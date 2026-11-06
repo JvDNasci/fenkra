@@ -758,6 +758,7 @@ impl Settings {
             leve: self.modo_leve,
             realista: self.graficos.iluminacao_realista,
             secao: None,
+            mapa: None,
         }
     }
 

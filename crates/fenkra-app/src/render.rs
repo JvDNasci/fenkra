@@ -20,6 +20,9 @@ struct U {
     tex_scale: array<vec4<f32>, 2>,  // tamanho (mm) de uma repetição de cada textura
     qual: vec4<f32>,       // x = 1 → iluminação realista (três pontos, ambiente hemisférico, gama)
     secao: vec4<f32>,      // plano de corte da prévia: xyz = normal (zero = sem corte), w = distância
+    mapa: vec4<f32>,       // mapa por pixel: x = tipo de curvatura, y = raio da escala, z = saída mínima (°), w = tampa (°)
+    mapa_dir: vec4<f32>,   // direção de abertura da inclinação
+    mapa_cor: array<vec4<f32>, 4>,  // paradas da escala do tema
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var tex: texture_2d_array<f32>;
@@ -77,6 +80,21 @@ fn shade_realistic(base_s: vec3<f32>, n: vec3<f32>, v: vec3<f32>, rough: f32, me
     return to_display(c);
 }
 
+// Escala do tema na posição `t`: a mesma de `sup_analise::rampa`, agora por pixel. Interpolar a cor
+// entre vértices, como antes, desenhava os triângulos na tela: a escala é logarítmica e tem paradas.
+fn rampa(t: f32) -> vec3<f32> {
+    let x = clamp(t, 0.0, 1.0) * 3.0;
+    let k = min(i32(floor(x)), 2);
+    return mix(u.mapa_cor[k].rgb, u.mapa_cor[k + 1].rgb, x - f32(k));
+}
+
+// Cor da curvatura (`EscalaCurvatura::cor`): as curvaturas principais vêm interpoladas e a escala vale aqui.
+fn cor_curvatura(k1: f32, k2: f32) -> vec3<f32> {
+    var k = max(abs(k1), abs(k2));
+    if (u.mapa.x > 1.5) { k = sqrt(abs(k1 * k2)); } else if (u.mapa.x > 0.5) { k = abs(k1 + k2) * 0.5; }
+    return rampa(log2(1.0 + k * u.mapa.y * 15.0) / 4.0);
+}
+
 // ---------- fundo
 struct BOut { @builtin(position) clip: vec4<f32>, @location(0) y: f32 };
 @vertex fn vs_bg(@builtin(vertex_index) i: u32) -> BOut {
@@ -106,14 +124,19 @@ struct MOut {
 }
 @fragment fn fs_mesh(i: MOut) -> @location(0) vec4<f32> {
     // derivadas antes de qualquer desvio dependente do pixel (exigência de uniformidade do WGSL)
-    let nraw = normalize(i.n);
-    let dn = length(fwidth(nraw));
-    let dp = max(length(fwidth(i.wp)), 1e-6);
+    let g = cross(dpdx(i.wp), dpdy(i.wp));
     if (cortado(i.wp)) { discard; }
     let mode = u.params.x;
     let v = normalize(u.eye.xyz - i.wp);
     var n = normalize(i.n);
-    if (dot(n, v) < 0.0) { n = -n; }
+    // De que lado se olha quem diz é o triângulo. Perto da silhueta a normal interpolada já aponta para
+    // longe do olho num triângulo ainda de frente, e virá-la acendia um reflexo errado na borda.
+    let frente = dot(g, v);
+    var lado = dot(n, v);
+    if (abs(frente) > 1e-20) { lado = dot(n, g) * frente; }
+    if (lado < 0.0) { n = -n; }
+    let nv = dot(n, v);
+    if (nv < 0.0) { n = normalize(n - v * nv); }
     if (mode > 1.5 && mode < 2.5) { return vec4<f32>(u.paper.rgb, 1.0); }
 
     var base = i.col.rgb;
@@ -123,6 +146,18 @@ struct MOut {
     var alpha = i.mat.z * i.col.a;
 
     var c: vec3<f32>;
+    if (mode > 8.5) {
+        // inclinação por pixel: o ângulo de saída vem da normal, e a faixa troca onde a superfície troca
+        let ang = degrees(asin(clamp(abs(dot(n, u.mapa_dir.xyz)), 0.0, 1.0)));
+        let w = max(fwidth(ang), 1e-3);
+        let f = 1.0 - smoothstep(u.mapa.z - w, u.mapa.z + w, ang);
+        let f2 = 1.0 - smoothstep(2.0 * u.mapa.z - w, 2.0 * u.mapa.z + w, ang);
+        let f3 = 1.0 - smoothstep(u.mapa.w - w, u.mapa.w + w, ang);
+        let d = abs(dot(n, v));
+        var cor = i.col.rgb;
+        if (i.mat.w < -0.5) { cor = rampa((f + f2 + f3) / 3.0); }
+        return vec4<f32>(cor * (0.55 + 0.45 * d), 1.0);
+    }
     if (mode > 7.5 && mode < 8.5) {
         // isofotas: linhas onde o ângulo entre a normal e a luz é o mesmo; a luz fica presa ao mundo
         let l = normalize(vec3<f32>(0.35, -0.45, 0.82));
@@ -134,9 +169,12 @@ struct MOut {
         return vec4<f32>(mix(fundo, vec3<f32>(0.05, 0.06, 0.09), linha), 1.0);
     }
     if (mode > 6.5) {
-        // curvatura: a cena já traz a cor por vértice, medida na superfície (B34); aqui só o relevo
+        // curvatura: a cena traz as curvaturas medidas na superfície (B34, B346) e a cor sai aqui,
+        // por pixel; o que vier sem medida (`mat.w` >= 0) mantém a própria cor
         let d = abs(dot(n, v));
-        return vec4<f32>(i.col.rgb * (0.55 + 0.45 * d), 1.0);
+        var cor = i.col.rgb;
+        if (i.mat.w < -0.5) { cor = cor_curvatura(i.col.x, i.col.y); }
+        return vec4<f32>(cor * (0.55 + 0.45 * d), 1.0);
     }
     if (mode > 5.5) {
         // zebra: faixas do reflexo de um ambiente de listras horizontais
@@ -330,9 +368,9 @@ impl DisplayMode {
             DisplayMode::RaioX => 4.,
             DisplayMode::SemiRenderizado => 5.,
             DisplayMode::Zebra => 6.,
-            // a inclinação usa a cor por vértice da curvatura; o DFM sombreia como o modo comum
+            // o DFM sombreia como o modo comum
             DisplayMode::Curvatura => 7.,
-            DisplayMode::Inclinacao => 7.,
+            DisplayMode::Inclinacao => 9.,
             DisplayMode::Isofotas => 8.,
             DisplayMode::Dfm => 0.,
         }
@@ -388,6 +426,23 @@ pub struct ViewStyle {
     pub realista: bool,
     /// plano de corte da prévia: normal (unitária) e distância; o lado positivo some
     pub secao: Option<[f32; 4]>,
+    /// escala dos mapas calculados por pixel (B346)
+    pub mapa: Option<MapaGpu>,
+}
+
+/// O que o shader precisa para pintar o mapa de curvatura ou de inclinação por pixel.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct MapaGpu {
+    /// 0 máxima, 1 média, 2 gaussiana
+    pub tipo: f32,
+    /// raio que recebe a última cor, em mm
+    pub raio: f32,
+    /// saída mínima e início da tampa, em graus
+    pub minimo: f32,
+    pub tampa: f32,
+    /// direção de abertura
+    pub dir: [f32; 3],
+    pub paradas: [[f32; 3]; 4],
 }
 
 #[repr(C)]
@@ -396,9 +451,12 @@ pub struct MeshVertex {
     pub pos: [f32; 3],
     pub nrm: [f32; 3],
     pub col: [f32; 4],
-    /// rugosidade, metalicidade, opacidade, —
+    /// rugosidade, metalicidade, opacidade, textura (1 em diante) ou `MAPA_POR_PIXEL`
     pub mat: [f32; 4],
 }
+
+/// Em `MeshVertex::mat[3]`: o vértice leva as curvaturas em `col` e a cor sai no shader.
+pub const MAPA_POR_PIXEL: f32 = -1.;
 
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
@@ -443,6 +501,9 @@ struct Uniforms {
     tex_scale: [[f32; 4]; 2],
     qual: [f32; 4],
     secao: [f32; 4],
+    mapa: [f32; 4],
+    mapa_dir: [f32; 4],
+    mapa_cor: [[f32; 4]; 4],
 }
 
 /// Camadas do array de texturas (cada imagem é reduzida para TEX × TEX).
@@ -784,6 +845,16 @@ impl Viewport {
         self.ultimo_giro.is_some_and(|t| t.elapsed() < PAUSA_NAVEGACAO)
     }
 
+    /// Altura do último quadro, em pixels da tela.
+    pub fn altura_px(&self) -> Option<u32> {
+        self.targets.as_ref().map(|t| t.size[1])
+    }
+
+    /// A câmera ainda vai andar sozinha?
+    pub fn animando(&self) -> bool {
+        self.anim.is_some()
+    }
+
     /// Maior contagem de amostras aceita pela placa que não passe do pedido.
     pub fn amostras_efetivas(&self, pedido: u32) -> u32 {
         self.suportadas.iter().copied().filter(|n| *n <= pedido).max().unwrap_or(1)
@@ -1053,6 +1124,9 @@ impl Viewport {
             tex_scale: self.tex_scale,
             qual: [if style.realista { 1. } else { 0. }, 0., 0., 0.],
             secao: style.secao.unwrap_or([0.; 4]),
+            mapa: style.mapa.map_or([0.; 4], |m| [m.tipo, m.raio, m.minimo, m.tampa]),
+            mapa_dir: style.mapa.map_or([0., 0., 1., 0.], |m| [m.dir[0], m.dir[1], m.dir[2], 0.]),
+            mapa_cor: style.mapa.map_or([[0.; 4]; 4], |m| m.paradas.map(|c| [c[0], c[1], c[2], 1.])),
         };
         rs.queue.write_buffer(&self.ubuf, 0, bytemuck::bytes_of(&u));
 
@@ -1139,6 +1213,12 @@ impl Viewport {
             }
         }
         rs.queue.submit([enc.finish()]);
+        // medição: o tempo da placa só aparece esperando ela terminar
+        if crate::medir_quadros::ativo() {
+            crate::medir_quadros::fase("placa", || {
+                let _ = rs.device.poll(wgpu::PollType::wait_indefinitely());
+            });
+        }
         self.last = Some(key);
         t.tex_id
     }

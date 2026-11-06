@@ -31,6 +31,7 @@ mod importar;
 mod features;
 mod lote;
 mod plm;
+mod polir;
 mod projeto;
 mod ramos_ui;
 mod salvar;
@@ -77,8 +78,8 @@ enum LeftTab {
     Projeto,
 }
 
-/// Pedido de cálculo: (geração, documento, reconstruir do zero, qualidade da malha).
-type PedidoCalculo = (u64, Document, bool, fenkra_core::QualidadeMalha);
+/// Pedido de cálculo: (geração, documento, reconstruir do zero, qualidade da malha, malha de tela).
+type PedidoCalculo = (u64, Document, bool, fenkra_core::QualidadeMalha, polir::Pedido);
 
 struct Worker {
     fila: fenkra_core::trabalho::Fila<PedidoCalculo, (u64, RecomputeResult)>,
@@ -94,7 +95,7 @@ impl Worker {
         let fila = fenkra_core::trabalho::Fila::nova(
             "recompute",
             // pedidos pulados passam adiante o "reconstruir do zero"
-            |antes: PedidoCalculo, novo: PedidoCalculo| (novo.0, novo.1, novo.2 | antes.2, novo.3),
+            |antes: PedidoCalculo, novo: PedidoCalculo| (novo.0, novo.1, novo.2 | antes.2, novo.3, novo.4),
             || {
                 fenkra_kernel::reduzir_prioridade_da_thread();
                 // cache entre cálculos: só refaz a partir do primeiro comando que mudou
@@ -105,6 +106,8 @@ impl Worker {
                     }
                     // outra qualidade só re-tessela: os comandos continuam no cache
                     cache.qualidade = job.3;
+                    cache.polir.alvo = job.4.alvo;
+                    cache.polir.agora = job.4.agora;
                     cache.cancelar = Some(ctl.bandeira());
                     cache.progresso = Some(ctl.clone());
                     let r = fenkra_solidos::recompute_cached(&job.1, &mut cache);
@@ -302,6 +305,8 @@ pub struct App {
     result_doc: Option<Document>,
     /// qualidade da malha enviada ao cálculo (a das configurações no último quadro)
     qualidade_malha: fenkra_core::QualidadeMalha,
+    /// malha de tela: o que a vista já pediu (B346)
+    polir: polir::Polidor,
     /// início da varredura visual da árvore após um cálculo (comando a comando)
     sweep_t0: f64,
     /// assistente de referências quebradas
@@ -408,6 +413,7 @@ impl App {
             gen_sent: 0,
             gen_done: 0,
             qualidade_malha: settings.graficos.qualidade(),
+            polir: Default::default(),
             viewport,
             scene_dirty: true,
             fit_pending: true,
@@ -566,12 +572,24 @@ impl App {
             app.started = true;
         }
         match std::env::var("FENKRA_EXIBIR").as_deref() {
+            Ok("sombreado") => app.settings.display = crate::render::DisplayMode::Sombreado,
+            Ok("render") => app.settings.display = crate::render::DisplayMode::SemiRenderizado,
             Ok("zebra") => app.settings.display = crate::render::DisplayMode::Zebra,
             Ok("curvatura") => app.settings.display = crate::render::DisplayMode::Curvatura,
             Ok("inclinacao") => app.settings.display = crate::render::DisplayMode::Inclinacao,
             Ok("isofotas") => app.settings.display = crate::render::DisplayMode::Isofotas,
             Ok("dfm") => app.settings.display = crate::render::DisplayMode::Dfm,
             _ => {}
+        }
+        // desenvolvimento: FENKRA_DEMO_POLIMENTO=<caso> abre uma peça de prova do polimento (B346)
+        if let Some(q) = crate::demo_polimento::qualidade() {
+            app.settings.graficos.preset = fenkra_core::PresetMalha::Personalizada;
+            app.settings.graficos.livre = q;
+            app.qualidade_malha = q;
+        }
+        if let Ok(caso) = std::env::var("FENKRA_DEMO_POLIMENTO") {
+            app.load_doc(crate::demo_polimento::documento(&caso), None, None);
+            app.started = true;
         }
         if std::env::var("FENKRA_DEMO_SUP").is_ok() {
             let d = &mut app.open.doc;
@@ -1103,14 +1121,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         d.rollback = d.rollback.min(i + 1);
         self.gen_sent += 1;
         self.sent_doc = Some(d.clone());
-        self.worker.enviar((self.gen_sent, d, false, self.qualidade_malha));
+        self.worker.enviar((self.gen_sent, d, false, self.qualidade_malha, self.polir.pedido_de_edicao()));
     }
 
     /// Pede o cálculo; `fresh` descarta o cache (reconstruir tudo do zero).
     fn send_recompute(&mut self, fresh: bool) {
         self.gen_sent += 1;
         self.sent_doc = Some(self.open.doc.clone());
-        self.worker.enviar((self.gen_sent, self.open.doc.clone(), fresh, self.qualidade_malha));
+        self.worker.enviar((self.gen_sent, self.open.doc.clone(), fresh, self.qualidade_malha, self.polir.pedido_de_edicao()));
     }
 
     /// A qualidade da malha mudou nas configurações: re-tessela a peça aberta e a montagem sem
@@ -1136,7 +1154,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let doc = self.sent_doc.clone().unwrap_or_else(|| self.open.doc.clone());
             self.gen_sent += 1;
             self.sent_doc = Some(doc.clone());
-            self.worker.enviar((self.gen_sent, doc, false, q));
+            self.worker.enviar((self.gen_sent, doc, false, q, self.polir.pedido_de_edicao()));
         }
     }
 
@@ -7081,8 +7099,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
             if let Some(rs) = frame.wgpu_render_state() {
                 let size = [(rect.width() * ppp) as u32, (rect.height() * ppp) as u32];
+                crate::demo_polimento::giro(&ctx, vp);
                 let mut style = self.settings.style();
                 style.navegando = vp.navegando();
+                style.mapa = crate::sup_inclinacao::escala_do_mapa(&self.settings, &ctx.global_style().visuals).map(|e| e.gpu());
                 // B06: corte de seção para ver a parede da casca aberta
                 let casca = self.session.as_ref().and_then(|s| self.open.doc.feature(s.id)).is_some_and(|f| matches!(f.kind, FeatureKind::Shell(_)));
                 if casca && ctx.data(|d| d.get_temp::<bool>(crate::previa::chave_secao())).unwrap_or(false) {
@@ -8189,7 +8209,10 @@ impl eframe::App for App {
         // resultados do recompute
         while let Some((g, mut r)) = self.worker.receber() {
             if g >= self.gen_done {
+                // o pedido da vista volta com a mesma geração: nada mudou no documento
+                let novo = g > self.gen_done;
                 self.gen_done = g;
+                self.polir.resultado_chegou(&r);
                 // referências antigas (só o ponto) que resolveram ganham a chave v2 no documento
                 let promoted = std::mem::take(&mut r.promoted);
                 if g == self.gen_sent && !promoted.is_empty() {
@@ -8210,14 +8233,21 @@ impl eframe::App for App {
                     self.apply_counts(&r.notes);
                 }
                 self.apply_extract_req(ctx);
+                // a barra de status fala do cálculo do documento, não da malha que a vista pediu
+                if let Some(a) = self.result.as_ref().filter(|_| !novo) {
+                    r.elapsed_ms = a.elapsed_ms;
+                }
                 self.result = Some(r);
                 if g == self.gen_sent {
                     self.result_doc = self.sent_doc.clone();
                 }
-                self.sweep_t0 = ctx.input(|i| i.time);
+                if novo {
+                    self.sweep_t0 = ctx.input(|i| i.time);
+                }
                 self.scene_dirty = true;
             }
         }
+        self.polir_vista(ctx);
         if ctx.input(|i| i.time) - self.sweep_t0 < 0.035 * (self.open.doc.features.len() as f64 + 1.) {
             ctx.request_repaint();
         }

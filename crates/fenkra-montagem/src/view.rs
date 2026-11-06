@@ -251,6 +251,7 @@ pub(crate) fn resultado_de(bodies: Vec<BodyResult>) -> RecomputeResult {
         points: vec![],
         curves: vec![],
         formas: vec![],
+        exibicao: Default::default(),
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
         surfaces: vec![],

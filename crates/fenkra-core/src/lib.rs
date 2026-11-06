@@ -45,5 +45,5 @@ pub mod trabalho;
 pub use doc::*;
 pub use edicao_direta::{DirectEdit, OpDireta};
 pub use regras::{EstiloRegras, Origem};
-pub use qualidade::{PresetMalha, PresetStl, QualidadeMalha};
+pub use qualidade::{Polimento, PresetMalha, PresetStl, QualidadeMalha};
 pub use sketch::SketchData;

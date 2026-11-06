@@ -10,6 +10,7 @@ mod settings;
 mod toolbar;
 mod editor;
 mod render;
+mod demo_polimento;
 mod scene;
 mod entradas;
 mod previa;

@@ -86,6 +86,9 @@ preferências do usuário.
 | `FENKRA_DEMO_IMPRESSAO=1` | abre o preparo de impressão com a peça aberta; `FENKRA_DEMO_IMPRESSAO_ARQUIVO=<arquivo>` grava o 3MF sem perguntar |
 | `FENKRA_EXIBIR=inclinacao\|isofotas\|dfm` | abre já no modo de análise (além de `zebra` e `curvatura`); com `dfm`, `FENKRA_DEMO_DFM=<parte do nome do perfil>` escolhe o processo (`fresagem`, `chapa`, `inje`, `3d`), liga o mapa de espessura e varre sozinho |
 | `FENKRA_DEMO_FOTO=<arquivo.png>` | grava a janela depois de 9 s e fecha o programa |
+| `FENKRA_DEMO_POLIMENTO=<caso>` | abre uma peça de prova do polimento da superfície (B346): `esfera`, `cilindro`, `toro`, `superficie` (painel de dupla curvatura), `filete`, `bolso`, `filete_sup` |
+| `FENKRA_DEMO_QUALIDADE=<desvio>,<ângulo>` | força a malha de trabalho, por exemplo `0.02,45` (a mais grossa aceita); `FENKRA_EXIBIR` também aceita `sombreado` e `render` |
+| `FENKRA_DEMO_SEM_POLIMENTO=1` | não pede a malha de tela, para comparar; `FENKRA_DEMO_GIRO=<graus por quadro>` gira a câmera sem parar, para medir o quadro com `FENKRA_MEDIR_QUADROS` (a fase `placa` traz o tempo da placa de vídeo) |
 | `FENKRA_DEMO_JANELA=<nome>` | abre no segundo quadro o que só o mouse abriria: `salvar_como`, `empacotar`, `reparar` (gravam a peça numa pasta temporária com dois links), `liberar` (com `FENKRA_DEMO_PROJETO=1`; cria uma montagem que usa a peça), `resumo` (com `FENKRA_DEMO_EST=1`), `roda`, `roda_editor`, `tabela`, `pmi_barra` e `pmi_fcf` (com `FENKRA_DEMO_PMI=1`), `daltonico` (liga a paleta segura) |
 | `FENKRA_DEMO_SIMULAR=<protanopia\|deuteranopia\|tritanopia>` | com `FENKRA_DEMO_FOTO`, grava a captura como essa visão a veria |
 | `FENKRA_DEMO_CHAPA=aba` ou `abaerro` | com `FENKRA_EDITAR=AbaUnificada`, abre o comando de aba unificado (o segundo com valores fora do limite); `FENKRA_DEMO_ABA=<n>` escolhe a aba do painel |

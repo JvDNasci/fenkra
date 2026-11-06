@@ -37,7 +37,7 @@ pub struct SceneOpts<'a> {
     pub point_style: u8,
     /// forma livre cuja superfície não aparece (modo Gaiola)
     pub forma_oculta: Option<Id>,
-    /// mapa de curvatura: a cor de cada vértice vem da curvatura medida pelo kernel
+    /// mapa de curvatura ou inclinação: o vértice leva a medida do kernel e o shader pinta por pixel
     pub curvatura: Option<crate::sup_inclinacao::EscalaMapa>,
     /// prévia do comando aberto
     pub fantasma: Option<crate::previa::Fantasma<'a>>,
@@ -150,7 +150,9 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         let fid = o.fantasma.as_ref().map(|f| f.id);
         let camadas = r.bodies.iter().flat_map(|b| {
             let antes = o.fantasma.as_ref().and_then(|f| f.antes_de(b)).map(|c| (c.collector, &c.mesh, c.face_owner.as_slice()));
-            antes.into_iter().chain(std::iter::once((b.collector, &b.mesh, b.face_owner.as_slice())))
+            // a prévia pinta sobre a malha de trabalho, e a de tela passaria por cima dela
+            let tela = r.exibicao.get(&b.collector).filter(|_| o.fantasma.is_none());
+            antes.into_iter().chain(std::iter::once((b.collector, tela.map_or(&b.mesh, |m| &**m), b.face_owner.as_slice())))
         });
         for (collector, m, face_owner) in camadas {
             let Some(col) = doc.collectors.iter().find(|c| c.id == collector) else { continue };
@@ -195,6 +197,8 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 }
                 let start = m.face_ranges[fi] as usize;
                 let end = m.face_ranges.get(fi + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
+                let textura = app.texture.filter(|t| (*t as u32) < crate::render::TEX_LAYERS).map(|t| t as f32 + 1.).unwrap_or(0.);
+                let medida = |i: usize| o.curvatura.and_then(|e| e.atributo_da_malha(m, i));
                 // duplica os vértices da face para poder colorir por face
                 let mut remap: HashMap<u32, u32> = HashMap::new();
                 for &vi in &m.indices[start..end] {
@@ -206,10 +210,10 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                             pos: p,
                             nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]],
                             col: {
-                                let c = o.curvatura.and_then(|e| e.cor_da_malha(m, vi as usize)).unwrap_or(c);
+                                let c = medida(vi as usize).unwrap_or(c);
                                 [c[0], c[1], c[2], 1.0]
                             },
-                            mat: [rough, metal, alpha, app.texture.filter(|t| (*t as u32) < crate::render::TEX_LAYERS).map(|t| t as f32 + 1.).unwrap_or(0.)],
+                            mat: [rough, metal, alpha, if medida(vi as usize).is_some() { crate::render::MAPA_POR_PIXEL } else { textura }],
                         });
                         (s.mesh.len() - 1) as u32
                     });
@@ -372,20 +376,21 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             if selected {
                 c = [c[0] * 0.55 + 0.45, c[1] * 0.55 + 0.38, c[2] * 0.55 + 0.08];
             }
-            let m = &sf.mesh;
+            let m = r.exibicao.get(&sf.id).filter(|_| o.fantasma.is_none()).map_or(&sf.mesh, |m| &**m);
             let base = s.mesh.len() as u32;
             for k in (0..m.positions.len()).step_by(3) {
                 let p = [m.positions[k], m.positions[k + 1], m.positions[k + 2]];
                 grow(&mut bounds, Vec3::from(p));
-                let c = o.curvatura.and_then(|e| e.cor_da_malha(m, k / 3)).unwrap_or(c);
-                s.mesh.push(MeshVertex { pos: p, nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]], col: [c[0], c[1], c[2], 1.0], mat: [rough, metal, alpha, 0.] });
+                let medida = o.curvatura.and_then(|e| e.atributo_da_malha(m, k / 3));
+                let c = medida.unwrap_or(c);
+                s.mesh.push(MeshVertex { pos: p, nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]], col: [c[0], c[1], c[2], 1.0], mat: [rough, metal, alpha, if medida.is_some() { crate::render::MAPA_POR_PIXEL } else { 0. }] });
             }
             s.indices.extend(m.indices.iter().map(|i| base + i));
             push_edges(&mut s.edges, m, o.tangent_edges, if selected { HILITE } else { edge_col });
         }
     }
 
-    crate::forma_ui::na_cena(doc, r, o.forma_oculta, &mut s, &mut |p| grow(&mut bounds, p));
+    crate::forma_ui::na_cena(doc, r, o.forma_oculta, o.curvatura.as_ref(), &mut s, &mut |p| grow(&mut bounds, p));
 
     // pontos, linhas e curvas de referência
     let geo_col = [0.95, 0.7, 0.3, 1.0];
@@ -611,5 +616,68 @@ pub(crate) fn push_edges(dst: &mut Vec<LineVertex>, m: &fenkra_kernel::Mesh, tan
         for q in m.edges[s0 * 6..s1 * 6].chunks_exact(3) {
             dst.push(lv([q[0], q[1], q[2]], col));
         }
+    }
+}
+
+#[cfg(test)]
+mod testes_malha_de_tela {
+    use super::*;
+    use crate::app::Sel;
+    use crate::render::MAPA_POR_PIXEL;
+    use crate::sup_analise::{EscalaCurvatura, TipoCurvatura};
+    use crate::sup_inclinacao::EscalaMapa;
+    use fenkra_core::{BoolOp, FeatureKind, Polimento, PrimKind, Primitive, QualidadeMalha};
+
+    const PARADAS: [[f32; 3]; 4] = [[0., 0., 1.], [0., 1., 0.], [1., 1., 0.], [1., 0., 0.]];
+
+    fn esfera(r: &str) -> Document {
+        let mut d = Document::new("t");
+        d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Esfera, plane: PlaneRef::Origin(OriginPlane::XY), a: r.into(), b: String::new(), c: String::new(), d: String::new(), op: BoolOp::Add }));
+        d
+    }
+
+    fn polida(d: &Document) -> RecomputeResult {
+        let mut c = fenkra_solidos::Cache::com_qualidade(QualidadeMalha { desvio_rel: 0.02, angulo_graus: 45. });
+        c.polir.alvo = Some(Polimento { desvio_mm: 0.05, angulo_graus: 5., curvatura: false, teto_triangulos: Polimento::TETO });
+        c.polir.agora = true;
+        fenkra_solidos::recompute_cached(d, &mut c)
+    }
+
+    fn cena(d: &Document, r: &RecomputeResult, curvatura: Option<EscalaMapa>, fantasma: Option<crate::previa::Fantasma>) -> Scene {
+        let (sel, filtro) = (Sel::None, Filter::default());
+        let o = SceneOpts { instancias: &[], forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: None, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura, fantasma };
+        build(d, r, &o)
+    }
+
+    #[test]
+    fn cena_desenha_a_malha_de_tela_e_a_selecao_segue_na_de_trabalho() {
+        let d = esfera("40");
+        let r = polida(&d);
+        let (trabalho, tela) = (r.bodies[0].mesh.indices.len(), r.exibicao[&r.bodies[0].collector].indices.len());
+        assert!(tela > trabalho);
+        assert_eq!(cena(&d, &r, None, None).indices.len(), tela);
+    }
+
+    #[test]
+    fn previa_aberta_volta_a_malha_de_trabalho() {
+        let d = esfera("40");
+        let r = polida(&d);
+        let f = crate::previa::Fantasma { id: fenkra_core::Id(u64::MAX), cor: [10, 20, 200], entrada: [200, 150, 10], erro: [200, 0, 0], retirada: [150, 0, 150], ferramenta: [0, 200, 200], neutro: [0, 200, 90], antes: &[] };
+        assert_eq!(cena(&d, &r, None, Some(f)).indices.len(), r.bodies[0].mesh.indices.len());
+    }
+
+    #[test]
+    fn mapa_manda_as_curvaturas_exatas_e_deixa_a_cor_para_o_pixel() {
+        let d = esfera("40");
+        let r = polida(&d);
+        let e = EscalaCurvatura { tipo: TipoCurvatura::Maxima, raio: 40., paradas: PARADAS };
+        let s = cena(&d, &r, Some(e.into()), None);
+        assert!(!s.mesh.is_empty());
+        for v in &s.mesh {
+            assert_eq!(v.mat[3], MAPA_POR_PIXEL);
+            assert!((v.col[0].abs() - 1. / 40.).abs() < 1e-5 && (v.col[1].abs() - 1. / 40.).abs() < 1e-5, "{:?}", v.col);
+        }
+        // fora do mapa o vértice leva a cor da peça
+        assert!(cena(&d, &r, None, None).mesh.iter().all(|v| v.mat[3] >= 0.));
     }
 }

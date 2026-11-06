@@ -330,6 +330,24 @@ mod imp {
         KernelError(e.what().to_string())
     }
 
+    fn malha_do_kernel(m: b::MeshData) -> Mesh {
+        Mesh {
+            positions: m.positions,
+            normals: m.normals,
+            curvature: m.curvature,
+            indices: m.indices,
+            edges: m.edges,
+            face_ranges: m.face_ranges,
+            edge_ranges: m.edge_ranges,
+            edge_geom: m.edge_geom,
+            edge_mids: m.edge_mids,
+            edge_smooth: m.edge_smooth,
+            vertices: m.vertices,
+            edge_faces: pairs(&m.edge_faces),
+            face_info: face_infos(&m.face_info),
+        }
+    }
+
     fn frame(f: &Frame) -> b::Frame {
         b::Frame {
             ox: f.origin[0],
@@ -903,22 +921,14 @@ mod imp {
         /// Malha com desvio linear (mm) e ângulo máximo entre normais vizinhas (radianos). Faces com
         /// malha pronta de mesmo ângulo e desvio a até 10% do pedido são reaproveitadas.
         pub fn mesh_angle(&self, deflection: f64, angle: f64) -> KResult<Mesh> {
-            let m = b::tessellate(&self.0, deflection, angle).map_err(err)?;
-            Ok(Mesh {
-                positions: m.positions,
-                normals: m.normals,
-                curvature: m.curvature,
-                indices: m.indices,
-                edges: m.edges,
-                face_ranges: m.face_ranges,
-                edge_ranges: m.edge_ranges,
-                edge_geom: m.edge_geom,
-                edge_mids: m.edge_mids,
-                edge_smooth: m.edge_smooth,
-                vertices: m.vertices,
-                edge_faces: pairs(&m.edge_faces),
-                face_info: face_infos(&m.face_info),
-            })
+            b::tessellate(&self.0, deflection, angle).map(malha_do_kernel).map_err(err)
+        }
+        /// Malha só para a tela (B346), mais fina que a de trabalho: mesma ordem de faces e arestas, sem
+        /// mexer na malha guardada na forma. `curv_tol` > 0 divide as arestas internas onde a curvatura
+        /// interpolada erra mais que essa fração; `k_ref` é a curvatura (1/mm) abaixo da qual a
+        /// diferença deixa de contar.
+        pub fn mesh_view(&self, deflection: f64, angle: f64, curv_tol: f64, k_ref: f64) -> KResult<Mesh> {
+            b::tessellate_view(&self.0, deflection, angle, curv_tol, k_ref).map(malha_do_kernel).map_err(err)
         }
         /// Índice (na ordem das faces da malha) da face mais próxima do ponto, se estiver a no máximo `limit`.
         pub fn face_index(&self, p: [f64; 3], limit: f64) -> KResult<Option<usize>> {
@@ -1341,6 +1351,9 @@ mod imp {
             no()
         }
         pub fn mesh_angle(&self, _: f64, _: f64) -> KResult<Mesh> {
+            no()
+        }
+        pub fn mesh_view(&self, _: f64, _: f64, _: f64, _: f64) -> KResult<Mesh> {
             no()
         }
         pub fn bbox(&self) -> Option<([f64; 3], [f64; 3])> {
@@ -1775,6 +1788,130 @@ mod tests {
         assert!(padrao == todos || padrao >= 2 && padrao <= todos / 2 + 1, "padrão {padrao} de {todos}");
         assert_eq!(um.indices, muitos.indices);
         assert_eq!(um.positions, muitos.positions);
+    }
+
+    /// Malha mais grossa que a configuração aceita: 45° e flecha grande.
+    const GROSSA: (f64, f64) = (2.0, 0.785);
+
+    fn ponto(m: &Mesh, i: usize) -> [f64; 3] {
+        [0, 1, 2].map(|k| m.positions[i * 3 + k] as f64)
+    }
+    fn normal(m: &Mesh, i: usize) -> [f64; 3] {
+        [0, 1, 2].map(|k| m.normals[i * 3 + k] as f64)
+    }
+
+    #[test]
+    fn esfera_tem_normal_e_curvatura_exatas_em_todo_no_inclusive_nos_polos() {
+        let r = 40.;
+        let m = Shape::sphere_surface([0., 0., 0.], r).unwrap().mesh_angle(GROSSA.0, GROSSA.1).unwrap();
+        let n = m.positions.len() / 3;
+        assert!(n > 10);
+        let polos = (0..n).filter(|i| ponto(&m, *i)[2].abs() > r - 1e-3).count();
+        assert!(polos > 0, "a malha chega aos polos");
+        for i in 0..n {
+            let (p, q) = (ponto(&m, i), normal(&m, i));
+            let erro = (0..3).map(|k| (p[k] / r - q[k]).powi(2)).sum::<f64>().sqrt();
+            assert!(erro < 1e-3, "nó {i} em {p:?}: normal {q:?}");
+            let (k1, k2) = (m.curvature[i * 2].abs(), m.curvature[i * 2 + 1].abs());
+            assert!((k1 - 1. / 40.).abs() < 1e-5 && (k2 - 1. / 40.).abs() < 1e-5, "nó {i} em {p:?}: {k1} {k2}");
+        }
+    }
+
+    #[test]
+    fn cilindro_tem_curvatura_exata() {
+        let m = Shape::cylinder_surface([0., 0., 0.], [0., 0., 1.], 30., 0., 80.).unwrap().mesh_angle(GROSSA.0, GROSSA.1).unwrap();
+        for c in m.curvature.chunks_exact(2) {
+            let (a, b) = (c[0].abs().max(c[1].abs()), c[0].abs().min(c[1].abs()));
+            assert!((a - 1. / 30.).abs() < 1e-6 && b < 1e-6, "{c:?}");
+        }
+    }
+
+    /// Curvatura exata do toro no ponto: 1/r na seção e cos(t)/(R + r cos(t)) na volta.
+    fn curvatura_do_toro(p: [f64; 3], maior: f64, menor: f64) -> (f64, f64) {
+        let cos = ((p[0] * p[0] + p[1] * p[1]).sqrt() - maior) / menor;
+        (1. / menor, cos / (maior + menor * cos))
+    }
+
+    fn toro() -> Shape {
+        let f = Frame { origin: [0., 0., 0.], x: [1., 0., 0.], normal: [0., 0., 1.] };
+        Shape::primitive(4, &f, &[40., 15.]).unwrap()
+    }
+
+    /// Erro médio, por área, da curvatura interpolada no centro dos triângulos, contra a do toro. A
+    /// interpolação é a que a tela faz; o centro do triângulo é onde ela mais se afasta dos nós. É a
+    /// média porque a borda da face não se divide: os triângulos encostados nela ficam como estão.
+    fn erro_no_meio_dos_triangulos(m: &Mesh) -> f64 {
+        let (mut soma, mut total) = (0f64, 0f64);
+        for t in m.indices.chunks_exact(3) {
+            let [a, b, c] = [t[0] as usize, t[1] as usize, t[2] as usize];
+            let lado = |x: usize, y: usize| [0, 1, 2].map(|k| ponto(m, y)[k] - ponto(m, x)[k]);
+            let (u, v) = (lado(a, b), lado(a, c));
+            let area = ((u[1] * v[2] - u[2] * v[1]).powi(2) + (u[2] * v[0] - u[0] * v[2]).powi(2) + (u[0] * v[1] - u[1] * v[0]).powi(2)).sqrt() / 2.;
+            let p: [f64; 3] = [0, 1, 2].map(|k| (ponto(m, a)[k] + ponto(m, b)[k] + ponto(m, c)[k]) / 3.);
+            // a curvatura da volta é a menor em módulo: a da seção vale 1/15 em todo o toro
+            let da_volta = |i: usize| {
+                let (x, y) = (m.curvature[i * 2] as f64, m.curvature[i * 2 + 1] as f64);
+                if x.abs() < y.abs() { x } else { y }
+            };
+            let interpolada = (da_volta(a) + da_volta(b) + da_volta(c)) / 3.;
+            // o centro do triângulo fica um pouco dentro do toro: leva o ponto até a superfície
+            let rho = (p[0] * p[0] + p[1] * p[1]).sqrt();
+            let (dx, dz) = (rho - 40., p[2]);
+            let l = (dx * dx + dz * dz).sqrt().max(1e-9);
+            let na_superficie = [(40. + dx / l * 15.) * p[0] / rho, (40. + dx / l * 15.) * p[1] / rho, dz / l * 15.];
+            let (_, k2) = curvatura_do_toro(na_superficie, 40., 15.);
+            soma += (interpolada.abs() - k2.abs()).abs() * area;
+            total += area;
+        }
+        soma / total
+    }
+
+    #[test]
+    fn curvatura_refinada_acompanha_a_superficie_entre_os_nos() {
+        let (d, a) = (0.5, GROSSA.1);
+        let comum = toro().mesh_view(d, a, 0., 0.).unwrap();
+        let fina = toro().mesh_view(d, a, 0.005, 1e-3).unwrap();
+        assert!(fina.indices.len() > comum.indices.len(), "{} vs {}", fina.indices.len(), comum.indices.len());
+        assert_eq!(fina.face_ranges.len(), comum.face_ranges.len());
+        let (e0, e1) = (erro_no_meio_dos_triangulos(&comum), erro_no_meio_dos_triangulos(&fina));
+        assert!(e1 < e0 * 0.6, "erro {e0} virou {e1}");
+        // o nó novo fica na superfície exata e com a curvatura de lá
+        for i in 0..fina.positions.len() / 3 {
+            let (k1, k2) = curvatura_do_toro(ponto(&fina, i), 40., 15.);
+            let (a, b) = (fina.curvature[i * 2] as f64, fina.curvature[i * 2 + 1] as f64);
+            assert!((a.abs().max(b.abs()) - k1.abs().max(k2.abs())).abs() < 1e-4, "nó {i}: {a} {b} contra {k1} {k2}");
+        }
+    }
+
+    #[test]
+    fn malha_de_tela_nao_mexe_na_malha_de_trabalho() {
+        let s = toro();
+        let trabalho = s.mesh_angle(1., 0.5).unwrap();
+        let tela = s.mesh_view(0.02, 0.087, 0., 0.).unwrap();
+        assert!(tela.indices.len() > trabalho.indices.len() * 4, "{} vs {}", tela.indices.len(), trabalho.indices.len());
+        assert_eq!(tela.face_ranges.len(), trabalho.face_ranges.len());
+        assert_eq!(tela.edge_ranges.len(), trabalho.edge_ranges.len());
+        assert_eq!(tela.edge_smooth, trabalho.edge_smooth);
+        let depois = s.mesh_angle(1., 0.5).unwrap();
+        assert_eq!(depois.indices, trabalho.indices);
+        assert_eq!(depois.positions, trabalho.positions);
+        assert!((s.mass().volume - 2. * std::f64::consts::PI.powi(2) * 40. * 15f64.powi(2)).abs() < 1.);
+    }
+
+    #[test]
+    fn furo_no_plano_acompanha_a_malha_de_tela_sem_fresta() {
+        // a borda do furo é da aresta: a tampa plana e a parede do furo recebem os mesmos pontos
+        let s = Shape::face(&XY, &[rect(60., 60.), vec![Seg2::Circle([0., 0.], 12.)]]).unwrap().extrude([0., 0., 1.], 10., 0.).unwrap();
+        let m = s.mesh_view(0.01, 0.087, 0.02, 1e-3).unwrap();
+        let mut bordas = std::collections::HashMap::<[[u32; 3]; 2], i32>::new();
+        let chave = |i: u32| [0, 1, 2].map(|k| m.positions[i as usize * 3 + k].to_bits());
+        for t in m.indices.chunks_exact(3) {
+            for e in 0..3 {
+                let (a, b) = (chave(t[e]), chave(t[(e + 1) % 3]));
+                *bordas.entry(if a < b { [a, b] } else { [b, a] }).or_default() += 1;
+            }
+        }
+        assert!(bordas.values().all(|n| *n == 2), "a casca da malha fecha: nenhuma aresta sobra");
     }
 
     #[cfg(windows)]
