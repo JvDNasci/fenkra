@@ -9,7 +9,7 @@ use super::*;
 use fenkra_desenho::source::TableData;
 
 /// Ids do rascunho partem daqui: nunca colidem com os do desenho real (o cache de projeções é por id).
-const SCRATCH: u64 = 1 << 40;
+pub(super) const SCRATCH: u64 = 1 << 40;
 
 pub struct Ghost {
     /// primitivas na folha (mm)
@@ -21,7 +21,7 @@ pub struct Ghost {
 /// Neste clique a ferramenta escolhe a posição final do objeto (e por isso alinha)?
 pub fn places(tool: u8, n: usize) -> bool {
     match tool {
-        c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM | c::NOTE | c::CENTER | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT => true,
+        c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM | c::NOTE | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT => true,
         // a linha do corte e o contorno do detalhe têm posicionamento próprio (`corte_ui`)
         c::SECTION | c::DETAIL => false,
         c::BALLOON | c::ROUGH | c::WELD | c::GDT | c::DATUM => n == 1,
@@ -251,11 +251,12 @@ pub fn compute(st: &mut DwgState, m: V2, snap: &SnapFn, view_at: &ViewAt) -> Opt
             let dm = Dim { id: Id(SCRATCH), view: vid, kind, anchors: vec![ax.unproject(c0), ax.unproject(on)], offset: 6., loose: true, ..Default::default() };
             g.items = layout::dim_items(&st.d, &dm, &mut st.models);
         }
-        c::NOTE | c::CENTER | c::BALLOON | c::ROUGH | c::WELD | c::GDT | c::DATUM => {
+        c::CENTER => g.items = super::centros_ui::fantasma(st, m),
+        c::NOTE | c::BALLOON | c::ROUGH | c::WELD | c::GDT | c::DATUM => {
             let (kind, text) = symbol_note(st, tool);
             let is_gdt = kind == NoteKind::Gdt;
-            let leader = (n == 1 && !matches!(tool, c::NOTE | c::CENTER)).then(|| st.clicks[0]);
-            let view = if matches!(tool, c::NOTE | c::CENTER) { view_at(st, at) } else { None };
+            let leader = (n == 1 && !tool == c::NOTE).then(|| st.clicks[0]);
+            let view = if tool == c::NOTE { view_at(st, at) } else { None };
             let note = Note { id: Id(SCRATCH), sheet: st.sheet, kind, pos: at, leader, text, size: st.d.text_height, view, gdt: is_gdt.then(DwgGdt::default), ..Default::default() };
             g.items = layout::note_items(&st.d, &note, &mut st.models);
         }
@@ -264,7 +265,7 @@ pub fn compute(st: &mut DwgState, m: V2, snap: &SnapFn, view_at: &ViewAt) -> Opt
             let data: TableData = match &st.ghost_table {
                 Some((k, d)) if *k == tool => d.clone(),
                 _ => {
-                    let t = Table { id: Id(SCRATCH), sheet: st.sheet, kind: kind.clone(), source: st.source.clone()?, pos: at, level: Default::default() };
+                    let t = Table { id: Id(SCRATCH), sheet: st.sheet, kind: kind.clone(), source: st.source.clone()?, pos: at, level: Default::default(), cfg: Default::default() };
                     let d = st.models.table(&t, &st.d);
                     st.ghost_table = Some((tool, d.clone()));
                     d

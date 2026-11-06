@@ -14,12 +14,16 @@ use std::path::PathBuf;
 
 mod alcas;
 mod assistentes;
+mod centros_ui;
 mod cota_inteligente;
 mod corte_ui;
 mod cordao;
 mod ghost;
 mod options;
 mod simbolos;
+mod tabelas_ui;
+#[cfg(test)]
+mod testes_centros_tabelas;
 #[cfg(test)]
 mod testes_corte_cota;
 
@@ -122,6 +126,8 @@ pub struct DwgState {
     new_label: String,
     /// dados da tabela do fantasma (ferramenta, dados): refeitos quando o desenho muda
     ghost_table: Option<(u8, fenkra_desenho::source::TableData)>,
+    /// marcas de centro: modo e extensão da ferramenta (B294)
+    centro: centros_ui::EstadoCentro,
     /// diálogos de Novo desenho e de exportação (B252) e a mensagem para o aviso do app
     novo: Option<assistentes::NovoUi>,
     export: Option<assistentes::ExportUi>,
@@ -204,6 +210,7 @@ impl DwgState {
             new_hidden: false,
             new_label: String::new(),
             ghost_table: None,
+            centro: Default::default(),
             novo: None,
             export: None,
             toast: None,
@@ -326,6 +333,7 @@ pub fn demo_ajustar(st: &mut DwgState) {
         _ => None,
     };
     let sheet = st.sheet;
+    demo_centros_tabela(st);
     match std::env::var("FENKRA_DEMO_DWG_SIMBOLO").unwrap_or_default().as_str() {
         kind @ ("rug" | "solda") => {
             let id = st.d.alloc();
@@ -348,6 +356,55 @@ pub fn demo_ajustar(st: &mut DwgState) {
             }
         }
         _ => {}
+    }
+}
+
+/// Desenvolvimento: `FENKRA_DEMO_DWG_CENTROS` = `simples`, `linear`, `circular` ou `todos` põe marcas
+/// de centro nos furos da vista de topo; `FENKRA_DEMO_DWG_TABELA=1` tira a coluna Rosca da tabela de
+/// furos, liga as etiquetas e destaca a linha A2. Nada grava no disco.
+fn demo_centros_tabela(st: &mut DwgState) {
+    use fenkra_desenho::centros::{self, ModoCentro};
+    let modos = std::env::var("FENKRA_DEMO_DWG_CENTROS").unwrap_or_default();
+    // a vista de topo é a segunda do conjunto padrão
+    let topo = st.d.views.iter().find(|v| matches!(v.kind, ViewKind::Standard(Dir::Topo))).map(|v| v.id);
+    if let (Some(vid), false) = (topo, modos.is_empty()) {
+        let p = st.models.proj(&st.d, vid);
+        if let Some(ax) = p.axes {
+            let arcos = centros::arcos(&p);
+            // os quatro furos da placa de exemplo ficam em (±48, ±24)
+            let furos: Vec<V2> = [(-1., -1.), (1., -1.), (1., 1.), (-1., 1.)]
+                .iter()
+                .filter_map(|(sx, sy)| {
+                    let q = ax.project([sx * 48., sy * 24., 0.]);
+                    arcos.iter().find(|(c, _)| ((c[0] - q[0]).powi(2) + (c[1] - q[1]).powi(2)).sqrt() < 0.05).map(|(c, _)| *c)
+                })
+                .collect();
+            let quer = |m: &str| modos == "todos" || modos == m;
+            let mut novas = vec![];
+            if quer("simples") && !furos.is_empty() {
+                novas.push((ModoCentro::Simples, vec![furos[0]]));
+            }
+            if quer("linear") && furos.len() == 4 {
+                novas.push((ModoCentro::Linear, vec![furos[1], furos[2]]));
+            }
+            if quer("circular") && furos.len() == 4 {
+                novas.push((ModoCentro::Circular, furos.clone()));
+            }
+            for (modo, pts) in novas {
+                let id = st.d.alloc();
+                if let Some(m) = centros::montar(id, vid, modo, &pts, &p) {
+                    st.d.centers.push(m);
+                }
+            }
+        }
+    }
+    if std::env::var("FENKRA_DEMO_DWG_TABELA").is_ok() {
+        if let Some(t) = st.d.tables.iter_mut().find(|t| t.kind == TableKind::Holes) {
+            t.cfg.colunas = ["Furo", "X", "Y", "Ø", "Prof."].map(String::from).to_vec();
+            t.cfg.etiquetas = true;
+            t.cfg.linha_sel = Some(1);
+            st.sel = Some(t.id);
+        }
     }
 }
 
@@ -404,7 +461,8 @@ fn hint(tool: u8, n: usize) -> &'static str {
         (c::DIM_H | c::DIM_V | c::DIM_A, _) => "Clique o segundo vértice",
         (c::BALLOON | c::ROUGH | c::WELD, 0) => "Clique o ponto indicado (ponta da chamada)",
         (c::BALLOON | c::ROUGH | c::WELD, _) => "Clique onde o símbolo vai ficar",
-        (c::NOTE | c::CENTER, _) => "Clique onde a nota vai ficar",
+        (c::NOTE, _) => "Clique onde a nota vai ficar",
+        (c::CENTER, _) => "Clique na borda ou dentro de um furo da vista",
         (c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT, _) => "Clique o canto superior esquerdo da tabela",
         _ => "",
     }
@@ -884,7 +942,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             }
         } else if let Some(tool) = st.tool {
             let blocked = block_reason(st);
-            painter.text(rect.center_top() + Vec2::new(0., 10.), egui::Align2::CENTER_TOP, format!("{}   (Esc {})", tr(blocked.unwrap_or_else(|| corte_ui::dica(st).unwrap_or_else(|| hint(tool, st.clicks.len())))), tr("cancela")), egui::FontId::proportional(14.), if dark { Color32::from_rgb(255, 210, 120) } else { Color32::from_rgb(120, 60, 0) });
+            painter.text(rect.center_top() + Vec2::new(0., 10.), egui::Align2::CENTER_TOP, format!("{}   (Esc {})", tr(blocked.unwrap_or_else(|| corte_ui::dica(st).unwrap_or_else(|| if tool == c::CENTER { centros_ui::dica(st) } else { hint(tool, st.clicks.len()) }))), tr("cancela")), egui::FontId::proportional(14.), if dark { Color32::from_rgb(255, 210, 120) } else { Color32::from_rgb(120, 60, 0) });
             let dim_tool = (c::DIM_H..=c::DIM_ANG).contains(&tool);
             // marcador do snap sob o mouse
             if let Some(m) = mouse_mm {
@@ -911,7 +969,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             options::bar(ui.ctx(), st, rect, cur_src.clone());
             // Enter confirma na posição do cursor, como o clique
             let enter = !ui.ctx().egui_wants_keyboard_input() && ui.ctx().input(|i| i.key_pressed(egui::Key::Enter));
-            if enter && corte_ui::terminar(st) {
+            if enter && (corte_ui::terminar(st) || centros_ui::terminar(st)) {
                 // Enter conclui a linha de corte (ou o contorno do detalhe): o clique seguinte posiciona
             } else if resp.clicked_by(egui::PointerButton::Primary) || (enter && resp.hovered()) {
                 if let Some(m) = mouse_mm {
@@ -944,10 +1002,14 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                     None => st.origin = None,
                 }
             } else if resp.clicked_by(egui::PointerButton::Primary) {
-                let p = mouse_mm.and_then(|p| pick(st, p));
-                st.focus = p;
-                if p != st.sel {
-                    st.sel = None;
+                // cabeçalho de tabela ordena; etiqueta de furo destaca a linha (B295)
+                let usada = mouse_mm.is_some_and(|q| tabelas_ui::clique(st, q));
+                if !usada {
+                    let p = mouse_mm.and_then(|p| pick(st, p));
+                    st.focus = p;
+                    if p != st.sel {
+                        st.sel = None;
+                    }
                 }
             } else if resp.drag_started_by(egui::PointerButton::Primary) {
                 let origin = ui.ctx().input(|i| i.pointer.press_origin()).map(to_mm).or(mouse_mm);
@@ -1393,7 +1455,11 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
             st.d.dims.push(Dim { id, view: vid, kind: if tool == c::DIM_R { DimKind::Radius } else { DimKind::Diameter }, anchors: vec![ax.unproject(c), ax.unproject(on)], offset: 6., text: String::new(), tol: String::new(), ..Default::default() });
             done(st, id);
         }
-        c::NOTE | c::CENTER => {
+        c::CENTER => match centros_ui::clicar(st, m) {
+            Ok(_) => {}
+            Err(e) => app.toast(tr(e), true),
+        },
+        c::NOTE => {
             let id = st.d.alloc();
             let (kind, text) = ghost::symbol_note(st, tool);
             // dentro de uma vista: pertence a ela (anda junto)
@@ -1440,7 +1506,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
             };
             let id = st.d.alloc();
             let source = st.source.clone().unwrap();
-            st.d.tables.push(Table { id, sheet, kind, source, pos: m, level: Default::default() });
+            st.d.tables.push(Table { id, sheet, kind, source, pos: m, level: Default::default(), cfg: Default::default() });
             done(st, id);
         }
         _ => st.tool = None,
@@ -1741,6 +1807,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 tree_row(ui, st, sid, id, text, depth);
                 let mut items: Vec<(Id, String)> = st.d.dims.iter().filter(|d| d.view == id).map(|d| (d.id, format!("↔ {}{}", tr(d.kind.label()), if d.text.is_empty() { String::new() } else { format!(" — {}", d.text) }))).collect();
                 items.extend(st.d.notes.iter().filter(|n| owners.get(&n.id) == Some(&id)).map(|n| (n.id, format!("{} {}", note_icon(&n.kind), note_title(n)))));
+                items.extend(st.d.centers.iter().filter(|c| c.view == id).map(|c| (c.id, format!("✛ {} — {}", tr("Marca de centro"), tr(c.modo.label())))));
                 for (cid, t) in items {
                     tree_row(ui, st, sid, cid, t, depth + 1);
                 }
@@ -1790,6 +1857,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let mut changed_src = false;
     let mut refresh_now = false;
     if let Some(id) = st.sel {
+        if centros_ui::painel(ui, st, id) {
+            return;
+        }
         if let Some(v) = st.d.views.iter_mut().find(|v| v.id == id) {
             ui.heading(tr("Vista"));
             let state = st.states.get(&id).copied().unwrap_or(ViewState::Atualizada);
@@ -1807,6 +1877,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             crate::editor::check(ui, &mut v.hidden_lines, "Linhas ocultas (tracejadas)");
             crate::editor::check(ui, &mut v.tangent_edges, "Arestas tangentes");
             crate::editor::check(ui, &mut v.label, "Mostrar rótulo e escala");
+            centros_ui::visibilidade_da_vista(ui, &mut st.d.centros_ocultos, &st.d.centers, id);
             ui.horizontal(|ui| {
                 ui.label(tr("Renderização"));
                 egui::ComboBox::from_id_salt(("render_vista", id.0)).selected_text(tr(v.render.label())).show_ui(ui, |ui| {
@@ -2020,6 +2091,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             }
             return;
         }
+        let tabela_pre = st.d.tables.iter().find(|t| t.id == id).cloned().map(|t| tabela::dados(&mut st.models, &t, &st.d).todas);
+        let vistas_folha: Vec<(Id, String)> = st.d.views.iter().filter(|v| v.sheet == st.sheet).map(|v| (v.id, v.name.clone())).collect();
         if let Some(t) = st.d.tables.iter_mut().find(|t| t.id == id) {
             ui.heading(tr(t.kind.label()));
             ui.label(RichText::new(&t.source.path).small());
@@ -2040,10 +2113,12 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     t.source = s;
                 }
             }
+            tabelas_ui::controles(ui, t, &tabela_pre.unwrap_or_default(), &vistas_folha);
+            ui.separator();
             let mut csv = None;
             if ui.button(tr("Exportar CSV…")).clicked() {
                 let t = t.clone();
-                let data = st.models.table(&t, &st.d);
+                let data = tabela::dados(&mut st.models, &t, &st.d).data;
                 csv = Some(data);
             }
             if let Some(data) = csv {
