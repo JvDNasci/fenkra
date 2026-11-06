@@ -1,4 +1,4 @@
-# ADR 0072: rosca modelada em trechos de duas voltas, prévia só em linhas e cosmética em textura (B351)
+# ADR 0073: rosca modelada em trechos de duas voltas, prévia só em linhas e cosmética em textura (B351)
 
 ## Contexto
 
