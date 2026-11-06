@@ -39,6 +39,8 @@ calcula, com adaptação de projeto.
 - Formato novo opcional no `.fka` (`transmissoes`, omitido quando vazio): arquivos antigos abrem como antes.
 - O diferencial anima com a caixa presa; a caixa solta (`ω caixa = (ω1 + ω2)/2`) está só no cálculo, porque o
   acoplamento entre juntas é de duas em duas.
-- A corrente desenhada é um corpo estático (rolos e placas); o movimento dos elos ao longo do laço está na
-  geometria (`Caminho::elos` com fase), mas ainda não é desenhado na viewport.
+- A corrente da montagem é um corpo estático de placas; os rolos saem do corpo e a viewport os desenha por
+  cima, andando pelo laço com a rotação da roda motora (`rolos_da_corrente`, `Caminho::elos` com fase). Os
+  rolos não entram em exportação nem na lista de peças; só a peça avulsa (`com_rolos`) os traz no sólido.
+- A dupla hélice em V usa junta cilíndrica (gira e desliza), sem retenção axial.
 - Sem-fim com muitas voltas é caro: o limite de 160 seções recusa o resto com mensagem.
