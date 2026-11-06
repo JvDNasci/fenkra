@@ -352,7 +352,8 @@ fn passadas(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, gatilho: Ga
             if so.is_some_and(|(c, _)| c != *comp) {
                 continue;
             }
-            let Some(mut doc) = cache.get(full, false).ok().filter(|p| !p.doc.external.is_empty()).map(|p| p.doc.clone()) else { continue };
+            // peça sem link nem é calculada: abrir uma montagem grande não pode passar por aqui
+            let Some(mut doc) = cache.documento(full).ok().filter(|d| !d.external.is_empty()).cloned() else { continue };
             let antes = (doc.external.clone(), doc.params.clone());
             for e in antes.0.iter().filter(|e| so.is_none_or(|(_, x)| x == e.id)) {
                 atualizar_link(a, dir, cache, gatilho, *comp, rotulo, full, &mut doc, e, &mut rel, k == 0);

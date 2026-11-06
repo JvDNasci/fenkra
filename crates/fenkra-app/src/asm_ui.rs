@@ -194,6 +194,21 @@ pub struct AsmState {
     pub view: Option<RecomputeResult>,
     /// recompor a vista (peças ou posições mudaram)
     pub dirty: bool,
+    /// composição fora da thread da interface (B125); nasce no primeiro quadro da janela
+    fundo: Option<crate::asm_fundo::ComporFundo>,
+    /// número do pedido mais novo: resposta de outro número já foi superada
+    geracao: u64,
+    /// há pedido na thread de composição
+    pub compondo: bool,
+    /// a vista mudou, mas o pedido ainda não saiu
+    envio_pendente: bool,
+    ultimo_envio: Option<std::time::Instant>,
+    /// cópias da vista: a malha compartilhada e a posição de cada uma
+    pub instancias: Vec<fenkra_montagem::lod::Instancia>,
+    /// caixa de cada corpo da vista
+    pub caixas: Vec<fenkra_montagem::lod::Caixa>,
+    /// comandos de cada peça para a árvore
+    contornos: std::collections::HashMap<String, PartOutline>,
     pub sel: Option<Id>,
     /// restrição ou junta em criação: nada entra na montagem antes de aceitar
     pub cmd: Option<crate::asm_cmd::Pendente>,
@@ -326,6 +341,14 @@ impl AsmState {
             view_doc: Document::new("montagem"),
             view: None,
             dirty: true,
+            fundo: None,
+            geracao: 0,
+            compondo: false,
+            envio_pendente: false,
+            ultimo_envio: None,
+            instancias: vec![],
+            caixas: vec![],
+            contornos: Default::default(),
             sel: None,
             cmd: None,
             fantasma_novo: false,
@@ -448,14 +471,8 @@ impl AsmState {
         self.furos_rel = rel;
     }
 
-    /// Recompõe a vista se preciso.
-    pub fn refresh(&mut self) -> bool {
-        if !self.dirty {
-            return false;
-        }
-        self.sincronizar_furos();
-        let dir = self.dir();
-        self.errors.clear();
+    /// Montagem como ela aparece agora: estado de exibição e isolamento aplicados.
+    fn montagem_mostrada(&self) -> Assembly {
         let mut shown = self.asm.with_state(&self.live);
         if self.isolate {
             let manter: Vec<Id> = self.multi.iter().copied().chain(self.sel).collect();
@@ -467,11 +484,106 @@ impl AsmState {
                 }
             }
         }
-        let (d, r) = fenkra_montagem::view::compose(&shown, dir.as_deref(), &mut self.cache, &mut self.errors);
-        self.view_doc = d;
-        self.view = Some(r);
+        shown
+    }
+
+    fn aplicar(&mut self, c: fenkra_montagem::view::Composta) {
+        self.view_doc = c.doc;
+        self.view = Some(c.result);
+        self.instancias = c.instancias;
+        self.caixas = c.caixas;
+        self.contornos.clear();
+    }
+
+    /// Recompõe a vista agora, nesta thread, se preciso. Serve a quem precisa da vista em dia para
+    /// seguir; o laço da interface usa `refresh_fundo`.
+    pub fn refresh(&mut self) -> bool {
+        if !self.dirty && !self.envio_pendente && !self.compondo {
+            return false;
+        }
+        self.sincronizar_furos();
+        let dir = self.dir();
+        self.errors.clear();
+        let shown = self.montagem_mostrada();
+        // o que estava na fila ficou superado
+        self.geracao += 1;
+        (self.compondo, self.envio_pendente) = (false, false);
+        let c = crate::medir_quadros::fase("compose", || fenkra_montagem::view::compor(&shown, dir.as_deref(), &mut self.cache, &mut self.errors, None));
+        if let Some(c) = c {
+            self.aplicar(c);
+        }
         self.dirty = false;
         true
+    }
+
+    /// Acompanha o estado da montagem sem esperar: a posição das cópias muda neste quadro, e a malha
+    /// posicionada dos corpos vem da thread de composição. Devolve `true` se a cena precisa de refazer.
+    pub fn refresh_fundo(&mut self, ctx: &egui::Context) -> bool {
+        const INTERVALO: std::time::Duration = std::time::Duration::from_millis(100);
+        let mut mudou = false;
+        if self.dirty {
+            self.dirty = false;
+            self.envio_pendente = true;
+            self.sincronizar_furos();
+            mudou |= self.posicoes_ao_vivo();
+        }
+        // arrastar pede composição a cada quadro: cancelar a anterior toda vez não deixaria nenhuma
+        // terminar, então um pedido novo só substitui o que está rodando depois do intervalo
+        if self.envio_pendente {
+            if !self.compondo || self.ultimo_envio.is_none_or(|t| t.elapsed() >= INTERVALO) {
+                self.enviar_pedido(ctx);
+            } else {
+                ctx.request_repaint_after(INTERVALO);
+            }
+        }
+        while let Some(r) = self.fundo.as_ref().and_then(|f| f.receber()) {
+            if r.geracao == self.geracao {
+                self.errors = r.erros;
+                for (f, d) in r.documentos {
+                    self.cache.semear_documento(f, d);
+                }
+                self.aplicar(r.composta);
+                self.compondo = false;
+                mudou = true;
+            }
+        }
+        if self.compondo {
+            ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        }
+        mudou
+    }
+
+    fn enviar_pedido(&mut self, ctx: &egui::Context) {
+        let c = ctx.clone();
+        self.fundo.get_or_insert_with(|| crate::asm_fundo::ComporFundo::nova(move || c.request_repaint()));
+        self.geracao += 1;
+        let pedido = crate::asm_fundo::Pedido { geracao: self.geracao, asm: self.montagem_mostrada(), dir: self.dir(), qualidade: self.cache.qualidade(), pendentes: self.cache.pendentes(), esquecer: self.cache.tirar_esquecidas() };
+        if let Some(f) = &self.fundo {
+            f.enviar(pedido);
+        }
+        self.compondo = true;
+        self.envio_pendente = false;
+        self.ultimo_envio = Some(std::time::Instant::now());
+    }
+
+    /// Progresso da composição em andamento: componentes prontos e total.
+    pub fn progresso_composicao(&self) -> Option<(u32, u32)> {
+        self.fundo.as_ref().filter(|_| self.compondo).and_then(|f| f.progresso())
+    }
+
+    /// Leva as cópias à posição atual dos componentes, sem esperar a composição.
+    fn posicoes_ao_vivo(&mut self) -> bool {
+        let Some(v) = &self.view else { return false };
+        let shown = self.asm.with_state(&self.live);
+        let mut mudou = false;
+        for i in &mut self.instancias {
+            let Some(n) = v.bodies.get(i.corpo).and_then(|b| shown.node(b.collector)) else { continue };
+            if i.posicao != n.placement {
+                i.posicao = n.placement;
+                mudou = true;
+            }
+        }
+        mudou
     }
 
     /// Resolve as restrições e marca a vista para recompor.
@@ -1147,7 +1259,7 @@ pub fn save(app: &mut App) {
 /// Resumo da árvore de uma peça (como aparece no Sólidos): corpos com a linha do tempo,
 /// geometria e parâmetros.
 #[derive(Clone, Default)]
-struct PartOutline {
+pub(crate) struct PartOutline {
     /// (coletor, nome, cor, comandos: (id, ícone, nome, suprimido))
     bodies: Vec<(Id, String, [u8; 3], Vec<(Id, &'static str, String, bool)>)>,
     /// geometria (ícone, nome)
@@ -1268,8 +1380,16 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             match &n.kind {
                 NodeKind::Part { path } => {
                     *inst.entry(path.clone()).or_insert(0) += 1;
-                    if let Ok(p) = st.cache.get(&full_path(dir.as_deref(), path), false) {
-                        feats.insert(n.id, PartOutline::of(&p.doc));
+                    // a árvore redesenha todo quadro: nada de disco nem de cálculo aqui. O documento vem
+                    // da composição, e até ela chegar a linha fica sem os comandos da peça
+                    if !st.contornos.contains_key(path) {
+                        if let Some(d) = st.cache.documento_pronto(&full_path(dir.as_deref(), path)) {
+                            let c = PartOutline::of(d);
+                            st.contornos.insert(path.clone(), c);
+                        }
+                    }
+                    if let Some(c) = st.contornos.get(path) {
+                        feats.insert(n.id, c.clone());
                     }
                 }
                 NodeKind::SubAssembly { path } => {
@@ -2384,6 +2504,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     ui.radio_value(&mut n.mode, LoadMode::Editavel, tr("editável"));
                     ui.radio_value(&mut n.mode, LoadMode::Visualizacao, tr("só visualização"));
                 });
+                ui.checkbox(&mut n.simplificada, tr("Versão simplificada")).on_hover_text(tr("Desenha o componente sempre com a malha mais grossa, de qualquer distância. Volume, massa e medidas continuam os da peça."));
                 let mut own = n.color.is_some();
                 ui.horizontal(|ui| {
                     if crate::editor::check(ui, &mut own, "cor própria").changed() {

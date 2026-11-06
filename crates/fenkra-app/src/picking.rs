@@ -231,8 +231,78 @@ fn pickable<'a>(r: &'a RecomputeResult, doc: &Document, f: &Filter) -> Vec<(usiz
 }
 
 pub fn pick(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: Pos2, f: &Filter) -> Option<Pick> {
+    pick_com_caixas(r, doc, cam, rect, pos, f, None)
+}
+
+#[cfg(test)]
+mod testes_caixas {
+    use super::*;
+
+    #[test]
+    fn raio_reconhece_a_caixa_e_a_folga() {
+        let c = ([0., 0., 0.], [10., 10., 10.]);
+        let baixo = Vec3::new(0., 0., -1.);
+        assert!(raio_na_caixa(Vec3::new(5., 5., 100.), baixo, &c, 0.));
+        assert!(!raio_na_caixa(Vec3::new(15., 5., 100.), baixo, &c, 0.));
+        assert!(raio_na_caixa(Vec3::new(15., 5., 100.), baixo, &c, 6.), "aresta a poucos pixels da caixa");
+        assert!(!raio_na_caixa(Vec3::new(5., 5., -100.), baixo, &c, 0.), "a caixa ficou atrás do raio");
+    }
+
+    #[test]
+    fn caixas_nao_mudam_o_que_a_selecao_acha() {
+        let r = fenkra_solidos::recompute(&fenkra_solidos::example_document());
+        let d = fenkra_solidos::example_document();
+        let cx: Vec<_> = r.bodies.iter().filter_map(|b| fenkra_montagem::lod::caixa_de(&b.mesh)).collect();
+        let cam = Camera { dist: 400., ..Default::default() };
+        let rect = Rect::from_min_size(Pos2::ZERO, egui::vec2(800., 600.));
+        let f = Filter { faces: true, edges: true, vertices: true, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None };
+        let mut achou = 0;
+        for x in (0..800).step_by(53) {
+            for y in (0..600).step_by(47) {
+                let p = Pos2::new(x as f32, y as f32);
+                let a = pick(&r, &d, &cam, rect, p, &f);
+                achou += a.is_some() as u32;
+                assert_eq!(a, pick_com_caixas(&r, &d, &cam, rect, p, &f, Some(&cx)));
+            }
+        }
+        assert!(achou > 0);
+    }
+}
+
+/// O raio passa a menos de `folga` da caixa?
+pub fn raio_na_caixa(o: Vec3, d: Vec3, caixa: &fenkra_montagem::lod::Caixa, folga: f32) -> bool {
+    let (mut t0, mut t1) = (f32::MIN, f32::MAX);
+    for k in 0..3 {
+        let (lo, hi) = (caixa.0[k] - folga, caixa.1[k] + folga);
+        if d[k].abs() < 1e-9 {
+            if o[k] < lo || o[k] > hi {
+                return false;
+            }
+            continue;
+        }
+        let (a, b) = ((lo - o[k]) / d[k], (hi - o[k]) / d[k]);
+        t0 = t0.max(a.min(b));
+        t1 = t1.min(a.max(b));
+    }
+    t0 <= t1 && t1 >= 0.
+}
+
+/// Seleção com a caixa de cada corpo: quem o raio nem chega perto fica fora antes de olhar triângulo.
+/// Na montagem isso é o que mantém o passar do mouse leve, com milhões de triângulos na cena (B125).
+pub fn pick_com_caixas(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: Pos2, f: &Filter, caixas: Option<&[fenkra_montagem::lod::Caixa]>) -> Option<Pick> {
     let (o, d) = cam.ray(rect, pos);
-    let meshes = pickable(r, doc, f);
+    let mut meshes = pickable(r, doc, f);
+    if let Some(cx) = caixas {
+        meshes.retain(|(code, ..)| {
+            cx.get(*code).is_none_or(|c| {
+                // a margem cobre a distância em pixels com que vértices e arestas são pegos
+                let centro = (Vec3::from(c.0) + Vec3::from(c.1)) / 2.;
+                let meia = (Vec3::from(c.1) - Vec3::from(c.0)).length() / 2.;
+                let folga = 12. / cam.px_por_mm((centro - cam.eye()).length() - meia, rect.height());
+                raio_na_caixa(o, d, c, folga)
+            })
+        });
+    }
     let masc = mascaras(r, f);
     // referência visível agora? (o resultado traz também as ocultas)
     let ref_ok = |id: Id| doc.reference(id).is_some_and(|x| doc.ref_shown(x) != f.hidden_env);

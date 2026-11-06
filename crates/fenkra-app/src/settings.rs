@@ -723,6 +723,7 @@ impl Settings {
             msaa: self.graficos.msaa.amostras(),
             simplificar: self.graficos.simplificar_ao_girar,
             navegando: false,
+            leve: self.modo_leve,
             realista: self.graficos.iluminacao_realista,
             secao: None,
         }

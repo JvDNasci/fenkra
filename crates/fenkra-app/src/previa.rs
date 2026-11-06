@@ -546,6 +546,7 @@ mod tests {
         let sel = crate::app::Sel::None;
         let filtro = Filter::default();
         let o = SceneOpts {
+            instancias: &[],
             curvatura: None,
             editing: None,
             sel: &sel,

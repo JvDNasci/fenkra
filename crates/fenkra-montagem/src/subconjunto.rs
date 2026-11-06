@@ -369,7 +369,7 @@ impl Assembly {
         self.nodes.retain(|n| !dentro.contains(&n.id));
         // os grupos seguem aqui para as peças que ficaram; sumindo a última, ficam vazios e inofensivos
         let pos = pos.min(self.nodes.len());
-        self.nodes.insert(pos, Node { id: no, name: no_nome, number: numero, kind: NodeKind::SubAssembly { path: path.into() }, parent: pai, placement: Placement::default(), fixed: fixo, visible: true, mode: LoadMode::Editavel, color: None });
+        self.nodes.insert(pos, Node { id: no, name: no_nome, number: numero, kind: NodeKind::SubAssembly { path: path.into() }, parent: pai, placement: Placement::default(), fixed: fixo, visible: true, mode: LoadMode::Editavel, color: None, simplificada: false });
         (sub, no, rel)
     }
 

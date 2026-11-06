@@ -41,6 +41,22 @@ pub struct SceneOpts<'a> {
     pub curvatura: Option<crate::sup_analise::EscalaCurvatura>,
     /// prévia do comando aberto
     pub fantasma: Option<crate::previa::Fantasma<'a>>,
+    /// cópias da montagem: esses corpos vão para os lotes, sem repetir a malha na cena (B125)
+    pub instancias: &'a [fenkra_montagem::lod::Instancia],
+}
+
+/// Linhas da matriz de posição: as colunas são os eixos da peça vistos do mundo.
+fn linhas_da_posicao(p: &fenkra_montagem::Placement) -> [[f32; 4]; 3] {
+    let e = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]].map(|x| p.dir(x));
+    [0, 1, 2].map(|r| [e[0][r] as f32, e[1][r] as f32, e[2][r] as f32, p.origin[r] as f32])
+}
+
+/// Cópia da cena para um corpo da montagem.
+pub(crate) fn copia_de(i: &fenkra_montagem::lod::Instancia, col: [f32; 3], mat: [f32; 4], aresta: [f32; 4]) -> (crate::instancias::Copia, (Vec3, Vec3)) {
+    let (lo, hi) = fenkra_montagem::lod::caixa_posta(&i.prototipo.caixa, &i.posicao);
+    let (lo, hi) = (Vec3::from(lo), Vec3::from(hi));
+    let gpu = crate::instancias::InstanciaGpu { m: linhas_da_posicao(&i.posicao), col: [col[0], col[1], col[2], 1.], mat, aresta };
+    (crate::instancias::Copia { gpu, centro: (lo + hi) / 2., raio: (hi - lo).length() / 2., simplificada: i.simplificada }, (lo, hi))
 }
 
 fn lv(p: [f32; 3], col: [f32; 4]) -> LineVertex {
@@ -123,6 +139,9 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     // só sketches se ocultam um a um; sólidos aparecem pelo corpo (a última feature junta tudo)
     let feat_hidden: HashSet<Id> = doc.features.iter().filter(|f| doc.sketch_hidden(f) && matches!(f.kind, fenkra_core::FeatureKind::Sketch(_))).map(|f| f.id).collect();
     let (peca_tema, aresta_tema) = crate::theme::piece_colors();
+    // o mapa de curvatura colore por vértice: só a malha posicionada de cada corpo sabe disso
+    let copias: HashMap<Id, &fenkra_montagem::lod::Instancia> = if o.curvatura.is_none() && o.fantasma.is_none() { o.instancias.iter().filter_map(|i| r.bodies.get(i.corpo).map(|b| (b.collector, i))).collect() } else { HashMap::new() };
+    s.tangentes = o.tangent_edges;
     let edge_col = if o.dark_edges { aresta_tema.map(|a| { let f = rgb(a); [f[0], f[1], f[2], 1.0] }).unwrap_or([0.06, 0.07, 0.09, 1.0]) } else { [0.85, 0.88, 0.92, 1.0] };
 
     if o.filter.corpos {
@@ -137,6 +156,24 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             let Some(col) = doc.collectors.iter().find(|c| c.id == collector) else { continue };
             let body_sel = hi(collector);
             let base = doc.appearance.unwrap_or(Appearance { color: col.color, finish: col.finish, texture: col.texture });
+            if let Some(i) = copias.get(&collector) {
+                if shows(!col.visible, env) {
+                    let (rough, metal, alpha) = base.finish.params();
+                    let mut c = rgb(if base.color == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(base.color) } else { base.color });
+                    if body_sel {
+                        c = [c[0] * 0.55 + 0.45, c[1] * 0.55 + 0.38, c[2] * 0.55 + 0.08];
+                    }
+                    let textura = base.texture.filter(|t| (*t as u32) < crate::render::TEX_LAYERS).map(|t| t as f32 + 1.).unwrap_or(0.);
+                    let (copia, (lo, hi)) = copia_de(i, c, [rough, metal, alpha, textura], edge_col);
+                    grow(&mut bounds, lo);
+                    grow(&mut bounds, hi);
+                    match s.lotes.iter_mut().find(|l| l.prototipo.id == i.prototipo.id) {
+                        Some(l) => l.copias.push(copia),
+                        None => s.lotes.push(crate::instancias::Lote { prototipo: i.prototipo.clone(), copias: vec![copia] }),
+                    }
+                }
+                continue;
+            }
             let nfaces = m.face_ranges.len();
             for fi in 0..nfaces {
                 let owner = face_owner.get(fi).copied();

@@ -3511,7 +3511,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if self.settings.bench == crate::settings::Bench::Desenho {
                     crate::dwg_ui::panel(self, ui)
                 } else if self.settings.bench == crate::settings::Bench::Montagem {
-                    crate::asm_ui::panel(self, ui)
+                    crate::medir_quadros::fase("painel", || crate::asm_ui::panel(self, ui))
                 } else if self.sketch.is_some() {
                     crate::sketch_ui::panel(self, ui)
                 } else {
@@ -3715,7 +3715,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let contorno = Contorno::reservar(&ui, regiao);
         match self.left {
             LeftTab::Peca if self.settings.bench == crate::settings::Bench::Desenho => crate::dwg_ui::tree(self, &mut ui),
-            LeftTab::Peca if self.settings.bench == crate::settings::Bench::Montagem => crate::asm_ui::tree(self, &mut ui),
+            LeftTab::Peca if self.settings.bench == crate::settings::Bench::Montagem => crate::medir_quadros::fase("arvore", || crate::asm_ui::tree(self, &mut ui)),
             LeftTab::Peca => self.tree(&mut ui),
             LeftTab::Projeto => self.project_panel(&mut ui),
         }
@@ -6538,7 +6538,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let n = self.open.doc.features.len();
                 let swept = (((now - self.sweep_t0) / 0.035) as usize).min(n);
                 let stale = self.stale_from().is_some() && !busy;
-                let (txt, col) = if busy {
+                let compondo = self.asm.as_ref().filter(|s| self.settings.bench == crate::settings::Bench::Montagem && s.compondo);
+                let (txt, col) = if let Some(s) = compondo {
+                    let t = match s.progresso_composicao() {
+                        Some((f, t)) => format!("⏳ {} {}/{t}", tr("compondo a montagem…"), f.min(t)),
+                        None => format!("⏳ {}", tr("compondo a montagem…")),
+                    };
+                    (t, crate::theme::st_warn())
+                } else if busy {
                     let t = match self.worker.progresso() {
                         Some((f, t)) => format!("⏳ recalculando… {}/{t}", f.min(t)),
                         None => "⏳ recalculando…".to_string(),
@@ -6758,6 +6765,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     ctx.request_repaint_after(crate::render::PAUSA_NAVEGACAO + std::time::Duration::from_millis(20));
                 }
                 let tex = vp.render(rs, size, style);
+                if vp.inst.subindo {
+                    ui.ctx().request_repaint();
+                }
+                crate::medir_quadros::valor("tris_copias", vp.inst.contagem.triangulos as f64);
+                crate::medir_quadros::valor("bytes_copias", vp.inst.contagem.bytes_placa as f64);
                 ui.painter().image(tex, rect, egui::Rect::from_min_max(egui::pos2(0., 0.), egui::pos2(1., 1.)), Color32::WHITE);
             }
 
@@ -6901,6 +6913,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     exclude_sketch: None,
                     fantasma: aberto.filter(|_| !escolhe_faces),
                 };
+                // sem mouse na medição: a seleção no meio da vista dá o custo de passar o mouse
+                if crate::medir_quadros::ativo() && crate::partida::quadros() % 25 == 0 {
+                    let caixas = self.asm.as_ref().filter(|_| self.in_asm()).map(|s| s.caixas.as_slice());
+                    crate::medir_quadros::fase("pick_caixas", || crate::picking::pick_com_caixas(r, &self.open.doc, &cam, rect, rect.center(), &filt, caixas));
+                }
                 let dragging = resp.dragged();
                 self.hover_pick = match (resp.hover_pos(), dragging) {
                     (Some(h), false) => {
@@ -6910,7 +6927,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             let cor = ui.visuals().text_color();
                             ui.painter().text(h + egui::vec2(14., 18.), egui::Align2::LEFT_TOP, format!("{i}/{n}  {}", tr("Alt + roda: selecionar outro")), egui::FontId::proportional(12.), cor);
                         }
-                        outro.or_else(|| crate::picking::pick(r, doc, &cam, rect, h, &filt))
+                        let caixas = self.asm.as_ref().filter(|_| self.in_asm()).map(|s| s.caixas.as_slice());
+                        outro.or_else(|| crate::picking::pick_com_caixas(r, doc, &cam, rect, h, &filt, caixas))
                     }
                     _ => {
                         self.selecao_ciclo.reiniciar();
@@ -7785,6 +7803,7 @@ impl eframe::App for App {
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
         crate::demo_foto::quadro(root.ctx());
         crate::partida::contar_quadro();
+        crate::medir_quadros::quadro(frame.info().cpu_usage);
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);
         // camadas de configuração (B100): projeto aberto, travas, opções do documento e avisos
@@ -8091,13 +8110,13 @@ impl eframe::App for App {
             crate::dwg_ui::canvas(self, root);
         } else if self.in_asm() {
             let st = self.asm.as_mut().unwrap();
-            if st.refresh() {
+            if crate::medir_quadros::fase("refresh_fundo", || st.refresh_fundo(ctx)) {
                 self.scene_dirty = true;
             }
             let st = self.asm.as_mut().unwrap();
             std::mem::swap(&mut self.result, &mut st.view);
             std::mem::swap(&mut self.open.doc, &mut st.view_doc);
-            self.viewport(root, frame);
+            crate::medir_quadros::fase("viewport", || self.viewport(root, frame));
             let st = self.asm.as_mut().unwrap();
             std::mem::swap(&mut self.result, &mut st.view);
             std::mem::swap(&mut self.open.doc, &mut st.view_doc);
@@ -8250,7 +8269,9 @@ impl eframe::App for App {
             self.scene_dirty = true;
         }
 
-        if self.scene_dirty {
+        // a primeira composição ainda não chegou: sem ela a cena seria a da peça de trás
+        let esperando_vista = self.in_asm() && self.asm.as_ref().is_some_and(|s| s.view.is_none() && (s.compondo || s.dirty));
+        if self.scene_dirty && !esperando_vista {
             let forma_oculta = crate::forma_ui::oculta(self);
             let asm_view = if self.in_asm() { self.asm.as_ref().and_then(|s| s.view.as_ref().map(|v| (&s.view_doc, v))) } else { None };
             let (scene_doc, scene_res) = match asm_view {
@@ -8274,8 +8295,9 @@ impl eframe::App for App {
                     fantasma: crate::previa::da_sessao(self.session.as_ref().filter(|_| asm_view.is_none()), &ctx.global_style().visuals),
                     forma_oculta,
                     curvatura: crate::sup_analise::escala_da_tela(&self.settings, &ctx.global_style().visuals),
+                    instancias: self.asm.as_ref().filter(|_| asm_view.is_some()).map_or(&[], |s| s.instancias.as_slice()),
                 };
-                let mut s = scene::build(scene_doc, r, &opts);
+                let mut s = crate::medir_quadros::fase("cena", || scene::build(scene_doc, r, &opts));
                 if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {
                     crate::previa::reter_ultima(&mut sess.ultima_valida, &mut s, r.status.get(&sess.id));
                 }
@@ -8286,7 +8308,9 @@ impl eframe::App for App {
                 crate::engrenagens_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::eixo_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 importar::defeitos_na_cena(self.importar_relatorio.as_ref(), self.importar_defeito, &mut s);
-                vp.set_scene(rs, &s);
+                crate::medir_quadros::valor("bytes_faces", (std::mem::size_of_val(s.mesh.as_slice()) + std::mem::size_of_val(s.indices.as_slice())) as f64);
+                crate::medir_quadros::valor("bytes_arestas", std::mem::size_of_val(s.edges.as_slice()) as f64);
+                crate::medir_quadros::fase("subir", || vp.set_scene(rs, &s));
                 let grande = vp.cena_grande;
                 self.scene_dirty = false;
                 if grande {

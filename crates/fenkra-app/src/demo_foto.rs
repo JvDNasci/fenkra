@@ -12,7 +12,9 @@ pub fn quadro(ctx: &egui::Context) {
     let Ok(arquivo) = std::env::var("FENKRA_DEMO_FOTO") else { return };
     static FEITA: AtomicBool = AtomicBool::new(false);
     ctx.request_repaint();
-    if ctx.input(|i| i.time) > ESPERA && !FEITA.swap(true, Ordering::Relaxed) {
+    // montagem grande pede mais tempo: `FENKRA_DEMO_FOTO_ESPERA=<segundos>`
+    let espera = std::env::var("FENKRA_DEMO_FOTO_ESPERA").ok().and_then(|v| v.parse().ok()).unwrap_or(ESPERA);
+    if ctx.input(|i| i.time) > espera && !FEITA.swap(true, Ordering::Relaxed) {
         ctx.request_screenshot(move |img| {
             let [w, h] = img.size;
             let bytes: Vec<u8> = img.pixels.iter().flat_map(|c| c.to_srgba_unmultiplied()).collect();

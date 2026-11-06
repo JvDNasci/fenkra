@@ -21,6 +21,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Graus de liberdade** (GDL na árvore) — dof_per_comp; selos na árvore.
 - **Padrão de componentes** (Repetição) — `repeticao.rs`, `asm_repeticao.rs`: direção por aresta, eixo ou face, Pelos furos, vários componentes, segunda direção, fantasmas, seta e marcas para pular (B263).
 - **Interferência e colisão** (Interferência) — `interferencia.rs`, `asm_interf.rs`: painel próprio, escopo, coincidência, subconjunto como peça única, realce do volume comum, ignorados salvos na montagem (B264); colisão ao arrastar.
+- **Grandes montagens** — `lod.rs`, `view.rs::compor`, `instancias.rs`, `asm_fundo.rs`: cópias dividem a malha na placa de vídeo, até três níveis de detalhe escolhidos pelo erro na tela, composição fora da thread da interface e versão simplificada por componente (B125, ADR 0052).
 - **Vista explodida** (Exibição) — `display.rs`, `asm_exibicao.rs`: painel com Estados, Explosão e Animação; lista de passos reordenável (linear, radial, espaçamento automático, suprimível), a seta do manipulador cria o passo, linhas pontilhadas automáticas que seguem para o desenho, quadros-chave arrastáveis (B286).
 - **Lista de materiais (BOM)** (BOM) — AsmBom; numeração de itens.
 
