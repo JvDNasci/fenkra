@@ -630,6 +630,21 @@ fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
     }
 }
 
+/// B359: a setinha das variações é um triângulo desenhado, proporcional ao ícone (cerca de um quarto
+/// do lado) e centrado nele. Antes era o glifo ▾ de 11 pt num botão de 30 px de altura, que ficava
+/// colado no alto e parecia solto. A área de clique continua a altura inteira do botão.
+fn seta_da_familia(ui: &mut egui::Ui, size: f32) -> egui::Response {
+    let (area, resp) = ui.allocate_exact_size(egui::vec2(12., size + 6.), egui::Sense::click());
+    let v = ui.visuals();
+    if resp.hovered() {
+        ui.painter().rect_filled(area.shrink2(egui::vec2(1., 3.)), 4., v.widgets.hovered.weak_bg_fill);
+    }
+    let cor = if resp.hovered() { v.text_color() } else { v.weak_text_color() };
+    let (c, l) = (egui::pos2(area.center().x, area.top() + 3. + size / 2.), (size * 0.12).clamp(2.5, 4.));
+    ui.painter().add(egui::Shape::convex_polygon(vec![c + egui::vec2(-l, -l * 0.5), c + egui::vec2(l, -l * 0.5), c + egui::vec2(0., l * 0.75)], cor, egui::Stroke::NONE));
+    resp
+}
+
 /// Mostra um grupo; devolve as ações clicadas.
 /// Índice do bloco desenhado nesta passada (alterna as cores do tema); zerado a cada quadro.
 
@@ -680,8 +695,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
                         acts.push(i.act);
                     }
                     // setinha: abre as variações da família
-                    let arrow = ui.add(egui::Button::new(RichText::new(tr("▾")).size(11.)).frame(false).min_size(egui::vec2(10., size)));
-                    let arrow = arrow.on_hover_text(tr("variações"));
+                    let arrow = seta_da_familia(ui, size).on_hover_text(tr("variações"));
                     egui::Popup::menu(&arrow).show(|ui| {
                         for (k, v) in items.iter().enumerate() {
                             let r = ui.horizontal(|ui| {
@@ -775,7 +789,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
         frame.show(ui, |ui| ui.vertical(|ui| {
             let row = ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| body(ui)).response;
             // nome do grupo centralizado sob os botões, com a largura do próprio bloco
-            let (r, resp) = ui.allocate_exact_size(egui::vec2(row.rect.width(), 14.), egui::Sense::drag());
+            let (r, resp) = ui.allocate_exact_size(egui::vec2(row.rect.width(), 12.), egui::Sense::drag());
             ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, &title, egui::FontId::proportional(10.5), ui.visuals().weak_text_color());
             // arrastar o nome do grupo solta o bloco (vira flutuante; encaixa de novo ao soltar perto de uma borda)
             if let Some(g) = g {

@@ -3451,9 +3451,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     // ------------------------------------------------------------ painéis
 
     fn top(&mut self, root: &mut egui::Ui) {
-        egui::Panel::top("menu").frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(8, 4))).show(root, |ui| {
+        egui::Panel::top("menu").frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(8, 2))).show(root, |ui| {
             // faixa do topo em degradê suave
-            let r = ui.max_rect().expand2(egui::vec2(8., 4.));
+            let r = ui.max_rect().expand2(egui::vec2(8., 2.));
             let (a, b) = (ui.visuals().panel_fill, ui.visuals().faint_bg_color);
             let mut m = egui::Mesh::default();
             m.colored_vertex(r.left_top(), a);
@@ -3707,7 +3707,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         if !top.is_empty() || !mais.is_empty() {
             let mut acts = vec![];
             let fill = root.visuals().panel_fill;
-            egui::Panel::top("comandos").frame(egui::Frame::new().fill(fill).inner_margin(egui::Margin { left: 8, right: 8, top: 4, bottom: 2 })).show(root, |ui| {
+            egui::Panel::top("comandos").frame(egui::Frame::new().fill(fill).inner_margin(egui::Margin { left: 8, right: 8, top: 2, bottom: 1 })).show(root, |ui| {
                 // uma linha só, sem barra de rolagem à vista (não quebra linha);
                 // a roda do mouse (vertical) rola a barra para os lados
                 if ui.rect_contains_pointer(ui.max_rect()) {
@@ -3742,7 +3742,6 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                                 acts.extend(toolbar::mais(ui, &mais, &mut self.settings, &ts));
                             }
                         });
-                        ui.add_space(2.);
                     });
             });
             for a in acts {
@@ -8520,10 +8519,10 @@ impl eframe::App for App {
         };
         if active {
             self.painel_comando(ctx, area);
+        }
         // B357: os painéis de análise existem enquanto a tela está no modo e fecham pelo ✕
         crate::sup_analise::painel_curvatura(self, ctx, area);
         crate::analise_janela::painel_listras(self, ctx, area);
-        }
         crate::sup_inclinacao::painel_inclinacao(self, ctx, area);
         crate::dfm_ui::painel(self, ctx, area);
         self.painel_importar(ctx, area);
@@ -9397,7 +9396,7 @@ fn bench_tab(ui: &mut egui::Ui, active: bool, text: &str, enabled: bool) -> egui
         ui.visuals().text_color()
     };
     let g = ui.painter().layout_no_wrap(text.to_string(), font, col);
-    let size = g.size() + egui::vec2(22., 10.);
+    let size = g.size() + egui::vec2(18., 6.);
     let (r, resp) = ui.allocate_exact_size(size, if enabled { egui::Sense::click() } else { egui::Sense::hover() });
     let p = ui.painter();
     if active {
