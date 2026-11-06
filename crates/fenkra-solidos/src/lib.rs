@@ -46,6 +46,7 @@ pub mod reconhece;
 pub mod padrao;
 pub mod furo_norma;
 pub mod chapa_linha;
+mod chapa_dobra_curva;
 mod chapa_flat;
 mod arestas;
 mod chapa_laco;
@@ -602,6 +603,8 @@ pub struct BendLine {
     /// eixo da dobra no espaço dobrado (as alças 3D e a linha de dobra desenhada leem daqui);
     /// `None` nas dobras que só existem na planificada (cantos da aba por perfil)
     pub eixo: Option<EixoDobra>,
+    /// linha central quando a dobra é curva (cadeia curva); vazia na dobra reta, que `center` descreve
+    pub curva: Vec<V3>,
 }
 
 /// Eixo de uma dobra no espaço dobrado.
@@ -1120,9 +1123,14 @@ impl Ctx<'_> {
             AxisRef::Fixed { origin, dir } => Ok((origin, geo3d::unit(dir).ok_or("eixo de comprimento zero")?)),
             AxisRef::Face { point, key } => self.face_axis(point, key.as_ref()).map(|(o, v, _)| (o, v)),
             AxisRef::Edge { mid, key } => {
-                let c = Curve3::poly(self.live_edge(mid, key.as_ref())?, false)?;
+                let pts = self.live_edge(mid, key.as_ref())?;
+                // aresta circular: o eixo do círculo, não a corda
+                if let Some((centro, normal, _)) = geo3d::circle_fit(&pts) {
+                    return Ok((centro, normal));
+                }
+                let c = Curve3::poly(pts, false)?;
                 if !c.is_straight() {
-                    return Err("a aresta do eixo não é reta".into());
+                    return Err("a aresta do eixo não é reta nem circular".into());
                 }
                 Ok((c.start(), geo3d::unit(geo3d::sub(c.end(), c.start())).ok_or("eixo de comprimento zero")?))
             }
@@ -1201,7 +1209,33 @@ impl Ctx<'_> {
                 }
             }
         }
-        Err("a face escolhida não é cilíndrica nem cônica".into())
+        // face plana: a normal dela, saindo do ponto escolhido
+        if key.is_some() {
+            for (b, _, _) in self.bodies.values() {
+                if let Ok((s, n)) = b.surface_near(q) {
+                    if dist(s, q) < 1e-3 {
+                        return Ok((self.on_face(p, key)?, n, 20.));
+                    }
+                }
+            }
+        }
+        Err("a face escolhida não é plana, cilíndrica nem cônica".into())
+    }
+
+    /// Ponto clicado numa face: leva `p` pela normal até a face viva e o assenta nela. Assim
+    /// acompanha a face quando ela anda, e referência perdida vira erro como em `live_face`.
+    fn on_face(&self, p: V3, key: Option<&FaceKey>) -> Result<V3, String> {
+        use geo3d::*;
+        let q = self.live_face(p, key)?;
+        for (b, _, _) in self.bodies.values() {
+            let Ok((s, n)) = b.surface_near(q) else { continue };
+            if dist(s, q) > 1e-3 {
+                continue;
+            }
+            let levado = add(p, mul(n, dot(sub(q, p), n)));
+            return Ok(b.surface_near(levado).map_or(levado, |x| x.0));
+        }
+        Ok(q)
     }
 
     /// Origem do plano de face. O plano segue a face; a face que sumiu vira erro. Sem chave vale
@@ -1251,6 +1285,11 @@ impl Ctx<'_> {
                 let (a, b) = (c[0], *c.last().unwrap());
                 Ok(if geo3d::dist(a, point) <= geo3d::dist(b, point) { a } else { b })
             }
+            PointRef::Center { point, edge } => {
+                let c = self.live_edge(point, Some(&edge))?;
+                geo3d::circle_fit(&c).map(|x| x.0).ok_or_else(|| "a aresta do centro não é mais circular".to_string())
+            }
+            PointRef::OnFace { point, key } => self.on_face(point, Some(&key)),
             PointRef::CurveVertex { curve, index } => {
                 if depth > 32 {
                     return Err("referência circular".into());
@@ -1713,6 +1752,15 @@ impl Ctx<'_> {
                 Geo::Plane(Frame { origin: o, x: rot(b.x), normal: rot(b.normal) })
             }
             PlaneParallelPoint { base, point } => Geo::Plane(Frame { origin: self.point(point, d)?, ..self.plane(base, d)? }),
+            AxisSystem { origin, x, z } => {
+                let o = self.point(origin, d)?;
+                let (dz, dx) = (self.axis_d(z, d)?.1, self.axis_d(x, d)?.1);
+                let xo = geo3d::sub(dx, geo3d::mul(dz, geo3d::dot(dx, dz)));
+                if norm(xo) < 1e-9 {
+                    return Err("os eixos X e Z do sistema são paralelos".into());
+                }
+                Geo::Plane(frame_from(o, dz, Some(xo))?)
+            }
             PlaneThreePoints { a, b, c } => {
                 let (pa, pb, pc) = (self.point(a, d)?, self.point(b, d)?, self.point(c, d)?);
                 let n = cross(geo3d::sub(pb, pa), geo3d::sub(pc, pa));
@@ -3533,9 +3581,11 @@ impl Ctx<'_> {
         let shift = if (geo3d::dot(d, n) > 0.) == mat_up { geo3d::mul(d, sp.t) } else { [0.; 3] };
         let inner: Vec<V3> = pts.iter().map(|p| geo3d::add(*p, shift)).collect();
         let a = ang.to_radians();
+        let cmp = chapa::compensacao(sp.t, r, ang, sp.k_for(r));
+        let sobe = geo3d::dot(d, n) > 0.;
         if sp.flat {
             // planificada: faixa desenvolvida (arco pela linha neutra + parede) para fora
-            let dev = chapa::compensacao(sp.t, r, ang, sp.k_for(r)).ba + len;
+            let dev = cmp.ba + len;
             let fr = Frame { origin: inner[0], x: outs[0], normal: d };
             let loc = |p: V3| {
                 let q = geo3d::sub(p, fr.origin);
@@ -3550,6 +3600,7 @@ impl Ctx<'_> {
             let face = Shape::face(&fr, &[lp]).map_err(k)?;
             let tool = face.extrude(geo3d::mul(d, -1.), sp.t, 0.).map_err(k)?;
             self.apply(f.target, tool, BoolOp::Add, f.id)?;
+            self.marca_cadeia(f.id, &inner, &outs, ang, r, sobe, &cmp, true);
             return Ok(None);
         }
         // seção no plano normal à aresta: arco da dobra (raio interno r, externo r+t) e parede
@@ -3603,6 +3654,7 @@ impl Ctx<'_> {
         });
         let tool = if straight { face.extrude(geo3d::unit(axis).unwrap_or([1., 0., 0.]), geo3d::norm(axis), 0.).map_err(k)? } else { face.sm_chain_sweep(&inner, n).map_err(k)? };
         self.apply(f.target, tool, BoolOp::Add, f.id)?;
+        self.marca_cadeia(f.id, &inner, &outs, ang, r, sobe, &cmp, false);
         Ok(None)
             
     }
@@ -4329,7 +4381,15 @@ impl Ctx<'_> {
                     }
                 }
                 let pts = self.resolve_faces("casca", f, b, owners, roles, &sh.faces, &sh.face_keys)?;
-                let (s, out) = b.shell_tagged(&pts, t, sh.outward, &tags_for(owners)).map_err(k)?;
+                let (s, out) = if sh.espessuras.is_empty() {
+                    b.shell_tagged(&pts, t, sh.outward, &tags_for(owners)).map_err(k)?
+                } else {
+                    if sh.closed {
+                        return Err("espessura por face precisa de uma face aberta".into());
+                    }
+                    let proprias = sh.espessuras.iter().map(|e| Ok((e.ponto, ev(&e.valor, &self.vars, "espessura da face")?))).collect::<Result<Vec<_>, String>>()?;
+                    b.shell_faces_tagged(&pts, t, sh.outward, &proprias, &tags_for(owners)).map_err(k)?
+                };
                 // o kernel pode devolver o corpo maciço sem erro: casca que não tirou material falhou
                 if !sh.outward && s.mass().volume >= b.mass().volume - 1e-9 * b.mass().volume.abs().max(1.) {
                     return Err("a casca não esvaziou o corpo: espessura grande demais para a peça".into());
@@ -4524,6 +4584,28 @@ impl Ctx<'_> {
                     e1 = e1.max(t);
                 }
                 let top = geo3d::add(j.a, geo3d::mul(e, e0));
+                // mapa de dobras: as duas dobras do joggle, de canto vivo, nas duas pontas da rampa
+                let rampa = run.hypot(depth);
+                let estica = if j.keep_length { 0. } else { rampa - run };
+                let giro = depth.abs().atan2(run).to_degrees();
+                let cmp = chapa::compensacao(sp.t, 0., giro, sp.k_for(0.));
+                let fim_rampa = geo3d::mul(e, e1 - e0);
+                for (du, sobe) in [(0., depth < 0.), (run + estica, depth > 0.)] {
+                    let p0 = geo3d::add(top, geo3d::mul(side, du));
+                    let l = [p0, geo3d::add(p0, fim_rampa)];
+                    self.marca_cadeia(f.id, &l, &[side, side], giro, 0., sobe, &cmp, sp.flat);
+                }
+                if sp.flat {
+                    // planificada: a chapa fica plana; sem manter o comprimento, a rampa acrescenta material
+                    let rest = b.boolean(&beyond, fenkra_kernel::Bool::Cut).map_err(k)?;
+                    let longe = far_part.transformed(Xform::Translate(geo3d::mul(side, estica))).map_err(k)?;
+                    let fundo = geo3d::mul(n, -sp.t);
+                    let faixa = [top, geo3d::add(top, fundo), geo3d::add(geo3d::add(top, fundo), geo3d::mul(side, run + estica)), geo3d::add(top, geo3d::mul(side, run + estica))];
+                    let ponte = Shape::poly_prism(&faixa, fim_rampa).map_err(k)?;
+                    let plana = rest.boolean(&longe, fenkra_kernel::Bool::Fuse).map_err(k)?.boolean(&ponte, fenkra_kernel::Bool::Fuse).map_err(k)?;
+                    self.bodies.insert(f.target, fresh_body(plana, f.id));
+                    return Ok(Some("planificada: joggle desfeito".into()));
+                }
                 let pts = [
                     top,
                     geo3d::sub(top, geo3d::mul(n, sp.t)),
@@ -4554,6 +4636,11 @@ impl Ctx<'_> {
                 let raw: Vec<(V3, V3)> = match bd.sketch {
                     Some(sid) => {
                         let (frame, sk) = &self.sketch(sid)?;
+                        // curva forte: parede varrida ao longo da linha, não giro em torno de reta
+                        if let Some(c) = chapa::cadeia_curva(&sk.open) {
+                            let pts: Vec<V3> = c.iter().map(|p| self.map_point(frame.point(p[0], p[1]), f.flat_space, sp.flat)).collect();
+                            return self.dobra_curva(f, pts, ang, r, bd);
+                        }
                         let (ls, nt) = chapa::linhas_dobra(&sk.open)?;
                         notes.extend(nt);
                         ls.iter().map(|(p, q)| (frame.point(p[0], p[1]), frame.point(q[0], q[1]))).collect()
@@ -4934,7 +5021,12 @@ impl Ctx<'_> {
                 let anchor = cf.edge[cf.edge.len() / 2];
                 let (now, from) = self.chapa_aresta("aba curva", f, anchor, cf.edge_key.as_ref(), sp.flat)?;
                 let shift = geo3d::sub(now, anchor);
-                let pts: Vec<V3> = cf.edge.iter().map(|q| self.map_point(geo3d::add(*q, if from == f.flat_space && geo3d::norm(shift) > 1e-9 { shift } else { [0.; 3] }), from, sp.flat)).collect();
+                // no estado em que foi escolhida, a cadeia nasce de novo do B-rep pela tangência
+                let viva = if cf.edge_key.is_some() && f.flat_space == sp.flat { self.cadeia_tangente(f.target, now, &cf.edge) } else { None };
+                let pts: Vec<V3> = match viva {
+                    Some(c) => c,
+                    None => cf.edge.iter().map(|q| self.map_point(geo3d::add(*q, if from == f.flat_space && geo3d::norm(shift) > 1e-9 { shift } else { [0.; 3] }), from, sp.flat)).collect(),
+                };
                 self.curve_flange(f, pts, ang, r, len, cf.flip, None, cf.side)
             }
             FeatureKind::SmSurfFlange(sf) => {
@@ -6069,7 +6161,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 let a = geo3d::add(m.c0, geo3d::mul(m.u, du));
                 [up_to(a), up_to(geo3d::add(a, geo3d::mul(m.ev, m.l)))]
             };
-            BendLine { start: line(0.), center: line(m.ba / 2.), end: line(m.ba), angle: m.a.to_degrees().abs(), radius: geo3d::dist(m.o, m.c0), up: m.a > 0. && !m.down, feature: m.feature, eixo: Some(EixoDobra { a: m.c0, b: geo3d::add(m.c0, geo3d::mul(m.ev, m.l)), centro: m.o, normal: m.n, saida: m.u }), allowance: m.ba, deduction: 2. * (if m.a.abs() < 179.9_f64.to_radians() { (m.a.abs() / 2.).tan() * (geo3d::dist(m.o, m.c0) + m.t) } else { geo3d::dist(m.o, m.c0) + m.t }) - m.ba }
+            BendLine { curva: vec![], start: line(0.), center: line(m.ba / 2.), end: line(m.ba), angle: m.a.to_degrees().abs(), radius: geo3d::dist(m.o, m.c0), up: m.a > 0. && !m.down, feature: m.feature, eixo: Some(EixoDobra { a: m.c0, b: geo3d::add(m.c0, geo3d::mul(m.ev, m.l)), centro: m.o, normal: m.n, saida: m.u }), allowance: m.ba, deduction: 2. * (if m.a.abs() < 179.9_f64.to_radians() { (m.a.abs() / 2.).tan() * (geo3d::dist(m.o, m.c0) + m.t) } else { geo3d::dist(m.o, m.c0) + m.t }) - m.ba }
         })
         .collect();
     // cantos da aba por perfil (linhas soltas) entram no mapa; a ordem segue a dos comandos
@@ -9105,7 +9197,7 @@ mod tests {
 
         // casca abrindo o topo
         let mut d = caixa();
-        d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![], closed: false }));
+        d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![], closed: false }));
         let v = vol(&d);
         assert!(v < v0 * 0.5 && v > 0., "casca {v}");
 
@@ -9430,7 +9522,7 @@ mod tests {
         // o mesmo vale para as faces de casca, ângulo de saída e espessura
         let (mut d, caixa, _, _) = caixa_com_bolso(5.);
         let falsa = FaceKey { owner: caixa, role: 77, kind: 0, normal_or_axis: [0., 0., 1.], area: 1. };
-        let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(falsa)], closed: false }));
+        let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(falsa)], closed: false }));
         let r = recompute(&d);
         assert!(matches!(&r.status[&sh], Status::Error(m) if m.starts_with("referência perdida:") && m.contains("casca")), "{:?}", r.status[&sh]);
     }
@@ -9482,7 +9574,7 @@ mod tests {
         let topo = (0..b.face_role.len()).find(|i| b.face_owner[*i] == caixa && b.face_role[*i] == 1).expect("tampa final");
         let key = b.face_key(topo).unwrap();
         assert_eq!(key.normal_or_axis, [0., 0., 1.]);
-        let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(key)], closed: false }));
+        let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(key)], closed: false }));
         let r = recompute(&d);
         assert_eq!(r.status[&sh], Status::Ok, "{:?}", r.status[&sh]);
         // a caixa fica mais alta: o ponto clicado (z = 20) já não está na face de cima, a chave sim
@@ -9497,7 +9589,7 @@ mod tests {
         let mut d = Document::new("t");
         let base = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-20., -15.], [20., 15.]);
         d.add_feature(ext(base, BoolOp::Add, "20"));
-        let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![], closed: false }));
+        let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![], closed: false }));
         let r = recompute(&d);
         assert_eq!(r.status[&sh], Status::Ok);
         assert!(matches!(r.promoted.get(&sh), Some(Promoted::Faces(k)) if k.len() == 1 && k[0].is_some()));
@@ -9942,12 +10034,27 @@ mod tests_dobra_sketch {
         let r = recompute(&d);
         assert!(matches!(&r.status[&id], Status::Warning(m) if m.contains("corda")), "{:?}", r.status[&id]);
         assert_eq!(r.bend_lines.len(), 1);
-        // spline bem curva: recusa com a causa
+        // spline bem curva: a parede acompanha a linha e a linha de dobra fica curva
         let mut d = base();
         let sk = sk_spline(&mut d, PlaneRef::Origin(OriginPlane::XY), &[[50., 0.], [65., 25.], [50., 50.]]);
         let id = d.add_feature(FeatureKind::SmBend(bend(Some(sk), 0., 0)));
         let r = recompute(&d);
-        assert!(matches!(&r.status[&id], Status::Error(m) if m.contains("cônica")), "{:?}", r.status[&id]);
+        assert!(matches!(&r.status[&id], Status::Warning(m) if m.contains("curva")), "{:?}", r.status[&id]);
+        assert_eq!(r.bend_lines.len(), 1);
+        assert!(r.bend_lines[0].curva.len() > 2, "linha de dobra curva");
+        // duas curvas fortes num comando: recusa com a causa
+        let mut d = base();
+        let sk = sk_spline(&mut d, PlaneRef::Origin(OriginPlane::XY), &[[50., 0.], [65., 25.], [50., 50.]]);
+        let sk2 = sk_spline(&mut d, PlaneRef::Origin(OriginPlane::XY), &[[70., 0.], [85., 25.], [70., 50.]]);
+        let FeatureKind::Sketch(s2) = d.feature(sk2).unwrap().kind.clone() else { panic!() };
+        let FeatureKind::Sketch(s1) = &mut d.feature_mut(sk).unwrap().kind else { panic!() };
+        let mut todos = s1.data.clone();
+        todos.points.extend(s2.data.points.iter().cloned());
+        todos.curves.extend(s2.data.curves.iter().cloned());
+        s1.data = todos;
+        let id = d.add_feature(FeatureKind::SmBend(bend(Some(sk), 0., 0)));
+        let r = recompute(&d);
+        assert!(matches!(&r.status[&id], Status::Error(m) if m.contains("um comando para cada")), "{:?}", r.status[&id]);
         // linhas coladas: a zona dobrada não cabe
         let mut d = base();
         let sk = sk_lines(&mut d, PlaneRef::Origin(OriginPlane::XY), &[([50., 0.], [50., 50.]), ([52., 0.], [52., 50.])]);

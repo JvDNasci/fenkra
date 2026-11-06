@@ -25,6 +25,29 @@ pub fn com_apelidos(doc: &Document) -> Vec<(String, LinkedGeo)> {
     v
 }
 
+/// Publica um sketch: cada curva dele vira uma cópia associativa publicada, `Nome.1`, `Nome.2`…
+/// Devolve quantas. Publicar de novo o mesmo sketch não repete as curvas já publicadas.
+pub fn publicar_sketch(doc: &mut Document, sketch: Id) -> usize {
+    let Some(f) = doc.feature(sketch) else { return 0 };
+    let fenkra_core::FeatureKind::Sketch(s) = &f.kind else { return 0 };
+    let nome = f.name.clone();
+    let curvas: Vec<Id> = s.data.curves.iter().filter(|c| !c.construction).map(|c| c.id).collect();
+    let mut novas = 0;
+    for (i, curve) in curvas.into_iter().enumerate() {
+        let alvo = fenkra_core::CurveRef::SketchCurve { sketch, curve };
+        if doc.references.iter().any(|r| r.published && matches!(&r.kind, fenkra_core::RefKind::CurveCopy { curve: c } if *c == alvo)) {
+            continue;
+        }
+        let id = doc.add_geometry(fenkra_core::RefKind::CurveCopy { curve: alvo });
+        if let Some(r) = doc.references.iter_mut().find(|r| r.id == id) {
+            r.published = true;
+            r.name = format!("{nome}.{}", i + 1);
+        }
+        novas += 1;
+    }
+    novas
+}
+
 /// Nome atual de uma publicação, seguindo o apelido.
 pub fn nome_atual<'a>(doc: &'a Document, nome: &'a str) -> &'a str {
     doc.apelidos_publicacao.iter().find(|(v, _)| v == nome).map(|(_, n)| n.as_str()).unwrap_or(nome)

@@ -539,7 +539,7 @@ mod tests {
     fn canal(altura_perna: f64) -> Planificada {
         let (a, b) = (altura_perna, 200. - altura_perna);
         let ls = vec![Entidade::Linha([0., 0.], [200., 0.]), Entidade::Linha([200., 0.], [200., 100.]), Entidade::Linha([200., 100.], [0., 100.]), Entidade::Linha([0., 100.], [0., 0.])];
-        let dobra = |ordem, x| DobraPlana { ordem, rotulo: String::new(), a: [x, 0.], b: [x, 100.], cima: true, angulo: 90., raio: 2., desenvolvido: 3. };
+        let dobra = |ordem, x| DobraPlana { curva: vec![], ordem, rotulo: String::new(), a: [x, 0.], b: [x, 100.], cima: true, angulo: 90., raio: 2., desenvolvido: 3. };
         Planificada {
             espessura: 2.,
             material: String::new(),

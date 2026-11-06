@@ -106,6 +106,10 @@ pub enum PointRef {
     CurveVertex { curve: Id, index: usize },
     /// ponta de uma aresta do modelo: segue a aresta; `point` escolhe a ponta e serve de reserva
     Vertex { point: [f64; 3], edge: EdgeKey },
+    /// centro de uma aresta circular do modelo: segue a aresta; `point` é a última posição
+    Center { point: [f64; 3], edge: EdgeKey },
+    /// ponto clicado numa face: acompanha a face; `point` é a posição clicada
+    OnFace { point: [f64; 3], key: FaceKey },
 }
 
 impl Default for PointRef {
@@ -120,7 +124,7 @@ impl PointRef {
             PointRef::Ref(x) => ids(x),
             PointRef::SketchPoint { sketch, .. } => ids(sketch),
             PointRef::CurveVertex { curve, .. } => ids(curve),
-            PointRef::Origin | PointRef::Fixed(_) | PointRef::Vertex { .. } => {}
+            PointRef::Origin | PointRef::Fixed(_) | PointRef::Vertex { .. } | PointRef::Center { .. } | PointRef::OnFace { .. } => {}
         }
     }
 }
@@ -562,6 +566,8 @@ pub enum RefKind {
     PlaneParallelPoint { base: PlaneRef, point: PointRef },
     /// Por três pontos não colineares.
     PlaneThreePoints { a: PointRef, b: PointRef, c: PointRef },
+    /// Sistema de eixos: origem, direção de X e de Z. Vale onde vale um plano (o XY dele).
+    AxisSystem { origin: PointRef, x: AxisRef, z: AxisRef },
     /// Por duas linhas coplanares (ou paralelas).
     PlaneTwoLines { a: CurveRef, b: CurveRef },
     /// Por um ponto e uma linha.
@@ -979,7 +985,7 @@ impl RefKind {
     pub fn class(&self) -> RefClass {
         use RefKind::*;
         match self {
-            OffsetPlane { .. } | AnglePlane { .. } | FacePlane { .. } | PlaneParallelPoint { .. } | PlaneThreePoints { .. } | PlaneTwoLines { .. }
+            OffsetPlane { .. } | AnglePlane { .. } | FacePlane { .. } | PlaneParallelPoint { .. } | PlaneThreePoints { .. } | AxisSystem { .. } | PlaneTwoLines { .. }
             | PlanePointLine { .. } | PlaneCurve { .. } | PlaneNormalCurve { .. } | PlaneTangentSurface { .. } | PlaneEquation { .. }
             | PlaneMeanPoints { .. } => RefClass::Plane,
             PlanePointNormal { .. } | PlaneMid { .. } => RefClass::Plane,
@@ -1019,6 +1025,11 @@ impl RefKind {
                 for p in [a, b, c] {
                     p.walk(ids)
                 }
+            }
+            AxisSystem { origin, x, z } => {
+                origin.walk(ids);
+                x.walk(ids);
+                z.walk(ids);
             }
             PlaneTwoLines { a, b } => {
                 a.walk(ids);
@@ -3132,7 +3143,10 @@ impl FeatureKind {
                     exprs(e)
                 }
             }
-            Shell(sh) => exprs(&mut sh.thickness),
+            Shell(sh) => {
+                exprs(&mut sh.thickness);
+                sh.espessuras.iter_mut().for_each(|e| exprs(&mut e.valor));
+            }
             Draft(d) => {
                 d.neutral.walk(ids);
                 exprs(&mut d.angle)
@@ -3562,7 +3576,16 @@ pub struct Primitive {
 
 /// Casca: esvazia o sólido abrindo as faces escolhidas (pontos clicados).
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct EspessuraFace {
+    pub ponto: [f64; 3],
+    pub valor: String,
+}
+
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct Shell {
+    /// faces com parede própria, diferente de `thickness`
+    #[serde(default)]
+    pub espessuras: Vec<EspessuraFace>,
     pub faces: Vec<[f64; 3]>,
     pub thickness: String,
     pub outward: bool,

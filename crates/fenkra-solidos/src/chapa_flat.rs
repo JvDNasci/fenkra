@@ -232,6 +232,7 @@ impl Ctx<'_> {
                     allowance: c.ba,
                     deduction: deducao(c, sp.t),
                     eixo: None,
+                    curva: vec![],
                 };
                 self.cut_outlines.push(CutOutline { feature: f.id, folded: vec![], flat: vec![], dobra: Some(bl) });
             }

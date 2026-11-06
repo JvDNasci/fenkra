@@ -456,7 +456,11 @@ impl Models {
         // planificada: linhas de dobra (5 = centro, 6 = limites do arco) e o rótulo de cada uma
         for b in &bends {
             let pr = |q: [V3; 2]| vec![axes.project(q[0]), axes.project(q[1])];
-            out.lines.push((pr(b.center), 5));
+            if b.curva.len() > 2 {
+                out.lines.push((b.curva.iter().map(|q| axes.project(*q)).collect(), 5));
+            } else {
+                out.lines.push((pr(b.center), 5));
+            }
             out.lines.push((pr(b.start), 6));
             out.lines.push((pr(b.end), 6));
             let m = [(b.center[0][0] + b.center[1][0]) / 2., (b.center[0][1] + b.center[1][1]) / 2., (b.center[0][2] + b.center[1][2]) / 2.];

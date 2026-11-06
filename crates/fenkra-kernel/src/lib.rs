@@ -515,6 +515,15 @@ mod imp {
             let s = b::shell_t(&self.0, &flat, t, outward, tags, &mut out).map_err(err)?;
             Ok((Shape(s), out))
         }
+        /// Casca em que algumas faces têm parede própria: `proprias` traz (ponto, espessura).
+        pub fn shell_faces_tagged(&self, faces: &[[f64; 3]], t: f64, outward: bool, proprias: &[([f64; 3], f64)], tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
+            let flat: Vec<f64> = faces.iter().flatten().copied().collect();
+            let fpts: Vec<f64> = proprias.iter().flat_map(|x| x.0).collect();
+            let vals: Vec<f64> = proprias.iter().map(|x| x.1).collect();
+            let mut out = vec![];
+            let s = b::shell_faces_t(&self.0, &flat, t, outward, &fpts, &vals, tags, &mut out).map_err(err)?;
+            Ok((Shape(s), out))
+        }
         pub fn draft_tagged(&self, faces: &[[f64; 3]], pull: [f64; 3], angle: f64, neutral: &Frame, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
             let flat: Vec<f64> = faces.iter().flatten().copied().collect();
             let (o, n) = (neutral.origin, neutral.normal);
@@ -1117,6 +1126,9 @@ mod imp {
             no()
         }
         pub fn primitive(_: u8, _: &Frame, _: &[f64]) -> KResult<Shape> {
+            no()
+        }
+        pub fn shell_faces_tagged(&self, _: &[[f64; 3]], _: f64, _: bool, _: &[([f64; 3], f64)], _: &[i32]) -> KResult<(Shape, Vec<i32>)> {
             no()
         }
         pub fn shell_tagged(&self, _: &[[f64; 3]], _: f64, _: bool, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {

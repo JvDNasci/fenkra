@@ -194,7 +194,7 @@ fn montar_casca(com_chave: bool) -> Casca {
     let b = &r0.bodies[0];
     let topo = (0..b.face_role.len()).find(|i| b.face_owner[*i] == caixa && b.face_role[*i] == 1).expect("tampa final");
     let keys = if com_chave { vec![b.face_key(topo)] } else { vec![] };
-    let comando = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: "t".into(), outward: false, face_keys: keys, closed: false }));
+    let comando = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "t".into(), outward: false, face_keys: keys, closed: false }));
     let r1 = recompute(&d);
     assert_eq!(r1.status[&comando], Status::Ok, "base da casca: {:?}", r1.status[&comando]);
     Casca { base: d, comando, sk_base }

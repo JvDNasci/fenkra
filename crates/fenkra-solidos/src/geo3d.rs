@@ -288,6 +288,11 @@ pub fn fit_circle(c: &Curve3) -> Result<(V3, V3, f64), String> {
     Ok((ctr, nn, r))
 }
 
+/// Mesmo círculo a partir dos pontos de uma aresta; reta ou forma livre devolve `None`.
+pub fn circle_fit(pts: &[V3]) -> Option<(V3, V3, f64)> {
+    fit_circle(&Curve3::poly(pts.to_vec(), false).ok()?).ok()
+}
+
 /// Arco de `a0` a `a1` (rad) no plano (centro, x, y).
 pub fn arc_pts(ctr: V3, x: V3, y: V3, r: f64, a0: f64, a1: f64) -> Vec<V3> {
     let n = (((a1 - a0).abs() / TAU) * 128.).ceil().max(8.) as usize;

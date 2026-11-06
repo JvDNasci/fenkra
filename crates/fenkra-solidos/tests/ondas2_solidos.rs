@@ -439,7 +439,7 @@ fn b48_casca_de_corpo_com_furo_escareado_nao_falha() {
     for (nome, depth, lado, face, espessura) in casos {
         for ang in ["82", "90", "120"] {
             let mut d = bloco_escareado_prof(ang, depth.clone());
-            let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![face], thickness: s(espessura), outward: false, face_keys: vec![], closed: false }));
+            let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![face], thickness: s(espessura), outward: false, face_keys: vec![], closed: false }));
             let r = recompute(&d);
             assert_eq!(r.status[&sh], Status::Ok, "casca ({lado}) com escareado {ang}° {nome}: {:?}", r.status[&sh]);
             let v = volume_total(&r);
@@ -458,7 +458,7 @@ fn b48_casca_abrindo_a_face_do_escareado_de_furo_cego() {
         return;
     }
     let mut d = bloco_escareado_prof("90", Extent::Blind(s("12")));
-    let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[20., 15., 20.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false }));
+    let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[20., 15., 20.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false }));
     let r = recompute(&d);
     assert_eq!(r.status[&sh], Status::Ok, "{:?}", r.status[&sh]);
 }
