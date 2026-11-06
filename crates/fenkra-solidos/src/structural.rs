@@ -189,7 +189,6 @@ pub fn shifted(loops: &[Loop2], by: [f64; 2]) -> Vec<Loop2> {
                     Seg2::Spline(p) => Seg2::Spline(p.iter().map(|q| m(*q)).collect()),
                     // espelhar inverte o sentido do parâmetro
                     Seg2::Ellipse(c, v, r, t0, t1) => Seg2::Ellipse(m(*c), m(*v), *r, -*t1, -*t0),
-                    Seg2::Ellipse(c, a, r, t0, t1) => Seg2::Ellipse(m(*c), *a, *r, *t0, *t1),
                 })
                 .collect()
         })
