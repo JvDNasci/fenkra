@@ -48,21 +48,46 @@ pub struct BomRow {
     pub sub: bool,
     pub qty: u32,
     pub name: String,
+    /// B102: configuração da tabela de projeto que o componente usa ("" = a ativa da própria peça)
+    pub config: String,
+    /// B102: PN da peça nessa configuração (o da coluna PN da linha, ou o da peça)
+    pub pn: String,
+    /// B102: motivo quando a configuração pedida não existe na peça: aparece no lugar do PN
+    pub erro: Option<String>,
 }
 
-/// Chave estável de um arquivo: relativo à pasta da montagem de cima, com "/".
-fn key_of(top: Option<&Path>, p: &Path) -> String {
+/// Chave estável de um arquivo: relativo à pasta da montagem de cima, com "/". A configuração
+/// (B102) entra na chave com `#`: a mesma peça em duas configurações é dois itens da lista.
+fn key_of(top: Option<&Path>, p: &Path, cfg: &str) -> String {
     let r = top.and_then(|d| p.strip_prefix(d).ok()).unwrap_or(p);
-    r.to_string_lossy().replace('\\', "/")
+    let base = r.to_string_lossy().replace('\\', "/");
+    if cfg.is_empty() {
+        base
+    } else {
+        format!("{base}#{cfg}")
+    }
+}
+
+/// PN e erro de uma peça numa configuração: abre o arquivo, aplica a linha da tabela e lê o PN dela.
+/// Configuração que a peça não tem devolve o motivo, nunca o PN de outra linha.
+fn pn_da_peca(path: &Path, cfg: &str) -> (String, Option<String>) {
+    let Some(doc) = std::fs::read_to_string(path).ok().and_then(|t| fenkra_core::Document::from_json(&t).ok()) else { return (String::new(), None) };
+    if cfg.is_empty() {
+        return (doc.props.pn.clone(), None);
+    }
+    match doc.com_configuracao(cfg) {
+        Ok(d) => (d.props.pn.clone(), None),
+        Err(e) => (String::new(), Some(e.to_string())),
+    }
 }
 
 fn load_sub(p: &Path) -> Option<Assembly> {
     std::fs::read_to_string(p).ok().and_then(|t| Assembly::from_json(&t).ok())
 }
 
-/// Componentes diretos: (arquivo, é subconjunto, quantidade, nome), na ordem da árvore.
-fn direct(a: &Assembly, dir: Option<&Path>) -> Vec<(PathBuf, bool, u32, String)> {
-    let mut out: Vec<(PathBuf, bool, u32, String)> = vec![];
+/// Componentes diretos: (arquivo, é subconjunto, quantidade, nome, configuração), na ordem da árvore.
+fn direct(a: &Assembly, dir: Option<&Path>) -> Vec<(PathBuf, bool, u32, String, String)> {
+    let mut out: Vec<(PathBuf, bool, u32, String, String)> = vec![];
     for n in a.nodes.iter().filter(|n| a.esqueleto != Some(n.id)) {
         let (p, sub) = match &n.kind {
             NodeKind::Part { path } => (path, false),
@@ -70,28 +95,29 @@ fn direct(a: &Assembly, dir: Option<&Path>) -> Vec<(PathBuf, bool, u32, String)>
             NodeKind::Group => continue,
         };
         let fp = full_path(dir, p);
-        match out.iter_mut().find(|r| r.0 == fp) {
+        let cfg = if sub { String::new() } else { a.config_de(n.id).to_string() };
+        match out.iter_mut().find(|r| r.0 == fp && r.4 == cfg) {
             Some(r) => r.2 += 1,
-            None => out.push((fp, sub, 1, n.name.clone())),
+            None => out.push((fp, sub, 1, n.name.clone(), cfg)),
         }
     }
     out
 }
 
-/// Peças de todos os níveis, somadas: (arquivo, quantidade, nome).
-fn flat(a: &Assembly, dir: Option<&Path>, mult: u32, depth: usize, out: &mut Vec<(PathBuf, u32, String)>) {
+/// Peças de todos os níveis, somadas: (arquivo, quantidade, nome, configuração).
+fn flat(a: &Assembly, dir: Option<&Path>, mult: u32, depth: usize, out: &mut Vec<(PathBuf, u32, String, String)>) {
     if depth > 16 {
         return;
     }
-    for (fp, sub, q, name) in direct(a, dir) {
+    for (fp, sub, q, name, cfg) in direct(a, dir) {
         if sub {
             if let Some(s) = load_sub(&fp) {
                 flat(&s, fp.parent(), mult * q, depth + 1, out);
             }
         } else {
-            match out.iter_mut().find(|r| r.0 == fp) {
+            match out.iter_mut().find(|r| r.0 == fp && r.3 == cfg) {
                 Some(r) => r.1 += mult * q,
-                None => out.push((fp, mult * q, name)),
+                None => out.push((fp, mult * q, name, cfg)),
             }
         }
     }
@@ -107,10 +133,10 @@ impl Assembly {
     /// subconjuntos). Os já numerados mantêm o número; números de itens que saíram não voltam
     /// a ser usados.
     pub fn assign_items(&mut self, dir: Option<&Path>) {
-        let mut keys: Vec<String> = direct(self, dir).into_iter().map(|r| key_of(dir, &r.0)).collect();
+        let mut keys: Vec<String> = direct(self, dir).into_iter().map(|r| key_of(dir, &r.0, &r.4)).collect();
         let mut f = vec![];
         flat(self, dir, 1, 0, &mut f);
-        keys.extend(f.into_iter().map(|r| key_of(dir, &r.0)));
+        keys.extend(f.into_iter().map(|r| key_of(dir, &r.0, &r.3)));
         for k in keys {
             if self.item_of(&k).is_none() {
                 let no = self.items.iter().map(|i| i.no).max().unwrap_or(0) + 1;
@@ -136,18 +162,25 @@ fn numbering(a: &Assembly, keys: &[String]) -> Vec<u32> {
         .collect()
 }
 
+/// Uma linha da lista, com o PN da configuração já lido do arquivo.
+#[allow(clippy::too_many_arguments)]
+fn linha(item: String, depth: usize, key: String, path: PathBuf, sub: bool, qty: u32, name: String, config: String) -> BomRow {
+    let (pn, erro) = if sub { (String::new(), None) } else { pn_da_peca(&path, &config) };
+    BomRow { item, depth, key, path, sub, qty, name, config, pn, erro }
+}
+
 /// Lista de peças no nível pedido, ordenada pelo número do item.
 pub fn bom(a: &Assembly, dir: Option<&Path>, level: BomLevel) -> Vec<BomRow> {
     match level {
         BomLevel::Topo => {
             let d = direct(a, dir);
-            let keys: Vec<String> = d.iter().map(|r| key_of(dir, &r.0)).collect();
+            let keys: Vec<String> = d.iter().map(|r| key_of(dir, &r.0, &r.4)).collect();
             let nos = numbering(a, &keys);
             let mut rows: Vec<BomRow> = d
                 .into_iter()
                 .zip(keys)
                 .zip(nos)
-                .map(|(((path, sub, qty, name), key), no)| BomRow { item: no.to_string(), depth: 0, key, path, sub, qty, name })
+                .map(|(((path, sub, qty, name, config), key), no)| linha(no.to_string(), 0, key, path, sub, qty, name, config))
                 .collect();
             rows.sort_by_key(|r| r.item.parse::<u32>().unwrap_or(u32::MAX));
             rows
@@ -155,13 +188,13 @@ pub fn bom(a: &Assembly, dir: Option<&Path>, level: BomLevel) -> Vec<BomRow> {
         BomLevel::Pecas => {
             let mut f = vec![];
             flat(a, dir, 1, 0, &mut f);
-            let keys: Vec<String> = f.iter().map(|r| key_of(dir, &r.0)).collect();
+            let keys: Vec<String> = f.iter().map(|r| key_of(dir, &r.0, &r.3)).collect();
             let nos = numbering(a, &keys);
             let mut rows: Vec<BomRow> = f
                 .into_iter()
                 .zip(keys)
                 .zip(nos)
-                .map(|(((path, qty, name), key), no)| BomRow { item: no.to_string(), depth: 0, key, path, sub: false, qty, name })
+                .map(|(((path, qty, name, config), key), no)| linha(no.to_string(), 0, key, path, false, qty, name, config))
                 .collect();
             rows.sort_by_key(|r| r.item.parse::<u32>().unwrap_or(u32::MAX));
             rows
@@ -178,22 +211,24 @@ pub fn bom(a: &Assembly, dir: Option<&Path>, level: BomLevel) -> Vec<BomRow> {
 /// densidade do material dele, ver `fenkra_solidos::massa`). Subconjunto soma as peças dele vezes a
 /// quantidade. `None` quando o arquivo não abre ou não tem sólido.
 pub fn massa_do_item(row: &BomRow) -> Option<f64> {
-    massa_do_arquivo(&row.path, row.sub, 0)
+    massa_do_arquivo(&row.path, row.sub, 0, &row.config)
 }
 
-fn massa_do_arquivo(path: &Path, sub: bool, depth: usize) -> Option<f64> {
+fn massa_do_arquivo(path: &Path, sub: bool, depth: usize, cfg: &str) -> Option<f64> {
     if depth > 16 {
         return None;
     }
     if !sub {
         let doc = fenkra_core::Document::from_json(&std::fs::read_to_string(path).ok()?).ok()?;
+        // B102: a massa é a da configuração do componente, não a da peça-base
+        let doc = if cfg.is_empty() { doc } else { doc.com_configuracao(cfg).ok()? };
         let m = fenkra_solidos::massa::massa_do_modelo_kg(&doc);
         return (m > 0.).then_some(m);
     }
     let asm = load_sub(path)?;
     let mut total = 0.;
-    for (fp, is_sub, qty, _) in direct(&asm, path.parent()) {
-        total += massa_do_arquivo(&fp, is_sub, depth + 1).unwrap_or(0.) * qty as f64;
+    for (fp, is_sub, qty, _, c) in direct(&asm, path.parent()) {
+        total += massa_do_arquivo(&fp, is_sub, depth + 1, &c).unwrap_or(0.) * qty as f64;
     }
     (total > 0.).then_some(total)
 }
@@ -207,7 +242,7 @@ fn structured(a: &Assembly, dir: Option<&Path>, top: Option<&Path>, prefix: &str
     for r in rows.iter_mut() {
         r.item = format!("{prefix}{}", r.item);
         r.depth = depth;
-        r.key = key_of(top, &r.path);
+        r.key = key_of(top, &r.path, &r.config);
     }
     for r in rows {
         let (sub, path, item) = (r.sub, r.path.clone(), r.item.clone());
@@ -242,7 +277,7 @@ mod tests {
         let arq = dir.join("peca.fkp");
         std::fs::write(&arq, doc.to_json()).unwrap();
         let vol: f64 = fenkra_solidos::recompute(&doc).bodies.iter().map(|b| b.mass.volume).sum();
-        let row = BomRow { item: "1".into(), depth: 0, key: "peca.fkp".into(), path: arq.clone(), sub: false, qty: 1, name: "peca".into() };
+        let row = BomRow { item: "1".into(), depth: 0, key: "peca.fkp".into(), path: arq.clone(), sub: false, qty: 1, name: "peca".into(), config: String::new(), pn: String::new(), erro: None };
         let m = massa_do_item(&row).expect("massa");
         // não é mais o aço fixo de 7,85: vale a densidade do alumínio da tabela
         assert!((m - vol * 2.7e-6).abs() < 1e-6 * vol.max(1.), "massa {m} volume {vol}");

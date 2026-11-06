@@ -489,11 +489,14 @@ impl Models {
                             None => (String::new(), r.name.clone(), String::new()),
                         }
                     } else {
-                        match self.parts.get(&r.path, false) {
+                        // B102: o código e o material são os da configuração do componente; configuração
+                        // que a peça não tem mostra o motivo no lugar do código
+                        match self.parts.get_config(&r.path, false, &r.config) {
                             Ok(p) => {
                                 let pr = &p.doc.props;
                                 (pr.pn.clone(), if pr.description.is_empty() { p.doc.name.clone() } else { pr.description.clone() }, pr.material.clone())
                             }
+                            Err(e) if !r.config.is_empty() => (format!("⚠ {e}"), r.name.clone(), String::new()),
                             Err(_) => (String::new(), r.name.clone(), String::new()),
                         }
                     };

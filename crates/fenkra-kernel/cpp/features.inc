@@ -204,6 +204,67 @@ std::unique_ptr<Shape> primitive(uint8_t kind, const Frame& fr, rust::Slice<cons
     });
 }
 
+// Casca aberta por booleana (B48). O deslocador de faces do OpenCASCADE não fecha a parede em volta de
+// um furo escareado de fundo plano quando a face aberta é a do próprio furo. Aqui a face aberta ganha
+// uma "tampa" de material por fora (prisma da face, para fora da peça): o corpo estendido não tem mais
+// aquela face, só o que sobra de contorno por dentro. Desloca-se o corpo estendido para dentro (a
+// cavidade) e a casca é o corpo original menos essa cavidade; como a tampa cobre a abertura, a
+// cavidade sai pela face aberta e não deixa parede nela.
+static std::shared_ptr<BRepAlgoAPI_Cut> shell_open_by_boolean(const TopoDS_Shape& body, const TopTools_ListOfShape& rm, double t, bool keep_holes) {
+    TopoDS_Shape ext = body;
+    for (const TopoDS_Shape& fs : rm) {
+        TopoDS_Face f = TopoDS::Face(fs);
+        BRepAdaptor_Surface su(f);
+        if (su.GetType() != GeomAbs_Plane) throw std::runtime_error("casca por booleana só abre faces planas");
+        gp_Dir n = su.Plane().Axis().Direction();
+        if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
+        TopoDS_Face base = f;
+        if (!keep_holes) {
+            // só o contorno externo: a tampa cobre também a boca do furo
+            BRepBuilderAPI_MakeFace mf(su.Plane(), BRepTools::OuterWire(f));
+            if (!mf.IsDone()) throw std::runtime_error("não foi possível cobrir a face aberta");
+            base = mf.Face();
+            if (base.Orientation() != f.Orientation()) base.Reverse();
+        }
+        TopoDS_Shape plate = BRepPrimAPI_MakePrism(base, gp_Vec(n) * (2 * t + 1.0)).Shape();
+        BRepAlgoAPI_Fuse fu(ext, plate);
+        if (!fu.IsDone() || fu.Shape().IsNull()) throw std::runtime_error("não foi possível cobrir a face aberta");
+        ext = fu.Shape();
+    }
+    ext = unify(ext);
+    BRepOffsetAPI_MakeOffsetShape off;
+    off.PerformByJoin(ext, -t, 1e-3, BRepOffset_Skin, Standard_False, Standard_False, GeomAbs_Arc);
+    if (!off.IsDone() || off.Shape().IsNull()) throw std::runtime_error("espessura grande demais para a peça");
+    // o deslocamento pode voltar como casca ou composto: a booleana pede um sólido
+    TopoDS_Shape cav = off.Shape();
+    if (cav.ShapeType() != TopAbs_SOLID) {
+        TopExp_Explorer es(cav, TopAbs_SOLID);
+        if (es.More()) {
+            cav = es.Current();
+        } else {
+            TopExp_Explorer eh(cav, TopAbs_SHELL);
+            if (!eh.More()) throw std::runtime_error("o deslocamento da casca não é um sólido");
+            BRepBuilderAPI_MakeSolid ms(TopoDS::Shell(eh.Current()));
+            cav = ms.Solid();
+        }
+        GProp_GProps vc;
+        BRepGProp::VolumeProperties(cav, vc);
+        if (vc.Mass() < 0) cav.Reverse();
+    }
+    for (double fuzzy : {0.0, 1e-4, 1e-3}) {
+        auto cut = std::make_shared<BRepAlgoAPI_Cut>();
+        TopTools_ListOfShape a1, t1;
+        a1.Append(body);
+        t1.Append(cav);
+        cut->SetArguments(a1);
+        cut->SetTools(t1);
+        if (fuzzy > 0) cut->SetFuzzyValue(fuzzy);
+        cut->Build();
+        if (cut->IsDone() && !cut->HasErrors() && !cut->Shape().IsNull()) return cut;
+    }
+    throw std::runtime_error("não foi possível esvaziar o corpo");
+}
+
 std::unique_ptr<Shape> shell_t(const Shape& s, rust::Slice<const double> pts, double thickness, bool outward,
                                rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
     return guard("casca", [&] {
@@ -228,6 +289,30 @@ std::unique_ptr<Shape> shell_t(const Shape& s, rust::Slice<const double> pts, do
         BRepOffsetAPI_MakeThickSolid mk;
         mk.MakeThickSolidByJoin(s.s, rm, outward ? thickness : -thickness, 1e-3, BRepOffset_Skin, Standard_False, Standard_False, GeomAbs_Arc);
         mk.Build();
+        // B48: o deslocador falha (ou devolve corpo inválido) em torno de furo escareado de fundo plano
+        // quando a face aberta é a da boca do furo: cai para a casca por booleana
+        bool bom = mk.IsDone() && !mk.Shape().IsNull();
+        if (bom) {
+            BRepCheck_Analyzer an(mk.Shape());
+            bom = an.IsValid();
+        }
+        if (!bom && !outward) {
+            for (bool furos : {true, false}) {
+                try {
+                    auto cut = shell_open_by_boolean(s.s, rm, thickness, furos);
+                    BRepCheck_Analyzer an(cut->Shape());
+                    if (!an.IsValid()) continue;
+                    // a casca precisa ter tirado material
+                    GProp_GProps a, b;
+                    BRepGProp::VolumeProperties(s.s, a);
+                    BRepGProp::VolumeProperties(cut->Shape(), b);
+                    if (b.Mass() >= a.Mass() - 1e-9 * a.Mass() || b.Mass() <= 0) continue;
+                    return tagged_result(*cut, s.s, tags, out);
+                } catch (const Standard_Failure&) {
+                } catch (const std::exception&) {
+                }
+            }
+        }
         if (!mk.IsDone()) throw std::runtime_error("espessura grande demais para a peça");
         return tagged_result(mk, s.s, tags, out);
     });

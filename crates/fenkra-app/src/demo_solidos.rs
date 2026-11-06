@@ -92,8 +92,160 @@ fn dois_corpos(d: &mut Document) -> (Id, Id) {
     (a, b)
 }
 
+/// Caixa 50 x 40 x 20 centrada em x e y.
+fn caixa_simples(d: &mut Document) -> Id {
+    *d = Document::new("Caixa");
+    let sk = sketch(d, PlaneRef::Origin(OriginPlane::XY), &|data, al| {
+        data.add_rect(&mut &mut *al, [-25., -20.], [25., 20.], false);
+    });
+    d.add_feature(extrude(sk, BoolOp::Add, "20"))
+}
+
+/// Pino 10 x 10 x 10 de onde saem as cópias dos padrões e do espelho, sobre uma base fina que ocupa o
+/// espaço das cópias: o primeiro enquadramento da câmera já cobre todas.
+fn pino(d: &mut Document, x0: f64, base: [[f64; 2]; 2]) -> Id {
+    *d = Document::new("Pino");
+    let sb = sketch(d, PlaneRef::Origin(OriginPlane::XY), &|data, al| {
+        data.add_rect(&mut &mut *al, base[0], base[1], false);
+    });
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sb, op: BoolOp::Add, extent: Extent::Blind(s("2")), reverse: true, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
+    let sk = sketch(d, PlaneRef::Origin(OriginPlane::XY), &|data, al| {
+        data.add_rect(&mut &mut *al, [x0, 0.], [x0 + 10., 10.], false);
+    });
+    d.add_feature(extrude(sk, BoolOp::Add, "10"))
+}
+
+fn filete(valor: &str, aresta: [f64; 3], prop: EdgeProp) -> FeatureKind {
+    FeatureKind::Fillet(EdgeOp { value: s(valor), edges: EdgeSel::Edges(vec![aresta]), mode: EdgeMode::Constant, prop, keys: vec![], extra: Default::default() })
+}
+
+fn furo_escareado(d: &mut Document, depth: Extent) {
+    let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
+    let sp = sketch(d, PlaneRef::Datum(topo), &|data, al| {
+        let p = data.add_point(&mut &mut *al, 0., 0.);
+        data.add_curve(&mut &mut *al, Curve::Point { p }, false);
+    });
+    d.add_feature(FeatureKind::Hole(Hole {
+        sketch: sp,
+        kind: HoleKind::Escareado { diameter: s("14"), angle: s("90") },
+        diameter: s("6.6"),
+        depth,
+        thread: None,
+        thread_modeled: false,
+        standard: None,
+        points: vec![],
+        dir: None,
+        reverse: false,
+        tip: None,
+        taper: s("0"),
+        left_hand: false,
+        extra: Default::default(),
+    }));
+}
+
 pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
     Some(match nome {
+        // B91: padrão linear com a terceira cópia pulada (ponto com X) e as setas de espaçamento
+        "padrao_pontos" => {
+            let b = pino(doc, 0., [[-10., -8.], [90., 18.]]);
+            DemoPrevia::Comando(FeatureKind::Pattern(Pattern {
+                kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("4"), spacing: s("20"), dir2: None, count2: s("1"), spacing2: s("0"), total: false },
+                sources: vec![b],
+                skip: vec![(2, 0)],
+            }))
+        }
+        // B91: padrão circular com o arco do ângulo total
+        "padrao_circular" => {
+            let b = pino(doc, 15., [[-30., -30.], [30., 30.]]);
+            DemoPrevia::Comando(FeatureKind::Pattern(Pattern {
+                kind: PatternKind::Circular { axis: AxisRef::Origin(OriginAxis::Z), count: s("5"), angle: s("240") },
+                sources: vec![b],
+                skip: vec![(3, 0)],
+            }))
+        }
+        // B91 e B275: o plano do espelho translúcido, com rótulo
+        "espelho" => {
+            let b = pino(doc, 8., [[-30., -8.], [30., 18.]]);
+            DemoPrevia::Comando(FeatureKind::Mirror(Mirror { plane: PlaneRef::Origin(OriginPlane::YZ), sources: vec![b] }))
+        }
+        // B90: o furo-guia pousa no centro da face de cima (sem mouse, só para a captura)
+        "furo_guia" => {
+            caixa_simples(doc);
+            DemoPrevia::Comando(FeatureKind::Hole(Hole {
+                sketch: crate::slots::UNSET_SKETCH,
+                kind: HoleKind::Escareado { diameter: s("13") , angle: s("90") },
+                diameter: s("6.6"),
+                depth: Extent::Blind(s("14")),
+                thread: None,
+                thread_modeled: false,
+                standard: None,
+                points: vec![],
+                dir: None,
+                reverse: false,
+                tip: None,
+                taper: s("0"),
+                left_hand: false,
+                extra: Default::default(),
+            }))
+        }
+        // B289: filete com propagação tangente: o canto vertical arredondado faz a cadeia passar por três arestas
+        "filete_tangente" => {
+            caixa_simples(doc);
+            doc.add_feature(filete("6", [25., -20., 10.], EdgeProp::Tangente));
+            // depois do filete do canto, a aresta de cima da frente vai de x = -25 a 19: o ponto médio é -3
+            DemoPrevia::Comando(filete("3", [-3., -20., 20.], EdgeProp::Tangente))
+        }
+        // B289: filete assimétrico com a seta que aponta para a face da primeira medida
+        "filete_assimetrico" => {
+            caixa_simples(doc);
+            DemoPrevia::Comando(FeatureKind::Fillet(EdgeOp { value: s("4"), edges: EdgeSel::Edges(vec![[0., -20., 20.]]), mode: EdgeMode::Asym(s("10")), prop: EdgeProp::Tangente, keys: vec![], extra: EdgeExtra { flips: vec![false], ..Default::default() } }))
+        }
+        // B289: filete parcial, com as setas de início e de fim do trecho
+        "filete_parcial" => {
+            caixa_simples(doc);
+            DemoPrevia::Comando(FeatureKind::Fillet(EdgeOp { value: s("4"), edges: EdgeSel::Edges(vec![[0., -20., 20.]]), mode: EdgeMode::Constant, prop: EdgeProp::Tangente, keys: vec![], extra: EdgeExtra { partial: Some([s("10"), s("35")]), ..Default::default() } }))
+        }
+        // B246 e B289: raio grande demais; a última prévia boa fica, a causa vai junto da seta e a superfície tentada aparece
+        "filete_grande" => {
+            caixa_simples(doc);
+            DemoPrevia::Comando(filete("30", [0., -20., 20.], EdgeProp::Tangente))
+        }
+        // B48: casca abrindo a face do escareado de um furo cego
+        "escareado_casca" => {
+            caixa_simples(doc);
+            furo_escareado(doc, Extent::Blind(s("12")));
+            DemoPrevia::Comando(FeatureKind::Shell(Shell { faces: vec![[20., 15., 20.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false }))
+        }
+        // B288 e B89: um término por lado
+        "dois_lados" => {
+            *doc = Document::new("Dois lados");
+            let sk = sketch(doc, PlaneRef::Origin(OriginPlane::XY), &|data, al| {
+                data.add_rect(&mut &mut *al, [-20., -15.], [20., 15.], false);
+            });
+            DemoPrevia::Comando(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::TwoSides(s("14"), s("6")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() }))
+        }
+        // B288: ângulo de saída da extrusão, com o arco na aresta do perfil
+        "saida" => {
+            *doc = Document::new("Saída");
+            let sk = sketch(doc, PlaneRef::Origin(OriginPlane::XY), &|data, al| {
+                data.add_rect(&mut &mut *al, [-12., -12.], [12., 12.], false);
+            });
+            DemoPrevia::Comando(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("30")), reverse: false, taper: s("6"), thin: None, thin_side: 0, dir: None, ends: Default::default() }))
+        }
+        // B288: base da primitiva (largura e profundidade) e altura
+        "primitiva_base" => {
+            *doc = Document::new("Primitiva");
+            DemoPrevia::Comando(FeatureKind::Primitive(Primitive { kind: PrimKind::Caixa, plane: PlaneRef::Origin(OriginPlane::XY), a: s("30"), b: s("20"), c: s("12"), d: s("0"), op: BoolOp::Add }))
+        }
+        // B288: mover corpo, com a seta de translação; "escala_corpo" mostra uma seta por eixo
+        "mover_corpo" => {
+            caixa_simples(doc);
+            DemoPrevia::Comando(FeatureKind::MoveBody(MoveBody { xf: BodyXf::Translate { dir: AxisRef::Origin(OriginAxis::X), dist: s("30") } }))
+        }
+        "escala_corpo" => {
+            caixa_simples(doc);
+            DemoPrevia::Comando(FeatureKind::MoveBody(MoveBody { xf: BodyXf::Affinity { plane: PlaneRef::Origin(OriginPlane::XY), fx: s("1.4"), fy: s("1"), fz: s("0.6") } }))
+        }
         "edicao_mover" => {
             peca_com_relevos(doc);
             edicao(OpDireta::Mover, &[[5., 0., 25.], [0., 0., 30.]], "0", ["10", "6", "0"])

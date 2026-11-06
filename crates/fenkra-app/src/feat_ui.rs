@@ -24,6 +24,8 @@ pub fn is_shape(k: &FeatureKind) -> bool {
 pub fn wants_faces(k: &FeatureKind) -> bool {
     matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::DirectEdit(_) | FeatureKind::Thread(_) | FeatureKind::StructPlate(_) | FeatureKind::StructWeld(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmCornerClose(_) | FeatureKind::SmConvert(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
         || matches!(k, FeatureKind::SmFlangedHole(h) if crate::slots::is_unset(h.sketch) || !h.points.is_empty())
+        // B90: furo sem centros do sketch posiciona-se clicando na face
+        || matches!(k, FeatureKind::Hole(h) if crate::handles::furo_espera_clique(h))
         || matches!(k, FeatureKind::Fillet(o) if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }))
 }
 
@@ -39,6 +41,14 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         FeatureKind::StructPlate(pl) => pl.at = p,
         FeatureKind::StructWeld(w) => w.adicionar(p, None),
         FeatureKind::SmFlangedHole(h) => h.points.push(p),
+        // B90: cada clique na face é um furo novo, normal à superfície no ponto clicado
+        FeatureKind::Hole(h) => {
+            h.points.retain(|q| !matches!(q, PointRef::Origin));
+            h.points.push(PointRef::Fixed(p));
+            if crate::slots::is_unset(h.sketch) {
+                h.sketch = Id(0);
+            }
+        }
         FeatureKind::SmCornerRelief(c) => c.at = p,
         FeatureKind::SmCornerClose(c) => c.at = p,
         FeatureKind::SmConvert(c) => c.face = p,
