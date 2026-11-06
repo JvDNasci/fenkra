@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 90720,
+ "tokens_total_k": 90930,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -17,14 +17,14 @@
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
-   "tokens_k": 19370,
-   "pct": 21.4
+   "tokens_k": 19580,
+   "pct": 21.5
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 21590,
-   "pct": 23.8
+   "pct": 23.7
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
@@ -573,7 +573,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B27",
@@ -5752,8 +5752,8 @@
    "tokens_k": 500,
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
-   "status": "a fazer",
-   "pct": 0.6
+   "status": "em andamento",
+   "pct": 0.5
   },
   {
    "id": "B340",
@@ -5883,6 +5883,38 @@
    "area": "Interface",
    "status": "em andamento",
    "pct": 0.3
+  },
+  {
+   "id": "B348",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Sketch: clicar no perfil sombreado seleciona as entidades que o formam",
+   "oque": "Clicar dentro da sombra de um perfil fechado seleciona todas as curvas que formam a região, incluindo laços internos: um quadrado dentro de outro seleciona os dois. Evita selecionar elemento por elemento em sketch grande. Conferir junto a seleção por janela arrastando.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Sketch",
+   "status": "em andamento",
+   "pct": 0.2
+  },
+  {
+   "id": "B349",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Zebra e análises não pegam o sombreado de sketch",
+   "oque": "Nas análises de superfície (zebra, curvatura, isofotas, inclinação) a sombra do perfil do sketch não entra no cálculo nem é pintada pelo modo de análise.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 60,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "em andamento",
+   "pct": 0.1
   }
  ]
 }

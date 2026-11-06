@@ -698,7 +698,7 @@ c('B337', 3, 'P1', 'Sólidos: varredura robusta com guia suave', 'Guia suave com
 c('B338', 4, 'P1', 'Visualizador web detalhado para computador e celular', 'Visualizador detalhado que roda no navegador, de computador e de celular, sem instalar nada e sem app de loja. Abre o pacote aberto .fkv gerado pelo Fenkra, por arquivo, HTML ou URL: modelo 3D, desenhos 2D nativos em vetor (não só PDF), MBD e PMI, árvore completa com visibilidade e isolar, busca de peça, atributos da peça, capturas salvas, corte e medição. Interface feita para toque e tela pequena. Não modela e não recalcula. Decisão do usuário: substitui app móvel e modelagem no celular.',
   ['USR-VISUALIZADOR'], [], 600, 'Auto + Visual', 'Geral', status='feito'),
 c('B339', 4, 'P1', 'PLM: pré-visualização, análise zonal e análise de montagem pelo visualizador', 'O visualizador web faz parte do PLM e também funciona separado. No projeto, cada peça e montagem tem pré-visualização rápida pelo pacote .fkv, sem abrir o Fenkra: abrir de dentro do PLM, comparar versões, ver atributos e estado. Inclui análise zonal (selecionar peças por volume ou região do produto, com lista e filtro) e análise de montagem (árvore, interferências e folgas já calculadas, peças por zona, onde é usado), para agilizar a modificação do produto e o trabalho com várias montagens detalhadas. Depois, hospedagem em servidor.',
-  ['USR-VISUALIZADOR'], [], 500, 'Auto + Visual', 'PDM / PLM'),
+  ['USR-VISUALIZADOR'], [], 500, 'Auto + Visual', 'PDM / PLM', status='em andamento'),
 c('B340', 4, 'P1', 'Gerar elemento de transmissão: comando único, editável e simulável', 'O gerador de engrenagens vira Gerar elemento de transmissão, um só comando para engrenagens, corrente e correia. O elemento fica editável depois de criado, com prévia 3D do par, já insere as restrições e juntas com a relação certa e já anima na montagem. Adaptação de projeto: a pessoa fixa o que limita (distância entre dois pontos, relação, espaço, módulo) e o comando propõe o que cabe.',
   ['USR-TRANSMISSAO'], [], 450, 'Auto + Visual', 'Biblioteca de normas', status='em andamento'),
 c('B341', 4, 'P1', 'Engrenagens cônicas a 90 graus, sem-fim e coroa', 'Engrenagens cônicas retas para eixos a 90 graus, em par e em diferencial, para mudar a direção da carga, além de sem-fim e coroa, com geometria do dente, prévia e junta de relação no ângulo certo.',
@@ -715,6 +715,10 @@ c('B346', 2, 'P0', 'Polimento visual: superfície lisa independente dos triângu
   ['USR-RENDER', 'B10'], [], 450, 'Auto + Visual', 'Interface', status='em andamento'),
 c('B347', 2, 'P0', 'Fluidez: regressão de quadros e limite de FPS configurável', 'O app ficou com sensação de 20 quadros por segundo depois das últimas entregas. Medir o tempo de quadro, achar o que roda a cada quadro sem precisar e voltar à fluidez anterior, com teste de orçamento de quadro. Nova opção nas configurações gráficas: limite de quadros em 30, 60, 120, 144 ou sem limite, e sincronismo vertical, com contador opcional de quadros na tela.',
   ['USR-FPS'], [], 250, 'Auto + Visual', 'Interface', status='em andamento'),
+c('B348', 2, 'P1', 'Sketch: clicar no perfil sombreado seleciona as entidades que o formam', 'Clicar dentro da sombra de um perfil fechado seleciona todas as curvas que formam a região, incluindo laços internos: um quadrado dentro de outro seleciona os dois. Evita selecionar elemento por elemento em sketch grande. Conferir junto a seleção por janela arrastando.',
+  ['USR-TESTE'], [], 150, 'Auto + Visual', 'Sketch', status='em andamento'),
+c('B349', 2, 'P0', 'Zebra e análises não pegam o sombreado de sketch', 'Nas análises de superfície (zebra, curvatura, isofotas, inclinação) a sombra do perfil do sketch não entra no cálculo nem é pintada pelo modo de análise.',
+  ['USR-TESTE'], [], 60, 'Auto + Visual', 'Interface', status='em andamento'),
 ]
 def main():
     for x in B:
