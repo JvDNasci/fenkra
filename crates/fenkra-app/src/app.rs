@@ -2868,6 +2868,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.scene_dirty = true;
                 return;
             }
+            // B355: o recurso concluído não fica selecionado, senão a árvore o mantém no conjunto
+            // único e a peça segue laranja até o próximo comando
+            crate::selecao::limpar_ao_concluir(&mut self.sel, &mut self.multi.borrow_mut(), &mut self.picks, s.id);
             self.open.doc.hide_consumed(s.id);
             // membro com várias linhas: um comando por linha (cantos preservados entre eles)
             let parts = self.open.doc.split_struct_member(s.id);

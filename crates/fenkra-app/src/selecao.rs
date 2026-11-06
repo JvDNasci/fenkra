@@ -144,6 +144,15 @@ pub fn ids_do_conjunto(multi: &[fenkra_core::Id], unico: Option<fenkra_core::Id>
     out
 }
 
+/// B355: ao concluir um comando a seleção toda é limpa. A árvore não guarda seleção permanente:
+/// o item único entra no conjunto que acende o 3D, então deixá-lo selecionado pintava a peça
+/// de laranja até o próximo comando.
+pub fn limpar_ao_concluir<S: Default, P>(sel: &mut S, multi: &mut Vec<fenkra_core::Id>, picks: &mut Vec<P>, id: fenkra_core::Id) {
+    *sel = S::default();
+    multi.retain(|x| *x != id);
+    picks.clear();
+}
+
 /// Tipos de subelemento que o comando aberto aceita. Vale só enquanto o comando está aberto e some
 /// sozinho ao fechar: nada é gravado nas preferências, então o filtro da barra volta intacto.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -217,6 +226,25 @@ pub fn ponto_no_poligono(p: Pos2, poli: &[Pos2]) -> bool {
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    /// B355: depois de concluir, o conjunto que acende o 3D fica vazio (a peça volta à cor normal).
+    #[test]
+    fn concluir_deixa_o_conjunto_de_realce_vazio() {
+        use crate::app::Sel;
+        let id = fenkra_core::Id(7);
+        let (mut sel, mut multi, mut picks) = (Sel::Feature(id), vec![id, fenkra_core::Id(3)], vec![1u8, 2]);
+        let unico = |s: &Sel| match s {
+            Sel::Feature(i) => Some(*i),
+            _ => None,
+        };
+        assert_eq!(ids_do_conjunto(&multi, unico(&sel), std::iter::empty()), vec![id, fenkra_core::Id(3)], "antes: o recurso novo acende");
+        limpar_ao_concluir(&mut sel, &mut multi, &mut picks, id);
+        assert_eq!(sel, Sel::None);
+        assert!(picks.is_empty());
+        assert_eq!(ids_do_conjunto(&multi, unico(&sel), std::iter::empty()), vec![fenkra_core::Id(3)], "só o que a pessoa marcou à parte segue");
+        multi.clear();
+        assert!(ids_do_conjunto(&multi, unico(&sel), std::iter::empty()).is_empty());
+    }
 
     #[test]
     fn poligono_decide_dentro_e_fora_inclusive_em_forma_de_l() {
