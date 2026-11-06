@@ -16,6 +16,7 @@ uso: fenkra-cli [--pasta DIR] COMANDO [argumentos]
   definir PECA NOME EXPR --saida ARQ [--sobrescrever]
   exportar PECA SAIDA.step [--sobrescrever]
   topologia ARQ | faces ARQ | cilindros ARQ | planos ARQ | caixa ARQ
+  features ARQ                  features inferidas (furos, filetes, chanfros)
   comparar ALVO ARQ             checador de similaridade
   reproduzir REGISTRO.jsonl --saida ARQ.fkx [--sobrescrever]
   servir                        um pedido JSON por linha na entrada padrão
@@ -86,6 +87,7 @@ fn plano(l: &Linha) -> Result<Vec<(&'static str, Value)>, String> {
         ["cilindros", a] => topologia(a, &["cilindros"]),
         ["planos", a] => topologia(a, &["planos"]),
         ["caixa", a] => topologia(a, &["caixa"]),
+        ["features", a] => vec![("features", json!({ "arquivo": a }))],
         ["comparar", alvo, a] => vec![("comparar", json!({ "alvo": alvo, "arquivo": a }))],
         ["reproduzir", a] => vec![
             ("reproduzir", json!({ "arquivo": a })),

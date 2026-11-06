@@ -27,6 +27,7 @@ mod demo_janelas;
 mod estado_doc;
 mod exportar;
 mod importar;
+mod features;
 mod lote;
 mod plm;
 mod projeto;
@@ -191,6 +192,8 @@ pub struct App {
     importar_relatorio: Option<fenkra_conversor::Relatorio>,
     /// defeito do relatório realçado na viewport
     importar_defeito: Option<usize>,
+    /// painel Features encontradas (B143), aberto só enquanto a pessoa analisa
+    features: Option<features::Estado>,
     exportar_dialogo: Option<exportar::Dialogo>,
     /// tela "Formatos suportados" aberta
     formatos_aberto: bool,
@@ -403,6 +406,7 @@ impl App {
             importar_dialogo: None,
             importar_relatorio: None,
             importar_defeito: None,
+            features: None,
             exportar_dialogo: None,
             formatos_aberto: false,
             lote_painel: None,
@@ -529,6 +533,10 @@ impl App {
         if let Ok(arquivo) = std::env::var("FENKRA_DEMO_IMPORTAR") {
             app.abrir_painel_importar(arquivo.into());
             app.started = true;
+        }
+        // desenvolvimento: FENKRA_DEMO_FEATURES=1 (ou um número, ou converter) abre uma placa importada com o painel
+        if let Ok(modo) = std::env::var("FENKRA_DEMO_FEATURES") {
+            app.demo_features(&modo);
         }
         // desenvolvimento: FENKRA_DEMO_PROJETO=1 abre um projeto de exemplo; =comparar já mostra a comparação
         if let Ok(modo) = std::env::var("FENKRA_DEMO_PROJETO") {
@@ -3356,6 +3364,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     let tem_relatorio = self.open.doc.origem.as_ref().is_some_and(|o| o.relatorio.is_some());
                     if ui.add_enabled(tem_relatorio, egui::Button::new(tr("Relatório da importação…"))).on_hover_text(tr("Abre o relatório guardado neste documento, mesmo sem o arquivo de origem.")).clicked() {
                         self.abrir_relatorio_embutido();
+                        ui.close();
+                    }
+                    let r = ui.add_enabled(self.features.is_none(), egui::Button::new(tr("Features encontradas…")));
+                    if r.on_hover_text(tr("Procura furos, filetes e chanfros no corpo importado e mostra no 3D. Estrutura inferida, não o histórico original.")).clicked() {
+                        self.abrir_features();
                         ui.close();
                     }
                     if ui.button(tr("Exportar STEP…")).clicked() {
@@ -8218,6 +8231,7 @@ impl eframe::App for App {
             crate::sup_analise::painel_curvatura(self, ctx, area);
         }
         self.painel_importar(ctx, area);
+        self.painel_features(ctx, area);
         self.painel_exportar(ctx, area);
         self.painel_lote(ctx, area);
         crate::pmi_baloes_ui::janela(self, ctx, area);
@@ -8451,6 +8465,7 @@ impl eframe::App for App {
                 crate::engrenagens_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::eixo_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 importar::defeitos_na_cena(self.importar_relatorio.as_ref(), self.importar_defeito, &mut s);
+                features::na_cena(self.features.as_ref(), &ctx.global_style().visuals, &mut s);
                 crate::medir_quadros::valor("bytes_faces", (std::mem::size_of_val(s.mesh.as_slice()) + std::mem::size_of_val(s.indices.as_slice())) as f64);
                 crate::medir_quadros::valor("bytes_arestas", std::mem::size_of_val(s.edges.as_slice()) as f64);
                 crate::medir_quadros::fase("subir", || vp.set_scene(rs, &s));

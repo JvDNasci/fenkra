@@ -124,6 +124,7 @@ mod textos_pmi;
 mod textos_superficies;
 mod textos_solidos;
 mod textos_edicao_direta;
+mod textos_features;
 mod tabela_projeto_ui;
 mod arestas_ui;
 mod textos_forma;
