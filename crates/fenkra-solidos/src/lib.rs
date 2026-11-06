@@ -5602,7 +5602,29 @@ impl Ctx<'_> {
                     }
                     None => None,
                 };
+                // B49: pontos de controle do filete variável (posição em % -> 0 a 1; raio em mm)
+                let mut controles: Vec<[f64; 2]> = vec![];
+                if mode_code == Some(0) {
+                    for (i, c) in o.extra.controls.iter().enumerate() {
+                        let pos = ev(&c.at, &self.vars, &format!("posição do ponto {}", i + 1))?;
+                        let raio = ev(&c.radius, &self.vars, &format!("raio do ponto {}", i + 1))?;
+                        if !(pos > 0. && pos < 100.) {
+                            return Err(format!("o ponto de controle {} fica em {pos}%: use um valor entre 0 e 100 (exclusive)", i + 1));
+                        }
+                        if raio <= 0. {
+                            return Err(format!("o ponto de controle {} precisa de raio maior que zero", i + 1));
+                        }
+                        controles.push([pos / 100., raio]);
+                    }
+                    controles.sort_by(|a, c| a[0].total_cmp(&c[0]));
+                }
                 let run = |val: f64, val2: f64| match (&picked, mode_code) {
+                    (Some(mids), Some(0)) if !controles.is_empty() => {
+                        // a medida de apoio escala junto (quando o raio tentado é menor, os pontos também)
+                        let fator = if v.abs() > 1e-12 { val / v } else { 1. };
+                        let c: Vec<[f64; 2]> = controles.iter().map(|p| [p[0], p[1] * fator]).collect();
+                        b.fillet_variable_tagged(val, val2, &c, o.extra.smooth, mids, tol, &tags)
+                    }
                     (Some(mids), Some(m)) => b.edges_mode_tagged(m, val, val2, mids, &o.extra.flips, tol, &tags),
                     (Some(mids), None) => b.edges_tagged(val, mids, tol, chamfer, &tags),
                     (None, _) if chamfer => b.chamfer_tagged(val, &tags),

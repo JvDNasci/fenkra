@@ -1093,6 +1093,38 @@ pub fn revolve_extras(ui: &mut egui::Ui, r: &mut Revolve, vars: &Vars) {
     thin_side_ui(ui, &mut r.thin, &mut r.thin_side, vars);
 }
 
+/// Pontos de controle do filete variável (B49): cada um tem posição na aresta (% do comprimento) e
+/// raio próprio; a seta de cada raio fica no 3D e a transição pode ser suave (spline) ou em retas.
+fn controles_ui(ui: &mut egui::Ui, extra: &mut EdgeExtra, vars: &Vars) {
+    section(ui, "Pontos de controle");
+    let mut tirar = None;
+    for (i, c) in extra.controls.iter_mut().enumerate() {
+        ui.push_id(("ctrl_filete", i), |ui| {
+            ui.label(RichText::new(format!("{} {}", tr("Ponto"), i + 1)).small().strong());
+            expr(ui, "Posição do ponto", &mut c.at, vars, "%");
+            expr(ui, "Raio do ponto", &mut c.radius, vars, "mm");
+            if ui.small_button(tr("✖ Tirar ponto")).clicked() {
+                tirar = Some(i);
+            }
+        });
+    }
+    if let Some(i) = tirar {
+        extra.controls.remove(i);
+    }
+    if ui.button(tr("+ Ponto de controle")).on_hover_text(tr("Acrescenta um ponto no meio da aresta, com raio próprio; a seta dele no 3D muda o raio.")).clicked() {
+        // o novo ponto nasce no meio do maior vão livre
+        let mut pos: Vec<f64> = vec![0., 100.];
+        pos.extend(extra.controls.iter().filter_map(|c| fenkra_core::expr::eval_str(&c.at, vars).ok()));
+        pos.sort_by(f64::total_cmp);
+        let (a, b) = pos.windows(2).map(|w| (w[0], w[1])).max_by(|x, y| (x.1 - x.0).total_cmp(&(y.1 - y.0))).unwrap_or((0., 100.));
+        extra.controls.push(ControlePonto { at: format!("{}", ((a + b) / 2.).round()), radius: "4".into() });
+    }
+    if !extra.controls.is_empty() {
+        crate::editor::check(ui, &mut extra.smooth, "transição suave (curva passando pelos pontos)");
+        ui.label(RichText::new(tr("Sem a transição suave, o raio varia em retas de um ponto ao outro.")).weak().small());
+    }
+}
+
 /// Variações de filete (constante/variável) e chanfro (distância, duas distâncias, distância+ângulo).
 pub fn edge_mode_ui(ui: &mut egui::Ui, o: &mut EdgeOp, vars: &Vars, fillet: bool, picked_faces: &[[f64; 3]]) {
     let cur = match o.mode {
@@ -1134,7 +1166,10 @@ pub fn edge_mode_ui(ui: &mut egui::Ui, o: &mut EdgeOp, vars: &Vars, fillet: bool
     }
     match &mut o.mode {
         EdgeMode::Constant => {}
-        EdgeMode::Variable(v) => expr(ui, "Raio final", v, vars, "mm"),
+        EdgeMode::Variable(v) => {
+            expr(ui, "Raio final", v, vars, "mm");
+            controles_ui(ui, &mut o.extra, vars);
+        }
         EdgeMode::TwoDist(v) => expr(ui, "Distância 2", v, vars, "mm"),
         EdgeMode::DistAngle(v) => expr(ui, "Ângulo", v, vars, "°"),
         EdgeMode::Asym(v) => expr(ui, "Raio da 2ª face", v, vars, "mm"),

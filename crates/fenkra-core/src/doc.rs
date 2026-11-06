@@ -3720,6 +3720,20 @@ pub struct EdgeExtra {
     /// escolhidas, e o filete termina reto nos dois extremos
     #[serde(default)]
     pub partial: Option<[String; 2]>,
+    /// filete variável (B49): pontos de controle no meio da aresta, cada um com a posição (em % do
+    /// comprimento, entre 0 e 100) e o raio próprio; o começo e o fim seguem `value` e "raio final"
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub controls: Vec<ControlePonto>,
+    /// transição suave: o raio passa em curva (spline) pelos pontos; senão varia em retas
+    #[serde(default)]
+    pub smooth: bool,
+}
+
+/// Ponto de controle do filete variável (B49): posição em % da aresta e raio, ambos aceitam expressão.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct ControlePonto {
+    pub at: String,
+    pub radius: String,
 }
 
 impl EdgeExtra {

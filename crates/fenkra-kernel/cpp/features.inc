@@ -549,6 +549,68 @@ std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, dou
     });
 }
 
+// Filete variável com pontos de controle (B49): raio r0 no começo da aresta, r1 no fim e os pares
+// (posição relativa 0 a 1, raio) de `ctrl` no meio. `smooth`: a lei passa suave (spline) pelos pontos;
+// senão o raio varia em retas de um ponto ao outro.
+std::unique_ptr<Shape> fillet_var_t(const Shape& s, double r0, double r1, rust::Slice<const double> ctrl, bool smooth, rust::Slice<const double> mids,
+                                    double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+    return guard("filete variável", [&] {
+        TopTools_IndexedMapOfShape edges;
+        TopExp::MapShapes(s.s, TopAbs_EDGE, edges);
+        std::vector<TopoDS_Edge> chosen;
+        int missing = 0;
+        for (size_t k = 0; k + 2 < mids.size(); k += 3) {
+            gp_Pnt ref(mids[k], mids[k + 1], mids[k + 2]);
+            int best = 0;
+            double bd = 1e300;
+            for (int i = 1; i <= edges.Extent(); ++i) {
+                const TopoDS_Edge& e = TopoDS::Edge(edges(i));
+                if (BRep_Tool::Degenerated(e)) continue;
+                BRepAdaptor_Curve c(e);
+                double d = c.Value((c.FirstParameter() + c.LastParameter()) / 2).Distance(ref);
+                if (d < bd) {
+                    bd = d;
+                    best = i;
+                }
+            }
+            if (best > 0 && bd <= tol) chosen.push_back(TopoDS::Edge(edges(best)));
+            else ++missing;
+        }
+        if (missing > 0) throw std::runtime_error(std::to_string(missing) + " das arestas escolhidas não existe(m) mais — reedite a seleção de arestas");
+        if (chosen.empty()) throw std::runtime_error("escolha as arestas na viewport");
+        std::vector<std::pair<double, double>> pts;
+        pts.emplace_back(0.0, r0);
+        for (size_t k = 0; k + 1 < ctrl.size(); k += 2) pts.emplace_back(ctrl[k], ctrl[k + 1]);
+        pts.emplace_back(1.0, r1);
+        for (size_t i = 0; i < pts.size(); ++i) {
+            if (pts[i].second <= 0) throw std::runtime_error("todo ponto de controle precisa de raio maior que zero");
+            if (i > 0 && pts[i].first <= pts[i - 1].first + 1e-6) throw std::runtime_error("os pontos de controle precisam de posições diferentes, entre 0 e 100%");
+        }
+        // sem transição suave: a lei vira retas de um ponto ao outro. A interpolação do kernel passa por
+        // pontos, então os vãos são amostrados na reta (10 passos): a curva segue a reta sem ondular
+        if (!smooth) {
+            std::vector<std::pair<double, double>> fino;
+            for (size_t i = 0; i + 1 < pts.size(); ++i)
+                for (int k = 0; k < 10; ++k) {
+                    const double t = k / 10.0;
+                    fino.emplace_back(pts[i].first + t * (pts[i + 1].first - pts[i].first), pts[i].second + t * (pts[i + 1].second - pts[i].second));
+                }
+            fino.push_back(pts.back());
+            pts = fino;
+        }
+        const int n = static_cast<int>(pts.size());
+        BRepFilletAPI_MakeFillet mk(s.s);
+        for (auto& e : chosen) {
+            TColgp_Array1OfPnt2d arr(1, n);
+            for (int i = 0; i < n; ++i) arr.SetValue(i + 1, gp_Pnt2d(pts[i].first, pts[i].second));
+            mk.Add(arr, e);
+        }
+        mk.Build();
+        if (!mk.IsDone()) throw std::runtime_error("raios grandes demais para as arestas");
+        return tagged_result(mk, s.s, tags, out);
+    });
+}
+
 rust::Vec<double> cylinder_at(const Shape& s, double px, double py, double pz) {
     return guard("face cilíndrica", [&] {
         TopoDS_Face f = face_near(s.s, gp_Pnt(px, py, pz), kFaceLimit);
