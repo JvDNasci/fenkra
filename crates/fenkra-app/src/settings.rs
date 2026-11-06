@@ -518,6 +518,8 @@ pub struct Settings {
     pub mouse3d: crate::mouse3d::Mouse3dConfig,
     /// a sugestão do modo leve já foi mostrada (uma vez só)
     pub sugestao_leve_vista: bool,
+    /// curso, perfil de fluxo e progresso das aulas (B323, B324)
+    pub curso: crate::curso::EstadoCurso,
     /// posição dos painéis livres, por bancada
     pub paineis: Vec<crate::paineis::PainelSalvo>,
     /// grupos fora do contexto que o usuário deixou sempre na faixa
@@ -612,6 +614,7 @@ impl Default for Settings {
             acessibilidade: Default::default(),
             mouse3d: Default::default(),
             sugestao_leve_vista: false,
+            curso: Default::default(),
             paineis: vec![],
             barra_fixos: vec![],
         }

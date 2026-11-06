@@ -233,6 +233,9 @@ def desenhos():
     ic("exportar_arquivo", B=CUBO(24, 20, 12, 6, 10), R="M24 17V5M18 11l6-6 6 6")
     ic("liberar_revisao", B=Q(8, 6, 24, 34), R=CADEADO(34, 34))
     ic("onde_usado", B=CUBO(20, 6, 12, 6, 12), R=C(32, 32, 7) + "M37 37l6 6")
+    ic("curso", B=Z((6, 12), (24, 18), (42, 12), (42, 34), (24, 40), (6, 34)) + "M24 18V40", R=CHECK(34, 8, 4))
+    ic("mapa_macro", B=Q(6, 6, 14, 10) + Q(28, 6, 14, 10) + Q(17, 32, 14, 10), R="M20 11h8M13 16v8h11v8M35 16v8H24")
+    ic("perfil_fluxo", B=C(20, 16, 7) + "M6 42c0-9 6-14 14-14s14 5 14 14", R="M30 12h12M38 8l4 4-4 4")
     ic("comparar", B=Q(6, 10, 15, 28) + Q(27, 10, 15, 28), R=S2(15, 24, 33, 24, 4))
     ic("estado_sem_revisao", B=Q(8, 6, 24, 34), R="M28 36h14")
     ic("estado_liberada", B=Q(8, 6, 24, 34), R=CHECK(34, 34, 8))
@@ -694,7 +697,7 @@ ic("forma_tangencia", B="M6 36c10-14 26-14 36 0", R=L((8, 25), (40, 25)) + S(24,
 ic("forma_simetria", b="M24 4v40", R="M20 10c-16 2-16 26 0 28M28 10c16 2 16 26 0 28")
 ic("forma_converter", b=Q(6, 12, 18, 24), R=CUBO(32, 12, 10, 5, 12) + "M18 24h4", pb=[(6, 12), (24, 12), (24, 36), (6, 36)])
 
-SO_INTERFACE = {"importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente"}
+SO_INTERFACE = {"importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo"}
 
 
 # ---------- saída ----------

@@ -101,6 +101,7 @@ pub const CLASSIFICACAO: &[(&str, Classe)] = &[
     ("acessibilidade", Interface),
     ("mouse3d", Maquina),
     ("sugestao_leve_vista", Sessao),
+    ("curso", Interface),
     ("paineis", Interface),
     ("barra_fixos", Interface),
 ];
