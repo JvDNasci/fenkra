@@ -1285,26 +1285,62 @@ fn leader_line(o: &mut Out, pts: Vec<V2>, s: f64, st: &PmiStyle, arrow: bool) {
     o.width = w;
 }
 
+/// Traços vetoriais (quadro unitário, y para cima) centrados em `c`, de lado `lado`.
+fn simbolo_vetorial(o: &mut Out, tracos: &[fenkra_core::gdt::Traco], c: V2, lado: f64) {
+    for t in tracos {
+        let pts: Vec<V2> = t.pts.iter().map(|q| [c[0] + q[0] * lado, c[1] + q[1] * lado]).collect();
+        if t.cheio {
+            o.fill(pts);
+        } else {
+            o.dline(pts, t.fechado, Style::Thin, 0);
+        }
+    }
+}
+
 /// Quadro de controle geométrico (ISO 1101) com o ponto de ancoragem em `at`; devolve a caixa.
-fn fcf(o: &mut Out, at: V2, sym: &str, rows: &[Vec<String>], s: f64, st: &PmiStyle) -> (V2, V2) {
+/// Símbolos e modificadores saem como traços vetoriais, não como glifos de fonte.
+fn fcf(o: &mut Out, at: V2, ch: fenkra_core::pmi::GdtChar, linhas: &[fenkra_core::gdt::FcfLinha], chamada: &str, s: f64, st: &PmiStyle) -> (V2, V2) {
+    use fenkra_core::gdt::Parte;
     let start = o.items.len();
     let h = s * 2.;
     let pad = s * 0.5;
-    let w0 = (text_width(sym, s * 1.2) + 2. * pad).max(h);
-    let cw = |t: &str| (text_width(t, s) + 2. * pad).max(h * 0.9);
-    let row_w: Vec<f64> = rows.iter().map(|r| r.iter().map(|c| cw(c)).sum()).collect();
+    let gap = s * 0.25;
+    let w0 = h;
+    let mod_w = s * 1.15;
+    let pw = |q: &Parte| match q {
+        Parte::Texto(t) => text_width(t, s),
+        Parte::Mod(m) if m.circulado().is_some() => mod_w,
+        Parte::Mod(m) => text_width(&m.texto(), s * 0.9),
+    };
+    let cw = |c: &Vec<Parte>| (c.iter().map(pw).sum::<f64>() + gap * c.len().saturating_sub(1) as f64 + 2. * pad).max(h * 0.9);
+    let row_w: Vec<f64> = linhas.iter().map(|r| r.celulas.iter().map(cw).sum()).collect();
     let total_w = w0 + row_w.iter().cloned().fold(0., f64::max);
-    let total_h = h * rows.len().max(1) as f64;
-    let (lo, hi) = anchored(at, total_w, total_h, st);
+    let frame_h = h * linhas.len().max(1) as f64;
+    let up = if chamada.is_empty() { 0. } else { s * 1.3 };
+    let (lo, hi) = anchored(at, total_w, frame_h + up, st);
+    let top0 = hi[1] - up;
     let bg = if st.bg != PmiBg::Padrao { st.bg } else { PmiBg::Nenhum };
-    frame_box(o, lo, [lo[0] + w0, hi[1]], st, PmiFrame::Caixa, bg);
-    o.text([lo[0] + w0 / 2., hi[1] - total_h / 2. - s * 0.6], sym.to_string(), s * 1.2, 0., Align::Center);
-    for (i, row) in rows.iter().enumerate() {
-        let top = hi[1] - h * i as f64;
+    if !chamada.is_empty() {
+        o.text([lo[0], hi[1] - s * 0.95], chamada.to_string(), s * 0.9, 0., Align::Left);
+    }
+    let mut i = 0;
+    while i < linhas.len() {
+        let mut j = i + 1;
+        while j < linhas.len() && linhas[j].sym.is_none() {
+            j += 1;
+        }
+        let sym = linhas[i].sym.unwrap_or(ch);
+        let (t, b) = (top0 - h * i as f64, top0 - h * j as f64);
+        frame_box(o, [lo[0], b], [lo[0] + w0, t], st, PmiFrame::Caixa, bg);
+        simbolo_vetorial(o, &sym.tracado(), [lo[0] + w0 / 2., (t + b) / 2.], h * 0.62);
+        i = j;
+    }
+    for (i, row) in linhas.iter().enumerate() {
+        let top = top0 - h * i as f64;
         let x0 = lo[0] + w0;
         frame_box(o, [x0, top - h], [x0 + row_w[i], top], st, PmiFrame::Caixa, bg);
         let mut x = x0;
-        for (k, c) in row.iter().enumerate() {
+        for (k, c) in row.celulas.iter().enumerate() {
             let w = cw(c);
             if k > 0 {
                 let col = o.color;
@@ -1312,7 +1348,17 @@ fn fcf(o: &mut Out, at: V2, sym: &str, rows: &[Vec<String>], s: f64, st: &PmiSty
                 o.dline(vec![[x, top], [x, top - h]], false, Style::Thin, st.frame_dash);
                 o.color = col;
             }
-            o.text([x + w / 2., top - h / 2. - s / 2.], c.clone(), s, 0., Align::Center);
+            let uso = c.iter().map(pw).sum::<f64>() + gap * c.len().saturating_sub(1) as f64;
+            let mut qx = x + (w - uso) / 2.;
+            for q in c {
+                let lw = pw(q);
+                match q {
+                    Parte::Texto(t) => o.text([qx + lw / 2., top - h / 2. - s / 2.], t.clone(), s, 0., Align::Center),
+                    Parte::Mod(m) if m.circulado().is_some() => simbolo_vetorial(o, &m.tracado(), [qx + lw / 2., top - h / 2.], mod_w),
+                    Parte::Mod(m) => o.text([qx + lw / 2., top - h / 2. - s * 0.45], m.texto(), s * 0.9, 0., Align::Center),
+                }
+                qx += lw + gap;
+            }
             x += w;
         }
     }
@@ -1403,18 +1449,85 @@ fn note(o: &mut Out, n: &Note) {
         }
         NoteKind::Gdt => {
             let g = n.gdt.clone().unwrap_or_default();
-            let modifier = if g.extra.modifier.trim().is_empty() { String::new() } else { format!(" {}", g.extra.modifier.trim()) };
-            let cell = |t: &str| format!("{}{}{modifier}", if g.extra.zone_dia { "Ø" } else { "" }, t.trim());
-            let row = |t: &str, d: &str| -> Vec<String> {
-                let mut v = vec![cell(t)];
-                v.extend(d.split(|c: char| c == '|' || c == ',' || c.is_whitespace()).filter(|x| !x.is_empty()).map(String::from));
-                v
-            };
-            let mut rows = vec![row(&g.tol, &g.datums)];
-            if let Some((t2, d2)) = &g.extra.second {
-                rows.push(row(t2, d2));
+            let linhas = g.extra.linhas(g.ch, &g.tol, &g.datums);
+            let (lo, hi) = fcf(o, n.pos, g.ch, &linhas, &g.extra.chamada(), s, st);
+            if let Some(t) = n.leader {
+                leader_box(o, lo, hi, t, s, st);
             }
-            let (lo, hi) = fcf(o, n.pos, g.ch.symbol(), &rows, s, st);
+        }
+        NoteKind::Balloon if st.frame != PmiFrame::Padrao => {
+            // balão com outra moldura (quadrado, losango…)
+            let (lo, hi) = text_box(o, n.pos, &[n.text.clone()], s, st, PmiFrame::Circulo, PmiBg::Nenhum);
+            if let Some(t) = n.leader {
+                leader_box(o, lo, hi, t, s, st);
+            }
+        }
+        NoteKind::Balloon => {
+            let r = s * 1.6;
+            let col = o.color;
+            o.color = st.frame_color.or(col);
+            o.dline(circle(n.pos, r), true, Style::Thin, st.frame_dash);
+            o.color = col;
+            o.text([n.pos[0], n.pos[1] - s / 2.], n.text.clone(), s, 0., Align::Center);
+            if let Some(t) = n.leader {
+                let u = v2unit(v2sub(t, n.pos));
+                leader_line(o, vec![v2add(n.pos, v2mul(u, r)), t], s, st, false);
+                if !st.hide_leader {
+                    o.fill(circle(t, 0.6));
+                }
+            }
+        }
+        NoteKind::Roughness => {
+            let p = n.pos;
+            match n.rough.as_ref().filter(|r| !r.basico()) {
+                // √ com a barra: valor em cima
+                None => {
+                    let h = s * 1.4;
+                    o.line(vec![[p[0] - h * 0.6, p[1] + h * 0.6], p, [p[0] + h * 0.9, p[1] + h * 1.6], [p[0] + h * 0.9 + text_width(&n.text, s) + 1., p[1] + h * 1.6]], Style::Thin);
+                    o.seg([p[0] - h * 0.6, p[1] + h * 0.6], [p[0] + h * 0.35, p[1] + h * 0.6], Style::Thin);
+                    o.text([p[0] + h * 0.9 + 0.5, p[1] + h * 1.6 + 0.6], n.text.clone(), s, 0., Align::Left);
+                }
+                Some(r) => rough_extended(o, p, &n.text, r, s),
+            }
+            if let Some(t) = n.leader {
+                leader_line(o, vec![p, t], s, st, true);
+            }
+        }
+        NoteKind::Weld => {
+            // símbolo ISO 2553 (sistema A): linha de referência a partir da junção `pos`
+            use fenkra_core::pmi::{weld_symbol, WeldExtra, WeldKind, WeldPrim};
+            let p = n.pos;
+            let prims = match &n.weld {
+                Some(w) => weld_symbol(w.kind, &n.text, w.all_around, &w.extra, s),
+                None => weld_symbol(WeldKind::Filete, &n.text, false, &WeldExtra::default(), s),
+            };
+            let m = |q: [f64; 2]| [p[0] + q[0], p[1] + q[1]];
+            for pr in prims {
+                match pr {
+                    WeldPrim::Line(v) => o.line(v.into_iter().map(m).collect(), Style::Thin),
+                    WeldPrim::Dashed(v) => o.line(v.into_iter().map(m).collect(), Style::Hidden),
+                    WeldPrim::Fill(v) => o.fill(v.into_iter().map(m).collect()),
+                    WeldPrim::Text(q, t, al) => o.text(m(q), t, s, 0., if al < 0 { Align::Right } else if al == 0 { Align::Center } else { Align::Left }),
+                }
+            }
+            if let Some(t) = n.leader {
+                leader_line(o, vec![p, t], s, st, true);
+            }
+        }
+        NoteKind::CenterMark => {
+            let r = if n.text.trim().is_empty() { 5. } else { n.text.trim().replace(',', ".").parse::<f64>().unwrap_or(5.) };
+            let p = n.pos;
+            o.seg([p[0] - 1.2, p[1]], [p[0] + 1.2, p[1]], Style::Thin);
+            o.seg([p[0], p[1] - 1.2], [p[0], p[1] + 1.2], Style::Thin);
+            o.seg([p[0] - r - 2., p[1]], [p[0] - 2., p[1]], Style::Center);
+            o.seg([p[0] + 2., p[1]], [p[0] + r + 2., p[1]], Style::Center);
+            o.seg([p[0], p[1] - r - 2.], [p[0], p[1] - 2.], Style::Center);
+            o.seg([p[0], p[1] + 2.], [p[0], p[1] + r + 2.], Style::Center);
+        }
+        NoteKind::Gdt => {
+            let g = n.gdt.clone().unwrap_or_default();
+            let linhas = g.extra.linhas(g.ch, &g.tol, &g.datums);
+            let (lo, hi) = fcf(o, n.pos, g.ch, &linhas, &g.extra.chamada(), s, st);
             if let Some(t) = n.leader {
                 leader_box(o, lo, hi, t, s, st);
             }

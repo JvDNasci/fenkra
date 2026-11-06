@@ -715,7 +715,7 @@ lado oposto");
             }
             let we = WeldExtra { other: None, other_side: false, length: s("4×30 (60)"), field: true, contour: WeldContour::Plano, process: s("135") };
             mk(d, PmiKind::Weld { kind: WeldKind::Filete, size: s("a5"), all_around: true, extra: we }, vec![[60., 35., 0.]], [30., 30., 25.], "");
-            mk(d, PmiKind::Gdt { ch: GdtChar::Posicao, tol: s("0,1"), datums: s("A B C"), extra: GdtExtra { zone_dia: true, modifier: s("Ⓜ"), second: Some((s("0,05"), s("A"))) } }, vec![[-50., -25., 8.]], [-40., -30., 25.], "");
+            mk(d, PmiKind::Gdt { ch: GdtChar::Posicao, tol: s("0,1"), datums: s("A B C"), extra: GdtExtra { zone_dia: true, modifier: s("Ⓜ"), second: Some((s("0,05"), s("A"))), ..Default::default() } }, vec![[-50., -25., 8.]], [-40., -30., 25.], "");
             mk(d, PmiKind::TitleBlock { template: TITLE_TEMPLATE.into() }, vec![[60., 35., 8.]], [50., -60., 0.], "");
             // legenda deitada no topo e quadro composto na frente (exemplos de anotação fixa no plano)
             if let Some(p) = d.pmi.last_mut() {

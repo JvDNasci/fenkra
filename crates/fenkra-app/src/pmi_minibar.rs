@@ -73,6 +73,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, lbl: Opt
         return;
     }
     let Some(lbl) = lbl.filter(|(i, _)| *i == id).map(|(_, r)| r) else { return };
+    // as referências do modelo alimentam as listas do quadro de tolerância e a letra livre
+    crate::pmi_gdt_ui::atualizar_existentes(crate::pmi_ui::list(app));
+    let outras = crate::pmi_gdt_ui::letras_de_outras(crate::pmi_ui::list(app), id);
     let ctx = ui.ctx().clone();
     let (enter, esc) = ctx.input_mut(|i| (i.consume_key(egui::Modifiers::NONE, egui::Key::Enter), i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)));
     let mut avancado = false;
@@ -95,8 +98,12 @@ pub fn show(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, lbl: Opt
                     mudou |= r.changed();
                     return;
                 }
+                if let PmiKind::Gdt { ch, tol, datums, extra } = &mut pm.kind {
+                    // quadro de tolerância: cada casa é um campo com lista, direto no 3D
+                    mudou |= crate::pmi_gdt_ui::editor(ui, "mini_gdt", ch, tol, datums, extra, false);
+                }
                 ui.horizontal(|ui| {
-                    campos(ui, pm, foco, &mut mudou);
+                    campos(ui, pm, foco, &mut mudou, &outras);
                     estilo(ui, pm, &mut mudou);
                     if ui.button(tr(if pm.plane.is_some() { "▱" } else { "🖵" })).on_hover_text(tr("Plano do texto: de frente para a tela ou deitado no plano da vista atual")).clicked() {
                         plano = true;
@@ -171,16 +178,20 @@ fn close(app: &mut App, reverteu: bool) {
 }
 
 /// Valor, precisão e tolerância (cotas); campo principal dos demais tipos.
-fn campos(ui: &mut egui::Ui, pm: &mut Pmi, foco: bool, mudou: &mut bool) {
+fn campos(ui: &mut egui::Ui, pm: &mut Pmi, foco: bool, mudou: &mut bool, outras: &[String]) {
     let dim = pm.kind.is_dimension();
-    let tem_valor = dim || matches!(pm.kind, PmiKind::Roughness { .. } | PmiKind::Datum { .. } | PmiKind::Balloon { .. } | PmiKind::Gdt { .. } | PmiKind::Weld { .. });
+    let tem_valor = dim || matches!(pm.kind, PmiKind::Roughness { .. } | PmiKind::Datum { .. } | PmiKind::Balloon { .. } | PmiKind::Weld { .. });
     ui.label(RichText::new(tr(pm.kind.label())).strong());
+    if let PmiKind::Datum { letter } = &mut pm.kind {
+        // referência: a letra nasce livre e a troca é recusada na hora, com a explicação
+        ui.label(tr("Letra"));
+        *mudou |= crate::pmi_gdt_ui::campo_letra(ui, letter, outras);
+        return;
+    }
     if tem_valor {
         let r = match &mut pm.kind {
             PmiKind::Roughness { ra, .. } => Some((tr("Ra"), ra)),
-            PmiKind::Datum { letter } => Some((tr("Letra"), letter)),
             PmiKind::Balloon { item } => Some((tr("Item"), item)),
-            PmiKind::Gdt { tol, .. } => Some((tr("Tolerância"), tol)),
             PmiKind::Weld { size, .. } => Some((tr("Medida"), size)),
             _ => None,
         };

@@ -335,6 +335,11 @@ fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>, targets: Vec<Option<Pm
         }
         _ => (kind, String::new()),
     };
+    // referência nova recebe a próxima letra livre (nunca I, O ou Q)
+    let kind = match kind {
+        PmiKind::Datum { .. } => PmiKind::Datum { letter: crate::pmi_gdt_ui::proxima(list(app)) },
+        k => k,
+    };
     let plane = chosen_plane(app, picks, &a);
     let id = Id(app.next_pmi_id());
     let n = list(app).iter().filter(|p| p.kind.label() == kind.label()).count() + 1;
@@ -941,18 +946,9 @@ fn draw_kind(cv: &Cv, pen: &Pen, pm: &Pmi, st: Pos2, s0: Pos2, s1: Option<Pos2>,
         }
         PmiKind::TitleBlock { template } => pen.table(cv, st, &fenkra_desenho::resolve(template, fields)),
         PmiKind::Gdt { ch, tol, datums, extra } => {
-            let cell_tol = |t: &str| format!("{}{}{}", if extra.zone_dia { "Ø" } else { "" }, t.trim(), if extra.modifier.trim().is_empty() { String::new() } else { format!(" {}", extra.modifier.trim()) });
-            let row = |t: &str, d: &str| -> Vec<String> {
-                let mut v = vec![cell_tol(t)];
-                v.extend(d.split(|c: char| c == '|' || c == ',' || c.is_whitespace()).filter(|x| !x.is_empty()).map(String::from));
-                v
-            };
-            let mut rows = vec![row(tol, datums)];
-            if let Some((t2, d2)) = &extra.second {
-                rows.push(row(t2, d2));
-            }
+            let linhas = extra.linhas(*ch, tol, datums);
             let slot = Pen::reserve(cv);
-            let fr = pen.fcf(cv, st, ch.symbol(), &rows);
+            let fr = pen.fcf(cv, st, *ch, &linhas, &extra.chamada());
             pen.leader(cv, slot, fr, s0);
             fr
         }
@@ -2052,44 +2048,7 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_captura
 /// Campos do quadro de controle geométrico (característica, tolerância, referências, modificador,
 /// quadro composto) — usado no 3D e no desenho.
 pub fn gdt_ui(ui: &mut egui::Ui, salt: &str, ch: &mut GdtChar, tol: &mut String, datums: &mut String, extra: &mut GdtExtra) {
-            egui::ComboBox::from_id_salt(salt).selected_text(format!("{} {}", ch.symbol(), tr(ch.label()))).show_ui(ui, |ui| {
-                for c in GdtChar::ALL {
-                    ui.selectable_value(ch, c, format!("{} {}", c.symbol(), tr(c.label())));
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.label(tr("Tolerância"));
-                ui.text_edit_singleline(tol);
-            });
-            ui.horizontal(|ui| {
-                ui.label(tr("Referências"));
-                ui.text_edit_singleline(datums);
-            });
-            ui.label(RichText::new(tr("Referências separadas por espaço (ex.: A B C); cada uma vira uma casa do quadro.")).weak().small());
-            crate::editor::check(ui, &mut extra.zone_dia, "zona cilíndrica (Ø antes do valor)");
-            ui.horizontal(|ui| {
-                ui.label(tr("Modificador"));
-                for m in ["", "Ⓜ", "Ⓛ", "Ⓟ", "Ⓕ", "Ⓢ", "Ⓣ", "Ⓤ"] {
-                    let lbl = if m.is_empty() { tr("nenhum").to_string() } else { m.to_string() };
-                    if ui.selectable_label(extra.modifier == m, lbl).clicked() {
-                        extra.modifier = m.to_string();
-                    }
-                }
-            })
-            .response
-            .on_hover_text(tr("Ⓜ máximo material, Ⓛ mínimo material, Ⓟ zona projetada, Ⓕ estado livre, Ⓢ independente, Ⓣ plano tangente, Ⓤ zona desigual"));
-            let mut comp = extra.second.is_some();
-            if crate::editor::check(ui, &mut comp, "quadro composto (segunda linha)").changed() {
-                extra.second = comp.then(|| (String::new(), String::new()));
-            }
-            if let Some((t2, d2)) = &mut extra.second {
-                ui.horizontal(|ui| {
-                    ui.label(tr("Tolerância 2"));
-                    ui.add(egui::TextEdit::singleline(t2).desired_width(70.));
-                    ui.label(tr("Referências 2"));
-                    ui.add(egui::TextEdit::singleline(d2).desired_width(70.));
-                });
-            }
+    crate::pmi_gdt_ui::editor(ui, salt, ch, tol, datums, extra, true);
 }
 
 pub fn weld_ui(ui: &mut egui::Ui, salt: &str, kind: &mut WeldKind, size: &mut String, all_around: &mut bool, extra: &mut WeldExtra) {
@@ -2208,6 +2167,9 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
         };
         (diag, anchors(app, &pm.kind, &app.picks))
     };
+    crate::pmi_gdt_ui::atualizar_existentes(list(app));
+    let outras = crate::pmi_gdt_ui::letras_de_outras(list(app), id);
+    let todas = list(app).clone();
     let l = list_mut(app);
     let Some(p) = l.iter_mut().find(|p| p.id == id) else { return false };
     ui.heading(format!("📐 {}", p.name));
@@ -2259,8 +2221,10 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
         PmiKind::Datum { letter } => {
             ui.horizontal(|ui| {
                 ui.label(tr("Letra"));
-                ui.text_edit_singleline(letter);
+                crate::pmi_gdt_ui::campo_letra(ui, letter, &outras);
             });
+            ui.separator();
+            crate::pmi_gdt_ui::painel_consultor(ui, &todas);
         }
         PmiKind::TitleBlock { template } => {
             ui.label(tr("Modelo (os campos entre chaves são preenchidos com os dados da peça)"));
@@ -2283,7 +2247,11 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
                 ui.add(egui::TextEdit::singleline(item).desired_width(60.));
             });
         }
-        PmiKind::Gdt { ch, tol, datums, extra } => gdt_ui(ui, "pmi_gdt", ch, tol, datums, extra),
+        PmiKind::Gdt { ch, tol, datums, extra } => {
+            gdt_ui(ui, "pmi_gdt", ch, tol, datums, extra);
+            ui.separator();
+            crate::pmi_gdt_ui::painel_consultor(ui, &todas);
+        }
         _ => {
             ui.horizontal(|ui| {
                 ui.label(tr("Texto (vazio = medido)"));
