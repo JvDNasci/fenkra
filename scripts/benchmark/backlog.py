@@ -732,7 +732,7 @@ c('B354', 3, 'P1', 'Biblioteca: correntes de kart 219 e 428', 'Acrescentar as co
 c('B355', 2, 'P0', 'Recurso recém-criado não fica selecionado nem laranja', 'Ao terminar um recurso, a peça fica laranja até o próximo comando, porque o último item da árvore fica selecionado. Ao confirmar, a seleção é limpa e a peça volta à cor normal. A árvore não mantém seleção permanente.',
   ['USR-TESTE'], [], 60, 'Auto + Visual', 'Interface', status='feito'),
 c('B356', 2, 'P1', 'Prévia leve em todos os comandos, com o cálculo real só ao confirmar', 'Vale para todos os comandos. Durante a edição, o comando mostra uma prévia simples, como arame ou forma grosseira sem detalhe, e a geometria final só é calculada ao confirmar. O comando responde na hora e o programa fica mais leve.',
-  ['USR-TESTE'], [], 250, 'Auto + Visual', 'Interface'),
+  ['USR-TESTE'], [], 250, 'Auto + Visual', 'Interface', status='em andamento'),
 c('B357', 2, 'P0', 'Janelas de análise abrem e fecham certo, com reteste completo', 'As janelas de análise de curvatura e de superfície abrem e não fecham. Corrigir e retestar todas as análises.',
   ['USR-TESTE'], [], 80, 'Auto + Visual', 'Interface', status='feito'),
 c('B358', 2, 'P0', 'Painéis como janelas: minimizar, expandir, fechar e encaixe com sombra', 'Todo painel ganha minimizar, expandir e fechar, reabre pelo menu, e ao arrastar mostra a sombra de onde vai encaixar, nas laterais, em cima e embaixo. O conjunto do menu lateral direito encaixa inteiro, e dá para redimensionar nos quatro lados e cantos.',
