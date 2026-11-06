@@ -775,7 +775,17 @@ pub enum RefKind {
         scale: String,
     },
     /// Concordância entre duas bordas, com continuidade G0/G1/G2 às superfícies de apoio.
-    SurfBlend { a: CurveRef, sa: Option<SurfRef>, b: CurveRef, sb: Option<SurfRef>, cont: Continuity, tension: String },
+    SurfBlend {
+        a: CurveRef,
+        sa: Option<SurfRef>,
+        b: CurveRef,
+        sb: Option<SurfRef>,
+        cont: Continuity,
+        tension: String,
+        /// tensão do lado `b`; sem ela, vale a mesma de `a`
+        #[serde(default)]
+        tension2: Option<String>,
+    },
     /// Juntar superfícies (costura) numa só.
     SurfJoin {
         items: Vec<SurfRef>,
@@ -858,7 +868,18 @@ pub enum RefKind {
         tangent_prop: bool,
     },
     /// Conectar duas superfícies pelas bordas que se olham (concordância automática).
-    SurfConnect { a: SurfRef, b: SurfRef, cont: Continuity, tension: String },
+    SurfConnect {
+        a: SurfRef,
+        b: SurfRef,
+        cont: Continuity,
+        tension: String,
+        /// tensão do lado `b`; sem ela, vale a mesma de `a`
+        #[serde(default)]
+        tension2: Option<String>,
+        /// ponto perto da borda escolhida em cada superfície; sem ele, vale a que olha para a outra
+        #[serde(default)]
+        near: [Option<[f64; 3]>; 2],
+    },
     /// Varredura avançada: perfil explícito com 1/2 guias, linear, circular ou cônica.
     SurfSweepX {
         kind: SweepKind,
@@ -1182,10 +1203,11 @@ impl RefKind {
                 surface.walk(ids);
                 exprs(dist)
             }
-            SurfConnect { a, b, tension, .. } => {
+            SurfConnect { a, b, tension, tension2, .. } => {
                 a.walk(ids);
                 b.walk(ids);
-                exprs(tension)
+                exprs(tension);
+                tension2.iter_mut().for_each(&mut *exprs);
             }
             SurfSweepX { kind, spine, sections, .. } => {
                 kind.walk(ids, exprs);
@@ -1285,13 +1307,14 @@ impl RefKind {
                 exprs(samples);
                 exprs(scale)
             }
-            SurfBlend { a, sa, b, sb, tension, .. } => {
+            SurfBlend { a, sa, b, sb, tension, tension2, .. } => {
                 a.walk(ids);
                 b.walk(ids);
                 for s in [sa, sb].into_iter().flatten() {
                     s.walk(ids)
                 }
-                exprs(tension)
+                exprs(tension);
+                tension2.iter_mut().for_each(&mut *exprs);
             }
             SurfJoin { items, tol, curves } => {
                 for s in items {

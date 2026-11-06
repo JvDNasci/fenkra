@@ -263,3 +263,222 @@ fn loft_nao_muda_sem_opcoes() {
     ok(&r, id);
     assert!((area(&r, id) - 1200.).abs() < 0.1);
 }
+
+/// Círculo de raio 20 em z = 0 e quadrado de lado 40 em z = 50, com um conector.
+fn circulo_e_quadrado(fc: f64) -> (Document, Id) {
+    let mut d = Document::new("conector");
+    let c = d.add_geometry(RefKind::Circle { center: fx([0.; 3]), plane: PlaneRef::Origin(OriginPlane::XY), radius: t("20"), start: t("0"), end: t("360") });
+    let q = d.add_geometry(RefKind::Polyline { points: [[20., 20., 50.], [-20., 20., 50.], [-20., -20., 50.], [20., -20., 50.]].map(fx).to_vec(), closed: true });
+    let opts = LoftOpts { connectors: vec![vec![fc, 0.]], ..Default::default() };
+    let id = d.add_geometry(RefKind::SurfLoft { sections: vec![CurveRef::Ref(c), CurveRef::Ref(q)], guide: None, ruled: false, closed: false, opts });
+    (d, id)
+}
+
+/// Área da regrada entre círculo e quadrado com o conector dado, numa grade fina nas duas direções.
+/// Só em `u` não basta: a faixa torcida não é plana, e dois triângulos por faixa medem as pontas dela e
+/// perdem a cintura do meio (com 135° de torção, 28% a mais).
+fn area_conferida(fc: f64) -> f64 {
+    use fenkra_solidos::geo3d::{add, cross, mul, norm, sub};
+    let circ = |u: f64| {
+        let a = (u + fc) * std::f64::consts::TAU;
+        [20. * a.cos(), 20. * a.sin(), 0.]
+    };
+    let quad = |u: f64| {
+        let s = u.rem_euclid(1.) * 4.;
+        let (i, f) = (s.floor() as usize % 4, s.fract());
+        let c = [[20., 20.], [-20., 20.], [-20., -20.], [20., -20.], [20., 20.]];
+        [c[i][0] + (c[i + 1][0] - c[i][0]) * f, c[i][1] + (c[i + 1][1] - c[i][1]) * f, 50.]
+    };
+    let p = |u: f64, v: f64| add(mul(circ(u), 1. - v), mul(quad(u), v));
+    let (n, m) = (800, 40);
+    let mut soma = 0.;
+    for i in 0..n {
+        let (u0, u1) = (i as f64 / n as f64, (i + 1) as f64 / n as f64);
+        for j in 0..m {
+            let (v0, v1) = (j as f64 / m as f64, (j + 1) as f64 / m as f64);
+            let (a, b, c, e) = (p(u0, v0), p(u1, v0), p(u1, v1), p(u0, v1));
+            soma += (norm(cross(sub(b, a), sub(c, a))) + norm(cross(sub(c, a), sub(e, a)))) / 2.;
+        }
+    }
+    soma
+}
+
+/// Maior giro em graus, visto de cima, de uma linha da grade ao ir do círculo ao quadrado.
+fn torcao(d: &Document, id: Id, fc: f64) -> f64 {
+    let n = recompute(d).notes.get(&id).unwrap().clone();
+    let e = loft::Entrada { secoes: n.secoes, guias: vec![], conectores: vec![vec![fc, 0.]], invertidas: vec![], regrada: false, fechar: false, tangentes: [0.; 2] };
+    let giro = |a: [f64; 3], b: [f64; 3]| {
+        let x = b[1].atan2(b[0]) - a[1].atan2(a[0]);
+        x.sin().atan2(x.cos()).abs().to_degrees()
+    };
+    let mut pior = 0f64;
+    // cada linha da grade vai do círculo ao quadrado
+    for g in loft::grades(&e).unwrap() {
+        for l in &g {
+            pior = pior.max(giro(l[0], l[l.len() - 1]));
+        }
+    }
+    pior
+}
+
+/// Aceite do B290: círculo e quadrado sem torção depois de mover um conector, com a área conferida.
+#[test]
+fn conector_desfaz_a_torcao_com_area_conferida() {
+    // fração 0 do círculo é o ponto em 0°, e o canto do quadrado está em 45°: entra torcida
+    let (d, id) = circulo_e_quadrado(0.);
+    let r = recompute(&d);
+    ok(&r, id);
+    let torcida = area(&r, id);
+    assert!((torcida - area_conferida(0.)).abs() / torcida < 0.01, "{torcida} {}", area_conferida(0.));
+    assert!(torcao(&d, id, 0.) > 40., "{}", torcao(&d, id, 0.));
+    // o conector anda até 45° no círculo: o ponto cai em frente ao canto
+    let (d, id) = circulo_e_quadrado(0.125);
+    let r = recompute(&d);
+    ok(&r, id);
+    let reta = area(&r, id);
+    assert!((reta - area_conferida(0.125)).abs() / reta < 0.01, "{reta} {}", area_conferida(0.125));
+    // lado reto contra arco: sem torção sobra só a diferença de até 4° entre os dois passos
+    assert!(torcao(&d, id, 0.125) < 5., "{}", torcao(&d, id, 0.125));
+    // a torção afina a cintura, como num hiperboloide: a superfície torcida é a menor
+    assert!(reta > torcida * 1.03, "{reta} {torcida}");
+    let (a, b) = caixa(&r, id);
+    assert!((a[2]).abs() < 0.01 && (b[2] - 50.).abs() < 0.01, "{a:?} {b:?}");
+    assert!((b[0] - 20.).abs() < 0.05 && (b[1] - 20.).abs() < 0.05, "os cantos ficam vivos: {b:?}");
+    // o canto do quadrado existe na malha: a grade é cortada ali
+    assert!(longe(&r, id, [20., 20., 50.]) < 1e-3);
+}
+
+#[test]
+fn varios_conectores_na_mesma_ordem_e_cruzados() {
+    let (mut d, id) = circulo_e_quadrado(0.125);
+    let kind = |d: &mut Document| match &mut d.references.iter_mut().find(|r| r.id == id).unwrap().kind {
+        RefKind::SurfLoft { opts, .. } => opts.connectors = vec![vec![0.125, 0.], vec![0.625, 0.5]],
+        _ => unreachable!(),
+    };
+    kind(&mut d);
+    let r = recompute(&d);
+    ok(&r, id);
+    assert!((area(&r, id) - area_conferida(0.125)).abs() / area(&r, id) < 0.01);
+    if let RefKind::SurfLoft { opts, .. } = &mut d.references.iter_mut().find(|r| r.id == id).unwrap().kind {
+        opts.connectors = vec![vec![0.1, 0.], vec![0.4, 0.5], vec![0.2, 0.75]];
+    }
+    let r = recompute(&d);
+    assert!(matches!(r.status.get(&id), Some(Status::Error(m)) if m.contains("cruzados")), "{:?}", r.status.get(&id));
+}
+
+#[test]
+fn inverter_a_secao_torce_e_tangencia_estufa_a_ponta() {
+    let (mut d, id) = circulo_e_quadrado(0.125);
+    // menor distância do eixo a meia altura: a seção invertida leva cada ponto para o lado oposto
+    let cintura = |r: &RecomputeResult| {
+        let m = &r.surfaces.iter().find(|s| s.id == id).unwrap().mesh;
+        m.positions.chunks_exact(3).filter(|p| (p[2] - 25.).abs() < 5.).map(|p| (p[0] * p[0] + p[1] * p[1]).sqrt()).fold(f32::MAX, f32::min)
+    };
+    let base = cintura(&recompute(&d));
+    assert!(base > 18., "{base}");
+    if let RefKind::SurfLoft { opts, .. } = &mut d.references.iter_mut().find(|r| r.id == id).unwrap().kind {
+        opts.reversed = vec![false, true];
+    }
+    let r = recompute(&d);
+    ok(&r, id);
+    assert!(cintura(&r) < base / 2., "sentido oposto cruza a superfície: {} {base}", cintura(&r));
+    // a seta da primeira ponta: a superfície sai subindo reto do círculo, e não em direção ao quadrado
+    if let RefKind::SurfLoft { opts, .. } = &mut d.references.iter_mut().find(|r| r.id == id).unwrap().kind {
+        opts.reversed = vec![];
+        opts.tangents = [t("120"), t("")];
+    }
+    let r = recompute(&d);
+    ok(&r, id);
+    // na grade, e não na malha: a malha da tela não tem vértice tão perto do círculo
+    let n = r.notes.get(&id).unwrap();
+    let inclinacao = |t: f64| {
+        let e = loft::Entrada { secoes: n.secoes.clone(), guias: vec![], conectores: vec![vec![0.125, 0.]], invertidas: vec![], regrada: false, fechar: false, tangentes: [t, 0.] };
+        let g = loft::grades(&e).unwrap();
+        g.iter().flatten().map(|l| ((l[1][0] - l[0][0]).hypot(l[1][1] - l[0][1])) / (l[1][2] - l[0][2])).fold(0f64, f64::max)
+    };
+    assert!(inclinacao(120.) < 0.06, "sai reto do círculo: {}", inclinacao(120.));
+    assert!(inclinacao(0.) > 0.15, "solta, ela vai direto ao quadrado: {}", inclinacao(0.));
+}
+
+#[test]
+fn isocurvas_saem_na_nota_e_seguem_a_densidade() {
+    let (mut d, id) = circulo_e_quadrado(0.125);
+    if let RefKind::SurfLoft { opts, .. } = &mut d.references.iter_mut().find(|r| r.id == id).unwrap().kind {
+        opts.iso = 3;
+    }
+    let r = recompute(&d);
+    ok(&r, id);
+    let n = r.notes.get(&id).unwrap();
+    assert_eq!(n.secoes.len(), 2);
+    let faces = r.surfaces.iter().find(|s| s.id == id).unwrap().mesh.face_ranges.len();
+    assert_eq!(n.iso.len(), 3 * 2 * faces);
+}
+
+/// Duas folhas separadas, para Concordância e Conectar: a primeira termina em x = 0, a segunda começa em x = 30.
+fn duas_folhas(d: &mut Document) -> (Id, Id) {
+    let extr = |d: &mut Document, a: [f64; 3], b: [f64; 3]| {
+        let c = reta(d, a, b);
+        d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("40"), length2: t("0"), until: None, until2: None })
+    };
+    (extr(d, [-40., 0., 0.], [0., 0., 0.]), extr(d, [30., 0., 20.], [70., 0., 20.]))
+}
+
+/// Aceite do B290: concordância pela aresta e pelo apoio dela, sem curva de Contorno no meio, e tangente
+/// às duas superfícies.
+#[test]
+fn concordancia_pela_aresta_clicada_fica_tangente() {
+    let mut d = Document::new("blend");
+    let (a, b) = duas_folhas(&mut d);
+    let borda = |x: f64, z: f64| CurveRef::Edge(vec![[x, 0., z], [x, 40., z]]);
+    let id = d.add_geometry(RefKind::SurfBlend { a: borda(0., 0.), sa: Some(SurfRef::Ref(a)), b: borda(30., 20.), sb: Some(SurfRef::Ref(b)), cont: Continuity::G1, tension: t("1"), tension2: None });
+    let ca = check(&mut d, CheckMode::Conexao, SurfRef::Ref(id), SurfRef::Ref(a), CurveRef::default(), "8", "0.05");
+    let cb = check(&mut d, CheckMode::Conexao, SurfRef::Ref(id), SurfRef::Ref(b), CurveRef::default(), "8", "0.05");
+    let r = recompute(&d);
+    ok(&r, id);
+    for c in [ca, cb] {
+        ok(&r, c);
+        let Analise::Conexao(x) = analise(&r, c) else { panic!() };
+        assert!(x.folga < 0.01 && x.angulo < 2., "folga {} ângulo {}", x.folga, x.angulo);
+    }
+    let (lo, hi) = caixa(&r, id);
+    assert!(lo[2] > -6. && hi[2] < 26. && (hi[1] - 40.).abs() < 1e-3, "{lo:?} {hi:?}");
+    // duas setas publicadas, uma por lado
+    assert_eq!(r.notes.get(&id).unwrap().tensoes.len(), 2);
+}
+
+#[test]
+fn tensao_por_lado_muda_so_aquele_lado() {
+    let mut d = Document::new("tensao");
+    let (a, b) = duas_folhas(&mut d);
+    let borda = |x: f64, z: f64| CurveRef::Edge(vec![[x, 0., z], [x, 40., z]]);
+    let mk = |d: &mut Document, t2: Option<&str>| d.add_geometry(RefKind::SurfBlend { a: borda(0., 0.), sa: Some(SurfRef::Ref(a)), b: borda(30., 20.), sb: Some(SurfRef::Ref(b)), cont: Continuity::G1, tension: t("1"), tension2: t2.map(t) });
+    let (igual, forte) = (mk(&mut d, None), mk(&mut d, Some("3")));
+    let r = recompute(&d);
+    ok(&r, igual);
+    ok(&r, forte);
+    // tensão alta do lado de chegada: ela entra mais longa, e a superfície passa do fim da folha
+    assert!(caixa(&r, forte).0[0] < caixa(&r, igual).0[0] || caixa(&r, forte).1[2] > caixa(&r, igual).1[2] || area(&r, forte) > area(&r, igual) * 1.02, "{} {}", area(&r, forte), area(&r, igual));
+}
+
+#[test]
+fn conectar_mostra_as_bordas_e_aceita_troca() {
+    let mut d = Document::new("conectar");
+    let (a, b) = duas_folhas(&mut d);
+    let id = d.add_geometry(RefKind::SurfConnect { a: SurfRef::Ref(a), b: SurfRef::Ref(b), cont: Continuity::G0, tension: t("1"), tension2: None, near: [None; 2] });
+    let r = recompute(&d);
+    ok(&r, id);
+    let n = r.notes.get(&id).unwrap();
+    assert_eq!((n.bordas[0].len(), n.bordas[1].len()), (4, 4), "as quatro bordas de cada folha");
+    let usada = &n.bordas[0][n.borda_usada[0]];
+    assert!(usada.iter().all(|p| p[0].abs() < 1e-6), "deduz a borda de frente: {usada:?}");
+    let (lo, hi) = caixa(&r, id);
+    assert!(lo[0].abs() < 1e-3 && (hi[0] - 30.).abs() < 1e-3, "{lo:?} {hi:?}");
+    // troca a primeira pela borda de trás, em x = -40
+    if let RefKind::SurfConnect { near, .. } = &mut d.references.iter_mut().find(|r| r.id == id).unwrap().kind {
+        near[0] = Some([-40., 20., 0.]);
+    }
+    let r = recompute(&d);
+    ok(&r, id);
+    let (lo, _) = caixa(&r, id);
+    assert!((lo[0] + 40.).abs() < 1e-3, "{lo:?}");
+}

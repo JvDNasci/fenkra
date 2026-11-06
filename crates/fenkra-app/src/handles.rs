@@ -358,6 +358,9 @@ fn write_value(app: &mut App, id: Id, value: String) {
 
 /// Valor da segunda alça de um elemento (limite 2, raio do cilindro); a primeira usa `write_value`.
 fn write_slot(app: &mut App, id: Id, slot: u8, value: String) {
+    if crate::sup_loft::escrever(&mut app.open.doc, id, slot, &value) {
+        return;
+    }
     if slot == 0 {
         return write_value(app, id, value);
     }
@@ -587,6 +590,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
         return;
     }
     let mut list = app.result.as_ref().map(|r| surface_handles(r, &app.open.doc, id)).unwrap_or_default();
+    // B290: setas de tangência e de tensão
+    if let Some(r) = app.result.as_ref() {
+        list.extend(crate::sup_loft::setas(&app.open.doc, r, id).into_iter().map(|(campo, base, dir, mm, expr, label)| (campo, Linear { base, dir, k: 1. / mm, expr, label })));
+    }
     if let (true, Some(h)) = (list.is_empty(), handle_for(app, id)) {
         list.push((0, h));
     }
@@ -669,7 +676,7 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     // cota editável junto da ponta
     let key = egui::Id::unique(("alca_edit", id.0, nth));
     let mut editing: Option<String> = ui.ctx().data(|m| m.get_temp(key));
-    let txt = if numeric { format!("{} {} mm", tr(h.label), fmt(val)) } else { format!("🔒 {} = {}", h.expr.trim(), fmt(val)) };
+    let txt = if numeric && crate::sup_loft::sem_unidade(h.label) { format!("{} {}", tr(h.label), fmt(val)) } else if numeric { format!("{} {} mm", tr(h.label), fmt(val)) } else { format!("🔒 {} = {}", h.expr.trim(), fmt(val)) };
     let lp = st + n * 22. + d * 10.;
     let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(estado.fonte())), Color32::WHITE);
     let lr = Rect::from_min_size(lp, galley.size() + egui::vec2(10., 6.));
@@ -689,7 +696,7 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
             if v.abs() < passo {
                 v = passo * v.signum().max(1.);
             }
-            write_value(app, id, fmt(v));
+            write_slot(app, id, slot, fmt(v));
         }
         if lresp.dragged() {
             ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);

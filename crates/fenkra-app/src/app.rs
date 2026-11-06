@@ -540,7 +540,7 @@ impl App {
             let lb = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([70., 0., 20.]), b: PointRef::Fixed([70., 40., 20.]), start: s("0"), end: s("0") });
             let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-20"), length2: "0".into(), until: None, until2: None });
             let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("20"), length2: "0".into(), until: None, until2: None });
-            d.add_geometry(RefKind::SurfBlend { a: CurveRef::Ref(la), sa: Some(SurfRef::Ref(fa)), b: CurveRef::Ref(lb), sb: Some(SurfRef::Ref(fb)), cont: Continuity::G2, tension: s("1") });
+            d.add_geometry(RefKind::SurfBlend { a: CurveRef::Ref(la), sa: Some(SurfRef::Ref(fa)), b: CurveRef::Ref(lb), sb: Some(SurfRef::Ref(fb)), cont: Continuity::G2, tension: s("1"), tension2: None });
             d.add_geometry(RefKind::SurfCylinder { point: PointRef::Fixed([-40., 0., 0.]), dir: AxisRef::Origin(OriginAxis::Z), radius: s("12"), start: s("0"), end: s("50") });
             app.started = true;
         }
@@ -1881,10 +1881,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     if let Some(r) = &self.result {
                         let pts = crate::picking::edge_polyline(r, body, edge);
                         if pts.len() >= 2 {
-                            s.curves.push(match self.edge_key_of(body, edge) {
+                            let c = match self.edge_key_of(body, edge) {
                                 Some(key) => CurveRef::BodyEdge { pts, key },
                                 None => CurveRef::Edge(pts),
-                            });
+                            };
+                            if let Some(a) = crate::sup3d::apoio_da_aresta(r, body, edge) {
+                                s.apoios.push((c.clone(), a));
+                            }
+                            s.curves.push(c);
                         }
                     }
                 }
@@ -5932,7 +5936,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let b = fill_special(&mut f.kind, &seed, if tree_pick { None } else { edge_mid }, if tree_pick { None } else { face_pt }, &verts, sketch, shape);
             a || b
         } else if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
-            fill(&mut r.kind, &mut c)
+            let antes = r.kind.clone();
+            let preencheu = fill(&mut r.kind, &mut c);
+            crate::sup_loft::aplicar_apoios(&mut r.kind, &seed);
+            preencheu || r.kind != antes
         } else {
             false
         };

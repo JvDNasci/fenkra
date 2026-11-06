@@ -16,6 +16,8 @@ pub struct Seed {
     pub points: Vec<PointRef>,
     pub curves: Vec<CurveRef>,
     pub surface: Option<SurfRef>,
+    /// B290: superfície dona de cada aresta clicada, para a concordância deduzir o apoio
+    pub apoios: Vec<(CurveRef, SurfRef)>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -403,7 +405,11 @@ impl GeoKind {
                 _ => None,
             } },
             SurfOffset => R::SurfOffset { surface: sf, dist: t("2"), both: false, join: OffsetJoin::Automatico },
-            SurfConnect => R::SurfConnect { a: sf, b: crate::slots::surf(), cont: Continuity::G1, tension: t("1") },
+            SurfConnect => {
+                let mut k = R::SurfConnect { a: sf, b: crate::slots::surf(), cont: Continuity::G1, tension: t("1"), tension2: None, near: [None; 2] };
+                crate::sup_loft::aplicar_apoios(&mut k, s);
+                k
+            }
             SurfSweepX => R::SurfSweepX { kind: SweepKind::Explicit { profile: c(0), guide1: c(1), guide2: None }, spine: None, solution: 0, smooth: false, sections: t("24") },
             SurfFilletSS => R::SurfFillet { a: sf, b: crate::slots::surf(), flip_a: false, flip_b: false, radius: t("5"), radius2: None },
             SurfEdgeFillet => R::SurfEdgeFillet { surface: sf, edges: edge_mids(s), radius: t("3"), radius2: None },
@@ -415,8 +421,16 @@ impl GeoKind {
             SurfSweep => R::SurfSweep { profile: SweepProfile::Curve(c(0)), spine: c(1), mode: SweepMode::Corrigido },
             SurfTube => R::SurfSweep { profile: SweepProfile::Circle(t("5")), spine: c(0), mode: SweepMode::Corrigido },
             SurfLoft => R::SurfLoft { sections: if s.curves.len() >= 2 { s.curves.clone() } else { vec![c(0), c(1)] }, guide: None, ruled: false, closed: false, opts: Default::default() },
-            SurfBlend => R::SurfBlend { a: c(0), sa: None, b: c(1), sb: None, cont: Continuity::G1, tension: t("1") },
-            SurfRuled => R::SurfRuled { curves: if s.curves.is_empty() { vec![c(0)] } else { s.curves.clone() }, support: s.surface, mode: RuledMode::Normal, dir: AxisRef::Origin(OriginAxis::Z), length: t("20"), flip: false },
+            SurfBlend => {
+                let mut k = R::SurfBlend { a: c(0), sa: None, b: c(1), sb: None, cont: Continuity::G1, tension: t("1"), tension2: None };
+                crate::sup_loft::aplicar_apoios(&mut k, s);
+                k
+            }
+            SurfRuled => {
+                let mut k = R::SurfRuled { curves: if s.curves.is_empty() { vec![c(0)] } else { s.curves.clone() }, support: s.surface, mode: RuledMode::Normal, dir: AxisRef::Origin(OriginAxis::Z), length: t("20"), flip: false };
+                crate::sup_loft::aplicar_apoios(&mut k, s);
+                k
+            }
             AnConexao => R::SurfCheck { mode: CheckMode::Conexao, a: sf, b: crate::slots::surf(), curve: CurveRef::default(), samples: t("16"), scale: t("1") },
             AnDesvio => R::SurfCheck { mode: CheckMode::Desvio, a: sf, b: crate::slots::surf(), curve: CurveRef::default(), samples: t("2"), scale: t("1") },
             AnPente => R::SurfCheck { mode: CheckMode::Pente, a: SurfRef::default(), b: SurfRef::default(), curve: c(0), samples: t("64"), scale: t("200") },
@@ -1027,6 +1041,16 @@ pub(crate) fn points_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id,
     );
 }
 
+/// Tensão de cada lado. Enquanto os dois são iguais, o segundo campo não guarda nada.
+fn tensoes(ui: &mut egui::Ui, t1: &mut String, t2: &mut Option<String>, vars: &HashMap<String, f64>) {
+    expr(ui, "Tensão 1", t1, vars, "");
+    let mut s = t2.clone().unwrap_or_else(|| t1.clone());
+    expr(ui, "Tensão 2", &mut s, vars, "");
+    if s != *t1 || t2.is_some() {
+        *t2 = Some(s);
+    }
+}
+
 fn on_curve(ui: &mut egui::Ui, at: &mut OnCurve, reverse: &mut bool, vars: &HashMap<String, f64>) {
     row(ui, "Posição", |ui| {
         let is_ratio = matches!(at, OnCurve::Ratio(_));
@@ -1535,7 +1559,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 ui.radio_value(join, OffsetJoin::Plano, tr("cantos vivos"));
             });
         }
-        R::SurfConnect { a, b, cont, tension } => {
+        R::SurfConnect { a, b, cont, tension, tension2, near } => {
             surf_slot(ui, "g_a", "Superfície 1", doc, me, a, seed);
             surf_slot(ui, "g_b", "Superfície 2", doc, me, b, seed);
             row(ui, "Continuidade", |ui| {
@@ -1544,9 +1568,12 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 ui.radio_value(cont, Continuity::G2, tr("G2 curvatura"));
             });
             if *cont != Continuity::G0 {
-                expr(ui, "Tensão", tension, vars, "");
+                tensoes(ui, tension, tension2, vars);
             }
-            ui.label(RichText::new(tr("As bordas usadas são as que ficam de frente uma para a outra.")).weak().small());
+            ui.label(RichText::new(tr("Valem as bordas de frente uma para a outra. No 3D, clique numa bolinha para trocar de borda.")).weak().small());
+            if near.iter().any(Option::is_some) && ui.button(tr("Voltar às bordas deduzidas")).clicked() {
+                *near = [None; 2];
+            }
         }
         R::SurfSweepX { kind, spine, solution, smooth, sections } => {
             let cur = match kind {
@@ -1755,6 +1782,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 ui.checkbox(ruled, tr("regrada (faces retas entre seções)"));
                 ui.checkbox(closed, tr("fechar (volta à primeira seção)"));
             }
+            crate::sup_loft::painel_do_loft(ui, sections.len(), opts, *closed, note);
         }
         R::SurfRuled { curves, support, mode, dir, length, .. } => {
             curves_list(ui, "g_rc", "Curva", doc, me, curves, seed, 1);
@@ -1794,11 +1822,20 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             }
             crate::sup_analise::resumo(ui, note.and_then(|n| n.analise.as_ref()));
         }
-        R::SurfBlend { a, sa, b, sb, cont, tension } => {
+        R::SurfBlend { a, sa, b, sb, cont, tension, tension2 } => {
+            let antes = (a.clone(), b.clone());
             curve_slot(ui, "g_a", "Borda 1", doc, me, a, seed);
             opt_surf(ui, "g_sa", "Apoio 1", doc, me, sa, seed);
             curve_slot(ui, "g_b", "Borda 2", doc, me, b, seed);
             opt_surf(ui, "g_sb", "Apoio 2", doc, me, sb, seed);
+            // borda nova traz o apoio dela
+            let apoio = |c: &CurveRef| seed.apoios.iter().find(|(x, _)| x == c).map(|x| x.1);
+            if *a != antes.0 {
+                *sa = apoio(a).or(*sa);
+            }
+            if *b != antes.1 {
+                *sb = apoio(b).or(*sb);
+            }
             let opts = [
                 ("cont_g0", "G0", "Posição: liga em linha reta", *cont == Continuity::G0),
                 ("cont_g1", "G1", "Tangente às superfícies de apoio", *cont == Continuity::G1),
@@ -1808,9 +1845,9 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 *cont = [Continuity::G0, Continuity::G1, Continuity::G2][i];
             }
             if *cont != Continuity::G0 {
-                expr(ui, "Tensão", tension, vars, "");
+                tensoes(ui, tension, tension2, vars);
             }
-            ui.label(RichText::new(tr("Bordas: use 'Contorno' ou 'Curva extraída' de uma aresta; apoio = a superfície daquela borda.")).weak().small());
+            ui.label(RichText::new(tr("Clique nas arestas no 3D: o apoio vem junto. Puxe as setas para a tensão de cada lado.")).weak().small());
         }
         R::SurfJoin { items, tol, curves } => {
             surfs_list(ui, "g_j", doc, me, items, seed);

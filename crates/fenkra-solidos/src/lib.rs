@@ -342,12 +342,35 @@ fn regrada(c: &geo3d::Curve3, apoio: Option<&Shape>, modo: RuledMode, vetor: Opt
     Shape::loft_surface(&[pts, saida], true, false, None).map_err(|x| x.0)
 }
 
-/// Borda de `sh` que "olha" para `other`: a borda livre é dividida nos cantos vivos e fica o
-/// trecho com a menor distância média até a outra superfície.
-fn facing_edge(sh: &Shape, other: &Shape) -> Result<Vec<V3>, String> {
+/// Borda de `sh` que "olha" para `other`: o trecho com a menor distância média até a outra superfície.
+/// Com `perto`, a escolha é da pessoa: fica o trecho mais perto do ponto.
+fn escolher_borda(runs: &[Vec<V3>], other: &Shape, perto: Option<V3>) -> Result<usize, String> {
+    use geo3d::*;
+    let mut best: Option<(f64, usize)> = None;
+    for (i, r) in runs.iter().enumerate() {
+        // na escolha da pessoa vale o ponto mais perto, e o trecho comprido não perde por ser comprido
+        let m = match perto {
+            Some(q) => r.iter().map(|p| dist(*p, q)).fold(f64::MAX, f64::min),
+            None => {
+                let mut acc = 0.;
+                for p in r {
+                    acc += dist(*p, other.surface_near(*p).map_err(|x| x.0)?.0);
+                }
+                acc / r.len() as f64
+            }
+        };
+        if best.is_none_or(|b| m < b.0) {
+            best = Some((m, i));
+        }
+    }
+    best.map(|b| b.1).ok_or_else(|| "a superfície não tem borda livre para conectar".into())
+}
+
+/// Bordas livres de `sh`, divididas nos cantos vivos.
+fn bordas_livres(sh: &Shape) -> Result<Vec<Vec<V3>>, String> {
     use geo3d::*;
     let loops = sh.boundary().map_err(|x| x.0)?;
-    let mut best: Option<(f64, Vec<V3>)> = None;
+    let mut out = vec![];
     for mut lp in loops {
         if lp.len() > 2 && dist(lp[0], *lp.last().unwrap()) < 1e-6 {
             lp.pop();
@@ -386,21 +409,9 @@ fn facing_edge(sh: &Shape, other: &Shape) -> Result<Vec<V3>, String> {
                 })
                 .collect()
         };
-        for r in runs {
-            if r.len() < 2 {
-                continue;
-            }
-            let mut acc = 0.;
-            for p in &r {
-                acc += dist(*p, other.surface_near(*p).map_err(|x| x.0)?.0);
-            }
-            let m = acc / r.len() as f64;
-            if best.as_ref().is_none_or(|b| m < b.0) {
-                best = Some((m, r));
-            }
-        }
+        out.extend(runs.into_iter().filter(|r| r.len() >= 2));
     }
-    best.map(|b| b.1).ok_or_else(|| "a superfície não tem borda livre para conectar".into())
+    Ok(out)
 }
 
 /// Filete (raio constante ou variável) nas arestas de uma superfície, pelos pontos médios.
@@ -508,6 +519,15 @@ pub struct RefNote {
     pub analise: Option<analise::Analise>,
     /// B290: isocurvas pedidas no multi-seções
     pub iso: Vec<Vec<V3>>,
+    /// B290: seções como o cálculo as recebeu, para os conectores andarem sobre elas
+    pub secoes: Vec<geo3d::Curve3>,
+    /// B290: seção que o cálculo percorre ao contrário, deduzida ou pedida
+    pub sentidos: Vec<bool>,
+    /// B290: seta de tensão de cada lado: ponto na borda, direção que sai dela e corda da ponte
+    pub tensoes: Vec<(V3, V3, f64)>,
+    /// B290: bordas que o Conectar pode usar em cada superfície, e qual está em uso
+    pub bordas: [Vec<Vec<V3>>; 2],
+    pub borda_usada: [usize; 2],
 }
 
 /// Superfície de referência exibível (malha).
@@ -1351,7 +1371,8 @@ impl Ctx<'_> {
 
     /// Concordância entre duas bordas: seções de Hermite (G1 cúbica, G2 quíntica com curvatura
     /// nula nas pontas) que saem tangentes às superfícies de apoio; G0 liga em linha reta.
-    fn blend(&self, a: &CurveRef, sa: Option<&SurfRef>, b: &CurveRef, sb: Option<&SurfRef>, cont: Continuity, tension: f64, d: u32) -> Result<Shape, String> {
+    #[allow(clippy::too_many_arguments)]
+    fn blend(&self, id: Id, a: &CurveRef, sa: Option<&SurfRef>, b: &CurveRef, sb: Option<&SurfRef>, cont: Continuity, tensoes: [f64; 2], d: u32) -> Result<Shape, String> {
         use geo3d::*;
         const N: usize = 24;
         let (ca, cb) = (self.curve(a, d)?, self.curve(b, d)?);
@@ -1386,13 +1407,20 @@ impl Ctx<'_> {
             if chord < 1e-6 {
                 return Err("as bordas se tocam — a concordância precisa de afastamento".into());
             }
-            let k = chord * tension;
             let sec = if cont == Continuity::G0 {
+                // sem seta, mas a etiqueta de continuidade precisa saber onde fica a ponte
+                if i == N / 2 {
+                    let d = unit(sub(pb[i], pa[i])).unwrap_or([1., 0., 0.]);
+                    self.notes.borrow_mut().entry(id).or_default().tensoes = vec![(pa[i], d, chord), (pb[i], mul(d, -1.), chord)];
+                }
                 vec![pa[i], pb[i]]
             } else {
                 let da = out(&sha, &pa, i, pb[i])?.unwrap_or_else(|| unit(sub(pb[i], pa[i])).unwrap());
                 let db = out(&shb, &pb, i, pa[i])?.unwrap_or_else(|| unit(sub(pa[i], pb[i])).unwrap());
-                let pts = hermite(pa[i], mul(da, k), [0.; 3], pb[i], mul(db, -k), [0.; 3], matches!(cont, Continuity::G2 | Continuity::G3));
+                if i == N / 2 {
+                    self.notes.borrow_mut().entry(id).or_default().tensoes = vec![(pa[i], da, chord), (pb[i], db, chord)];
+                }
+                let pts = hermite(pa[i], mul(da, chord * tensoes[0]), [0.; 3], pb[i], mul(db, -chord * tensoes[1]), [0.; 3], matches!(cont, Continuity::G2 | Continuity::G3));
                 pts.into_iter().step_by(4).chain(std::iter::once(pb[i])).collect::<Vec<_>>()
             };
             sections.push(sec);
@@ -1970,11 +1998,20 @@ impl Ctx<'_> {
                     Geo::Surface(one)
                 }
             }
-            SurfConnect { a, b, cont, tension } => {
+            SurfConnect { a, b, cont, tension, tension2, near } => {
                 let (sa, sb) = (self.cut_shape(a, d)?, self.cut_shape(b, d)?);
-                let ea = facing_edge(&sa, &sb)?;
-                let eb = facing_edge(&sb, &sa)?;
-                Geo::Surface(self.blend(&CurveRef::Edge(ea), Some(a), &CurveRef::Edge(eb), Some(b), *cont, e(tension, "tensão")?, d)?)
+                let (ra, rb) = (bordas_livres(&sa)?, bordas_livres(&sb)?);
+                let (ia, ib) = (escolher_borda(&ra, &sb, near[0])?, escolher_borda(&rb, &sa, near[1])?);
+                let (ea, eb) = (ra[ia].clone(), rb[ib].clone());
+                {
+                    let mut n = self.notes.borrow_mut();
+                    let n = n.entry(id).or_default();
+                    n.bordas = [ra, rb];
+                    n.borda_usada = [ia, ib];
+                }
+                let t1 = e(tension, "tensão")?;
+                let t2 = tension2.as_ref().map_or(Ok(t1), |t| e(t, "tensão 2"))?;
+                Geo::Surface(self.blend(id, &CurveRef::Edge(ea), Some(a), &CurveRef::Edge(eb), Some(b), *cont, [t1, t2], d)?)
             }
             SurfSweepX { kind, spine, solution, smooth, sections } => {
                 let n = e(sections, "seções")?.round().clamp(4., 200.) as usize;
@@ -2103,6 +2140,12 @@ impl Ctx<'_> {
                 for g in &opts.guides {
                     guias.push(self.curve(g, d)?);
                 }
+                {
+                    let mut n = self.notes.borrow_mut();
+                    let n = n.entry(id).or_default();
+                    n.sentidos = loft::sentidos(&curvas, &opts.reversed);
+                    n.secoes = curvas.clone();
+                }
                 let controle = !guias.is_empty() || !opts.connectors.is_empty() || opts.reversed.iter().any(|x| *x) || tangentes.iter().any(|t| *t != 0.);
                 let sh = if controle {
                     loft::superficie(&loft::Entrada { secoes: curvas, guias, conectores: opts.connectors.clone(), invertidas: opts.reversed.clone(), regrada: *ruled, fechar: *closed, tangentes })?
@@ -2173,7 +2216,11 @@ impl Ctx<'_> {
                 nota.text = texto;
                 Geo::Point(pior)
             }
-            SurfBlend { a, sa, b, sb, cont, tension } => Geo::Surface(self.blend(a, sa.as_ref(), b, sb.as_ref(), *cont, e(tension, "tensão")?, d)?),
+            SurfBlend { a, sa, b, sb, cont, tension, tension2 } => {
+                let t1 = e(tension, "tensão")?;
+                let t2 = tension2.as_ref().map_or(Ok(t1), |t| e(t, "tensão 2"))?;
+                Geo::Surface(self.blend(id, a, sa.as_ref(), b, sb.as_ref(), *cont, [t1, t2], d)?)
+            }
             SurfJoin { items, tol, curves } => {
                 let t = e(tol, "tolerância")?;
                 let mut acc = Shape::empty();
@@ -7854,7 +7901,7 @@ mod tests {
         let c_s2 = line(&mut d, [0., 250., 0.], [40., 250., 0.]);
 
         let s2 = d.add_geometry(RefKind::SurfExtrude { curve: c_s2, dir: AxisRef::Origin(OriginAxis::Y), length: s("20"), length2: s("0"), until: None, until2: None });
-        let con = d.add_geometry(RefKind::SurfConnect { a: SurfRef::Ref(s1), b: SurfRef::Ref(s2), cont: Continuity::G0, tension: s("1") });
+        let con = d.add_geometry(RefKind::SurfConnect { a: SurfRef::Ref(s1), b: SurfRef::Ref(s2), cont: Continuity::G0, tension: s("1"), tension2: None, near: [None; 2] });
         // dividir pela curva que corta a faixa ao meio
         let cutc = line(&mut d, [20., 190., 0.], [20., 230., 0.]);
         let spl = d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(s1), tool: SurfRef::Plane(PlaneRef::Origin(OriginPlane::YZ)), flip: true, more: vec![], curve: Some(cutc), more_flip: vec![] });
@@ -8577,6 +8624,7 @@ mod tests {
             sb: Some(SurfRef::Ref(fb)),
             cont: Continuity::G1,
             tension: s("1"),
+            tension2: None,
         });
         let join = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(fa), SurfRef::Ref(blend), SurfRef::Ref(fb)], tol: s("0.01"), curves: vec![] });
         let bounds = d.add_geometry(RefKind::CurveBoundary { surface: SurfRef::Ref(join), which: 0, prop: Propagation::Nenhuma, near: None, expected: None });

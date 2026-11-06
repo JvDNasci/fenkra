@@ -36,6 +36,8 @@ pub static CAMPOS: &[(&str, &str, &str)] = &[
     ("Tamanho", "Tamanho do elemento. Maior que zero; cresce em todas as direções a partir do ponto de origem.", "Size of the element. Above zero; grows in every direction from the origin point."),
     ("ρ", "Razão de achatamento da curva cônica: 0,5 é parábola, abaixo é elipse, acima é hipérbole.", "Flattening ratio of the conic curve: 0.5 is a parabola, below is an ellipse, above is a hyperbola."),
     ("Peso", "Peso do ponto de controle. Maior que zero; peso alto puxa a curva para o ponto, 1 é neutro.", "Control point weight. Above zero; a high weight pulls the curve toward the point, 1 is neutral."),
+    ("Tensão 1", "Quanto a ponte insiste na direção do primeiro apoio, em múltiplos da distância entre as bordas.", "How far the bridge keeps the direction of the first support, in multiples of the distance between the edges."),
+    ("Tensão 2", "Quanto a ponte insiste na direção do segundo apoio, em múltiplos da distância entre as bordas.", "How far the bridge keeps the direction of the second support, in multiples of the distance between the edges."),
     ("Tensão", "Tensão da curva nas pontas. De 0 (frouxa) a 1 (esticada); mais tensão reduz o abaulamento.", "Curve tension at the ends. From 0 (loose) to 1 (taut); more tension reduces bulging."),
     ("Tolerância", "Distância máxima aceita entre o resultado e o desenho ideal. Quanto menor, mais fiel e mais lento.", "Largest distance accepted between the result and the ideal shape. Smaller is more faithful and slower."),
     ("Razão", "Razão entre duas medidas. Maior que zero; 1 mantém as duas iguais.", "Ratio between two measures. Above zero; 1 keeps both equal."),

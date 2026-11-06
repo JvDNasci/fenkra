@@ -15,6 +15,7 @@ mod entradas;
 mod previa;
 mod sup3d;
 mod sup_analise;
+mod sup_loft;
 mod picking;
 mod selecao;
 mod selecao_regras;
