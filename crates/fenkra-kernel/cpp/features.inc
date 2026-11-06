@@ -129,10 +129,17 @@ std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> s
     return guard("varredura", [&] {
         TopoDS_Wire w = spine_wire(spine);
         GeomFill_Trihedron t = mode == 1 ? GeomFill_IsFixed : mode == 2 ? GeomFill_IsFrenet : GeomFill_IsCorrectedFrenet;
-        BRepOffsetAPI_MakePipe mk(w, face.s, t, Standard_False);
-        mk.Build();
-        if (!mk.IsDone()) throw std::runtime_error("não foi possível varrer o perfil ao longo da curva");
-        return wrap(mk.Shape());
+        // Numa guia suave, `spine_wire` faz uma aresta só; com muitos pontos a aproximação da varredura
+        // nessa aresta pode desistir. `BRepFill_Pipe::MakeShape` não confere isso e lê uma face nula
+        // ainda no construtor, antes de `IsDone` existir. Guia com cantos vira trechos retos e não falha.
+        TopoDS_Shape out;
+        protegido("varredura: o kernel não conseguiu seguir esta guia suave; use menos pontos na spline ou divida a guia em trechos", [&] {
+            BRepOffsetAPI_MakePipe mk(w, face.s, t, Standard_False);
+            mk.Build();
+            if (!mk.IsDone()) throw std::runtime_error("não foi possível varrer o perfil ao longo da curva");
+            out = mk.Shape();
+        });
+        return wrap(out);
     });
 }
 

@@ -89,6 +89,9 @@
 #include <TopoDS_Vertex.hxx>
 #include <gp_Cylinder.hxx>
 #include <type_traits>
+#if defined(_MSC_VER)
+#include <excpt.h>
+#endif
 #include <vector>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepAlgoAPI_Common.hxx>
@@ -199,6 +202,32 @@ auto guard(const char* what, F&& f) -> decltype(f()) {
         std::string m = e.GetMessageString() ? e.GetMessageString() : "";
         throw std::runtime_error(std::string(what) + ": " + (m.empty() ? std::string("erro geométrico do kernel") : m));
     }
+}
+
+// Alguns algoritmos do OCCT seguem depois de uma etapa interna falhar e leem uma forma nula: isso é
+// violação de acesso, não exceção C++, e nem `guard` nem o cxx a enxergam, então o processo morreria.
+// `sem_violacao` devolve false nesse caso; outras exceções (C++ inclusive) seguem o caminho normal.
+#if defined(_MSC_VER)
+bool sem_violacao(void (*f)(void*), void* ctx) {
+    __try {
+        f(ctx);
+        return true;
+    } __except (GetExceptionCode() == 0xC0000005u ? EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        return false;
+    }
+}
+#else
+bool sem_violacao(void (*f)(void*), void* ctx) {
+    f(ctx);
+    return true;
+}
+#endif
+
+// Roda `f`; se o OCCT tentar ler memória inválida lá dentro, vira erro com `mensagem`.
+template <class F>
+void protegido(const char* mensagem, F&& f) {
+    using Fn = std::remove_reference_t<F>;
+    if (!sem_violacao([](void* c) { (*static_cast<Fn*>(c))(); }, &f)) throw std::runtime_error(mensagem);
 }
 
 std::unique_ptr<Shape> wrap(const TopoDS_Shape& s) {

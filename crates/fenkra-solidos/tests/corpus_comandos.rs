@@ -997,6 +997,156 @@ fn invalido_superficie_deslocada_de_superficie_que_nao_existe() {
     erro(&recompute(&d), id);
 }
 
+// Spline de muitos pontos como guia: a aproximação da varredura desiste numa aresta só e o kernel lia
+// uma face nula, o que derrubava o processo. Agora cada comando que passa por ali dá erro nomeado.
+
+// a falha é sensível à forma: arredondar estes pontos pode fazer a varredura passar
+const GUIA_LONGA: [[f64; 3]; 14] = [
+    [0.0, 0.8600804100884216, 1.1450247351705096],
+    [10.0, 0.48199301161008745, 0.7615589370847153],
+    [20.0, 2.2048180384300933, -2.051278570459579],
+    [30.0, -2.7830179540936144, -1.7327595907565863],
+    [40.0, -1.8335226954001924, -2.209066039185336],
+    [50.0, -1.391385040053577, 1.3031763746385758],
+    [60.0, -0.963145518306703, 1.3869923797711938],
+    [70.0, 0.30173447841788414, -1.946983024036132],
+    [80.0, 1.6654125335167955, 1.6088844992211209],
+    [90.0, 1.9853424598705167, -0.14030591717508512],
+    [100.0, 2.358035958373508, 2.3234039668865583],
+    [110.0, -0.23000579637704965, 1.0199072629235229],
+    [120.0, 0.5738345799097198, -0.6312282644583582],
+    [130.0, 0.16650554465586942, 0.9091645228633187],
+];
+
+fn fixos(p: &[[f64; 3]]) -> Vec<PointRef> {
+    p.iter().map(|q| PointRef::Fixed(*q)).collect()
+}
+
+fn spline_fixa(d: &mut Document, p: &[[f64; 3]]) -> CurveRef {
+    CurveRef::Ref(d.add_geometry(RefKind::Spline { points: fixos(p), closed: false, tangents: vec![] }))
+}
+
+fn varredura(d: &mut Document, spine: CurveRef, op: BoolOp) -> Id {
+    let perfil = sk_circulos(d, PlaneRef::Origin(OriginPlane::YZ), &[([0., 0.], 1.)]);
+    d.add_feature(FeatureKind::Sweep(Sweep { sketch: perfil, spine, mode: SweepMode::Corrigido, op, thin: None }))
+}
+
+fn erro_de_guia(nome: &str, r: &RecomputeResult, id: Id) {
+    let m = erro(r, id);
+    assert!(m.contains("guia suave"), "{nome}: esperava o erro nomeado da guia, veio: {m}");
+}
+
+#[test]
+fn invalido_nervura_com_spline_longa_da_erro_nomeado() {
+    precisa_kernel!();
+    let mut d = Document::new("nervura");
+    let g = spline_fixa(&mut d, &GUIA_LONGA);
+    let id = varredura(&mut d, g, BoolOp::Add);
+    erro_de_guia("nervura", &recompute(&d), id);
+}
+
+#[test]
+fn invalido_rasgo_com_spline_longa_da_erro_nomeado_e_preserva_o_corpo() {
+    precisa_kernel!();
+    let mut d = Document::new("rasgo");
+    let c = sk_rect(&mut d, XY, [-10., -20.], [140., 20.]);
+    d.add_feature(ext(c, BoolOp::Add, "10"));
+    let g = spline_fixa(&mut d, &GUIA_LONGA);
+    let id = varredura(&mut d, g, BoolOp::Cut);
+    let r = recompute(&d);
+    erro_de_guia("rasgo", &r, id);
+    assert!((volume_total(&r) - 150. * 40. * 10.).abs() < 1e-6, "o corpo anterior devia ficar intacto: {}", volume_total(&r));
+}
+
+#[test]
+fn invalido_membro_estrutural_com_spline_longa_da_erro_nomeado() {
+    precisa_kernel!();
+    let mut d = Document::new("estrutural");
+    let g = spline_fixa(&mut d, &GUIA_LONGA);
+    let id = d.add_feature(FeatureKind::StructMember(StructMember {
+        paths: vec![g],
+        family: s("Tubo"),
+        designation: s("teste"),
+        kind: SectionKind::TuboRedondo,
+        dims: vec![s("6"), s("1")],
+        anchor: 0,
+        angle: s("0"),
+        off_x: s("0"),
+        off_y: s("0"),
+        ext1: s("0"),
+        ext2: s("0"),
+        corner: CornerMode::MeiaEsquadria,
+        gap: s("0"),
+        joints: vec![],
+        material: String::new(),
+        mirror: false,
+    }));
+    erro_de_guia("estrutural", &recompute(&d), id);
+}
+
+#[test]
+fn invalido_nervura_de_chapa_com_spline_longa_da_erro_nomeado() {
+    precisa_kernel!();
+    let mut d = Document::new("chapa");
+    d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
+    let base = sk_rect(&mut d, XY, [-20., -30.], [300., 30.]);
+    d.add_feature(FeatureKind::SmWall(SmWall { sketch: base, reverse: false, offset: String::new(), mid: false, surface: None }));
+    let topo = d.add_offset_plane(XY, "2");
+    let mut data = SketchData::default();
+    let mut al = || d.alloc();
+    let pts: Vec<Id> = GUIA_LONGA.iter().map(|q| data.add_point(&mut al, q[0], q[1])).collect();
+    data.add_curve(&mut al, Curve::Spline { pts }, false);
+    let curva = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(topo), data }));
+    let id = d.add_feature(FeatureKind::SmStamp(SmStamp { sketch: curva, depth: s("2"), flip: false, kind: 1, width: s("6"), punch: None }));
+    let r = recompute(&d);
+    erro_de_guia("nervura de chapa", &r, id);
+    assert!((volume_total(&r) - 320. * 60. * 2.).abs() < 1e-6, "a chapa devia ficar intacta: {}", volume_total(&r));
+}
+
+#[test]
+fn invalido_superficie_e_loft_com_spline_longa_nao_derrubam() {
+    precisa_kernel!();
+    let mut d = Document::new("superficies");
+    let g = spline_fixa(&mut d, &GUIA_LONGA);
+    let linha = |d: &mut Document, q: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([q[0], q[1] - 2., q[2]]), b: PointRef::Fixed([q[0], q[1] + 2., q[2]]), start: s("0"), end: s("0") }));
+    let (a, b) = (linha(&mut d, GUIA_LONGA[0]), linha(&mut d, GUIA_LONGA[13]));
+    let tubo = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(s("1")), spine: g.clone(), mode: SweepMode::Corrigido });
+    let perfil = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Curve(a.clone()), spine: g.clone(), mode: SweepMode::Corrigido });
+    let loft = d.add_geometry(RefKind::SurfLoft { sections: vec![a, b], guide: Some(g), ruled: false, closed: false, opts: Default::default() });
+    let r = recompute(&d);
+    // estes caminhos conferem a falha sozinhos: o resultado pode ser superfície ou erro, nunca queda
+    for id in [tubo, perfil, loft] {
+        assert!(matches!(r.status[&id], Status::Ok | Status::Warning(_) | Status::Error(_)), "{:?}", r.status[&id]);
+    }
+}
+
+/// A proteção só age na falha: a mesma guia como polilinha (cantos, trechos retos) e uma spline curta
+/// continuam varrendo.
+#[test]
+fn varredura_segue_com_polilinha_e_com_spline_curta() {
+    precisa_kernel!();
+    let mut d = Document::new("polilinha");
+    let cantos: Vec<[f64; 3]> = GUIA_LONGA.iter().enumerate().map(|(i, q)| [q[0], q[1], if i % 2 == 0 { 0. } else { 10. }]).collect();
+    let g = CurveRef::Ref(d.add_geometry(RefKind::Polyline { points: fixos(&cantos), closed: false }));
+    let id = varredura(&mut d, g, BoolOp::Add);
+    let r = recompute(&d);
+    ok(&r, id);
+    assert!(volume_total(&r) > 0., "polilinha sem volume");
+    let (a, b) = caixa_da_malha(&r);
+    assert!(b[0] - a[0] > 129. && b[0] - a[0] < 140., "caixa da polilinha {a:?} {b:?}");
+
+    let mut d = Document::new("spline curta");
+    let g = spline_fixa(&mut d, &[[0., 0., 0.], [20., 5., 0.], [40., -5., 0.], [60., 0., 0.]]);
+    let id = varredura(&mut d, g, BoolOp::Add);
+    let r = recompute(&d);
+    ok(&r, id);
+    // perfil de área π varrido pela curva: um pouco mais que o vão de 60 mm, e nunca o dobro
+    let v = volume_total(&r);
+    assert!(v > PI * 55. && v < PI * 120., "volume da spline curta {v}");
+    let (a, b) = caixa_da_malha(&r);
+    assert!(b[0] - a[0] > 58. && b[0] - a[0] < 66., "caixa da spline curta {a:?} {b:?}");
+}
+
 /// BUG achado (B72): corte passante cujo sentido não alcança o corpo (sketch na base, sem inverter)
 /// volta `Ok` com o volume intacto; um corte que não remove nada devia avisar.
 #[test]
