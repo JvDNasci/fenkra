@@ -86,6 +86,14 @@ foreach ($dll in 'vcruntime140.dll', 'vcruntime140_1.dll', 'msvcp140.dll') {
     Copy-Item $p $out
 }
 
+# visualizador do .fkv (B365): a página solta, com three.js dentro, que abre um .fkv por arrastar ou
+# escolher o arquivo. Gerada pelo próprio programa, pois o modelo da página tem marcas a preencher.
+$visualizador = Join-Path $out "Fenkra Visualizador.html"
+$p = Start-Process -FilePath (Join-Path $out "fenkra.exe") -ArgumentList @("--gerar-visualizador", "`"$visualizador`"") -Wait -PassThru
+if ($p.ExitCode -ne 0 -or -not (Test-Path $visualizador)) { throw "não consegui gerar Fenkra Visualizador.html" }
+$html = Get-Content $visualizador -Raw -Encoding utf8
+if ($html -match '/\*@(THREE|PACOTE|PACOTE_B|META)@\*/' -or $html -notmatch 'THREE') { throw "Fenkra Visualizador.html saiu com marcas não preenchidas" }
+
 # licenças obrigatórias (LGPL-2.1: texto, aviso do OCCT e oferta de código-fonte)
 foreach ($doc in $licencas) {
     $p = Join-Path $root $doc
@@ -110,7 +118,7 @@ foreach ($lib in @("opencascade", "freetype", "libpng", "zlib", "bzip2", "brotli
 $build | Set-Content -Path (Join-Path $out "NOTICE-BUILD.txt") -Encoding utf8
 
 # o pacote precisa conter os três arquivos de licença
-foreach ($doc in $licencas) {
+foreach ($doc in $licencas + "Fenkra Visualizador.html") {
     if (-not (Test-Path (Join-Path $out $doc))) { throw "pacote sem $doc" }
 }
 

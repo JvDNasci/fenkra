@@ -165,3 +165,32 @@ faz pedido de rede por conta própria (só busca o `.fkv` quando recebe uma URL)
 O teste `crates/fenkra-pacote/tests/corpus.rs` gera pacote de peça, montagem e desenho, abre pelo leitor de
 referência, valida as referências (nós, malhas, folhas, IDs únicos, pais) e confere números contra o
 documento. A página foi aberta em Chromium nas mesmas amostras (ver o ADR 0062).
+
+## Abrir o arquivo (B365)
+
+- **Padrão:** Arquivo, Exportar visualização grava uma página `.html` autocontida. Duplo clique abre no
+  navegador, sem internet. O `.fkv` puro é a opção avançada do mesmo painel. Depois de gravar, o painel
+  oferece "Abrir no navegador".
+- **`Fenkra Visualizador.html`** vai na pasta do release. Abra-a e arraste o `.fkv` para a tela, ou toque
+  em Abrir e escolha o arquivo. Quem gera é `fenkra --gerar-visualizador <saida.html>` (o modelo em `web/`
+  tem marcas a preencher, então não se copia o arquivo cru).
+- **Duplo clique no `.fkv` (Windows):** Configurações, Camadas e perfil, "Associar o .fkv ao Fenkra".
+  Grava duas chaves em `HKCU\Software\Classes`, só com o clique, e há "Desfazer a associação". O duplo
+  clique chama `fenkra --abrir-fkv "%1"`, que grava uma página temporária e a abre no navegador sem subir a
+  janela do programa (ADR 0072).
+
+### Celular: o que foi testado e o que funciona
+
+Teste feito no navegador interno do Fenkra, emulando 375x812 com agente de usuário de Android (Pixel 8),
+servindo a pasta por `http://127.0.0.1`:
+
+| Caso | Resultado |
+|---|---|
+| Página `.html` com o pacote dentro, aberta por **link** | Funciona: carrega, mostra a peça em 3D, sem rolagem horizontal, painel embaixo, botões de toque |
+| `Fenkra Visualizador.html` vazia | Funciona: mostra a instrução clara; escolher o `.fkv` pelo campo de arquivo carrega o modelo |
+| Abrir o arquivo **local** (`file://`) | **Não foi possível testar**: o navegador interno recusa `file://`. Em celular real isso depende do aparelho e do sistema |
+
+Sem rodeios: **o caminho garantido no celular é abrir por link.** Publique o `.html` em qualquer endereço
+(site, nuvem com link direto, servidor da equipe) e abra o link. Abrir um arquivo recebido por mensagem
+ou e-mail costuma funcionar no Android (o Chrome abre `.html` pelo gerenciador de arquivos) e não é
+confiável no iPhone; isso é do sistema, não do visualizador. O painel do comando diz o mesmo.

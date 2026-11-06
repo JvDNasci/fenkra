@@ -29,6 +29,7 @@ mod demo_estrutural;
 mod estado_doc;
 mod exportar;
 mod visualizacao;
+pub(crate) use visualizacao::abrir_no_navegador;
 mod importar;
 mod features;
 mod lote;
@@ -213,6 +214,7 @@ pub struct App {
     /// painel Features encontradas (B143), aberto só enquanto a pessoa analisa
     features: Option<features::Estado>,
     exportar_dialogo: Option<exportar::Dialogo>,
+    visualizacao_dialogo: Option<visualizacao::Dialogo>,
     pub impressao: Option<crate::impressao_ui::Painel>,
     /// tela "Formatos suportados" aberta
     formatos_aberto: bool,
@@ -430,6 +432,7 @@ impl App {
             importar_defeito: None,
             features: None,
             exportar_dialogo: None,
+            visualizacao_dialogo: None,
             impressao: None,
             formatos_aberto: false,
             lote_painel: None,
@@ -543,6 +546,11 @@ impl App {
         if let Ok(f) = std::env::var("FENKRA_DEMO_EXPORTAR") {
             let formato = fenkra_conversor::Formato::TODOS.into_iter().find(|q| q.extensoes().contains(&f.as_str()));
             app.abrir_painel_exportar(formato.unwrap_or(fenkra_conversor::Formato::Step));
+            app.started = true;
+        }
+        // desenvolvimento: FENKRA_DEMO_VISUALIZACAO=1 abre o painel de exportar visualização (B365)
+        if std::env::var("FENKRA_DEMO_VISUALIZACAO").is_ok() {
+            app.exportar_visualizacao(false);
             app.started = true;
         }
         // desenvolvimento: FENKRA_DEMO_FORMATOS=1 abre a matriz; FENKRA_DEMO_LOTE=<pasta>, um lote já simulado
@@ -8537,6 +8545,7 @@ impl eframe::App for App {
         self.painel_importar(ctx, area);
         self.painel_features(ctx, area);
         self.painel_exportar(ctx, area);
+        self.painel_visualizacao(ctx, area);
         self.painel_impressao(ctx, area);
         self.painel_lote(ctx, area);
         crate::pmi_baloes_ui::janela(self, ctx, area);

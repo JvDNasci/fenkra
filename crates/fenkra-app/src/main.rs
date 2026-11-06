@@ -89,6 +89,7 @@ mod textos_biblioteca3;
 mod textos_conversor;
 mod textos_formatos;
 mod textos_visualizacao;
+mod assoc_fkv;
 mod textos_malha;
 mod malha_ui;
 mod impressao_ui;
@@ -241,6 +242,10 @@ fn opcoes(modo: partida::Modo) -> eframe::NativeOptions {
 /// vai para o `partida.log`; se nenhuma funcionar, uma caixa de mensagem explica o que aconteceu.
 fn main() -> eframe::Result {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // duplo clique num .fkv (B365): abre o pacote no navegador e sai, sem subir a janela
+    if assoc_fkv::tratar_argumentos(&args) {
+        return Ok(());
+    }
     partida::iniciar();
     if args.iter().any(|a| a == "--diagnostico") {
         partida::diagnostico();

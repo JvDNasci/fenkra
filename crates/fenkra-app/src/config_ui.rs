@@ -89,4 +89,35 @@ pub fn pagina(ui: &mut egui::Ui, s: &mut Settings, doc: &mut Document) {
     ui.separator();
     ui.label(RichText::new(tr("Arquivo de configurações")).strong());
     ui.label(RichText::new(tr("Cada gravação guarda a anterior como backup (config.json.bak). Se o arquivo estragar, o programa restaura o backup e avisa.")).weak().small());
+
+    secao_fkv(ui);
+}
+
+/// Associar o `.fkv` ao Fenkra no Windows (B365): só com clique, em HKCU, e com desfazer.
+fn secao_fkv(ui: &mut egui::Ui) {
+    let msg_key = egui::Id::new("config_fkv_msg");
+    ui.separator();
+    ui.label(RichText::new(tr("Abrir o .fkv com duplo clique")).strong());
+    ui.label(RichText::new(tr("O .fkv é um pacote: o navegador não o abre sozinho. Associá-lo faz o duplo clique abrir o modelo no navegador, pelo Fenkra, sem abrir a janela dele. Vale só para o seu usuário do Windows e não pede administrador.")).weak().small());
+    let ligado = crate::assoc_fkv::registrado();
+    ui.label(RichText::new(tr(if ligado { "O .fkv abre pelo Fenkra com duplo clique." } else { "O .fkv não está associado ao Fenkra." })).small());
+    ui.horizontal(|ui| {
+        if ui.add_enabled(cfg!(windows), egui::Button::new(tr("Associar o .fkv ao Fenkra"))).on_hover_text(tr("Grava duas chaves em HKCU\\Software\\Classes. Só acontece com este clique.")).clicked() {
+            let m = match crate::assoc_fkv::registrar() {
+                Ok(()) => tr("Associação feita.").to_string(),
+                Err(e) => format!("{}: {e}", tr("Não consegui mudar a associação")),
+            };
+            ui.ctx().data_mut(|d| d.insert_temp(msg_key, m));
+        }
+        if ui.add_enabled(cfg!(windows) && ligado, egui::Button::new(tr("Desfazer a associação"))).on_hover_text(tr("Apaga as duas chaves que o botão ao lado criou.")).clicked() {
+            let m = match crate::assoc_fkv::desfazer() {
+                Ok(()) => tr("Associação desfeita.").to_string(),
+                Err(e) => format!("{}: {e}", tr("Não consegui mudar a associação")),
+            };
+            ui.ctx().data_mut(|d| d.insert_temp(msg_key, m));
+        }
+    });
+    if let Some(m) = ui.ctx().data(|d| d.get_temp::<String>(msg_key)) {
+        ui.label(RichText::new(m).small());
+    }
 }

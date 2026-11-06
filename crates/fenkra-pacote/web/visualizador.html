@@ -60,6 +60,8 @@ main.com-painel #painel{display:flex}
 #aviso .caixa{max-width:420px}
 #aviso h2{margin:0 0 8px;font-size:18px}
 #aviso p{color:var(--suave);margin:6px 0}
+#aviso p.dica{font-size:13px;margin:10px 0 0}
+#aviso button{margin-top:8px}
 #soltar{outline:2px dashed var(--destaque);outline-offset:-8px}
 .fila{display:flex;gap:6px;margin:0 0 8px}
 .zgrade{display:grid;grid-template-columns:auto 1fr 1fr;gap:6px;align-items:center;margin:0 0 8px}
@@ -120,7 +122,7 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--suav
       <div id="folha"></div>
       <div id="barra" role="toolbar"></div>
       <div id="flutuantes"><div id="corte"></div><div id="medida" role="status" aria-live="polite"></div></div>
-      <div id="aviso" class="on"><div class="caixa"><h2 data-t="vazio_t">Abra um pacote .fkv</h2><p data-t="vazio_p">Escolha o arquivo ou arraste-o para cá. Nada sai do seu aparelho.</p><button id="babrir2" data-t="abrir">Abrir</button></div></div>
+      <div id="aviso" class="on"><div class="caixa"><h2 data-t="vazio_t">Abra um pacote .fkv</h2><p data-t="vazio_p">Escolha o arquivo ou arraste-o para cá. Nada sai do seu aparelho.</p><button id="babrir2" data-t="abrir">Abrir</button><p class="dica" data-t="vazio_p2">Não tem um .fkv? No Fenkra, use Arquivo, Exportar visualização.</p><p class="dica" data-t="vazio_p3">No celular: se o arquivo não aparecer ao tocar em Abrir, mande o .fkv para o aparelho e procure em Arquivos ou Downloads.</p></div></div>
     </section>
   </main>
 </div>
@@ -138,7 +140,7 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--suav
    ======================================================================================== */
 const TX = {
  pt:{ "3D":"3D", folhas:"Folhas", painel:"Painel", abrir:"Abrir", tema:"Tema",
-  vazio_t:"Abra um pacote .fkv", vazio_p:"Escolha o arquivo ou arraste-o para cá. Nada sai do seu aparelho.",
+  vazio_t:"Abra um pacote .fkv", vazio_p:"Arraste o arquivo .fkv para esta tela ou toque em Abrir e escolha-o. Nada sai do seu aparelho.", vazio_p2:"Não tem um .fkv? No Fenkra, use Arquivo, Exportar visualização.", vazio_p3:"No celular: se o arquivo não aparecer ao tocar em Abrir, mande o .fkv para o aparelho e procure em Arquivos ou Downloads.",
   arvore:"Árvore", dados:"Dados", pmi:"PMI", vistas:"Vistas", estados:"Estados", lista:"Lista",
   buscar:"Buscar peça, código ou material", ajustar:"Ajustar", isolar:"Isolar", tudo:"Tudo", cortar:"Cortar", medir:"Medir", orto:"Orto", persp:"Persp.",
   sem_sel:"Toque numa peça para ver os dados.", nome:"Nome", pn:"Código", descricao:"Descrição", material:"Material", tipo_de_peca:"Tipo",
@@ -159,7 +161,7 @@ const TX = {
   trocar_lado:"Trocar lados", cmp_igual:"Nenhuma diferença encontrada.", totais:"Totais", adicionados:"Adicionados", removidos:"Removidos", movidos:"Movidos", alterados:"Alterados",
   so_no_outro:"só no outro pacote", girou:"girou", visivel:"Visível", estado:"Estado", versao:"Versão" },
  en:{ "3D":"3D", folhas:"Sheets", painel:"Panel", abrir:"Open", tema:"Theme",
-  vazio_t:"Open a .fkv package", vazio_p:"Choose the file or drop it here. Nothing leaves your device.",
+  vazio_t:"Open a .fkv package", vazio_p:"Drop the .fkv file on this screen, or tap Open and choose it. Nothing leaves your device.", vazio_p2:"No .fkv yet? In Fenkra, use File, Export viewer package.", vazio_p3:"On a phone: if the file does not show up when you tap Open, send the .fkv to the device and look in Files or Downloads.",
   arvore:"Tree", dados:"Data", pmi:"PMI", vistas:"Views", estados:"States", lista:"List",
   buscar:"Search part, code or material", ajustar:"Fit", isolar:"Isolate", tudo:"All", cortar:"Section", medir:"Measure", orto:"Ortho", persp:"Persp.",
   sem_sel:"Tap a part to see its data.", nome:"Name", pn:"Part no.", descricao:"Description", material:"Material", tipo_de_peca:"Type",
@@ -1134,7 +1136,7 @@ function montarPlm(){
   c.hidden = !partes.length; c.textContent = partes.join(" · ");
 }
 function mostrarErro(msg){
-  const a=$("#aviso"); a.classList.add("on"); a.querySelector("h2").textContent=T("erro"); a.querySelector("p").textContent=msg;
+  const a=$("#aviso"); a.classList.add("on"); a.querySelector("h2").textContent=T("erro"); a.querySelector("p").textContent=msg; a.querySelectorAll("p.dica").forEach(n=>n.hidden=true);
 }
 async function carregar(fonte, opcoes){
   try{
