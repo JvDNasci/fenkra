@@ -16,6 +16,10 @@ pub mod mesh_io;
 pub mod structural;
 pub mod perfis_catalogo;
 pub mod st_cantos;
+pub mod st_encaixe;
+pub mod st_encaixe_doc;
+#[cfg(test)]
+mod st_encaixe_tests;
 pub mod st_dobra;
 mod st_dobra_geo;
 pub mod st_dobra_corte;

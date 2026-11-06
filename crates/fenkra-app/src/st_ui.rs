@@ -586,12 +586,15 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     }
     if export {
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_corte.csv").save_file() {
-            let mut t = String::from("perfil;material;comprimento_mm;angulo1_graus;angulo2_graus;quantidade;barras_materia_prima;dobras;modo_da_dobra\n");
+            let mut t = String::from("perfil;material;comprimento_mm;angulo1_graus;angulo2_graus;quantidade;barras_materia_prima;dobras;modo_da_dobra;corte_encaixe_mm\n");
             let num = |a: Option<f64>| a.map(fmt).unwrap_or_default();
+            // B155: comprimento de corte do encaixe das pontas (laser ou plasma em tubo), por peça
+            let encaixes = fenkra_solidos::st_encaixe_doc::encaixes_da_estrutura(app.doc(), &Default::default());
             for r in &rows {
+                let encaixe = r.members.first().and_then(|m| encaixes.iter().find(|e| (e.feature, e.linha) == *m)).map(|e| fmt(e.comprimento_de_corte())).unwrap_or_default();
                 let dobras = r.tubo.as_ref().map(|t| t.resumo()).unwrap_or_default();
                 let modo = r.tubo.as_ref().and_then(|t| t.modo()).map(|m| fenkra_solidos::st_dobra::nome_modo(m)).unwrap_or_default();
-                t += &format!("{};{};{};{};{};{};{};{};{}\n", r.designation, r.material, fmt(r.length), num(r.angle1), num(r.angle2), r.count, r.bars * r.count, dobras, modo);
+                t += &format!("{};{};{};{};{};{};{};{};{};{}\n", r.designation, r.material, fmt(r.length), num(r.angle1), num(r.angle2), r.count, r.bars * r.count, dobras, modo, encaixe);
             }
             match std::fs::write(&p, t) {
                 Ok(()) => app.toast(tr("Lista de corte exportada"), false),

@@ -53,6 +53,8 @@ fn nome_da_linha(app: &App, l: st_cantos::Linha) -> String {
 
 /// Janela dos cantos. Mantém `app.st_cantos` atualizado enquanto aberta (o 3D desenha a partir dele).
 pub fn window(app: &mut App, ctx: &egui::Context) {
+    // a prévia do encaixe só vale no quadro em que o cartão a pediu
+    crate::st_encaixe_ui::limpar(ctx);
     if !app.st_cantos_open {
         if !app.st_cantos.is_empty() {
             app.st_cantos.clear();
@@ -239,7 +241,10 @@ fn cartao(ui: &mut egui::Ui, app: &App, c: &Canto, novo: &mut Option<Box<dyn FnO
         let mut g = if c.explicito && c.folga != 0. { format!("{}", c.folga) } else { String::new() };
         ui.horizontal(|ui| {
             ui.label(tr("Folga de solda"));
-            if ui.add(egui::TextEdit::singleline(&mut g).desired_width(60.).hint_text(tr("folga"))).on_hover_text(tr("Distância entre o membro que para e a face de quem continua, em mm.")).changed() {
+            let campo = ui.add(egui::TextEdit::singleline(&mut g).desired_width(60.).hint_text(tr("folga"))).on_hover_text(tr("Distância entre o membro que para e a face de quem continua, em mm."));
+            // B155: durante a edição o 3D mostra o valor num rótulo flutuante
+            crate::st_encaixe_ui::marcar_foco_folga(ui.ctx(), campo.has_focus());
+            if campo.changed() {
                 let modo = c.modo;
                 let cont = c.continua;
                 *novo = Some(Box::new(move |d| {
@@ -247,6 +252,9 @@ fn cartao(ui: &mut egui::Ui, app: &App, c: &Canto, novo: &mut Option<Box<dyn FnO
                 }));
             }
         });
+        if c.modo == CornerMode::Encaixe {
+            crate::st_encaixe_ui::cartao(ui, app, c);
+        }
     }
 }
 
@@ -285,4 +293,6 @@ pub fn draw(ui: &egui::Ui, rect: egui::Rect, vp: &crate::render::Viewport, canto
         }
         resp.on_hover_text(format!("{} · {}", tr(nome_da_classe(c.classe)), tr(nome_do_modo(c.modo))));
     }
+    // B155: prévia fantasma do corte de encaixe do canto escolhido
+    crate::st_encaixe_ui::desenhar(ui, rect, vp);
 }

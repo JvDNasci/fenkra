@@ -1,4 +1,4 @@
-# ADR 0058: edição direta de faces por cura do kernel e relevo transladado
+# ADR 0060: edição direta de faces por cura do kernel e relevo transladado
 
 Data: 2026-11-06. Item: B33. Um corpo vindo de STEP chega sem sketch nem comandos; sem editar pelas faces ele
 não serve para nada depois da migração.

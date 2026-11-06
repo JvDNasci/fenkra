@@ -727,6 +727,40 @@ impl App {
             app.st_cantos_open = std::env::var("FENKRA_DEMO_CANTOS").is_ok();
             app.started = true;
         }
+        // desenvolvimento: FENKRA_DEMO_ENCAIXE=1 abre um tubo redondo oblíquo encaixado noutro (B155) com o
+        // cartão do canto aberto; `folga` mostra também o rótulo da folga em edição
+        if std::env::var("FENKRA_DEMO_ENCAIXE").is_ok() {
+            let s = |x: &str| x.to_string();
+            let mut d = Document::new("Encaixe de tubos");
+            let l1 = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([0., 0., 600.]), start: s("0"), end: s("0") });
+            let l2 = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([346.4, 0., 200.]), start: s("0"), end: s("0") });
+            d.add_feature(FeatureKind::StructMember(StructMember {
+                paths: vec![CurveRef::Ref(l1), CurveRef::Ref(l2)],
+                family: s("Tubo redondo"),
+                designation: s("60,3x3,6"),
+                kind: SectionKind::TuboRedondo,
+                dims: vec![s("60.3"), s("3.6")],
+                anchor: 0,
+                angle: s("0"),
+                off_x: s("0"),
+                off_y: s("0"),
+                ext1: s("0"),
+                ext2: s("0"),
+                corner: CornerMode::Encaixe,
+                gap: s("1"),
+                joints: vec![],
+                material: String::new(),
+                mirror: false,
+            }));
+            for r in &mut d.references {
+                r.visible = false;
+            }
+            app.load_doc(d, None, None);
+            app.settings.bench = crate::settings::Bench::Estrutural;
+            app.st_cantos_open = true;
+            app.st_cantos_sel = Some([0., 0., 0.]);
+            app.started = true;
+        }
         // desenvolvimento: FENKRA_DEMO_DOBRA=1 abre um tubo retangular dobrado em U (duas dobras de dobradeira, a primeira
         // com uma regra de exemplo); junto com FENKRA_EDITAR=Membro mostra o painel do nó
         // com `canto`, `v` ou `multiplo` no lugar do 1: tubo 30x30x1,2 com as duas dobras em V com raio, V comum ou V múltiplo
