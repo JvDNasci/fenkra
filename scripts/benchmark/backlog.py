@@ -749,6 +749,10 @@ c('B363', 2, 'P1', 'Documentos abertos: alternar rápido entre peças e abrir em
   ['USR-TESTE'], [], 300, 'Auto + Visual', 'Interface'),
 c('B364', 4, 'P1', 'PLM: árvore navegável do produto com miniatura, PN e estado', 'Além da lista em linhas, o projeto mostra uma árvore navegável do produto em forma de grafo: cada nó com miniatura simples da peça e PN. Ao passar o mouse o nó expande e mostra PN, nome e estado, com regra de cor por estado (liberado ou não). Dá para abrir conjunto grande e navegar nos níveis, com a pré-visualização vinda do pacote .fkv.',
   ['USR-TESTE'], [], 350, 'Auto + Visual', 'PDM / PLM'),
+c('B365', 4, 'P0', 'Abrir o .fkv sem esforço: página no pacote, duplo clique e celular', 'O .fkv gerado não abre em lugar nenhum sozinho. Instalar a página do visualizador com o programa, associar o .fkv no Windows para abrir no navegador com duplo clique, deixar HTML como saída padrão do comando e explicar no próprio comando como abrir no computador e no celular.',
+  ['USR-TESTE'], [], 150, 'Auto + Visual', 'Geral', status='em andamento'),
+c('B366', 2, 'P1', 'Painéis em outro monitor: arrastar para fora da janela', 'Painéis e janelas de comando podem sair da janela principal e ficar em outra tela, como janela nativa, voltando ao encaixe ao arrastar de volta. O layout lembra em qual monitor cada painel estava.',
+  ['USR-TESTE'], [], 350, 'Auto + Visual', 'Interface', status='em andamento'),
 ]
 def main():
     for x in B:

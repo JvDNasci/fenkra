@@ -4,15 +4,15 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 94.7 M tokens (≈ 316 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 95.2 M tokens (≈ 317 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
-| Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 7.6% |
-| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 12.3% |
-| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 90 | ≈ 22290 k | 23.5% |
-| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 82 | ≈ 22250 k | 23.5% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 98 | ≈ 31320 k | 33.1% |
+| Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 7.5% |
+| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 12.2% |
+| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 91 | ≈ 22640 k | 23.8% |
+| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 82 | ≈ 22250 k | 23.4% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 99 | ≈ 31470 k | 33.1% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
@@ -204,6 +204,7 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 | B360 | P1 | **Painel de comando em hierarquia, em vez de abas e caixas** — Em recurso curto, Elemento, Tipo e Definição viram um fluxo só. Ao escolher o tipo, os campos dele aparecem logo abaixo, em hierarquia que acompanha a decisão: no furo, tipo, depois escareado, rosca e diâmetro. Sem depender de abas. Estudar como softwares de modelagem CAD avançados organizam esses painéis, sem copiar. | USR-TESTE |  | 450 k | 0.5% | Auto + Visual | a fazer |
 | B361 | P1 | **Realce de face por contorno externo** — Clicar numa face realça só o contorno dela, sem brilhar a área inteira nem as arestas internas. Aresta e ponto continuam brilhando só eles. | USR-TESTE |  | 150 k | 0.2% | Auto + Visual | em andamento |
 | B363 | P1 | **Documentos abertos: alternar rápido entre peças e abrir em janela nova** — Barra e atalho para ver e trocar entre os documentos abertos, sem perder o estado de cada um, com opção de abrir em nova janela, refinando a lista de peças do rodapé. | USR-TESTE |  | 300 k | 0.3% | Auto + Visual | a fazer |
+| B366 | P1 | **Painéis em outro monitor: arrastar para fora da janela** — Painéis e janelas de comando podem sair da janela principal e ficar em outra tela, como janela nativa, voltando ao encaixe ao arrastar de volta. O layout lembra em qual monitor cada painel estava. | USR-TESTE |  | 350 k | 0.4% | Auto + Visual | em andamento |
 | B47 | P1 | **PNEngine: regras de part-number e ambientes** — Acrescentar ao aceite de interação: campo de PN com prévia ao vivo em cinza enquanto os campos são preenchidos, tooltip por máscara com exemplo e teste de falha (se a gravação falhar, a sequência não avança). | CTX-PN | PLM-06 | 120 k | 0.1% | Auto | feito |
 | B48 | P1 | **Furo: ângulo do escareado e casca com escareado** — Ângulo do escareado editável (82°, 90°, 100°, 120°) e por norma; casca deixa de falhar quando o corpo tem furo escareado. | DR-02, BM-SOL | SOL-06 | 80 k | 0.1% | Auto | feito |
 | B93 | P1 | **Salvar como com referências e Empacotar** — Salvar como em 4 modos (renomear/mover, cópia e continuar, cópia e abrir, novo documento) com tabela editável de referências, prefixo/sufixo e conflitos. Empacotar para pasta ou zip (plano/hierárquico, desenhos, linkados, derivados, pular bibliotecas) com manifesto, colisões renomeadas e listadas e verificação reabrindo o pacote. | PESQ-PLM, PESQ-MAC |  | 300 k | 0.3% | Auto | feito |
@@ -309,6 +310,7 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 |---|---|---|---|---|---|---|---|---|
 | B119 | P0 | **Exportação 3MF e preparo de impressão** — Base de entrada e saída para impressão: 3MF com unidade mm, tesselação configurável, múltiplos corpos, posição na mesa, metadados, miniatura e cores por face via Materials; escrita própria zip+XML validada com lib3mf (BSD-2) em CI; STL binário; verificação pré-impressão (estanque, não manifold, normais, partes soltas); assentar peça numa face e mapa de balanço mínimo; abertura no fatiador externo por processo separado com caminho configurável. A bancada completa de orientação e suportes é o B164. | PESQ-MOD |  | 250 k | 0.3% | Auto | feito |
 | B155 | P0 | **Estrutural: corte de encaixe normal entre membros (laser/plasma em tubos)** — Acrescentar a interação: o corte de encaixe mostra prévia fantasma, a parede em vigor por cor ao passar o mouse no ponto da curva e opção de corte perpendicular para laser em tubo; ao editar a folga, rótulo flutuante com o valor em mm. | USR-CORTE |  | 350 k | 0.4% | Auto + Visual | feito |
+| B365 | P0 | **Abrir o .fkv sem esforço: página no pacote, duplo clique e celular** — O .fkv gerado não abre em lugar nenhum sozinho. Instalar a página do visualizador com o programa, associar o .fkv no Windows para abrir no navegador com duplo clique, deixar HTML como saída padrão do comando e explicar no próprio comando como abrir no computador e no celular. | USR-TESTE |  | 150 k | 0.2% | Auto + Visual | em andamento |
 | B110 | P1 | **Calculadoras de projeto: parafuso, ajuste forçado, mola, viga** — Painel de cálculo com fatores de segurança. Insere ou ajusta o componente. (BN01; módulo Cálculo mecânico; depende de B28, B52, B42, B90). | PESQ-MOD |  | 300 k | 0.3% | Auto | em andamento |
 | B112 | P1 | **Perfil de regras DFM (furo, bolso, chapa)** — Motor de regras DFM com perfis JSON por processo (furo, bolso, chapa, injeção, aditivo), cada regra com identificador, tipo de entidade, limites, severidade e texto; varredura devolve violações com referência estável à face e realce 3D; limites editáveis sem recompilar. É a base de B113, B166 e B167. Referências: CAD avançado A DFMXpress, Protolabs, DFMPro. | PESQ-MOD |  | 300 k | 0.3% | Auto | em andamento |
 | B113 | P1 | **Análise de espessura, saliência e canto vivo** — Mapa de espessura por raio-bola máxima ou ray casting sobre pontos das faces, saliência pela normal contra a direção de construção (B164) e canto vivo por raio mínimo da ferramenta, com legenda, filtro por violação e limites vindos do perfil do processo (B112). Aceite: degrau de 1 mm e 3 mm gera duas faixas com erro até 5%. | PESQ-MOD |  | 200 k | 0.2% | Auto | feito |
