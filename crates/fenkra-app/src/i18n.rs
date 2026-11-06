@@ -30,6 +30,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_chapa::TEXTOS.iter())
             .chain(crate::textos_montagem::TEXTOS.iter())
             .chain(crate::textos_plm::TEXTOS.iter())
+            .chain(crate::textos_curso::TEXTOS.iter())
             .chain(crate::textos_pmi::TEXTOS.iter())
             .chain(crate::textos_config::TEXTOS.iter())
             .chain(crate::textos_acessibilidade::TEXTOS.iter())

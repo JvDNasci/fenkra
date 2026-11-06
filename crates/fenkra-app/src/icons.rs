@@ -92,7 +92,7 @@ macro_rules! modelos {
 
 // Lista gerada a partir de assets/icons2 (scripts/gerar_icones2.py).
 modelos!(
-    "comparar", "estado_conflito", "estado_editado", "estado_leitura", "estado_liberada", "estado_sem_revisao",
+    "curso", "mapa_macro", "perfil_fluxo", "comparar", "estado_conflito", "estado_editado", "estado_leitura", "estado_liberada", "estado_sem_revisao",
     "exportar_arquivo", "liberar_revisao", "onde_usado",
     "abrir_projeto", "ajustar", "an_curvatura", "an_sombreado", "an_zebra", "aparencia", "arestas_comando",
     "arestas_selecionar", "arestas_todas", "asm_catalogo", "asm_engrenagens", "asm_fixadores", "asm_furo_pecas", "asm_grupo",

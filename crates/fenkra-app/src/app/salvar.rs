@@ -21,6 +21,8 @@ const DESENHO: u64 = 2;
 pub enum Acao {
     NovaPeca,
     Exemplo,
+    /// peça de exemplo da tela inicial, pelo nome (aulas do curso, B323)
+    ExemploNomeado(String),
     AbrirDialogo,
     Importar,
     AbrirCaminho(PathBuf),
@@ -127,6 +129,13 @@ impl App {
                 self.started = true;
             }
             Acao::Exemplo => self.load_doc(fenkra_solidos::example_document(), None, None),
+            Acao::ExemploNomeado(nome) => {
+                if let Some(e) = crate::examples::all().into_iter().find(|e| e.name == nome) {
+                    self.load_doc(e.doc, None, None);
+                    self.settings.bench = e.bench;
+                    self.started = true;
+                }
+            }
             Acao::Importar => {
                 self.importar_arquivo();
                 self.started = true;

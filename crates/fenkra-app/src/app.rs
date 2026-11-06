@@ -206,6 +206,8 @@ pub struct App {
     settings_open: bool,
     /// tela Sobre (versão, licença e créditos)
     about_open: bool,
+    /// curso, mapa de macroprocessos e pergunta "de onde você vem?" (B323, B324, B325)
+    curso_ui: crate::curso_ui::CursoUi,
     /// busca de comandos (Ctrl+K, B60)
     busca_cmd: crate::ajuda_cmd::Busca,
     /// ambiente de ocultos: mostra só o que está oculto (para reexibir)
@@ -400,6 +402,7 @@ impl App {
             settings,
             settings_open: false,
             about_open: false,
+            curso_ui: crate::curso_ui::CursoUi::do_ambiente(),
             busca_cmd: Default::default(),
             hidden_env: false,
             align_pending: None,
@@ -3190,6 +3193,20 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                 });
                 ui.menu_button(tr("Ajuda"), |ui| {
+                    if ui.button(tr("Curso…")).clicked() {
+                        self.curso_ui.aberto = true;
+                        ui.close();
+                    }
+                    if ui.button(tr("Mapa de macroprocessos…")).clicked() {
+                        self.curso_ui.abrir_mapa(self.settings.bench);
+                        ui.close();
+                    }
+                    if ui.button(tr("De onde você vem?…")).clicked() {
+                        self.curso_ui.abrir_perfil();
+                        self.curso_ui.pergunta = true;
+                        ui.close();
+                    }
+                    ui.separator();
                     if ui.button(tr("Sobre o Fenkra…")).clicked() {
                         self.about_open = true;
                         ui.close();
@@ -4101,6 +4118,39 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 });
             });
         self.settings_open = open;
+    }
+
+    /// Curso, mapa de macroprocessos e pergunta "de onde você vem?". Só desenha e devolve pedidos; o
+    /// documento muda pelos mesmos caminhos de sempre (com a pergunta de alterações não salvas).
+    fn curso_quadro(&mut self, ctx: &egui::Context, area: Rect) {
+        // primeira abertura: pergunta uma vez, depois de qualquer outro aviso e fora das capturas de desenvolvimento
+        if !self.settings.curso.perfil_visto && self.started && !self.curso_ui.sem_auto && self.sugestao_leve.is_none() && self.relatorio_pendente.is_none() {
+            self.curso_ui.pergunta = true;
+        }
+        if !self.curso_ui.aberto && !self.curso_ui.pergunta {
+            return;
+        }
+        let (componentes, restricoes) = self.asm.as_ref().map_or((0, 0), |s| (s.asm.nodes.len(), s.asm.mates.len()));
+        let (folhas, vistas, cotas, tabelas) = self.dwg.as_ref().map_or((0, 0, 0, 0), |s| (s.d.sheets.len(), s.d.views.len(), s.d.dims.len(), s.d.tables.len()));
+        let cx = crate::curso::Contexto { doc: &self.open.doc, componentes, restricoes, folhas, vistas, cotas, tabelas };
+        let a = crate::curso_ui::painel(ctx, area, &mut self.curso_ui, &mut self.settings, &cx);
+        let b = crate::curso_ui::pergunta_inicial(ctx, &mut self.curso_ui, &mut self.settings);
+        for saida in [a, b] {
+            if saida.mudou {
+                self.settings.save();
+            }
+            for p in saida.pedidos {
+                match p {
+                    crate::curso_ui::Pedido::Exemplo(nome) => self.com_confirmacao(Acao::ExemploNomeado(nome.to_string())),
+                    crate::curso_ui::Pedido::Comando(icone) => {
+                        if let Some(c) = crate::compat::comando(icone) {
+                            self.act(c.act);
+                        }
+                    }
+                    crate::curso_ui::Pedido::Bancada(b) => self.settings.bench = b,
+                }
+            }
+        }
     }
 
     /// Tela Sobre: versão, licença, créditos e aviso de marcas (B202).
@@ -7820,6 +7870,7 @@ impl eframe::App for App {
         self.side_toolbars(ctx, area);
         self.settings_window(ctx);
         self.about_window(ctx);
+        self.curso_quadro(ctx, area);
         if let Some(a) = self.busca_cmd.ui(ctx) {
             self.act(a);
         }
