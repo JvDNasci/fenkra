@@ -13,6 +13,7 @@ use crate::i18n::tr;
 
 mod aresta;
 mod furo;
+mod limites;
 mod padrao;
 pub(crate) mod solidos;
 
@@ -372,6 +373,14 @@ fn write_slot(app: &mut App, id: Id, slot: u8, value: String) {
     if slot == 0 {
         return write_value(app, id, value);
     }
+    if let Some(FeatureKind::Loft(l)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
+        match slot {
+            crate::loft_3d::CAMPO_INICIO => l.inicio.intensidade = value,
+            crate::loft_3d::CAMPO_FIM => l.fim.intensidade = value,
+            _ => {}
+        }
+        return;
+    }
     // B288: alças extras da bancada Sólidos têm os campos em handles/solidos.rs
     if slot >= solidos::PRIMEIRO {
         solidos::aplicar(&mut app.open.doc, id, slot, value);
@@ -578,12 +587,21 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     // chapa: linha de dobra na face e alças de ângulo, raio, largura e recuos (B243 e B249)
     crate::chapa_manip_ui::overlay(app, ui, rect, &cam, id);
     // B253: o Membro tem as próprias alças (deslocamento, rotação com ímã de 45°, prolongar, espelhar)
-    if matches!(app.open.doc.feature(id).map(|f| &f.kind), Some(FeatureKind::StructMember(_))) {
+    if let Some(FeatureKind::StructMember(m)) = app.open.doc.feature(id).map(|f| f.kind.clone()) {
+        crate::st_esqueleto::overlay(app, ui, rect, &cam, &m);
         crate::st_alcas::overlay(app, ui, rect, &cam, id);
         return;
     }
     if matches!(app.open.doc.reference(id).map(|r| &r.kind), Some(RefKind::SurfFill { .. })) {
         contour_overlay(app, ui, rect, &cam, id);
+        return;
+    }
+    if let Some(FeatureKind::Loft(l)) = app.open.doc.feature(id).map(|f| f.kind.clone()) {
+        crate::loft_3d::overlay(app, ui, rect, &cam, id);
+        let setas = app.result.as_ref().map(|r| crate::loft_3d::setas(r, &l)).unwrap_or_default();
+        for (i, (campo, base, dir, mm, expr)) in setas.into_iter().enumerate() {
+            linear_handle(app, ui, rect, &cam, id, campo, i, Linear { base, dir, k: 1. / mm, expr, label: "Intensidade" });
+        }
         return;
     }
     if matches!(app.open.doc.feature(id).map(|f| &f.kind), Some(FeatureKind::Revolve(_))) {
@@ -702,6 +720,10 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     } else if hr.hovered() && numeric {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
     }
+    // B14: a seta que passa sobre um elemento o propõe como limite
+    if hr.dragged() || hr.drag_stopped() {
+        limites::propor(app, ui, rect, id, slot, st, hr.drag_stopped());
+    }
 
     // cota editável junto da ponta
     let key = egui::Id::unique(("alca_edit", id.0, nth));
@@ -744,6 +766,7 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     }
     if let Some(mut text) = editing.take() {
         let mut done: Option<bool> = None;
+        let mut desvincular = false;
         egui::Area::new(egui::Id::unique(("alca_area", id.0, nth))).fixed_pos(lr.left_bottom() + egui::vec2(0., 4.)).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.label(RichText::new(h.label).small());
@@ -753,6 +776,10 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
                 if !ok {
                     ui.label(RichText::new(tr("expressão inválida")).small().color(crate::theme::st_err()));
                 }
+                // valor ligado a parâmetro: o rótulo diz qual e deixa soltar o vínculo
+                if !numeric && ui.small_button(tr("Desvincular")).on_hover_text(tr("Troca a expressão pelo valor de agora; a seta volta a arrastar.")).clicked() {
+                    desvincular = true;
+                }
                 let (enter, esc) = ui.input(|i| (i.key_pressed(egui::Key::Enter), i.key_pressed(egui::Key::Escape)));
                 if enter && ok {
                     done = Some(true);
@@ -761,6 +788,10 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
                 }
             });
         });
+        if desvincular {
+            write_slot(app, id, slot, fmt(val));
+            done = Some(false);
+        }
         match done {
             Some(true) => {
                 // a cota guarda o comprimento total; a seta do plano médio mostra metade

@@ -494,7 +494,7 @@ fn casca_aberta_em_cima_muda_espessura_e_volta() {
     precisa_kernel!();
     let (mut d, _, _) = caixa_cotada();
     param(&mut d, "t", "2");
-    d.add_feature(FeatureKind::Shell(Shell { faces: vec![[20., 15., 20.]], thickness: s("t"), outward: false, face_keys: vec![], closed: false }));
+    d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[20., 15., 20.]], thickness: s("t"), outward: false, face_keys: vec![], closed: false }));
     let e = |t: f64| prisma(24000. - (40. - 2. * t) * (30. - 2. * t) * (20. - t), [40., 30., 20.]);
     ciclo("casca", &mut d, "t", "3", &e(2.), &e(3.));
 }
@@ -876,14 +876,14 @@ fn invalido_chanfro_maior_que_a_face() {
 #[test]
 fn invalido_casca_mais_grossa_que_o_corpo() {
     precisa_kernel!();
-    let (r, id) = com(|_| FeatureKind::Shell(Shell { faces: vec![[20., 15., 20.]], thickness: s("30"), outward: false, face_keys: vec![], closed: false }));
+    let (r, id) = com(|_| FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[20., 15., 20.]], thickness: s("30"), outward: false, face_keys: vec![], closed: false }));
     erro(&r, id);
 }
 
 #[test]
 fn invalido_casca_com_face_que_nao_existe() {
     precisa_kernel!();
-    let (r, id) = com(|_| FeatureKind::Shell(Shell { faces: vec![[500., 500., 500.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }));
+    let (r, id) = com(|_| FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[500., 500., 500.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }));
     erro(&r, id);
 }
 

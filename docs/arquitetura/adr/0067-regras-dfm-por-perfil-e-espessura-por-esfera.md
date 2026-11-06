@@ -1,4 +1,4 @@
-# ADR 0064: regras DFM por perfil JSON e espessura pela esfera máxima inscrita
+# ADR 0067: regras DFM por perfil JSON e espessura pela esfera máxima inscrita
 
 Data: 2026-11-06. Estado: aceita. Itens: B112, B113, B197, B180.
 

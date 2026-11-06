@@ -439,7 +439,7 @@ mod tests {
     }
 
     fn casca() -> FeatureKind {
-        FeatureKind::Shell(Shell { faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false })
+        FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false })
     }
 
     /// Casca, espessura e rosca esperam a face; depois do clique o campo some e o contador sobe.

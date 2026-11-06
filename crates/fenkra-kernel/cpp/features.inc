@@ -318,6 +318,31 @@ std::unique_ptr<Shape> shell_t(const Shape& s, rust::Slice<const double> pts, do
     });
 }
 
+// Casca com espessura própria em algumas faces: `fpts` tem os pontos e `vals`, a espessura de cada uma.
+std::unique_ptr<Shape> shell_faces_t(const Shape& s, rust::Slice<const double> pts, double thickness, bool outward,
+                                     rust::Slice<const double> fpts, rust::Slice<const double> vals,
+                                     rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+    return guard("casca", [&] {
+        if (thickness <= 0) throw std::runtime_error("a espessura precisa ser positiva");
+        double sinal = outward ? 1.0 : -1.0;
+        auto abertas = faces_near(s.s, pts);
+        auto proprias = faces_near(s.s, fpts);
+        if (proprias.size() != vals.size()) throw std::runtime_error("uma face da lista de espessuras não foi achada");
+        // faces planas vizinhas com paredes diferentes só fecham por interseção; arco fica de reserva
+        for (GeomAbs_JoinType junta : {GeomAbs_Intersection, GeomAbs_Arc}) {
+            BRepOffset_MakeOffset mk;
+            mk.Initialize(s.s, sinal * thickness, 1e-3, BRepOffset_Skin, Standard_False, Standard_False, junta, Standard_False, Standard_False);
+            for (auto& f : abertas) mk.AddFace(f);
+            for (size_t i = 0; i < proprias.size(); i++) mk.SetOffsetOnFace(proprias[i], sinal * vals[i]);
+            mk.MakeThickSolid();
+            if (!mk.IsDone() || mk.Shape().IsNull()) continue;
+            fill(out, carry(s.s, to_vec(tags), mk.Shape(), [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return mk.Modified(f); }, -1));
+            return wrap(mk.Shape());
+        }
+        throw std::runtime_error("as espessuras escolhidas não fecham a parede");
+    });
+}
+
 std::unique_ptr<Shape> draft_t(const Shape& s, rust::Slice<const double> pts, double dx, double dy, double dz, double angle_deg,
                                double ox, double oy, double oz, double nx, double ny, double nz,
                                rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {

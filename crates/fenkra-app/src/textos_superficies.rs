@@ -3,6 +3,18 @@
 //! virar gargalo.
 
 pub static TEXTOS: &[(&str, &str)] = &[
+    ("Soltar: até este elemento", "Release: up to this element"),
+    ("Desvincular", "Unlink"),
+    ("Troca a expressão pelo valor de agora; a seta volta a arrastar.", "Replaces the expression with the current value; the arrow drags again."),
+    ("Sistema de eixos", "Axis system"),
+    ("Origem e direções de X e Z. Serve de referência onde um plano serve, inclusive na montagem.", "Origin and X and Z directions. Works as a reference wherever a plane does, including in assemblies."),
+    ("Eixo X", "X axis"),
+    ("Eixo Z", "Z axis"),
+    ("Publicar sketch para outras peças", "Publish sketch to other parts"),
+    ("curva(s) publicada(s)", "curve(s) published"),
+    ("Escolha uma aresta para extrair.", "Pick an edge to extract."),
+    ("Centro da aresta", "Edge center"),
+    ("Ponto na face", "Point on face"),
     ("A seta do 3D aponta o lado que fica. Clique nela para inverter.", "The 3D arrow points to the side that stays. Click it to flip."),
     ("Clique para inverter o lado.", "Click to flip the side."),
     ("Aparar e dividir", "Trim and split"),

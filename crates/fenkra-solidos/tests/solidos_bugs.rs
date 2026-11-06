@@ -46,7 +46,7 @@ fn casca_fechada_cria_cavidade_sem_abrir_face() {
     }
     let v0 = volume(&caixa());
     let mut d = caixa();
-    let sh = d.add_feature(FeatureKind::Shell(Shell { faces: vec![], thickness: "2".into(), outward: false, face_keys: vec![], closed: true }));
+    let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![], thickness: "2".into(), outward: false, face_keys: vec![], closed: true }));
     let r = recompute(&d);
     assert!(matches!(r.status[&sh], Status::Ok), "{:?}", r.status[&sh]);
     let esperado = v0 - 36. * 26. * 16.;

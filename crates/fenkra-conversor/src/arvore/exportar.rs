@@ -89,7 +89,7 @@ impl Tradutor {
             PointRef::Fixed(c) => Ponto::Coordenadas(*c),
             PointRef::Ref(i) => Ponto::Referencia { referencia: self.exige(*i)? },
             PointRef::SketchPoint { sketch, point } => Ponto::DeEsboco { esboco: self.exige(*sketch)?, ponto: id(*point) },
-            PointRef::CurveVertex { .. } | PointRef::Vertex { .. } => return Err("ponto tirado de curva ou aresta: o formato guarda só coordenadas e pontos de esboço".into()),
+            PointRef::CurveVertex { .. } | PointRef::Vertex { .. } | PointRef::Center { .. } | PointRef::OnFace { .. } => return Err("ponto tirado de curva ou aresta: o formato guarda só coordenadas e pontos de esboço".into()),
         })
     }
 

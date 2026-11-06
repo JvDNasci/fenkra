@@ -26,6 +26,7 @@ pub enum GeoKind {
     PlaneParallelPoint,
     PlaneAngle,
     Plane3P,
+    AxisSys,
     Plane2L,
     PlanePL,
     PlaneCurve,
@@ -110,8 +111,8 @@ pub enum GeoKind {
 
 use GeoKind::*;
 
-pub const PLANES: [GeoKind; 13] = [
-    PlaneOffset, PlaneParallelPoint, PlaneAngle, Plane3P, Plane2L, PlanePL, PlanePointNormal, PlaneMid, PlaneCurve, PlaneNormalCurve, PlaneTangent, PlaneEquation, PlaneMean,
+pub const PLANES: [GeoKind; 14] = [
+    PlaneOffset, PlaneParallelPoint, PlaneAngle, Plane3P, AxisSys, Plane2L, PlanePL, PlanePointNormal, PlaneMid, PlaneCurve, PlaneNormalCurve, PlaneTangent, PlaneEquation, PlaneMean,
 ];
 pub const POINTS: [GeoKind; 12] = [PtCoords, PtOnCurve, PtOnPlane, PtOnSurface, PtCenter, PtTangent, PtBetween, PtCurvePlane, PtCurveCurve, PtProject, PtProjectCurve, PtOffset];
 pub const LINES: [GeoKind; 9] = [LinePts, LineDir, LineAngle, LineTangent, LineNormal, LinePlanes, LineBisector, LineAxis, Polyline];
@@ -132,6 +133,7 @@ impl GeoKind {
             PlaneParallelPoint => ("plano_paralelo_ponto", "Paralelo/ponto", "Paralelo passando por um ponto", "Paralelo a um plano ou face, passando exatamente pelo ponto escolhido (vértice ou ponto de referência)."),
             PlaneAngle => ("plano_angulo", "Ângulo/normal", "Plano por ângulo ou normal", "Gira o plano base em torno de um eixo ou linha. 90° deixa o plano normal ao base."),
             Plane3P => ("plano_3pontos", "3 pontos", "Plano por três pontos", "Passa por três pontos não colineares (vértices ou pontos de referência)."),
+            AxisSys => ("plano_ponto_normal", "Sistema de eixos", "Sistema de eixos", "Origem e direções de X e Z. Serve de referência onde um plano serve, inclusive na montagem."),
             Plane2L => ("plano_2linhas", "2 linhas", "Plano por duas linhas", "Definido por duas linhas coplanares (concorrentes ou paralelas)."),
             PlanePL => ("plano_ponto_linha", "Ponto e linha", "Plano por ponto e linha", "Passa por um ponto e contém uma linha de referência ou aresta."),
             PlaneCurve => ("plano_curva", "Curva planar", "Plano de uma curva planar", "Contém uma curva aberta ou fechada que esteja num único plano (aresta, círculo, spline…)."),
@@ -248,6 +250,7 @@ impl GeoKind {
             R::FacePlane { .. } => return None,
             R::PlaneParallelPoint { .. } => PlaneParallelPoint,
             R::PlaneThreePoints { .. } => Plane3P,
+            R::AxisSystem { .. } => AxisSys,
             R::PlaneTwoLines { .. } => Plane2L,
             R::PlanePointLine { .. } => PlanePL,
             R::PlaneCurve { .. } => PlaneCurve,
@@ -357,6 +360,7 @@ impl GeoKind {
             PlaneParallelPoint => R::PlaneParallelPoint { base: pl, point: p(0) },
             PlaneAngle => R::AnglePlane { base: pl, axis: ax(OriginAxis::X), angle: t("30") },
             Plane3P => R::PlaneThreePoints { a: p(0), b: p(1), c: p(2) },
+            AxisSys => R::AxisSystem { origin: p(0), x: AxisRef::Origin(OriginAxis::X), z: AxisRef::Origin(OriginAxis::Z) },
             Plane2L => R::PlaneTwoLines { a: c(0), b: c(1) },
             PlanePL => R::PlanePointLine { point: p(0), line: c(0) },
             PlaneCurve => R::PlaneCurve { curve: c(0) },
@@ -527,6 +531,7 @@ pub fn inputs_of(k: &RefKind) -> Seed {
             s.points.push(*point)
         }
         R::PlaneThreePoints { a, b, c } | R::Circle3 { a, b, c, .. } => s.points.extend([*a, *b, *c]),
+        R::AxisSystem { origin, .. } => s.points.push(*origin),
         R::PlaneTwoLines { a, b } | R::Corner { a, b, .. } | R::Connect { a, b, .. } => s.curves.extend([a.clone(), b.clone()]),
         R::PlanePointLine { point, line } => {
             s.points.push(*point);
@@ -635,6 +640,8 @@ pub fn point_name(doc: &Document, p: &PointRef) -> String {
         PointRef::Ref(id) => doc.reference(*id).map(|r| r.name.clone()).or_else(|| crate::slots::label(*id)).unwrap_or_else(|| format!("⚠ perdido #{}", id.0)),
         PointRef::Fixed(q) => format!("({}, {}, {})", fmt(q[0]), fmt(q[1]), fmt(q[2])),
         PointRef::Vertex { .. } => tr("Vértice do modelo").into(),
+        PointRef::Center { .. } => tr("Centro da aresta").into(),
+        PointRef::OnFace { .. } => tr("Ponto na face").into(),
         PointRef::SketchPoint { sketch, point } => format!("{} · ponto #{}", doc.name_of(*sketch), point.0),
         PointRef::CurveVertex { curve, index } => format!("{} · {}", doc.name_of(*curve), match index {
             0 => "início".to_string(),
@@ -717,7 +724,7 @@ pub(crate) fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docum
 }
 
 pub(crate) fn curve_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, c: &mut CurveRef, seed: &Seed) {
-    row(ui, label, |ui| {
+    ui.scope(|ui| row(ui, label, |ui| {
         egui::ComboBox::from_id_salt(salt).selected_text(curve_name(doc, c)).width(150.).show_ui(ui, |ui| {
             for a in [OriginAxis::X, OriginAxis::Y, OriginAxis::Z] {
                 ui.selectable_value(c, CurveRef::Axis(a), format!("Origem · eixo {a:?}"));
@@ -728,6 +735,18 @@ pub(crate) fn curve_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docum
         });
         if pick_button(ui, !seed.curves.is_empty(), "uma aresta ou curva") {
             *c = seed.curves.last().unwrap().clone();
+        }
+    }))
+    .response
+    .context_menu(|ui| {
+        // qualquer campo de curva: a aresta vira um elemento Extrair, que passa a ocupar o campo
+        if !matches!(c, CurveRef::Edge(_) | CurveRef::BodyEdge { .. }) {
+            ui.label(RichText::new(tr("Escolha uma aresta para extrair.")).weak());
+            return;
+        }
+        if ui.button(tr("Extrair")).clicked() {
+            ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique(EXTRACT_CURVE_REQ), c.clone()));
+            ui.close();
         }
     });
 }
@@ -829,9 +848,11 @@ pub(crate) struct ExtractReq {
     pub complement: bool,
 }
 pub(crate) const EXTRACT_REQ: &str = "extrair_do_campo";
+/// Mesmo pedido, de um campo de curva: leva a aresta que está no campo.
+pub(crate) const EXTRACT_CURVE_REQ: &str = "extrair_curva_do_campo";
 
-/// Troca, em qualquer campo do elemento, a superfície `old` pela `new`.
-pub(crate) fn swap_surface(k: &mut RefKind, old: SurfRef, new: SurfRef) {
+/// Troca, em qualquer campo do elemento ou do comando, a referência `old` pela `new`.
+pub(crate) fn swap_ref<K: serde::Serialize + serde::de::DeserializeOwned, R: serde::Serialize>(k: &mut K, old: &R, new: &R) {
     fn go(v: &mut serde_json::Value, old: &serde_json::Value, new: &serde_json::Value) {
         if v == old {
             *v = new.clone();
@@ -1214,6 +1235,11 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::PlaneParallelPoint { base, point } => {
             plane_slot(ui, "g_base", "Paralelo a", doc, me, base, seed);
             point_slot(ui, "g_p", "Passa por", doc, me, point, seed);
+        }
+        R::AxisSystem { origin, x, z } => {
+            point_slot(ui, "g_a", "Origem", doc, me, origin, seed);
+            axis_slot(ui, "g_x", "Eixo X", doc, me, x, seed);
+            axis_slot(ui, "g_z", "Eixo Z", doc, me, z, seed);
         }
         R::PlaneThreePoints { a, b, c } => {
             point_slot(ui, "g_a", "Ponto 1", doc, me, a, seed);

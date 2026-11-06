@@ -816,7 +816,7 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<crate::previa::DemoPrevia>
             doc.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Caixa, plane: PlaneRef::Origin(OriginPlane::XY), a: t("60"), b: t("40"), c: t("30"), d: t("0"), op: BoolOp::Add }));
             Comando(FeatureKind::SplitBody(SplitBody { surface: yz, flip: false }))
         }
-        _ => return None,
+        _ => return crate::sup_demo::demo(nome, doc),
     })
 }
 

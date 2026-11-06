@@ -82,6 +82,8 @@ type PedidoCalculo = (u64, Document, bool, fenkra_core::QualidadeMalha);
 
 struct Worker {
     fila: fenkra_core::trabalho::Fila<PedidoCalculo, (u64, RecomputeResult)>,
+    /// controle do último pedido: é por ele que o Cancelar da barra de status para o cálculo
+    ultimo: std::cell::RefCell<Option<fenkra_core::trabalho::Controle>>,
 }
 
 impl Worker {
@@ -113,11 +115,18 @@ impl Worker {
             },
             move || ctx.request_repaint(),
         );
-        Worker { fila }
+        Worker { fila, ultimo: Default::default() }
     }
 
     fn enviar(&self, pedido: PedidoCalculo) {
-        self.fila.enviar(pedido);
+        *self.ultimo.borrow_mut() = Some(self.fila.enviar(pedido));
+    }
+
+    /// Para o cálculo em andamento; o que já terminou fica no cache.
+    fn cancelar(&self) {
+        if let Some(c) = self.ultimo.borrow().as_ref() {
+            c.cancelar();
+        }
     }
 
     fn receber(&self) -> Option<(u64, RecomputeResult)> {
@@ -1084,6 +1093,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         self.send_recompute(false);
     }
 
+    /// Atualizar esta feature: calcula só até o comando; os de depois seguem desatualizados.
+    fn atualizar_ate(&mut self, id: Id) {
+        let Some(i) = self.open.doc.feature_index(id) else { return };
+        let mut d = self.open.doc.clone();
+        d.rollback = d.rollback.min(i + 1);
+        self.gen_sent += 1;
+        self.sent_doc = Some(d.clone());
+        self.worker.enviar((self.gen_sent, d, false, self.qualidade_malha));
+    }
+
     /// Pede o cálculo; `fresh` descarta o cache (reconstruir tudo do zero).
     fn send_recompute(&mut self, fresh: bool) {
         self.gen_sent += 1;
@@ -1344,6 +1363,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     fn save(&mut self) {
         if crate::asm_ui::salvar_peca_pendente(self) {
             return;
+        }
+        if self.open.doc.retrocedida() {
+            self.toast(tr("Peça salva retrocedida: os comandos depois do objeto em trabalho ficam inativos até você voltar ao fim."), false);
         }
         if self.open.frozen.is_some() {
             self.toast("Revisão congelada não pode ser salva. Abra a versão de trabalho.", true);
@@ -1779,7 +1801,25 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     /// Menu de contexto de um campo de superfície: cria o Extrair e o coloca no campo.
     fn apply_extract_req(&mut self, ctx: &egui::Context) {
-        use crate::geo_ui::{swap_surface, ExtractReq, EXTRACT_REQ};
+        use crate::geo_ui::{swap_ref, ExtractReq, EXTRACT_CURVE_REQ, EXTRACT_REQ};
+        let target = self.session.as_ref().map(|s| s.id).or(match self.sel {
+            Sel::Ref(id) | Sel::Feature(id) => Some(id),
+            _ => None,
+        });
+        let chave = egui::Id::unique(EXTRACT_CURVE_REQ);
+        if let Some(old) = ctx.data_mut(|m| {
+            let q = m.get_temp::<CurveRef>(chave);
+            m.remove::<CurveRef>(chave);
+            q
+        }) {
+            let d = &mut self.open.doc;
+            let new = CurveRef::Ref(d.add_geometry(RefKind::CurveCopy { curve: old.clone() }));
+            if let Some(r) = d.references.iter_mut().find(|r| Some(r.id) == target) {
+                swap_ref(&mut r.kind, &old, &new);
+            } else if let Some(f) = target.and_then(|t| d.feature_mut(t)) {
+                swap_ref(&mut f.kind, &old, &new);
+            }
+        }
         let key = egui::Id::unique(EXTRACT_REQ);
         let Some(q) = ctx.data_mut(|m| {
             let q = m.get_temp::<ExtractReq>(key);
@@ -1788,12 +1828,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }) else {
             return;
         };
-        let target = self.session.as_ref().map(|s| s.id).or(if let Sel::Ref(id) = self.sel { Some(id) } else { None });
         let d = &mut self.open.doc;
         let key = if let SurfRef::Face { key, .. } = q.old { key } else { None };
         let id = d.add_geometry(RefKind::SurfExtract { face: q.face, owner: q.owner, prop: Propagation::Nenhuma, complement: q.complement, expected: None, key });
         if let Some(r) = d.references.iter_mut().find(|r| Some(r.id) == target) {
-            swap_surface(&mut r.kind, q.old, SurfRef::Ref(id));
+            swap_ref(&mut r.kind, &q.old, &SurfRef::Ref(id));
+        } else if let Some(f) = target.and_then(|t| d.feature_mut(t)) {
+            swap_ref(&mut f.kind, &q.old, &SurfRef::Ref(id));
         }
     }
 
@@ -2490,7 +2531,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 w.picking_b = !w.faces.is_empty();
                 Sel::Feature(d.add_feature(FeatureKind::StructWeld(w)))
             }
-            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone(), closed: false }))),
+            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone(), closed: false }))),
             Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: face_keys.clone() }))),
             Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2"), face_keys: face_keys.clone(), remove: false }))),
             Cmd::DirectEdit(i) => {
@@ -4759,7 +4800,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     resp.context_menu(|ui| {
                         ui.label(RichText::new(&c.name).strong());
-                        if ui.button(tr("✎ Renomear   F2")).clicked() {
+            if ui.button(tr("✎ Renomear   F2")).clicked() {
                             actions.push(TreeAction::StartRename(c.id));
                             ui.close();
                         }
@@ -4779,6 +4820,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         }
                         if ui.button(tr("🗀 Nova pasta de comandos")).clicked() {
                             actions.push(TreeAction::NewCommandFolder);
+                            ui.close();
+                        }
+                        if ui.button(tr("Novo contêiner ordenado")).on_hover_text(tr("Os comandos de dentro consomem um ao outro, na ordem.")).clicked() {
+                            actions.push(TreeAction::NovoConteiner(OrdemConteiner::Ordenado));
+                            ui.close();
+                        }
+                        if ui.button(tr("Novo contêiner não ordenado")).on_hover_text(tr("Os comandos de dentro só referenciam, sem depender uns dos outros.")).clicked() {
+                            actions.push(TreeAction::NovoConteiner(OrdemConteiner::NaoOrdenado));
                             ui.close();
                         }
                         if ui.button(tr("Marcador no fim")).clicked() {
@@ -5415,6 +5464,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     ui.painter().circle_filled(r.center(), 4., Color32::from_rgb(a.color[0], a.color[1], a.color[2]));
                 }
                 crate::tree_ui::icone(ui, crate::tree_ui::icone_comando(&f.kind));
+                // o objeto em trabalho vem sublinhado: é depois dele que o próximo comando entra
+                let text = if doc.objeto_em_trabalho() == Some(f.id) { text.underline() } else { text };
                 self.row_label(ui, f.id, &f.name, self.sel == Sel::Feature(f.id), text, actions)
             })
             .inner;
@@ -5432,6 +5483,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         resp.context_menu(|ui| {
             ui.label(RichText::new(&f.name).strong());
+            if !free && ui.button(tr("Definir como objeto em trabalho")).clicked() {
+                actions.push(TreeAction::ObjetoTrabalho(f.id));
+                ui.close();
+            }
+            if !free && ui.button(tr("Atualizar esta feature")).clicked() {
+                actions.push(TreeAction::AtualizarAte(f.id));
+                ui.close();
+            }
             if ui.button(tr("✏ Editar   (duplo clique)")).clicked() {
                 actions.push(TreeAction::EditSketch(f.id));
                 ui.close();
@@ -5448,6 +5507,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if is_sketch {
                     if ui.button(if f.hidden { tr("Mostrar   H") } else { tr("Ocultar   H") }).clicked() {
                         actions.push(TreeAction::Hide(f.id, !f.hidden));
+                        ui.close();
+                    }
+                    if ui.button(tr("Publicar sketch para outras peças")).clicked() {
+                        actions.push(TreeAction::SketchPublish(f.id));
                         ui.close();
                     }
                     if ui.button(tr("Alinhar vista ao sketch   N")).clicked() {
@@ -5645,6 +5708,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let n = format!("Geometria {}", d.folders.iter().filter(|f| f.kind == FolderKind::Geometria).count() + 1);
                 self.sel = Sel::Folder(d.add_geometry_folder(&n));
             }
+            TreeAction::ObjetoTrabalho(id) => {
+                if let Err(e) = d.definir_objeto_em_trabalho(id) {
+                    self.toast(format!("{e:?}"), true);
+                }
+            }
+            TreeAction::AtualizarAte(id) => self.atualizar_ate(id),
+            TreeAction::NovoConteiner(ordem) => {
+                let n = format!("{} {}", tr("Contêiner"), d.folders.len() + 1);
+                match d.add_conteiner(&n, ordem, None) {
+                    Ok(id) => self.sel = Sel::Folder(id),
+                    Err(e) => self.toast(format!("{e:?}"), true),
+                }
+            }
             TreeAction::NewCommandFolder => {
                 let n = format!("Pasta {}", d.folders.len() + 1);
                 self.sel = Sel::Folder(d.add_folder(&n));
@@ -5769,6 +5845,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if let Some(c) = d.collectors.iter_mut().find(|c| c.id == id) {
                     c.published = on;
                 }
+            }
+            TreeAction::SketchPublish(id) => {
+                let n = fenkra_montagem::publicacoes::publicar_sketch(d, id);
+                self.toast(format!("{n} {}", tr("curva(s) publicada(s)")), false);
             }
             TreeAction::OpenPublications => self.pub_open = true,
             TreeAction::SelRegra(p, regra) => self.selecionar_por_regra(p, regra),
@@ -6172,25 +6252,38 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 Pick::Edge { body, edge, .. } => {
                     let pts = crate::picking::edge_polyline(r, body, edge);
                     if let Some((ctr, n, _)) = geom_fit::circle(&pts) {
-                        c.alt_points.push_back(PointRef::Fixed(ctr));
-                        c.alt_axes.push_back(AxisRef::Fixed { origin: ctr, dir: n });
+                        // com chave, centro e eixo seguem a aresta circular
+                        match self.edge_key_of(body, edge) {
+                            Some(k) => {
+                                c.alt_points.push_back(PointRef::Center { point: ctr, edge: k });
+                                c.alt_axes.push_back(AxisRef::Edge { mid: pts[pts.len() / 2], key: Some(k) });
+                            }
+                            None => {
+                                c.alt_points.push_back(PointRef::Fixed(ctr));
+                                c.alt_axes.push_back(AxisRef::Fixed { origin: ctr, dir: n });
+                            }
+                        }
                     }
                 }
                 Pick::Face { body, face, point, .. } => {
                     let pt = point.map(|v| v as f64);
+                    let chave = self.face_key_of(Some(p));
                     if let Some(m) = crate::picking::mesh_of(r, body) {
                         let s1 = m.face_ranges.get(face + 1).map(|x| *x as usize).unwrap_or(m.indices.len()).min(m.indices.len());
                         let s0 = (m.face_ranges.get(face).copied().unwrap_or(0) as usize).min(s1);
                         match geom_fit::face(&m.positions, &m.normals, &m.indices[s0..s1]) {
-                            FaceKind::Plane(n) => c.alt_axes.push_back(AxisRef::Fixed { origin: pt, dir: n }),
-                            FaceKind::Axis(o, d) => c.alt_axes.push_back(match self.face_key_of(Some(p)) {
+                            FaceKind::Plane(n) => c.alt_axes.push_back(match chave {
+                                Some(k) => AxisRef::Face { point: pt, key: Some(k) },
+                                None => AxisRef::Fixed { origin: pt, dir: n },
+                            }),
+                            FaceKind::Axis(o, d) => c.alt_axes.push_back(match chave {
                                 Some(k) => AxisRef::Face { point: pt, key: Some(k) },
                                 None => AxisRef::Fixed { origin: o, dir: d },
                             }),
                             FaceKind::Other => {}
                         }
                     }
-                    c.alt_points.push_back(PointRef::Fixed(pt));
+                    c.alt_points.push_back(chave.map_or(PointRef::Fixed(pt), |key| PointRef::OnFace { point: pt, key }));
                 }
                 Pick::SkCurve { sketch, .. } | Pick::SkPoint { sketch, .. } => {
                     if let Some(p) = plane_of(sketch) {
@@ -6245,7 +6338,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         use crate::picking::Pick;
         // o resultado sai emprestado durante a coleta e volta logo depois
         let Some(r) = self.result.take() else { return };
-        let (mut edges, mut faces, mut made): (Vec<Vec<Vec<[f64; 3]>>>, Vec<Vec<[f64; 3]>>, Vec<Id>) = (vec![], vec![], vec![]);
+        let (mut edges, mut faces, mut made): (Vec<Vec<CurveRef>>, Vec<Vec<[f64; 3]>>, Vec<Id>) = (vec![], vec![], vec![]);
         let mut seen_e: Vec<(usize, usize)> = vec![];
         let mut seen_f: Vec<(usize, usize)> = vec![];
         for p in self.picks.clone() {
@@ -6274,7 +6367,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
                 Pick::Edge { body, edge, .. } => {
                     let Some(m) = crate::picking::mesh_of(&r, body) else { continue };
-                    let set: Vec<Vec<[f64; 3]>> = edge_set(m, edge, o.prop)
+                    let set: Vec<CurveRef> = edge_set(m, edge, o.prop)
                         .into_iter()
                         .filter(|e| {
                             let new = !seen_e.contains(&(body, *e));
@@ -6283,8 +6376,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             }
                             new
                         })
-                        .map(|e| edge_pts(m, e))
-                        .filter(|p| p.len() >= 2)
+                        .map(|e| (e, edge_pts(m, e)))
+                        .filter(|(_, p)| p.len() >= 2)
+                        // aresta de corpo vai por dono e papel (ADR 0010); a polilinha fica de reserva
+                        .map(|(e, pts)| match r.bodies.get(body).and_then(|b| b.edge_key(e)) {
+                            Some(key) => CurveRef::BodyEdge { pts, key },
+                            None => CurveRef::Edge(pts),
+                        })
                         .collect();
                     if !set.is_empty() {
                         edges.push(set);
@@ -6301,7 +6399,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         self.result = Some(r);
         if o.multi {
-            let all_e: Vec<Vec<[f64; 3]>> = edges.drain(..).flatten().collect();
+            let all_e: Vec<CurveRef> = edges.drain(..).flatten().collect();
             if !all_e.is_empty() {
                 edges.push(all_e);
             }
@@ -6313,9 +6411,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let d = &mut self.open.doc;
         for set in edges {
             made.push(if set.len() == 1 {
-                d.add_geometry(RefKind::CurveCopy { curve: CurveRef::Edge(set.into_iter().next().unwrap()) })
+                d.add_geometry(RefKind::CurveCopy { curve: set.into_iter().next().unwrap() })
             } else {
-                d.add_geometry(RefKind::CurveJoin { curves: set.into_iter().map(CurveRef::Edge).collect() })
+                d.add_geometry(RefKind::CurveJoin { curves: set })
             });
         }
         for set in faces {
@@ -6768,9 +6866,23 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 };
                 ui.label(RichText::new(txt).small().color(col));
                 ui.separator();
-                ui.checkbox(&mut self.settings.auto_update, RichText::new(tr("auto")).small()).on_hover_text(tr("atualizar automaticamente a cada mudança"));
+                if busy && ui.small_button(tr("✖ Cancelar")).on_hover_text(tr("para o cálculo; o que já terminou fica guardado")).clicked() {
+                    self.worker.cancelar();
+                }
+                // o modo fica no documento: cada peça lembra o seu
+                let mut auto = self.open.doc.atualizacao == ModoAtualizacao::Automatica;
+                if ui.checkbox(&mut auto, RichText::new(tr("auto")).small()).on_hover_text(tr("atualizar automaticamente a cada mudança")).changed() {
+                    self.open.doc.atualizacao = if auto { ModoAtualizacao::Automatica } else { ModoAtualizacao::Manual };
+                }
                 if ui.small_button(tr("⟳ Atualizar")).on_hover_text(tr("recalcula o que mudou (F5)")).clicked() {
                     self.send_recompute(false);
+                }
+                if let Some(nome) = self.open.doc.objeto_em_trabalho().map(|id| self.open.doc.name_of(id)) {
+                    ui.separator();
+                    ui.label(RichText::new(format!("{}: {nome}", tr("Em trabalho"))).small());
+                }
+                if self.open.doc.retrocedida() && ui.small_button(tr("Voltar ao fim da peça")).clicked() {
+                    self.open.doc.voltar_ao_fim_da_peca();
                 }
                 if ui.small_button(tr("⟲ Reconstruir")).on_hover_text(tr("reconstrói tudo do zero, sem cache (Ctrl+F5)")).clicked() {
                     self.send_recompute(true);
@@ -7719,6 +7831,10 @@ fn eye(ui: &mut egui::Ui, hidden: bool) -> bool {
 }
 
 enum TreeAction {
+    ObjetoTrabalho(Id),
+    AtualizarAte(Id),
+    NovoConteiner(OrdemConteiner),
+    SketchPublish(Id),
     ParentsChildren(Id),
     ApplyView(usize),
     NewGeometryFolder,
@@ -8343,6 +8459,9 @@ impl eframe::App for App {
         crate::asm_fixadores::painel(self, ctx, area);
         crate::asm_chaveta::painel(self, ctx, area);
         crate::calculo_ui::painel(self, ctx, area);
+        if let Some(st) = self.asm.as_mut() {
+            crate::asm_resolver::janela(st, ctx);
+        }
         crate::asm_ui::contexto_window(self, ctx);
         crate::asm_ui::gears_window(self, ctx);
         crate::transmissao_ui::janela(self, ctx);
@@ -8419,7 +8538,8 @@ impl eframe::App for App {
         // feitas fora deste trecho, como Del, desfazer, assistentes e janelas)
         // com um comando aberto calcula sempre: a prévia é o motivo de ele estar aberto, e o cálculo
         // fica no fio de trás, então o modo manual não ganha nada em segurar
-        if (self.settings.auto_update || self.session.is_some()) && self.open.frozen.is_none() && self.needs_recompute() {
+        let automatica = self.settings.auto_update && self.open.doc.atualizacao == ModoAtualizacao::Automatica;
+        if (automatica || self.session.is_some()) && self.open.frozen.is_none() && self.needs_recompute() {
             self.request_recompute();
         }
         let link_key = egui::Id::unique("fenkra_link_acao");

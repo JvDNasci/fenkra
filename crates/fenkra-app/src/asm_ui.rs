@@ -297,6 +297,8 @@ pub struct AsmState {
     pub chaveta: Option<crate::asm_chaveta::Estado>,
     /// calculadoras de projeto abertas (B110)
     pub calculo: Option<crate::calculo_ui::Estado>,
+    /// componentes que abriram sem bater uid e caminho: esperam a janela Resolver (B66)
+    pub referencias: Vec<crate::asm_resolver::Pendencia>,
     /// como estava cada ponto no último recálculo das pilhas
     pub pilhas_diag: fenkra_montagem::pilhas::Recalculo,
     /// comando Repetição aberto (B263)
@@ -406,6 +408,7 @@ impl AsmState {
             fixadores: None,
             chaveta: None,
             calculo: None,
+            referencias: vec![],
             pilhas_diag: Default::default(),
             gears_open: None,
             trans_open: None,
@@ -713,9 +716,18 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 Ok(a) => {
                     app.settings.add_recent_file(&p);
                     let mut st = AsmState::new(a, Some(p));
+                    let mut movidos = 0;
+                    if let Some(dir) = st.dir() {
+                        let (pendencias, m) = crate::asm_resolver::conferir(&mut st.asm, &dir, std::slice::from_ref(&dir));
+                        st.referencias = pendencias;
+                        movidos = m;
+                    }
                     let rel = st.atualizar_links(Gatilho::Abrir);
                     app.asm = Some(st);
                     app.fit_now();
+                    if movidos > 0 {
+                        app.toast(format!("{movidos} {}", tr("componente(s) achado(s) em outro lugar pela identidade")), false);
+                    }
                     if rel.pendurados > 0 {
                         app.toast(format!("{} {}", rel.pendurados, tr("link(s) pendurado(s): a origem ou a publicação sumiu")), true);
                     }

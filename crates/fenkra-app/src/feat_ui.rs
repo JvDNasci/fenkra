@@ -276,6 +276,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
             crate::editor::check(ui, &mut l.ruled, "faces retas entre perfis (regrada)");
             crate::editor::check(ui, &mut l.closed, "fechada (volta ao primeiro perfil)");
+            crate::loft_3d::painel(ui, l, vars);
         }
         FeatureKind::Primitive(p) => {
             section(ui, "Forma");
@@ -308,6 +309,23 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 faces_ui(ui, &mut s.faces, picked_faces);
                 s.face_keys = carry_keys(&before, &s.face_keys, &s.faces);
                 ui.label(RichText::new(tr("As faces escolhidas ficam abertas; o resto vira parede com a espessura.")).weak().small());
+                ui.label(RichText::new(tr("Espessura por face")).strong());
+                let mut tirar = None;
+                for (i, e) in s.espessuras.iter_mut().enumerate() {
+                    ui.horizontal(|ui| {
+                        expr(ui, "Face", &mut e.valor, vars, "mm");
+                        if ui.small_button("✖").on_hover_text(tr("A face volta à espessura geral.")).clicked() {
+                            tirar = Some(i);
+                        }
+                    });
+                }
+                if let Some(i) = tirar {
+                    s.espessuras.remove(i);
+                }
+                let nova = picked_faces.iter().rev().find(|p| !s.faces.contains(p) && !s.espessuras.iter().any(|e| e.ponto == **p)).copied();
+                if ui.add_enabled(nova.is_some(), egui::Button::new(tr("+ Face selecionada"))).on_hover_text(tr("Selecione uma face de parede: ela ganha espessura própria.")).clicked() {
+                    s.espessuras.extend(nova.map(|ponto| EspessuraFace { ponto, valor: s.thickness.clone() }));
+                }
             }
             let chave = crate::previa::chave_secao();
             let mut corte = ui.ctx().data(|d| d.get_temp::<bool>(chave)).unwrap_or(false);
@@ -641,13 +659,13 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::SmBend(b) => {
             section(ui, "Dobra por linha");
             let mut from_sketch = b.sketch.is_some();
-            if crate::editor::check(ui, &mut from_sketch, "linhas de um sketch (várias; curva quase reta)").changed() {
+            if crate::editor::check(ui, &mut from_sketch, "linhas de um sketch (várias retas ou uma curva)").changed() {
                 b.sketch = from_sketch.then_some(Id(0));
             }
             match &mut b.sketch {
                 Some(sid) => {
                     sketch_pick(ui, "smb_sk", "Sketch", doc, idx, sid);
-                    ui.label(RichText::new(tr("Cada reta do sketch vira uma dobra; as linhas precisam ser paralelas. Curva suave vira a corda dela, com aviso.")).weak().small());
+                    ui.label(RichText::new(tr("Cada reta do sketch vira uma dobra; as linhas precisam ser paralelas. Uma curva sozinha levanta uma parede ao longo dela.")).weak().small());
                 }
                 None => {
                     ui.label(RichText::new(format!("linha de {} a {}", crate::app::p3(b.a, 1), crate::app::p3(b.b, 1))).small());
@@ -1264,7 +1282,15 @@ pub fn bend_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, 
             (Some(a), Some(c)) => Some([a, c]),
             _ => None,
         };
-        if let Some([a, c]) = seg(b.center) {
+        // dobra curva: a linha acompanha a curva; as marcas de começo e fim ficam só nas pontas
+        if b.curva.len() > 2 {
+            for w in b.curva.windows(2) {
+                if let Some([a, c]) = seg([w[0], w[1]]) {
+                    painter.line_segment([a, c], egui::Stroke::new(1.6, col));
+                }
+            }
+        }
+        if let Some([a, c]) = seg(b.center).filter(|_| b.curva.len() <= 2) {
             painter.extend(egui::Shape::dashed_line(&[a, c], egui::Stroke::new(1.6, col), 10., 4.));
             let m = a + (c - a) * 0.5;
             let g = painter.layout_no_wrap(b.label(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), col);

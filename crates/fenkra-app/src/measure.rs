@@ -172,6 +172,12 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         }
     }
     let Some(a) = act else { return };
+    // a seleção é uma só aqui: a chave dela faz o elemento seguir o modelo (ADR 0010)
+    let chave_face = app.face_key_of(app.picks.first());
+    let chave_aresta = match app.picks.first() {
+        Some(crate::picking::Pick::Edge { body, edge, .. }) => app.result.as_ref().and_then(|r| r.bodies.get(*body)?.edge_key(*edge)),
+        _ => None,
+    };
     let d = &mut app.open.doc;
     let new = match a {
         Act::Param(label, v, unit) => {
@@ -182,8 +188,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             Sel::Params
         }
         Act::Point(p) => Sel::Ref(d.add_geometry(RefKind::PointCoords { x: fmt(p[0]), y: fmt(p[1]), z: fmt(p[2]), frame: None })),
-        Act::Curve(pts) => Sel::Ref(d.add_geometry(RefKind::CurveCopy { curve: CurveRef::Edge(pts) })),
-        Act::Surface(p, owner) => Sel::Ref(d.add_geometry(RefKind::SurfExtract { face: p, owner, prop: Propagation::Nenhuma, complement: false, expected: None, key: None })),
+        Act::Curve(pts) => Sel::Ref(d.add_geometry(RefKind::CurveCopy { curve: chave_aresta.map_or_else(|| CurveRef::Edge(pts.clone()), |key| CurveRef::BodyEdge { pts: pts.clone(), key }) })),
+        Act::Surface(p, owner) => Sel::Ref(d.add_geometry(RefKind::SurfExtract { face: p, owner, prop: Propagation::Nenhuma, complement: false, expected: None, key: chave_face })),
     };
     app.sel = new;
 }
