@@ -41,29 +41,76 @@ std::unique_ptr<Shape> tagged_result(Mk& mk, const TopoDS_Shape& src, rust::Slic
     return wrap(mk.Shape());
 }
 
-// Curva guia a partir da polilinha: com cantos vivos vira polilinha, senão B-spline suave.
-TopoDS_Wire spine_wire(rust::Slice<const double> pts) {
+// B-spline da guia suave; nula quando a guia tem cantos vivos (ou só dois pontos) e deve virar polilinha.
+Handle(Geom_BSplineCurve) guia_suave(rust::Slice<const double> pts) {
     const size_t n = pts.size() / 3;
     if (n < 2) throw std::runtime_error("curva guia com menos de dois pontos");
+    if (n == 2) return Handle(Geom_BSplineCurve)();
     std::vector<gp_Pnt> p;
     for (size_t i = 0; i < n; ++i) p.push_back(P3(pts, i));
-    bool corners = false;
     for (size_t i = 1; i + 1 < n; ++i) {
         gp_Vec a(p[i - 1], p[i]), b(p[i], p[i + 1]);
-        if (a.Magnitude() > 1e-9 && b.Magnitude() > 1e-9 && a.Angle(b) > 0.35) corners = true;
+        if (a.Magnitude() > 1e-9 && b.Magnitude() > 1e-9 && a.Angle(b) > 0.35) return Handle(Geom_BSplineCurve)();
     }
+    TColgp_Array1OfPnt arr(1, static_cast<int>(n));
+    for (size_t i = 0; i < n; ++i) arr.SetValue(static_cast<int>(i) + 1, p[i]);
+    GeomAPI_PointsToBSpline bs(arr, 3, 8, GeomAbs_C2, 1e-4);
+    return bs.Curve();
+}
+
+// Curva guia a partir da polilinha: com cantos vivos vira polilinha, senão B-spline suave.
+TopoDS_Wire spine_wire(rust::Slice<const double> pts) {
+    Handle(Geom_BSplineCurve) c = guia_suave(pts);
     BRepBuilderAPI_MakeWire w;
-    if (n == 2 || corners) {
-        for (size_t i = 0; i + 1 < n; ++i)
-            if (p[i].Distance(p[i + 1]) > 1e-9) w.Add(BRepBuilderAPI_MakeEdge(p[i], p[i + 1]).Edge());
+    if (c.IsNull()) {
+        for (size_t i = 0; i + 1 < pts.size() / 3; ++i)
+            if (P3(pts, i).Distance(P3(pts, i + 1)) > 1e-9) w.Add(BRepBuilderAPI_MakeEdge(P3(pts, i), P3(pts, i + 1)).Edge());
     } else {
-        TColgp_Array1OfPnt arr(1, static_cast<int>(n));
-        for (size_t i = 0; i < n; ++i) arr.SetValue(static_cast<int>(i) + 1, p[i]);
-        GeomAPI_PointsToBSpline bs(arr, 3, 8, GeomAbs_C2, 1e-4);
-        w.Add(BRepBuilderAPI_MakeEdge(bs.Curve()).Edge());
+        w.Add(BRepBuilderAPI_MakeEdge(c).Edge());
     }
     if (!w.IsDone()) throw std::runtime_error("curva guia inválida");
     return w.Wire();
+}
+
+// A mesma curva em `k` arestas de parâmetro igual. Como todas apontam para a mesma B-spline, a tangente
+// e a curvatura nas emendas são as da própria curva: dividir não cria canto.
+TopoDS_Wire guia_dividida(const Handle(Geom_BSplineCurve)& c, int k) {
+    const double a = c->FirstParameter(), b = c->LastParameter();
+    BRepBuilderAPI_MakeWire w;
+    for (int i = 0; i < k; ++i) w.Add(BRepBuilderAPI_MakeEdge(c, a + (b - a) * i / k, a + (b - a) * (i + 1) / k).Edge());
+    if (!w.IsDone()) throw std::runtime_error("curva guia inválida");
+    return w.Wire();
+}
+
+// Menor raio de curvatura da guia, com amostras em cada vão de nós (a curvatura muda de um vão a outro).
+double raio_minimo(const Handle(Geom_BSplineCurve)& c) {
+    double k = 0;
+    for (int i = 1; i < c->NbKnots(); ++i) {
+        const double a = c->Knot(i), b = c->Knot(i + 1);
+        for (int j = 0; j <= 32; ++j) k = std::max(k, GeomLProp_CLProps(c, a + (b - a) * j / 32, 2, 1e-9).Curvature());
+    }
+    return k > 1e-12 ? 1 / k : 1e300;
+}
+
+// Maior distância do perfil ao início da guia: o perfil viaja rígido, então é esse o braço que dobra
+// para dentro de uma curva fechada. Em guia plana só conta o braço no plano dela: a altura de uma
+// parede erguida sobre a curva nunca dobra.
+double alcance_do_perfil(const TopoDS_Shape& perfil, const gp_Pnt& inicio, const TColgp_Array1OfPnt& guia) {
+    GProp_PEquation eq(guia, 1e-6);
+    const bool plana = eq.IsPlanar();
+    const gp_XYZ normal = plana ? eq.Plane().Axis().Direction().XYZ() : gp_XYZ();
+    double r = 0;
+    for (TopExp_Explorer e(perfil, TopAbs_EDGE); e.More(); e.Next()) {
+        const TopoDS_Edge& ed = TopoDS::Edge(e.Current());
+        if (BRep_Tool::Degenerated(ed)) continue;
+        BRepAdaptor_Curve a(ed);
+        for (int j = 0; j <= 16; ++j) {
+            gp_XYZ v = a.Value(a.FirstParameter() + (a.LastParameter() - a.FirstParameter()) * j / 16).XYZ() - inicio.XYZ();
+            if (plana) v -= normal * v.Dot(normal);
+            r = std::max(r, v.Modulus());
+        }
+    }
+    return r;
 }
 
 // Face plana a partir de laços: o maior é o contorno, os outros viram furos.
@@ -125,21 +172,87 @@ std::unique_ptr<Shape> transform_t(const Shape& s, uint8_t kind, rust::Slice<con
     });
 }
 
+namespace {
+
+// Maior distância aceita entre a superfície aproximada e a varredura exata. O bom resultado fica perto
+// de 5e-5 (metade da tolerância de 1e-4 do kernel); o ruim passa de 1 mm. `BRepCheck` e o volume não
+// veem essa diferença: uma varredura com 4 mm de erro pode sair válida e com o volume certo.
+constexpr double kErroVarredura = 1e-3;
+
+// Uma tentativa completa. Falha de qualquer tipo (leitura de face nula inclusive) só devolve false,
+// para a próxima tentativa seguir; quem decide o erro final é `sweep_tool`.
+bool varre(const TopoDS_Wire& w, const TopoDS_Shape& perfil, GeomFill_Trihedron t, TopoDS_Shape& out) {
+    bool ok = false;
+    try {
+        protegido("", [&] {
+            BRepOffsetAPI_MakePipe mk(w, perfil, t, Standard_False);
+            mk.Build();
+            if (!mk.IsDone() || mk.Shape().IsNull() || mk.ErrorOnSurface() > kErroVarredura) return;
+            if (!BRepCheck_Analyzer(mk.Shape()).IsValid()) return;
+            out = mk.Shape();
+            ok = true;
+        });
+    } catch (const std::runtime_error&) {
+    } catch (const Standard_Failure&) {
+    }
+    return ok;
+}
+
+// Guia com cantos: em cada canto de ângulo t a parede recua alcance * tan(t/2) nos dois trechos. Se os
+// recuos das duas pontas somam mais que o trecho, ele some e a parede cruza a vizinha. O kernel aprova
+// esse sólido, com menos da metade do volume. Uma spline de curva apertada cai aqui, em trechos curtos.
+void confere_cantos(const TopoDS_Shape& perfil, rust::Slice<const double> spine) {
+    std::vector<gp_Pnt> p;
+    for (size_t i = 0; i < spine.size() / 3; ++i)
+        if (p.empty() || p.back().Distance(P3(spine, i)) > 1e-9) p.push_back(P3(spine, i));
+    if (p.size() < 3) return;
+    TColgp_Array1OfPnt arr(1, int(p.size()));
+    for (size_t i = 0; i < p.size(); ++i) arr.SetValue(int(i) + 1, p[i]);
+    const double alcance = alcance_do_perfil(perfil, p[0], arr);
+    std::vector<double> recuo(p.size(), 0.);
+    for (size_t i = 1; i + 1 < p.size(); ++i) recuo[i] = alcance * std::tan(gp_Vec(p[i - 1], p[i]).Angle(gp_Vec(p[i], p[i + 1])) / 2);
+    for (size_t i = 0; i + 1 < p.size(); ++i) {
+        const double trecho = p[i].Distance(p[i + 1]);
+        if (recuo[i] + recuo[i + 1] > trecho) {
+            char m[200];
+            std::snprintf(m, sizeof m, "varredura: um trecho de %.3g mm da guia é curto demais para o alcance do perfil (%.3g mm) nos cantos, e o sólido se dobraria sobre si mesmo; suavize a guia ou reduza o perfil", trecho, alcance);
+            throw std::runtime_error(m);
+        }
+    }
+}
+
+}  // namespace
+
 std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> spine, uint8_t mode) {
     return guard("varredura", [&] {
-        TopoDS_Wire w = spine_wire(spine);
-        GeomFill_Trihedron t = mode == 1 ? GeomFill_IsFixed : mode == 2 ? GeomFill_IsFrenet : GeomFill_IsCorrectedFrenet;
-        // Numa guia suave, `spine_wire` faz uma aresta só; com muitos pontos a aproximação da varredura
-        // nessa aresta pode desistir. `BRepFill_Pipe::MakeShape` não confere isso e lê uma face nula
-        // ainda no construtor, antes de `IsDone` existir. Guia com cantos vira trechos retos e não falha.
+        Handle(Geom_BSplineCurve) c = guia_suave(spine);
+        if (!c.IsNull()) {
+            // Curva mais fechada que o braço do perfil: a parede passa por cima dela mesma. O kernel
+            // aprova esse sólido, e nenhum triedro corrige, porque o defeito está na geometria pedida.
+            const double raio = raio_minimo(c), alcance = alcance_do_perfil(face.s, c->StartPoint(), c->Poles());
+            if (raio < alcance) {
+                char m[200];
+                std::snprintf(m, sizeof m, "varredura: a guia faz uma curva de raio %.3g mm, menor que o alcance do perfil (%.3g mm), e o sólido se dobraria sobre si mesmo; suavize a guia ou reduza o perfil", raio, alcance);
+                throw std::runtime_error(m);
+            }
+        } else {
+            confere_cantos(face.s, spine);
+        }
+        const GeomFill_Trihedron t = mode == 1 ? GeomFill_IsFixed : mode == 2 ? GeomFill_IsFrenet : GeomFill_IsCorrectedFrenet;
         TopoDS_Shape out;
-        protegido("varredura: o kernel não conseguiu seguir esta guia suave; use menos pontos na spline ou divida a guia em trechos", [&] {
-            BRepOffsetAPI_MakePipe mk(w, face.s, t, Standard_False);
-            mk.Build();
-            if (!mk.IsDone()) throw std::runtime_error("não foi possível varrer o perfil ao longo da curva");
-            out = mk.Shape();
-        });
-        return wrap(out);
+        // O caminho de sempre vem primeiro: guia que já varria mantém as mesmas faces.
+        // Sem a proteção de `protegido`, essa tentativa numa guia suave pode derrubar o processo.
+        if ((kViolacaoProtegida || c.IsNull()) && varre(spine_wire(spine), face.s, t, out)) return wrap(out);
+        if (c.IsNull()) throw std::runtime_error("varredura: o resultado saiu inválido; confira se o perfil cabe nos cantos da guia");
+        // O Frenet corrigido amostra a torção da guia com poucos passos por aresta e, numa curva longa,
+        // a lei salta dezenas de graus entre vizinhos: a aproximação não acompanha. O triedro discreto
+        // amostra por vão de nós e não salta. Frenet pedido pela pessoa continua Frenet.
+        const GeomFill_Trihedron robusto = mode == 2 ? GeomFill_IsFrenet : GeomFill_IsDiscreteTrihedron;
+        for (int k : {4, 8, 16}) {
+            falhar_se_cancelado();
+            if (varre(guia_dividida(c, k), face.s, robusto, out)) return wrap(out);
+        }
+        throw std::runtime_error("varredura: o kernel não conseguiu seguir esta guia suave, nem dividida em 16 trechos; simplifique a curva ou divida a guia");
     });
 }
 

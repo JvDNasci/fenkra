@@ -990,6 +990,24 @@ mod imp {
         }
     }
 
+    /// Limita o tempo das booleanas e da malha desta thread: passado o prazo, elas param com erro
+    /// "limite de tempo". Vale até largar a guarda. Varredura e filete não têm como ser interrompidos.
+    pub fn limitar_tempo(segundos: f64) -> GuardaPrazo {
+        b::set_deadline(segundos.max(0.));
+        GuardaPrazo { _so_nesta_thread: std::marker::PhantomData }
+    }
+
+    /// Ao cair, a thread deixa de ter prazo. Não atravessa threads: o prazo é da thread que o pediu.
+    pub struct GuardaPrazo {
+        _so_nesta_thread: std::marker::PhantomData<*const ()>,
+    }
+
+    impl Drop for GuardaPrazo {
+        fn drop(&mut self) {
+            b::set_deadline(-1.);
+        }
+    }
+
     /// Escolhe o algoritmo do malhador: `true` usa o Delabella. Existe só para medir (B235); o padrão
     /// do programa continua o do OpenCASCADE. Quem troca deve chamar `discard_mesh` antes de comparar.
     pub fn definir_malhador_delabella(ligar: bool) {
@@ -1367,6 +1385,12 @@ mod imp {
 
     pub struct GuardaCancelamento;
 
+    pub fn limitar_tempo(_: f64) -> GuardaPrazo {
+        GuardaPrazo
+    }
+
+    pub struct GuardaPrazo;
+
     pub fn definir_malhador_delabella(_: bool) {}
 
     pub fn malhador_delabella() -> bool {
@@ -1382,7 +1406,7 @@ mod imp {
     }
 }
 
-pub use imp::{ligar_cancelamento, GuardaCancelamento, definir_fios_malhador, definir_malhador_delabella, malhador_delabella, fios_aplicados, fios_malhador, version, Shape, AVAILABLE};
+pub use imp::{limitar_tempo, GuardaPrazo, ligar_cancelamento, GuardaCancelamento, definir_fios_malhador, definir_malhador_delabella, malhador_delabella, fios_aplicados, fios_malhador, version, Shape, AVAILABLE};
 
 /// Põe a thread atual abaixo da prioridade normal, para o cálculo não disputar processador com a
 /// interface. Chame uma vez, dentro da thread de cálculo. Devolve se a prioridade mudou.

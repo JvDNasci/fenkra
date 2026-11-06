@@ -4222,6 +4222,9 @@ impl Ctx<'_> {
                 if !sk.open.is_empty() {
                     avisos.push(format!("{} perfil(is) aberto(s) do sketch foram descartados: só contornos fechados varrem", sk.open.len()));
                 }
+                if guia_com_cantos(&spine.pts) {
+                    avisos.push(AVISO_GUIA_COM_CANTOS.into());
+                }
                 // B301: o perfil deve estar normal à curva no início; o ângulo fora disso entra no aviso
                 if let Some(desvio) = varredura_desvio(&frame.normal, &spine.pts) {
                     if desvio > 3. {
@@ -4694,6 +4697,11 @@ impl Ctx<'_> {
                         if chains.is_empty() {
                             return Err("a nervura precisa de linhas ou curvas no sketch".into());
                         }
+                        // B337: a booleana de uma nervura longa pode levar minutos; o erro vem antes
+                        let _prazo = fenkra_kernel::limitar_tempo(60.);
+                        // cada curva soma e depois corta: um erro no meio não pode deixar a soma na chapa
+                        let antes = self.bodies.get(&f.target).cloned();
+                        let feito = (|| -> Result<(), String> {
                         for spine in chains.iter().filter(|c| c.len() >= 2) {
                             let tan = geo3d::unit(geo3d::sub(spine[1], spine[0])).ok_or("curva nula")?;
                             let across = geo3d::unit(fenkra_kernel::cross(p, tan)).ok_or("curva normal à chapa")?;
@@ -4710,7 +4718,18 @@ impl Ctx<'_> {
                             self.apply(f.target, outer, BoolOp::Add, f.id)?;
                             self.apply(f.target, inner, BoolOp::Cut, f.id)?;
                         }
-                        Ok(None)
+                        Ok(())
+                        })();
+                        if let Err(e) = feito {
+                            match antes {
+                                Some(b) => self.bodies.insert(f.target, b),
+                                None => self.bodies.remove(&f.target),
+                            };
+                            self.steps.remove(&f.id);
+                            self.tools.remove(&f.id);
+                            return Err(e);
+                        }
+                        Ok(chains.iter().any(|c| guia_com_cantos(c)).then(|| AVISO_GUIA_COM_CANTOS.to_string()))
                     }
                     // circular nos pontos: tronco de cone revolvido
                     2 => {
@@ -5735,6 +5754,17 @@ impl Ctx<'_> {
         }
     }
 }
+
+/// A guia vira trechos retos no kernel (mesmo critério de `guia_suave`, em `features.inc`). Nesse caso a
+/// seção não gira nos cantos: cada trecho sai como um prisma inclinado, e o sólido é aprovado (B337).
+fn guia_com_cantos(pts: &[[f64; 3]]) -> bool {
+    pts.windows(3).any(|q| match (geo3d::unit(geo3d::sub(q[1], q[0])), geo3d::unit(geo3d::sub(q[2], q[1]))) {
+        (Some(a), Some(b)) => geo3d::dot(a, b).clamp(-1., 1.).acos() > 0.35,
+        _ => false,
+    })
+}
+
+const AVISO_GUIA_COM_CANTOS: &str = "a guia tem cantos e a seção não gira neles: depois de cada canto o perfil segue inclinado e o volume fica menor que o de um tubo; use uma guia suave";
 
 /// Ângulo (graus) entre a normal do plano do perfil e a tangente da guia no primeiro trecho (B301).
 fn varredura_desvio(normal: &[f64; 3], pts: &[[f64; 3]]) -> Option<f64> {

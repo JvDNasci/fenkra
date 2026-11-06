@@ -997,10 +997,10 @@ fn invalido_superficie_deslocada_de_superficie_que_nao_existe() {
     erro(&recompute(&d), id);
 }
 
-// Spline de muitos pontos como guia: a aproximação da varredura desiste numa aresta só e o kernel lia
-// uma face nula, o que derrubava o processo. Agora cada comando que passa por ali dá erro nomeado.
+// Spline de muitos pontos como guia: numa aresta só, a aproximação da varredura desiste e o kernel lia
+// uma face nula, o que derrubava o processo (B337). Agora o kernel divide a guia e a varredura sai.
 
-// a falha é sensível à forma: arredondar estes pontos pode fazer a varredura passar
+// a falha é sensível à forma: arredondar estes pontos pode fazer a primeira tentativa passar
 const GUIA_LONGA: [[f64; 3]; 14] = [
     [0.0, 0.8600804100884216, 1.1450247351705096],
     [10.0, 0.48199301161008745, 0.7615589370847153],
@@ -1031,22 +1031,27 @@ fn varredura(d: &mut Document, spine: CurveRef, op: BoolOp) -> Id {
     d.add_feature(FeatureKind::Sweep(Sweep { sketch: perfil, spine, mode: SweepMode::Corrigido, op, thin: None }))
 }
 
-fn erro_de_guia(nome: &str, r: &RecomputeResult, id: Id) {
-    let m = erro(r, id);
-    assert!(m.contains("guia suave"), "{nome}: esperava o erro nomeado da guia, veio: {m}");
+fn comprimento_da_guia_longa() -> f64 {
+    fenkra_solidos::geo3d::spline(&GUIA_LONGA, false).unwrap().pts.windows(2).map(|q| fenkra_solidos::geo3d::dist(q[0], q[1])).sum()
 }
 
 #[test]
-fn invalido_nervura_com_spline_longa_da_erro_nomeado() {
+fn nervura_com_spline_longa_varre_o_tubo_inteiro() {
     precisa_kernel!();
     let mut d = Document::new("nervura");
     let g = spline_fixa(&mut d, &GUIA_LONGA);
     let id = varredura(&mut d, g, BoolOp::Add);
-    erro_de_guia("nervura", &recompute(&d), id);
+    let r = recompute(&d);
+    ok(&r, id);
+    // perfil de área π pela guia inteira; a malha inscrita fica um pouco abaixo
+    let (v, esperado) = (volume_da_malha(&r.bodies[0]), PI * comprimento_da_guia_longa());
+    assert!((v / esperado - 1.).abs() < 0.08, "volume {v:.1}, esperado {esperado:.1}");
+    let (a, b) = caixa_da_malha(&r);
+    assert!(b[0] - a[0] > 129. && b[0] - a[0] < 134., "caixa {a:?} {b:?}");
 }
 
 #[test]
-fn invalido_rasgo_com_spline_longa_da_erro_nomeado_e_preserva_o_corpo() {
+fn rasgo_com_spline_longa_tira_material_do_corpo() {
     precisa_kernel!();
     let mut d = Document::new("rasgo");
     let c = sk_rect(&mut d, XY, [-10., -20.], [140., 20.]);
@@ -1054,12 +1059,14 @@ fn invalido_rasgo_com_spline_longa_da_erro_nomeado_e_preserva_o_corpo() {
     let g = spline_fixa(&mut d, &GUIA_LONGA);
     let id = varredura(&mut d, g, BoolOp::Cut);
     let r = recompute(&d);
-    erro_de_guia("rasgo", &r, id);
-    assert!((volume_total(&r) - 150. * 40. * 10.).abs() < 1e-6, "o corpo anterior devia ficar intacto: {}", volume_total(&r));
+    ok(&r, id);
+    // a guia entra e sai do corpo, então o rasgo tira só parte do tubo, e nunca mais que ele todo
+    let tirado = 150. * 40. * 10. - volume_da_malha(&r.bodies[0]);
+    assert!(tirado > 20. && tirado < 1.05 * PI * comprimento_da_guia_longa(), "volume tirado {tirado:.1}");
 }
 
 #[test]
-fn invalido_membro_estrutural_com_spline_longa_da_erro_nomeado() {
+fn membro_estrutural_com_spline_longa_segue_a_guia() {
     precisa_kernel!();
     let mut d = Document::new("estrutural");
     let g = spline_fixa(&mut d, &GUIA_LONGA);
@@ -1081,11 +1088,16 @@ fn invalido_membro_estrutural_com_spline_longa_da_erro_nomeado() {
         material: String::new(),
         mirror: false,
     }));
-    erro_de_guia("estrutural", &recompute(&d), id);
+    let r = recompute(&d);
+    ok(&r, id);
+    // tubo de 6 mm e parede 1: área π(3² − 2²) ao longo da guia
+    let (v, esperado) = (volume_total(&r), PI * 5. * comprimento_da_guia_longa());
+    assert!((v / esperado - 1.).abs() < 0.08, "volume {v:.1}, esperado {esperado:.1}");
 }
 
+/// A nervura de 6 mm é mais larga que a curva mais fechada desta guia: a parede dobraria sobre si mesma.
 #[test]
-fn invalido_nervura_de_chapa_com_spline_longa_da_erro_nomeado() {
+fn invalido_nervura_de_chapa_mais_larga_que_a_curva_da_erro_nomeado() {
     precisa_kernel!();
     let mut d = Document::new("chapa");
     d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
@@ -1099,7 +1111,8 @@ fn invalido_nervura_de_chapa_com_spline_longa_da_erro_nomeado() {
     let curva = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(topo), data }));
     let id = d.add_feature(FeatureKind::SmStamp(SmStamp { sketch: curva, depth: s("2"), flip: false, kind: 1, width: s("6"), punch: None }));
     let r = recompute(&d);
-    erro_de_guia("nervura de chapa", &r, id);
+    let m = erro(&r, id);
+    assert!(m.contains("dobraria"), "esperava o erro de dobra, veio: {m}");
     assert!((volume_total(&r) - 320. * 60. * 2.).abs() < 1e-6, "a chapa devia ficar intacta: {}", volume_total(&r));
 }
 
