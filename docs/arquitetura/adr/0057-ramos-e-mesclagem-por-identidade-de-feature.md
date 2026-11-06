@@ -1,4 +1,4 @@
-# ADR 0054: ramos e mesclagem por identidade de feature
+# ADR 0057: ramos e mesclagem por identidade de feature
 
 Data: 2026-11-06. Item: B130. Liga com B214 (comparador por feature), B305 (checador de qualidade),
 B265 (papéis) e B94 (relações).
