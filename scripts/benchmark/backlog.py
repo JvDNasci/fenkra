@@ -699,6 +699,14 @@ c('B338', 4, 'P1', 'Visualizador web detalhado para computador e celular', 'Visu
   ['USR-VISUALIZADOR'], [], 600, 'Auto + Visual', 'Geral', status='em andamento'),
 c('B339', 4, 'P1', 'PLM: pré-visualização, análise zonal e análise de montagem pelo visualizador', 'O visualizador web faz parte do PLM e também funciona separado. No projeto, cada peça e montagem tem pré-visualização rápida pelo pacote .fkv, sem abrir o Fenkra: abrir de dentro do PLM, comparar versões, ver atributos e estado. Inclui análise zonal (selecionar peças por volume ou região do produto, com lista e filtro) e análise de montagem (árvore, interferências e folgas já calculadas, peças por zona, onde é usado), para agilizar a modificação do produto e o trabalho com várias montagens detalhadas. Depois, hospedagem em servidor.',
   ['USR-VISUALIZADOR'], [], 500, 'Auto + Visual', 'PDM / PLM'),
+c('B340', 4, 'P1', 'Gerar elemento de transmissão: comando único, editável e simulável', 'O gerador de engrenagens vira Gerar elemento de transmissão, um só comando para engrenagens, corrente e correia. O elemento fica editável depois de criado, com prévia 3D do par, já insere as restrições e juntas com a relação certa e já anima na montagem. Adaptação de projeto: a pessoa fixa o que limita (distância entre dois pontos, relação, espaço, módulo) e o comando propõe o que cabe.',
+  ['USR-TRANSMISSAO'], [], 450, 'Auto + Visual', 'Biblioteca de normas'),
+c('B341', 4, 'P1', 'Engrenagens cônicas a 90 graus, sem-fim e coroa', 'Engrenagens cônicas retas para eixos a 90 graus, em par e em diferencial, para mudar a direção da carga, além de sem-fim e coroa, com geometria do dente, prévia e junta de relação no ângulo certo.',
+  ['USR-TRANSMISSAO'], [], 400, 'Auto + Visual', 'Biblioteca de normas'),
+c('B342', 4, 'P1', 'Corrente, coroa e pinhão, com biblioteca de transmissão', 'Biblioteca de correntes padronizadas (passo, rolo, largura), coroa e pinhão gerados a partir da corrente, número de elos e distância entre centros corrigida, e corrente desenhada no 3D com movimento. Biblioteca com correias e transmissões afins. Dados normativos só de fonte gratuita conferida em duas fontes.',
+  ['USR-TRANSMISSAO'], [], 400, 'Auto + Visual', 'Biblioteca de normas'),
+c('B343', 4, 'P1', 'Cálculo de transmissão ao vivo: relação, torque, velocidade e perdas', 'Painel que mostra enquanto edita: relação de transmissão e de voltas, velocidade angular, torque de entrada e saída, potência, rendimento e perda por par, com fórmulas de elementos de máquinas e fonte citada, cálculo preliminar. Cadeia de vários estágios soma o resultado, e o valor segue para a simulação da montagem.',
+  ['USR-TRANSMISSAO'], [], 300, 'Auto + Visual', 'Biblioteca de normas'),
 ]
 def main():
     for x in B:

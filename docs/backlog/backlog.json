@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 88020,
+ "tokens_total_k": 89570,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 7180,
-   "pct": 8.2
+   "pct": 8.0
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 13.2
+   "pct": 13.0
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 18670,
-   "pct": 21.2
+   "pct": 20.8
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 21590,
-   "pct": 24.5
+   "pct": 24.1
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 28970,
-   "pct": 32.9
+   "tokens_k": 30520,
+   "pct": 34.1
   }
  },
  "itens": [
@@ -319,7 +319,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B16",
@@ -611,7 +611,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B29",
@@ -1231,7 +1231,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B59",
@@ -1433,7 +1433,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B72",
@@ -1485,7 +1485,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B75",
@@ -1533,7 +1533,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B78",
@@ -1597,7 +1597,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B82",
@@ -1830,7 +1830,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B96",
@@ -1898,7 +1898,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B100",
@@ -1967,7 +1967,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B104",
@@ -1984,7 +1984,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B105",
@@ -2001,7 +2001,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B106",
@@ -2034,7 +2034,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B108",
@@ -2148,7 +2148,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B115",
@@ -2324,7 +2324,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B126",
@@ -2356,7 +2356,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B128",
@@ -2485,7 +2485,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B136",
@@ -2533,7 +2533,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B139",
@@ -2629,7 +2629,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B145",
@@ -2725,7 +2725,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B151",
@@ -2789,7 +2789,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B155",
@@ -2885,7 +2885,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B161",
@@ -2933,7 +2933,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B164",
@@ -2965,7 +2965,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B166",
@@ -3093,7 +3093,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B174",
@@ -3125,7 +3125,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B176",
@@ -3333,7 +3333,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B189",
@@ -3801,7 +3801,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B218",
@@ -4009,7 +4009,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B231",
@@ -4281,7 +4281,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B248",
@@ -4585,7 +4585,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B267",
@@ -5241,7 +5241,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B308",
@@ -5754,6 +5754,70 @@
    "area": "PDM / PLM",
    "status": "a fazer",
    "pct": 0.6
+  },
+  {
+   "id": "B340",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Gerar elemento de transmissão: comando único, editável e simulável",
+   "oque": "O gerador de engrenagens vira Gerar elemento de transmissão, um só comando para engrenagens, corrente e correia. O elemento fica editável depois de criado, com prévia 3D do par, já insere as restrições e juntas com a relação certa e já anima na montagem. Adaptação de projeto: a pessoa fixa o que limita (distância entre dois pontos, relação, espaço, módulo) e o comando propõe o que cabe.",
+   "origem": [
+    "USR-TRANSMISSAO"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B341",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Engrenagens cônicas a 90 graus, sem-fim e coroa",
+   "oque": "Engrenagens cônicas retas para eixos a 90 graus, em par e em diferencial, para mudar a direção da carga, além de sem-fim e coroa, com geometria do dente, prévia e junta de relação no ângulo certo.",
+   "origem": [
+    "USR-TRANSMISSAO"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B342",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Corrente, coroa e pinhão, com biblioteca de transmissão",
+   "oque": "Biblioteca de correntes padronizadas (passo, rolo, largura), coroa e pinhão gerados a partir da corrente, número de elos e distância entre centros corrigida, e corrente desenhada no 3D com movimento. Biblioteca com correias e transmissões afins. Dados normativos só de fonte gratuita conferida em duas fontes.",
+   "origem": [
+    "USR-TRANSMISSAO"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B343",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Cálculo de transmissão ao vivo: relação, torque, velocidade e perdas",
+   "oque": "Painel que mostra enquanto edita: relação de transmissão e de voltas, velocidade angular, torque de entrada e saída, potência, rendimento e perda por par, com fórmulas de elementos de máquinas e fonte citada, cálculo preliminar. Cadeia de vários estágios soma o resultado, e o valor segue para a simulação da montagem.",
+   "origem": [
+    "USR-TRANSMISSAO"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.3
   }
  ]
 }
