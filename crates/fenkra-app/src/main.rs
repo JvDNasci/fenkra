@@ -104,6 +104,8 @@ mod chapa_laco_ui;
 mod chapa_canto_ui;
 mod chapa_unif_ui;
 mod chapa_b35_ui;
+mod chapa_fab_ui;
+mod textos_chapa_fab;
 mod st_alcas;
 mod st_secao;
 mod st_painel;

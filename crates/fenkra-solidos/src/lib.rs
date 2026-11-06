@@ -57,6 +57,8 @@ mod chapa_perfis;
 mod chapa_canto_tests;
 pub use chapa_laco::{laco_de_malha, recuos_extensao};
 pub mod planificada;
+pub mod nesting;
+pub mod chapa_dobra_sim;
 pub use chapa_flat::{passos_planificados, PassoPlanificado};
 pub mod st_frames;
 mod st_placas;
