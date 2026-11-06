@@ -203,7 +203,7 @@ impl App {
         // desenvolvimento: FENKRA_DEMO_EXPORTAR_ARQUIVO=<arquivo> grava sem perguntar, para conferir a saída
         let demo = std::env::var("FENKRA_DEMO_EXPORTAR_ARQUIVO").ok().map(std::path::PathBuf::from);
         let Some(caminho) = demo.or_else(|| rfd::FileDialog::new().add_filter(d.formato.nome(), d.formato.extensoes()).set_file_name(format!("{nome}.{extensao}")).save_file()) else { return };
-        let r = if d.formato.e_2d() {
+        let r = if d.formato.e_2d() || (!d.montagem && fenkra_solidos::corpo_malha::tem_corpo_de_malha(&self.open.doc)) {
             Registro::default().gravar_documento(&self.open.doc, &caminho, &d.opcoes)
         } else {
             let modelo = match (self.asm.as_ref().filter(|_| d.montagem), &pasta) {

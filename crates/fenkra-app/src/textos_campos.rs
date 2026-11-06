@@ -12,6 +12,12 @@ pub static CAMPOS: &[(&str, &str, &str)] = &[
     ("Dentes", "Quantos dentes o pente desenha ao longo da curva. Típico 32 a 200; não muda a curva.", "How many teeth the comb draws along the curve. Typically 32 to 200; it does not change the curve."),
     ("Escala", "Tamanho dos dentes do pente: milímetros de dente por unidade de curvatura. Só muda o desenho.", "Comb tooth size: millimeters of tooth per unit of curvature. It only changes the drawing."),
     ("Folga máxima da junção", "Bordas mais afastadas que isto não contam como junção. Maior que zero; aumente se a análise não achar a emenda.", "Edges farther apart than this do not count as a junction. Above zero; raise it if the analysis misses the seam."),
+    // corpo de malha
+    ("Desvio da malha", "Distância máxima entre a malha e a superfície exata do sólido. Zero usa um milésimo da diagonal da peça.", "Largest distance between the mesh and the exact solid surface. Zero uses a thousandth of the part diagonal."),
+    ("Ângulo da malha", "Dobra máxima entre triângulos vizinhos numa curva. Típico 5 a 20; menor deixa a curva mais lisa e a malha mais pesada.", "Largest bend between neighboring triangles on a curve. Typically 5 to 20; lower is smoother and heavier."),
+    ("Desvio máximo", "Até onde a decimação pode afastar a superfície antes de parar. Zero deixa só a proporção mandar.", "How far decimation may move the surface before it stops. Zero leaves only the ratio in charge."),
+    ("Parte mínima", "Parte solta menor que esta fração da área da maior parte sai do corpo. Típico 0,001 a 0,05.", "A loose part smaller than this fraction of the largest part's area leaves the body. Typically 0.001 to 0.05."),
+    ("Solda", "Vértices a menos que esta distância viram um só. Típico 0,001 a 0,1; alto demais fecha detalhe de verdade.", "Vertices closer than this distance become one. Typically 0.001 to 0.1; too high closes real detail."),
     // medidas gerais
     ("Aba D1", "Comprimento da aba no lado 1 da dobra. Maior que zero; mede-se na face externa.", "Flange length on side 1 of the bend. Above zero; measured on the outer face."),
     ("Aba D2", "Comprimento da aba no lado 2 da dobra. Maior que zero; mede-se na face externa.", "Flange length on side 2 of the bend. Above zero; measured on the outer face."),

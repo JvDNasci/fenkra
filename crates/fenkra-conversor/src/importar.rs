@@ -185,7 +185,7 @@ fn medir(modelo: &ModeloNeutro, r: &mut Relatorio) -> Result<(), ErroConv> {
     Ok(())
 }
 
-fn o_que_fica_fora(modelo: &ModeloNeutro, conjunto: bool, r: &mut Relatorio) {
+pub(crate) fn o_que_fica_fora(modelo: &ModeloNeutro, conjunto: bool, r: &mut Relatorio) {
     let xde = &modelo.xde;
     if modelo.formato == Formato::Brep {
         r.nao_carrega.push(Nota::nova(FORA_BREP, &[]));
@@ -297,6 +297,9 @@ impl Registro {
             let d = crate::plano::ler_svg(&bytes)?;
             return crate::dxf::importar_desenho(caminho, &bytes, d, Formato::Svg, o, extensao_diverge);
         }
+        if crate::malha::corpo::vai_como_corpo(formato, caminho, o)? {
+            return crate::malha::corpo::importar(formato, caminho, &bytes, texto, o, extensao_diverge);
+        }
         let provedor = self.provedor(formato)?;
         let mut modelo = provedor.ler(formato, caminho, o)?;
 
@@ -390,6 +393,8 @@ impl Registro {
                 std::fs::write(destino, texto).map_err(|e| ErroConv::Gravacao(format!("não foi possível gravar '{}': {e}", destino.display())))
             }
             Some(f) if f.e_2d() => crate::plano::gravar(doc, f, destino),
+            Some(f) if f.e_malha() && fenkra_solidos::corpo_malha::tem_corpo_de_malha(doc) => crate::malha::corpo::gravar_documento(doc, f, destino, saida),
+            _ if fenkra_solidos::corpo_malha::tem_corpo_de_malha(doc) && fenkra_solidos::final_shape(doc).is_none() => Err(ErroConv::Gravacao("corpo de malha não tem geometria exata: converta em sólido antes de gravar neste formato".into())),
             _ => self.gravar(&ModeloNeutro::de_documento(doc)?, destino, saida),
         }
     }

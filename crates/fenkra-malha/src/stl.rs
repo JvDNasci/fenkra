@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! STL: triângulos soltos, sem cor, unidade nem estrutura.
 
-use super::{erro, Cena, Malha};
-use crate::ErroConv;
+use crate::{erro, Cena, Malha};
+use crate::Erro as ErroConv;
 use std::fmt::Write as _;
 
 /// O binário não tem assinatura: o que o identifica é o tamanho bater com a contagem do cabeçalho.
-pub(crate) fn e_binario(b: &[u8]) -> bool {
+pub fn e_binario(b: &[u8]) -> bool {
     b.len() >= 84 && u64::from(u32::from_le_bytes([b[80], b[81], b[82], b[83]])) * 50 + 84 == b.len() as u64
 }
 
-pub(crate) fn e_texto(b: &[u8]) -> bool {
+pub fn e_texto(b: &[u8]) -> bool {
     let t = String::from_utf8_lossy(&b[..b.len().min(1024)]);
     t.trim_start().to_lowercase().starts_with("solid") && (t.contains("facet") || t.contains("endsolid"))
 }
 
-pub(crate) fn ler(b: &[u8]) -> Result<Cena, ErroConv> {
+pub fn ler(b: &[u8]) -> Result<Cena, ErroConv> {
     let mut m = Malha::default();
     if e_binario(b) {
         let n = u32::from_le_bytes([b[80], b[81], b[82], b[83]]) as usize;
@@ -61,7 +61,7 @@ fn normal(a: [f64; 3], b: [f64; 3], c: [f64; 3]) -> [f64; 3] {
     n.map(|x| x / l)
 }
 
-pub(crate) fn gravar(cena: &Cena, binario: bool, mm: f64) -> Vec<u8> {
+pub fn gravar(cena: &Cena, binario: bool, mm: f64) -> Vec<u8> {
     let malhas = cena.no_lugar();
     let total: usize = malhas.iter().map(|m| m.tris.len()).sum();
     let triangulos = || malhas.iter().flat_map(|m| m.tris.iter().map(|t| t.map(|i| m.pos[i as usize].map(|v| v / mm))));

@@ -999,6 +999,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.label(RichText::new(tr("Todas as células fechadas entram; para tirar uma, selecione um vértice/ponto dentro dela.")).weak().small());
             hyb_op(ui, &mut bf.op);
         }
+        FeatureKind::MeshOp(m) => crate::malha_ui::painel(ui, doc, me, m, vars),
+        FeatureKind::MeshImport(m) if m.corpo => crate::malha_ui::painel_importar(ui, doc, me, m),
         FeatureKind::MeshImport(m) => {
             section(ui, "Malha → B-rep");
             ui.label(RichText::new(&m.path).small());

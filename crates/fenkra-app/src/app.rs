@@ -789,6 +789,13 @@ impl App {
                 app.started = true;
             }
         }
+        // desenvolvimento: FENKRA_DEMO_MALHA=<importar|reparar|decimar|booleana> abre um corpo de malha com o comando
+        if let Ok(modo) = std::env::var("FENKRA_DEMO_MALHA") {
+            if let Some(id) = crate::malha_ui::demo_preparar(&mut app.open.doc, &modo) {
+                app.start_session(id, false, None);
+                app.started = true;
+            }
+        }
         // desenvolvimento: FENKRA_DEMO_PMI=1 anota a placa de exemplo (cota, nota, tolerância, rugosidade)
         if std::env::var("FENKRA_DEMO_PMI").is_ok() {
             use fenkra_core::pmi::*;
@@ -2492,9 +2499,22 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 return;
             }
             Cmd::MeshImport => {
-                let Some(p) = rfd::FileDialog::new().add_filter("Malha", &["stl", "obj"]).pick_file() else { return };
-                Sel::Feature(d.add_feature(FeatureKind::MeshImport(MeshImport { path: p.to_string_lossy().into(), solid: true })))
+                let Some(p) = rfd::FileDialog::new().add_filter(tr("Malha"), &["stl", "obj", "ply", "3mf"]).pick_file() else { return };
+                match crate::malha_ui::importar_para_doc(d, &p) {
+                    Ok(id) => Sel::Feature(id),
+                    Err(e) => {
+                        self.toast(e, true);
+                        return;
+                    }
+                }
             }
+            Cmd::Malha(a) => match crate::malha_ui::nova_op(a, d) {
+                Ok(op) => Sel::Feature(d.add_feature(FeatureKind::MeshOp(fenkra_core::malha::MeshOp { op }))),
+                Err(e) => {
+                    self.toast(tr(e), true);
+                    return;
+                }
+            },
             Cmd::Combine(op) => {
                 let active = d.active_collector;
                 let Some(tool) = d.collectors.iter().find(|c| c.id != active).map(|c| c.id) else {
@@ -7536,6 +7556,8 @@ pub enum Cmd {
     CloseSurface,
     SewSurface,
     BoundaryFill,
+    /// comando sobre o corpo de malha
+    Malha(crate::malha_ui::AcaoMalha),
     MeshImport,
     ImportarArquivo,
     Param,

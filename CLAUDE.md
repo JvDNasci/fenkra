@@ -20,6 +20,7 @@ Pré-requisitos, variáveis `FENKRA_DEMO*` e release: [docs/desenvolvimento.md](
 |---|---|
 | `fenkra-core` | Documento, árvore, parâmetros, sketch e solver, referências |
 | `fenkra-kernel` | Fachada C++ do OpenCASCADE (`cpp/*.inc`) |
+| `fenkra-malha` | Corpo de malha: formatos, solda, reparo, decimação, BVH, desvio, booleanas |
 | `fenkra-solidos` | Recompute: sólidos, superfícies, chapa, estrutural, biblioteca |
 | `fenkra-montagem` | Restrições, solver, juntas, mecanismos, BOM |
 | `fenkra-desenho` | Folhas, vistas, cotas, exportação |

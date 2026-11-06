@@ -17,6 +17,7 @@ pub mod estilo_chapa;
 pub mod expr;
 pub mod formato;
 pub mod macros;
+pub mod malha;
 pub mod materiais;
 pub mod parametros;
 pub mod gdt;

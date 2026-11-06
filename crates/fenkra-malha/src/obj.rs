@@ -2,14 +2,14 @@
 //! OBJ com MTL: grupos e materiais em texto, sem unidade nem árvore. Montagem vai achatada, um `o` por
 //! peça. O MTL é um arquivo ao lado, com o mesmo nome.
 
-use super::{erro, escrever, Cena, Malha, Material, No};
-use crate::ErroConv;
+use crate::{erro, escrever, Cena, Malha, Material, No};
+use crate::Erro as ErroConv;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::path::{Component, Path, PathBuf};
 
 /// Sem assinatura, o OBJ se reconhece pelas palavras do começo de cada linha.
-pub(crate) fn parece(b: &[u8]) -> bool {
+pub fn parece(b: &[u8]) -> bool {
     let fatia = &b[..b.len().min(4096)];
     let t = String::from_utf8_lossy(fatia);
     let mut linhas: Vec<&str> = t.lines().collect();
@@ -50,7 +50,7 @@ fn ler_mtl(t: &str, cena: &mut Cena) -> HashMap<String, usize> {
 
 /// Só arquivo ao lado: um arquivo hostil não pode apontar para fora da pasta e virar leitura de
 /// qualquer arquivo da máquina.
-pub(crate) fn ao_lado(caminho: &Path, nome: &str) -> Option<PathBuf> {
+pub fn ao_lado(caminho: &Path, nome: &str) -> Option<PathBuf> {
     let p = Path::new(nome);
     p.components().all(|c| matches!(c, Component::Normal(_))).then(|| caminho.parent().unwrap_or(Path::new("")).join(p))
 }
@@ -68,7 +68,7 @@ fn indice(texto: &str, total: usize) -> Option<usize> {
     usize::try_from(r).ok().filter(|r| *r < total)
 }
 
-pub(crate) fn ler(b: &[u8], caminho: &Path) -> Result<Cena, ErroConv> {
+pub fn ler(b: &[u8], caminho: &Path) -> Result<Cena, ErroConv> {
     let t = String::from_utf8_lossy(b);
     let mut c = Cena::default();
     let (mut v, mut cores, mut n): (Vec<[f64; 3]>, Vec<[u8; 4]>, Vec<[f32; 3]>) = (vec![], vec![], vec![]);
@@ -175,7 +175,7 @@ pub(crate) fn ler(b: &[u8], caminho: &Path) -> Result<Cena, ErroConv> {
     Ok(c)
 }
 
-pub(crate) fn gravar(cena: &Cena, caminho: &Path, mm: f64, normais: bool) -> Result<(), ErroConv> {
+pub fn gravar(cena: &Cena, caminho: &Path, mm: f64, normais: bool) -> Result<(), ErroConv> {
     let mtl = caminho.with_extension("mtl");
     let nome_mtl = mtl.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let mut s = String::from("# Fenkra\n");

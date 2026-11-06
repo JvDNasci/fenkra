@@ -3,9 +3,9 @@
 //! unidade declarada. A especificação pede malha fechada e vértices compartilhados, por isso a saída é
 //! soldada, e pede que o objeto seja definido antes de quem o usa, por isso a saída vai em pós-ordem.
 
-use super::{erro, mm_da_unidade, xml, zip, Cena, Malha, No};
-use crate::ErroConv;
-use fenkra_kernel::IDENTIDADE;
+use crate::{erro, mm_da_unidade, xml, zip, Cena, Malha, No};
+use crate::Erro as ErroConv;
+use crate::IDENTIDADE;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
@@ -114,7 +114,7 @@ impl Saida<'_> {
     }
 }
 
-pub(crate) fn gravar(cena: &Cena, mm: f64, unidade: &str) -> Result<Vec<u8>, ErroConv> {
+pub fn gravar(cena: &Cena, mm: f64, unidade: &str) -> Result<Vec<u8>, ErroConv> {
     let mut s = Saida { cena, texto: String::new(), malhas: HashMap::new(), nos: HashMap::new(), proximo: 1, grupo: 1, mm };
     if !cena.materiais.is_empty() {
         s.texto.push_str(r#"<basematerials id="1">"#);
@@ -180,7 +180,7 @@ fn malhas_do_objeto(objeto: roxmltree::Node, malha: roxmltree::Node, cores: &Has
     Ok(saida)
 }
 
-pub(crate) fn ler(b: &[u8]) -> Result<Cena, ErroConv> {
+pub fn ler(b: &[u8]) -> Result<Cena, ErroConv> {
     let relacoes = zip::abrir(b, |n| n == "_rels/.rels")?.unwrap_or_default();
     let relacoes = String::from_utf8_lossy(&relacoes).to_string();
     let alvo = relacoes.split("Target=\"").skip(1).filter_map(|t| t.split('"').next()).find(|t| t.ends_with(".model")).map(|t| t.trim_start_matches('/').to_string());

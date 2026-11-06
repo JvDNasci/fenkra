@@ -12,6 +12,7 @@ pub mod regioes;
 pub mod analise;
 pub mod loft;
 pub mod importacao;
+pub mod corpo_malha;
 pub mod mesh_io;
 pub mod structural;
 pub mod perfis_catalogo;
@@ -727,6 +728,8 @@ struct Ctx<'a> {
     miter_next: bool,
     /// contorno de cada recorte de chapa nos dois estados (dobrado e planificado)
     cut_outlines: Vec<CutOutline>,
+    /// corpos de malha por coletor; ficam ao lado de `bodies`, sem `Shape`
+    malhas: HashMap<Id, corpo_malha::CorpoMalha>,
     roscas: Vec<RoscaViz>,
     relatorios_forma: Vec<(Id, forma_brep::RelatorioForma)>,
     formas_resolvidas: Vec<forma_vinculo::FormaResolvida>,
@@ -5578,6 +5581,8 @@ impl Ctx<'_> {
                 self.apply(f.target, cells, bf.op, f.id)?;
                 Ok(None)
             }
+            FeatureKind::MeshImport(m) if m.corpo => self.importar_corpo_malha(f, m),
+            FeatureKind::MeshOp(m) => self.operar_malha(f, m),
             FeatureKind::MeshImport(m) => {
                 let tris = mesh_io::read(&m.path)?;
                 let sh = Shape::from_mesh(&tris, m.solid).map_err(k)?;
@@ -5809,6 +5814,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -5948,10 +5954,11 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             parts.push(all_bodies(&cx.body_sig));
         }
         let sig = hash_of(&parts.iter().map(|x| x.as_str()).collect::<Vec<_>>(), global);
-        match cache.feats.get(&f.id).filter(|e| e.sig == sig).cloned() {
+        match cache.feats.get(&f.id).filter(|e| e.sig == sig && !corpo_malha::sempre_roda(&f.kind)).cloned() {
             Some(e) => {
                 // nada que ele lê mudou: reaproveita o que ele produziu
                 cache.reused += 1;
+                corpo_malha::ao_reaproveitar(&mut cx.malhas, f);
                 cx.status.insert(f.id, e.status);
                 if let Some(p) = e.promoted {
                     promoted.insert(f.id, p);
@@ -6209,6 +6216,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             }
         }
     }
+    bodies.extend(doc.collectors.iter().filter_map(|c| cx.malhas.get(&c.id).map(|m| corpo_malha::resultado(c, m))));
     cache.limitar(&vivas, &fills_vivos, TETO_CACHE_MALHAS);
     let formas = formas_visiveis(doc, &cx.status, &cx.formas_resolvidas);
 
@@ -6278,6 +6286,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
                 last_sheet: None,
                 sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -6315,6 +6324,7 @@ pub fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -6767,6 +6777,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -6860,6 +6871,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -6899,6 +6911,7 @@ pub fn member_corners(doc: &Document) -> Vec<st_cantos::Canto> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         steps: HashMap::new(),
         miter_next: false,
@@ -6955,6 +6968,7 @@ pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -7237,6 +7251,7 @@ pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, pres
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -7255,6 +7270,13 @@ pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, pres
         if let Some(b) = cx.body(c.id) {
             all = if all.is_null() { b.clone() } else { all.compound(b) };
         }
+    }
+    let com_malha = doc.collectors.iter().any(|c| collector.is_none_or(|x| x == c.id) && cx.malhas.contains_key(&c.id));
+    if com_malha {
+        return match formato {
+            FormatoExport::Stl => corpo_malha::exportar_stl(&cx, collector, &all, path, preset),
+            FormatoExport::Step => Err("corpo de malha não tem geometria exata: converta em sólido antes de gravar STEP".into()),
+        };
     }
     if all.is_null() {
         return Err("nada para exportar".into());
@@ -7291,6 +7313,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         last_sheet: None,
         sheet_maps: vec![],
         cut_outlines: vec![],
+        malhas: HashMap::new(),
         roscas: vec![],
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -8765,7 +8788,7 @@ mod tests {
         t += "endsolid c\n";
         std::fs::write(&dir, t).unwrap();
         let mut m = Document::new("m");
-        m.add_feature(FeatureKind::MeshImport(MeshImport { path: dir.to_string_lossy().into(), solid: true }));
+        m.add_feature(FeatureKind::MeshImport(MeshImport { path: dir.to_string_lossy().into(), solid: true, ..Default::default() }));
         let r = recompute(&m);
         assert!(matches!(r.status[&m.features[0].id], Status::Warning(_)), "{:?}", r.status[&m.features[0].id]);
         assert!(near(r.bodies[0].mass.volume, 1000., 1e-6), "malha {}", r.bodies[0].mass.volume);

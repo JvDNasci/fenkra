@@ -2,13 +2,13 @@
 //! A cena: malhas, materiais e nós. Um grafo, como o modelo neutro: a peça usada quatro vezes é uma
 //! malha e quatro nós que apontam para ela.
 
-use crate::modelo::{compor, PROFUNDIDADE};
-use crate::ErroConv;
-use fenkra_kernel::IDENTIDADE;
+use crate::{compor, PROFUNDIDADE};
+use crate::Erro as ErroConv;
+use crate::IDENTIDADE;
 use std::collections::{BTreeMap, HashMap};
 
 /// Teto de ocorrências: um arquivo hostil faz o grafo crescer em potência com poucos bytes.
-pub(crate) const LIMITE_OCORRENCIAS: usize = 1_000_000;
+pub const LIMITE_OCORRENCIAS: usize = 1_000_000;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Material {
@@ -70,16 +70,16 @@ pub struct Cena {
 /// Uma malha num lugar da árvore: caminho de nomes, índice da malha e matriz acumulada.
 pub type Ocorrencia = (Vec<String>, usize, [f64; 12]);
 
-fn aplicar(m: &[f64; 12], p: [f64; 3]) -> [f64; 3] {
+pub fn aplicar(m: &[f64; 12], p: [f64; 3]) -> [f64; 3] {
     [0, 1, 2].map(|i| m[i * 4] * p[0] + m[i * 4 + 1] * p[1] + m[i * 4 + 2] * p[2] + m[i * 4 + 3])
 }
 
-fn determinante(m: &[f64; 12]) -> f64 {
+pub fn determinante(m: &[f64; 12]) -> f64 {
     m[0] * (m[5] * m[10] - m[6] * m[9]) - m[1] * (m[4] * m[10] - m[6] * m[8]) + m[2] * (m[4] * m[9] - m[5] * m[8])
 }
 
 /// A matriz só gira e desloca? Escala e espelho não cabem numa posição de montagem.
-pub(crate) fn e_rigida(m: &[f64; 12]) -> bool {
+pub fn e_rigida(m: &[f64; 12]) -> bool {
     let linha = |i: usize| [m[i * 4], m[i * 4 + 1], m[i * 4 + 2]];
     let ponto = |a: [f64; 3], b: [f64; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     let (a, b, c) = (linha(0), linha(1), linha(2));
@@ -207,7 +207,7 @@ impl Malha {
 
     /// Cópia na posição da matriz. Espelho inverte o sentido dos triângulos, e a normal só sobrevive à
     /// matriz rígida.
-    pub(crate) fn transformada(&self, m: &[f64; 12]) -> Malha {
+    pub fn transformada(&self, m: &[f64; 12]) -> Malha {
         let mut r = self.clone();
         r.pos = self.pos.iter().map(|p| aplicar(m, *p)).collect();
         if e_rigida(m) {
@@ -226,13 +226,13 @@ impl Malha {
 
     /// Índices fora da lista de vértices, comuns em arquivo corrompido, viram erro aqui, uma vez, e
     /// nenhum gravador precisa conferir de novo.
-    pub(crate) fn conferir(&self, formato: &str) -> Result<(), ErroConv> {
+    pub fn conferir(&self, formato: &str) -> Result<(), ErroConv> {
         let n = self.pos.len() as u32;
         if self.tris.iter().flatten().any(|i| *i >= n) {
-            return Err(super::erro(formato, "triângulo com vértice inexistente"));
+            return Err(crate::erro(formato, "triângulo com vértice inexistente"));
         }
         if self.pos.iter().flatten().any(|v| !v.is_finite()) {
-            return Err(super::erro(formato, "vértice com número inválido"));
+            return Err(crate::erro(formato, "vértice com número inválido"));
         }
         Ok(())
     }
@@ -249,15 +249,15 @@ impl Cena {
     }
 
     /// Conta algo que o leitor viu e não traduziu.
-    pub(crate) fn ignorar(&mut self, oque: &str, quantos: usize) {
-        debug_assert!(super::ITENS_FORA.contains(&oque), "termo sem tradução: {oque}");
+    pub fn ignorar(&mut self, oque: &str, quantos: usize) {
+        debug_assert!(crate::ITENS_FORA.contains(&oque), "termo sem tradução: {oque}");
         if quantos > 0 {
             *self.ignorados.entry(oque.to_string()).or_insert(0) += quantos;
         }
     }
 
     /// Acrescenta uma malha e um nó de topo com ela.
-    pub(crate) fn raiz_com(&mut self, m: Malha) -> usize {
+    pub fn raiz_com(&mut self, m: Malha) -> usize {
         let mut no = No::novo(&m.nome);
         no.malhas.push(self.malhas.len());
         self.malhas.push(m);
@@ -327,7 +327,7 @@ impl Cena {
     }
 
     /// Põe um nó acima de todas as raízes. Serve para trocar o eixo de cima na leitura.
-    pub(crate) fn embrulhar(&mut self, local: [f64; 12]) {
+    pub fn embrulhar(&mut self, local: [f64; 12]) {
         let mut no = No::novo("");
         no.local = local;
         no.filhos = std::mem::take(&mut self.raizes);
@@ -344,7 +344,7 @@ impl Cena {
     }
 
     /// Cor por vértice igual em toda a malha é só a cor da peça: vira material, que todo formato leva.
-    pub(crate) fn cor_uniforme_vira_material(&mut self) {
+    pub fn cor_uniforme_vira_material(&mut self) {
         for i in 0..self.malhas.len() {
             let Some(primeira) = self.malhas[i].cor_v.first().copied() else { continue };
             if self.malhas[i].cor_v.iter().all(|c| *c == primeira) {
@@ -359,7 +359,7 @@ impl Cena {
 
     /// Peças de uma cor só, juntas num arquivo sem estrutura (PLY): se cada parte solta tem cor única,
     /// cada uma volta a ser uma peça com o seu material.
-    pub(crate) fn separar_por_cor(&mut self) {
+    pub fn separar_por_cor(&mut self) {
         for i in 0..self.malhas.len() {
             if self.malhas[i].cor_v.is_empty() {
                 continue;
@@ -403,7 +403,7 @@ impl Cena {
     /// Tira os nós que só passam adiante. Formatos com camadas de embrulho (3MF, glTF com eixo trocado)
     /// não podem virar montagens de um filho só. Nó com filho compartilhado continua compartilhando:
     /// o que se copia é a referência.
-    pub(crate) fn enxugar(&mut self) {
+    pub fn enxugar(&mut self) {
         for i in 0..self.nos.len() {
             let mut voltas = 0;
             while self.nos[i].malhas.is_empty() && self.nos[i].filhos.len() == 1 && voltas < PROFUNDIDADE {
@@ -427,7 +427,7 @@ impl Cena {
 
     /// Escala e espelho entram na malha: a posição de uma peça só gira e desloca. A cópia fica neste nó;
     /// quem usa o filho por outro caminho segue vendo o original.
-    pub(crate) fn assentar(&mut self) {
+    pub fn assentar(&mut self) {
         for i in 0..self.nos.len() {
             if e_rigida(&self.nos[i].local) {
                 continue;
@@ -451,16 +451,16 @@ impl Cena {
     }
 }
 
-#[cfg(test)]
-pub(crate) mod testes {
-    use super::*;
+/// Cubo de lado `l` com o canto na origem e as normais para fora.
+pub fn cubo(nome: &str, l: f64) -> Malha {
+    let pos = (0..8).map(|i| [(i & 1) as f64 * l, ((i >> 1) & 1) as f64 * l, ((i >> 2) & 1) as f64 * l]).collect();
+    let tris = vec![[0, 2, 3], [0, 3, 1], [4, 5, 7], [4, 7, 6], [0, 1, 5], [0, 5, 4], [2, 6, 7], [2, 7, 3], [0, 4, 6], [0, 6, 2], [1, 3, 7], [1, 7, 5]];
+    Malha { nome: nome.into(), pos, tris, ..Default::default() }
+}
 
-    /// Cubo de lado `l` com o canto na origem e as normais para fora.
-    pub(crate) fn cubo(nome: &str, l: f64) -> Malha {
-        let pos = (0..8).map(|i| [(i & 1) as f64 * l, ((i >> 1) & 1) as f64 * l, ((i >> 2) & 1) as f64 * l]).collect();
-        let tris = vec![[0, 2, 3], [0, 3, 1], [4, 5, 7], [4, 7, 6], [0, 1, 5], [0, 5, 4], [2, 6, 7], [2, 7, 3], [0, 4, 6], [0, 6, 2], [1, 3, 7], [1, 7, 5]];
-        Malha { nome: nome.into(), pos, tris, ..Default::default() }
-    }
+#[cfg(test)]
+mod testes {
+    use super::*;
 
     #[test]
     fn cubo_fecha_com_volume_certo() {

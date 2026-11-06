@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/fenkra-core",
+    "crates/fenkra-malha",
     "crates/fenkra-kernel",
     "crates/fenkra-dxf",
     "crates/fenkra-conversor",

@@ -509,7 +509,14 @@ pub fn entries(g: Group) -> Vec<Entry> {
             ]),
             One(it("hib_costurar", "Costurar", "Costurar superfície no corpo (Sew Surface)", "Acrescenta o volume entre a superfície e o corpo, ou remove o lado escolhido.", Cmd(C::SewSurface))),
             One(it("hib_preencher", "Preencher", "Preencher fronteiras (Boundary Fill)", "Sólido dos volumes fechados por superfícies, faces e planos; escolha as células que ficam de fora.", Cmd(C::BoundaryFill))),
-            One(it("hib_malha", "Malha", "Importar malha STL/OBJ como B-rep", "Converte triângulos em faces costuradas; se fechar, vira sólido.", Cmd(C::MeshImport))),
+            Family("hib_malha", vec![
+                it("hib_malha", "Malha", "Importar malha como corpo", "Traz STL, OBJ, PLY ou 3MF como corpo de malha, sem teto de triângulos e sem virar B-rep.", Cmd(C::MeshImport)),
+                it("malha_reparar", "Reparar malha", "Reparar malha", "Solda vértices, separa não manifold, corrige normais e fecha furos do corpo de malha.", Cmd(C::Malha(crate::malha_ui::AcaoMalha::Reparar))),
+                it("malha_decimar", "Decimar malha", "Decimar malha", "Reduz os triângulos do corpo de malha mantendo a forma.", Cmd(C::Malha(crate::malha_ui::AcaoMalha::Decimar))),
+                it("malha_booleana", "Booleana de malha", "Booleana de malha", "Une, subtrai ou intersecta dois corpos fechados sem passar pelo B-rep.", Cmd(C::Malha(crate::malha_ui::AcaoMalha::Booleana))),
+                it("malha_solido", "Malha para sólido", "Malha para sólido", "Transforma o corpo de malha em B-rep facetado, até 200 mil triângulos.", Cmd(C::Malha(crate::malha_ui::AcaoMalha::ParaBrep))),
+                it("solido_malha", "Sólido para malha", "Sólido para malha", "Transforma o corpo B-rep do coletor em corpo de malha.", Cmd(C::Malha(crate::malha_ui::AcaoMalha::DeBrep))),
+            ]),
             One(it("importar_arquivo", TEXTO_IMPORTAR.0, TEXTO_IMPORTAR.1, TEXTO_IMPORTAR.2, Cmd(C::ImportarArquivo))),
         ],
         Group::Analise => vec![

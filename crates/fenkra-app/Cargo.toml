@@ -20,6 +20,7 @@ path = "src/bin/fenkra_conv.rs"
 fenkra-core = { path = "../fenkra-core" }
 fenkra-kernel = { path = "../fenkra-kernel" }
 fenkra-conversor = { path = "../fenkra-conversor" }
+fenkra-malha = { path = "../fenkra-malha" }
 fenkra-solidos = { path = "../fenkra-solidos" }
 fenkra-project = { path = "../fenkra-project" }
 fenkra-montagem = { path = "../fenkra-montagem" }

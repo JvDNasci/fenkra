@@ -350,8 +350,12 @@ fn malha_acima_do_teto_recusa_o_solido_mas_converte_para_malha() {
     c.raizes.push(0);
     let (a, b) = (dir.join("g.stl"), dir.join("g.3mf"));
     fenkra_conversor::malha::gravar_para_teste(Formato::Stl, &c, &a).unwrap();
-    let e = Registro::default().importar(&a, &OpcoesImportar::default()).err().unwrap();
+    // o teto ficou só no caminho até o B-rep; pelo padrão ela entra inteira, como corpo de malha
+    let solido = OpcoesImportar { malha_em_solido: true, ..Default::default() };
+    let e = Registro::default().importar(&a, &solido).err().unwrap();
     assert!(e.to_string().contains("grande demais"), "{e}");
+    let i = Registro::default().importar(&a, &OpcoesImportar::default()).unwrap();
+    assert_eq!(recompute(&i.doc).bodies[0].mesh.indices.len() / 3, 2 * n * n);
     Registro::default().converter(&a, &b, &OpcoesImportar::default(), &OpcoesExportar::default()).unwrap();
     let volta = fenkra_conversor::malha::ler_para_teste(Formato::Tmf, &b).unwrap();
     assert_eq!(volta.no_lugar()[0].tris.len(), 2 * n * n);

@@ -10,56 +10,23 @@
 //! vértice. O caminho até o B-rep tem teto, porque cada triângulo vira uma face.
 
 mod amf;
-mod cena;
 mod collada;
+pub(crate) mod corpo;
 mod gltf;
 mod ifc;
 mod nos3d;
-pub(crate) mod obj;
-mod ply;
 mod ponte;
-pub(crate) mod stl;
-mod tmf;
 mod usd;
 mod vrml;
 mod x3d;
-pub(crate) mod zip;
 
-pub use cena::{Cena, Malha, Material, No};
+pub use fenkra_malha::{Cena, Malha, Material, No, ITENS_FORA};
+pub(crate) use fenkra_malha::{mm_da_unidade, obj, ply, stl, tmf, xml, zip};
+pub(crate) use ponte::LIMITE_BREP;
 
 use crate::{Capacidades, ErroConv, Formato, ModeloNeutro, OpcoesExportar, OpcoesImportar, Provedor};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-
-/// Tudo o que um leitor pode relatar como não traduzido. A interface traduz cada termo, então a lista
-/// é fechada: termo novo entra aqui e na tradução.
-pub const ITENS_FORA: &[&str] = &[
-    "textura",
-    "biblioteca de materiais não encontrada",
-    "material sem definição",
-    "linha ou ponto solto",
-    "elemento extra",
-    "treliça de vigas",
-    "pilha de fatias",
-    "componente em outro arquivo",
-    "cor por vértice",
-    "aresta curva",
-    "animação",
-    "esqueleto",
-    "câmera",
-    "luz",
-    "ponto ou linha",
-    "primitiva sem malha",
-    "arquivo externo",
-    "alternativa de Switch ou LOD",
-    "orientação de escala",
-    "cor por face",
-    "protótipo",
-    "sólido paramétrico sem malha pronta",
-    "furo em face",
-    "cavidade interna que ficou como sólido à parte",
-    "peça com vários materiais, que ficou com a cor do maior",
-];
 
 /// Como a geometria exata vira triângulos, e como a malha vai para o arquivo.
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -86,10 +53,10 @@ pub(crate) fn ler_cena(formato: Formato, caminho: &Path) -> Result<Cena, ErroCon
     let bytes = std::fs::read(caminho).map_err(|e| ErroConv::Leitura(format!("não foi possível ler '{}': {e}", caminho.display())))?;
     let nome = caminho.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let mut cena = match formato {
-        Formato::Stl => stl::ler(&bytes),
-        Formato::Obj => obj::ler(&bytes, caminho),
-        Formato::Ply => ply::ler(&bytes),
-        Formato::Tmf => tmf::ler(&bytes),
+        Formato::Stl => stl::ler(&bytes).map_err(ErroConv::from),
+        Formato::Obj => obj::ler(&bytes, caminho).map_err(ErroConv::from),
+        Formato::Ply => ply::ler(&bytes).map_err(ErroConv::from),
+        Formato::Tmf => tmf::ler(&bytes).map_err(ErroConv::from),
         Formato::Amf => amf::ler(&bytes),
         Formato::Gltf | Formato::Glb => gltf::ler(&bytes, caminho),
         Formato::Vrml => vrml::ler(&bytes),
@@ -113,7 +80,7 @@ pub(crate) fn gravar_cena(formato: Formato, cena: &Cena, caminho: &Path, o: &Opc
     let (mm, nome) = unidade_de_saida(o);
     match formato {
         Formato::Stl => escrever(caminho, &stl::gravar(cena, o.malha.binario, mm)),
-        Formato::Obj => obj::gravar(cena, caminho, mm, o.malha.normais),
+        Formato::Obj => obj::gravar(cena, caminho, mm, o.malha.normais).map_err(ErroConv::from),
         Formato::Ply => escrever(caminho, &ply::gravar(cena, o.malha.binario, mm)),
         Formato::Tmf => escrever(caminho, &tmf::gravar(cena, mm, nome)?),
         Formato::Amf => escrever(caminho, amf::gravar(cena, mm, nome).as_bytes()),
@@ -138,19 +105,6 @@ fn unidade_de_saida(o: &OpcoesExportar) -> (f64, &'static str) {
     }
 }
 
-/// Milímetros por unidade, pelo nome que 3MF e AMF usam. `None` se o nome é desconhecido.
-fn mm_da_unidade(nome: &str) -> Option<f64> {
-    match nome.to_lowercase().as_str() {
-        "micron" | "micrometer" => Some(0.001),
-        "millimeter" | "millimetre" | "mm" => Some(1.),
-        "centimeter" | "centimetre" | "cm" => Some(10.),
-        "inch" | "in" => Some(25.4),
-        "foot" | "feet" | "ft" => Some(304.8),
-        "meter" | "metre" | "m" => Some(1000.),
-        _ => None,
-    }
-}
-
 fn escrever(caminho: &Path, bytes: &[u8]) -> Result<(), ErroConv> {
     std::fs::write(caminho, bytes).map_err(|e| ErroConv::Gravacao(format!("não foi possível gravar '{}': {e}", caminho.display())))
 }
@@ -158,11 +112,6 @@ fn escrever(caminho: &Path, bytes: &[u8]) -> Result<(), ErroConv> {
 /// Falha de leitura com o nome do formato na frente.
 fn erro(formato: &str, motivo: impl std::fmt::Display) -> ErroConv {
     ErroConv::Leitura(format!("{formato}: {motivo}"))
-}
-
-/// Texto seguro para XML, em atributo ou corpo.
-pub(crate) fn xml(t: &str) -> String {
-    t.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;").replace('"', "&quot;")
 }
 
 /// Provedor dos formatos de malha, em Rust puro: nenhum deles precisa do kernel para ser lido.

@@ -1764,8 +1764,10 @@ pub enum FeatureKind {
     SewSurface(SewSurface),
     /// Preencher fronteiras: volumes fechados por superfícies e planos (Boundary Fill).
     BoundaryFill(BoundaryFill),
-    /// Malha STL/OBJ convertida em B-rep.
+    /// Malha importada: fica corpo de malha, ou vira B-rep nos documentos antigos.
     MeshImport(MeshImport),
+    /// Operação sobre o corpo de malha do coletor (B170).
+    MeshOp(crate::malha::MeshOp),
     /// Corpo sólido vindo de um elemento Linked/Isolated (peça gerada a partir de outra).
     LinkedBody(LinkedBody),
     /// Mover o corpo inteiro: translação, rotação, simetria ou afinidade.
@@ -2857,12 +2859,18 @@ pub struct BoundaryFill {
     pub op: BoolOp,
 }
 
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Default, PartialEq, Debug, Serialize, Deserialize)]
 pub struct MeshImport {
-    /// arquivo .stl ou .obj (relativo à pasta do projeto ou absoluto)
+    /// arquivo de malha (relativo à pasta do projeto ou absoluto)
     pub path: String,
     /// tenta fechar em sólido (senão fica superfície/casca)
     pub solid: bool,
+    /// fica corpo de malha, sem virar B-rep e sem teto de triângulos (B170)
+    #[serde(default)]
+    pub corpo: bool,
+    /// chave da malha em `Document::malhas`; vazia lê `path` a cada cálculo
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub dados: String,
 }
 
 /// Insere no coletor de destino o corpo guardado num elemento Linked/Isolated (B-rep fechado).
@@ -2914,6 +2922,7 @@ impl FeatureKind {
             Forma(_) => "Forma",
             BoundaryFill(_) => "PreencherFronteiras",
             MeshImport(_) => "Malha",
+            MeshOp(m) => m.op.nome(),
             LinkedBody(_) => "CorpoLink",
             SmWall(_) => "ParedeBase",
             SmFlange(_) => "Aba",
@@ -2981,7 +2990,7 @@ impl FeatureKind {
             SewSurface(_) => "⧉",
             Forma(_) => "◍",
             BoundaryFill(_) => "▦",
-            MeshImport(_) => "△",
+            MeshImport(_) | MeshOp(_) => "△",
             LinkedBody(_) => "🔗",
             MoveBody(_) => "✥",
             SmWall(_) => "▭",
@@ -3202,6 +3211,7 @@ impl FeatureKind {
                 }
             }
             MeshImport(_) => {}
+            MeshOp(m) => m.op.walk(ids, exprs),
             LinkedBody(b) => ids(&mut b.geo),
             SmWall(w) => ids(&mut w.sketch),
             SmFlange(f) => {
@@ -3999,6 +4009,10 @@ pub struct Document {
     /// origem do documento importado; fora do arquivo nos demais, para não mudar o hash das versões
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub origem: Option<SeloOrigem>,
+    /// malhas embutidas pelo hash: o corpo de malha abre sem o arquivo de origem, e o comando na árvore
+    /// guarda só a chave, para o cálculo e o desfazer não carregarem megabytes a cada passo
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub malhas: std::collections::BTreeMap<String, crate::malha::MalhaEmbutida>,
     /// Aparência da peça inteira (sobrepõe a cor dos coletores).
     #[serde(default)]
     pub appearance: Option<Appearance>,
@@ -4109,6 +4123,7 @@ impl Document {
             rollback: 0,
             atualizacao: ModoAtualizacao::Automatica,
             origem: None,
+            malhas: Default::default(),
         };
         let c = d.add_collector("Corpo principal");
         d.active_collector = c;

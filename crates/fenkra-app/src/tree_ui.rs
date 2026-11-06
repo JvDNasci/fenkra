@@ -458,6 +458,13 @@ pub fn icone_comando(k: &FeatureKind) -> &'static str {
         Forma(_) => "forma",
         BoundaryFill(_) => "hib_preencher",
         MeshImport(_) => "hib_malha",
+        MeshOp(m) => match m.op {
+            fenkra_core::malha::MeshOpKind::Reparar(_) => "malha_reparar",
+            fenkra_core::malha::MeshOpKind::Decimar(_) => "malha_decimar",
+            fenkra_core::malha::MeshOpKind::Booleana(_) => "malha_booleana",
+            fenkra_core::malha::MeshOpKind::ParaBrep { .. } => "malha_solido",
+            fenkra_core::malha::MeshOpKind::DeBrep { .. } => "solido_malha",
+        },
         LinkedBody(_) => "asm_link",
         MoveBody(_) => "xf_mover",
         SmWall(_) => "sm_parede",

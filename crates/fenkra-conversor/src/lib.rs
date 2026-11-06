@@ -55,6 +55,17 @@ pub enum ErroConv {
     Ausente(String),
 }
 
+impl From<fenkra_malha::Erro> for ErroConv {
+    fn from(e: fenkra_malha::Erro) -> Self {
+        use fenkra_malha::Erro;
+        match e {
+            Erro::Formato(t) => ErroConv::Formato(t),
+            Erro::Leitura(t) | Erro::Operacao(t) => ErroConv::Leitura(t),
+            Erro::Gravacao(t) => ErroConv::Gravacao(t),
+        }
+    }
+}
+
 impl From<fenkra_kernel::KernelError> for ErroConv {
     fn from(e: fenkra_kernel::KernelError) -> Self {
         ErroConv::Leitura(e.0)

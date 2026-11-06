@@ -3,7 +3,7 @@
 //! criptografia nem ZIP64. A leitura tem teto de tamanho, porque um pacote pequeno pode descompactar
 //! em gigabytes.
 
-use crate::ErroConv;
+use crate::Erro as ErroConv;
 
 /// Maior arquivo descompactado que se aceita de um pacote.
 const LIMITE: usize = 2 << 30;
@@ -22,7 +22,7 @@ fn crc32(dados: &[u8]) -> u32 {
     !c
 }
 
-pub(crate) fn e_zip(b: &[u8]) -> bool {
+pub fn e_zip(b: &[u8]) -> bool {
     b.len() > 4 && b[..4] == LOCAL.to_le_bytes()
 }
 
@@ -62,12 +62,12 @@ fn diretorio(b: &[u8]) -> Option<Vec<Entrada>> {
 }
 
 /// Nomes das entradas, para reconhecer o pacote sem abrir nada.
-pub(crate) fn nomes(b: &[u8]) -> Vec<String> {
+pub fn nomes(b: &[u8]) -> Vec<String> {
     diretorio(b).unwrap_or_default().into_iter().map(|e| e.nome).collect()
 }
 
 /// Conteúdo da primeira entrada que atende `filtro`.
-pub(crate) fn abrir(b: &[u8], filtro: impl Fn(&str) -> bool) -> Result<Option<Vec<u8>>, ErroConv> {
+pub fn abrir(b: &[u8], filtro: impl Fn(&str) -> bool) -> Result<Option<Vec<u8>>, ErroConv> {
     let ruim = |m: &str| ErroConv::Leitura(format!("pacote ZIP: {m}"));
     let lista = diretorio(b).ok_or_else(|| ruim("diretório ilegível"))?;
     let Some(e) = lista.iter().find(|e| filtro(&e.nome)) else { return Ok(None) };
@@ -90,7 +90,7 @@ pub(crate) fn abrir(b: &[u8], filtro: impl Fn(&str) -> bool) -> Result<Option<Ve
 
 /// Grava entradas em ordem. `alinhar` põe o início de cada dado num múltiplo de 64 bytes e não
 /// comprime: é a regra do USDZ, feito para ser lido direto da memória.
-pub(crate) fn gravar(entradas: &[(&str, &[u8])], alinhar: bool) -> Result<Vec<u8>, ErroConv> {
+pub fn gravar(entradas: &[(&str, &[u8])], alinhar: bool) -> Result<Vec<u8>, ErroConv> {
     let mut saida = Vec::new();
     let mut central = Vec::new();
     for (nome, dados) in entradas {
