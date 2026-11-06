@@ -647,6 +647,42 @@ mod tests {
     }
 
     #[test]
+    fn linhas_de_explosao_do_estado_seguem_para_a_vista() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_montagem::display::{Explosao, PassoExplosao, ModoPasso};
+        use fenkra_montagem::{Assembly, NodeKind, Placement};
+        let dir = std::env::temp_dir().join(format!("fenkra_desenho_explosao_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("placa.fkp"), fenkra_solidos::example_document().to_json()).unwrap();
+        let mut a = Assembly::new("m");
+        let c = a.add_component("P", NodeKind::Part { path: "placa.fkp".into() }, Placement::default(), None);
+        let mut e = Explosao::nova("E");
+        e.passos.push(PassoExplosao { nome: "p".into(), comps: vec![c], modo: ModoPasso::Linear { dir: [1., 0., 0.], dist: 80. }, suprimido: false });
+        let centros = [(c, [0., 0., 0.])].into();
+        let mut estado = e.no_estado(&a.snapshot_state("Explodida"), &centros);
+        estado.name = "Explodida".into();
+        a.display_states.push(estado);
+        a.explosoes.push(e);
+        std::fs::write(dir.join("m.fka"), a.to_json()).unwrap();
+        let mut d = Drawing::new("t", crate::Format::A3);
+        let s = d.sheets[0].id;
+        let mut m = crate::source::Models::new(Some(dir.clone()));
+        let src = |estado: &str| crate::Source { path: "m.fka".into(), display_state: estado.into(), hidden: vec![] };
+        let com = d.add_view(s, src("Explodida"), ViewKind::Standard(crate::Dir::Topo), [100., 100.], 1.);
+        let sem = d.add_view(s, src(""), ViewKind::Standard(crate::Dir::Topo), [300., 100.], 1.);
+        let p = m.proj(&d, com);
+        assert!(p.error.is_none(), "{:?}", p.error);
+        let l: Vec<_> = p.lines.iter().filter(|x| x.1 == 7).collect();
+        assert_eq!(l.len(), 1, "uma linha para a peça que saiu do lugar");
+        let (q0, q1) = (l[0].0[0], l[0].0[1]);
+        assert!(((q1[0] - q0[0]).hypot(q1[1] - q0[1]) - 80.).abs() < 1e-6, "{q0:?} {q1:?}");
+        assert!(!m.proj(&d, sem).lines.iter().any(|x| x.1 == 7), "sem estado, sem linha");
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn fatia_so_tem_a_face_cortada_e_o_corte_em_degraus_refaz_a_projecao() {
         if !fenkra_kernel::AVAILABLE {
             return;

@@ -254,6 +254,8 @@ pub struct AsmState {
     pub explode_factor: f64,
     /// o manipulador mexe na explosão (não na posição real)
     pub explode_mode: bool,
+    /// painel de exibição: aba, explosão e passo escolhidos
+    pub exibicao: crate::asm_exibicao::Exibicao,
     /// marca de limite em arrasto: o desfazer é um só por arrasto
     pub limite_em_arrasto: bool,
     pub display_open: bool,
@@ -353,6 +355,7 @@ impl AsmState {
             live: Default::default(),
             explode_factor: 0.,
             explode_mode: false,
+            exibicao: Default::default(),
             limite_em_arrasto: false,
             display_open: false,
             bom_open: None,
@@ -3701,7 +3704,7 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
 // ============================================================== exibição
 
 /// Centro de cada componente sem explosão (para a explosão automática).
-fn centers(st: &AsmState) -> std::collections::HashMap<Id, [f64; 3]> {
+pub(crate) fn centers(st: &AsmState) -> std::collections::HashMap<Id, [f64; 3]> {
     let mut out = std::collections::HashMap::new();
     if let Some(r) = &st.view {
         for b in &r.bodies {
@@ -4284,175 +4287,5 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
     }
     if let Some((p, dir)) = gravar {
         save_gear(app, &p, dir);
-    }
-}
-
-/// Janela de exibição: estados de exibição, explosão e animação por quadros-chave.
-pub fn display_window(app: &mut App, ctx: &egui::Context) {
-    let cam_now = app.camera_get();
-    let Some(st) = app.asm.as_mut() else { return };
-    if !st.display_open {
-        return;
-    }
-    use fenkra_montagem::display::{auto_explode, Animation, Key};
-    let mut open = true;
-    let mut set_cam: Option<fenkra_montagem::display::Cam> = None;
-    let before = st.live.clone();
-    let fechar = egui::Id::unique(("concluir_janela", "asm_ui.rs6"));
-    if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
-        open = false;
-    }
-    egui::Window::new(tr("🎬 Exibição e animação"))
-        .id(egui::Id::unique("janela_exibicao"))
-        .open(&mut open)
-        .default_width(470.)
-        .resizable(true)
-        .show(ctx, |ui| {
-            if crate::app::done_bar(ui) {
-                ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
-            }
-            crate::editor::section(ui, "Estados de exibição");
-            ui.label(RichText::new(tr("Guardam o que aparece, cores, explosão e câmera. O detalhamento usa estes estados como coletores de exibição.")).weak().small());
-            let mut apply = None;
-            let mut del = None;
-            for (i, s) in st.asm.display_states.iter_mut().enumerate() {
-                ui.horizontal(|ui| {
-                    ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(150.));
-                    if ui.small_button(tr("▶ aplicar")).clicked() {
-                        apply = Some(i);
-                    }
-                    if ui.small_button("✖").clicked() {
-                        del = Some(i);
-                    }
-                });
-            }
-            if let Some(i) = apply {
-                st.live = st.asm.display_states[i].clone();
-                // o estado salvo guarda quem fica oculto: aplica na árvore também
-                for n in &mut st.asm.nodes {
-                    n.visible = !st.live.hidden.contains(&n.id);
-                }
-                set_cam = st.live.camera;
-                st.dirty = true;
-            }
-            if let Some(i) = del {
-                st.asm.display_states.remove(i);
-            }
-            if ui.button(tr("💾 Salvar estado atual")).clicked() {
-                let mut s = st.asm.snapshot_state(&format!("Estado {}", st.asm.display_states.len() + 1));
-                s.offsets = st.live.offsets.clone();
-                s.camera = cam_now;
-                st.asm.display_states.push(s);
-                st.modified = true;
-            }
-            crate::editor::section(ui, "Vista explodida");
-            if ui.add(crate::ui_ext::slider(&mut st.explode_factor, 0.0..=3.0).text(tr("afastamento"))).changed() {
-                let c = centers(st);
-                st.live.offsets = auto_explode(&st.asm, &c, st.explode_factor);
-                st.dirty = true;
-            }
-            crate::editor::check(ui, &mut st.explode_mode, "ajustar à mão (o manipulador mexe só na explosão)");
-            if ui.button(tr("Juntar tudo (sem explosão)")).clicked() {
-                st.live.offsets.clear();
-                st.explode_factor = 0.;
-                st.dirty = true;
-            }
-            crate::editor::section(ui, "Animação");
-            if st.asm.animations.is_empty() {
-                if ui.button(tr("+ Nova animação")).clicked() {
-                    st.asm.animations.push(Animation { name: "Animação 1".into(), keys: vec![] });
-                }
-                return;
-            }
-            st.anim_sel = st.anim_sel.min(st.asm.animations.len() - 1);
-            ui.horizontal_wrapped(|ui| {
-                let names: Vec<String> = st.asm.animations.iter().map(|a| a.name.clone()).collect();
-                egui::ComboBox::from_id_salt("anim_sel").selected_text(&names[st.anim_sel]).show_ui(ui, |ui| {
-                    for (i, n) in names.iter().enumerate() {
-                        ui.selectable_value(&mut st.anim_sel, i, n);
-                    }
-                });
-                if ui.small_button(tr("+ nova")).clicked() {
-                    let n = st.asm.animations.len() + 1;
-                    st.asm.animations.push(Animation { name: format!("Animação {n}"), keys: vec![] });
-                    st.anim_sel = n - 1;
-                }
-            });
-            let a = &mut st.asm.animations[st.anim_sel];
-            ui.horizontal(|ui| {
-                ui.label(tr("Nome"));
-                ui.text_edit_singleline(&mut a.name);
-            });
-            let dur = a.duration().max(0.1);
-            ui.horizontal(|ui| {
-                if ui.button(if st.anim_play { "⏸" } else { "▶" }).clicked() {
-                    st.anim_play = !st.anim_play;
-                }
-                if ui.button("⏮").clicked() {
-                    st.anim_t = 0.;
-                }
-                ui.add(crate::ui_ext::slider(&mut st.anim_t, 0.0..=dur).text("t (s)"));
-            });
-            // linha do tempo com os quadros-chave
-            let (r, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 26.), egui::Sense::hover());
-            let p = ui.painter_at(r);
-            p.rect_filled(r, 4., ui.visuals().extreme_bg_color);
-            for k in &a.keys {
-                let x = r.left() + (k.t / dur) as f32 * r.width();
-                p.add(egui::Shape::convex_polygon(vec![egui::pos2(x, r.top() + 4.), egui::pos2(x + 6., r.center().y), egui::pos2(x, r.bottom() - 4.), egui::pos2(x - 6., r.center().y)], Color32::from_rgb(255, 190, 40), egui::Stroke::NONE));
-            }
-            let xt = r.left() + (st.anim_t / dur) as f32 * r.width();
-            p.line_segment([egui::pos2(xt, r.top()), egui::pos2(xt, r.bottom())], egui::Stroke::new(2., Color32::from_rgb(90, 180, 255)));
-            let mut kdel = None;
-            for (i, k) in a.keys.iter_mut().enumerate() {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new(format!("◆ {}", k.state.name)).small());
-                    { let __r = ui.add(crate::ui_ext::dv(&mut k.t).range(0.0..=600.0).speed(0.05).suffix(" s")); crate::ui_ext::wheel(ui, &__r, &mut k.t); __r };
-                    if ui.small_button("✖").clicked() {
-                        kdel = Some(i);
-                    }
-                });
-            }
-            if let Some(i) = kdel {
-                a.keys.remove(i);
-            }
-            if ui.button(tr("◆ Quadro-chave aqui (estado atual + câmera)")).clicked() {
-                let mut s = st.asm.snapshot_state(&format!("quadro {}", st.asm.animations[st.anim_sel].keys.len() + 1));
-                s.offsets = st.live.offsets.clone();
-                s.camera = cam_now;
-                let t = if st.asm.animations[st.anim_sel].keys.is_empty() { 0. } else { st.anim_t.max(st.asm.animations[st.anim_sel].duration() + 1.) };
-                st.asm.animations[st.anim_sel].keys.push(Key { t, state: s });
-                st.modified = true;
-            }
-            ui.label(RichText::new(tr("Monte a cena (oculte peças, exploda, gire a câmera) e grave um quadro; repita em outro tempo. A animação interpola a explosão e a câmera.")).weak().small());
-        });
-    // reprodução
-    if st.anim_play {
-        if let Some(a) = st.asm.animations.get(st.anim_sel) {
-            st.anim_t += ctx.input(|i| i.stable_dt) as f64;
-            let d = a.duration();
-            if st.anim_t > d {
-                st.anim_t = 0.;
-            }
-            if let Some(s) = a.at(st.anim_t) {
-                for n in &mut st.asm.nodes {
-                    n.visible = !s.hidden.contains(&n.id);
-                }
-                set_cam = s.camera;
-                st.live = s;
-                st.dirty = true;
-            }
-            ctx.request_repaint();
-        }
-    }
-    if st.live != before {
-        st.dirty = true;
-    }
-    if !open {
-        st.display_open = false;
-        st.anim_play = false;
-    }
-    if let Some(c) = set_cam {
-        app.camera_set(c);
     }
 }

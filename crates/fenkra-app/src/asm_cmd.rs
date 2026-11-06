@@ -659,6 +659,10 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         st.dirty = true;
         return;
     }
+    if matches!(nome, "explosao" | "explosao_anim" | "exibicao") {
+        crate::asm_exibicao::demo(st, nome);
+        return;
+    }
     if nome.starts_with("interf") {
         crate::asm_interf::demo(st, nome);
         return;

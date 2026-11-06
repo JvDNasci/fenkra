@@ -28,6 +28,8 @@ pub struct Loaded {
     pub pieces: Vec<Shape>,
     /// nome de cada peça de `pieces` (para marcar as que o corte não atravessa)
     pub piece_names: Vec<String>,
+    /// linhas de explosão do estado de exibição, no mundo
+    pub linhas: Vec<Vec<V3>>,
     /// arquivos de que depende (para saber quando recarregar)
     files: Vec<(PathBuf, Option<SystemTime>)>,
     pub error: Option<String>,
@@ -62,7 +64,8 @@ impl Axes {
 /// Projeção pronta de uma vista, em mm do modelo no plano da vista.
 #[derive(Clone, Debug, Default)]
 pub struct Proj {
-    /// polilinhas e tipo: 0 visível, 1 tangente, 2 contorno, 3 oculta, 4 borda do detalhe
+    /// polilinhas e tipo: 0 visível, 1 tangente, 2 contorno, 3 oculta, 4 borda do detalhe, 7 linha de
+    /// explosão
     pub lines: Vec<(Vec<V2>, u8)>,
     /// contornos cortados (hachura)
     pub hatch: Vec<Vec<V2>>,
@@ -206,7 +209,7 @@ impl Models {
 
     fn read(&mut self, full: &Path, state: &str, hidden: &[u64]) -> Loaded {
         let mut files = vec![(full.to_path_buf(), stamp(full))];
-        let fail = |files, e: String| Loaded { model: Model::Part(Box::new(Document::new("?"))), shape: None, pieces: vec![], piece_names: vec![], files, error: Some(e) };
+        let fail = |files, e: String| Loaded { model: Model::Part(Box::new(Document::new("?"))), shape: None, pieces: vec![], piece_names: vec![], linhas: vec![], files, error: Some(e) };
         let txt = match std::fs::read_to_string(full) {
             Ok(t) => t,
             Err(e) => return fail(files, format!("{}: {e}", full.display())),
@@ -217,7 +220,7 @@ impl Models {
                 Ok(doc) => {
                     let shape = fenkra_solidos::final_shape(&doc);
                     let error = shape.is_none().then(|| "a peça não tem corpo visível".to_string());
-                    Loaded { model: Model::Part(Box::new(doc)), shape, pieces: vec![], piece_names: vec![], files, error }
+                    Loaded { model: Model::Part(Box::new(doc)), shape, pieces: vec![], piece_names: vec![], linhas: vec![], files, error }
                 }
                 Err(e) => fail(files, e.to_string()),
             };
@@ -227,10 +230,10 @@ impl Models {
             Err(e) => return fail(files, e),
         };
         let dir = full.parent().map(|p| p.to_path_buf());
-        let mut shown_asm = match a.display_states.iter().find(|s| s.name == state) {
-            Some(st) => a.with_state(st),
-            None => a.clone(),
-        };
+        let estado = a.display_states.iter().find(|s| s.name == state);
+        let mut shown_asm = estado.map_or_else(|| a.clone(), |st| a.with_state(st));
+        let vista = |c: fenkra_core::Id| !hidden.contains(&c.0);
+        let linhas: Vec<Vec<V3>> = estado.map_or(vec![], |st| st.linhas.iter().filter(|l| vista(l.comp) && !st.hidden.contains(&l.comp)).map(|l| l.pontos.clone()).collect());
         // componentes escondidos só nesta vista
         for n in &mut shown_asm.nodes {
             if hidden.contains(&n.id.0) {
@@ -255,7 +258,7 @@ impl Models {
         }
         let shape = (!all.is_null()).then_some(all);
         let error = shape.is_none().then(|| "a montagem não tem peças visíveis".to_string());
-        Loaded { model: Model::Asm(Box::new(a)), shape, pieces, piece_names, files, error }
+        Loaded { model: Model::Asm(Box::new(a)), shape, pieces, piece_names, linhas, files, error }
     }
 
     /// Projeção da vista (calcula só quando a vista, a mãe ou o arquivo mudam).
@@ -291,6 +294,7 @@ impl Models {
         let tangent = v.tangent_edges;
         let hidden = v.hidden_lines;
         let l = self.load(&v.source);
+        let linhas_explosao = l.linhas.clone();
         let mut out = Proj { error: l.error.clone(), ..Default::default() };
         // detalhe: recorte circular da vista mãe
         if let ViewKind::Detail { center, radius, .. } = &v.kind {
@@ -458,6 +462,7 @@ impl Models {
             let m = [(b.center[0][0] + b.center[1][0]) / 2., (b.center[0][1] + b.center[1][1]) / 2., (b.center[0][2] + b.center[1][2]) / 2.];
             out.labels.push((axes.project(m), b.label()));
         }
+        out.lines.extend(linhas_explosao.iter().map(|l| (l.iter().map(|p| axes.project(*p)).collect(), 7u8)));
         out.bounds();
         out
     }

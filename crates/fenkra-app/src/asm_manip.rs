@@ -313,8 +313,16 @@ pub fn desenhar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     if st.explode_mode {
         let off = st.live.offset(id);
         if let Some(v) = crate::gizmo::translate_gizmo(ui, rect, cam, id.0 ^ 0x5eed, c, [Vec3::X, Vec3::Y, Vec3::Z], off, [false; 3]) {
+            st.exibicao.seta.get_or_insert((id, off));
             st.live.set_offset(id, v);
             st.dirty = true;
+        }
+        // soltou a seta: o que ela andou vira um passo
+        if ui.input(|i| !i.pointer.any_down()) {
+            if let Some((peca, inicio)) = st.exibicao.seta.take() {
+                let escolhidas = st.comps_of(&app.picks).into_iter().chain(st.multi.iter().copied()).collect();
+                crate::asm_exibicao::soltar_seta(st, peca, inicio, escolhidas);
+            }
         }
         return;
     }

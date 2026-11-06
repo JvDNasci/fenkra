@@ -35,6 +35,7 @@ mod demo_foto;
 mod asm_selecao;
 mod asm_simbolos;
 mod asm_limites;
+mod asm_exibicao;
 mod st_ui;
 mod pmi_ui;
 mod pmi_smart;
