@@ -85,9 +85,12 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
         let (dois, tres, trat, ign) = st_cantos::contagem(&cantos);
         ui.horizontal_wrapped(|ui| {
             for (c, n) in [(ClasseCanto::DoisMembros, dois), (ClasseCanto::TresOuMais, tres), (ClasseCanto::Tratado, trat), (ClasseCanto::Ignorado, ign)] {
-                let (r, _) = ui.allocate_exact_size(egui::vec2(12., 12.), egui::Sense::hover());
-                ui.painter().circle_filled(r.center(), 5.5, cor_da_classe(c, ui.visuals()));
-                ui.label(format!("{} ({n})", tr(nome_da_classe(c))));
+                // ponto e nome juntos: sem o grupo, a quebra de linha separava a cor do rótulo
+                ui.horizontal(|ui| {
+                    let (r, _) = ui.allocate_exact_size(egui::vec2(12., 12.), egui::Sense::hover());
+                    ui.painter().circle_filled(r.center(), 5.5, cor_da_classe(c, ui.visuals()));
+                    ui.label(format!("{} ({n})", tr(nome_da_classe(c))));
+                });
                 ui.add_space(6.);
             }
         });

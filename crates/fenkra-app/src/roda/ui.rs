@@ -32,18 +32,27 @@ pub fn desenhar(ctx: &egui::Context, centro: Pos2, icones: &[String], pagina: us
             let ativo = alvo == Some(i);
             let ocupado = icones.get(i).is_some();
             let r1 = if ativo { RAIO_EXTERNO * 1.12 } else { RAIO_EXTERNO };
-            let fundo = if ativo && ocupado { acento.gamma_multiply(0.85) } else { v.window_fill.gamma_multiply(if ocupado { 0.92 } else { 0.5 }) };
+            let fundo = if ativo && ocupado { acento } else { v.window_fill.gamma_multiply(if ocupado { 0.92 } else { 0.5 }) };
             p.add(Shape::convex_polygon(setor_anel(c, i, RAIO_MORTO + 4., r1), fundo, Stroke::new(1., v.widgets.noninteractive.bg_stroke.color)));
             let Some(ic) = icones.get(i) else { continue };
             let meio = angulo_do_setor(i);
             let r = (RAIO_MORTO + RAIO_EXTERNO) * 0.5;
             let pos = c + egui::vec2(meio.sin() * r, -meio.cos() * r);
-            let texto_cor = if ativo { crate::theme::readable(acento, &v) } else { v.text_color() };
+            // o número fica na borda externa do próprio setor, longe do ícone e do nome (antes caía no vizinho e se misturava ao nome dele)
+            let a_num = meio - 12f32.to_radians();
+            let pos_num = c + egui::vec2(a_num.sin() * (RAIO_EXTERNO - 8.), -a_num.cos() * (RAIO_EXTERNO - 8.));
+            // sobre o setor aceso o texto é branco ou preto, o que contrastar mais com o acento (antes o acento escurecido dava texto escuro sobre azul escuro)
+            let texto_cor = if ativo {
+                let (a, br, pr) = ([acento.r(), acento.g(), acento.b()], [255u8; 3], [0u8; 3]);
+                if crate::acessibilidade::contraste(a, br) >= crate::acessibilidade::contraste(a, pr) { Color32::WHITE } else { Color32::BLACK }
+            } else {
+                v.text_color()
+            };
             egui::Image::new(crate::icons::get(ic)).paint_at(ui, egui::Rect::from_center_size(pos - egui::vec2(0., 8.), egui::vec2(34., 34.)));
             if let Some(it) = item(ic) {
                 p.text(pos + egui::vec2(0., 20.), egui::Align2::CENTER_TOP, tr(it.name), egui::FontId::proportional(11.), texto_cor);
             }
-            p.text(pos + egui::vec2(-26., -34.), egui::Align2::CENTER_CENTER, (i + 1).to_string(), egui::FontId::proportional(10.), texto_cor.gamma_multiply(0.7));
+            p.text(pos_num, egui::Align2::CENTER_CENTER, (i + 1).to_string(), egui::FontId::proportional(10.), texto_cor.gamma_multiply(0.7));
         }
         // centro: nome do comando apontado e a página
         let nome = alvo.and_then(|i| icones.get(i)).and_then(|ic| item(ic)).map(|it| tr(it.name).to_owned()).unwrap_or_default();
@@ -99,7 +108,7 @@ pub fn editor(ctx: &egui::Context, cfg: &mut Config) {
         return;
     }
     let mut aberto = true;
-    egui::Window::new(tr("Roda de comandos")).id(egui::Id::new("janela_roda_editor")).open(&mut aberto).default_size([620., 420.]).show(ctx, |ui| {
+    egui::Window::new(tr("Roda de comandos")).id(egui::Id::new("janela_roda_editor")).open(&mut aberto).default_pos([240., 130.]).default_size([620., 420.]).show(ctx, |ui| {
         let mut sel: usize = ui.ctx().data(|d| d.get_temp(chave_ctx())).unwrap_or(0);
         sel = sel.min(CONTEXTOS.len() - 1);
         ui.horizontal(|ui| {

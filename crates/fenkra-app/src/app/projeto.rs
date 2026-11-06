@@ -205,7 +205,7 @@ impl App {
         let Some(mut st) = ctx.data(|d| d.get_temp::<Option<SalvarComoUi>>(id_salvar_como())).flatten() else { return };
         let (mut fechar, mut executar) = (false, false);
         let mut escolher_destino = false;
-        egui::Window::new(tr("Salvar como com referências")).collapsible(false).resizable(true).default_width(640.).show(ctx, |ui| {
+        egui::Window::new(tr("Salvar como com referências")).default_pos([380., 140.]).collapsible(false).resizable(true).default_width(640.).show(ctx, |ui| {
             for m in ModoSalvarComo::TODOS {
                 ui.radio_value(&mut st.plano.modo, m, tr(m.rotulo())).on_hover_text(tr(m.descricao()));
             }
@@ -333,7 +333,7 @@ impl App {
     fn janela_empacotar(&mut self, ctx: &egui::Context) {
         let Some(mut st) = ctx.data(|d| d.get_temp::<Option<PacoteUi>>(id_pacote())).flatten() else { return };
         let (mut fechar, mut executar) = (false, false);
-        egui::Window::new(tr("Empacotar")).collapsible(false).resizable(true).default_width(560.).show(ctx, |ui| {
+        egui::Window::new(tr("Empacotar")).default_pos([380., 140.]).collapsible(false).resizable(true).default_width(560.).show(ctx, |ui| {
             ui.label(RichText::new(st.raiz.display().to_string()).weak().small());
             ui.horizontal(|ui| {
                 ui.label(tr("Destino"));
@@ -506,7 +506,7 @@ impl App {
         let Some(mut st) = ctx.data(|d| d.get_temp::<Option<ReparoUi>>(id_reparo())).flatten() else { return };
         let (mut fechar, mut todos) = (false, false);
         let mut aplicar: Option<(String, PathBuf)> = None;
-        egui::Window::new(tr("Reparar links")).collapsible(false).resizable(true).default_width(600.).show(ctx, |ui| {
+        egui::Window::new(tr("Reparar links")).default_pos([380., 140.]).collapsible(false).resizable(true).default_width(600.).show(ctx, |ui| {
             ui.label(RichText::new(st.arquivo.display().to_string()).weak().small());
             let quebradas = st.diag.iter().filter(|d| d.veredito != Veredito::Ok).count();
             if quebradas == 0 {

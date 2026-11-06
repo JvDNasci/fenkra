@@ -23,6 +23,7 @@ mod arvore;
 mod diag;
 mod gravar;
 mod roda_app;
+mod demo_janelas;
 mod estado_doc;
 mod exportar;
 mod importar;
@@ -1384,7 +1385,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let fade = if ready { (1. - (el - min_time) / 0.25).clamp(0., 1.) } else { 1. };
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(root, |ui| {
             let rect = ui.max_rect();
-            paint_backdrop(ui.painter(), rect, true, el, accent);
+            paint_backdrop(ui.painter(), rect, true, el, accent, None);
             let painter = ui.painter().with_clip_rect(rect);
             let c = rect.center() - egui::vec2(0., 40.);
             let appear = ease_out((el / 0.6).min(1.));
@@ -1430,6 +1431,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let mut example: Option<usize> = None;
         let dark = root.ctx().global_style().visuals.dark_mode;
         let accent = brand_accent();
+        // tema Fênix: o fundo da tela inicial sai do próprio tema (o degradê azul padrão destoava do creme e do acento)
+        let fundo_do_tema = (self.settings.theme_name == crate::theme::FENIX).then(|| root.ctx().global_style().visuals.panel_fill);
         let (now, dt) = root.ctx().input(|i| (i.time, i.stable_dt.min(0.1)));
         let t0 = *self.start_t0.get_or_insert(now);
         let el_real = (now - t0) as f32;
@@ -1438,7 +1441,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let el = el_real.min(entrada);
         let ex_meta: Vec<(&'static str, &'static str, crate::settings::Bench)> = crate::examples::all().into_iter().map(|e| (e.name, e.desc, e.bench)).collect();
         egui::CentralPanel::default().frame(egui::Frame::NONE.inner_margin(12.)).show(root, |ui| {
-            paint_backdrop(ui.painter(), ui.max_rect().expand(12.), dark, el, accent);
+            paint_backdrop(ui.painter(), ui.max_rect().expand(12.), dark, el, accent, fundo_do_tema);
             // tudo entra deslizando de leve
             let k_in = ease_out((el / 0.7).min(1.));
             ui.set_opacity(k_in);
@@ -7160,6 +7163,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
     fn dialogs(&mut self, ctx: &egui::Context) {
         self.dialogos_de_gravacao(ctx);
+        self.demo_janela(ctx);
         self.janelas_projeto(ctx);
         self.janelas_de_diagnostico(ctx);
         if let Some(dd) = &mut self.delete_dialog {
@@ -8527,8 +8531,12 @@ fn example_card(ui: &mut egui::Ui, key: &str, name: &str, desc: &str, bench: cra
 
 /// Fundo com profundidade (degradê, brilho, grade em perspectiva correndo e partículas) para a
 /// tela inicial e o carregamento.
-fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool, t: f32, accent: Color32) {
-    let (top, bot) = if dark { (Color32::from_rgb(16, 30, 58), Color32::from_rgb(8, 11, 20)) } else { (Color32::from_rgb(232, 241, 252), Color32::from_rgb(196, 214, 238)) };
+fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool, t: f32, accent: Color32, base: Option<Color32>) {
+    let (top, bot) = match base {
+        Some(f) => (f, f.lerp_to_gamma(if dark { Color32::WHITE } else { Color32::BLACK }, 0.05)),
+        None if dark => (Color32::from_rgb(16, 30, 58), Color32::from_rgb(8, 11, 20)),
+        None => (Color32::from_rgb(232, 241, 252), Color32::from_rgb(196, 214, 238)),
+    };
     let top = top.lerp_to_gamma(accent, 0.08);
     let mut m = egui::Mesh::default();
     m.colored_vertex(rect.left_top(), top);
@@ -8547,7 +8555,11 @@ fn paint_backdrop(p: &egui::Painter, rect: Rect, dark: bool, t: f32, accent: Col
         p.circle_filled(glow, r, Color32::from_rgba_unmultiplied(ar, ag, ab, if dark { 2 } else { 3 }));
     }
     // grade em perspectiva na parte de baixo (chão de CAD), andando devagar para a frente
-    let line = if dark { Color32::from_rgba_unmultiplied(120, 170, 255, 18) } else { Color32::from_rgba_unmultiplied(30, 80, 160, 22) };
+    let line = match base {
+        Some(_) => Color32::from_rgba_unmultiplied(accent.r(), accent.g(), accent.b(), 20),
+        None if dark => Color32::from_rgba_unmultiplied(120, 170, 255, 18),
+        None => Color32::from_rgba_unmultiplied(30, 80, 160, 22),
+    };
     let horizon = rect.top() + rect.height() * 0.62;
     let vp = egui::pos2(rect.center().x, horizon - rect.height() * 0.25);
     for i in -14..=14 {

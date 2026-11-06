@@ -82,7 +82,7 @@ pub(crate) fn section_icon(title: &str) -> &'static str {
         "⊕"
     } else if has(&["estado", "usado por", "interfer"]) {
         "ⓘ"
-    } else if has(&["tipo", "forma", "definição", "plano"]) {
+    } else if has(&["tipo", "forma", "definição", "plano", "elemento"]) {
         "☰"
     } else if has(&["componente", "peças", "montagem", "recurso"]) {
         "🧩"
@@ -796,7 +796,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             };
             command_bar(ui, session.map(|s| s.0) == Some(id), &mut sess_act);
             tabs_begin(ui, ("elemento", format!("{:?}", crate::geo_ui::GeoKind::of(&r.kind))));
-            section(ui, "Definição");
+            // "Definição" já é uma seção do geo_ui::panel: com o mesmo nome aqui o painel mostrava duas abas iguais
+            section(ui, "Elemento");
             crate::geo_ui::panel(ui, &doc_ro, r, &vars, &seed, ref_err.as_deref(), ref_note.as_ref());
             section(ui, "Nome e exibição");
             ui.horizontal(|ui| {
