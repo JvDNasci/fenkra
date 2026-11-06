@@ -386,6 +386,7 @@ impl<'a> Ctx<'a> {
     /// Contexto sem sólidos calculados, só para ler as geometrias dos membros.
     pub(crate) fn vazio(doc: &'a Document, vars: Vars) -> Ctx<'a> {
         Ctx {
+            relatorios_forma: vec![],
             doc,
             vars,
             qualidade: Default::default(),

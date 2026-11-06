@@ -6565,6 +6565,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
 pub fn member_corners(doc: &Document) -> Vec<st_cantos::Canto> {
     let Ok(vars) = doc.eval_params() else { return vec![] };
     let cx = Ctx {
+        relatorios_forma: vec![],
         doc,
         vars,
         qualidade: Default::default(),

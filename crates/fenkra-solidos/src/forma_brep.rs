@@ -459,7 +459,7 @@ mod testes {
             let b = &r0.bodies[0];
             let viva = (0..b.mesh.edge_smooth.len()).find(|e| b.mesh.edge_smooth[*e] == 0).expect("aresta viva");
             let m = [b.mesh.edge_mids[3 * viva] as f64, b.mesh.edge_mids[3 * viva + 1] as f64, b.mesh.edge_mids[3 * viva + 2] as f64];
-            let fl = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("2"), edges: EdgeSel::Edges(vec![m]), mode: Default::default(), prop: Default::default(), keys: vec![] }));
+            let fl = d.add_feature(FeatureKind::Fillet(EdgeOp { extra: Default::default(), value: s("2"), edges: EdgeSel::Edges(vec![m]), mode: Default::default(), prop: Default::default(), keys: vec![] }));
             let _ = alvo;
             let r = recompute(&d);
             assert!(matches!(r.status.get(&fl), Some(Status::Ok | Status::Warning(_))), "filete G{continuidade}: {:?}", r.status.get(&fl));
