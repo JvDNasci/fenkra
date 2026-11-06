@@ -128,3 +128,6 @@ Write-Host "DLLs incluídas: $($needed.Count)"
 Write-Host "Pasta: $out ($size MB)"
 Write-Host "Zip:   $zip ($zsize MB)"
 Write-Host "SHA256: $hash"
+
+# atualiza o atalho da área de trabalho
+& (Join-Path $PSScriptRoot "atalho.ps1")
