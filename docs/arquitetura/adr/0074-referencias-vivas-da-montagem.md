@@ -1,4 +1,4 @@
-# ADR 0072: referências da montagem guardam como se reencontrar (B99, B263, B55)
+# ADR 0074: referências da montagem guardam como se reencontrar (B99, B263, B55)
 
 ## Contexto
 
