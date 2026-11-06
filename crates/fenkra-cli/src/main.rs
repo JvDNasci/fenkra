@@ -19,6 +19,8 @@ uso: fenkra-cli [--pasta DIR] COMANDO [argumentos]
   features ARQ                  features inferidas (furos, filetes, chanfros)
   comparar ALVO ARQ             checador de similaridade
   reproduzir REGISTRO.jsonl --saida ARQ.fkx [--sobrescrever]
+  visualizar ARQ --saida X.fkv [--html X.html] [--decimar F]
+                                pacote de visualização para o navegador (.fkp, .fka ou .fkd)
   servir                        um pedido JSON por linha na entrada padrão
 
 PECA é .fkx ou .fkp; ARQ pode ser também .step. Todo caminho fica dentro de --pasta (padrão: a pasta
@@ -29,6 +31,8 @@ struct Linha {
     pasta: String,
     sobrescrever: bool,
     saida: Option<String>,
+    html: Option<String>,
+    decimar: Option<f64>,
     resto: Vec<String>,
 }
 
@@ -37,6 +41,8 @@ fn ler_argumentos() -> Result<Linha, String> {
         pasta: ".".into(),
         sobrescrever: false,
         saida: None,
+        html: None,
+        decimar: None,
         resto: vec![],
     };
     let mut a = std::env::args().skip(1);
@@ -44,6 +50,11 @@ fn ler_argumentos() -> Result<Linha, String> {
         match x.as_str() {
             "--pasta" => l.pasta = a.next().ok_or("--pasta pede um caminho")?,
             "--saida" => l.saida = Some(a.next().ok_or("--saida pede um caminho")?),
+            "--html" => l.html = Some(a.next().ok_or("--html pede um caminho")?),
+            "--decimar" => {
+                let v = a.next().ok_or("--decimar pede uma fração")?;
+                l.decimar = Some(v.replace(',', ".").parse().map_err(|_| "--decimar pede um número de 0,01 a 1")?);
+            }
             "--sobrescrever" => l.sobrescrever = true,
             _ if x.starts_with("--") => return Err(format!("opção desconhecida: {x}")),
             _ => l.resto.push(x),
@@ -163,6 +174,28 @@ fn main() {
     };
     if l.resto[0] == "servir" {
         std::process::exit(i32::from(servir(sessao, &mut alvo).is_err()));
+    }
+    if let ["visualizar", arquivo] = l.resto.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+        let Some(saida_fkv) = l.saida.as_deref() else {
+            eprintln!("falta --saida
+
+{AJUDA}");
+            std::process::exit(2);
+        };
+        let pasta = match Pasta::nova(&l.pasta) {
+            Ok(p) => p,
+            Err(e) => {
+                let _ = escrever(&mut alvo, &envelope(Err(e)));
+                std::process::exit(1);
+            }
+        };
+        let r = fenkra_cli::visualizar::visualizar(
+            &pasta,
+            &fenkra_cli::visualizar::Pedido { arquivo, saida: saida_fkv, html: l.html.as_deref(), decimar: l.decimar, sobrescrever: l.sobrescrever },
+        );
+        let falhou = r.is_err();
+        let _ = escrever(&mut alvo, &envelope(r));
+        std::process::exit(i32::from(falhou));
     }
     let passos = match plano(&l) {
         Ok(p) => p,

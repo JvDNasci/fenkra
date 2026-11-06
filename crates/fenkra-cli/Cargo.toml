@@ -19,4 +19,5 @@ fenkra-core = { path = "../fenkra-core" }
 fenkra-kernel = { path = "../fenkra-kernel" }
 fenkra-conversor = { path = "../fenkra-conversor" }
 fenkra-solidos = { path = "../fenkra-solidos" }
+fenkra-pacote = { path = "../fenkra-pacote" }
 serde_json.workspace = true

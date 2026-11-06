@@ -26,6 +26,7 @@ mod roda_app;
 mod demo_janelas;
 mod estado_doc;
 mod exportar;
+mod visualizacao;
 mod importar;
 mod features;
 mod lote;
@@ -3458,6 +3459,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     if ui.button(tr("Exportar malha…")).on_hover_text(tr("Grava em formatos abertos de malha e visualização: 3MF, OBJ, PLY, glTF, USD e outros, com desvio, cor e estrutura.")).clicked() {
                         self.abrir_painel_exportar(fenkra_conversor::Formato::Glb);
+                        ui.close();
+                    }
+                    if ui.button(tr("Exportar visualização…")).on_hover_text(tr("Grava o pacote .fkv ou uma página web autocontida que abre a peça, a montagem ou o desenho no navegador do computador ou do celular, sem instalar nada.")).clicked() {
+                        self.exportar_visualizacao(false);
+                        ui.close();
+                    }
+                    if ui.button(tr("Exportar visualização simplificada…")).on_hover_text(tr("Igual à anterior, com a malha reduzida e sem os pontos de medição exatos: protege a geometria e pesa menos.")).clicked() {
+                        self.exportar_visualizacao(true);
                         ui.close();
                     }
                     if ui.add(egui::Button::image_and_text(crate::icons::get("conversao_lote"), tr("Conversão em lote…"))).on_hover_text(tr("Converte arquivos, pastas e documentos do projeto para vários formatos de uma vez, com simulação antes de gravar.")).clicked() {
