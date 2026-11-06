@@ -121,6 +121,7 @@ pub fn nome_da_bancada(b: Bench) -> &'static str {
     match b {
         Bench::Solidos => "Modelagem Sólida",
         Bench::Superficies => "Superfícies",
+        Bench::FormaLivre => "Forma livre",
         Bench::Montagem => "Montagem",
         Bench::Chapa => "Chapa metálica",
         Bench::Estrutural => "Estrutural",

@@ -250,6 +250,7 @@ pub fn trilha_da_bancada(b: Bench) -> &'static Trilha {
     let id = match b {
         Bench::Solidos => "solidos",
         Bench::Superficies => "superficies",
+        Bench::FormaLivre => "superficies",
         Bench::Montagem => "montagem",
         Bench::Chapa => "chapa",
         Bench::Estrutural => "estrutural",
