@@ -3,6 +3,12 @@
 //! Ficam num arquivo próprio para não disputar linhas com a tabela geral de `i18n.rs`.
 
 pub static TEXTOS: &[(&str, &str)] = &[
+    // opções do snap (B96)
+    ("Snap vira restrição", "Snap becomes a constraint"),
+    ("Juntar pontos ao soltar", "Merge points on release"),
+    ("O ponto que nasce ou é solto sobre o meio, o quadrante ou uma curva fica preso ali. Desligada, o snap só posiciona.", "A point created or released on a midpoint, a quadrant or a curve stays attached there. Off, the snap only positions it."),
+    ("Soltar um ponto sobre outro faz os dois virarem um só. Desligada, ou com Ctrl durante o arraste, ele só fica ali em cima.", "Releasing a point on another makes them one. Off, or with Ctrl while dragging, it just sits on top."),
+    ("Juntar esses pontos deixaria o sketch em conflito: o ponto ficou onde estava", "Merging these points would put the sketch in conflict: the point stayed where it was"),
     // entidades e ferramentas (B32)
     ("Clique no centro e depois num ponto do círculo de construção: inscrito, o ponto é um vértice; circunscrito, o meio de um lado. De 3 a 40 lados, no painel ou com as teclas + e -; a tecla do modo troca inscrito e circunscrito.", "Click the center, then a point on the construction circle: inscribed, the point is a vertex; circumscribed, the middle of a side. From 3 to 40 sides, in the panel or with the + and - keys; the mode key switches inscribed and circumscribed."),
     ("Selecione curvas, clique no ponto base e nos destinos: cada clique cria uma cópia, com as restrições e cotas internas, até o Esc.", "Select curves, click the base point and the destinations: each click makes a copy, with its internal constraints and dimensions, until Esc."),

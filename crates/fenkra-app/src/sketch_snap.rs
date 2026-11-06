@@ -14,6 +14,13 @@ use fenkra_core::{Id, SketchData};
 
 type P = [f64; 2];
 
+/// Dica da opção que guarda o apoio do snap como restrição.
+pub const DICA_RESTRINGE: &str = "O ponto que nasce ou é solto sobre o meio, o quadrante ou uma curva fica preso ali. Desligada, o snap só posiciona.";
+/// Dica da opção que junta dois pontos ao fim do arraste.
+pub const DICA_JUNTAR: &str = "Soltar um ponto sobre outro faz os dois virarem um só. Desligada, ou com Ctrl durante o arraste, ele só fica ali em cima.";
+/// Aviso de quando a junção foi desfeita.
+pub const NAO_JUNTOU: &str = "Juntar esses pontos deixaria o sketch em conflito: o ponto ficou onde estava";
+
 /// Distância na tela em que um ponto notável atrai o cursor.
 pub const RAIO_PONTO: f32 = 10.;
 /// Distância na tela em que uma curva atrai o cursor: menor que a dos pontos, que têm preferência.
@@ -147,18 +154,25 @@ pub fn achar(sk: &SketchData, cursor: Pos2, uv: P, tela: &dyn Fn(P) -> Pos2, sem
     vizinhas.into_iter().filter(|v| v.2 < RAIO_CURVA).min_by(|a, b| a.2.total_cmp(&b.2)).map(|v| Achado { tipo: TipoSnap::SobreCurva, uv: v.3, ponto: None, curvas: [Some(v.0), None] })
 }
 
-/// O ponto novo guarda o apoio do snap como restrição. Spline não tem equação de ponto sobre a curva.
+/// Soltar duas vezes no mesmo apoio não repete a restrição: repetida, ela só atrapalha o solver.
+fn sem_repetir(sk: &mut SketchData, al: &mut impl FnMut() -> Id, k: Kind) {
+    if !sk.constraints.iter().any(|c| c.kind == k) {
+        sk.add_constraint(al, k);
+    }
+}
+
+/// O ponto guarda o apoio do snap como restrição. Spline e elipse não têm equação de ponto sobre a curva.
 pub fn vincula(sk: &mut SketchData, al: &mut impl FnMut() -> Id, p: Id, tipo: TipoSnap, curvas: [Option<Id>; 2]) {
-    let sobre = |sk: &SketchData, c: Id| !matches!(sk.curve(c).map(|x| &x.geom), Some(Curve::Spline { .. }) | None);
+    let sobre = |sk: &SketchData, c: Id| !matches!(sk.curve(c).map(|x| &x.geom), Some(Curve::Spline { .. } | Curve::Ellipse { .. }) | None);
     match (tipo, curvas) {
         (TipoSnap::Meio, [Some(c), _]) if matches!(sk.curve(c).map(|x| &x.geom), Some(Curve::Line { .. })) => {
-            sk.add_constraint(al, Kind::Midpoint(p, c));
+            sem_repetir(sk, al, Kind::Midpoint(p, c));
         }
         (TipoSnap::Meio | TipoSnap::SobreCurva, [Some(c), _]) if sobre(sk, c) => {
-            sk.add_constraint(al, Kind::PointOnCurve(p, c));
+            sem_repetir(sk, al, Kind::PointOnCurve(p, c));
         }
         (TipoSnap::Quadrante, [Some(c), _]) => {
-            sk.add_constraint(al, Kind::PointOnCurve(p, c));
+            sem_repetir(sk, al, Kind::PointOnCurve(p, c));
             let centro = match sk.curve(c).map(|x| &x.geom) {
                 Some(Curve::Circle { c: k, .. } | Curve::Arc { c: k, .. }) => Some(*k),
                 _ => None,
@@ -166,13 +180,13 @@ pub fn vincula(sk: &mut SketchData, al: &mut impl FnMut() -> Id, p: Id, tipo: Ti
             if let Some(k) = centro {
                 let (a, b) = (sk.pos(p), sk.pos(k));
                 let kind = if (a[0] - b[0]).abs() < (a[1] - b[1]).abs() { Kind::VerticalPts(p, k) } else { Kind::HorizontalPts(p, k) };
-                sk.add_constraint(al, kind);
+                sem_repetir(sk, al, kind);
             }
         }
         (TipoSnap::Intersecao, [a, b]) => {
             for c in [a, b].into_iter().flatten() {
                 if sobre(sk, c) {
-                    sk.add_constraint(al, Kind::PointOnCurve(p, c));
+                    sem_repetir(sk, al, Kind::PointOnCurve(p, c));
                 }
             }
         }
@@ -222,7 +236,12 @@ pub fn desenha_glifo(painter: &egui::Painter, s: Pos2, tipo: TipoSnap, cor: Colo
             painter.add(egui::Shape::closed_line(vec![s + v(-5., -6.), s + v(5., -6.), s + v(-5., 6.), s + v(5., 6.)], st));
         }
     }
-    painter.text(s + v(10., -10.), egui::Align2::LEFT_BOTTOM, tr(tipo.nome()), egui::FontId::proportional(10.), cor);
+    // o nome passa por cima da sombra do perfil: precisa de fundo e da cor de texto do tema
+    let visual = painter.ctx().global_style().visuals.clone();
+    let g = painter.layout_no_wrap(tr(tipo.nome()).to_string(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(10.)), visual.strong_text_color());
+    let r = egui::Rect::from_min_size(s + v(10., -10. - g.size().y), g.size() + v(4., 0.));
+    painter.rect_filled(r, 2., visual.extreme_bg_color.gamma_multiply(0.85));
+    painter.galley(r.min + v(2., 0.), g, visual.strong_text_color());
 }
 
 /// Motivo de uma linha de inferência.
@@ -329,13 +348,18 @@ pub fn inferir(sk: &SketchData, uv: P, ancora: Option<P>, anterior: Option<Id>, 
     Inferencia { uv: q, linhas, direcao }
 }
 
+/// Quanto a linha de inferência continua depois do cursor, em pixels.
+const ALEM_DO_CURSOR: f32 = 60.;
+
 /// Desenha as linhas tracejadas com o glifo do motivo.
 pub fn desenha_inferencia(painter: &egui::Painter, tela: &dyn Fn(P) -> Pos2, inf: &Inferencia, cor: Color32) {
     for l in &inf.linhas {
         let (a, b) = (tela(l.de), tela(l.ate));
-        painter.extend(egui::Shape::dashed_line(&[a, b], Stroke::new(1., cor), 5., 4.));
+        // passa do cursor: até ele, a prévia da forma cobre a linha que explica o ajuste
+        let alem = b + (b - a).normalized() * ALEM_DO_CURSOR;
+        painter.extend(egui::Shape::dashed_line(&[a, alem], Stroke::new(1., cor), 5., 4.));
         let m = a + (b - a) * 0.5;
-        painter.text(m + egui::vec2(6., -6.), egui::Align2::LEFT_BOTTOM, l.motivo.glifo(), egui::FontId::proportional(11.), cor);
+        painter.text(m + egui::vec2(6., -6.), egui::Align2::LEFT_BOTTOM, l.motivo.glifo(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), cor);
     }
 }
 
@@ -424,6 +448,23 @@ mod testes {
         let x = sk.add_point(&mut al, 0., 0.);
         vincula(&mut sk, &mut al, x, TipoSnap::Intersecao, [Some(l), Some(circ)]);
         assert_eq!(sk.constraints.iter().filter(|k| matches!(k.kind, Kind::PointOnCurve(p, _) if p == x)).count(), 2);
+    }
+
+    #[test]
+    fn soltar_duas_vezes_no_mesmo_apoio_nao_repete_a_restricao() {
+        let (mut sk, mut al) = (SketchData::default(), ids());
+        let l = linha(&mut sk, &mut al, [0., 0.], [100., 0.]);
+        let p = sk.add_point(&mut al, 30., 0.);
+        vincula(&mut sk, &mut al, p, TipoSnap::SobreCurva, [Some(l), None]);
+        vincula(&mut sk, &mut al, p, TipoSnap::SobreCurva, [Some(l), None]);
+        assert_eq!(sk.constraints.len(), 1);
+    }
+
+    #[test]
+    fn opcoes_do_snap_tem_traducao() {
+        for t in [DICA_RESTRINGE, DICA_JUNTAR, NAO_JUNTOU, "Snap vira restrição", "Juntar pontos ao soltar"] {
+            assert!(crate::i18n::tem_traducao(t), "{t}");
+        }
     }
 
     #[test]

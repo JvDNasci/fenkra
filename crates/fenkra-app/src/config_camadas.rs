@@ -76,6 +76,8 @@ pub const CLASSIFICACAO: &[(&str, Classe)] = &[
     ("grid_step", Documento),
     ("snaps", Interface),
     ("auto_constraints", Interface),
+    ("snap_restringe", Interface),
+    ("juntar_ao_soltar", Interface),
     ("auto_dims", Interface),
     ("dim_on_type", Interface),
     ("keys", Interface),

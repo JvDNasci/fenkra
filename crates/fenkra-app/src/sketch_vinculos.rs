@@ -102,7 +102,7 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
     let d = &mut s.data;
     let mut acao = None;
     let titulo = if quebrados.is_empty() { tr("Geometria externa e posição").to_string() } else { format!("{} (→✕ {})", tr("Geometria externa e posição"), quebrados.len()) };
-    egui::CollapsingHeader::new(titulo).id_salt("sk_vinculos").default_open(!quebrados.is_empty()).show(ui, |ui| {
+    egui::CollapsingHeader::new(titulo).id_salt("sk_vinculos").default_open(!quebrados.is_empty() || crate::sketch_demo::abre_vinculos()).show(ui, |ui| {
         ui.label(RichText::new(tr("Política da geometria nova")).strong());
         ui.horizontal_wrapped(|ui| {
             for (p, n, dica) in [

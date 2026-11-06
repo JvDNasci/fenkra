@@ -474,6 +474,10 @@ pub struct Settings {
     pub grid_step: f32,
     pub snaps: bool,
     pub auto_constraints: bool,
+    /// o apoio de um snap (meio, sobre a curva, quadrante, interseção) vira restrição
+    pub snap_restringe: bool,
+    /// ponto solto sobre outro ponto vira um ponto só
+    pub juntar_ao_soltar: bool,
     pub auto_dims: bool,
     /// valor digitado no campo do cursor vira cota
     pub dim_on_type: bool,
@@ -611,6 +615,8 @@ impl Default for Settings {
             grid_step: 10.,
             snaps: true,
             auto_constraints: true,
+            snap_restringe: true,
+            juntar_ao_soltar: true,
             auto_dims: false,
             dim_on_type: true,
             keys: Default::default(),

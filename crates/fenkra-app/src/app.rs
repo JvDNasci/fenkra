@@ -7009,7 +7009,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     let size = vp.bounds.map(|(a, b)| (b - a).max_element().max(20.) * 0.6).unwrap_or(60.);
                     let corner = at + (Vec3::from(f.x.map(|v| v as f32)) + Vec3::from(f.y().map(|v| v as f32))) * size * 0.45;
                     if let Some(pos) = vp.project(rect, corner) {
-                        ui.painter().text(pos, egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(11.), ink);
+                        ui.painter().text(pos, egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), ink);
                     }
                 }
             }
@@ -7024,7 +7024,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 for p in &r.points {
                     let Some(name) = vis(p.id).filter(|_| self.settings.filter.pontos) else { continue };
                     if let Some(pos) = vp.project(rect, Vec3::from(p.p.map(|v| v as f32))) {
-                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(11.), ink);
+                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), ink);
                     }
                 }
                 for c in &r.curves {
@@ -7034,7 +7034,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                     let m = c.pts[c.pts.len() / 2];
                     if let Some(pos) = vp.project(rect, Vec3::from(m.map(|v| v as f32))) {
-                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(11.), ink);
+                        ui.painter().text(pos + egui::vec2(6., -4.), egui::Align2::LEFT_BOTTOM, &name, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), ink);
                     }
                 }
             }
@@ -7069,7 +7069,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.settings.display.label()
             );
             let color = if self.hidden_env { Color32::from_rgb(255, 190, 80) } else { ink };
-            ui.painter().text(rect.center_top() + egui::vec2(0., 8.), egui::Align2::CENTER_TOP, info, egui::FontId::proportional(12.), color);
+            ui.painter().text(rect.center_top() + egui::vec2(0., 8.), egui::Align2::CENTER_TOP, info, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), color);
             if self.hidden_env {
                 ui.painter().rect_stroke(rect.shrink(2.), 0., egui::Stroke::new(3., Color32::from_rgb(255, 170, 60)), egui::StrokeKind::Inside);
             }
@@ -7079,7 +7079,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     rect.center_top() + egui::vec2(0., 40.),
                     egui::Align2::CENTER_TOP,
                     "Kernel geométrico indisponível — compile com o OpenCASCADE instalado para ver os sólidos",
-                    egui::FontId::proportional(14.),
+                    egui::FontId::proportional(crate::acessibilidade::fonte_3d(14.)),
                     Color32::from_rgb(255, 180, 90),
                 );
             }
@@ -7122,7 +7122,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         let outro = self.selecao_ciclo.escolher(h, passo_ciclo, || crate::picking::pilha_de_faces(r, doc, &cam, rect, h, &filt));
                         if let (Some(_), Some((i, n))) = (outro, self.selecao_ciclo.posicao()) {
                             let cor = ui.visuals().text_color();
-                            ui.painter().text(h + egui::vec2(14., 18.), egui::Align2::LEFT_TOP, format!("{i}/{n}  {}", tr("Alt + roda: selecionar outro")), egui::FontId::proportional(12.), cor);
+                            ui.painter().text(h + egui::vec2(14., 18.), egui::Align2::LEFT_TOP, format!("{i}/{n}  {}", tr("Alt + roda: selecionar outro")), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
                         }
                         let caixas = self.asm.as_ref().filter(|_| self.in_asm()).map(|s| s.caixas.as_slice());
                         outro.or_else(|| crate::picking::pick_com_caixas(r, doc, &cam, rect, h, &filt, caixas))
@@ -7284,7 +7284,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     } else {
                         ui.painter().rect_stroke(b, 0., stroke, egui::StrokeKind::Middle);
                     }
-                    ui.painter().text(now + egui::vec2(10., 10.), egui::Align2::LEFT_TOP, if crossing { "cruzada (toca)" } else { "janela (inteiro dentro)" }, egui::FontId::proportional(11.), stroke.color);
+                    ui.painter().text(now + egui::vec2(10., 10.), egui::Align2::LEFT_TOP, if crossing { "cruzada (toca)" } else { "janela (inteiro dentro)" }, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), stroke.color);
                     if !ctx.input(|i| i.pointer.primary_down()) {
                         let mut got = if laco {
                             crate::picking::laco_select(r, &self.open.doc, &cam, rect, &self.selecao_extra.laco, crossing, &filt)
@@ -7325,14 +7325,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if let Some(Some(k)) = face_cmd.map(|id| self.open.doc.feature(id).map(|f| f.kind.clone())) {
                     let marks = crate::feat_ui::face_marks(&k);
                     ui.painter().text(rect.center_top() + egui::vec2(0., 30.), egui::Align2::CENTER_TOP,
-                        format!("Clique nas faces para acrescentá-las · {} escolhida(s) · Enter conclui", marks.len()), egui::FontId::proportional(13.), crate::theme::accent(ui.visuals()));
+                        format!("Clique nas faces para acrescentá-las · {} escolhida(s) · Enter conclui", marks.len()), egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), crate::theme::accent(ui.visuals()));
                 }
                 // arestas escolhidas do filete/chanfro em edição
                 if let Some(Some(FeatureKind::Fillet(o) | FeatureKind::Chamfer(o))) = edge_cmd.map(|id| self.open.doc.feature(id).map(|f| &f.kind)) {
                     if let EdgeSel::Edges(list) = &o.edges {
                         let n = list.len();
                         ui.painter().text(rect.center_top() + egui::vec2(0., 30.), egui::Align2::CENTER_TOP,
-                            format!("Clique nas arestas para pôr/tirar do comando · {n} escolhida(s) · Enter conclui"), egui::FontId::proportional(13.), crate::theme::st_warn());
+                            format!("Clique nas arestas para pôr/tirar do comando · {n} escolhida(s) · Enter conclui"), egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), crate::theme::st_warn());
                     }
                 }
                 let painter = ui.painter_at(rect);
@@ -7347,7 +7347,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 if !self.picks.is_empty() {
                     let n = self.picks.len();
                     let txt = if n == 1 { self.picks[0].label(&self.open.doc) } else { format!("{n} itens selecionados") };
-                    ui.painter().text(rect.center_bottom() + egui::vec2(0., -32.), egui::Align2::CENTER_BOTTOM, format!("Seleção: {txt}  ·  Esc limpa"), egui::FontId::proportional(12.), crate::theme::st_warn());
+                    ui.painter().text(rect.center_bottom() + egui::vec2(0., -32.), egui::Align2::CENTER_BOTTOM, format!("Seleção: {txt}  ·  Esc limpa"), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), crate::theme::st_warn());
                 }
             }
             if self.sketch.is_none() {
@@ -9116,6 +9116,8 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 ui.add(crate::ui_ext::slider(&mut s.grid_step, 1.0..=50.0).text("passo da grade (mm)"));
                 ui.checkbox(&mut s.snaps, tr("snaps"));
                 ui.checkbox(&mut s.auto_constraints, tr("restrições automáticas"));
+                ui.checkbox(&mut s.snap_restringe, tr("Snap vira restrição")).on_hover_text(tr(crate::sketch_snap::DICA_RESTRINGE));
+                ui.checkbox(&mut s.juntar_ao_soltar, tr("Juntar pontos ao soltar")).on_hover_text(tr(crate::sketch_snap::DICA_JUNTAR));
                 ui.checkbox(&mut s.auto_dims, tr("cotas automáticas"));
                 ui.label(RichText::new(tr("Aplicado pelo editor de sketch interativo (próxima alpha).")).weak().small());
             }

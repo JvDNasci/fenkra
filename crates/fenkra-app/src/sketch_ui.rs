@@ -260,6 +260,11 @@ pub struct SketchEdit {
     /// `FENKRA_DEMO_SKETCH`: cursor e opção da barra sem mouse
     pub(crate) demo_cursor: Option<[f64; 2]>,
     pub(crate) demo_opcao: Option<CKind>,
+    /// `FENKRA_DEMO_SKETCH`: Shift e Ctrl segurados
+    pub(crate) demo_shift: bool,
+    pub(crate) demo_ctrl: bool,
+    /// `FENKRA_DEMO_SKETCH`: canto de onde a janela de seleção foi puxada
+    pub(crate) demo_janela: Option<[f64; 2]>,
 }
 
 /// Campo de valor aberto agora: o painel lê daqui o rótulo e a medida atual.
@@ -452,12 +457,32 @@ impl SketchEdit {
             sombra: None,
             demo_cursor: None,
             demo_opcao: None,
+            demo_shift: false,
+            demo_ctrl: false,
+            demo_janela: None,
         }
     }
     /// Plano de corte dos corpos para o renderizador, com o olho em `olho`.
     pub fn plano_de_corte(&self, olho: Vec3) -> Option<[f32; 4]> {
         self.corte.as_ref().map(|f| crate::sketch_sombra::plano_de_corte(f, [olho.x as f64, olho.y as f64, olho.z as f64]))
     }
+    /// Linha em andamento a partir de um ponto do sketch.
+    pub(crate) fn demo_cadeia(&mut self, p: Option<Id>) {
+        self.chain_first = p;
+        self.chain_last = p;
+    }
+
+    /// Linha em andamento a partir do ponto do sketch mais perto de `uv`.
+    pub(crate) fn demo_clique_linha(&mut self, sk: &SketchData, uv: [f64; 2]) {
+        let p = sk.points.iter().min_by(|a, b| d2([a.x, a.y], uv).total_cmp(&d2([b.x, b.y], uv))).map(|p| p.id);
+        self.demo_cadeia(p);
+    }
+
+    /// Põe um ponto em arraste, como se o botão tivesse descido sobre ele.
+    pub(crate) fn demo_arraste(&mut self, p: Id, de: [f64; 2]) {
+        self.drag = Some(Drag { pts: vec![(p, de)], start: de, circle: None, corpo: None });
+    }
+
     pub(crate) fn demo_clique(&mut self, uv: [f64; 2]) {
         self.clicks.push(Snap::livre(uv));
     }
@@ -571,6 +596,8 @@ impl SketchEdit {
                 }
             }
             Tool::Mirror | Tool::Offset => curvas as usize,
+            // a linha não guarda cliques: o passo é a cadeia em andamento
+            Tool::Line => self.chain_last.is_some() as usize,
             t if crate::sketch_fluxo::cota(t) => self.pending.is_some() as usize,
             _ => self.clicks.len(),
         }
@@ -715,6 +742,29 @@ fn point_for(sk: &mut SketchData, al: &mut impl FnMut() -> Id, s: Snap) -> Id {
         crate::sketch_snap::vincula(sk, al, p, s.tipo, s.apoio);
     }
     p
+}
+
+/// Fim do arraste de um ponto: cumpre o que o glifo prometeu, juntando ou guardando o apoio. Se o
+/// sketch estava resolvido e deixaria de estar, desfaz: um arraste não pode criar conflito sozinho.
+/// Devolve `false` nesse caso.
+fn soltar_ponto(sk: &mut SketchData, al: &mut impl FnMut() -> Id, vars: &HashMap<String, f64>, p: Id, s: Snap, juntar: bool) -> bool {
+    let antes = sk.clone();
+    let alvo = match (juntar, s.origin) {
+        (false, _) => None,
+        (true, true) => Some(point_for(sk, al, s)),
+        (true, false) => s.point,
+    };
+    match alvo {
+        Some(q) => sk.merge_points(p, q),
+        None if s.vincula && s.point.is_none() => crate::sketch_snap::vincula(sk, al, p, s.tipo, s.apoio),
+        None => return true,
+    }
+    let estava_bem = antes.clone().solve(vars, &[]).converged;
+    if estava_bem && !sk.clone().solve(vars, &[]).converged {
+        *sk = antes;
+        return false;
+    }
+    true
 }
 
 fn is_line(sk: &SketchData, id: Id) -> bool {
@@ -1133,7 +1183,7 @@ fn draw_dim(painter: &egui::Painter, v: &View, sk: &SketchData, k: &Kind, label:
         }
         _ => return None,
     };
-    let galley = painter.layout_no_wrap(dim_text(sk, k, reference), egui::FontId::proportional(12.), col);
+    let galley = painter.layout_no_wrap(dim_text(sk, k, reference), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), col);
     let r = Rect::from_center_size(tpos, galley.size() + egui::vec2(8., 4.));
     painter.rect_filled(r, 3., if dark { Color32::from_black_alpha(170) } else { Color32::from_white_alpha(220) });
     painter.galley(r.min + egui::vec2(4., 2.), galley, col);
@@ -1778,7 +1828,7 @@ fn draw_lock(painter: &egui::Painter, at: Pos2, col: Color32) {
 
 /// Campos ao lado do cursor: rótulo, valor e cadeado de cada um, com o foco marcado.
 fn draw_fields(painter: &egui::Painter, at: Pos2, entry: &ValueEntry, fields: &[Measure], vars: &HashMap<String, f64>, vis: &egui::Visuals) {
-    let font = egui::FontId::proportional(12.);
+    let font = egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.));
     let mut y = at.y;
     for (i, f) in fields.iter().enumerate() {
         let lock = entry.locks.iter().find(|l| l.0 == i);
@@ -1795,14 +1845,14 @@ fn draw_fields(painter: &egui::Painter, at: Pos2, entry: &ValueEntry, fields: &[
         let row = Rect::from_min_size(Pos2::new(at.x, y), egui::vec2(170., 20.));
         painter.rect_filled(row, 3., vis.extreme_bg_color);
         painter.rect_stroke(row, 3., if focus { vis.selection.stroke } else { vis.widgets.noninteractive.bg_stroke }, egui::StrokeKind::Inside);
-        painter.text(row.left_center() + egui::vec2(6., 0.), egui::Align2::LEFT_CENTER, tr(f.label), egui::FontId::proportional(11.), vis.weak_text_color());
+        painter.text(row.left_center() + egui::vec2(6., 0.), egui::Align2::LEFT_CENTER, tr(f.label), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), vis.weak_text_color());
         painter.text(row.right_center() - egui::vec2(22., 0.), egui::Align2::RIGHT_CENTER, value, font.clone(), if valid { vis.text_color() } else { BAD });
         if lock.is_some() {
             draw_lock(painter, row.right_center() - egui::vec2(11., 0.), vis.selection.stroke.color);
         }
         y += 22.;
     }
-    painter.text(Pos2::new(at.x, y + 1.), egui::Align2::LEFT_TOP, tr("digite o valor · Tab trava e avança · Enter confirma"), egui::FontId::proportional(10.), vis.weak_text_color());
+    painter.text(Pos2::new(at.x, y + 1.), egui::Align2::LEFT_TOP, tr("digite o valor · Tab trava e avança · Enter confirma"), egui::FontId::proportional(crate::acessibilidade::fonte_3d(10.)), vis.weak_text_color());
 }
 
 /// Com o campo vazio, + e - trocam os lados do polígono em vez de abrir a expressão.
@@ -1988,10 +2038,18 @@ fn caixa_da_selecao(sk: &SketchData, v: &View, sel: &[Ent]) -> Option<Rect> {
 
 /// Rótulo de medida preso à prévia.
 fn draw_tag(painter: &egui::Painter, pos: Pos2, text: String, dark: bool) {
-    let galley = painter.layout_no_wrap(text, egui::FontId::proportional(11.), FREE);
+    let galley = painter.layout_no_wrap(text, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), FREE);
     let r = Rect::from_center_size(pos, galley.size() + egui::vec2(6., 2.));
     painter.rect_filled(r, 3., if dark { Color32::from_black_alpha(170) } else { Color32::from_white_alpha(220) });
     painter.galley(r.min + egui::vec2(3., 1.), galley, FREE);
+}
+
+/// Dica junto ao cursor. Tem fundo porque passa por cima da sombra do perfil, que é da cor dela.
+fn dica_no_cursor(painter: &egui::Painter, pos: Pos2, text: String, cor: Color32) {
+    let galley = painter.layout_no_wrap(text, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), cor);
+    let r = Rect::from_min_size(pos, galley.size() + egui::vec2(6., 2.));
+    painter.rect_filled(r, 3., painter.ctx().global_style().visuals.extreme_bg_color.gamma_multiply(0.85));
+    painter.galley(r.min + egui::vec2(3., 1.), galley, cor);
 }
 
 fn measure_text(m: &Measure) -> String {
@@ -2237,7 +2295,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             if sel || related || bad {
                 painter.circle_stroke(pos, 7., Stroke::new(1., col));
             }
-            painter.text(pos, egui::Align2::CENTER_CENTER, glyph(&c.kind), egui::FontId::proportional(10.), col);
+            painter.text(pos, egui::Align2::CENTER_CENTER, glyph(&c.kind), egui::FontId::proportional(crate::acessibilidade::fonte_3d(10.)), col);
             edit.hits.push((r, Ent::Cs(c.id)));
             continue;
         }
@@ -2288,12 +2346,16 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         let (loops, _) = sk.loops();
         let msg = format!("Contornos: {} fechado(s) · {} ponta(s) aberta(s) · {} ponto(s) sobreposto(s)", loops.len(), open.len(), overlaps);
         let col = if open.is_empty() && overlaps == 0 { Color32::from_rgb(120, 210, 130) } else { Color32::from_rgb(255, 170, 60) };
-        painter.text(rect.left_top() + egui::vec2(10., 62.), egui::Align2::LEFT_TOP, msg, egui::FontId::proportional(12.), col);
+        painter.text(rect.left_top() + egui::vec2(10., 62.), egui::Align2::LEFT_TOP, msg, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), col);
     }
 
     // ---------- entrada do mouse
     let (shift, ctrl, alt) = ui.input(|i| (i.modifiers.shift, i.modifiers.command, i.modifiers.alt));
+    let (shift, ctrl) = (shift || edit.demo_shift, ctrl || edit.demo_ctrl);
     let hover = edit.demo_cursor.map(|q| v.to_screen(q)).or(resp.hover_pos());
+    if let Some(q) = edit.demo_janela {
+        edit.janela = Some(v.to_screen(q));
+    }
     let mut cursor_uv = hover.and_then(|p| v.to_uv(p));
 
     // curva mais perto do cursor, sem olhar os pontos: relimitar age na curva mesmo junto à ponta
@@ -2342,7 +2404,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     let snap_at = |pos: Pos2, sk: &SketchData, exclude: &[Id], sem_curvas: &[Id]| -> Option<Snap> {
         let uv = v.to_uv(pos)?;
         let achado = crate::sketch_snap::achar(sk, pos, uv, &|q| v.to_screen(q), exclude, sem_curvas, settings.snaps);
-        let de = |a: crate::sketch_snap::Achado| Snap { uv: a.uv, point: a.ponto, origin: false, tipo: a.tipo, apoio: a.curvas, vincula: settings.auto_constraints };
+        let de = |a: crate::sketch_snap::Achado| Snap { uv: a.uv, point: a.ponto, origin: false, tipo: a.tipo, apoio: a.curvas, vincula: settings.auto_constraints && settings.snap_restringe };
         // ponto que já existe vence; a origem vence o que seria um ponto novo
         if let Some(a) = achado.filter(|a| a.ponto.is_some()) {
             return Some(de(a));
@@ -2390,6 +2452,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     let sem_pontos: Vec<Id> = sem_pontos.into_iter().chain(pontos_ocultos.iter().copied()).collect();
     let sem_curvas: Vec<Id> = sem_curvas.into_iter().chain(curvas_ocultas.iter().copied()).collect();
     let mut cur_snap = hover.and_then(|p| snap_at(p, &sk, &sem_pontos, &sem_curvas));
+    // Ctrl durante o arraste: o ponto vai aonde o cursor for, sem apoio nenhum
+    if let (true, true, Some(uv)) = (ctrl, edit.drag.is_some(), hover.and_then(|p| v.to_uv(p))) {
+        cur_snap = Some(Snap::livre(uv));
+    }
 
     // ---------- inferência: enquanto se desenha, sem apoio mais forte, o cursor procura alinhamentos
     let desenha = matches!(tool, Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point | Tool::Spline);
@@ -2447,7 +2513,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         }
                     }
                     if r.hovered() {
-                        painter.text(hs + egui::vec2(10., -10.), egui::Align2::LEFT_BOTTOM, tr("arraste: tangente e intensidade neste ponto"), egui::FontId::proportional(11.), SEL);
+                        painter.text(hs + egui::vec2(10., -10.), egui::Align2::LEFT_BOTTOM, tr("arraste: tangente e intensidade neste ponto"), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), SEL);
                     }
                 }
             }
@@ -2716,12 +2782,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             if resp.drag_stopped() {
                 edit.drag_label = None;
                 if let Some(d) = edit.drag.take() {
-                    // o que o glifo prometeu: juntar ao ponto, ou guardar o apoio como restrição
                     if let ([(p, _)], Some(s)) = (d.pts.as_slice(), cur_snap) {
-                        match s.point {
-                            Some(q) => sk.merge_points(*p, q),
-                            None if s.vincula => crate::sketch_snap::vincula(&mut sk, &mut al, *p, s.tipo, s.apoio),
-                            None => {}
+                        if !soltar_ponto(&mut sk, &mut al, &vars, *p, s, settings.juntar_ao_soltar) {
+                            toast = Some((crate::sketch_snap::NAO_JUNTOU.to_string(), true));
                         }
                     }
                     edit.report = sk.solve(&vars, &[]);
@@ -2857,7 +2920,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
             if let Some(h) = hover {
                 let hint = if edit.clicks.len() < 2 { tr("clique nos pontos da spline") } else { tr("Enter / duplo clique / botão direito termina") };
-                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, hint, egui::FontId::proportional(11.), FREE);
+                dica_no_cursor(&painter, h + egui::vec2(14., 14.), hint.to_string(), FREE);
             }
         }
 
@@ -2896,7 +2959,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 edit.report = sk.solve(&vars, &[]);
             }
             if let Some(h) = hover {
-                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, edit.dica_passo(), egui::FontId::proportional(11.), FREE);
+                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, edit.dica_passo(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), FREE);
             }
         }
 
@@ -2909,7 +2972,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     let made = crate::sketch_ext::world(&app.open.doc, r, &p, intersect, &v.f);
                     // a dica diz a forma exata que vai nascer
                     let forma = made.as_ref().and_then(|x| x.forma(&v.f)).map_or(String::new(), |n| format!(" → {}", tr(n)));
-                    painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, format!("{}{forma}", p.label(&app.open.doc)), egui::FontId::proportional(11.), FREE);
+                    painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, format!("{}{forma}", p.label(&app.open.doc)), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), FREE);
                     // fantasma do que vai nascer no plano, não só da origem
                     if let Some(x) = &made {
                         let uv = crate::sketch_ext::to_uv(&v.f, &x.pts);
@@ -2965,7 +3028,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 } else {
                     match rl::plano_estender(&sk, c, uv) {
                         Ok(plano) => {
-                            draw_ghost_uv(&painter, &v, &plano.novo, false);
+                            // tracejada: da mesma cor, cheia ela se confundiria com a curva que já existe
+                            draw_ghost_uv(&painter, &v, &plano.novo, true);
                             painter.circle_stroke(v.to_screen(plano.destino), 5., Stroke::new(1.5, FREE));
                             painter.circle_filled(v.to_screen(sk.pos(plano.ponta)), 3.5, FREE);
                         }
@@ -2998,7 +3062,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     (_, Some(m)) => (tr(m).to_string(), BAD),
                     _ => (crate::sketch_fluxo::dica(modo, 0, None, false, !edit.sel.is_empty()), FREE),
                 };
-                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, hint, egui::FontId::proportional(11.), col);
+                dica_no_cursor(&painter, h + egui::vec2(14., 14.), hint, col);
             }
         }
 
@@ -3193,7 +3257,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     None => (edit_hint(tool, sel_curves.is_empty(), edit.sel.is_empty(), edit.clicks.len()), FREE),
                 };
                 let texto = if refusal.is_some() { tr(hint).to_string() } else { crate::sketch_fluxo::dica(tool, edit.indice_passo(), Some(hint), edit.em_passo(), !edit.sel.is_empty()) };
-                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, texto, egui::FontId::proportional(11.), col);
+                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), col);
             }
         }
 
@@ -3275,7 +3339,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 } else {
                     tr("clique numa linha, círculo, arco ou ponto")
                 };
-                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, hint, egui::FontId::proportional(11.), FREE);
+                dica_no_cursor(&painter, h + egui::vec2(14., 14.), hint.to_string(), FREE);
             }
         }
 
@@ -3314,7 +3378,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 edit.sel.clear();
             }
             if let Some(h) = hover {
-                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, edit.dica_passo(), egui::FontId::proportional(11.), FREE);
+                painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, edit.dica_passo(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), FREE);
             }
         }
     }
@@ -3598,9 +3662,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
 
     // ---------- status
     let (txt, col) = status_line(&edit.report);
-    painter.text(rect.center_top() + egui::vec2(0., 26.), egui::Align2::CENTER_TOP, format!("✏ {} · {txt}", tr("Editando sketch")), egui::FontId::proportional(13.), col);
+    painter.text(rect.center_top() + egui::vec2(0., 26.), egui::Align2::CENTER_TOP, format!("✏ {} · {txt}", tr("Editando sketch")), egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), col);
     let tool_name = tr(tool.info().2);
-    painter.text(rect.center_top() + egui::vec2(0., 44.), egui::Align2::CENTER_TOP, format!("{}: {tool_name} · {}", tr("Ferramenta"), tr("Esc cancela o passo atual")), egui::FontId::proportional(11.), col.gamma_multiply(0.8));
+    painter.text(rect.center_top() + egui::vec2(0., 44.), egui::Align2::CENTER_TOP, format!("{}: {tool_name} · {}", tr("Ferramenta"), tr("Esc cancela o passo atual")), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), col.gamma_multiply(0.8));
 
     edit.keyboard_busy = ui.ctx().egui_wants_keyboard_input();
 
@@ -3884,6 +3948,73 @@ impl ValueEntry {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Duas linhas soltas: o ponto `b` da primeira é arrastado até `c`, ponta da segunda.
+    fn duas_linhas() -> (SketchData, impl FnMut() -> Id, Id, Id) {
+        let mut n = 800u64;
+        let mut al = move || {
+            n += 1;
+            Id(n)
+        };
+        let mut sk = SketchData::default();
+        let (a, b) = (sk.add_point(&mut al, 0., 0.), sk.add_point(&mut al, 10., 0.));
+        let (c, d) = (sk.add_point(&mut al, 20., 0.), sk.add_point(&mut al, 20., 10.));
+        sk.add_curve(&mut al, Curve::Line { a, b }, false);
+        sk.add_curve(&mut al, Curve::Line { a: c, b: d }, false);
+        (sk, al, b, c)
+    }
+
+    fn sobre_ponto(q: Id, uv: [f64; 2]) -> Snap {
+        Snap { point: Some(q), tipo: TipoSnap::Ponta, ..Snap::livre(uv) }
+    }
+
+    #[test]
+    fn soltar_sobre_ponto_junta_so_com_a_opcao_ligada() {
+        let vars = HashMap::new();
+        let (mut sk, mut al, b, c) = duas_linhas();
+        assert!(soltar_ponto(&mut sk, &mut al, &vars, b, sobre_ponto(c, [20., 0.]), true));
+        assert!(sk.point(b).is_none());
+        assert!(sk.curves.iter().all(|k| !SketchData::curve_points(&k.geom).contains(&b)));
+
+        let (mut sk, mut al, b, c) = duas_linhas();
+        let antes = sk.clone();
+        assert!(soltar_ponto(&mut sk, &mut al, &vars, b, sobre_ponto(c, [20., 0.]), false));
+        assert_eq!(sk, antes);
+    }
+
+    #[test]
+    fn juntar_que_cria_conflito_e_desfeito() {
+        let vars = HashMap::new();
+        let (mut sk, mut al, b, c) = duas_linhas();
+        // uma cota manda as duas pontas ficarem a 10 uma da outra: não dá para serem o mesmo ponto
+        sk.add_constraint(&mut al, Kind::Distance(b, c, "10".into()));
+        let antes = sk.clone();
+        assert!(!soltar_ponto(&mut sk, &mut al, &vars, b, sobre_ponto(c, [20., 0.]), true));
+        assert_eq!(sk, antes);
+    }
+
+    #[test]
+    fn soltar_na_origem_prende_a_ponta_nela() {
+        let vars = HashMap::new();
+        let (mut sk, mut al, b, _) = duas_linhas();
+        let s = Snap { origin: true, tipo: TipoSnap::Origem, ..Snap::livre([0., 0.]) };
+        assert!(soltar_ponto(&mut sk, &mut al, &vars, b, s, true));
+        let o = sk.points.iter().find(|p| p.fixed).expect("ponto da origem");
+        assert_eq!(sk.pos(o.id), [0., 0.]);
+        assert!(sk.curves.iter().any(|k| SketchData::curve_points(&k.geom).contains(&o.id)));
+    }
+
+    #[test]
+    fn apoio_do_snap_so_vira_restricao_com_a_opcao_ligada() {
+        let vars = HashMap::new();
+        let (mut sk, mut al, b, _) = duas_linhas();
+        let curva = sk.curves[1].id;
+        let s = Snap { tipo: TipoSnap::SobreCurva, apoio: [Some(curva), None], ..Snap::livre([20., 5.]) };
+        soltar_ponto(&mut sk, &mut al, &vars, b, s, true);
+        assert!(sk.constraints.is_empty(), "sem `vincula` o snap só posiciona");
+        soltar_ponto(&mut sk, &mut al, &vars, b, Snap { vincula: true, ..s }, true);
+        assert_eq!(sk.constraints.len(), 1);
+    }
 
     fn line_sketch(a: [f64; 2], b: [f64; 2]) -> (SketchData, Id) {
         let mut sk = SketchData::default();
