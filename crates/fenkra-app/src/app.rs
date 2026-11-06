@@ -8683,6 +8683,7 @@ impl eframe::App for App {
                 let mut s = crate::medir_quadros::fase("cena", || scene::build(scene_doc, r, &opts));
                 crate::dfm_ui::decorar(&self.settings, r, &ctx.global_style().visuals, &mut s);
                 if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {
+                    sombra_perfil: !self.settings.display.e_analise(),
                     crate::previa::reter_ultima(&mut sess.ultima_valida, &mut s, r.status.get(&sess.id));
                 }
                 crate::impressao_ui::na_cena(self.impressao.as_ref(), &mut s);

@@ -2177,7 +2177,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     edit.corte = corte;
 
     // ---------- perfil sombreado: sai direto dos dados do sketch, sem esperar o recálculo da peça
-    if exibir.perfil {
+    let sombra_visivel = exibir.perfil && !settings.display.e_analise();
+    if sombra_visivel {
         if edit.sombra.as_ref().is_none_or(|s| s.0 != sk) {
             edit.sombra = Some((sk.clone(), crate::sketch_sombra::faixas(&sk)));
         }

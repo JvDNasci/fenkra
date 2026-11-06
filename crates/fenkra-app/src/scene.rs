@@ -37,6 +37,8 @@ pub struct SceneOpts<'a> {
     pub point_style: u8,
     /// forma livre cuja superfície não aparece (modo Gaiola)
     pub forma_oculta: Option<Id>,
+    /// sombra dos perfis fechados de sketch: desligada nos modos de análise
+    pub sombra_perfil: bool,
     /// mapa de curvatura: a cor de cada vértice vem da curvatura medida pelo kernel
     pub curvatura: Option<crate::sup_inclinacao::EscalaMapa>,
     /// prévia do comando aberto
@@ -238,7 +240,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             // sombra dos perfis fechados
             let n = Vec3::from(sk.frame.normal.map(|v| v as f32));
             let fc = if editing { [0.3, 0.65, 1.0, 1.0] } else { [0.35, 0.7, 1.0, 1.0] };
-            for p in &sk.fill {
+            for p in sk.fill.iter().filter(|_| o.sombra_perfil) {
                 s.fill.push(MeshVertex { pos: *p, nrm: n.into(), col: fc, mat: [1.0, 0.0, if editing { 0.22 } else { 0.14 }, 0.] });
             }
             if editing {
@@ -554,6 +556,60 @@ mod testes_setas {
 
     fn ponto(doc: &mut Document, frame: Option<PlaneRef>) -> Id {
         doc.add_geometry(RefKind::PointCoords { x: "1".into(), y: "2".into(), z: "3".into(), frame })
+    }
+
+    /// Corpo extrudado com o sketch dele à vista, e a cena de cada modo de exibição.
+    fn cena_do_modo(m: crate::render::DisplayMode, editing: bool) -> (Scene, Vec3) {
+        let mut d = Document::new("t");
+        let mut s = fenkra_core::SketchData::default();
+        let mut n = 100u64;
+        s.add_rect(
+            &mut || {
+                n += 1;
+                Id(n)
+            },
+            [0., 0.],
+            [30., 20.],
+            false,
+        );
+        let sk = d.add_feature(fenkra_core::FeatureKind::Sketch(fenkra_core::Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: s }));
+        d.add_feature(fenkra_core::FeatureKind::Extrude(fenkra_core::Extrude { sketch: sk, op: fenkra_core::BoolOp::Add, extent: fenkra_core::Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
+        let r = fenkra_solidos::recompute(&d);
+        let (sel, filtro) = (Sel::None, Filter::default());
+        // o sketch aparece mesmo consumido pela extrusão: é o caso em que a sombra passa pela peça
+        let o = SceneOpts { instancias: &[], forma_oculta: None, sombra_perfil: !m.e_analise(), editing: editing.then_some(sk), sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: Some(sk), hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura: None, fantasma: None };
+        let c = build(&d, &r, &o);
+        let tam = c.bounds.map(|(a, b)| b - a).unwrap_or(Vec3::ZERO);
+        (c, tam)
+    }
+
+    #[test]
+    fn analise_nao_leva_a_sombra_do_perfil_para_a_cena() {
+        use crate::render::DisplayMode as M;
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        for editing in [false, true] {
+            let (normal, tam) = cena_do_modo(M::SombreadoArestas, editing);
+            assert!(!normal.fill.is_empty(), "fora da análise a sombra continua");
+            assert!(!normal.mesh.is_empty());
+            assert!((tam - Vec3::new(30., 20., 10.)).length() < 1e-3, "{tam:?}");
+            for m in [M::Zebra, M::Curvatura, M::Inclinacao, M::Isofotas, M::Dfm] {
+                let (c, t) = cena_do_modo(m, editing);
+                assert!(c.fill.is_empty(), "{m:?}: a sombra não entra na análise");
+                assert_eq!(c.mesh.len(), normal.mesh.len(), "{m:?}: a peça continua igual");
+                assert_eq!(c.lines.len(), normal.lines.len(), "{m:?}: as linhas do sketch continuam");
+                assert_eq!(c.overlay.len(), normal.overlay.len());
+                assert_eq!(t, tam, "{m:?}: a sombra não pesa no enquadramento");
+            }
+        }
+    }
+
+    #[test]
+    fn modos_comuns_nao_sao_analise() {
+        use crate::render::DisplayMode as M;
+        let analises: Vec<M> = M::ALL.iter().copied().filter(|m| m.e_analise()).collect();
+        assert_eq!(analises, vec![M::Zebra, M::Curvatura, M::Inclinacao, M::Isofotas, M::Dfm]);
     }
 
     #[test]
