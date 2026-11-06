@@ -102,6 +102,10 @@ pub fn tem_limite(j: &Joint) -> bool {
 
 /// Valor no trilho ou no arco sob o mouse.
 fn valor_sob(m: &MarcaLimite, raio: f64, rect: Rect, cam: &Camera, mouse: Pos2) -> Option<f64> {
+    if !m.curva.is_empty() {
+        let tela: Vec<Option<Pos2>> = m.curva.iter().map(|q| cam.project(rect, v3(*q))).collect();
+        return arco_sob(&m.curva, &tela, mouse).map(|s| s - m.arco0);
+    }
     if m.grau.angular() {
         let perto = (-AMOSTRAS_ARCO..=AMOSTRAS_ARCO).filter_map(|g| cam.project(rect, v3(m.ponto(g as f64, raio))).map(|q| ((q - mouse).length(), g as f64)));
         return perto.min_by(|a, b| a.0.total_cmp(&b.0)).map(|x| x.1);
@@ -111,8 +115,40 @@ fn valor_sob(m: &MarcaLimite, raio: f64, rect: Rect, cam: &Camera, mouse: Pos2) 
     Some(((mouse - zero).dot(na_tela) / ppm) as f64)
 }
 
+/// Comprimento andado sobre a curva até o ponto dela mais perto do mouse, na tela. Segmento atrás da
+/// câmera não conta, mas o comprimento dele sim.
+fn arco_sob(curva: &[[f64; 3]], tela: &[Option<Pos2>], mouse: Pos2) -> Option<f64> {
+    let (mut andado, mut melhor) = (0., None::<(f32, f64)>);
+    for (k, w) in curva.windows(2).enumerate() {
+        let l = fenkra_montagem::norm(fenkra_montagem::sub(w[1], w[0]));
+        if let (Some(a), Some(b)) = (tela[k], tela[k + 1]) {
+            let e = b - a;
+            let t = ((mouse - a).dot(e) / e.length_sq().max(1e-6)).clamp(0., 1.);
+            let d = (a + e * t).distance(mouse);
+            if melhor.is_none_or(|m| d < m.0) {
+                melhor = Some((d, andado + l * t as f64));
+            }
+        }
+        andado += l;
+    }
+    melhor.map(|m| m.1)
+}
+
 /// Pontos de `de` até `ate`, para desenhar o trecho.
 fn linha(m: &MarcaLimite, raio: f64, de: f64, ate: f64, rect: Rect, cam: &Camera) -> Vec<Pos2> {
+    if !m.curva.is_empty() {
+        // os dois extremos e, entre eles, os vértices da curva: o trecho faz as mesmas curvas dela
+        let mut s = 0.;
+        let mut marcos = vec![de];
+        for w in m.curva.windows(2) {
+            s += fenkra_montagem::norm(fenkra_montagem::sub(w[1], w[0]));
+            if s - m.arco0 > de && s - m.arco0 < ate {
+                marcos.push(s - m.arco0);
+            }
+        }
+        marcos.push(ate);
+        return marcos.into_iter().filter_map(|v| cam.project(rect, v3(m.ponto(v, raio)))).collect();
+    }
     let n = if m.grau.angular() { 48 } else { 1 };
     (0..=n).filter_map(|k| cam.project(rect, v3(m.ponto(de + (ate - de) * k as f64 / n as f64, raio)))).collect()
 }
@@ -241,6 +277,16 @@ mod tests {
         assert_eq!(f.prender(100.), 100.);
         f.max.ligado = true;
         assert_eq!(f.prender(100.), 45.);
+    }
+
+    #[test]
+    fn arco_sob_o_mouse_segue_a_curva_dobrada() {
+        // L na tela: 100 na horizontal e 50 na vertical, com o mesmo comprimento no modelo
+        let curva = [[0., 0., 0.], [100., 0., 0.], [100., 50., 0.]];
+        let tela: Vec<Option<Pos2>> = curva.iter().map(|p| Some(egui::pos2(p[0] as f32, p[1] as f32))).collect();
+        assert!((arco_sob(&curva, &tela, egui::pos2(40., 5.)).unwrap() - 40.).abs() < 1e-3);
+        assert!((arco_sob(&curva, &tela, egui::pos2(110., 30.)).unwrap() - 130.).abs() < 1e-3);
+        assert!(arco_sob(&curva, &[None, None, None], egui::pos2(0., 0.)).is_none());
     }
 
     #[test]

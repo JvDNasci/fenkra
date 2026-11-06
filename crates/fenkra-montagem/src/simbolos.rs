@@ -196,11 +196,18 @@ pub struct MarcaLimite {
     pub zero: V3,
     pub faixa: Faixa,
     pub atual: f64,
+    /// trajetória no mundo: quando existe, as marcas andam sobre ela e não em linha reta
+    pub curva: Vec<V3>,
+    /// comprimento andado na curva onde o grau vale zero
+    pub arco0: f64,
 }
 
 impl MarcaLimite {
     /// Ponto do mundo onde o grau vale `v`. O `raio` só conta no arco.
     pub fn ponto(&self, v: f64, raio: f64) -> V3 {
+        if let Some(q) = crate::kin::ponto_no_arco(&self.curva, v + self.arco0) {
+            return q;
+        }
         if !self.grau.angular() {
             return [0, 1, 2].map(|i| self.origem[i] + self.eixo[i] * v);
         }
@@ -226,10 +233,18 @@ pub fn marcas_limite(a: &Assembly, j: &Joint) -> Vec<MarcaLimite> {
         Grau::CursoY => Some((em(em(oa, xa, j.zero[0]), ya, j.zero[1]), ya, za)),
         // tomba do eixo z em direção ao x
         Grau::Inclinacao => Some((oa, ya, za)),
-        Grau::Trajeto => None,
+        Grau::Trajeto => {
+            let JointKind::PointCurve { curve } = &j.kind else { return None };
+            let (origem, adiante) = (crate::kin::ponto_no_arco(curve, j.zero[2])?, crate::kin::ponto_no_arco(curve, j.zero[2] + 1.)?);
+            Some((pa.point(origem), unit(pa.dir(sub(adiante, origem))), xa))
+        }
+    };
+    let curva = |g: Grau| match &j.kind {
+        JointKind::PointCurve { curve } if g == Grau::Trajeto => curve.iter().map(|q| pa.point(*q)).collect(),
+        _ => vec![],
     };
     let graus = j.kind.graus().iter().filter(|g| j.limites.faixa(**g).ligada());
-    graus.filter_map(|g| lugar(*g).map(|(origem, eixo, zero)| MarcaLimite { grau: *g, origem, eixo, zero, faixa: *j.limites.faixa(*g), atual: medir_grau(j, *g, &pa, &pb) })).collect()
+    graus.filter_map(|g| lugar(*g).map(|(origem, eixo, zero)| MarcaLimite { grau: *g, origem, eixo, zero, faixa: *j.limites.faixa(*g), atual: medir_grau(j, *g, &pa, &pb), curva: curva(*g), arco0: if *g == Grau::Trajeto { j.zero[2] } else { 0. } })).collect()
 }
 
 /// Símbolos da montagem nas posições de agora. Peça oculta leva junto o que só ela segura.

@@ -824,6 +824,20 @@ pub fn demo(st: &mut AsmState, nome: &str) {
             st.solve();
             st.sel = Some(id);
         }
+        "limites_trajeto" => {
+            // ponto em curva numa trilha dobrada sobre a placa, com a faixa no meio dela
+            let curva = vec![[10., 10., 12.], [70., 10., 12.], [70., 38., 12.], [30., 38., 12.]];
+            let fr = kin::JFrame::from_axis([0.; 3], [0., 0., 1.]);
+            if let Some(n) = st.asm.node_mut(tampa) {
+                n.placement.origin = [40., 10., 12.];
+            }
+            let id = st.asm.add_joint(JointKind::PointCurve { curve: curva }, kin::JRef { comp: base, frame: fr }, kin::JRef { comp: tampa, frame: fr });
+            if let Some(j) = st.asm.joints.iter_mut().find(|j| j.id == id) {
+                j.limites.trajeto = kin::Faixa::nova(-15., 65.);
+            }
+            st.solve();
+            st.sel = Some(id);
+        }
         "limites_cmd" => {
             let mut pen = Pendente::novo(Tipo::Junta(JointKind::Revolute));
             pen.c.receber(eixo(base));

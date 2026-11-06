@@ -368,6 +368,30 @@ fn arco_ate(curva: &[V3], q: V3) -> f64 {
     achado
 }
 
+/// Comprimento total da polilinha.
+pub fn comprimento_curva(curva: &[V3]) -> f64 {
+    curva.windows(2).map(|w| norm(sub(w[1], w[0]))).sum()
+}
+
+/// Ponto da polilinha a `s` mm do começo. Fora dela, a ponta mais perto: a junta não sai da curva.
+pub fn ponto_no_arco(curva: &[V3], s: f64) -> Option<V3> {
+    let (primeiro, ultimo) = (*curva.first()?, *curva.last()?);
+    if s <= 0. {
+        return Some(primeiro);
+    }
+    let mut andado = 0.;
+    for w in curva.windows(2) {
+        let e = sub(w[1], w[0]);
+        let l = norm(e);
+        if andado + l >= s && l > 0. {
+            let t = (s - andado) / l;
+            return Some([0, 1, 2].map(|i| w[0][i] + e[i] * t));
+        }
+        andado += l;
+    }
+    Some(ultimo)
+}
+
 /// Posição no plano da junta e na trajetória, sem descontar o zero da criação.
 fn posicao_crua(j: &Joint, pa: &Placement, pb: &Placement) -> [f64; 3] {
     let (oa, za, xa) = j.a.frame.world(pa);
@@ -513,7 +537,18 @@ pub fn levar_a(a: &mut Assembly, id: Id, g: Grau, v: f64) -> crate::solve::Solve
             let (comp, lugar, k) = if peca_b_presa { (j.a.comp, pa, -falta) } else { (j.b.comp, pb, falta) };
             return crate::solve::solve_toward(a, comp, lugar.moved(d.map(|e| e * k), [0.; 3], lugar.origin), 0.05);
         }
-        Grau::Inclinacao | Grau::Trajeto => return crate::solve::solve(a),
+        Grau::Trajeto => {
+            let j = a.joints[i].clone();
+            let JointKind::PointCurve { curve } = &j.kind else { return crate::solve::solve(a) };
+            let (Some(pa), Some(pb)) = (a.lugar(j.a.comp), a.lugar(j.b.comp)) else { return Default::default() };
+            let Some(alvo) = ponto_no_arco(curve, v + j.zero[2]) else { return crate::solve::solve(a) };
+            // a trajetória é a da peça A: quem anda é o seguidor, ou a própria curva se ele estiver preso
+            let falta = sub(pa.point(alvo), pb.point(j.b.frame.o));
+            let seguidor_preso = a.node(j.b.comp).is_none_or(|n| n.fixed);
+            let (comp, lugar, k) = if seguidor_preso { (j.a.comp, pa, -1.) } else { (j.b.comp, pb, 1.) };
+            return crate::solve::solve_toward(a, comp, lugar.moved(falta.map(|e| e * k), [0.; 3], lugar.origin), 0.05);
+        }
+        Grau::Inclinacao => return crate::solve::solve(a),
     }
     let rep = crate::solve::solve(a);
     a.joints[i].drive_angle = ang;
@@ -521,14 +556,14 @@ pub fn levar_a(a: &mut Assembly, id: Id, g: Grau, v: f64) -> crate::solve::Solve
     rep
 }
 
-/// O grau aceita valor digitado? A inclinação e o trajeto não têm um caminho único até o valor, e o
-/// comando gravado na junta já manda no ângulo e no curso.
+/// O grau aceita valor digitado? A inclinação não tem um caminho único até o valor, e o comando
+/// gravado na junta já manda no ângulo e no curso.
 pub fn aceita_levar(j: &Joint, g: Grau) -> bool {
     match g {
         Grau::Giro => j.drive_angle.is_none(),
         Grau::Curso => j.drive_len.is_none(),
-        Grau::CursoX | Grau::CursoY => true,
-        Grau::Inclinacao | Grau::Trajeto => false,
+        Grau::CursoX | Grau::CursoY | Grau::Trajeto => true,
+        Grau::Inclinacao => false,
     }
 }
 

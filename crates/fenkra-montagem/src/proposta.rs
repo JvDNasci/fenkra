@@ -593,10 +593,10 @@ pub fn animar(base: &Assembly, previa: &Previa, op: &OpcoesAnimar) -> Result<Vec
             JointKind::Spherical => inicio.moved([0.; 3], x.map(|v| v * varrer(faixa_giro, s).to_radians()), o),
             JointKind::Planar => inicio.moved(x.map(|v| v * varrer(faixa_curso, s)), z.map(|v| v * varrer(faixa_giro, s).to_radians()), o),
             JointKind::PointCurve { curve } => {
-                // de ponta a ponta da curva, a partir do ponto mais perto
-                let u = (s + 1.) / 2. * (curve.len() - 1) as f64;
-                let (i, t) = ((u as usize).min(curve.len() - 2), u.fract());
-                let q = [0, 1, 2].map(|e| curve[i][e] + (curve[i + 1][e] - curve[i][e]) * t);
+                // de ponta a ponta da curva, ou de limite a limite
+                let ponta = (-j.zero[2], crate::kin::comprimento_curva(curve) - j.zero[2]);
+                let (lo, hi) = if op.limites { j.limites.trajeto.ou(ponta) } else { ponta };
+                let q = crate::kin::ponto_no_arco(curve, j.zero[2] + lo + (hi - lo) * (s + 1.) / 2.).unwrap_or(curve[0]);
                 let atual = c.lugar(j.b.comp).unwrap_or_default().point(j.b.frame.o);
                 let d = sub(pa.point(q), atual);
                 c.lugar(comp).unwrap_or(inicio).moved(d, [0.; 3], o)
