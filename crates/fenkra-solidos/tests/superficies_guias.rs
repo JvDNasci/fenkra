@@ -15,7 +15,7 @@ fn fx(p: [f64; 3]) -> PointRef {
 }
 
 fn curva(d: &mut Document, pts: &[[f64; 3]]) -> CurveRef {
-    CurveRef::Ref(d.add_geometry(RefKind::Spline { points: pts.iter().map(|p| fx(*p)).collect(), closed: false }))
+    CurveRef::Ref(d.add_geometry(RefKind::Spline { points: pts.iter().map(|p| fx(*p)).collect(), closed: false, tangents: vec![] }))
 }
 
 fn reta(d: &mut Document, a: [f64; 3], b: [f64; 3]) -> CurveRef {

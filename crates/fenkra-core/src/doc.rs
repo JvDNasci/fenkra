@@ -619,7 +619,13 @@ pub enum RefKind {
     /// Círculo (ou arco) por três pontos.
     Circle3 { a: PointRef, b: PointRef, c: PointRef, full: bool },
     /// Spline interpolada pelos pontos.
-    Spline { points: Vec<PointRef>, closed: bool },
+    Spline {
+        points: Vec<PointRef>,
+        closed: bool,
+        /// tangente fixada em cada ponto; lista mais curta que os pontos vale como solta no resto
+        #[serde(default)]
+        tangents: Vec<Option<SplineTan>>,
+    },
     /// Hélice cilíndrica ou cônica.
     Helix { origin: PointRef, axis: AxisRef, radius: String, pitch: String, height: String, taper: String, left: bool },
     /// Espiral plana do raio inicial ao final.
@@ -3223,6 +3229,15 @@ fn extent_walk(e: &mut Extent, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnM
         Extent::UpTo(p) => p.walk(ids),
         Extent::UpToSurface(s) => s.walk(ids),
     }
+}
+
+/// Tangente fixada num ponto da spline.
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SplineTan {
+    /// direção unitária
+    pub dir: [f64; 3],
+    /// múltiplo do tamanho natural da tangente ali: 1 é a velocidade que a curva já teria
+    pub tension: f64,
 }
 
 /// Para onde a faixa regrada sai da curva.

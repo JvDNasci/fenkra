@@ -1745,7 +1745,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     }
 
     /// Ponta de aresta com chave no vértice clicado: o ponto passa a seguir a aresta.
-    fn vertex_ref(&self, body: usize, pos: [f64; 3]) -> PointRef {
+    pub(crate) fn vertex_ref(&self, body: usize, pos: [f64; 3]) -> PointRef {
         let found = self.result.as_ref().and_then(|r| {
             let m = &r.bodies.get(body)?.mesh;
             (0..m.edge_ranges.len()).find_map(|e| {
@@ -6965,6 +6965,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                             FeatureKind::SmFlange(fl) => fl.edge = m,
                             FeatureKind::SmHem(h) => h.edge = m,
                             _ => {}
+                        }
+                    }
+                } else if let (Some(sid), true) = (
+                    self.session.as_ref().map(|x| x.id).filter(|id| crate::sup_spline::editavel(&self.open.doc, *id)),
+                    resp.clicked_by(egui::PointerButton::Primary),
+                ) {
+                    // B291: curva por pontos aberta: cada clique é um ponto
+                    if let Some(h) = resp.interact_pointer_pos() {
+                        if let Some(p) = crate::sup_spline::ponto_do_clique(self, &cam, rect, h, sid, self.hover_pick) {
+                            crate::sup_spline::gravar_ponto(&mut self.open.doc, sid, p);
                         }
                     }
                 } else if resp.double_clicked_by(egui::PointerButton::Primary) {

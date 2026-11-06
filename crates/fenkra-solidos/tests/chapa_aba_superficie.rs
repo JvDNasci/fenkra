@@ -26,7 +26,7 @@ fn nervura(spline: bool) -> (Document, Id, Id) {
             PointRef::Fixed([75. + 5. * (y / 60. * std::f64::consts::PI).sin(), y, 0.])
         })
         .collect();
-    let curva = d.add_geometry(if spline { RefKind::Spline { points: pts, closed: false } } else { RefKind::Polyline { points: pts, closed: false } });
+    let curva = d.add_geometry(if spline { RefKind::Spline { points: pts, closed: false, tangents: vec![] } } else { RefKind::Polyline { points: pts, closed: false } });
     let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(curva), dir: AxisRef::Origin(OriginAxis::Z), length: s("60"), length2: s("0"), until: None, until2: None });
     let aba = d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Ref(sup), face: [40., 25., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90") }));
     (d, sup, aba)

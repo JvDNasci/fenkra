@@ -521,6 +521,8 @@ pub struct RefNote {
     pub iso: Vec<Vec<V3>>,
     /// B290: seções como o cálculo as recebeu, para os conectores andarem sobre elas
     pub secoes: Vec<geo3d::Curve3>,
+    /// B291: pontos da spline já resolvidos, para o painel fixar a tangente onde ela está
+    pub pontos: Vec<V3>,
     /// B290: seção que o cálculo percorre ao contrário, deduzida ou pedida
     pub sentidos: Vec<bool>,
     /// B290: seta de tensão de cada lado: ponto na borda, direção que sai dela e corda da ponte
@@ -1808,7 +1810,11 @@ impl Ctx<'_> {
                 Geo::Curve(circle_curve(c, &f, e(radius, "raio")?, e(start, "ângulo inicial")?.to_radians(), e(end, "ângulo final")?.to_radians())?)
             }
             Circle3 { a, b, c, full } => Geo::Curve(circle3_curve(self.point(a, d)?, self.point(b, d)?, self.point(c, d)?, *full)?),
-            Spline { points, closed } => Geo::Curve(spline(&self.points(points, d)?, *closed)?),
+            Spline { points, closed, tangents } => {
+                let p = self.points(points, d)?;
+                self.notes.borrow_mut().entry(id).or_default().pontos = p.clone();
+                Geo::Curve(spline_tan(&p, *closed, tangents)?)
+            }
             Helix { origin, axis, radius, pitch, height, taper, left } => {
                 let (_, ax) = self.axis_d(axis, d)?;
                 Geo::Curve(helix(self.point(origin, d)?, ax, e(radius, "raio")?, e(pitch, "passo")?, e(height, "altura")?, e(taper, "conicidade")?, *left)?)

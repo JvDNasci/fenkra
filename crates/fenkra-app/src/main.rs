@@ -16,6 +16,7 @@ mod previa;
 mod sup3d;
 mod sup_analise;
 mod sup_loft;
+mod sup_spline;
 mod picking;
 mod selecao;
 mod selecao_regras;

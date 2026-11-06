@@ -379,7 +379,7 @@ impl GeoKind {
             Polyline => R::Polyline { points: pts(2), closed: false },
             Circle => R::Circle { center: p(0), plane: pl, radius: t("20"), start: t("0"), end: t("360") },
             Circle3 => R::Circle3 { a: p(0), b: p(1), c: p(2), full: true },
-            Spline => R::Spline { points: pts(3), closed: false },
+            Spline => R::Spline { points: pts(3), closed: false, tangents: vec![] },
             Helix => R::Helix { origin: p(0), axis: ax(OriginAxis::Z), radius: t("10"), pitch: t("5"), height: t("50"), taper: t("0"), left: false },
             Spiral => R::Spiral { center: p(0), plane: pl, r0: t("5"), r1: t("30"), turns: t("3") },
             Conic => R::Conic { center: p(0), plane: pl, kind: ConicKind::Elipse, a: t("30"), b: t("15"), extent: t("40") },
@@ -1351,9 +1351,10 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             expr(ui, "Início", start, vars, "mm");
             expr(ui, "Fim", end, vars, "mm");
         }
-        R::Polyline { points, closed } | R::Spline { points, closed } => {
+        R::Polyline { points, closed } | R::Spline { points, closed, .. } => {
             points_list(ui, "g_pts", doc, me, points, seed, 2);
             ui.checkbox(closed, tr("fechada"));
+            crate::sup_spline::painel(ui, me, &mut r.kind, note.map_or(&[], |n| n.pontos.as_slice()));
         }
         R::Circle { center, plane, radius, start, end } => {
             point_slot(ui, "g_c", "Centro", doc, me, center, seed);
@@ -1543,6 +1544,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::SplineControl { points, closed } => {
             points_list(ui, "g_pts", doc, me, points, seed, 3);
             ui.checkbox(closed, tr("fechada"));
+            crate::sup_spline::painel(ui, me, &mut r.kind, note.map_or(&[], |n| n.pontos.as_slice()));
         }
         R::CurveCopy { curve } => curve_slot(ui, "g_c", "Aresta/curva", doc, me, curve, seed),
         R::CurveJoin { curves } => {

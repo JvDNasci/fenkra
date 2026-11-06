@@ -85,6 +85,15 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("RMS", "RMS"),
     ("Maior curvatura", "Highest curvature"),
     ("Menor raio", "Smallest radius"),
+    // B291
+    ("Ponto preso a outra referência: ele segue a origem.", "Point tied to another reference: it follows its source."),
+    ("Clique para mover este ponto com o gizmo.", "Click to move this point with the gizmo."),
+    ("Gire para mudar a tangente; o tamanho é a tensão.", "Rotate to change the tangent; the length is the tension."),
+    ("Clique no 3D para acrescentar pontos; clique num ponto para movê-lo.", "Click in 3D to add points; click a point to move it."),
+    ("pente de curvatura", "curvature comb"),
+    ("Tamanho dos dentes do pente: não muda a curva.", "Comb tooth size: it does not change the curve."),
+    ("fixar a tangente do ponto", "fix the tangent of point"),
+    ("Guarda a direção de agora; depois gire a alça no 3D.", "Keeps the current direction; then rotate the handle in 3D."),
     // B290
     ("Seção na ordem do comando. Clique para inverter o sentido dela.", "Section in command order. Click to reverse its direction."),
     ("Arraste ao longo da curva para desfazer a torção.", "Drag along the curve to undo the twist."),

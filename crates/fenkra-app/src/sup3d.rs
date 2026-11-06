@@ -577,6 +577,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
     }
     crate::sup_analise::overlay(app, ui, rect, cam, id);
     crate::sup_loft::overlay(app, ui, rect, cam, id);
+    crate::sup_spline::overlay(app, ui, rect, cam, id);
     let Some(r) = app.result.as_ref() else { return };
     let doc = &app.open.doc;
     let destaque = crate::theme::accent(ui.visuals());
@@ -712,7 +713,7 @@ fn demo_b34(nome: &str, doc: &mut Document) -> crate::previa::DemoPrevia {
     use crate::previa::DemoPrevia::Ref;
     let t = |x: &str| x.to_string();
     let fx = PointRef::Fixed;
-    let curva = |d: &mut Document, p: &[[f64; 3]]| CurveRef::Ref(d.add_geometry(RefKind::Spline { points: p.iter().map(|q| fx(*q)).collect(), closed: false }));
+    let curva = |d: &mut Document, p: &[[f64; 3]]| CurveRef::Ref(d.add_geometry(RefKind::Spline { points: p.iter().map(|q| fx(*q)).collect(), closed: false, tangents: vec![] }));
     let onda = |d: &mut Document, z: f64| {
         let c = curva(d, &[[-40., 0., 0. + z], [0., 12., z], [40., 0., z]]);
         SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("50"), length2: t("0"), until: None, until2: None }))
@@ -797,6 +798,13 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<crate::previa::DemoPrevia>
             let g1 = reta(doc, [0., 0., 0.], [0., 0., 80.]);
             let g2 = reta(doc, [40., 0., 0.], [40., 0., 80.]);
             Ref(RefKind::SurfSweepX { kind: SweepKind::CircleRadius { guide1: g1, guide2: g2, radius: t("25") }, spine: None, solution: 0, smooth: false, sections: t("12") })
+        }
+        "sup_spline" => {
+            let p = [[-50., 0., 0.], [-15., 25., 10.], [20., -15., 20.], [55., 10., 5.]].map(PointRef::Fixed).to_vec();
+            let vinculo = doc.add_geometry(RefKind::PointCoords { x: t("20"), y: t("-15"), z: t("20"), frame: None });
+            let mut pts = p;
+            pts[2] = PointRef::Ref(vinculo);
+            return Some(Ref(RefKind::Spline { points: pts, closed: false, tangents: vec![None, Some(SplineTan { dir: [0., 0.6, 0.8], tension: 1.5 })] }));
         }
         "sup_conectores" | "sup_concordancia" | "sup_conectar" => return Some(demo_b290(nome, doc)),
         "sup_guias" | "sup_regrada" | "sup_conexao" | "sup_desvio" | "sup_pente" => return Some(demo_b34(nome, doc)),
