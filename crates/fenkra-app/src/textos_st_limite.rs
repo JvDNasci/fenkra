@@ -1,0 +1,33 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//! Traduções do aparar e estender até limite (B37).
+
+pub static TEXTOS: &[(&str, &str)] = &[
+    ("Aparar / estender até limite", "Trim / extend to limit"),
+    ("Nenhum membro na estrutura.", "No members in the structure."),
+    ("Membro", "Member"),
+    ("linha", "line"),
+    ("Início", "Start"),
+    ("Fim", "End"),
+    ("A ponta onde a linha guia começa.", "The end where the guide line starts."),
+    ("A ponta onde a linha guia termina.", "The end where the guide line finishes."),
+    ("Aparar", "Trim"),
+    ("Estender", "Extend"),
+    ("Encurta o membro até o limite; o trecho que sai aparece em vermelho.", "Shortens the member to the limit; the part that goes away shows in red."),
+    ("Alonga o membro até o limite; o trecho que entra aparece em verde.", "Lengthens the member to the limit; the part that is added shows in green."),
+    ("Limite", "Limit"),
+    ("Plano", "Plane"),
+    ("Outro membro", "Another member"),
+    ("Um plano perpendicular a um dos eixos do mundo, numa posição em mm.", "A plane perpendicular to one world axis, at a position in mm."),
+    ("A ponta para na face do outro membro, medida a partir do eixo dele.", "The end stops at the other member's face, measured from its axis."),
+    ("Posição do plano ao longo do eixo, em mm.", "Plane position along the axis, in mm."),
+    ("Não há outro membro.", "There is no other member."),
+    ("Prolongar se não alcança", "Extend if it does not reach"),
+    ("Quando o limite fica do lado contrário ao da ação (aparar que precisa alongar, ou o inverso), aplica mesmo assim.", "When the limit is on the opposite side of the action (trim that needs lengthening, or the reverse), applies anyway."),
+    ("Prolongamento novo:", "New extension:"),
+    ("Não alcança: o limite pede", "Does not reach: the limit asks for"),
+    ("Hoje:", "Now:"),
+    ("Aplicar", "Apply"),
+    ("Grava o prolongamento no membro. Desfazer volta num passo.", "Writes the extension to the member. Undo goes back one step."),
+    ("Ponta ajustada até o limite", "End adjusted to the limit"),
+    ("sobra", "stays"),
+];

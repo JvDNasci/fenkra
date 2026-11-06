@@ -349,7 +349,36 @@ impl Models {
                         fenkra_solidos::final_shape(&flat)
                     }
                     None => {
-                        out.error = Some("a peça não é de chapa: não há planificação".into());
+                        // B331: tubo dobrado na estrutura: a "planificada" é o tubo reto com as marcas
+                        let tubos = fenkra_solidos::tubos_dobrados(doc);
+                        let Some(tubo) = tubos.iter().find(|t| !t.dobras.is_empty()) else {
+                            out.error = Some("a peça não é de chapa nem tem tubo dobrado: não há planificação".into());
+                            return out;
+                        };
+                        match fenkra_solidos::st_dobra_vista::vista_reta(tubo) {
+                            Ok(dv) => {
+                                use fenkra_solidos::st_dobra_corte::Camada;
+                                for t in &dv.tracos {
+                                    let estilo = match t.camada {
+                                        Camada::Dobra | Camada::Marcacao => 3,
+                                        _ => 0,
+                                    };
+                                    let mut pts: Vec<V2> = t.pts.clone();
+                                    if t.fechado {
+                                        if let Some(p0) = pts.first().copied() {
+                                            pts.push(p0);
+                                        }
+                                    }
+                                    out.lines.push((pts, estilo));
+                                }
+                                for r in &dv.rotulos {
+                                    out.labels.push((r.pos, r.texto.clone()));
+                                }
+                                out.bounds();
+                                out.center = [(out.lo[0] + out.hi[0]) / 2., (out.lo[1] + out.hi[1]) / 2.];
+                            }
+                            Err(e) => out.error = Some(e),
+                        }
                         return out;
                     }
                 }
