@@ -10,6 +10,7 @@ impl App {
     pub(super) fn demo_janela(&mut self, ctx: &egui::Context) {
         static FEITO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         let Ok(nome) = std::env::var("FENKRA_DEMO_JANELA") else { return };
+        self.demo_diagnostico_acao(ctx);
         if ctx.input(|i| i.time) < 2. || FEITO.swap(true, std::sync::atomic::Ordering::Relaxed) {
             return;
         }
@@ -50,6 +51,7 @@ impl App {
                 }
             }
             "daltonico" => self.settings.acessibilidade.paleta_segura = true,
+            "diagnostico" => self.demo_diagnostico(),
             "roda_editor" => crate::roda::ui::pedir_abrir(ctx),
             "tabela" => {
                 let s = |x: &str| x.to_string();

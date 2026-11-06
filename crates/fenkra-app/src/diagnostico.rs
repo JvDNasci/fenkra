@@ -48,6 +48,75 @@ pub fn ancestrais(doc: &Document, id: Id) -> Vec<Id> {
     out
 }
 
+/// Família do objeto: só troca de lugar com outro da mesma. Um sketch serve onde outro servia, e um
+/// comando, onde outro do mesmo tipo servia.
+fn mesma_familia(doc: &Document, a: Id, b: Id) -> bool {
+    match (doc.feature(a), doc.feature(b), doc.reference(a), doc.reference(b)) {
+        (Some(x), Some(y), ..) => std::mem::discriminant(&x.kind) == std::mem::discriminant(&y.kind),
+        (.., Some(x), Some(y)) => x.kind.class() == y.kind.class(),
+        _ => false,
+    }
+}
+
+/// O que pode entrar no lugar de `id` para quem está na posição `antes_de`: quem depende dele fica de
+/// fora, e um comando depois de quem vai usá-lo quebraria a ordem.
+pub fn candidatos(doc: &Document, id: Id, antes_de: Option<usize>) -> Vec<(Id, String)> {
+    let cedo = |x: Id| antes_de.is_none_or(|n| doc.feature_index(x).is_none_or(|i| i < n));
+    let serve = |x: Id, nome: &str| (x != id && mesma_familia(doc, id, x) && cedo(x) && !ancestrais(doc, x).contains(&id)).then(|| (x, nome.to_string()));
+    let refs = doc.references.iter().filter_map(|r| serve(r.id, &r.name));
+    refs.chain(doc.features.iter().filter_map(|f| serve(f.id, &f.name))).collect()
+}
+
+/// Uma troca oferecida no painel.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Troca {
+    /// comando que muda; `None` muda quem usava `de`, todos eles
+    pub alvo: Option<Id>,
+    pub de: Id,
+    pub para: Id,
+    pub rotulo: String,
+}
+
+/// O que a falha de `id` aceita: ele mesmo sai e outro entra para quem o usava, ou, mais comum, um
+/// pai dele é trocado só aqui: a extrusão que falhou por causa do sketch passa a usar outro sketch.
+pub fn trocas(doc: &Document, id: Id) -> Vec<Troca> {
+    let primeiro_uso = filhos(doc, id).into_iter().filter_map(|f| doc.feature_index(f)).min();
+    let nome = |x: Id| doc.name_of(x);
+    let mut v: Vec<Troca> = vec![];
+    if !filhos(doc, id).is_empty() {
+        v.extend(candidatos(doc, id, primeiro_uso).into_iter().map(|(para, n)| Troca { alvo: None, de: id, para, rotulo: format!("{} → {n}", nome(id)) }));
+    }
+    for p in pais(doc, id) {
+        let lista = candidatos(doc, p, doc.feature_index(id)).into_iter().filter(|(x, _)| *x != id && !ancestrais(doc, *x).contains(&id));
+        v.extend(lista.map(|(para, n)| Troca { alvo: Some(id), de: p, para, rotulo: format!("{} → {n}", nome(p)) }));
+    }
+    v
+}
+
+/// Faz a troca: dentro do alvo, ou em todos que usavam `de`.
+pub fn aplicar_troca(doc: &mut Document, t: &Troca) {
+    let (de, para) = (t.de, t.para);
+    let mut troca = |x: &mut Id| {
+        if *x == de {
+            *x = para;
+        }
+    };
+    for f in doc.features.iter_mut().filter(|f| t.alvo.is_none_or(|a| a == f.id)) {
+        f.kind.walk(&mut troca, &mut |_| {});
+    }
+    for r in doc.references.iter_mut().filter(|r| r.id != para && t.alvo.is_none_or(|a| a == r.id)) {
+        r.kind.walk(&mut troca, &mut |_| {});
+    }
+}
+
+/// O elemento de geometria que Isolar corta: o próprio, ou o primeiro pai que for geometria.
+pub fn alvo_de_isolar(doc: &Document, id: Id) -> Option<Id> {
+    if doc.reference(id).is_some() {
+        return Some(id);
+    }
+    pais(doc, id).into_iter().find(|p| doc.reference(*p).is_some())
+}
+
 /// Comandos com erro, de cima para baixo na linha de tempo, cada um apontando a sua causa.
 pub fn falhas<'a>(doc: &Document, status: impl Fn(Id) -> Option<&'a Status>) -> Vec<Falha> {
     let erro = |id: Id| match status(id) {
@@ -55,13 +124,14 @@ pub fn falhas<'a>(doc: &Document, status: impl Fn(Id) -> Option<&'a Status>) -> 
         _ => None,
     };
     let mut v = vec![];
-    for f in &doc.features {
-        let Some(mensagem) = erro(f.id) else { continue };
-        let causa = ancestrais(doc, f.id)
+    // a geometria não tem lugar na linha de tempo e vem antes de quem a usa
+    for id in doc.references.iter().map(|r| r.id).chain(doc.features.iter().map(|f| f.id)) {
+        let Some(mensagem) = erro(id) else { continue };
+        let causa = ancestrais(doc, id)
             .into_iter()
             .filter(|a| erro(*a).is_some())
             .min_by_key(|a| doc.feature_index(*a).map_or(0, |i| i + 1));
-        v.push(Falha { id: f.id, mensagem, causa });
+        v.push(Falha { id, mensagem, causa });
     }
     v
 }
@@ -152,6 +222,51 @@ mod testes {
         assert_eq!(v[0].causa, None, "A é a causa");
         assert_eq!(v[1].id, b);
         assert_eq!(v[1].causa, Some(a), "B é consequência de A");
+    }
+
+    #[test]
+    fn extrusao_que_falhou_troca_o_sketch_so_nela() {
+        let (mut d, sk, a, b) = cadeia();
+        let cedo = d.add_feature(FeatureKind::Sketch(Default::default()));
+        d.features.rotate_right(1);
+        let tarde = d.add_feature(FeatureKind::Sketch(Default::default()));
+        let t = trocas(&d, a);
+        // o sketch que vem depois da extrusão não serve: ela o usaria antes de ele existir
+        assert!(t.iter().all(|x| x.para != tarde), "{t:?}");
+        let troca = t.iter().find(|x| x.para == cedo && x.alvo == Some(a) && x.de == sk).expect("troca do sketch").clone();
+        aplicar_troca(&mut d, &troca);
+        assert!(pais(&d, a).contains(&cedo) && !pais(&d, a).contains(&sk));
+        assert_eq!(pais(&d, b), vec![a], "quem não falhou fica como estava");
+    }
+
+    #[test]
+    fn comando_nao_entra_no_lugar_de_quem_depende_dele() {
+        let (d, _, a, b) = cadeia();
+        assert!(candidatos(&d, a, None).iter().all(|x| x.0 != b));
+    }
+
+    #[test]
+    fn isolar_sobe_do_comando_para_a_geometria_que_ele_usa() {
+        use fenkra_core::doc::{OriginPlane, PlaneRef, Sketch};
+        let mut d = Document::new("t");
+        let plano = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "5");
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(plano), data: Default::default() }));
+        assert_eq!(alvo_de_isolar(&d, plano), Some(plano));
+        assert_eq!(alvo_de_isolar(&d, sk), Some(plano));
+        let solto = d.add_feature(FeatureKind::Sketch(Default::default()));
+        assert_eq!(alvo_de_isolar(&d, solto), None);
+    }
+
+    #[test]
+    fn geometria_com_erro_entra_no_painel_antes_dos_comandos() {
+        use fenkra_core::doc::{OriginPlane, PlaneRef};
+        let (mut d, _, a, _) = cadeia();
+        let plano = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "5");
+        let mut st: HashMap<Id, Status> = HashMap::new();
+        st.insert(plano, Status::Error("sem pai".into()));
+        st.insert(a, Status::Error("perfil aberto".into()));
+        let v = falhas(&d, |i| st.get(&i));
+        assert_eq!(v.iter().map(|f| f.id).collect::<Vec<_>>(), vec![plano, a]);
     }
 
     #[test]

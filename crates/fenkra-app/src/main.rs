@@ -190,6 +190,7 @@ mod medir_quadros;
 mod desempenho;
 mod textos_desempenho;
 mod textos_montagem5;
+mod textos_fechamont;
 mod mouse3d;
 mod mouse3d_hid;
 mod textos_mouse3d;

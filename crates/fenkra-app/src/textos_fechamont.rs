@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//! Traduções do fechamento da montagem: restrições, geometria da montagem, transmissão e diagnóstico.
+
+pub static TEXTOS: &[(&str, &str)] = &[
+    ("Geometria da montagem", "Assembly geometry"),
+    ("Com o comando aberto, clique aqui: a restrição fica ligada a esta geometria e a segue quando ela mudar", "With the command open, click here: the constraint stays tied to this geometry and follows it when it changes"),
+    ("Gira a peça em volta do eixo do elemento antes de aceitar", "Rotates the part around the element axis before accepting"),
+    ("clique no 3D:", "click in 3D:"),
+    ("Medir no 3D", "Measure in 3D"),
+    ("Clique em dois pontos da montagem: vértice, aresta ou furo. A medida entra na distância, e o furo vale pelo eixo dele.", "Click two points of the assembly: vertex, edge or hole. The measure goes into the distance, and a hole counts by its axis."),
+    ("Duas laterais (dentes desta peça) e dois satélites; as laterais precisam de número par de dentes.", "Two side gears (teeth of this part) and two pinions; the side gears need an even tooth count."),
+    ("Caixa solta", "Free carrier"),
+    ("A caixa gira no rpm de entrada e leva os satélites; presa, ela fica parada e a lateral 2 gira ao contrário.", "The carrier turns at the input rpm and takes the pinions along; held, it stays still and side gear 2 turns the other way."),
+    ("Giro das laterais na caixa", "Side gear turn in the carrier"),
+    ("Zero é a reta: as duas laterais giram com a caixa. Fora disso, uma adianta e a outra atrasa o mesmo tanto.", "Zero is straight ahead: both side gears turn with the carrier. Otherwise one gains what the other loses."),
+    ("Cadeia de transmissão", "Transmission chain"),
+    ("Estágio", "Stage"),
+    ("Entrada", "Input"),
+    ("Saída", "Output"),
+    ("Torque", "Torque"),
+    ("Rendimento", "Efficiency"),
+    ("Total", "Total"),
+    ("relação total", "total ratio"),
+    ("perda", "loss"),
+    ("giro da saída em t:", "output turn at t:"),
+    ("✔ cada estágio recebe o que o anterior entrega", "✔ each stage gets what the previous one delivers"),
+    ("Levar a cadeia para os comandos", "Send the chain to the drives"),
+    ("A junta motora de cada estágio passa a girar com a saída do anterior.", "The driving joint of each stage now turns with the output of the previous one."),
+    ("Diferencial de caixa solta", "Free carrier differential"),
+    ("Guarda a geometria de agora e corta os pais de", "Keeps the current geometry and cuts the parents of"),
+];
