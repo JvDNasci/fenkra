@@ -256,7 +256,7 @@ c('B123', 4, 'P2', 'Posições nomeadas de montagem', 'Acrescentar: cada posiç�
 c('B124', 4, 'P1', 'Instruções de montagem animadas', 'Instruções de montagem animadas: nó Instruções, Roteiro, Passo, com referências estáveis a instâncias, estado de exibição, câmera, balões e BOM por passo calculado, nunca digitado. Etapa 1 (cerca de 200 k): passos manuais com explodida, saída HTML (B146), PDF vetorial e PNG, usando a remoção de linhas ocultas do desenho técnico para figuras isométricas vetoriais com balões. Etapa 2 (cerca de 100 k): sequência automática por direção de remoção derivada dos graus de liberdade das restrições com teste de colisão, agrupamento de fixadores e vídeo via ffmpeg externo opcional. S1000D e DITA ficam fora. Integra com B168, B152 e B156.',
   ['PESQ-MOD'], [], 300, 'Auto', 'Geral'),
 c('B125', 3, 'P1', 'Grandes montagens: carga leve e LOD', 'Depende antes da tesselação linear e do cache de malhas com limite. A carga e a composição da montagem precisam sair da thread da interface (view::compose e tesselar rodam nela hoje). Malha mais grossa por componente reaproveita os presets do B61 e o modo leve.',
-  ['PESQ-MOD'], [], 400, 'Auto', 'Montagem'),
+  ['PESQ-MOD'], [], 400, 'Auto', 'Montagem', status='feito'),
 c('B126', 4, 'P2', 'Tolerância empilhada 1D', 'Cadeia de cotas do PMI (cota em cadeia e de base como conjuntos), pior caso/RSS/Monte Carlo, contribuição. Cotas de referência e teóricas fora do empilhamento; usa a Tolerance tipada e as classes ISO 286 do crate de tabelas. Depende de B108, B82.',
   ['PESQ-MOD'], [], 250, 'Auto', 'PMI 3D'),
 c('B127', 4, 'P2', 'Rota de tubo dobrado', 'Rota 3D, raio de dobra, tabela de dobra, lista de corte. (BN12; módulo Tubulação; depende de B32, B42, B99).',
