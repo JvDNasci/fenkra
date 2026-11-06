@@ -193,6 +193,20 @@ impl App {
         });
     }
 
+    /// Lista curta das violações de um relatório, para os diálogos que rodam o checador (B305).
+    pub(super) fn linhas_qualidade(&self, ui: &mut egui::Ui, r: &fenkra_project::qualidade_modelo::Relatorio) {
+        if r.dispensado {
+            return;
+        }
+        ui.label(RichText::new(tr("Qualidade do modelo")).strong());
+        if r.violacoes.is_empty() {
+            ui.label(RichText::new(tr("Nenhuma regra violada.")).color(ui.visuals().hyperlink_color).small());
+        }
+        for v in &r.violacoes {
+            ui.label(RichText::new(format!("{} {} ({} / {})", tr(v.efetiva().rotulo()), tr(v.regra.rotulo()), fmt_num(v.medido), fmt_num(v.limite))).small().color(cor_gravidade(ui, v.efetiva())));
+        }
+    }
+
     /// Menu da linha de uma versão no histórico (B214): abrir somente leitura, restaurar como nova
     /// versão, comparar com a atual e comparar com outra.
     pub(super) fn menu_versao(&mut self, ui: &mut egui::Ui, sel: u64, numero: usize, total: usize, restaurar: &mut Option<usize>) {
