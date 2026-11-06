@@ -237,56 +237,16 @@ pub fn reconhece(pts: &[V3]) -> Curva3 {
 }
 
 impl SketchData {
-    fn ponto_fixo(&mut self, al: &mut impl FnMut() -> Id, q: P) -> Id {
-        let id = self.add_point(al, q[0], q[1]);
-        if let Some(p) = self.point_mut(id) {
-            p.fixed = true;
-        }
-        id
-    }
-
     /// Põe a geometria externa no sketch com a forma exata, ligada à origem.
     pub fn add_link_exata(&mut self, al: &mut impl FnMut() -> Id, source: LinkSrc, intersect: bool, forma: &Exata, construction: bool) -> Id {
-        let shape = match *forma {
-            Exata::Ponto(q) => {
-                let p = self.ponto_fixo(al, q);
-                self.add_curve(al, Curve::Point { p }, construction);
-                LinkShape::Poly { points: vec![p], closed: false, isolated: false }
-            }
-            Exata::Reta(a, b) => {
-                let (a, b) = (self.ponto_fixo(al, a), self.ponto_fixo(al, b));
-                let curve = self.add_curve(al, Curve::Line { a, b }, construction);
-                LinkShape::Line { a, b, curve }
-            }
-            Exata::Circulo { c, r } => {
-                let center = self.ponto_fixo(al, c);
-                let curve = self.add_curve(al, Curve::Circle { c: center, r }, construction);
-                LinkShape::Circle { center, curve }
-            }
-            Exata::Arco { c, s, e } => {
-                let (center, s, e) = (self.ponto_fixo(al, c), self.ponto_fixo(al, s), self.ponto_fixo(al, e));
-                let curve = self.add_curve(al, Curve::Arc { c: center, s, e }, construction);
-                LinkShape::Arc { center, s, e, curve }
-            }
-            Exata::Elipse { c, maior, menor, t0, t1 } => {
-                let center = self.ponto_fixo(al, c);
-                // inteira: as pontas não existem e o centro faz o papel delas
-                let (s, e) = if t1 - t0 >= TAU - 1e-9 {
-                    (center, center)
-                } else {
-                    (self.ponto_fixo(al, elipse_em(c, maior, menor, t0)), self.ponto_fixo(al, elipse_em(c, maior, menor, t1)))
-                };
-                let curve = self.add_curve(al, Curve::Ellipse { c: center, s, e, major: maior, minor: menor, t0, t1 }, construction);
-                LinkShape::Ellipse { center, s, e, curve }
-            }
-        };
+        let shape = self.monta_exata(al, forma, Default::default(), construction);
         let id = al();
         self.links.push(SkLink { id, source, intersect, shape, policy: self.link_policy });
         id
     }
 
     /// Reposiciona a geometria externa com a forma nova. Devolve `false` se a origem virou outro tipo
-    /// de curva, porque os pontos guardados não servem para a forma nova.
+    /// de curva: quem resolve é `aplica_vinculo`, que refaz a forma.
     pub fn update_link_exata(&mut self, link: Id, forma: &Exata) -> bool {
         let Some(l) = self.links.iter().find(|l| l.id == link).cloned() else { return false };
         let mut poe = |id: Id, q: P| {
@@ -311,7 +271,7 @@ impl SketchData {
                 poe(*s, ps);
                 poe(*e, pe);
             }
-            (LinkShape::Ellipse { center, s, e, curve }, Exata::Elipse { c, maior, menor, t0, t1 }) => {
+            (LinkShape::Ellipse { center, s, e, curve }, Exata::Elipse { c, maior, menor, t0, t1 }) if (s == center) == (t1 - t0 >= TAU - 1e-9) => {
                 poe(*center, c);
                 if s != center {
                     poe(*s, elipse_em(c, maior, menor, t0));

@@ -301,6 +301,8 @@ pub struct SketchViz {
     pub link_e: Vec<(Id, [f64; 2], f64, f64, f64)>,
     /// vínculos que perderam a origem (o estado "→✕" do painel)
     pub link_quebrados: Vec<Id>,
+    /// geometria externa que mudou de estrutura: o editor aplica o mesmo pedido no documento
+    pub link_ops: Vec<fenkra_core::vinculo::OpVinculo>,
     /// cada curva do sketch no mundo (id, construção, polilinha) — subelementos selecionáveis
     pub ents: Vec<(Id, bool, Vec<[f32; 3]>)>,
     /// cada ponto do sketch no mundo (id, posição)
@@ -3903,27 +3905,41 @@ impl Ctx<'_> {
                 // geometria externa (converter/projetar/interseção): reposiciona antes de resolver
                 let mut link_warn = vec![];
                 let mut quebrados = vec![];
+                let mut link_ops = vec![];
                 let data = if s.data.links.is_empty() {
                     std::borrow::Cow::Borrowed(&s.data)
                 } else {
+                    use fenkra_core::projecao::{projeta, reconhece};
                     use fenkra_core::sketch::{LinkPolicy, LinkShape};
+                    use fenkra_core::vinculo::OpVinculo;
                     let mut d = s.data.clone();
+                    // o documento não muda aqui: o que mudar de estrutura fica guardado para o editor
+                    let mut aplica = |d: &mut SketchData, op: OpVinculo, nome: Option<&str>, warn: &mut Vec<String>| {
+                        let ef = d.aplica_vinculo(&op);
+                        if ef.perdidas > 0 {
+                            warn.push(format!("geometria externa: a origem virou {}; {} restrição(ões) saíram", nome.unwrap_or("outra curva"), ef.perdidas));
+                        }
+                        if ef.sobras > 0 {
+                            warn.push(format!("geometria externa: {} ponto(s) sem interseção ficaram no lugar porque têm restrição", ef.sobras));
+                        }
+                        if ef.refeito {
+                            link_ops.push(op);
+                        }
+                    };
                     for l in &s.data.links {
                         // isolado fica como está, mesmo sem a origem
                         if l.policy == LinkPolicy::Isolado {
                             continue;
                         }
-                        // forma exata: a fórmula da origem manda
-                        if !matches!(l.shape, LinkShape::Poly { .. }) {
+                        let soltos = matches!(l.shape, LinkShape::Poly { isolated: true, .. });
+                        // a fórmula da origem manda, se a forma atual puder dar lugar a ela
+                        if !soltos {
                             match self.link_exata(l, &frame) {
-                                Ok(Some(forma)) => {
-                                    if !d.update_link_exata(l.id, &forma) {
-                                        quebrados.push(l.id);
-                                        link_warn.push(format!("geometria externa: a origem virou {}", forma.nome()));
-                                    }
+                                Ok(Some(forma)) if d.link_aceita_forma(l.id) => {
+                                    aplica(&mut d, OpVinculo::Exata(l.id, forma), Some(forma.nome()), &mut link_warn);
                                     continue;
                                 }
-                                Ok(None) => {}
+                                Ok(_) => {}
                                 Err(e) => {
                                     quebrados.push(l.id);
                                     link_warn.push(format!("geometria externa: {e}"));
@@ -3941,7 +3957,14 @@ impl Ctx<'_> {
                                         [geo3d::dot(v, frame.x), geo3d::dot(v, y)]
                                     })
                                     .collect();
-                                d.update_link(l.id, &uv);
+                                // sem fórmula na origem (corte de face, por exemplo), a forma vem dos pontos
+                                let forma = if soltos { None } else { projeta(&reconhece(&p3), &profile::plano_do(&frame)).filter(|_| d.link_aceita_forma(l.id)) };
+                                let op = match forma {
+                                    _ if soltos => OpVinculo::Pontos(l.id, uv),
+                                    Some(f) => OpVinculo::Exata(l.id, f),
+                                    None => OpVinculo::Polilinha(l.id, uv),
+                                };
+                                aplica(&mut d, op, forma.as_ref().map(|f| f.nome()), &mut link_warn);
                             }
                             Ok(_) => {
                                 quebrados.push(l.id);
@@ -3958,6 +3981,7 @@ impl Ctx<'_> {
                 let mut es = eval_sketch(&data, &self.vars)?;
                 es.warnings.extend(link_warn);
                 es.link_quebrados = quebrados;
+                es.link_ops = link_ops;
                 for l in data.links.iter().filter(|l| l.policy != fenkra_core::sketch::LinkPolicy::Isolado) {
                     use fenkra_core::sketch::{Curve, LinkShape};
                     match &l.shape {
@@ -6160,6 +6184,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             link_r: es.link_r.clone(),
             link_e: es.link_e.clone(),
             link_quebrados: es.link_quebrados.clone(),
+            link_ops: es.link_ops.clone(),
             ents: es.curves.iter().map(|(cid, pts)| (*cid, es.cons.contains(cid), pts.iter().map(|q| to3d(fr, *q)).collect())).collect(),
             pt_ids: es.pts.iter().map(|(pid, q)| (*pid, to3d(fr, *q))).collect(),
         };
@@ -7770,6 +7795,109 @@ mod tests {
         let r = recompute(&d);
         let v = r.sketches.iter().find(|v| v.feature == sk).unwrap();
         assert!(v.link_quebrados.is_empty() && !v.link_e.is_empty());
+    }
+
+    /// O que o editor faz depois do cálculo: leva ao documento o que mudou de estrutura.
+    fn aplica_no_documento(d: &mut Document, sk: Id, r: &RecomputeResult) -> usize {
+        let ops = r.sketches.iter().find(|v| v.feature == sk).unwrap().link_ops.clone();
+        if let Some(FeatureKind::Sketch(s)) = d.feature_mut(sk).map(|f| &mut f.kind) {
+            for op in &ops {
+                s.data.aplica_vinculo(op);
+            }
+        }
+        ops.len()
+    }
+
+    #[test]
+    fn origem_que_muda_de_tipo_refaz_o_vinculo_sem_quebrar() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::projecao::Exata;
+        use fenkra_core::sketch::{Curve, Kind, LinkShape, LinkSrc};
+        let (mut d, _) = cilindro_eliptico();
+        // o vínculo foi feito quando a aresta era uma linha; agora ela é a elipse de cima
+        let mut data = SketchData::default();
+        let mut n = 9_500_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        data.add_link_exata(&mut al, LinkSrc::Edge { mid: [-25., 0., 10.] }, false, &Exata::Reta([0., 0.], [10., 0.]), false);
+        let LinkShape::Line { curve, .. } = data.links[0].shape else { panic!() };
+        data.add_constraint(&mut al, Kind::Length(curve, "10".into()));
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+        let r = recompute(&d);
+        let v = r.sketches.iter().find(|v| v.feature == sk).unwrap();
+        assert!(v.link_quebrados.is_empty(), "{:?}", r.status[&sk]);
+        assert!(!v.link_e.is_empty(), "o cálculo já enxerga a elipse");
+        // a cota de comprimento não serve à elipse, e isso é dito
+        assert!(matches!(&r.status[&sk], Status::Warning(m) if m.contains("elipse")), "{:?}", r.status[&sk]);
+        assert_eq!(aplica_no_documento(&mut d, sk, &r), 1);
+        let Some(FeatureKind::Sketch(s)) = d.feature(sk).map(|f| &f.kind) else { panic!() };
+        assert!(matches!(s.data.curve(curve).unwrap().geom, Curve::Ellipse { .. }), "a mesma curva, com o mesmo id");
+        assert!(s.data.constraints.is_empty());
+        let r = recompute(&d);
+        assert!(matches!(r.status[&sk], Status::Ok), "{:?}", r.status[&sk]);
+        assert_eq!(aplica_no_documento(&mut d, sk, &r), 0, "em dia, nada mais muda");
+    }
+
+    #[test]
+    fn perfil_com_vinculo_que_mudou_de_tipo_extruda_a_forma_nova() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::projecao::Exata;
+        use fenkra_core::sketch::LinkSrc;
+        let (mut d, _) = cilindro_eliptico();
+        let mut data = SketchData::default();
+        let mut n = 9_510_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        data.add_link_exata(&mut al, LinkSrc::Edge { mid: [-25., 0., 10.] }, false, &Exata::Reta([0., 0.], [10., 0.]), false);
+        let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "10");
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(topo), data }));
+        let ex = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("5".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+        // sem tocar no documento: quem calcula sozinho (linha de comando, testes) também vê a elipse
+        let r = recompute(&d);
+        assert!(matches!(r.status[&ex], Status::Ok), "{:?}", r.status[&ex]);
+        // cilindro elíptico de semieixos 30 e 10, altura 10 + 5
+        let v = r.bodies.last().unwrap().mass.volume;
+        let esperado = std::f64::consts::PI * 30. * 10. * 15.;
+        assert!((v - esperado).abs() / esperado < 1e-3, "{v} contra {esperado}");
+    }
+
+    #[test]
+    fn interseccao_que_passa_a_cortar_mais_vezes_ganha_o_ponto() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::sketch::{LinkShape, LinkSrc};
+        let (mut d, _) = cilindro_eliptico();
+        // só uma travessia guardada; a elipse de baixo corta o plano XZ em duas
+        let mut data = SketchData::default();
+        let mut n = 9_520_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        data.add_link_points(&mut al, LinkSrc::Edge { mid: [-25., 0., 0.] }, &[[-25., 0.]], true).unwrap();
+        let LinkShape::Poly { points, .. } = data.links[0].shape.clone() else { panic!() };
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XZ), data }));
+        let r = recompute(&d);
+        let v = r.sketches.iter().find(|v| v.feature == sk).unwrap();
+        assert_eq!(v.link_pts.len(), 2, "{:?}", r.status[&sk]);
+        // o ponto que existia segue a travessia dele, e o novo nasce na outra
+        let q = v.link_pts.iter().find(|p| p.0 == points[0]).unwrap().1;
+        assert!((q[0] + 25.).abs() < 1e-9, "{q:?}");
+        let novo = v.link_pts.iter().find(|p| p.0 != points[0]).unwrap().1;
+        assert!((novo[0] - 35.).abs() < 1e-9, "{novo:?}");
+        assert_eq!(aplica_no_documento(&mut d, sk, &r), 1);
+        let r = recompute(&d);
+        assert_eq!(aplica_no_documento(&mut d, sk, &r), 0);
+        assert!(matches!(r.status[&sk], Status::Ok), "{:?}", r.status[&sk]);
     }
 
     #[test]
