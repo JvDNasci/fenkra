@@ -50,6 +50,26 @@ impl App {
                 }
             }
             "daltonico" => self.settings.acessibilidade.paleta_segura = true,
+            // B361: a face de cima do primeiro corpo já escolhida (contorno externo, furos de fora)
+            "face" => {
+                let alvo = self.result.as_ref().and_then(|r| r.bodies.first()).and_then(|b| {
+                    let m = &b.mesh;
+                    (0..m.face_ranges.len()).filter_map(|f| {
+                        let v = m.indices[m.face_ranges[f] as usize] as usize;
+                        (m.normals[v * 3 + 2] > 0.99).then(|| (f, m.positions[v * 3 + 2], [m.positions[v * 3], m.positions[v * 3 + 1], m.positions[v * 3 + 2]]))
+                    }).max_by(|a, b| a.1.total_cmp(&b.1)).map(|(f, _, p)| (f, p, b.face_owner.get(f).copied().unwrap_or(b.collector)))
+                });
+                if let Some((face, point, owner)) = alvo {
+                    self.picks = vec![crate::picking::Pick::Face { body: 0, face, owner, point, normal: [0., 0., 1.] }];
+                }
+            }
+            // B355: abre o último comando e conclui: a peça não pode ficar laranja
+            "concluir" => {
+                if let Some(id) = self.open.doc.features.last().map(|f| f.id) {
+                    self.start_session(id, false, None);
+                    self.conclude_session();
+                }
+            }
             "roda_editor" => crate::roda::ui::pedir_abrir(ctx),
             "tabela" => {
                 let s = |x: &str| x.to_string();
