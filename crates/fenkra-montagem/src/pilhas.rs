@@ -71,6 +71,9 @@ pub struct Pilha {
     pub travar_giro: bool,
     /// componentes da pilha, com o parafuso primeiro
     pub pecas: Vec<Id>,
+    /// restrições que a própria pilha criou: refazer troca só estas. Vazio em arquivo antigo
+    #[serde(default)]
+    pub restricoes: Vec<Id>,
     #[serde(default = "sim")]
     pub seguir_furo: bool,
     #[serde(default = "sim")]
@@ -176,6 +179,7 @@ pub(crate) fn registrar(a: &mut Assembly, furos: &[Furo], md: &Medida, tamanho: 
         tam_acessorios: op.tam_acessorios.clone(),
         folga: op.folga,
         travar_giro: op.travar_giro,
+        restricoes: a.mates.iter().filter(|m| pecas.contains(&m.a.comp) || pecas.contains(&m.b.comp)).map(|m| m.id).collect(),
         pecas,
         seguir_furo: true,
         atualizar_comprimento: op.comprimento.is_none(),
@@ -192,6 +196,57 @@ pub(crate) fn registrar(a: &mut Assembly, furos: &[Furo], md: &Medida, tamanho: 
 fn tirar_pecas(a: &mut Assembly, pecas: &[Id]) {
     a.nodes.retain(|n| !pecas.contains(&n.id));
     a.mates.retain(|m| !pecas.contains(&m.a.comp) && !pecas.contains(&m.b.comp));
+}
+
+/// A restrição foi feita pela pilha? Arquivo antigo não guardou a lista: ali vale que a pilha nunca
+/// grava o clique, e que ela nunca se prende à origem.
+fn da_pilha(p: &Pilha, m: &Mate) -> bool {
+    if !p.restricoes.is_empty() {
+        return p.restricoes.contains(&m.id);
+    }
+    m.a.pick.is_none() && m.b.pick.is_none() && m.a.comp != ORIGEM && m.b.comp != ORIGEM
+}
+
+/// Quem herda o id de cada peça antiga, na ordem: o parafuso sempre é o primeiro; depois quem usa o
+/// mesmo arquivo; e, com o mesmo número de peças, a mesma posição na pilha, que é a troca de tamanho.
+/// Peça sem herdeira saiu de verdade, como a arruela desligada.
+fn herdeiras(velhas: &[(Id, NodeKind)], novas: &[(Id, NodeKind)]) -> Vec<(Id, Id)> {
+    let mut pares: Vec<(Id, Id)> = vec![];
+    let livre = |pares: &[(Id, Id)], v: Id, n: Id| !pares.iter().any(|p| p.0 == v || p.1 == n);
+    if let (Some(v), Some(n)) = (velhas.first(), novas.first()) {
+        pares.push((v.0, n.0));
+    }
+    for (v, kv) in velhas {
+        if let Some((n, _)) = novas.iter().find(|(n, kn)| kn == kv && livre(&pares, *v, *n)) {
+            pares.push((*v, *n));
+        }
+    }
+    if velhas.len() == novas.len() {
+        for (v, n) in velhas.iter().zip(novas) {
+            if livre(&pares, v.0, n.0) {
+                pares.push((v.0, n.0));
+            }
+        }
+    }
+    pares
+}
+
+/// A peça nova passa a ser a antiga: mesmo id e o que a pessoa ajustou nela.
+fn herdar(a: &mut Assembly, velho: &Node, novo: Id) {
+    if let Some(n) = a.node_mut(novo) {
+        n.id = velho.id;
+        n.visible = velho.visible;
+        n.color = velho.color;
+        n.number = velho.number;
+        n.mode = velho.mode;
+    }
+    for m in &mut a.mates {
+        for r in [&mut m.a, &mut m.b] {
+            if r.comp == novo {
+                r.comp = velho.id;
+            }
+        }
+    }
 }
 
 /// Apaga a pilha e o que ela pôs na montagem.
@@ -226,11 +281,30 @@ fn achar_furo<'a>(an: &Ancora, furos: &'a [Furo]) -> Option<&'a Furo> {
 fn refazer(a: &mut Assembly, dir: &Path, lib: &Biblioteca, mut p: Pilha, md: &Medida, desig: &str, op: &OpcoesFixadores) -> Result<(), String> {
     let fam = lib.familia(&p.familia).ok_or("família desconhecida")?;
     let t = fam.tamanho(desig).ok_or("tamanho desconhecido")?;
+    // o que a pessoa fez nas peças da pilha não é da pilha: fica de fora do refazer
+    let velhas: Vec<Node> = p.pecas.iter().filter_map(|c| a.node(*c).cloned()).collect();
+    let toca = |m: &Mate| p.pecas.contains(&m.a.comp) || p.pecas.contains(&m.b.comp);
+    let manuais: Vec<Mate> = a.mates.iter().filter(|m| toca(m) && !da_pilha(&p, m)).cloned().collect();
     tirar_pecas(a, &p.pecas);
     let pasta = pasta_dos_fixadores(a);
     let mut rel = RelatorioFixadores::default();
     let mut arquivos = HashMap::new();
-    p.pecas = inserir_pecas(a, dir, md, fam, t, desig, lib.familia(&p.familia_arruela), lib.familia(&p.familia_porca), op, pasta, &mut arquivos, &mut rel)?;
+    let novas = inserir_pecas(a, dir, md, fam, t, desig, lib.familia(&p.familia_arruela), lib.familia(&p.familia_porca), op, pasta, &mut arquivos, &mut rel)?;
+    // as restrições novas são as que tocam as peças novas, antes de qualquer troca de id
+    p.restricoes = a.mates.iter().filter(|m| novas.contains(&m.a.comp) || novas.contains(&m.b.comp)).map(|m| m.id).collect();
+    let tipo = |n: &Node| (n.id, n.kind.clone());
+    let lista_nova: Vec<(Id, NodeKind)> = novas.iter().filter_map(|c| a.node(*c).map(tipo)).collect();
+    let pares = herdeiras(&velhas.iter().map(tipo).collect::<Vec<_>>(), &lista_nova);
+    for (v, n) in &pares {
+        if let Some(velho) = velhas.iter().find(|x| x.id == *v) {
+            herdar(a, velho, *n);
+        }
+    }
+    p.pecas = novas.iter().map(|n| pares.iter().find(|x| x.1 == *n).map_or(*n, |x| x.0)).collect();
+    // a restrição manual volta se as peças dela ainda existem; a de peça que saiu vai junto com ela
+    let existe = |a: &Assembly, c: Id| c == ORIGEM || a.node(c).is_some();
+    let voltam: Vec<Mate> = manuais.into_iter().filter(|m| existe(a, m.a.comp) && existe(a, m.b.comp)).collect();
+    a.mates.extend(voltam);
     p.tamanho = desig.to_string();
     p.comprimento = md.comprimento;
     p.nome = p.rotulo();
@@ -278,6 +352,7 @@ pub fn adicionar_manual(a: &mut Assembly, dir: &Path, lib: &Biblioteca, comp: Id
         folga: op.folga,
         travar_giro: op.travar_giro,
         pecas: vec![],
+        restricoes: vec![],
         seguir_furo: false,
         atualizar_comprimento: false,
         trocar_junto: true,
@@ -492,6 +567,84 @@ mod tests {
 
     fn nomes(a: &Assembly, p: &Pilha) -> Vec<String> {
         p.pecas.iter().map(|c| a.name_of(*c)).collect()
+    }
+
+    /// Restrição manual, com o clique gravado, entre o parafuso e a placa A.
+    fn manual(a: &mut Assembly, parafuso: Id) -> Id {
+        let comp = a.nodes.iter().find(|n| n.name == "A").unwrap().id;
+        let g = Geom::Plane { p: [0.; 3], n: [1., 0., 0.] };
+        a.add_mate(MateKind::Parallel, MateRef { comp, geom: g, pick: Some([1., 0., 0.]) }, MateRef { comp: parafuso, geom: g, pick: Some([1., 0., 0.]) })
+    }
+
+    #[test]
+    fn refazer_guarda_os_ids_e_a_restricao_manual() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let d = pasta("ids");
+        let (mut a, mut c) = conjunto(&d, 8., &[[0., 0.]]);
+        let p = a.pilhas[0].clone();
+        let m = manual(&mut a, p.pecas[0]);
+        let j = {
+            let f = crate::kin::JFrame::from_axis([0.; 3], [0., 0., 1.]);
+            a.add_joint(crate::kin::JointKind::Revolute, crate::kin::JRef { comp: p.pecas[3], frame: f }, crate::kin::JRef { comp: p.pecas[0], frame: f })
+        };
+        a.node_mut(p.pecas[0]).unwrap().color = Some([1, 2, 3]);
+        let auto = a.mates.iter().filter(|x| p.restricoes.contains(&x.id)).count();
+        let r = editar(&mut a, &d, &mut c, biblioteca::publica(), &[p.id], |x| {
+            x.seguir_furo = false;
+            x.tamanho = "M5".into();
+        });
+        assert_eq!(r.refeitas, 1, "{r:?}");
+        let q = a.pilhas[0].clone();
+        assert_eq!(q.pecas, p.pecas, "cada peça continua com o id dela");
+        assert_eq!(a.node(q.pecas[0]).unwrap().color, Some([1, 2, 3]));
+        assert!(a.mates.iter().any(|x| x.id == m), "a restrição manual ficou");
+        assert_eq!(a.mates.iter().filter(|x| q.restricoes.contains(&x.id)).count(), auto, "as da pilha foram trocadas, sem acumular");
+        assert!(!q.restricoes.contains(&m));
+        let junta = a.joints.iter().find(|x| x.id == j).unwrap();
+        assert!(a.node(junta.a.comp).is_some() && a.node(junta.b.comp).is_some(), "a junta não fica apontando para o vazio");
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn peca_que_sai_leva_so_a_restricao_dela() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let d = pasta("arruela");
+        let (mut a, mut c) = conjunto(&d, 8., &[[0., 0.]]);
+        let p = a.pilhas[0].clone();
+        let no_parafuso = manual(&mut a, p.pecas[0]);
+        let na_arruela = manual(&mut a, p.pecas[1]);
+        let r = editar(&mut a, &d, &mut c, biblioteca::publica(), &[p.id], |x| x.arruela = false);
+        assert_eq!(r.refeitas, 1, "{r:?}");
+        let q = a.pilhas[0].clone();
+        assert_eq!(q.pecas.len(), 2, "parafuso e porca");
+        assert_eq!(q.pecas[0], p.pecas[0]);
+        assert_eq!(q.pecas[1], p.pecas[3], "a porca usa o mesmo arquivo e fica com o id dela");
+        assert!(a.mates.iter().any(|x| x.id == no_parafuso));
+        assert!(!a.mates.iter().any(|x| x.id == na_arruela), "a arruela saiu de verdade");
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn arquivo_antigo_sem_a_lista_reconhece_a_restricao_pelo_clique() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let d = pasta("antigo");
+        let (mut a, mut c) = conjunto(&d, 8., &[[0., 0.]]);
+        let p = a.pilhas[0].clone();
+        let m = manual(&mut a, p.pecas[0]);
+        a.pilhas[0].restricoes.clear();
+        editar(&mut a, &d, &mut c, biblioteca::publica(), &[p.id], |x| {
+            x.seguir_furo = false;
+            x.tamanho = "M5".into();
+        });
+        assert!(a.mates.iter().any(|x| x.id == m));
+        assert!(!a.pilhas[0].restricoes.is_empty(), "o refazer já deixa a lista gravada");
+        let _ = std::fs::remove_dir_all(d);
     }
 
     #[test]

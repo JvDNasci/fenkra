@@ -382,6 +382,23 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
         ui.label(RichText::new(tr(pen.c.tipo.label())).strong());
         ui.label(tr(etapa_texto(&pen.c)));
     });
+    // ---- resultado da prévia: no topo, porque é a primeira coisa a ler quando não fecha
+    match &pen.resultado {
+        Some(Err(e)) => {
+            ui.label(RichText::new(tr(e)).color(crate::theme::st_err()));
+        }
+        Some(Ok(p)) if p.falhou() => {
+            quadro_de_conflito(ui, p, &nomes_conflito, &mut pen.conflito_sob_mouse);
+            ui.label(RichText::new(format!("{} {}", p.report.dof, tr("GDL restariam com a proposta"))).small());
+        }
+        Some(Ok(p)) => {
+            ui.label(RichText::new(format!("{} {} ({} {})", p.report.dof, tr("GDL livres depois de aceitar"), p.gdl_antes, tr("agora"))).color(crate::theme::st_ok()));
+            if p.redundante() {
+                ui.label(RichText::new(tr("Não tira grau de liberdade: repete o que já está restrito.")).small().color(crate::theme::st_warn()));
+            }
+        }
+        None => {}
+    }
     // ---- suporte: duas caixas, com a cor das setas do 3D
     crate::editor::section(ui, "Suporte");
     for k in 0..2 {
@@ -555,23 +572,6 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
                 pen.c.inv_lado = !pen.c.inv_lado;
             }
         });
-    }
-    // ---- resultado da prévia
-    match &pen.resultado {
-        Some(Err(e)) => {
-            ui.label(RichText::new(tr(e)).color(crate::theme::st_err()));
-        }
-        Some(Ok(p)) if p.falhou() => {
-            quadro_de_conflito(ui, p, &nomes_conflito, &mut pen.conflito_sob_mouse);
-            ui.label(RichText::new(format!("{} {}", p.report.dof, tr("GDL restariam com a proposta"))).small());
-        }
-        Some(Ok(p)) => {
-            ui.label(RichText::new(format!("{} {} ({} {})", p.report.dof, tr("GDL livres depois de aceitar"), p.gdl_antes, tr("agora"))).color(crate::theme::st_ok()));
-            if p.redundante() {
-                ui.label(RichText::new(tr("Não tira grau de liberdade: repete o que já está restrito.")).small().color(crate::theme::st_warn()));
-            }
-        }
-        None => {}
     }
     // ---- avançado
     egui::CollapsingHeader::new(tr("Avançado")).id_salt("asm_cmd_avancado").show(ui, |ui| {
