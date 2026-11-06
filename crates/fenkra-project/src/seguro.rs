@@ -46,11 +46,42 @@ pub fn gravar_atomico(destino: &Path, dados: &[u8]) -> std::io::Result<()> {
         // a cópia de segurança é melhor esforço: falhar nela não impede salvar
         let _ = std::fs::copy(destino, caminho_bak(destino));
     }
-    if let Err(e) = std::fs::rename(&tmp, destino) {
+    if let Err(e) = renomear_com_tentativas(&tmp, destino) {
         let _ = std::fs::remove_file(&tmp);
-        return Err(e);
+        return Err(if bloqueio_temporario(&e) {
+            std::io::Error::new(
+                e.kind(),
+                format!("o arquivo continuou bloqueado (em uso ou sem permissão) após várias tentativas ({e}); o conteúdo anterior foi preservado"),
+            )
+        } else {
+            e
+        });
     }
     Ok(())
+}
+
+/// Bloqueio breve do Windows: 32 (arquivo em uso), 33 (trecho travado) e 5 (acesso negado, que a
+/// troca de nome devolve quando o destino está aberto por outro processo; num arquivo realmente
+/// protegido o erro persiste e volta claro depois das tentativas). Antivírus, indexador e
+/// outro processo abrem o arquivo por instantes e a troca de nome falha nesse intervalo.
+pub(crate) fn bloqueio_temporario(e: &std::io::Error) -> bool {
+    cfg!(windows) && matches!(e.raw_os_error(), Some(5) | Some(32) | Some(33))
+}
+
+/// Troca o nome tentando de novo só em bloqueio temporário (até 8 vezes, ~0,6 s). O temporário
+/// segue intacto até a troca dar certo, então nenhum dado se perde; outros erros voltam na hora.
+pub(crate) fn renomear_com_tentativas(de: &Path, para: &Path) -> std::io::Result<()> {
+    let mut espera = 10u64;
+    for _ in 0..8 {
+        match std::fs::rename(de, para) {
+            Err(e) if bloqueio_temporario(&e) => {
+                std::thread::sleep(std::time::Duration::from_millis(espera));
+                espera = (espera * 2).min(160);
+            }
+            r => return r,
+        }
+    }
+    std::fs::rename(de, para)
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -182,6 +213,41 @@ mod tests {
         assert_eq!(std::fs::read(&f).unwrap(), b"dois");
         assert_eq!(std::fs::read(caminho_bak(&f)).unwrap(), b"um");
         assert!(!com_sufixo(&f, ".tmp").exists());
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn bloqueio_breve_do_windows_e_vencido_com_tentativas() {
+        let d = tmp("bloqueio");
+        let f = d.join("peca.fkp");
+        gravar_atomico(&f, b"original").unwrap();
+        // outro processo segura o destino aberto sem compartilhar por ~150 ms
+        use std::os::windows::fs::OpenOptionsExt;
+        let seg = std::fs::OpenOptions::new().read(true).share_mode(0).open(&f).unwrap();
+        let t = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(150));
+            drop(seg);
+        });
+        gravar_atomico(&f, b"novo").unwrap();
+        t.join().unwrap();
+        assert_eq!(std::fs::read(&f).unwrap(), b"novo");
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn bloqueio_persistente_da_erro_claro_e_preserva_o_original() {
+        let d = tmp("persiste");
+        let f = d.join("peca.fkp");
+        gravar_atomico(&f, b"original").unwrap();
+        use std::os::windows::fs::OpenOptionsExt;
+        let _seg = std::fs::OpenOptions::new().read(true).share_mode(0).open(&f).unwrap();
+        let e = gravar_atomico(&f, b"novo").unwrap_err();
+        assert!(e.to_string().contains("continuou bloqueado"), "{e}");
+        assert!(!com_sufixo(&f, ".tmp").exists());
+        drop(_seg);
+        assert_eq!(std::fs::read(&f).unwrap(), b"original");
         let _ = std::fs::remove_dir_all(d);
     }
 

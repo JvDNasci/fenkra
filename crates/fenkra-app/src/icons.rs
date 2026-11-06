@@ -144,7 +144,7 @@ modelos!(
     "sm_furo_flangeado", "sm_joggle", "sm_parametros", "sm_parede", "sm_rasgo_circular", "sm_recorte",
     "sm_veneziana", "spine", "spline", "spline_controle", "st_biblioteca", "st_canto_aparar",
     "st_canto_encaixe", "st_canto_meia", "st_canto_nenhum", "st_corte", "st_membro", "st_montagem", "st_placa",
-    "st_reforco", "sup_cilindro", "sup_concordancia", "sup_conectar", "sup_deslocada", "sup_esfera",
+    "st_reforco", "st_solda", "sup_cilindro", "sup_concordancia", "sup_conectar", "sup_deslocada", "sup_esfera",
     "sup_extraida", "sup_extrudada", "sup_filete", "sup_filete_aresta", "sup_multisecoes", "sup_preenchida",
     "sup_regrada", "sup_revolucao", "sup_tubo", "sup_varredura", "sup_varredura_av", "sweep_corrigido", "sweep_fixo",
     "sweep_frenet", "vista_direita", "vista_frente", "vista_iso", "vista_topo", "wf_repetir", "xf_afinidade",
@@ -548,6 +548,12 @@ pub fn tool_button(ui: &mut egui::Ui, icon: &str, label: &str, size: f32, show_l
         ui.painter().rect_filled(rect, 6., fill);
         let icon_rect = egui::Rect::from_center_size(egui::pos2(rect.center().x, rect.top() + 4. + size / 2.), egui::vec2(size, size));
         egui::Image::new(get(icon)).paint_at(ui, icon_rect);
+        // o passo atual do curso aponta este comando (B297)
+        if let Some(d) = crate::curso_ui::destaque(ui.ctx()) {
+            if d.icone == icon {
+                crate::curso_ui::pintar_destaque(ui, rect, d);
+            }
+        }
         if let Some(g) = galley {
             let pos = egui::pos2(rect.center().x - g.size().x / 2., icon_rect.bottom() + 2.);
             ui.painter().galley(pos, g, v.text_color());

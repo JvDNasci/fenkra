@@ -130,10 +130,18 @@ impl App {
             }
             Acao::Exemplo => self.load_doc(fenkra_solidos::example_document(), None, None),
             Acao::ExemploNomeado(nome) => {
-                if let Some(e) = crate::examples::all().into_iter().find(|e| e.name == nome) {
-                    self.load_doc(e.doc, None, None);
-                    self.settings.bench = e.bench;
+                if let Some((doc, bench)) = crate::curso_exemplos::peca(&nome) {
+                    self.load_doc(doc, None, None);
+                    self.settings.bench = bench;
                     self.started = true;
+                } else if let Some(arq) = crate::curso_exemplos::gravar_composto(&nome) {
+                    // montagem ou desenho de exemplo (B297): arquivos numa pasta temporária
+                    self.open_path(&arq);
+                    if nome == crate::curso_exemplos::FOLHA {
+                        if let Some(d) = self.dwg.as_mut() {
+                            d.source = Some(crate::curso_exemplos::fonte_da_folha());
+                        }
+                    }
                 }
             }
             Acao::Importar => {

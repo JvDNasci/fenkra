@@ -192,6 +192,22 @@ pub fn perto_na_malha(m: &Mesh, p: Vec3) -> Option<(Vec3, Vec3)> {
     melhor.map(|x| (x.1, x.2))
 }
 
+/// Superfície dona da aresta clicada: a de referência ou a face do corpo que tem essa aresta.
+pub fn apoio_da_aresta(r: &RecomputeResult, body: usize, edge: usize) -> Option<SurfRef> {
+    if let Some(id) = crate::picking::surface_of(r, body) {
+        return Some(SurfRef::Ref(id));
+    }
+    let b = r.bodies.get(body)?;
+    let m = &b.mesh;
+    let face = m.edge_faces.get(edge)?.iter().copied().find(|f| *f != fenkra_kernel::NO_FACE)? as usize;
+    let i0 = *m.face_ranges.get(face)? as usize;
+    let vtx = |k: usize| Vec3::new(m.positions[m.indices[k] as usize * 3], m.positions[m.indices[k] as usize * 3 + 1], m.positions[m.indices[k] as usize * 3 + 2]);
+    let (p0, p1, p2) = (vtx(i0), vtx(i0 + 1), vtx(i0 + 2));
+    let (c, n) = ((p0 + p1 + p2) / 3., (p1 - p0).cross(p2 - p0).try_normalize()?);
+    let d = |v: Vec3| [v.x as f64, v.y as f64, v.z as f64];
+    Some(SurfRef::Face { point: d(c), normal: d(n), owner: b.face_owner.get(face).copied(), key: b.face_key(face) })
+}
+
 /// Ponto e normal da superfície de entrada, o mais perto possível de `perto`.
 fn ancora(r: &RecomputeResult, s: &SurfRef, perto: Vec3) -> Option<(Vec3, Vec3)> {
     match s {
@@ -478,6 +494,7 @@ pub fn decorar(doc: &Document, r: &RecomputeResult, f: &crate::previa::Fantasma,
     crate::sup_analise::decorar(r, f.id, &[f4(f.cor), f4(f.neutro), f4(f.entrada), f4(f.erro)], s);
     let cobre = cobre_a_entrada(doc, f.id);
     pintar_regioes(r, f, s);
+    crate::sup_loft::decorar(doc, r, f, s);
     let tem_regioes = !regioes(r, f.id).is_empty();
     for x in suportes(doc, f.id) {
         // os pedaços já mostram a superfície inteira, com contorno
@@ -559,6 +576,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
         return;
     }
     crate::sup_analise::overlay(app, ui, rect, cam, id);
+    crate::sup_loft::overlay(app, ui, rect, cam, id);
+    crate::sup_spline::overlay(app, ui, rect, cam, id);
     let Some(r) = app.result.as_ref() else { return };
     let doc = &app.open.doc;
     let destaque = crate::theme::accent(ui.visuals());
@@ -664,12 +683,37 @@ pub fn dica_de_lado(ui: &mut egui::Ui) {
     ui.label(RichText::new(tr("A seta do 3D aponta o lado que fica. Clique nela para inverter.")).weak().small());
 }
 
+/// Casos do B290: círculo e quadrado com conector, concordância e conectar.
+fn demo_b290(nome: &str, doc: &mut Document) -> crate::previa::DemoPrevia {
+    use crate::previa::DemoPrevia::Ref;
+    let t = |x: &str| x.to_string();
+    let fx = PointRef::Fixed;
+    let folha = |d: &mut Document, a: [f64; 3], b: [f64; 3]| {
+        let c = CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: fx(a), b: fx(b), start: t("0"), end: t("0") }));
+        d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("50"), length2: t("0"), until: None, until2: None })
+    };
+    if nome == "sup_conectores" {
+        let z = doc.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "60");
+        let _ = z;
+        let c = doc.add_geometry(RefKind::Circle { center: fx([0.; 3]), plane: PlaneRef::Origin(OriginPlane::XY), radius: t("25"), start: t("0"), end: t("360") });
+        let q = doc.add_geometry(RefKind::Polyline { points: [[20., 20., 60.], [-20., 20., 60.], [-20., -20., 60.], [20., -20., 60.]].map(fx).to_vec(), closed: true });
+        return Ref(RefKind::SurfLoft { sections: vec![CurveRef::Ref(c), CurveRef::Ref(q)], guide: None, ruled: false, closed: false, opts: LoftOpts { connectors: vec![vec![0.125, 0.]], iso: 6, tangents: [t("40"), t("0")], ..Default::default() } });
+    }
+    let a = folha(doc, [-60., 0., 0.], [-20., 0., 0.]);
+    let b = folha(doc, [20., 0., 25.], [60., 0., 25.]);
+    if nome == "sup_conectar" {
+        return Ref(RefKind::SurfConnect { a: SurfRef::Ref(a), b: SurfRef::Ref(b), cont: Continuity::G1, tension: t("1"), tension2: Some(t("0.6")), near: [None; 2] });
+    }
+    let borda = |x: f64, z: f64| CurveRef::Edge(vec![[x, 0., z], [x, 50., z]]);
+    Ref(RefKind::SurfBlend { a: borda(-20., 0.), sa: Some(SurfRef::Ref(a)), b: borda(20., 25.), sb: Some(SurfRef::Ref(b)), cont: Continuity::G2, tension: t("1"), tension2: None })
+}
+
 /// Casos do B34: multi-seções com guias, regrada e as análises.
 fn demo_b34(nome: &str, doc: &mut Document) -> crate::previa::DemoPrevia {
     use crate::previa::DemoPrevia::Ref;
     let t = |x: &str| x.to_string();
     let fx = PointRef::Fixed;
-    let curva = |d: &mut Document, p: &[[f64; 3]]| CurveRef::Ref(d.add_geometry(RefKind::Spline { points: p.iter().map(|q| fx(*q)).collect(), closed: false }));
+    let curva = |d: &mut Document, p: &[[f64; 3]]| CurveRef::Ref(d.add_geometry(RefKind::Spline { points: p.iter().map(|q| fx(*q)).collect(), closed: false, tangents: vec![] }));
     let onda = |d: &mut Document, z: f64| {
         let c = curva(d, &[[-40., 0., 0. + z], [0., 12., z], [40., 0., z]]);
         SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("50"), length2: t("0"), until: None, until2: None }))
@@ -755,6 +799,14 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<crate::previa::DemoPrevia>
             let g2 = reta(doc, [40., 0., 0.], [40., 0., 80.]);
             Ref(RefKind::SurfSweepX { kind: SweepKind::CircleRadius { guide1: g1, guide2: g2, radius: t("25") }, spine: None, solution: 0, smooth: false, sections: t("12") })
         }
+        "sup_spline" => {
+            let p = [[-50., 0., 0.], [-15., 25., 10.], [20., -15., 20.], [55., 10., 5.]].map(PointRef::Fixed).to_vec();
+            let vinculo = doc.add_geometry(RefKind::PointCoords { x: t("20"), y: t("-15"), z: t("20"), frame: None });
+            let mut pts = p;
+            pts[2] = PointRef::Ref(vinculo);
+            return Some(Ref(RefKind::Spline { points: pts, closed: false, tangents: vec![None, Some(SplineTan { dir: [0., 0.6, 0.8], tension: 1.5 })] }));
+        }
+        "sup_conectores" | "sup_concordancia" | "sup_conectar" => return Some(demo_b290(nome, doc)),
         "sup_guias" | "sup_regrada" | "sup_conexao" | "sup_desvio" | "sup_pente" => return Some(demo_b34(nome, doc)),
         "sup_engrossar" => {
             let f = folha(doc, [-40., 0., 0.], [40., 0., 0.]);

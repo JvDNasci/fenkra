@@ -16,6 +16,7 @@ mod alcas;
 mod assistentes;
 mod cota_inteligente;
 mod corte_ui;
+mod cordao;
 mod ghost;
 mod options;
 mod simbolos;
@@ -1986,6 +1987,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             } else if n.kind == NoteKind::Weld {
                 simbolos::previa(ui, n, st.d.text_height);
                 simbolos::solda(ui, n);
+                cordao::do_modelo(ui, &mut st.models, &st.d.views, n);
             } else {
                 ui.text_edit_multiline(&mut n.text);
             }

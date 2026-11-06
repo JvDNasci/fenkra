@@ -619,7 +619,13 @@ pub enum RefKind {
     /// Círculo (ou arco) por três pontos.
     Circle3 { a: PointRef, b: PointRef, c: PointRef, full: bool },
     /// Spline interpolada pelos pontos.
-    Spline { points: Vec<PointRef>, closed: bool },
+    Spline {
+        points: Vec<PointRef>,
+        closed: bool,
+        /// tangente fixada em cada ponto; lista mais curta que os pontos vale como solta no resto
+        #[serde(default)]
+        tangents: Vec<Option<SplineTan>>,
+    },
     /// Hélice cilíndrica ou cônica.
     Helix { origin: PointRef, axis: AxisRef, radius: String, pitch: String, height: String, taper: String, left: bool },
     /// Espiral plana do raio inicial ao final.
@@ -775,7 +781,17 @@ pub enum RefKind {
         scale: String,
     },
     /// Concordância entre duas bordas, com continuidade G0/G1/G2 às superfícies de apoio.
-    SurfBlend { a: CurveRef, sa: Option<SurfRef>, b: CurveRef, sb: Option<SurfRef>, cont: Continuity, tension: String },
+    SurfBlend {
+        a: CurveRef,
+        sa: Option<SurfRef>,
+        b: CurveRef,
+        sb: Option<SurfRef>,
+        cont: Continuity,
+        tension: String,
+        /// tensão do lado `b`; sem ela, vale a mesma de `a`
+        #[serde(default)]
+        tension2: Option<String>,
+    },
     /// Juntar superfícies (costura) numa só.
     SurfJoin {
         items: Vec<SurfRef>,
@@ -858,7 +874,18 @@ pub enum RefKind {
         tangent_prop: bool,
     },
     /// Conectar duas superfícies pelas bordas que se olham (concordância automática).
-    SurfConnect { a: SurfRef, b: SurfRef, cont: Continuity, tension: String },
+    SurfConnect {
+        a: SurfRef,
+        b: SurfRef,
+        cont: Continuity,
+        tension: String,
+        /// tensão do lado `b`; sem ela, vale a mesma de `a`
+        #[serde(default)]
+        tension2: Option<String>,
+        /// ponto perto da borda escolhida em cada superfície; sem ele, vale a que olha para a outra
+        #[serde(default)]
+        near: [Option<[f64; 3]>; 2],
+    },
     /// Varredura avançada: perfil explícito com 1/2 guias, linear, circular ou cônica.
     SurfSweepX {
         kind: SweepKind,
@@ -1182,10 +1209,11 @@ impl RefKind {
                 surface.walk(ids);
                 exprs(dist)
             }
-            SurfConnect { a, b, tension, .. } => {
+            SurfConnect { a, b, tension, tension2, .. } => {
                 a.walk(ids);
                 b.walk(ids);
-                exprs(tension)
+                exprs(tension);
+                tension2.iter_mut().for_each(&mut *exprs);
             }
             SurfSweepX { kind, spine, sections, .. } => {
                 kind.walk(ids, exprs);
@@ -1285,13 +1313,14 @@ impl RefKind {
                 exprs(samples);
                 exprs(scale)
             }
-            SurfBlend { a, sa, b, sb, tension, .. } => {
+            SurfBlend { a, sa, b, sb, tension, tension2, .. } => {
                 a.walk(ids);
                 b.walk(ids);
                 for s in [sa, sb].into_iter().flatten() {
                     s.walk(ids)
                 }
-                exprs(tension)
+                exprs(tension);
+                tension2.iter_mut().for_each(&mut *exprs);
             }
             SurfJoin { items, tol, curves } => {
                 for s in items {
@@ -1785,6 +1814,8 @@ pub enum FeatureKind {
     StructPlate(StructPlate),
     /// Estrutural: reforço (cantoneira/gusset) entre dois membros.
     StructGusset(StructGusset),
+    /// Estrutural: cordão de solda entre dois conjuntos de faces (cosmético ou sólido).
+    StructWeld(StructWeld),
 }
 
 fn niveis_padrao() -> u8 {
@@ -2142,6 +2173,134 @@ impl StructGusset {
             repeat: GussetRepeat::Nenhuma,
             count: String::new(),
             spacing: String::new(),
+        }
+    }
+}
+
+/// Como o cordão de solda existe no modelo (B285).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum BeadMode {
+    /// só os caminhos e os comprimentos: não gera material e alimenta o símbolo do desenho
+    #[default]
+    Cosmetico,
+    /// gera o metal depositado: entra na massa e na lista de itens
+    Solido,
+}
+
+/// Perfil do cordão de filete: plano (triângulo), convexo (abaulado) ou côncavo (cavado).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum BeadShape {
+    #[default]
+    Plano,
+    Convexo,
+    Concavo,
+}
+
+/// Contínuo ou intermitente. O vão é a distância livre entre dois trechos; o passo, a distância de
+/// início a início (passo = comprimento + vão).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum BeadPattern {
+    #[default]
+    Continuo,
+    ComprimentoEVao,
+    ComprimentoEPasso,
+}
+
+/// Cordão de solda por conjuntos de faces (B285): os caminhos são as curvas onde as faces do
+/// conjunto 1 encontram as do conjunto 2.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct StructWeld {
+    /// pontos das faces escolhidas: as `split` primeiras são o conjunto 1, o resto o conjunto 2
+    pub faces: Vec<[f64; 3]>,
+    /// referência v2 de cada face (paralelo a `faces`; `None` = só o ponto)
+    #[serde(default)]
+    pub face_keys: Vec<Option<FaceKey>>,
+    pub split: usize,
+    /// o próximo clique na viewport entra no conjunto 2
+    #[serde(default)]
+    pub picking_b: bool,
+    /// cada face escolhida leva junto a cadeia de faces tangentes a ela
+    #[serde(default)]
+    pub tangent: bool,
+    /// perna do filete (mm)
+    pub leg: String,
+    #[serde(default)]
+    pub shape: BeadShape,
+    #[serde(default)]
+    pub mode: BeadMode,
+    #[serde(default)]
+    pub pattern: BeadPattern,
+    /// comprimento de cada trecho do cordão intermitente
+    #[serde(default)]
+    pub seg_len: String,
+    /// vão ou passo, conforme `pattern`
+    #[serde(default)]
+    pub spacing: String,
+    /// intermitente alternado: os caminhos de índice ímpar começam meio passo depois
+    #[serde(default)]
+    pub staggered: bool,
+    /// o cordão termina neste plano
+    #[serde(default)]
+    pub end_plane: Option<PlaneRef>,
+    /// fica com o lado do plano para onde a normal aponta (senão, o lado oposto)
+    #[serde(default)]
+    pub end_keep_front: bool,
+    /// material do metal de adição (vazio = o da peça)
+    #[serde(default)]
+    pub material: String,
+}
+
+impl StructWeld {
+    pub fn novo(leg: &str) -> Self {
+        StructWeld {
+            faces: vec![],
+            face_keys: vec![],
+            split: 0,
+            picking_b: false,
+            tangent: false,
+            leg: leg.into(),
+            shape: BeadShape::Plano,
+            mode: BeadMode::Cosmetico,
+            pattern: BeadPattern::Continuo,
+            seg_len: String::new(),
+            spacing: String::new(),
+            staggered: false,
+            end_plane: None,
+            end_keep_front: false,
+            material: String::new(),
+        }
+    }
+
+    /// Faces do conjunto 1 e do conjunto 2.
+    pub fn conjuntos(&self) -> (&[[f64; 3]], &[[f64; 3]]) {
+        let n = self.split.min(self.faces.len());
+        self.faces.split_at(n)
+    }
+
+    /// Acrescenta a face ao conjunto ativo.
+    pub fn adicionar(&mut self, p: [f64; 3], key: Option<FaceKey>) {
+        self.face_keys.resize(self.faces.len(), None);
+        if self.picking_b {
+            self.faces.push(p);
+            self.face_keys.push(key);
+        } else {
+            let i = self.split.min(self.faces.len());
+            self.faces.insert(i, p);
+            self.face_keys.insert(i, key);
+            self.split = i + 1;
+        }
+    }
+
+    /// Tira a face da posição `i` (Shift+clique ou botão), mantendo a divisão dos conjuntos.
+    pub fn remover(&mut self, i: usize) {
+        if i >= self.faces.len() {
+            return;
+        }
+        self.face_keys.resize(self.faces.len(), None);
+        self.faces.remove(i);
+        self.face_keys.remove(i);
+        if i < self.split {
+            self.split -= 1;
         }
     }
 }
@@ -2778,6 +2937,7 @@ impl FeatureKind {
             StructMember(_) => "Membro",
             StructPlate(_) => "Placa",
             StructGusset(_) => "Reforço",
+            StructWeld(_) => "Cordão de solda",
             MoveBody(m) => match m.xf {
                 BodyXf::Translate { .. } => "Translação",
                 BodyXf::Rotate { .. } => "Rotação",
@@ -2839,6 +2999,7 @@ impl FeatureKind {
             StructMember(_) => "⌶",
             StructPlate(_) => "▬",
             StructGusset(_) => "◺",
+            StructWeld(_) => "≋",
         }
     }
 
@@ -3164,6 +3325,14 @@ impl FeatureKind {
                     exprs(&mut q[1])
                 }
             }
+            StructWeld(w) => {
+                if let Some(p) = &mut w.end_plane {
+                    p.walk(ids)
+                }
+                for e in [&mut w.leg, &mut w.seg_len, &mut w.spacing] {
+                    exprs(e)
+                }
+            }
             SmHem(h) => {
                 exprs(&mut h.length);
                 exprs(&mut h.gap)
@@ -3200,6 +3369,15 @@ fn extent_walk(e: &mut Extent, ids: &mut dyn FnMut(&mut Id), exprs: &mut dyn FnM
         Extent::UpTo(p) => p.walk(ids),
         Extent::UpToSurface(s) => s.walk(ids),
     }
+}
+
+/// Tangente fixada num ponto da spline.
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SplineTan {
+    /// direção unitária
+    pub dir: [f64; 3],
+    /// múltiplo do tamanho natural da tangente ali: 1 é a velocidade que a curva já teria
+    pub tension: f64,
 }
 
 /// Para onde a faixa regrada sai da curva.

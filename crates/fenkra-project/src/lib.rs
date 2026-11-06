@@ -23,6 +23,7 @@ pub mod plano;
 pub mod pn;
 pub mod qualidade_modelo;
 pub mod qualidade_projeto;
+pub mod ramos;
 pub mod referencias;
 pub mod relacoes;
 pub mod salvar_como;

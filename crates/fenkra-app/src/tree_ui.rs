@@ -481,6 +481,7 @@ pub fn icone_comando(k: &FeatureKind) -> &'static str {
         StructMember(_) => "st_membro",
         StructPlate(_) => "st_placa",
         StructGusset(_) => "st_reforco",
+        StructWeld(_) => "st_solda",
     }
 }
 

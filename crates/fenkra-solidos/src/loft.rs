@@ -266,6 +266,38 @@ fn cruzamento(g: &Curve3, c: &Curve3) -> Result<(V3, f64), String> {
 }
 
 /// Sentidos, frações dos conectores (das guias também) e cruzamentos das guias.
+/// Seções no sentido em que a superfície as percorre, e quais foram viradas: cada uma acompanha a
+/// anterior, e `invertidas` troca esse sentido por pedido da pessoa.
+fn orientar(secoes: &[Curve3], invertidas: &[bool]) -> (Vec<Curve3>, Vec<bool>) {
+    let fechada = |c: &Curve3| c.closed || dist(c.start(), c.end()) < 1e-6;
+    let mut cs: Vec<Curve3> = vec![];
+    let mut virou = vec![];
+    for (i, c) in secoes.iter().enumerate() {
+        let mut c = c.clone();
+        let mut inv = false;
+        if let Some(a) = cs.last() {
+            inv = if fechada(a) {
+                dot(giro(&a.pts), giro(&c.pts)) < 0.
+            } else {
+                dist(a.start(), c.start()) + dist(a.end(), c.end()) > dist(a.start(), c.end()) + dist(a.end(), c.start())
+            };
+            // o sentido das anteriores já pode estar trocado, e o vetor `a` já o carrega
+        }
+        inv ^= invertidas.get(i).copied().unwrap_or(false);
+        if inv {
+            c.pts.reverse();
+        }
+        virou.push(inv);
+        cs.push(c);
+    }
+    (cs, virou)
+}
+
+/// Quais seções a superfície percorre ao contrário, para a seta do 3D dizer a verdade.
+pub fn sentidos(secoes: &[Curve3], invertidas: &[bool]) -> Vec<bool> {
+    orientar(secoes, invertidas).1
+}
+
 fn preparar(e: &Entrada) -> Result<(Vec<Curve3>, Vec<bool>, Vec<Vec<f64>>), String> {
     if e.secoes.len() < 2 {
         return Err("são precisas pelo menos duas seções".into());
@@ -275,26 +307,7 @@ fn preparar(e: &Entrada) -> Result<(Vec<Curve3>, Vec<bool>, Vec<Vec<f64>>), Stri
     if e.secoes.iter().any(|c| fechada(c) != f0) {
         return Err("misture só seções abertas ou só fechadas".into());
     }
-    let mut cs: Vec<Curve3> = vec![];
-    let mut virou = vec![];
-    for (i, c) in e.secoes.iter().enumerate() {
-        let mut c = c.clone();
-        let mut inv = false;
-        if let Some(a) = cs.last() {
-            inv = if f0 {
-                dot(giro(&a.pts), giro(&c.pts)) < 0.
-            } else {
-                dist(a.start(), c.start()) + dist(a.end(), c.end()) > dist(a.start(), c.end()) + dist(a.end(), c.start())
-            };
-            // o sentido das anteriores já pode estar trocado, e o vetor `a` já o carrega
-        }
-        inv ^= e.invertidas.get(i).copied().unwrap_or(false);
-        if inv {
-            c.pts.reverse();
-        }
-        virou.push(inv);
-        cs.push(c);
-    }
+    let (cs, virou) = orientar(&e.secoes, &e.invertidas);
     let mut cadeias: Vec<Vec<f64>> = vec![];
     for k in &e.conectores {
         if k.len() != cs.len() {

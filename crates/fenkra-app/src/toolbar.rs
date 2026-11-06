@@ -407,6 +407,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             Family("st_ligacao", vec![
                 it("st_placa", "Placa", "Placa de extremidade", "Fecha a ponta do membro mais perto do vértice selecionado (base de fixação).", Cmd(C::StPlate)),
                 it("st_reforco", "Reforço", "Reforço (gusset)", "Chapa triangular ou com chanfro de alívio no encontro de dois membros.", Cmd(C::StGusset)),
+                it("st_solda", "Cordão de solda", "Cordão de solda por faces", "Cordão entre dois conjuntos de faces: cosmético (alimenta o símbolo do desenho) ou sólido, contínuo ou intermitente.", Cmd(C::StWeld)),
             ]),
             One(it("st_biblioteca", "Biblioteca", "Biblioteca de perfis", "Cadastre famílias de perfis padronizados (tamanhos, ancoragem e rotação padrão).", Cmd(C::StLibrary))),
             One(it("st_canto_meia", "Cantos", "Cantos da estrutura", "Lista os cantos onde os membros se encontram, realça cada um no 3D, troca o tratamento e quem continua, e agrupa cantos iguais.", Cmd(C::StCorners))),
@@ -653,7 +654,10 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
                     let i = items[cur];
                     let any_sel = items.iter().any(|x| is_selected(x.act, s, st));
                     let sel = is_selected(i.act, s, st) || any_sel;
-                    if tool_button(ui, i.icon, i.name, size, labels, sel, i.brief, i.advanced).clicked() {
+                    let r = tool_button(ui, i.icon, i.name, size, labels, sel, i.brief, i.advanced);
+                    let icones: Vec<&str> = items.iter().map(|x| x.icon).collect();
+                    crate::curso_ui::destaque_em_familia(ui, r.rect, &icones, i.icon);
+                    if r.clicked() {
                         acts.push(i.act);
                     }
                     // setinha: abre as variações da família

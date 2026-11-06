@@ -30,6 +30,10 @@ pub enum TipoEvento {
     Reparo,
     /// violação de regra de qualidade aceita (B305): `autor` é quem aceitou, `de` a regra, `para` a versão
     Excecao,
+    /// ramo criado, salvo ou descartado (B130): `de` é o ramo, `para` a versão
+    Ramo,
+    /// pedido, revisão e entrada de um ramo na linha principal (B130)
+    Mesclagem,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

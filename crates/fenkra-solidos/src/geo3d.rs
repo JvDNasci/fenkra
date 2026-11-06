@@ -328,6 +328,69 @@ pub fn circle3_curve(a: V3, b: V3, c: V3, full: bool) -> Result<Curve3, String> 
     circle_curve(ctr, &f, r, 0., end)
 }
 
+/// Ponto `i` da spline, com os vizinhos que faltam nas pontas.
+fn vizinho(pts: &[V3], closed: bool, i: isize) -> V3 {
+    let n = pts.len();
+    if closed {
+        pts[i.rem_euclid(n as isize) as usize]
+    } else if i < 0 {
+        // ponta: reflete para tangente natural
+        sub(mul(pts[0], 2.), pts[1])
+    } else if i as usize >= n {
+        sub(mul(pts[n - 1], 2.), pts[n - 2])
+    } else {
+        pts[i as usize]
+    }
+}
+
+/// Distância de parâmetro entre dois pontos na Catmull-Rom centrípeta.
+fn passo_centripeto(a: V3, b: V3) -> f64 {
+    dist(a, b).sqrt().max(1e-9)
+}
+
+/// Derivada que a spline tem no ponto `i`, em relação ao parâmetro centrípeto: é a mesma nos dois
+/// trechos que se encontram ali, porque a curva é C1 nesse parâmetro.
+pub fn tangente_natural(pts: &[V3], closed: bool, i: usize) -> V3 {
+    let k = i as isize;
+    let (a, b, c) = (vizinho(pts, closed, k - 1), pts[i], vizinho(pts, closed, k + 1));
+    let (h0, h1) = (passo_centripeto(a, b), passo_centripeto(b, c));
+    add(sub(mul(sub(b, a), 1. / h0), mul(sub(c, a), 1. / (h0 + h1))), mul(sub(c, b), 1. / h1))
+}
+
+/// Spline por pontos com tangentes fixadas. Cada trecho da Catmull-Rom é uma cúbica de Hermite entre as
+/// derivadas naturais dos dois pontos; a tangente fixada só troca a derivada daquele ponto, e por isso
+/// fixar na direção natural com tensão 1 não muda a forma.
+pub fn spline_tan(pts: &[V3], closed: bool, tan: &[Option<fenkra_core::SplineTan>]) -> Result<Curve3, String> {
+    if tan.iter().all(Option::is_none) {
+        return spline(pts, closed);
+    }
+    if pts.len() < 2 {
+        return Err("a spline precisa de pelo menos dois pontos".into());
+    }
+    let n = pts.len();
+    let derivada = |i: usize| {
+        let m = tangente_natural(pts, closed, i);
+        match tan.get(i).copied().flatten() {
+            Some(t) => mul(unit(t.dir).unwrap_or([1., 0., 0.]), norm(m).max(1e-9) * t.tension),
+            None => m,
+        }
+    };
+    let mut out = vec![];
+    for s in 0..if closed { n } else { n - 1 } {
+        let (i, j) = (s, (s + 1) % n);
+        let h = passo_centripeto(pts[i], pts[j]);
+        let (m0, m1) = (mul(derivada(i), h), mul(derivada(j), h));
+        for k in 0..24 {
+            let t = k as f64 / 24.;
+            let (t2, t3) = (t * t, t * t * t);
+            let (h00, h10, h01, h11) = (2. * t3 - 3. * t2 + 1., t3 - 2. * t2 + t, -2. * t3 + 3. * t2, t3 - t2);
+            out.push(add(add(mul(pts[i], h00), mul(m0, h10)), add(mul(pts[j], h01), mul(m1, h11))));
+        }
+    }
+    out.push(if closed { pts[0] } else { pts[n - 1] });
+    Curve3::poly(out, closed)
+}
+
 /// Spline interpolada (Catmull-Rom centrípeta) pelos pontos.
 pub fn spline(pts: &[V3], closed: bool) -> Result<Curve3, String> {
     if pts.len() < 2 {
@@ -337,18 +400,7 @@ pub fn spline(pts: &[V3], closed: bool) -> Result<Curve3, String> {
         return Curve3::line(pts[0], pts[1]);
     }
     let n = pts.len();
-    let get = |i: isize| -> V3 {
-        if closed {
-            pts[i.rem_euclid(n as isize) as usize]
-        } else if i < 0 {
-            // ponta: reflete para tangente natural
-            sub(mul(pts[0], 2.), pts[1])
-        } else if i as usize >= n {
-            sub(mul(pts[n - 1], 2.), pts[n - 2])
-        } else {
-            pts[i as usize]
-        }
-    };
+    let get = |i: isize| vizinho(pts, closed, i);
     let spans = if closed { n } else { n - 1 };
     let mut out = vec![];
     for s in 0..spans as isize {
