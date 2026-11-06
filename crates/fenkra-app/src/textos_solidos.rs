@@ -2,6 +2,11 @@
 //! Traduções da bancada Sólidos (filete, chanfro e alças 3D), à parte de `i18n.rs`.
 
 pub static TEXTOS: &[(&str, &str)] = &[
+    ("Livre", "Free"),
+    ("Clique para o perfil começar neste vértice e desfazer a torção.", "Click for the profile to start at this vertex and undo the twist."),
+    ("Normal ao perfil", "Normal to profile"),
+    ("Intensidade", "Strength"),
+    ("Clique nos vértices do 3D para desfazer a torção; arraste a seta para mudar a intensidade.", "Click the 3D vertices to undo the twist; drag the arrow to change the strength."),
     ("Assimétrico", "Asymmetric"),
     ("Um raio em cada face da aresta (reta, entre planos); a seta inverte o lado", "One radius on each face of the edge (straight, between planes); the arrow flips the side"),
     ("Inverter por aresta", "Flip per edge"),

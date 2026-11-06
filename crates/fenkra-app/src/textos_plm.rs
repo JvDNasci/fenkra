@@ -3,6 +3,14 @@
 //! Tabela própria para não disputar `i18n.rs` com outras bancadas.
 
 pub static TEXTOS: &[(&str, &str)] = &[
+    ("Resolver referências", "Resolve references"),
+    ("Estes componentes não abriram como foram salvos. Escolha o arquivo certo de cada um.", "These components did not open as saved. Pick the right file for each one."),
+    ("Vários arquivos têm a identidade deste componente.", "Several files have this component's identity."),
+    ("O arquivo neste caminho é outro documento.", "The file at this path is a different document."),
+    ("O arquivo não foi encontrado.", "The file was not found."),
+    ("Procurar…", "Browse…"),
+    ("Deixar como está", "Leave as is"),
+    ("componente(s) achado(s) em outro lugar pela identidade", "component(s) found elsewhere by identity"),
     // B305: checador de qualidade do modelo
     ("Qualidade do modelo", "Model quality"),
     ("bloqueia", "blocks"),

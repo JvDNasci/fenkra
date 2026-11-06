@@ -115,7 +115,7 @@ pub fn point_pos(r: &RecomputeResult, p: &fenkra_core::PointRef) -> Option<[f64;
     match *p {
         P::Origin => Some([0.; 3]),
         P::Fixed(q) => Some(q),
-        P::Vertex { point, .. } => Some(point),
+        P::Vertex { point, .. } | P::Center { point, .. } | P::OnFace { point, .. } => Some(point),
         P::Ref(id) => r.points.iter().find(|x| x.id == id).map(|x| x.p),
         P::SketchPoint { sketch, point } => {
             let s = r.sketches.iter().find(|s| s.feature == sketch)?;

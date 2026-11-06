@@ -3,6 +3,8 @@
 //! lateral da aba e laço de arestas). Tabela própria para não disputar `i18n.rs`.
 
 pub static TEXTOS: &[(&str, &str)] = &[
+    ("linhas de um sketch (várias retas ou uma curva)", "lines from a sketch (several straight lines or one curve)"),
+    ("Cada reta do sketch vira uma dobra; as linhas precisam ser paralelas. Uma curva sozinha levanta uma parede ao longo dela.", "Each straight line becomes a bend; lines must be parallel. A single curve raises a wall along it."),
     // B283: estilos de chapa
     ("Estilo da chapa", "Sheet style"),
     ("(sem estilo)", "(no style)"),

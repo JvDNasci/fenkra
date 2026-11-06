@@ -7,6 +7,8 @@
 
 /// (rótulo, dica em português, dica em inglês)
 pub static CAMPOS: &[(&str, &str, &str)] = &[
+    ("Face", "Espessura da parede nesta face, no lugar da geral. Maior que zero.", "Wall thickness on this face, instead of the general one. Greater than zero."),
+    ("Intensidade", "Quanto o loft segue a normal do perfil antes de virar. 0 a 3; 1 é um terço do vão.", "How far the loft follows the profile normal before turning. 0 to 3; 1 is a third of the span."),
     // análises de superfície
     ("Amostras por borda", "Quantos pontos a análise mede em cada borda da junção. Mais amostras acham defeitos menores; típico 8 a 64.", "How many points the analysis measures on each junction edge. More samples find smaller defects; typically 8 to 64."),
     ("Dentes", "Quantos dentes o pente desenha ao longo da curva. Típico 32 a 200; não muda a curva.", "How many teeth the comb draws along the curve. Typically 32 to 200; it does not change the curve."),

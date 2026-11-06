@@ -401,7 +401,7 @@ pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
         "reforco" => FeatureKind::StructGusset(StructGusset::novo([0., 0., 700.], "80", "6", "10")),
         "casca" => {
             caixa(doc);
-            FeatureKind::Shell(Shell { faces: vec![[0., 0., 30.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false })
+            FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 30.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false })
         }
         "espessura" => {
             caixa(doc);
@@ -693,7 +693,7 @@ mod tests {
         let mut d = caixa();
         let antes = recompute(&d);
         let base = corpos_base(Some(&antes));
-        let casca = d.add_feature(FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }));
+        let casca = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }));
         let r = recompute(&d);
         assert!(valido(r.status.get(&casca)), "{:?}", r.status.get(&casca));
         let v = r.bodies[0].mass.volume;
@@ -762,7 +762,7 @@ mod tests {
             let op = EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() };
             casos.push((nome, d, if modo { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }, ENTRA, false));
         }
-        casos.push(("casca", caixa(), FeatureKind::Shell(Shell { faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }), ENTRA, false));
+        casos.push(("casca", caixa(), FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }), ENTRA, false));
         for (nome, mut d, kind, cor, sobe) in casos {
             let antes = recompute(&d);
             let base = corpos_base(Some(&antes));
@@ -854,7 +854,7 @@ mod tests {
         let sk = Id(1);
         assert!(retira(&extrusao(sk, BoolOp::Cut, false, "5")));
         assert!(!retira(&extrusao(sk, BoolOp::Add, false, "5")));
-        assert!(!retira(&FeatureKind::Shell(Shell { faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false })));
+        assert!(!retira(&FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false })));
         assert!(retira(&FeatureKind::Thickness(Thickness { faces: vec![], value: s("2"), face_keys: vec![], remove: true })));
     }
 
