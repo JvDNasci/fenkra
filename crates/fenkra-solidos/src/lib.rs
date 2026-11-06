@@ -19,6 +19,7 @@ pub mod st_dobra;
 mod st_dobra_geo;
 pub mod st_dobra_corte;
 pub mod st_dobra_saida;
+pub mod st_dobra_maquina;
 mod st_dobra_v;
 pub use st_dobra_geo::tubos_dobrados;
 pub mod hardware;

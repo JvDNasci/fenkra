@@ -368,6 +368,10 @@ struct CutUi {
     material: String,
     /// primeiro membro da linha clicada (comando, trecho)
     clicada: Option<(Id, usize)>,
+    /// seleção do 3D já mostrada na lista (para rolar até a linha só quando ela muda)
+    vista_sel: Option<Id>,
+    /// B332: opções e conferência dos dados de dobra para máquina
+    maq: crate::st_maquina_ui::Estado,
 }
 
 fn ang_txt(a: Option<f64>) -> String {
@@ -414,6 +418,12 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     }
     rows.retain(|r| ui_state.material.is_empty() || r.material == ui_state.material);
     ordenar(&mut rows, ui_state.sort, ui_state.desc);
+    // desenvolvimento: FENKRA_DEMO_CORTE=<n> deixa a linha n (de 0) clicada, para a captura do realce
+    if ui_state.clicada.is_none() {
+        if let Some(k) = std::env::var("FENKRA_DEMO_CORTE").ok().and_then(|v| v.parse::<usize>().ok()) {
+            ui_state.clicada = rows.get(k).and_then(|r| r.members.first().copied());
+        }
+    }
     // clicar o corpo no 3D seleciona a linha que o contém
     let sel_feature = match app.sel {
         Sel::Feature(id) => Some(id),
@@ -421,6 +431,8 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     };
     let mut open = true;
     let mut export = false;
+    let mut gerar = false;
+    let mut acao_maq: Option<crate::st_maquina_ui::Acao> = None;
     let mut hover_row: Option<usize> = None;
     let fechar = egui::Id::unique(("concluir_janela", "st2"));
     if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
@@ -483,10 +495,14 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                 ui.end_row();
                 for (k, r) in rows.iter().enumerate() {
                     let primeiro = r.members.first().copied();
-                    let marcada = (primeiro.is_some() && primeiro == ui_state.clicada) || sel_feature.is_some_and(|f| r.members.iter().any(|m| m.0 == f));
+                    let marcada = crate::st_corte_liga::marcada(r, ui_state.clicada, sel_feature);
                     let resp = ui.selectable_label(marcada, &r.designation);
                     if resp.clicked() {
                         ui_state.clicada = primeiro;
+                    }
+                    // B296: o corpo clicado no 3D leva a lista até a linha dele (uma vez por mudança de seleção)
+                    if sel_feature.is_some() && sel_feature != ui_state.vista_sel && marcada {
+                        resp.scroll_to_me(Some(egui::Align::Center));
                     }
                     if resp.hovered() {
                         hover_row = Some(k);
@@ -533,6 +549,9 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                     for e in t.erros.iter().chain(&t.avisos) {
                         ui.label(RichText::new(format!("⚠ {e}")).color(crate::theme::st_warn()).small());
                     }
+                    if let Some(a) = crate::st_maquina_ui::bloco(ui, t, n, &mut ui_state.maq) {
+                        acao_maq = Some(a);
+                    }
                 }
                 ui.label(RichText::new(tr("Alongamento e afinamento são estimativas de um modelo simples, sem fonte confirmada: não são valores de engenharia.")).weak().small());
             }
@@ -542,21 +561,29 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
             }
             let total: f64 = rows.iter().map(|r| r.length * r.count as f64).sum();
             ui.label(RichText::new(format!("total de barras: {} mm", fmt(total))).weak());
-            if ui.button(tr("💾 Exportar CSV…")).clicked() {
-                export = true;
-            }
+            ui.horizontal(|ui| {
+                if ui.button(tr("💾 Exportar CSV…")).clicked() {
+                    export = true;
+                }
+                if ui.button(tr("Gerar montagem…")).on_hover_text(tr("Abre o resumo com peças, instâncias, pasta e nomes dos arquivos; nada é gravado antes de Confirmar.")).clicked() {
+                    gerar = true;
+                }
+            });
         });
     // realce no 3D: a linha sob o mouse, senão a clicada
-    let alvo: Vec<Id> = hover_row
-        .and_then(|k| rows.get(k))
-        .or_else(|| ui_state.clicada.and_then(|c| rows.iter().find(|r| r.members.first() == Some(&c))))
-        .map(|r| r.members.iter().map(|m| m.0).collect())
-        .unwrap_or_default();
+    let alvo: Vec<Id> = crate::st_corte_liga::alvo_do_realce(&rows, hover_row, ui_state.clicada);
+    ui_state.vista_sel = sel_feature;
     if alvo != app.st_cut_hi {
         app.st_cut_hi = alvo;
         app.scene_dirty = true;
     }
+    if let Some(a) = acao_maq {
+        crate::st_maquina_ui::executar(app, &tubos_dobrados, a, &mut ui_state.maq);
+    }
     ctx.data_mut(|d| d.insert_temp(estado_id, ui_state));
+    if gerar {
+        crate::st_montagem_ui::abrir(app);
+    }
     if export {
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_corte.csv").save_file() {
             let mut t = String::from("perfil;material;comprimento_mm;angulo1_graus;angulo2_graus;quantidade;barras_materia_prima;dobras;modo_da_dobra\n");

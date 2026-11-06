@@ -332,6 +332,21 @@ impl Ctx<'_> {
             avisos.extend(n.res.avisos.iter().map(|a| format!("linhas {}–{}: {a}", n.antes + 1, n.depois + 1)));
             erros.extend(n.res.erros.iter().map(|a| format!("linhas {}–{}: {a}", n.antes + 1, n.depois + 1)));
         }
+        // pontos do eixo: ponta livre da primeira perna, os nós e a ponta livre da última
+        let ponta_livre = |i: usize, no: V3, ext: (f64, f64)| -> V3 {
+            let g = &geo[i];
+            let (longe, e) = if geo3d::dist(g.start, no) > geo3d::dist(g.end, no) { (g.start, ext.0) } else { (g.end, ext.1) };
+            match geo3d::unit(geo3d::sub(longe, no)) {
+                Some(u) => geo3d::add(longe, geo3d::mul(u, e)),
+                None => longe,
+            }
+        };
+        let mut pontos: Vec<V3> = vec![];
+        if let (Some(&p0), Some(&pn), Some(n0), Some(nn)) = (pernas.first(), pernas.last(), nos.first(), nos.last()) {
+            pontos.push(ponta_livre(p0, n0.p, explicit));
+            pontos.extend(nos.iter().map(|n| n.p));
+            pontos.push(ponta_livre(pn, nn.p, explicit));
+        }
         TuboDobrado {
             feature: f.id,
             linhas: pernas.to_vec(),
@@ -344,6 +359,7 @@ impl Ctx<'_> {
             avisos,
             erros,
             fundido: !nos.is_empty() && nos.iter().all(no_fundivel),
+            pontos,
         }
     }
 }

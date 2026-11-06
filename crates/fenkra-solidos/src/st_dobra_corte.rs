@@ -519,6 +519,7 @@ mod tests {
             avisos: vec![],
             erros: vec![],
             fundido: true,
+            pontos: vec![],
         }
     }
 

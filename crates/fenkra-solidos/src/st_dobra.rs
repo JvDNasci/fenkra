@@ -514,6 +514,9 @@ pub struct TuboDobrado {
     pub erros: Vec<String>,
     /// as pernas formam um sólido só (todos os nós são dobradeira e sem erro)
     pub fundido: bool,
+    /// pontos do eixo: início, cada nó de dobra e fim (já com os prolongamentos das pontas); base dos
+    /// dados de máquina (B332)
+    pub pontos: Vec<[f64; 3]>,
 }
 
 impl TuboDobrado {
