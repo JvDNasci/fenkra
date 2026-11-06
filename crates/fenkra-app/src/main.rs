@@ -184,6 +184,8 @@ mod props_geometria;
 mod asm_fundo;
 mod instancias;
 mod medir_quadros;
+mod desempenho;
+mod textos_desempenho;
 mod textos_montagem5;
 mod mouse3d;
 mod mouse3d_hid;

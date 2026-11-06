@@ -145,8 +145,33 @@ fn sinonimos(icone: &str) -> &'static str {
     SINONIMOS.iter().find(|(i, _)| *i == icone).map(|(_, s)| *s).unwrap_or("")
 }
 
-/// Todos os comandos da barra, uma vez cada (famílias abertas).
+thread_local! {
+    /// Catálogo montado uma vez. A barra é fixa em tempo de compilação, então não há o que refazer.
+    static CATALOGO: &'static [Item] = {
+        MONTAGENS.with(|m| m.set(m.get() + 1));
+        Box::leak(montar_comandos().into_boxed_slice())
+    };
+    static MONTAGENS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Quantas vezes esta thread montou o catálogo (o teste confere que é uma só).
+#[cfg(test)]
+pub fn montagens_do_catalogo() -> usize {
+    MONTAGENS.with(|m| m.get())
+}
+
+/// Todos os comandos da barra, uma vez cada (famílias abertas), sem remontar a cada chamada. A
+/// montagem varre todos os grupos e tira repetidos; refazê-la por quadro custava dezenas de ms (B347).
+pub fn catalogo() -> &'static [Item] {
+    CATALOGO.with(|c| *c)
+}
+
+/// Cópia do catálogo, para quem precisa de um `Vec` próprio.
 pub fn comandos() -> Vec<Item> {
+    catalogo().to_vec()
+}
+
+fn montar_comandos() -> Vec<Item> {
     let mut out: Vec<Item> = vec![];
     for e in toolbar::all_entries() {
         let itens = match e {

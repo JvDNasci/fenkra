@@ -538,6 +538,12 @@ pub struct Settings {
     pub leve_anterior: Option<crate::perfil::Anterior>,
     /// transições da interface e da câmera (desligadas no modo leve)
     pub animacoes: bool,
+    /// B347: no máximo quantos quadros por segundo enquanto algo se move
+    pub limite_quadros: crate::desempenho::Limite,
+    /// B347: sincronismo vertical (cada quadro espera a tela atualizar)
+    pub vsync: bool,
+    /// B347: mostra os quadros por segundo no canto da vista
+    pub contador_fps: bool,
     /// acessibilidade básica (B321): paleta segura, reduzir movimento e escala da fonte
     pub acessibilidade: crate::acessibilidade::Acessibilidade,
     /// mouse 3D (B322): sensibilidade, inversão por eixo, eixo dominante e ação dos botões
@@ -647,6 +653,9 @@ impl Default for Settings {
             modo_leve: false,
             leve_anterior: None,
             animacoes: true,
+            limite_quadros: Default::default(),
+            vsync: true,
+            contador_fps: false,
             acessibilidade: Default::default(),
             mouse3d: Default::default(),
             sugestao_leve_vista: false,
