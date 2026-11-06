@@ -312,6 +312,8 @@ pub struct ParamLacoCorrente {
     pub elos: u32,
     /// distância entre centros (a corrigida para `elos`)
     pub centros: f64,
+    /// desenha os rolos no corpo; na montagem eles saem (a viewport os desenha andando pelo laço)
+    pub com_rolos: bool,
 }
 
 /// Corrente 3D: `elos` rolos (círculos extrudados entre as placas) e duas fitas de placas ao longo do
@@ -341,8 +343,10 @@ pub fn corrente_documento(p: &ParamLacoCorrente) -> Result<Document, String> {
             data.add_curve(&mut al, Curve::Circle { c: ctr, r: c.rolo / 2. }, false);
         }
     }
-    let sk = m.sketch("Rolos", PlaneRef::Origin(OriginPlane::XY), data);
-    extrusao_de(&mut m, "Rolos", sk, "b1");
+    if p.com_rolos {
+        let sk = m.sketch("Rolos", PlaneRef::Origin(OriginPlane::XY), data);
+        extrusao_de(&mut m, "Rolos", sk, "b1");
+    }
     // as duas fitas de placas: anel entre h dentro e h fora do laço
     for (nome, desvio) in [("Placas_a", "-tp"), ("Placas_b", "b1")] {
         let plano = m.plano(&format!("Plano_{nome}"), desvio)?;
@@ -564,7 +568,7 @@ mod tests {
         let c = crate::transmissao_dados::corrente("ISO 08B-1").unwrap();
         let elos = elos_da_corrente(c.passo, n1, n2, 400.);
         let cc = distancia_corrigida_corrente(c.passo, n1, n2, elos).unwrap();
-        let p = ParamLacoCorrente { corrente: "ISO 08B-1".into(), dentes1: n1, dentes2: n2, elos, centros: cc };
+        let p = ParamLacoCorrente { corrente: "ISO 08B-1".into(), dentes1: n1, dentes2: n2, elos, centros: cc, com_rolos: true };
         let (v, lo, hi) = medir(&corrente_documento(&p).unwrap());
         assert!(v > 0.);
         // largura: das placas externas, b1 + 2 tp

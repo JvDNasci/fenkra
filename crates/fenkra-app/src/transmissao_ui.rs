@@ -291,6 +291,31 @@ pub fn na_cena(st: Option<&crate::asm_ui::AsmState>, v: &egui::Visuals, cena: &m
     }
 }
 
+/// Rolos das correntes da montagem, andando pelo laço com a roda motora (a corrente em si é um corpo
+/// estático de placas; os rolos saem do corpo e são desenhados aqui na posição da simulação).
+pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
+    if app.settings.bench != crate::settings::Bench::Montagem {
+        return;
+    }
+    let Some(st) = app.asm.as_ref() else { return };
+    if !st.asm.transmissoes.iter().any(|r| matches!(r.elemento, Elemento::Corrente { .. })) {
+        return;
+    }
+    let v = ui.visuals().clone();
+    let p = ui.painter_at(rect);
+    let (cor, borda) = (crate::theme::accent(&v), v.window_stroke().color);
+    for reg in st.asm.transmissoes.iter().filter(|r| matches!(r.elemento, Elemento::Corrente { .. })) {
+        let Some((pontos, rolo)) = fenkra_montagem::transmissao::rolos_da_corrente(&st.asm, reg) else { continue };
+        let proj = |q: [f64; 3]| cam.project(rect, glam::Vec3::new(q[0] as f32, q[1] as f32, q[2] as f32));
+        for q in &pontos {
+            let (Some(c), Some(b)) = (proj(*q), proj([q[0] + rolo / 2., q[1], q[2]])) else { continue };
+            let r = (b - c).length().clamp(1.5, 12.);
+            p.circle_filled(c, r, cor.gamma_multiply(0.85));
+            p.circle_stroke(c, r, egui::Stroke::new(1., borda));
+        }
+    }
+}
+
 fn campo(ui: &mut egui::Ui, rotulo: &str, v: &mut f64, r: std::ops::RangeInclusive<f64>, suf: &str, vel: f64, dica: &str) {
     ui.horizontal(|ui| {
         ui.label(tr(rotulo));

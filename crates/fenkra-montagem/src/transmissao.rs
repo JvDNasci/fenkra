@@ -131,6 +131,9 @@ pub struct Layout {
     pub acoplamentos: Vec<(usize, usize, f64)>,
     /// junta que recebe o comando de giro
     pub motora: usize,
+    /// as juntas são cilíndricas (giram e deslizam no eixo): a dupla hélice em V centra o par sozinha,
+    /// sem retenção axial
+    pub folga_axial: bool,
     pub distancia_centros: f64,
     /// giro da última peça por giro da motora, com o sinal
     pub razao: f64,
@@ -312,7 +315,7 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
             let w = k1.largura_dente + (furo1 * 0.8).max(4.);
             let j1 = peca_com_eixo(&mut pecas, &mut juntas, peca(d1, r1.chave_arquivo(), l1), *furo1, -SOBRA_PINO - z_roda, w + SOBRA_PINO)?;
             let j2 = peca_com_eixo(&mut pecas, &mut juntas, peca(d2, r2.chave_arquivo(), l2), *furo2, -SOBRA_PINO - z_roda, w + SOBRA_PINO)?;
-            let corr = corrente_documento(&ParamLacoCorrente { corrente: corrente.clone(), dentes1: n1, dentes2: n2, elos, centros: cc })?;
+            let corr = corrente_documento(&ParamLacoCorrente { corrente: corrente.clone(), dentes1: n1, dentes2: n2, elos, centros: cc, com_rolos: false })?;
             pecas.push(PecaLayout { nome: format!("Corrente {} ({elos} elos)", c.designacao), chave: format!("corrente-{}-z{n1}-z{n2}-e{elos}", c.designacao.replace(' ', "")), doc: corr, lugar: Placement::default(), fixa: true });
             // a menor é a motora; a razão é o sentido igual: n1 / n2
             let r = n1 as f64 / n2 as f64;
@@ -386,7 +389,28 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
         }
     }
     let _ = nome_curto("");
-    Ok(Layout { pecas, juntas, acoplamentos: acopl, motora, distancia_centros: distancia, razao, avisos })
+    let folga_axial = matches!(e, Elemento::Engrenagens { pinhao, .. } if pinhao.espinha_peixe && pinhao.tipo == TipoEngrenagem::Helicoidal);
+    Ok(Layout { pecas, juntas, acoplamentos: acopl, motora, folga_axial, distancia_centros: distancia, razao, avisos })
+}
+
+/// Rolos da corrente de um registro, no mundo, na posição da simulação agora: andam pelo laço com a
+/// rotação da roda motora (a corrente avança o arco do primitivo). Devolve também o diâmetro do rolo.
+/// A viewport desenha esses pontos por cima da corrente (a corrente em si é um corpo estático de placas).
+pub fn rolos_da_corrente(asm: &Assembly, reg: &RegistroTransmissao) -> Option<(Vec<V3>, f64)> {
+    let Elemento::Corrente { corrente, dentes1, dentes2, .. } = &reg.elemento else { return None };
+    let c = dados::corrente(corrente)?;
+    let (n1, n2) = ((*dentes1).min(*dentes2), (*dentes1).max(*dentes2));
+    let (roda1, roda2) = (asm.node(*reg.comps.get(1)?)?.placement, asm.node(*reg.comps.get(3)?)?.placement);
+    let centros = norm(sub(roda2.origin, roda1.origin));
+    let cam = fenkra_solidos::transmissao_corrente::Caminho::novo(dados::diametro_primitivo_roda(c.passo, n1) / 2., dados::diametro_primitivo_roda(c.passo, n2) / 2., centros).ok()?;
+    let pl: HashMap<Id, Placement> = asm.nodes.iter().map(|n| (n.id, n.placement)).collect();
+    let junta = asm.joints.iter().find(|j| Some(&j.id) == reg.juntas.first())?;
+    let graus = crate::kin::measure(junta, &pl)?.0;
+    let fase = fenkra_solidos::transmissao_corrente::avanco_da_corrente(cam.r1, graus);
+    let z = c.largura / 2.;
+    let n = dados::elos_da_corrente(c.passo, n1, n2, centros).max(1) as usize;
+    let pontos = cam.elos(n, fase).iter().map(|q| roda1.point([q.x, q.y, z])).collect();
+    Some((pontos, c.rolo))
 }
 
 /// Calcula o elemento ao vivo: estágio, resultado com a entrada dada.
@@ -440,7 +464,8 @@ pub fn inserir_transmissao(asm: &mut Assembly, dir: Option<&Path>, e: &Elemento,
     let f = JFrame::from_axis([0.; 3], [0., 0., 1.]);
     let mut juntas = vec![];
     for (ie, ip) in &lay.juntas {
-        juntas.push(asm.add_joint(JointKind::Revolute, JRef { comp: comps[*ie], frame: f }, JRef { comp: comps[*ip], frame: f }));
+        let tipo = if lay.folga_axial { JointKind::Cylindrical } else { JointKind::Revolute };
+        juntas.push(asm.add_joint(tipo, JRef { comp: comps[*ie], frame: f }, JRef { comp: comps[*ip], frame: f }));
     }
     let mut acopl = vec![];
     for (a, b, r) in &lay.acoplamentos {
@@ -578,6 +603,7 @@ mod tests {
         let mut a = Assembly::new("V");
         let r = inserir_transmissao(&mut a, Some(&dir), &e, 300., 2., &Placement::default()).unwrap();
         assert!(a.mates.is_empty(), "nenhuma restrição axial: a dupla hélice é quem trava");
+        assert!(a.joints.iter().all(|j| matches!(j.kind, JointKind::Cylindrical)), "juntas cilíndricas: sem retenção axial");
         assert!((r.razao + 20. / 36.).abs() < 1e-12);
         if !fenkra_kernel::AVAILABLE {
             return;
@@ -649,6 +675,37 @@ mod tests {
             let i = crate::view::interferences(&b, Some(&dir), &mut crate::load::PartCache::default(), 2.0);
             assert!(i.is_empty(), "t = {t}: {i:?}");
         }
+    }
+
+    #[test]
+    fn os_rolos_da_corrente_andam_pelo_laco_com_a_roda_motora() {
+        let dir = pasta("rolos");
+        let e = Elemento::Corrente { corrente: "ISO 08B-1".into(), dentes1: 17, dentes2: 34, centros: 400., furo1: 10., furo2: 12. };
+        let mut a = Assembly::new("Corrente");
+        inserir_transmissao(&mut a, Some(&dir), &e, 300., 5., &Placement::default()).unwrap();
+        let reg = a.transmissoes[0].clone();
+        let (p0, rolo) = rolos_da_corrente(&a, &reg).unwrap();
+        assert!((rolo - 8.51).abs() < 1e-9 && p0.len() == 90);
+        // 0,05 s a 300 rpm = 90° da roda menor: cada rolo anda r1·π/2 pelo laço
+        let mut b = a.clone();
+        assert!(em_t(&mut b, 0.05));
+        let (p1, _) = rolos_da_corrente(&b, &b.transmissoes[0].clone()).unwrap();
+        let r1 = fenkra_solidos::transmissao_dados::diametro_primitivo_roda(12.7, 17) / 2.;
+        let roda1 = b.node(reg.comps[1]).unwrap().placement;
+        let c = norm(sub(b.node(reg.comps[3]).unwrap().placement.origin, roda1.origin));
+        let cam = fenkra_solidos::transmissao_corrente::Caminho::novo(r1, fenkra_solidos::transmissao_dados::diametro_primitivo_roda(12.7, 34) / 2., c).unwrap();
+        // cada rolo está onde o laço o põe depois de avançar r1 · 90° (conta independente da função)
+        let esperado: Vec<V3> = cam.elos(90, r1 * std::f64::consts::FRAC_PI_2).iter().map(|q| roda1.point([q.x, q.y, 7.75 / 2.])).collect();
+        for (q, e) in p1.iter().zip(&esperado) {
+            assert!(norm(sub(*q, *e)) < 1e-6, "{q:?} {e:?}");
+        }
+        assert!(norm(sub(p1[0], p0[0])) > 1., "o rolo 0 saiu do lugar");
+        // sem corrente no registro, nada a desenhar
+        let reto = inserir_transmissao(&mut a.clone(), Some(&dir), &par_reto(), 600., 5., &Placement::default());
+        assert!(reto.is_ok());
+        let mut c = Assembly::new("x");
+        inserir_transmissao(&mut c, Some(&dir), &par_reto(), 600., 5., &Placement::default()).unwrap();
+        assert!(rolos_da_corrente(&c, &c.transmissoes[0].clone()).is_none());
     }
 
     #[test]
