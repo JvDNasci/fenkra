@@ -99,6 +99,7 @@ pub fn encaixes_da_estrutura(doc: &Document, opc: &Opcoes) -> Vec<MembroComEncai
         cut_outlines: vec![],
         roscas: vec![],
         relatorios_forma: vec![],
+        formas_resolvidas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
