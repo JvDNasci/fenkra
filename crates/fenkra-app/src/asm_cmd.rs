@@ -657,6 +657,14 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         st.fantasma_novo = true;
         return;
     }
+    if nome.starts_with("calculo") {
+        crate::calculo_ui::demo(st, nome);
+        return;
+    }
+    if nome.starts_with("chaveta") {
+        crate::asm_chaveta::demo(st, nome);
+        return;
+    }
     if nome == "encaixe" {
         st.cmd = Some(Pendente::novo(Tipo::Junta(JointKind::Rigid)));
         crate::asm_encaixe::demo(st);

@@ -543,6 +543,8 @@ def desenhos():
     ic("asm_fixadores", B="M6 22h10M32 22h10M6 34h10M32 34h10M16 22v12M32 22v12", R="M14 12h20v6H14zM20 18v24M28 18v24")
     ic("asm_catalogo", B="M10 8h24a4 4 0 0 1 4 4v28H14a4 4 0 0 1-4-4zM10 36a4 4 0 0 1 4-4h24", R="M19 13h10v5H19zM22 18v10M26 18v10")
     ic("asm_engrenagens", B=ENGRENAGEM(16, 18, 11, 8, 8), R=ENGRENAGEM(33, 33, 11, 8, 8))
+    ic("asm_chaveta", B="M6 30v12h36V30H34M14 30H6", R="M14 20h20a4 4 0 0 1 0 8H14a4 4 0 0 1 0-8z")
+    ic("asm_calculo", B=Q(8, 6, 32, 36), R=Q(13, 11, 22, 8) + "M14 26h4M22 26h4M30 26h4M14 34h4M22 34h4M30 34h4")
     ic("asm_lista", B="M20 12h22M20 24h22M20 36h22", R=C(10, 12, 4) + C(10, 24, 4) + C(10, 36, 4))
     ic("asm_numerar", B=CUBO(16, 22, 10, 5, 10), R=C(36, 14, 7) + L((31, 19), (20, 28)))
     ic("asm_recorte_peca", B=CUBO(24, 16, 18, 9, 12), R="M14 21V6h20v15M14 21l10 5 10-5")
@@ -730,6 +732,8 @@ ic("forma_simetria", b="M24 4v40", R="M20 10c-16 2-16 26 0 28M28 10c16 2 16 26 0
 ic("forma_converter", b=Q(6, 12, 18, 24), R=CUBO(32, 12, 10, 5, 12) + "M18 24h4", pb=[(6, 12), (24, 12), (24, 36), (6, 36)])
 
 SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", "sm_converter_chapa", "sm_aba_laco", "sm_fecha_canto", "sm_canto_topo", "sm_canto_sobreposto", "sm_canto_sob", "importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo", "an_conexao", "an_desvio", "an_pente", "sup_regrada", "st_solda", "conversao_lote", "formatos_suportados", "edit_mover_face", "edit_apagar_face", "edit_deslocar_face", "edit_raio_filete"}
+
+SO_INTERFACE |= {"asm_chaveta", "asm_calculo"}
 
 
 # ---------- saída ----------

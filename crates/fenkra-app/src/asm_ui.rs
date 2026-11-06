@@ -293,6 +293,10 @@ pub struct AsmState {
     pub catalogo: Option<crate::biblioteca_ui::Estado>,
     /// assistente de prendedores aberto (B98)
     pub fixadores: Option<crate::asm_fixadores::Estado>,
+    /// comando Chaveta aberto (B292)
+    pub chaveta: Option<crate::asm_chaveta::Estado>,
+    /// calculadoras de projeto abertas (B110)
+    pub calculo: Option<crate::calculo_ui::Estado>,
     /// como estava cada ponto no último recálculo das pilhas
     pub pilhas_diag: fenkra_montagem::pilhas::Recalculo,
     /// comando Repetição aberto (B263)
@@ -398,6 +402,8 @@ impl AsmState {
             inserir: None,
             repeticao: None,
             fixadores: None,
+            chaveta: None,
+            calculo: None,
             pilhas_diag: Default::default(),
             gears_open: None,
             anim_sel: 0,
@@ -719,7 +725,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
             let is_asm = matches!(
                 c,
                 Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
-                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmCatalogo | Cmd::AsmGears
+                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmCatalogo | Cmd::AsmGears | Cmd::AsmChaveta | Cmd::AsmCalculo
             );
             let Some(st) = app.asm.as_mut() else {
                 // só os comandos de montagem avisam; os da peça seguem normalmente
@@ -820,6 +826,14 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 Cmd::AsmCatalogo => {
                     // liga e desliga: o painel Biblioteca abre só enquanto a pessoa o usa
                     st.catalogo = if st.catalogo.is_some() { None } else { Some(crate::biblioteca_ui::Estado::default()) };
+                }
+                Cmd::AsmCalculo => crate::calculo_ui::abrir(st),
+                Cmd::AsmChaveta => {
+                    if st.chaveta.is_some() {
+                        st.chaveta = None;
+                    } else {
+                        crate::asm_chaveta::abrir(st, &app.picks);
+                    }
                 }
                 Cmd::AsmGears => {
                     if st.gears_open.is_none() {
@@ -946,7 +960,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
 /// clique numa peça a seleciona na árvore.
 pub fn after_viewport(app: &mut App, ctx: &egui::Context) {
     after_view_quick(app);
-    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_fixadores::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
+    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_fixadores::apos_viewport(app) && !crate::asm_chaveta::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
         selecao_do_clique(app, ctx.input(|i| i.modifiers.alt));
     }
     // duplo clique numa peça: abre para editar

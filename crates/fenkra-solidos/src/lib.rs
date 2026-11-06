@@ -36,6 +36,8 @@ pub mod engrenagens;
 pub mod engrenagens_dim;
 pub mod eixos_recursos;
 pub mod eixos;
+pub mod chaveta_rasgos;
+pub mod calculo_projeto;
 pub mod profile;
 pub mod refs;
 pub mod chapa;
