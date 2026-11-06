@@ -729,6 +729,20 @@ c('B353', 3, 'P0', 'Projeto-teste: produto completo modelado no Fenkra para vali
   ['USR-TESTE'], [], 600, 'Auto + Visual', 'Geral'),
 c('B354', 3, 'P1', 'Biblioteca: correntes de kart 219 e 428', 'Acrescentar as correntes 219 e 428 à biblioteca de transmissão, com dados conferidos em duas fontes gratuitas. Necessária para a etapa de transmissão do kart de teste (B353).',
   ['USR-TESTE'], [], 60, 'Auto', 'Biblioteca de normas'),
+c('B355', 2, 'P0', 'Recurso recém-criado não fica selecionado nem laranja', 'Ao terminar um recurso, a peça fica laranja até o próximo comando, porque o último item da árvore fica selecionado. Ao confirmar, a seleção é limpa e a peça volta à cor normal. A árvore não mantém seleção permanente.',
+  ['USR-TESTE'], [], 60, 'Auto + Visual', 'Interface', status='em andamento'),
+c('B356', 2, 'P1', 'Prévia leve de superfícies e splines, reconstruída ao confirmar', 'Durante a edição, splines e superfícies mostram só arame ou uma superfície grosseira sem detalhe, e a geometria final é feita ao confirmar, para o comando responder na hora.',
+  ['USR-TESTE'], [], 250, 'Auto + Visual', 'Interface'),
+c('B357', 2, 'P0', 'Janelas de análise abrem e fecham certo, com reteste completo', 'As janelas de análise de curvatura e de superfície abrem e não fecham. Corrigir e retestar todas as análises.',
+  ['USR-TESTE'], [], 80, 'Auto + Visual', 'Interface', status='em andamento'),
+c('B358', 2, 'P0', 'Painéis como janelas: minimizar, expandir, fechar e encaixe com sombra', 'Todo painel ganha minimizar, expandir e fechar, reabre pelo menu, e ao arrastar mostra a sombra de onde vai encaixar, nas laterais, em cima e embaixo. O conjunto do menu lateral direito encaixa inteiro, e dá para redimensionar nos quatro lados e cantos.',
+  ['USR-TESTE'], [], 400, 'Auto + Visual', 'Interface', status='em andamento'),
+c('B359', 2, 'P1', 'Barra superior e seta da interface na proporção certa', 'A barra de cima está grande demais e a seta fora de proporção. Reduzir mantendo a área de clique e a escala de interface.',
+  ['USR-TESTE'], [], 50, 'Visual', 'Interface', status='em andamento'),
+c('B360', 2, 'P1', 'Painel de comando em hierarquia, em vez de abas e caixas', 'Em recurso curto, Elemento, Tipo e Definição viram um fluxo só. Ao escolher o tipo, os campos dele aparecem logo abaixo, em hierarquia que acompanha a decisão: no furo, tipo, depois escareado, rosca e diâmetro. Sem depender de abas. Estudar como softwares de modelagem CAD avançados organizam esses painéis, sem copiar.',
+  ['USR-TESTE'], [], 450, 'Auto + Visual', 'Interface'),
+c('B361', 2, 'P1', 'Realce de face por contorno externo', 'Clicar numa face realça só o contorno dela, sem brilhar a área inteira nem as arestas internas. Aresta e ponto continuam brilhando só eles.',
+  ['USR-TESTE'], [], 150, 'Auto + Visual', 'Interface', status='em andamento'),
 ]
 def main():
     for x in B:

@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 92440,
+ "tokens_total_k": 93880,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 7180,
-   "pct": 7.8
+   "pct": 7.6
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 12.6
+   "pct": 12.4
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
-   "tokens_k": 20430,
-   "pct": 22.1
+   "tokens_k": 21870,
+   "pct": 23.3
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 22250,
-   "pct": 24.1
+   "pct": 23.7
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
    "tokens_k": 30970,
-   "pct": 33.5
+   "pct": 33.0
   }
  },
  "itens": [
@@ -130,7 +130,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B06",
@@ -206,7 +206,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B10",
@@ -3381,7 +3381,7 @@
    "teste": "Auto",
    "area": "PMI 3D",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B192",
@@ -3397,7 +3397,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B193",
@@ -3833,7 +3833,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B220",
@@ -3897,7 +3897,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B224",
@@ -3977,7 +3977,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B229",
@@ -4233,7 +4233,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B245",
@@ -5995,6 +5995,118 @@
    "area": "Biblioteca de normas",
    "status": "a fazer",
    "pct": 0.1
+  },
+  {
+   "id": "B355",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Recurso recém-criado não fica selecionado nem laranja",
+   "oque": "Ao terminar um recurso, a peça fica laranja até o próximo comando, porque o último item da árvore fica selecionado. Ao confirmar, a seleção é limpa e a peça volta à cor normal. A árvore não mantém seleção permanente.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 60,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "em andamento",
+   "pct": 0.1
+  },
+  {
+   "id": "B356",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Prévia leve de superfícies e splines, reconstruída ao confirmar",
+   "oque": "Durante a edição, splines e superfícies mostram só arame ou uma superfície grosseira sem detalhe, e a geometria final é feita ao confirmar, para o comando responder na hora.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B357",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Janelas de análise abrem e fecham certo, com reteste completo",
+   "oque": "As janelas de análise de curvatura e de superfície abrem e não fecham. Corrigir e retestar todas as análises.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "em andamento",
+   "pct": 0.1
+  },
+  {
+   "id": "B358",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Painéis como janelas: minimizar, expandir, fechar e encaixe com sombra",
+   "oque": "Todo painel ganha minimizar, expandir e fechar, reabre pelo menu, e ao arrastar mostra a sombra de onde vai encaixar, nas laterais, em cima e embaixo. O conjunto do menu lateral direito encaixa inteiro, e dá para redimensionar nos quatro lados e cantos.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "em andamento",
+   "pct": 0.4
+  },
+  {
+   "id": "B359",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Barra superior e seta da interface na proporção certa",
+   "oque": "A barra de cima está grande demais e a seta fora de proporção. Reduzir mantendo a área de clique e a escala de interface.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 50,
+   "teste": "Visual",
+   "area": "Interface",
+   "status": "em andamento",
+   "pct": 0.1
+  },
+  {
+   "id": "B360",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Painel de comando em hierarquia, em vez de abas e caixas",
+   "oque": "Em recurso curto, Elemento, Tipo e Definição viram um fluxo só. Ao escolher o tipo, os campos dele aparecem logo abaixo, em hierarquia que acompanha a decisão: no furo, tipo, depois escareado, rosca e diâmetro. Sem depender de abas. Estudar como softwares de modelagem CAD avançados organizam esses painéis, sem copiar.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B361",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Realce de face por contorno externo",
+   "oque": "Clicar numa face realça só o contorno dela, sem brilhar a área inteira nem as arestas internas. Aresta e ponto continuam brilhando só eles.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "em andamento",
+   "pct": 0.2
   }
  ]
 }
