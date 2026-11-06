@@ -282,7 +282,7 @@ pub const ANGULO_PADRAO: f64 = 0.35;
 mod ffi;
 
 pub mod xde;
-pub use xde::{EsquemaStep, InfoReparo, InstanciaXde, ModeloXde, OpcoesGravarXde, OpcoesLerXde, ProdutoXde, UnidadeStep, IDENTIDADE};
+pub use xde::{DefeitoForma, EsquemaStep, InfoReparo, InstanciaXde, ModeloXde, OpcoesGravarIges, OpcoesGravarXde, OpcoesLerXde, ProdutoXde, TipoDefeito, UnidadeStep, IDENTIDADE};
 
 #[cfg(occt)]
 mod imp {

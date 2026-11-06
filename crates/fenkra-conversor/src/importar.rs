@@ -3,9 +3,9 @@
 //! a miniatura. Roda dentro do processo filho; o resultado é só dado.
 
 use crate::relatorio::*;
-use crate::{detectar, montar_documento, texto_do_caminho, ErroConv, Formato, ModeloNeutro, OpcoesImportar, Registro, Relatorio};
+use crate::{detectar, montar_documento, texto_do_caminho, Contagem, Defeito, Destino, ErroConv, Formato, LinhaReparo, ModeloNeutro, OpcoesImportar, Registro, Relatorio, TipoDefeito};
 use fenkra_core::{Document, SeloOrigem};
-use fenkra_kernel::{version, Xform};
+use fenkra_kernel::{version, InfoReparo, Xform};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -63,9 +63,9 @@ pub fn unidade_suspeita(medidas: [f64; 3]) -> Option<Suspeita> {
 /// quando a pessoa diz que a declaração está errada.
 fn declarada_em_mm(unidades: &str) -> f64 {
     let u = unidades.to_uppercase();
-    if u.contains("INCH") {
+    if u.contains("INCH") || u == "IN" {
         25.4
-    } else if u.contains("CENTI") {
+    } else if u.contains("CENTI") || u == "CM" {
         10.
     } else if u.contains("MILLI") || u == "MM" {
         1.
@@ -90,6 +90,22 @@ fn escalar(modelo: &mut ModeloNeutro, k: f64) -> Result<(), ErroConv> {
     Ok(())
 }
 
+fn antes(i: &InfoReparo) -> Contagem {
+    Contagem {
+        faces: i.faces_antes,
+        faces_ruins: i.faces_ruins_antes,
+        solidos: i.solidos_antes,
+        abertas: i.abertas_antes,
+        soltas: i.soltas_antes,
+        arestas_livres: i.arestas_livres_antes,
+        tolerancia: i.tolerancia_antes,
+    }
+}
+
+fn depois(i: &InfoReparo) -> Contagem {
+    Contagem { faces: i.faces, faces_ruins: i.faces_ruins, solidos: i.solidos, abertas: i.abertas, soltas: i.soltas, arestas_livres: i.arestas_livres, tolerancia: i.tolerancia }
+}
+
 /// Repara cada definição uma vez, não cada ocorrência, e anota o que restou aberto.
 fn reparar(modelo: &mut ModeloNeutro, o: &OpcoesImportar, r: &mut Relatorio) -> Result<(), ErroConv> {
     for p in &mut modelo.xde.produtos {
@@ -98,6 +114,12 @@ fn reparar(modelo: &mut ModeloNeutro, o: &OpcoesImportar, r: &mut Relatorio) -> 
         r.faces_reparadas += info.faces_tocadas;
         r.faces_costuradas += info.faces_costuradas;
         r.faces_ruins += info.faces_ruins;
+        let (a, d) = (antes(&info), depois(&info));
+        r.antes.somar(&a);
+        r.depois.somar(&d);
+        if a.tem_defeito() || d.tem_defeito() {
+            r.reparo_pecas.push(LinhaReparo { peca: p.nome.clone(), antes: a, depois: d });
+        }
         if info.abertas > 0 || info.soltas > 0 {
             r.nao_fecharam.push(p.nome.clone());
         }
@@ -106,6 +128,34 @@ fn reparar(modelo: &mut ModeloNeutro, o: &OpcoesImportar, r: &mut Relatorio) -> 
             r.avisos.push(Nota::nova(AV_CORES_REPARO, &[p.nome.clone()]));
         }
         p.forma = Some(novo);
+    }
+    Ok(())
+}
+
+/// Lista o que sobrou depois do reparo, cada defeito no lugar da primeira ocorrência da peça. Peça usada
+/// N vezes tem o mesmo defeito nas N: repetir só encheria a lista.
+fn listar_defeitos(modelo: &ModeloNeutro, r: &mut Relatorio) -> Result<(), ErroConv> {
+    let mut vistos = std::collections::HashSet::new();
+    let total: u32 = r.reparo_pecas.iter().map(|l| l.depois.faces_ruins + l.depois.soltas + l.depois.arestas_livres).sum();
+    for c in modelo.ocorrencias() {
+        let produto = &modelo.xde.produtos[c.produto];
+        let Some(f) = produto.forma.as_ref() else { continue };
+        let resta = LIMITE_DEFEITOS.saturating_sub(r.defeitos.len() as u32);
+        if resta == 0 || !vistos.insert(c.produto) {
+            continue;
+        }
+        for d in f.defeitos(resta)? {
+            let tipo = match d.tipo {
+                fenkra_kernel::TipoDefeito::FaceInvalida => TipoDefeito::FaceInvalida,
+                fenkra_kernel::TipoDefeito::ArestaLivre => TipoDefeito::ArestaLivre,
+                fenkra_kernel::TipoDefeito::FaceSolta => TipoDefeito::FaceSolta,
+            };
+            let segmentos = d.segmentos.iter().map(|s| s.map(|p| aplicar(&c.local, p, true).map(|v| v as f32))).collect();
+            r.defeitos.push(Defeito { tipo, peca: produto.nome.clone(), indice: d.indice, segmentos });
+        }
+    }
+    if total > r.defeitos.len() as u32 {
+        r.avisos.push(Nota::nova(AV_DEFEITOS_FORA, &[r.defeitos.len().to_string(), total.to_string()]));
     }
     Ok(())
 }
@@ -131,7 +181,7 @@ fn medir(modelo: &ModeloNeutro, r: &mut Relatorio) -> Result<(), ErroConv> {
     Ok(())
 }
 
-fn o_que_fica_fora(modelo: &ModeloNeutro, r: &mut Relatorio) {
+fn o_que_fica_fora(modelo: &ModeloNeutro, conjunto: bool, r: &mut Relatorio) {
     let xde = &modelo.xde;
     if modelo.formato == Formato::Brep {
         r.nao_carrega.push(Nota::nova(FORA_BREP, &[]));
@@ -153,8 +203,21 @@ fn o_que_fica_fora(modelo: &ModeloNeutro, r: &mut Relatorio) {
     if !camadas.is_empty() {
         r.nao_carrega.push(Nota::nova(FORA_CAMADAS, &[camadas.join(", ")]));
     }
-    if modelo.tem_montagem() {
+    if modelo.tem_montagem() && !conjunto {
         r.nao_carrega.push(Nota::nova(FORA_MONTAGEM, &[]));
+    }
+    if !xde.ignoradas.is_empty() {
+        let mut contagem = std::collections::BTreeMap::new();
+        for tipo in &xde.ignoradas {
+            *contagem.entry(tipo.as_str()).or_insert(0usize) += 1;
+        }
+        let lista: Vec<String> = contagem.iter().map(|(tipo, n)| format!("{tipo} ({n})")).collect();
+        r.nao_carrega.push(Nota::nova(FORA_IGES, &[lista.join(", ")]));
+    }
+    if modelo.formato == Formato::Iges {
+        for p in r.nao_fecharam.clone() {
+            r.avisos.push(Nota::nova(AV_SUPERFICIES, &[p]));
+        }
     }
 }
 
@@ -215,6 +278,9 @@ impl Registro {
         if formato == Formato::Arvore {
             return crate::arvore::importar(caminho, &bytes, extensao_diverge);
         }
+        if formato == Formato::Dxf {
+            return crate::dxf::importar(caminho, &bytes, o, extensao_diverge);
+        }
         let provedor = self.provedor(formato)?;
         let mut modelo = provedor.ler(formato, caminho, o)?;
 
@@ -247,6 +313,7 @@ impl Registro {
             }
         }
         reparar(&mut modelo, o, &mut r)?;
+        listar_defeitos(&modelo, &mut r)?;
         medir(&modelo, &mut r)?;
         if let Some(m) = r.medidas() {
             let maior = m.into_iter().fold(0., f64::max);
@@ -256,7 +323,8 @@ impl Registro {
                 None => {}
             }
         }
-        o_que_fica_fora(&modelo, &mut r);
+        let conjunto = o.destino == Destino::Montagem && modelo.pede_conjunto();
+        o_que_fica_fora(&modelo, conjunto, &mut r);
 
         let selo = SeloOrigem {
             nome: nome_arquivo,
@@ -265,12 +333,31 @@ impl Registro {
             esquema,
             unidades,
             derivado_de: None,
+            relatorio: None,
         };
         // o documento antes da miniatura: a malha fica na forma e iria junto para o B-rep
-        let (doc, corpos) = montar_documento(&modelo, &nome_doc, texto, selo)?;
-        r.corpos = corpos;
+        let (mut doc, mut pecas) = if conjunto {
+            let (c, corpos) = modelo.para_conjunto(&nome_doc, texto, &selo)?;
+            r.corpos = corpos;
+            let primeira = c.pecas.first().map(|(_, d)| d.clone()).ok_or_else(|| ErroConv::Leitura("arquivo sem peças".into()))?;
+            (primeira, Some(c))
+        } else {
+            let (d, corpos) = montar_documento(&modelo, &nome_doc, texto, selo)?;
+            r.corpos = corpos;
+            (d, None)
+        };
+        // só na primeira peça: em todas, mil peças levariam mil cópias do relatório
+        let embutido = serde_json::to_string(&r).ok();
+        if let Some(s) = &mut doc.origem {
+            s.relatorio.clone_from(&embutido);
+        }
+        if let Some((_, primeira)) = pecas.as_mut().and_then(|c| c.pecas.first_mut()) {
+            if let Some(s) = &mut primeira.origem {
+                s.relatorio = embutido;
+            }
+        }
         let previa = previa(&modelo, &r)?;
-        Ok(Importado { doc, relatorio: r, previa, conjunto: None })
+        Ok(Importado { doc, relatorio: r, previa, conjunto: pecas })
     }
 
     /// Lê e grava noutro formato, sem passar por documento.
@@ -299,6 +386,8 @@ mod testes {
         assert_eq!(declarada_em_mm("INCH"), 25.4);
         assert_eq!(declarada_em_mm("MILLIMETRE"), 1.);
         assert_eq!(declarada_em_mm("METRE"), 1000.);
+        assert_eq!(declarada_em_mm("IN"), 25.4, "o IGES abrevia");
+        assert_eq!(declarada_em_mm("CM"), 10.);
         assert_eq!(declarada_em_mm(""), 1.);
     }
 }

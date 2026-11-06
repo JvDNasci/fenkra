@@ -43,6 +43,7 @@ pub fn importar_step(caminho: &str) -> Result<Importacao, String> {
         esquema: info.esquema,
         unidades: info.unidades,
         derivado_de: None,
+        relatorio: None,
     };
     let m = forma.mass();
     let relatorio = format!(

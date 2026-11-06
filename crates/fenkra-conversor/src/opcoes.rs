@@ -69,6 +69,48 @@ impl UnidadeArquivo {
     }
 }
 
+/// O que um arquivo com várias peças vira.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Destino {
+    /// um documento por peça e uma montagem com as ocorrências: a peça repetida existe uma vez
+    #[default]
+    Montagem,
+    /// um documento só, com um corpo por ocorrência
+    UmaPeca,
+}
+
+impl Destino {
+    pub const TODOS: [Destino; 2] = [Destino::Montagem, Destino::UmaPeca];
+
+    pub fn nome(self) -> &'static str {
+        match self {
+            Destino::Montagem => "Montagem",
+            Destino::UmaPeca => "Uma peça",
+        }
+    }
+}
+
+/// Como uma montagem vai para o arquivo.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Estrutura {
+    /// produtos e instâncias, como na árvore
+    #[default]
+    Arvore,
+    /// um produto só com tudo no lugar
+    Achatada,
+}
+
+impl Estrutura {
+    pub const TODAS: [Estrutura; 2] = [Estrutura::Arvore, Estrutura::Achatada];
+
+    pub fn nome(self) -> &'static str {
+        match self {
+            Estrutura::Arvore => "Com estrutura",
+            Estrutura::Achatada => "Achatada",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OpcoesImportar {
@@ -79,11 +121,12 @@ pub struct OpcoesImportar {
     /// tolerância do reparo e da costura, em mm
     pub tolerancia: f64,
     pub unidade: UnidadeArquivo,
+    pub destino: Destino,
 }
 
 impl Default for OpcoesImportar {
     fn default() -> Self {
-        OpcoesImportar { cores: true, nomes: true, camadas: true, reparo: Reparo::default(), tolerancia: 0.01, unidade: UnidadeArquivo::default() }
+        OpcoesImportar { cores: true, nomes: true, camadas: true, reparo: Reparo::default(), tolerancia: 0.01, unidade: UnidadeArquivo::default(), destino: Destino::default() }
     }
 }
 
@@ -123,6 +166,27 @@ impl From<UnidadeSaida> for UnidadeStep {
     }
 }
 
+/// Como o IGES leva a geometria.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ModoIges {
+    /// topologia completa: o sólido chega sólido em quem lê BRep
+    #[default]
+    Brep,
+    /// faces aparadas soltas: o que todo programa antigo lê, e chega como superfícies
+    Faces,
+}
+
+impl ModoIges {
+    pub const TODOS: [ModoIges; 2] = [ModoIges::Brep, ModoIges::Faces];
+
+    pub fn nome(self) -> &'static str {
+        match self {
+            ModoIges::Brep => "BRep",
+            ModoIges::Faces => "Faces",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct OpcoesExportar {
@@ -133,11 +197,13 @@ pub struct OpcoesExportar {
     pub camadas: bool,
     /// liga a escrita de PMI do gravador; exige AP242 para ser semântico
     pub pmi: bool,
+    pub iges: ModoIges,
+    pub estrutura: Estrutura,
 }
 
 impl Default for OpcoesExportar {
     fn default() -> Self {
-        OpcoesExportar { esquema: EsquemaSaida::default(), unidade: UnidadeSaida::default(), cores: true, nomes: true, camadas: true, pmi: false }
+        OpcoesExportar { esquema: EsquemaSaida::default(), unidade: UnidadeSaida::default(), cores: true, nomes: true, camadas: true, pmi: false, iges: ModoIges::default(), estrutura: Estrutura::default() }
     }
 }
 

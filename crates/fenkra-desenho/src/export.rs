@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Exportação das folhas: PDF (uma página por folha, vetorial), SVG e DXF (R12, uma folha).
+//! Exportação das folhas: PDF (uma página por folha, vetorial), SVG e DXF (R2000, uma folha).
 
 use crate::layout::{Align, Item, Prim, Style};
 use crate::*;
@@ -49,110 +49,55 @@ pub fn svg(items: &[Item], size: V2) -> String {
     s
 }
 
-/// DXF R12 (ASCII) de uma folha: camadas por tipo de linha, textos com estilo padrão.
+/// DXF R2000 de uma folha: camadas por tipo de linha, curvas amostradas de volta a `ARC` e `CIRCLE`,
+/// setas e sombreado como `HATCH` e textos como `MTEXT`.
 pub fn dxf(items: &[Item]) -> String {
-    let mut s = String::new();
-    let pair = |s: &mut String, c: i32, v: &str| {
-        let _ = write!(s, "{c}\n{v}\n");
-    };
-    // tabelas de tipos de linha e camadas
-    pair(&mut s, 0, "SECTION");
-    pair(&mut s, 2, "TABLES");
-    pair(&mut s, 0, "TABLE");
-    pair(&mut s, 2, "LTYPE");
-    pair(&mut s, 70, "3");
-    for (name, pat) in [("CONTINUOUS", vec![]), ("HIDDEN", vec![3., -1.5]), ("CENTER", vec![8., -1.5, 1., -1.5])] {
-        pair(&mut s, 0, "LTYPE");
-        pair(&mut s, 2, name);
-        pair(&mut s, 70, "0");
-        pair(&mut s, 3, name);
-        pair(&mut s, 72, "65");
-        pair(&mut s, 73, &pat.len().to_string());
-        pair(&mut s, 40, &format!("{}", pat.iter().map(|x: &f64| x.abs()).sum::<f64>()));
-        for x in pat {
-            pair(&mut s, 49, &x.to_string());
-        }
-    }
-    pair(&mut s, 0, "ENDTAB");
-    pair(&mut s, 0, "TABLE");
-    pair(&mut s, 2, "LAYER");
-    pair(&mut s, 70, "5");
-    for (name, color, lt) in [("VISIVEL", "7", "CONTINUOUS"), ("FINA", "3", "CONTINUOUS"), ("OCULTA", "4", "HIDDEN"), ("CENTRO", "1", "CENTER"), ("MOLDURA", "7", "CONTINUOUS")] {
-        pair(&mut s, 0, "LAYER");
-        pair(&mut s, 2, name);
-        pair(&mut s, 70, "0");
-        pair(&mut s, 62, color);
-        pair(&mut s, 6, lt);
-    }
-    pair(&mut s, 0, "ENDTAB");
-    pair(&mut s, 0, "ENDSEC");
-    pair(&mut s, 0, "SECTION");
-    pair(&mut s, 2, "ENTITIES");
-    let layer = |st: Style| match st {
+    use fenkra_dxf::{cor_indexada, reconhecer, Anexo, Camada, Desenho, Entidade, TipoLinha, Unidade, TOLERANCIA_ARCO};
+    let camada = |st: Style| match st {
         Style::Visible => "VISIVEL",
         Style::Thin => "FINA",
         Style::Hidden => "OCULTA",
         Style::Center => "CENTRO",
         Style::Thick => "MOLDURA",
     };
+    let mut d = Desenho {
+        unidade: Unidade::Milimetro,
+        tipos_linha: vec![TipoLinha { nome: "HIDDEN".into(), padrao: vec![3., -1.5] }, TipoLinha { nome: "CENTER".into(), padrao: vec![8., -1.5, 1., -1.5] }],
+        camadas: vec![
+            Camada { espessura: Some(50), ..Camada::nova("VISIVEL", 7, "Continuous") },
+            Camada { espessura: Some(25), ..Camada::nova("FINA", 3, "Continuous") },
+            Camada { espessura: Some(25), ..Camada::nova("OCULTA", 4, "HIDDEN") },
+            Camada { espessura: Some(25), ..Camada::nova("CENTRO", 1, "CENTER") },
+            Camada { espessura: Some(70), ..Camada::nova("MOLDURA", 7, "Continuous") },
+        ],
+        ..Default::default()
+    };
     for it in items {
+        let mut por = |nome: &str, e: Entidade| {
+            let mut item = fenkra_dxf::Item::novo(nome, e);
+            item.cor = it.color.map(cor_indexada);
+            item.espessura = it.width.map(|w| (w * 100.).round() as i16);
+            d.itens.push(item);
+        };
         match &it.prim {
             Prim::Line { pts, style } => {
-                for w in pts.windows(2) {
-                    pair(&mut s, 0, "LINE");
-                    pair(&mut s, 8, layer(*style));
-                    pair(&mut s, 10, &format!("{:.4}", w[0][0]));
-                    pair(&mut s, 20, &format!("{:.4}", w[0][1]));
-                    pair(&mut s, 30, "0");
-                    pair(&mut s, 11, &format!("{:.4}", w[1][0]));
-                    pair(&mut s, 21, &format!("{:.4}", w[1][1]));
-                    pair(&mut s, 31, "0");
+                for e in reconhecer(pts, TOLERANCIA_ARCO) {
+                    por(camada(*style), e);
                 }
             }
-            Prim::Fill { pts } => {
-                // seta: SOLID (3 vértices; o 4º repete o 3º)
-                if pts.len() >= 3 {
-                    pair(&mut s, 0, "SOLID");
-                    pair(&mut s, 8, "FINA");
-                    let q = [pts[0], pts[1], pts[2], pts[2]];
-                    for (i, p) in q.iter().enumerate() {
-                        pair(&mut s, 10 + i as i32, &format!("{:.4}", p[0]));
-                        pair(&mut s, 20 + i as i32, &format!("{:.4}", p[1]));
-                        pair(&mut s, 30 + i as i32, "0");
-                    }
-                }
-            }
+            Prim::Fill { pts } if pts.len() >= 3 => por("FINA", Entidade::Hachura { lacos: vec![pts.clone()] }),
+            Prim::Fill { .. } => {}
             Prim::Text { pos, text, size, angle, align } => {
-                pair(&mut s, 0, "TEXT");
-                pair(&mut s, 8, "FINA");
-                pair(&mut s, 10, &format!("{:.4}", pos[0]));
-                pair(&mut s, 20, &format!("{:.4}", pos[1]));
-                pair(&mut s, 30, "0");
-                pair(&mut s, 40, &format!("{size}"));
-                pair(&mut s, 1, &dxf_text(text));
-                pair(&mut s, 50, &format!("{angle:.3}"));
-                let h = match align {
-                    Align::Left => 0,
-                    Align::Center => 1,
-                    Align::Right => 2,
+                let anexo = match align {
+                    Align::Left => Anexo::Esquerda,
+                    Align::Center => Anexo::Centro,
+                    Align::Right => Anexo::Direita,
                 };
-                if h != 0 {
-                    pair(&mut s, 72, &h.to_string());
-                    pair(&mut s, 11, &format!("{:.4}", pos[0]));
-                    pair(&mut s, 21, &format!("{:.4}", pos[1]));
-                    pair(&mut s, 31, "0");
-                }
+                por("FINA", Entidade::Texto { pos: *pos, altura: *size, angulo: *angle, anexo, texto: text.clone() });
             }
         }
     }
-    pair(&mut s, 0, "ENDSEC");
-    pair(&mut s, 0, "EOF");
-    s
-}
-
-/// Caracteres especiais do DXF (%%c diâmetro, %%d grau, %%p mais-menos).
-fn dxf_text(t: &str) -> String {
-    t.replace('Ø', "%%c").replace('°', "%%d").replace('±', "%%p")
+    fenkra_dxf::gravar(&d)
 }
 
 /// Texto em WinAnsi (Latin-1 nos acentos) para a fonte padrão do PDF; o resto vira '?'.

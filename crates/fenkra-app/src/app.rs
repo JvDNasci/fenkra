@@ -24,6 +24,7 @@ mod diag;
 mod gravar;
 mod roda_app;
 mod estado_doc;
+mod exportar;
 mod importar;
 mod plm;
 mod projeto;
@@ -183,6 +184,9 @@ pub struct App {
     importar_dialogo: Option<importar::Dialogo>,
     /// relatório da última importação, até a pessoa fechar
     importar_relatorio: Option<fenkra_conversor::Relatorio>,
+    /// defeito do relatório realçado na viewport
+    importar_defeito: Option<usize>,
+    exportar_dialogo: Option<exportar::Dialogo>,
     /// documento comparado, rótulo da revisão e o que mudou desde ela (B279)
     comparacao: Option<(u64, String, fenkra_project::estado_doc::Diferencas)>,
     /// diagnóstico e pais/filhos (B69)
@@ -390,6 +394,8 @@ impl App {
             importacao_pendente: None,
             importar_dialogo: None,
             importar_relatorio: None,
+            importar_defeito: None,
+            exportar_dialogo: None,
             comparacao: None,
             diag: Default::default(),
             selecao_ciclo: Default::default(),
@@ -494,6 +500,11 @@ impl App {
         if std::env::var("FENKRA_DEMO_RELATORIO").is_ok() {
             app.relatorio_pendente = Some(crate::relatorio::montar("índice fora do limite", "crates/exemplo/src/x.rs:10", "main", "(pilha de exemplo)", crate::perfil::medido().as_ref(), "[1] inicio: Fenkra | args [\"arquivo-da-pessoa.fenkra\"] | WGPU_BACKEND None
 [2] adaptador: exemplo"));
+            app.started = true;
+        }
+        // desenvolvimento: FENKRA_DEMO_EXPORTAR=iges abre o painel de exportação nesse formato
+        if let Ok(f) = std::env::var("FENKRA_DEMO_EXPORTAR") {
+            app.abrir_painel_exportar(if f == "iges" { fenkra_conversor::Formato::Iges } else { fenkra_conversor::Formato::Step });
             app.started = true;
         }
         // desenvolvimento: FENKRA_DEMO_IMPORTAR=<arquivo> abre o painel de importação com esse arquivo
@@ -1241,9 +1252,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     }
 
     fn export(&mut self, ext: &str, preset: fenkra_core::PresetStl) {
-        let filtro: &[&str] = if ext == "step" { &["step", "stp"] } else { &[ext] };
         let Some(path) = rfd::FileDialog::new()
-            .add_filter(ext.to_uppercase(), filtro)
+            .add_filter(ext.to_uppercase(), &[ext])
             .set_file_name(format!("{}.{ext}", self.open.doc.name))
             .save_file()
         else {
@@ -3168,14 +3178,23 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.close();
                     }
                     ui.separator();
-                    let importar = ui.add(egui::Button::image_and_text(crate::icons::get("importar_arquivo"), tr("Importar STEP, BREP ou árvore…")));
+                    let importar = ui.add(egui::Button::image_and_text(crate::icons::get("importar_arquivo"), tr("Importar STEP, IGES, BREP, DXF ou árvore…")));
                     let (nome, frase, passos) = crate::toolbar::TEXTO_IMPORTAR;
                     if crate::icons::hover_help(ui, importar, tr(nome), tr(frase), tr(passos)).clicked() {
                         self.com_confirmacao(Acao::Importar);
                         ui.close();
                     }
+                    let tem_relatorio = self.open.doc.origem.as_ref().is_some_and(|o| o.relatorio.is_some());
+                    if ui.add_enabled(tem_relatorio, egui::Button::new(tr("Relatório da importação…"))).on_hover_text(tr("Abre o relatório guardado neste documento, mesmo sem o arquivo de origem.")).clicked() {
+                        self.abrir_relatorio_embutido();
+                        ui.close();
+                    }
                     if ui.button(tr("Exportar STEP…")).clicked() {
-                        self.export("step", Default::default());
+                        self.abrir_painel_exportar(fenkra_conversor::Formato::Step);
+                        ui.close();
+                    }
+                    if ui.button(tr("Exportar IGES…")).clicked() {
+                        self.abrir_painel_exportar(fenkra_conversor::Formato::Iges);
                         ui.close();
                     }
                     if ui.button(tr("Exportar árvore paramétrica…")).on_hover_text(tr("Grava a receita da peça ou da montagem em JSON aberto: esboços, cotas, comandos, nomes e cores. Não leva a geometria pronta.")).clicked() {
@@ -6328,7 +6347,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             let (rotulo, frase, passos) = estado_doc::EXPORTAR;
             if estado_doc::botao(ui, true, "exportar_arquivo", rotulo, frase, passos).clicked() {
-                self.export("step", Default::default());
+                self.abrir_painel_exportar(fenkra_conversor::Formato::Step);
             }
             if ui.button(tr("📄 Estrutura CSV")).clicked() {
                 if let Some(path) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("estrutura.csv").save_file() {
@@ -7934,6 +7953,7 @@ impl eframe::App for App {
             self.painel_comando(ctx, area);
         }
         self.painel_importar(ctx, area);
+        self.painel_exportar(ctx, area);
         if let Some(id) = ctx.data(|m| m.get_temp::<Id>(egui::Id::unique("fenkra_props"))) {
             ctx.data_mut(|m| m.remove::<Id>(egui::Id::unique("fenkra_props")));
             self.props_target = Some(if self.open.doc.reference(id).is_some() { AppTarget::Ref(id) } else { AppTarget::Feature(id) });
@@ -8159,6 +8179,7 @@ impl eframe::App for App {
                 crate::asm_repeticao::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::engrenagens_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::eixo_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
+                importar::defeitos_na_cena(self.importar_relatorio.as_ref(), self.importar_defeito, &mut s);
                 vp.set_scene(rs, &s);
                 let grande = vp.cena_grande;
                 self.scene_dirty = false;

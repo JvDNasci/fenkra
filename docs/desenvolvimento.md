@@ -69,6 +69,10 @@ preferências do usuário.
 | `FENKRA_DEMO_RELATORIO=1` | mostra um relatório de falha de exemplo, sem gravar nada |
 | `FENKRA_DEMO_INICIO=1` | mostra a tela inicial |
 | `FENKRA_DEMO_TEMA=<nome>` | usa o tema (Escuro, Claro, NeoTech Minimalista…) |
+| `FENKRA_DEMO_IMPORTAR=<arquivo>` | abre o painel de importação com o arquivo; `FENKRA_DEMO_IMPORTAR_OK=1` confirma sozinho |
+| `FENKRA_DEMO_DEFEITO=n` | com a confirmação automática, já realça o defeito n do relatório |
+| `FENKRA_DEMO_PASTA=<pasta>` | grava as peças de um conjunto importado nessa pasta, sem perguntar |
+| `FENKRA_DEMO_EXPORTAR=iges` | abre o painel de exportação (`iges` ou outro valor para STEP) |
 | `FENKRA_DEMO_CHAPA`, `_EST`, `_SUP`, `_ASM`, `_PMI`, `_DWG` | abre o exemplo de cada bancada |
 | `FENKRA_DEMO_ASM=<nome>` | montagem de exemplo com: `mec` (mecanismo), `cmd` (restrição com fantasma), `junta` (junta automática), `simbolos` (cota e junta no modelo), `manip` (manipulador numa dobradiça), `duzentas` (200 restrições), `inserir` e `inserir_vazia` (peça no cursor), `interf`, `interf_oculta` e `interf_transparente` (realce da interferência), `repeticao` (fantasmas e marcas), `fixadores` (assistente), `encaixe` (pontos de encaixe), `grade<N>` (N peças iguais) |
 | `FENKRA_DEMO_ABA=<n>` | abre o painel de comando já na aba n (a primeira é 0), para capturas sem mouse |

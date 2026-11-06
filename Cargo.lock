@@ -1295,8 +1295,10 @@ version = "0.1.0-alpha.28"
 dependencies = [
  "blake3",
  "fenkra-core",
+ "fenkra-dxf",
  "fenkra-kernel",
  "fenkra-montagem",
+ "fenkra-project",
  "fenkra-solidos",
  "serde",
  "serde_json",
@@ -1317,12 +1319,17 @@ name = "fenkra-desenho"
 version = "0.1.0-alpha.28"
 dependencies = [
  "fenkra-core",
+ "fenkra-dxf",
  "fenkra-kernel",
  "fenkra-montagem",
  "fenkra-solidos",
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "fenkra-dxf"
+version = "0.1.0-alpha.28"
 
 [[package]]
 name = "fenkra-kernel"
@@ -1374,6 +1381,7 @@ version = "0.1.0-alpha.28"
 dependencies = [
  "blake3",
  "fenkra-core",
+ "fenkra-dxf",
  "fenkra-kernel",
  "serde",
  "serde_json",

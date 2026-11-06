@@ -335,8 +335,11 @@ mod tests {
         n.weld = Some(w);
         let it = itens(&n);
         let (svg, dxf, pdf) = exportar(&it);
+        // o R2000 escreve o × em ASCII: o texto se confere lendo o arquivo de volta
+        let lido = fenkra_dxf::ler(dxf.as_bytes()).unwrap();
+        let no_dxf = |t: &str| lido.itens.iter().any(|i| matches!(&i.entidade, fenkra_dxf::Entidade::Texto { texto, .. } if texto.contains(t)));
         for t in ["a5", "3×50 (100)"] {
-            assert!(svg.contains(t) && dxf.contains(t), "falta {t}");
+            assert!(svg.contains(t) && no_dxf(t), "falta {t}");
         }
         assert!(String::from_utf8_lossy(&pdf).contains("(a5)"));
         // o mesmo símbolo escrito à mão no modelo (texto antigo + extras) dá as mesmas primitivas

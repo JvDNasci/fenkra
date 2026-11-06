@@ -20,6 +20,7 @@ mod reancorar;
 pub use esquema::{validar, ErroEsquema};
 pub use exportar::{exportar_peca, Exportado, Fora};
 pub use ler::{ler_peca, ler_texto, Remontada};
+pub(crate) use montagem::nome_de_arquivo;
 pub use montagem::{exportar_montagem, gravar_em_pasta, remontar, Conjunto};
 pub use reancorar::{atualizar_pontos, reancorar, Reancoragem};
 

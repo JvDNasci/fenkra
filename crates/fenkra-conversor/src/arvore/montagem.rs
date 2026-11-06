@@ -19,6 +19,25 @@ pub struct Conjunto {
     pub montagem: Option<Assembly>,
 }
 
+impl Conjunto {
+    /// Nome do `.fka` da montagem.
+    pub fn arquivo_da_montagem(&self) -> Option<String> {
+        self.montagem.as_ref().map(|a| format!("{}.fka", nome_de_arquivo(&a.name)))
+    }
+
+    /// Troca os caminhos dos componentes, de nome do arquivo no conjunto para onde a peça ficou.
+    pub fn reapontar(&mut self, novos: &HashMap<String, String>) {
+        let Some(a) = &mut self.montagem else { return };
+        for n in &mut a.nodes {
+            if let NodeKind::Part { path } = &mut n.kind {
+                if let Some(novo) = novos.get(path.as_str()) {
+                    path.clone_from(novo);
+                }
+            }
+        }
+    }
+}
+
 fn compor(pai: &Placement, filho: &Placement) -> Placement {
     let mut rot = [[0.; 3]; 3];
     for (i, linha) in rot.iter_mut().enumerate() {
@@ -115,7 +134,7 @@ pub fn exportar_montagem(asm: &Assembly, pasta: &Path) -> Result<Arquivo, ErroCo
 
 /// Nome de arquivo tirado de texto de fora: nada de separador nem de `..`, ou um arquivo hostil
 /// escreveria fora da pasta escolhida.
-fn nome_de_arquivo(nome: &str) -> String {
+pub(crate) fn nome_de_arquivo(nome: &str) -> String {
     let limpo: String = nome.chars().map(|c| if c.is_alphanumeric() || " -_".contains(c) { c } else { '_' }).collect();
     let limpo = limpo.trim();
     if limpo.is_empty() {
@@ -177,7 +196,7 @@ pub fn gravar_em_pasta(c: &Conjunto, pasta: &Path) -> Result<PathBuf, ErroConv> 
     let Some(a) = &c.montagem else {
         return c.pecas.first().map(|(n, _)| pasta.join(n)).ok_or_else(|| ErroConv::Gravacao("arquivo sem peças".into()));
     };
-    let nome = format!("{}.fka", nome_de_arquivo(&a.name));
+    let nome = c.arquivo_da_montagem().unwrap_or_default();
     gravar(&nome, a.to_json())?;
     Ok(pasta.join(nome))
 }

@@ -16,6 +16,8 @@ struct XdeProduct;
 struct XdeInfo;
 struct XdeReadOpts;
 struct XdeWriteOpts;
+struct XdeIgesOpts;
+struct XdeDefect;
 
 struct Shape {
     TopoDS_Shape s;
@@ -149,16 +151,19 @@ void export_stl(const Shape& s, rust::Str path, double deflection, double angle)
 std::unique_ptr<Shape> import_step(rust::Str path, rust::Vec<rust::String>& info);
 std::unique_ptr<XdeDoc> xde_new();
 std::unique_ptr<XdeDoc> xde_read(rust::Str path, const XdeReadOpts& o);
+std::unique_ptr<XdeDoc> xde_read_iges(rust::Str path, const XdeReadOpts& o);
 XdeInfo xde_info(const XdeDoc& d);
 rust::Vec<XdeProduct> xde_products(const XdeDoc& d);
 std::unique_ptr<Shape> xde_shape(const XdeDoc& d, uint32_t i);
 uint32_t xde_add(XdeDoc& d, const XdeProduct& p, const Shape& s);
 void xde_add_component(XdeDoc& d, uint32_t assembly, const XdeInst& c);
 void xde_write(XdeDoc& d, rust::Str path, const XdeWriteOpts& o);
+void xde_write_iges(XdeDoc& d, rust::Str path, const XdeIgesOpts& o);
 std::unique_ptr<Shape> xde_moved(const Shape& s, rust::Slice<const double> m);
 uint32_t xde_solid_count(const Shape& s);
 std::unique_ptr<Shape> xde_solid_at(const Shape& s, uint32_t i);
 std::unique_ptr<Shape> xde_heal(const Shape& s, uint8_t level, double tol, rust::Vec<double>& stats);
+rust::Vec<XdeDefect> xde_defects(const Shape& s, uint32_t limit);
 rust::String occt_version();
 
 }  // namespace fenkra

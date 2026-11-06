@@ -48,7 +48,7 @@ impl Registro {
     }
 
     /// Grava no formato pedido pela extensão do destino. Extensão desconhecida é erro: gravar STEP em
-    /// `.igs` faria o outro programa falhar sem dizer por quê.
+    /// `.xyz` faria o outro programa falhar sem dizer por quê.
     pub fn gravar(&self, modelo: &ModeloNeutro, caminho: &Path, opcoes: &OpcoesExportar) -> Result<(), ErroConv> {
         let extensao = caminho.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
         let formato = self
@@ -56,6 +56,9 @@ impl Registro {
             .into_iter()
             .find(|f| f.extensoes().contains(&extensao.as_str()))
             .ok_or_else(|| ErroConv::Formato(format!("extensão desconhecida: '{extensao}'")))?;
+        if opcoes.estrutura == crate::Estrutura::Achatada && modelo.tem_montagem() {
+            return self.provedor(formato)?.gravar(formato, &modelo.achatado()?, caminho, opcoes);
+        }
         self.provedor(formato)?.gravar(formato, modelo, caminho, opcoes)
     }
 }
@@ -92,7 +95,7 @@ mod testes {
 
     #[test]
     fn registro_padrao_lista_formatos_e_registro_vazio_explica() {
-        assert_eq!(Registro::default().formatos(), vec![Formato::Step, Formato::Brep]);
+        assert_eq!(Registro::default().formatos(), vec![Formato::Step, Formato::Iges, Formato::Brep]);
         let e = Registro::vazio().provedor(Formato::Step).err().unwrap();
         assert!(e.to_string().contains("nenhum provedor"), "{e}");
     }

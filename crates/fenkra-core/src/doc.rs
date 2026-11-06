@@ -3588,6 +3588,9 @@ pub struct SeloOrigem {
     /// uid do documento do qual este derivou, quando a pessoa pediu um documento novo
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub derivado_de: Option<String>,
+    /// relatório de conversão em JSON: fica no documento para abrir de novo sem o arquivo de origem
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub relatorio: Option<String>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]

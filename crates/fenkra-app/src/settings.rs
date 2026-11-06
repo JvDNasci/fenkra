@@ -413,6 +413,9 @@ pub struct Settings {
     /// últimas opções do painel de importação
     #[serde(default)]
     pub opcoes_importar: fenkra_conversor::OpcoesImportar,
+    /// últimas opções do painel de exportação
+    #[serde(default)]
+    pub opcoes_exportar: fenkra_conversor::OpcoesExportar,
     pub theme: Theme,
     /// escala da interface (fontes e controles)
     pub ui_scale: f32,
@@ -551,6 +554,7 @@ impl Default for Settings {
     fn default() -> Self {
         Settings {
             opcoes_importar: Default::default(),
+            opcoes_exportar: Default::default(),
             theme: Theme::Claro,
             ui_scale: 1.0,
             gradient: true,

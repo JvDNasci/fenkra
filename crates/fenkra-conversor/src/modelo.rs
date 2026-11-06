@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Modelo neutro: a árvore de produtos que todo provedor lê e grava.
 
-use crate::Formato;
+use crate::{ErroConv, Formato};
 use fenkra_kernel::{InstanciaXde, ModeloXde, ProdutoXde, Shape, IDENTIDADE};
 
 pub type ProdutoNeutro = ProdutoXde;
@@ -25,7 +25,7 @@ pub struct Ocorrencia {
 }
 
 /// `a` depois de `b`, com as matrizes 3x4 por linhas.
-fn compor(a: &[f64; 12], b: &[f64; 12]) -> [f64; 12] {
+pub(crate) fn compor(a: &[f64; 12], b: &[f64; 12]) -> [f64; 12] {
     let mut r = [0.; 12];
     for i in 0..3 {
         for j in 0..4 {
@@ -36,8 +36,12 @@ fn compor(a: &[f64; 12], b: &[f64; 12]) -> [f64; 12] {
     r
 }
 
+pub(crate) fn cor_de(c: [u8; 3]) -> [f32; 4] {
+    [c[0] as f32 / 255., c[1] as f32 / 255., c[2] as f32 / 255., 1.]
+}
+
 /// Limite de profundidade: um arquivo com ciclo de montagens não pode travar o conversor.
-const PROFUNDIDADE: usize = 64;
+pub(crate) const PROFUNDIDADE: usize = 64;
 
 impl ModeloNeutro {
     /// Modelo de uma forma só, para formatos sem estrutura.
@@ -46,8 +50,16 @@ impl ModeloNeutro {
         ModeloNeutro { formato, xde: ModeloXde { produtos: vec![produto], raizes: vec![0], ..Default::default() } }
     }
 
+    /// Modelo de uma peça aberta: a forma final do documento, com a cor do primeiro coletor.
+    pub fn de_documento(doc: &fenkra_core::Document) -> Result<ModeloNeutro, ErroConv> {
+        let forma = fenkra_solidos::final_shape(doc).ok_or_else(|| ErroConv::Gravacao("o documento não tem forma para gravar".into()))?;
+        let mut m = ModeloNeutro::de_forma(Formato::Step, &doc.name, forma);
+        m.xde.produtos[0].cor = doc.collectors.first().map(|c| cor_de(c.color));
+        Ok(m)
+    }
+
     /// Nome de uma ocorrência: a instância quando o arquivo nomeou, senão o produto.
-    fn nome_da_instancia(&self, i: &InstanciaXde) -> String {
+    pub(crate) fn nome_da_instancia(&self, i: &InstanciaXde) -> String {
         let automatico = i.nome.is_empty() || i.nome.starts_with("=>") || i.nome.starts_with("NAUO");
         if automatico {
             self.xde.produtos.get(i.produto).map(|p| p.nome.clone()).unwrap_or_default()
@@ -89,6 +101,55 @@ impl ModeloNeutro {
     pub fn tem_montagem(&self) -> bool {
         self.xde.produtos.iter().any(|p| p.forma.is_none())
     }
+
+    /// Junta numa peça só os produtos sem sólido, em ordem. O IGES não tem árvore: cada superfície é uma
+    /// raiz, e separadas elas nunca se costurariam. A cor de cada uma vira cor de face na peça junta.
+    pub(crate) fn juntar_soltas(&mut self, nome: &str) -> Result<(), ErroConv> {
+        if self.tem_montagem() {
+            return Ok(());
+        }
+        let (mut soltas, mut outros) = (Vec::new(), Vec::new());
+        for p in std::mem::take(&mut self.xde.produtos) {
+            let tem_solido = p.forma.as_ref().map(|f| f.solidos().map(|s| !s.is_empty())).transpose()?.unwrap_or(false);
+            if tem_solido {
+                outros.push(p);
+            } else {
+                soltas.push(p);
+            }
+        }
+        if soltas.len() > 1 {
+            soltas = vec![superficies(soltas, nome)];
+        }
+        outros.extend(soltas);
+        self.xde.raizes = (0..outros.len()).collect();
+        self.xde.produtos = outros;
+        Ok(())
+    }
+}
+
+/// Uma peça com as superfícies dadas. O composto cresce em árvore equilibrada: em fila, mil superfícies
+/// virariam mil níveis de composto para o explorador do kernel descer a cada consulta.
+pub(crate) fn superficies(soltas: Vec<ProdutoXde>, nome: &str) -> ProdutoXde {
+    let mut p = ProdutoXde { nome: nome.into(), ..Default::default() };
+    let (mut formas, mut base) = (Vec::with_capacity(soltas.len()), 0);
+    for s in soltas {
+        let Some(forma) = s.forma else { continue };
+        let faces = forma.face_count();
+        match s.cor {
+            Some(c) if s.cores_faces.is_empty() => p.cores_faces.extend((0..faces).map(|i| (base + i, c))),
+            _ => p.cores_faces.extend(s.cores_faces.iter().map(|(i, c)| (base + i, *c))),
+        }
+        p.camadas.extend(s.camadas.into_iter().filter(|c| !c.is_empty()));
+        base += faces;
+        formas.push(forma);
+    }
+    p.camadas.sort_unstable();
+    p.camadas.dedup();
+    while formas.len() > 1 {
+        formas = formas.chunks(2).map(|par| if let [a, b] = par { a.compound(b) } else { par[0].clone() }).collect();
+    }
+    p.forma = formas.pop();
+    p
 }
 
 #[cfg(test)]

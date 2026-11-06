@@ -79,7 +79,12 @@ fn importar_pelo_filho_entrega_documento_relatorio_e_miniatura() {
     let dir = pasta("importa");
     let arquivo = dir.join("peça de fora.step");
     Registro::default().gravar(&modelo(), &arquivo, &OpcoesExportar::default()).unwrap();
-    let i = filho(Filho::LIMITE).importar(&arquivo, OpcoesImportar::default(), &AtomicBool::new(false)).unwrap();
+    // padrão: o conjunto atravessa o processo com a peça uma vez só e duas ocorrências
+    let c = filho(Filho::LIMITE).importar(&arquivo, OpcoesImportar::default(), &AtomicBool::new(false)).unwrap().conjunto.expect("conjunto");
+    assert_eq!((c.pecas.len(), c.montagem.map(|m| m.nodes.len())), (1, Some(2)));
+
+    let uma_peca = OpcoesImportar { destino: fenkra_conversor::Destino::UmaPeca, ..Default::default() };
+    let i = filho(Filho::LIMITE).importar(&arquivo, uma_peca, &AtomicBool::new(false)).unwrap();
     assert_eq!((i.relatorio.produtos, i.relatorio.corpos), (2, 2));
     let nomes: Vec<&str> = i.doc.collectors.iter().map(|c| c.name.as_str()).collect();
     assert_eq!(nomes, ["Bloco 1", "Bloco 2"], "a leitura é a primeira coisa que o filho faz");

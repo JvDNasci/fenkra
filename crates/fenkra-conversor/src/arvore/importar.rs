@@ -107,6 +107,7 @@ pub(crate) fn importar(caminho: &Path, bytes: &[u8], extensao_diverge: bool) -> 
         esquema,
         unidades: arquivo.unidades.clone(),
         derivado_de: None,
+        relatorio: None,
     };
     for (_, doc) in &mut conjunto.pecas {
         doc.origem = Some(selo.clone());

@@ -9,7 +9,10 @@ use std::path::Path;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Formato {
     Step,
+    Iges,
     Brep,
+    /// desenho 2D: vira sketches, sem passar por provedor de geometria
+    Dxf,
     /// árvore paramétrica aberta (B266): JSON, sem geometria
     Arvore,
 }
@@ -18,7 +21,9 @@ impl Formato {
     pub fn nome(self) -> &'static str {
         match self {
             Formato::Step => "STEP",
+            Formato::Iges => "IGES",
             Formato::Brep => "BREP",
+            Formato::Dxf => "DXF",
             Formato::Arvore => "Árvore paramétrica",
         }
     }
@@ -26,14 +31,16 @@ impl Formato {
     pub fn extensoes(self) -> &'static [&'static str] {
         match self {
             Formato::Step => &["step", "stp"],
+            Formato::Iges => &["igs", "iges"],
             Formato::Brep => &["brep"],
+            Formato::Dxf => &["dxf"],
             Formato::Arvore => &["fkx"],
         }
     }
 
     fn por_extensao(caminho: &Path) -> Option<Formato> {
         let e = caminho.extension()?.to_string_lossy().to_lowercase();
-        [Formato::Step, Formato::Brep, Formato::Arvore].into_iter().find(|f| f.extensoes().contains(&e.as_str()))
+        [Formato::Step, Formato::Iges, Formato::Brep, Formato::Dxf, Formato::Arvore].into_iter().find(|f| f.extensoes().contains(&e.as_str()))
     }
 
     fn por_conteudo(conteudo: &[u8]) -> Option<Formato> {
@@ -45,10 +52,39 @@ impl Formato {
             Some(Formato::Brep)
         } else if texto.starts_with('{') && tem_marca_da_arvore(conteudo) {
             Some(Formato::Arvore)
+        } else if e_iges(conteudo) {
+            Some(Formato::Iges)
+        } else if e_dxf(conteudo) {
+            Some(Formato::Dxf)
         } else {
             None
         }
     }
+}
+
+/// O IGES não tem assinatura: é texto em cartões de 80 colunas, com a seção na coluna 73 e o número da
+/// linha depois dela. A primeira linha é da seção de início (S) ou, sem ela, da global (G).
+fn e_iges(conteudo: &[u8]) -> bool {
+    let linha = conteudo.split(|b| *b == b'\n').next().unwrap_or_default();
+    let linha = linha.strip_suffix(b"\r").unwrap_or(linha);
+    linha.len() == 80 && matches!(linha[72], b'S' | b'G') && linha[73..].iter().all(|b| *b == b' ' || b.is_ascii_digit())
+}
+
+/// O DXF abre com o par "0, SECTION", depois de comentários (código 999), ou com a marca do binário.
+fn e_dxf(conteudo: &[u8]) -> bool {
+    if fenkra_dxf::e_binario(conteudo) {
+        return true;
+    }
+    let texto = String::from_utf8_lossy(&conteudo[..conteudo.len().min(4096)]);
+    let mut linhas = texto.lines().map(str::trim).filter(|l| !l.is_empty());
+    while let (Some(codigo), Some(valor)) = (linhas.next(), linhas.next()) {
+        match codigo {
+            "999" => continue,
+            "0" => return valor == "SECTION",
+            _ => return false,
+        }
+    }
+    false
 }
 
 /// O campo `formato` pode estar em qualquer lugar do objeto: quem escreve o JSON escolhe a ordem.
@@ -61,7 +97,7 @@ fn tem_marca_da_arvore(conteudo: &[u8]) -> bool {
 pub fn detectar(caminho: &Path, conteudo: &[u8]) -> Result<(Formato, bool), ErroConv> {
     let Some(f) = Formato::por_conteudo(conteudo) else {
         return Err(ErroConv::Formato(format!(
-            "'{}' não parece STEP, BREP nem árvore paramétrica; o Fenkra lê formatos neutros: exporte STEP AP214 ou AP242 no programa de origem",
+            "'{}' não parece STEP, IGES, BREP, DXF nem árvore paramétrica; o Fenkra lê formatos neutros: exporte STEP AP214 ou AP242 no programa de origem",
             caminho.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default()
         )));
     };

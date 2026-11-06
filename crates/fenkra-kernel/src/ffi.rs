@@ -80,6 +80,8 @@ pub mod bridge {
         schema: String,
         units: String,
         roots: Vec<u32>,
+        /// tipo de cada entidade que a leitura deixou para trás (só IGES)
+        skipped: Vec<String>,
         dims: u32,
         tols: u32,
         datums: u32,
@@ -100,6 +102,22 @@ pub mod bridge {
         names: bool,
         layers: bool,
         gdt: bool,
+    }
+
+    /// unit: 0 mm, 1 polegada, 2 metro. brep: topologia (186/514) em vez de faces soltas (144).
+    struct XdeIgesOpts {
+        brep: bool,
+        unit: u8,
+        colors: bool,
+        names: bool,
+        layers: bool,
+    }
+
+    /// kind: 0 face inválida, 1 aresta livre, 2 face solta. `segs`: 6 números por segmento do traço.
+    struct XdeDefect {
+        kind: u8,
+        index: u32,
+        segs: Vec<f64>,
     }
 
     unsafe extern "C++" {
@@ -277,18 +295,21 @@ pub mod bridge {
         type XdeDoc;
         fn xde_new() -> Result<UniquePtr<XdeDoc>>;
         fn xde_read(path: &str, o: &XdeReadOpts) -> Result<UniquePtr<XdeDoc>>;
+        fn xde_read_iges(path: &str, o: &XdeReadOpts) -> Result<UniquePtr<XdeDoc>>;
         fn xde_info(d: &XdeDoc) -> XdeInfo;
         fn xde_products(d: &XdeDoc) -> Result<Vec<XdeProduct>>;
         fn xde_shape(d: &XdeDoc, i: u32) -> Result<UniquePtr<Shape>>;
         fn xde_add(d: Pin<&mut XdeDoc>, p: &XdeProduct, s: &Shape) -> Result<u32>;
         fn xde_add_component(d: Pin<&mut XdeDoc>, assembly: u32, c: &XdeInst) -> Result<()>;
         fn xde_write(d: Pin<&mut XdeDoc>, path: &str, o: &XdeWriteOpts) -> Result<()>;
+        fn xde_write_iges(d: Pin<&mut XdeDoc>, path: &str, o: &XdeIgesOpts) -> Result<()>;
         /// `m`: matriz 3x4 por linhas
         fn xde_moved(s: &Shape, m: &[f64]) -> Result<UniquePtr<Shape>>;
         fn xde_solid_count(s: &Shape) -> u32;
         fn xde_solid_at(s: &Shape, i: u32) -> Result<UniquePtr<Shape>>;
         /// `stats`: ver `xde_heal` em cpp/xde.inc
         fn xde_heal(s: &Shape, level: u8, tol: f64, stats: &mut Vec<f64>) -> Result<UniquePtr<Shape>>;
+        fn xde_defects(s: &Shape, limit: u32) -> Result<Vec<XdeDefect>>;
         fn occt_version() -> String;
     }
 }
