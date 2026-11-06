@@ -563,6 +563,13 @@ impl App {
         if let Ok(modo) = std::env::var("FENKRA_DEMO_PROJETO") {
             app.demo_projeto(modo == "comparar");
         }
+        // desenvolvimento: FENKRA_DEMO_DESEMPENHO=1 abre as configurações na seção Desempenho, com o contador ligado
+        if std::env::var("FENKRA_DEMO_DESEMPENHO").is_ok() {
+            app.settings_open = true;
+            app.settings_page = 4;
+            app.settings.contador_fps = true;
+            app.started = true;
+        }
         // desenvolvimento: FENKRA_AJUSTES=1 abre as configurações ao iniciar
         if std::env::var("FENKRA_AJUSTES").is_ok() {
             app.settings_open = true;
@@ -7103,6 +7110,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 vp.navegou();
                 ctx.request_repaint();
             }
+            if let Some(g) = crate::desempenho::giro_automatico() {
+                vp.camera.yaw += g.to_radians();
+                vp.navegou();
+                ctx.request_repaint();
+            }
 
             if let Some(rs) = frame.wgpu_render_state() {
                 let size = [(rect.width() * ppp) as u32, (rect.height() * ppp) as u32];
@@ -7123,7 +7135,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     // volta à qualidade total quando a câmera para: um redesenho logo depois da pausa
                     ctx.request_repaint_after(crate::render::PAUSA_NAVEGACAO + std::time::Duration::from_millis(20));
                 }
+                crate::desempenho::marca("vp_navegacao");
                 let tex = vp.render(rs, size, style);
+                crate::desempenho::marca("vp_render_cpu");
+                crate::desempenho::esperar_placa(&rs.device);
                 if vp.inst.subindo {
                     ui.ctx().request_repaint();
                 }
@@ -7191,6 +7206,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
             }
 
+            crate::desempenho::marca("vp_rotulos");
             let cam = vp.camera;
             // comando em edição: entradas realçadas com o papel de cada uma
             if let (Some(r), Some(sid)) = (&self.result, self.session.as_ref().map(|x| x.id)) {
@@ -8196,18 +8212,31 @@ impl eframe::App for App {
     }
 
     fn ui(&mut self, root: &mut egui::Ui, frame: &mut eframe::Frame) {
+        // limite de quadros: só no primeiro passe do quadro (um segundo passe do egui não deve dormir de novo)
+        if root.ctx().current_pass_index() == 0 {
+            crate::desempenho::esperar_limite(self.settings.limite_quadros);
+        }
+        let _quadro = crate::desempenho::quadro_guardado();
+        crate::desempenho::aplicar_vsync(frame, self.settings.vsync);
+        crate::desempenho::contar_quadro(root.ctx(), self.settings.contador_fps);
+        crate::desempenho::fechar_se_acabou(root.ctx());
         crate::demo_foto::quadro(root.ctx());
         crate::partida::contar_quadro();
         crate::medir_quadros::quadro(frame.info().cpu_usage);
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);
         // camadas de configuração (B100): projeto aberto, travas, opções do documento e avisos
+        crate::desempenho::marca("pre_inicio");
         crate::config_camadas::definir_projeto(self.project.as_ref().map(|p| p.root.as_path()));
+        crate::desempenho::marca("pre_definir_projeto");
         crate::config_camadas::sincronizar(&mut self.settings, &mut self.open.doc);
+        crate::desempenho::marca("pre_sincronizar");
         for aviso in crate::config_camadas::tirar_avisos() {
             self.toast(aviso, true);
         }
+        crate::desempenho::marca("pre_avisos");
         crate::ajuda_cmd::publicar_atalhos(ctx, &self.settings.keys);
+        crate::desempenho::marca("pre_atalhos");
         crate::ui_ext::definir_modo_roda(crate::ui_ext::ModoRoda::de_u8(self.settings.wheel_mode));
         // cores salvas: preferências ↔ paleta usada pelos painéis
         {
@@ -8220,6 +8249,7 @@ impl eframe::App for App {
                 *user = self.settings.user_colors.clone();
             }
         }
+        crate::desempenho::marca("pre_paleta");
         // resultados do recompute
         while let Some((g, mut r)) = self.worker.receber() {
             if g >= self.gen_done {
@@ -8266,6 +8296,7 @@ impl eframe::App for App {
             ctx.request_repaint();
         }
 
+        crate::desempenho::marca("pre_worker");
         // atalhos (mapa configurável em Configurações → Atalhos e navegação)
         use crate::keymap::KeyAction as K;
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::K)) {
@@ -8273,7 +8304,9 @@ impl eframe::App for App {
         }
         let km = self.settings.keys.clone();
         let typing = ctx.egui_wants_keyboard_input() || self.sketch.as_ref().is_some_and(|e| e.entry.typing());
+        crate::desempenho::marca("pre_teclas");
         self.roda_passo(ctx, typing);
+        crate::desempenho::marca("pre_roda");
         let (save, undo, redo) = (km.pressed(ctx, K::Save), !typing && km.pressed(ctx, K::Undo), !typing && km.pressed(ctx, K::Redo));
         let del = km.pressed(ctx, K::Delete);
         // Ctrl+S salva o documento ativo (com a checagem de mudança externa); Ctrl+Shift+S abre o plano
@@ -8331,6 +8364,7 @@ impl eframe::App for App {
                 self.redo();
             }
         }
+        crate::desempenho::marca("pre_modos");
         if !typing && self.sketch.is_none() && km.pressed(ctx, K::ViewMenu) {
             self.view_menu = !self.view_menu;
         }
@@ -8446,6 +8480,7 @@ impl eframe::App for App {
             }
         }
 
+        crate::desempenho::marca("pre");
         if self.splash(root) {
             return;
         }
@@ -8462,13 +8497,16 @@ impl eframe::App for App {
         let sel_before = self.sel;
         let settings_before = self.settings.clone();
         let hidden_env_before = self.hidden_env;
+        crate::desempenho::marca("copias");
 
         self.top(root);
+        crate::desempenho::marca("top");
         // a viewport ocupa tudo sob a barra; árvore, painéis e status ficam por cima dela
         let area = root.available_rect_before_wrap();
         self.area_util = area;
         self.hover_now.set(None);
         self.atualizar_conjunto();
+        crate::desempenho::marca("conjunto");
         // o painel de comando só existe com um comando aberto
         let active = if self.settings.bench == crate::settings::Bench::Desenho {
             self.dwg.as_ref().is_some_and(|s| s.active())
@@ -8524,6 +8562,7 @@ impl eframe::App for App {
         }
         self.view_menu_window(ctx);
         self.dialogs(ctx);
+        crate::desempenho::marca("paineis");
         if self.settings.bench == crate::settings::Bench::Desenho {
             crate::dwg_ui::canvas(self, root);
         } else if self.in_asm() {
@@ -8547,9 +8586,11 @@ impl eframe::App for App {
             self.viewport(root, frame);
             crate::pmi_ui::after_viewport(self);
         }
+        crate::desempenho::marca("viewport");
         // depois da viewport e na mesma camada: só as linhas capturam o mouse, o vazio continua sendo o modelo
         self.arvore_sobre_modelo(root, area);
         self.barra_status(root, area);
+        crate::desempenho::marca("arvore_status");
         // realce dinâmico do item sob o mouse
         if self.hover_now.get() != self.hover_item {
             self.hover_item = self.hover_now.get();
@@ -8557,11 +8598,13 @@ impl eframe::App for App {
             ctx.request_repaint();
         }
         self.toasts(ctx);
+        crate::desempenho::contador_ui(ctx, self.settings.contador_fps);
         self.sugestao_leve_ui(ctx);
         self.relatorio_ui(ctx);
 
         // edição não destrutiva + desfazer + bloqueio de revisão congelada
         if self.open.doc != before {
+            crate::medir_quadros::valor("doc_mudou", 1.);
             if let Some(rev) = &self.open.frozen {
                 let msg = format!("Revisão {rev} está congelada. Abra a versão de trabalho para editar.");
                 self.open.doc = before;
@@ -8579,6 +8622,7 @@ impl eframe::App for App {
                 self.scene_dirty = true;
             }
         }
+        crate::desempenho::marca("comparar_doc");
         self.sincronizar_qualidade();
         self.hist.definir_limite_mb(self.settings.historico_mb);
         // atualização automática: compara com o último documento enviado (pega também mudanças
@@ -8589,6 +8633,7 @@ impl eframe::App for App {
         if (automatica || self.session.is_some()) && self.open.frozen.is_none() && self.needs_recompute() {
             self.request_recompute();
         }
+        crate::desempenho::marca("recompute");
         let link_key = egui::Id::unique("fenkra_link_acao");
         if let Some((ext, act)) = ctx.data(|m| m.get_temp::<(Id, u8)>(link_key)) {
             ctx.data_mut(|m| m.remove::<(Id, u8)>(link_key));
@@ -8630,6 +8675,7 @@ impl eframe::App for App {
             self.start_session(id, false, None);
         }
         self.gravar_passo(ctx);
+        crate::desempenho::marca("janelas");
         if self.result.is_some() && !self.calculando() {
             if let Some(k) = self.demo_previa.take() {
                 let snapshot = self.open.doc.clone();
@@ -8678,6 +8724,7 @@ impl eframe::App for App {
             self.scene_dirty = true;
         }
         if self.settings != settings_before {
+            crate::desempenho::settings_mudou(&settings_before, &self.settings);
             if self.settings.theme != settings_before.theme || self.settings.theme_name != settings_before.theme_name || self.settings.ui_scale != settings_before.ui_scale || self.settings.animacoes != settings_before.animacoes || self.settings.acessibilidade != settings_before.acessibilidade {
                 self.settings.apply(ctx);
             }
@@ -8745,6 +8792,7 @@ impl eframe::App for App {
                 ctx.request_repaint();
             }
         }
+        crate::desempenho::marca("cena");
         // texturas: recarrega as imagens quando a lista (arquivo, escala) muda
         let key: Vec<(String, f64)> = self.open.doc.textures.iter().map(|t| (t.path.clone(), t.scale)).collect();
         if key != self.tex_key {
@@ -9058,6 +9106,34 @@ fn graficos_ui(ui: &mut egui::Ui, s: &mut Settings) {
     ui.label(RichText::new(tr("Durante órbita, pan e zoom desenha sem anti-serrilhamento e volta à qualidade total ao parar.")).weak().small());
     ui.checkbox(&mut g.iluminacao_realista, tr("Iluminação realista"));
     ui.label(RichText::new(tr("Sombreado com luz de três pontos, ambiente de céu e chão e brilho suave. Desligado usa o sombreado simples.")).weak().small());
+    desempenho_ui(ui, s);
+}
+
+/// Seção "Desempenho" (B347): limite de quadros, sincronismo vertical e contador. Cada campo tem a
+/// dica no texto de apoio e no balão; as três opções valem na hora, sem reiniciar.
+fn desempenho_ui(ui: &mut egui::Ui, s: &mut Settings) {
+    ui.add_space(10.);
+    ui.separator();
+    let titulo = ui.label(RichText::new(tr("Desempenho")).strong());
+    if std::env::var_os("FENKRA_DEMO_DESEMPENHO").is_some() {
+        titulo.scroll_to_me(Some(egui::Align::TOP));
+    }
+    let dica_limite = tr("Quantos quadros por segundo o Fenkra desenha, no máximo, enquanto algo se move (girar, animar, arrastar). Parado, ele não desenha nada. Um limite menor poupa a placa de vídeo e a bateria.");
+    ui.horizontal(|ui| {
+        ui.label(tr("Limite de quadros")).on_hover_text(dica_limite);
+        egui::ComboBox::from_id_salt("limite_quadros").selected_text(s.limite_quadros.label()).show_ui(ui, |ui| {
+            for l in crate::desempenho::Limite::ALL {
+                ui.selectable_value(&mut s.limite_quadros, l, l.label());
+            }
+        });
+    });
+    ui.label(RichText::new(dica_limite).weak().small());
+    let dica_vsync = tr("Liga: cada quadro espera a tela atualizar, sem rasgos na imagem e com a placa descansando entre os quadros. Desliga: desenha o mais rápido que o limite deixar, o que pode rasgar a imagem e esquentar a placa. Vale na hora.");
+    ui.checkbox(&mut s.vsync, tr("Sincronismo vertical (vsync)")).on_hover_text(dica_vsync);
+    ui.label(RichText::new(dica_vsync).weak().small());
+    let dica_contador = tr("Mostra no canto da vista quantos quadros por segundo o Fenkra está desenhando. Parado, mostra \"em repouso\".");
+    ui.checkbox(&mut s.contador_fps, tr("Mostrar contador de quadros")).on_hover_text(dica_contador);
+    ui.label(RichText::new(dica_contador).weak().small());
 }
 
 fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {

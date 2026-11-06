@@ -321,12 +321,12 @@ pub fn paginas(icones: &[String], provaveis: &[String]) -> Vec<Vec<String>> {
 
 /// Item da barra pelo ícone.
 pub fn item(icone: &str) -> Option<Item> {
-    crate::ajuda_cmd::comandos().into_iter().find(|i| i.icon == icone)
+    crate::ajuda_cmd::catalogo().iter().find(|i| i.icon == icone).copied()
 }
 
 /// Ícone da barra de uma ação.
 pub fn icone_da_acao(a: Act) -> Option<&'static str> {
-    crate::ajuda_cmd::comandos().into_iter().find(|i| i.act == a).map(|i| i.icon)
+    crate::ajuda_cmd::catalogo().iter().find(|i| i.act == a).map(|i| i.icon)
 }
 
 // ------------------------------------------------------------------------- uso aprendido

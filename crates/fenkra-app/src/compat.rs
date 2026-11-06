@@ -174,7 +174,7 @@ pub fn escolhido(s: &Settings) -> Option<&'static Perfil> {
 
 /// Comando da barra pelo ícone.
 pub fn comando(icone: &str) -> Option<Item> {
-    ajuda_cmd::comandos().into_iter().find(|i| i.icon == icone)
+    ajuda_cmd::catalogo().iter().find(|i| i.icon == icone).copied()
 }
 
 /// Grupo da barra em que o comando mora (primeiro que o contém).
