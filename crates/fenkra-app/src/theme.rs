@@ -488,6 +488,17 @@ pub fn cor_da_escala(c: [f32; 3]) -> Color32 {
     Color32::from_rgb(r, g, b)
 }
 
+/// Cor opaca a partir dos três canais guardados no tema.
+pub fn cor_rgb(c: [u8; 3]) -> Color32 {
+    Color32::from_rgb(c[0], c[1], c[2])
+}
+
+/// A mesma cor do tema com outra opacidade (0 a 255), sem criar cor nova.
+pub fn com_alfa(c: Color32, alfa: u8) -> Color32 {
+    let [r, g, b, _] = c.to_array();
+    Color32::from_rgba_unmultiplied(r, g, b, alfa)
+}
+
 pub fn st_ok() -> Color32 {
     estado(Estado::Ok)
 }

@@ -226,7 +226,7 @@ pub fn janela(ctx: &egui::Context, doc: &Document) {
 fn aba_nesting(ui: &mut egui::Ui, e: &mut Est, doc: &Document) {
     crate::editor::section(ui, "Peças");
     ui.horizontal(|ui| {
-        ui.add(egui::DragValue::new(&mut e.qtd).range(1..=500).prefix(format!("{} ", tr("quantidade"))));
+        ui.add(crate::ui_ext::dv(&mut e.qtd).range(1..=500).prefix(format!("{} ", tr("quantidade"))));
         if ui.button(tr("Adicionar peça atual")).on_hover_text(tr("Planifica a chapa aberta e acrescenta à lista com a quantidade ao lado. Troque de documento e adicione mais para dispor peças diferentes juntas.")).clicked() {
             match planificada::planificar(doc).and_then(|p| PecaNesting::da_planificada(&doc.name, &p, e.qtd)) {
                 Ok(p) => {
@@ -242,7 +242,7 @@ fn aba_nesting(ui: &mut egui::Ui, e: &mut Est, doc: &Document) {
     for (i, p) in e.pecas.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             ui.label(RichText::new(&p.nome).small());
-            ui.add(egui::DragValue::new(&mut p.quantidade).range(1..=500).prefix("× "));
+            ui.add(crate::ui_ext::dv(&mut p.quantidade).range(1..=500).prefix("× "));
             ui.checkbox(&mut p.girar, tr("girar")).on_hover_text(tr("Desligado fixa a peça na orientação original (sentido do fio do material)."));
             if ui.small_button("✕").clicked() {
                 tirar = Some(i);
@@ -256,19 +256,19 @@ fn aba_nesting(ui: &mut egui::Ui, e: &mut Est, doc: &Document) {
     crate::editor::section(ui, "Chapa comercial");
     egui::Grid::new("fab_chapa").num_columns(4).show(ui, |ui| {
         ui.label(tr("Largura"));
-        ui.add(egui::DragValue::new(&mut e.larg).range(50.0..=20000.0).suffix(" mm")).on_hover_text(tr("Dimensão da chapa comercial em mm."));
+        ui.add(crate::ui_ext::dv(&mut e.larg).range(50.0..=20000.0).suffix(" mm")).on_hover_text(tr("Dimensão da chapa comercial em mm."));
         ui.label(tr("Altura"));
-        ui.add(egui::DragValue::new(&mut e.alt).range(50.0..=20000.0).suffix(" mm")).on_hover_text(tr("Dimensão da chapa comercial em mm."));
+        ui.add(crate::ui_ext::dv(&mut e.alt).range(50.0..=20000.0).suffix(" mm")).on_hover_text(tr("Dimensão da chapa comercial em mm."));
         ui.end_row();
         ui.label(tr("Margem"));
-        ui.add(egui::DragValue::new(&mut e.margem).range(0.0..=100.0).suffix(" mm")).on_hover_text(tr("Faixa da borda que fica sem peça (pinça e refilo)."));
+        ui.add(crate::ui_ext::dv(&mut e.margem).range(0.0..=100.0).suffix(" mm")).on_hover_text(tr("Faixa da borda que fica sem peça (pinça e refilo)."));
         ui.label(tr("Espaço"));
-        ui.add(egui::DragValue::new(&mut e.espaco).range(0.0..=50.0).suffix(" mm")).on_hover_text(tr("Distância mínima entre os contornos de duas peças (folga de corte)."));
+        ui.add(crate::ui_ext::dv(&mut e.espaco).range(0.0..=50.0).suffix(" mm")).on_hover_text(tr("Distância mínima entre os contornos de duas peças (folga de corte)."));
         ui.end_row();
     });
     ui.horizontal(|ui| {
         ui.checkbox(&mut e.girar, tr("Permitir rotação")).on_hover_text(tr("Testa 0, 90, 180 e 270 graus por peça. Desligado, usa só a orientação original."));
-        ui.add(egui::DragValue::new(&mut e.esforco).range(1..=200).prefix(format!("{} ", tr("tentativas")))).on_hover_text(tr("Melhor esforço: repete a disposição com outras ordens das peças e guarda a melhor. Mais tentativas demoram mais."));
+        ui.add(crate::ui_ext::dv(&mut e.esforco).range(1..=200).prefix(format!("{} ", tr("tentativas")))).on_hover_text(tr("Melhor esforço: repete a disposição com outras ordens das peças e guarda a melhor. Mais tentativas demoram mais."));
     });
     ui.horizontal(|ui| {
         if ui.button(tr("Dispor")).clicked() {

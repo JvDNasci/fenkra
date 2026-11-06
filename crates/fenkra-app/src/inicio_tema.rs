@@ -30,7 +30,7 @@ pub struct Paleta {
 }
 
 fn rgb(c: [u8; 3]) -> Color32 {
-    Color32::from_rgb(c[0], c[1], c[2])
+    crate::theme::cor_rgb(c)
 }
 
 fn mistura(a: [u8; 3], b: [u8; 3], k: f32) -> [u8; 3] {
@@ -89,15 +89,14 @@ pub fn fundo(p: &egui::Painter, rect: Rect, pal: &Paleta, t: f32, animar: bool) 
     m.add_triangle(0, 1, 2);
     m.add_triangle(0, 2, 3);
     p.add(egui::Shape::mesh(m));
-    let [ar, ag, ab, _] = pal.destaque.to_array();
-    let glow = rect.center_top() + egui::vec2((t * 0.3).sin() * 30., rect.height() * 0.3);
+        let glow = rect.center_top() + egui::vec2((t * 0.3).sin() * 30., rect.height() * 0.3);
     let breathe = 1. + (if animar { 0.08 } else { 0.04 }) * (t * 0.8).sin();
     for k in 0..24 {
         let r = (460. - k as f32 * 17.) * breathe;
-        p.circle_filled(glow, r, Color32::from_rgba_unmultiplied(ar, ag, ab, if pal.escuro { 3 } else { 4 }));
+        p.circle_filled(glow, r, crate::theme::com_alfa(pal.destaque, if pal.escuro { 3 } else { 4 }));
     }
     // grade de chão (cor do destaque do tema), andando para a frente
-    let linha = Color32::from_rgba_unmultiplied(ar, ag, ab, if animar { 34 } else { 24 });
+    let linha = crate::theme::com_alfa(pal.destaque, if animar { 34 } else { 24 });
     let horizon = rect.top() + rect.height() * 0.62;
     let vp = egui::pos2(rect.center().x, horizon - rect.height() * 0.25);
     for i in -14..=14 {
@@ -123,7 +122,7 @@ pub fn fundo(p: &egui::Painter, rect: Rect, pal: &Paleta, t: f32, animar: bool) 
         let y = rect.top() + rect.height() * fy;
         let a = (fy * (1. - fy) * 4.).clamp(0., 1.);
         let size = 1. + (i % 3) as f32 * 0.8;
-        p.circle_filled(egui::pos2(x, y), size, Color32::from_rgba_unmultiplied(ar, ag, ab, (a * if pal.escuro { 90. } else { 110. }) as u8));
+        p.circle_filled(egui::pos2(x, y), size, crate::theme::com_alfa(pal.destaque, (a * if pal.escuro { 90. } else { 110. }) as u8));
     }
     if animar {
         // varredura: faixa de luz cruzando a tela de tempos em tempos
@@ -135,13 +134,13 @@ pub fn fundo(p: &egui::Painter, rect: Rect, pal: &Paleta, t: f32, animar: bool) 
             for j in 0..6 {
                 let w = 6. + j as f32 * 10.;
                 let a = (10. * fade * (1. - j as f32 / 6.)) as u8;
-                p.rect_filled(Rect::from_center_size(egui::pos2(x, rect.center().y), egui::vec2(w, rect.height())), 0., Color32::from_rgba_unmultiplied(ar, ag, ab, a));
+                p.rect_filled(Rect::from_center_size(egui::pos2(x, rect.center().y), egui::vec2(w, rect.height())), 0., crate::theme::com_alfa(pal.destaque, a));
             }
         }
         // cubo de arame girando, atrás da marca
         let c = glow + egui::vec2(0., 20.);
         let (seg, _) = cubo_de_arame(t * 0.35, c, rect.height().min(rect.width()) * 0.22);
-        let fio = Color32::from_rgba_unmultiplied(ar, ag, ab, if pal.escuro { 46 } else { 60 });
+        let fio = crate::theme::com_alfa(pal.destaque, if pal.escuro { 46 } else { 60 });
         for [a, b] in seg {
             p.line_segment([a, b], egui::Stroke::new(1.2, fio));
         }
