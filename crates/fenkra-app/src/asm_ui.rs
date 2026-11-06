@@ -3873,8 +3873,8 @@ pub fn bom_window(app: &mut App, ctx: &egui::Context) {
             }
         });
         egui::ScrollArea::vertical().max_height(360.).show(ui, |ui| {
-            egui::Grid::new("asm_bom").striped(true).num_columns(3).show(ui, |ui| {
-                for h in ["Item", "Componente", "Qtd."] {
+            egui::Grid::new("asm_bom").striped(true).num_columns(4).show(ui, |ui| {
+                for h in ["Item", "Componente", "PN", "Qtd."] {
                     ui.label(RichText::new(tr(h)).strong());
                 }
                 ui.end_row();
@@ -3882,7 +3882,17 @@ pub fn bom_window(app: &mut App, ctx: &egui::Context) {
                     let fixed = st.asm.item_of(&r.key).is_some() || r.depth > 0;
                     let item = RichText::new(&r.item);
                     ui.label(if fixed { item } else { item.italics().weak() }).on_hover_text(if fixed { tr("número fixo") } else { tr("número provisório: fica fixo ao salvar a montagem") });
-                    ui.label(format!("{}{}{}", "    ".repeat(r.depth), if r.sub { "▣ " } else { "" }, r.name));
+                    // B102: a configuração do componente aparece no nome; o PN é o da linha dela
+                    let cfg = if r.config.is_empty() { String::new() } else { format!(" [{}]", r.config) };
+                    ui.label(format!("{}{}{}{}", "    ".repeat(r.depth), if r.sub { "▣ " } else { "" }, r.name, cfg));
+                    match &r.erro {
+                        Some(e) => {
+                            ui.label(RichText::new(tr("configuração inexistente")).color(crate::theme::st_err())).on_hover_text(e);
+                        }
+                        None => {
+                            ui.label(&r.pn);
+                        }
+                    }
                     ui.label(r.qty.to_string());
                     ui.end_row();
                 }
@@ -3906,9 +3916,9 @@ pub fn bom_window(app: &mut App, ctx: &egui::Context) {
     }
     if export {
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_pecas.csv").save_file() {
-            let mut t = String::from("item;componente;quantidade\n");
+            let mut t = String::from("item;componente;configuração;pn;quantidade\n");
             for r in &rows {
-                t += &format!("{};{};{}\n", r.item, r.name, r.qty);
+                t += &format!("{};{};{};{};{}\n", r.item, r.name, r.config, r.pn, r.qty);
             }
             if let Err(e) = std::fs::write(&p, t) {
                 app.toast(format!("Erro: {e}"), true);

@@ -636,12 +636,15 @@ fn auto_balloons(app: &mut App) {
     let items = fenkra_montagem::bom::bom(&a, dir.as_deref(), fenkra_montagem::bom::BomLevel::Topo);
     for n in &a.nodes {
         let (fenkra_montagem::NodeKind::Part { path } | fenkra_montagem::NodeKind::SubAssembly { path }) = &n.kind else { continue };
-        if paths.contains(path) || !fenkra_montagem::view::shown(&a, n.id) {
+        // B102: a mesma peça em duas configurações é dois itens, com dois balões
+        let cfg = a.config_de(n.id).to_string();
+        let chave = if cfg.is_empty() { path.clone() } else { format!("{path}#{cfg}") };
+        if paths.contains(&chave) || !fenkra_montagem::view::shown(&a, n.id) {
             continue;
         }
-        paths.push(path.clone());
+        paths.push(chave);
         let fp = fenkra_montagem::load::full_path(dir.as_deref(), path);
-        let item = items.iter().find(|r| r.path == fp).map(|r| r.item.clone()).unwrap_or_else(|| paths.len().to_string());
+        let item = items.iter().find(|r| r.path == fp && r.config == cfg).map(|r| r.item.clone()).unwrap_or_else(|| paths.len().to_string());
         let Some(sh) = fenkra_montagem::view::placed_shape(&a, n.id, dir.as_deref(), &mut cache) else { continue };
         let Some((l, h)) = sh.bbox() else { continue };
         let c3 = [0, 1, 2].map(|i| (l[i] + h[i]) / 2.);

@@ -414,27 +414,29 @@ fn auto_balloons(app: &mut App) {
     let st = app.asm.as_mut().unwrap();
     let dir = st.dir();
     let rows = fenkra_montagem::bom::bom(&st.asm, dir.as_deref(), fenkra_montagem::bom::BomLevel::Topo);
-    let nodes: Vec<(Id, String)> = st
+    let nodes: Vec<(Id, String, String)> = st
         .asm
         .nodes
         .iter()
         .filter(|n| n.visible)
         .filter_map(|n| match &n.kind {
-            fenkra_montagem::NodeKind::Part { path } | fenkra_montagem::NodeKind::SubAssembly { path } => Some((n.id, path.clone())),
+            fenkra_montagem::NodeKind::Part { path } | fenkra_montagem::NodeKind::SubAssembly { path } => Some((n.id, path.clone(), st.asm.config_de(n.id).to_string())),
             _ => None,
         })
         .collect();
     let mut seen: Vec<String> = vec![];
     let mut found: Vec<([f64; 3], String, f64)> = vec![];
-    for (id, path) in nodes {
-        if seen.contains(&path) {
+    for (id, path, cfg) in nodes {
+        // B102: a mesma peça em duas configurações é dois itens, com dois balões
+        let chave = if cfg.is_empty() { path.clone() } else { format!("{path}#{cfg}") };
+        if seen.contains(&chave) {
             continue;
         }
-        seen.push(path.clone());
+        seen.push(chave);
         let Some(sh) = fenkra_montagem::view::placed_shape(&st.asm, id, dir.as_deref(), &mut st.cache) else { continue };
         let Some((l, h)) = sh.bbox() else { continue };
         let fp = fenkra_montagem::load::full_path(dir.as_deref(), &path);
-        let item = rows.iter().find(|r| r.path == fp).map(|r| r.item.clone()).unwrap_or_else(|| seen.len().to_string());
+        let item = rows.iter().find(|r| r.path == fp && r.config == cfg).map(|r| r.item.clone()).unwrap_or_else(|| seen.len().to_string());
         let size = ((h[0] - l[0]).powi(2) + (h[1] - l[1]).powi(2)).sqrt();
         // âncora numa face visível: o triângulo mais voltado para a câmera (e maior), não o CG
         let mut anchor = [(l[0] + h[0]) / 2., (l[1] + h[1]) / 2., h[2]];
