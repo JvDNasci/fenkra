@@ -21,6 +21,8 @@ mod sup_demo;
 mod sup_loft;
 mod sup_spline;
 mod picking;
+mod analise_janela;
+mod textos_analise;
 mod selecao;
 mod selecao_regras;
 mod alca_estado;

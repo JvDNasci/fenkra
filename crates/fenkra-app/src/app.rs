@@ -8520,7 +8520,9 @@ impl eframe::App for App {
         };
         if active {
             self.painel_comando(ctx, area);
-            crate::sup_analise::painel_curvatura(self, ctx, area);
+        // B357: os painéis de análise existem enquanto a tela está no modo e fecham pelo ✕
+        crate::sup_analise::painel_curvatura(self, ctx, area);
+        crate::analise_janela::painel_listras(self, ctx, area);
         }
         crate::sup_inclinacao::painel_inclinacao(self, ctx, area);
         crate::dfm_ui::painel(self, ctx, area);
