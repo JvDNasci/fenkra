@@ -200,6 +200,7 @@ impl App {
         self.dialogo_liberar(ctx);
         self.janela_comparacao(ctx);
         self.janela_mescla(ctx);
+        self.visualizador_quadro(ctx);
     }
 
     fn janela_salvar_como(&mut self, ctx: &egui::Context) {
@@ -334,6 +335,12 @@ impl App {
     fn janela_empacotar(&mut self, ctx: &egui::Context) {
         let Some(mut st) = ctx.data(|d| d.get_temp::<Option<PacoteUi>>(id_pacote())).flatten() else { return };
         let (mut fechar, mut executar) = (false, false);
+        // B305: o pacote é o que sobe para outra pessoa; o checador do PLM roda "antes de subir ao servidor"
+        let qualidade = self.open.entry.and_then(|id| {
+            let m = self.medidas_da_peca_aberta(id)?;
+            self.project.as_ref()?.avaliar_qualidade(id, &m, fenkra_project::qualidade_modelo::Momento::SubirAoServidor).ok()
+        });
+        let barrado = qualidade.as_ref().is_some_and(|r| r.bloqueia());
         egui::Window::new(tr("Empacotar")).default_pos([380., 140.]).collapsible(false).resizable(true).default_width(560.).show(ctx, |ui| {
             ui.label(RichText::new(st.raiz.display().to_string()).weak().small());
             ui.horizontal(|ui| {
@@ -394,8 +401,15 @@ impl App {
                 }
                 None => {}
             }
+            if let Some(r) = &qualidade {
+                ui.separator();
+                self.linhas_qualidade(ui, r);
+                if barrado {
+                    ui.label(RichText::new(tr("O perfil de qualidade do projeto barra esta peça. Registre uma exceção com nome e motivo no painel do projeto.")).small().color(ui.visuals().error_fg_color));
+                }
+            }
             ui.horizontal(|ui| {
-                if ui.button(tr("Empacotar")).clicked() {
+                if ui.add_enabled(!barrado, egui::Button::new(tr("Empacotar"))).clicked() {
                     executar = true;
                 }
                 if ui.button(tr("Fechar")).clicked() {
