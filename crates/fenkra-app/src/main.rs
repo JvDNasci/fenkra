@@ -14,6 +14,8 @@ mod demo_polimento;
 mod scene;
 mod entradas;
 mod previa;
+mod rosca_ui;
+mod demo_rosca;
 mod sup3d;
 mod sup_analise;
 mod loft_3d;

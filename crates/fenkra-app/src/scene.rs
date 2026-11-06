@@ -222,6 +222,13 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                     s.indices.push(ni);
                 }
             }
+            // B351: a rosca sem sulco real (cosmética, ou a prévia leve da modelada) vira textura na parede
+            if shows(!col.visible, env) {
+                let desta: Vec<&fenkra_solidos::RoscaViz> = r.roscas.iter().filter(|x| doc.feature(x.feature).is_some_and(|f| f.target == collector)).collect();
+                if !desta.is_empty() {
+                    crate::rosca_ui::texturas(&desta, m, [edge_col[0], edge_col[1], edge_col[2]], &mut s.ghost);
+                }
+            }
             if shows(!col.visible, env) {
                 let cor = o.fantasma.as_ref().map(|f| f.cor_de(doc));
                 match (fid, cor) {

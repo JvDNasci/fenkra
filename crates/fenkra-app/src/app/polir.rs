@@ -19,6 +19,8 @@ pub struct Pedido {
     pub alvo: Option<Polimento>,
     /// tessela agora; sem isso o cálculo só reaproveita o que tem
     pub agora: bool,
+    /// comando aberto para edição: a rosca modelada dele vira só linhas até concluir (B351)
+    pub leve: Option<fenkra_core::Id>,
 }
 
 #[derive(Default)]
@@ -32,7 +34,7 @@ pub struct Polidor {
 impl Polidor {
     /// Pedido de quem edita: não tessela, e o corpo que não mudou segue com a malha que tem.
     pub fn pedido_de_edicao(&self) -> Pedido {
-        Pedido { alvo: self.alvo, agora: false }
+        Pedido { alvo: self.alvo, agora: false, leve: None }
     }
 
     pub fn resultado_chegou(&mut self, r: &fenkra_solidos::RecomputeResult) {
@@ -85,6 +87,6 @@ impl App {
         self.polir.feito = Some((alvo, self.gen_done));
         self.polir.alvo = alvo;
         let Some(doc) = self.sent_doc.clone() else { return };
-        self.worker.enviar((self.gen_sent, doc, false, self.qualidade_malha, Pedido { alvo, agora: true }));
+        self.worker.enviar((self.gen_sent, doc, false, self.qualidade_malha, Pedido { alvo, agora: true, leve: self.session.as_ref().map(|s| s.id) }));
     }
 }
