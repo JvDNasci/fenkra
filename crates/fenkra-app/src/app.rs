@@ -58,6 +58,12 @@ pub enum Sel {
     Pmi(Id),
 }
 
+/// Documento que saiu de cena para uma peça da montagem ficar ativa, com os desfazer dele.
+pub struct DocGuardado {
+    open: OpenDoc,
+    hist: crate::historico::Historico,
+}
+
 /// Documento aberto.
 pub struct OpenDoc {
     pub doc: Document,
@@ -201,6 +207,8 @@ pub struct App {
     pub scene_dirty: bool,
     fit_pending: bool,
     hist: crate::historico::Historico,
+    /// o documento foi trocado neste quadro: a diferença do fim do quadro não é edição (B362)
+    doc_trocado: bool,
     /// diálogos de gravação (B65, B56)
     salvar: salvar::Estado,
     /// arquivo reimportado que mudou, esperando a escolha entre atualizar e derivar
@@ -402,6 +410,7 @@ impl App {
             extract: None,
             extract_last: ExtractOpts::default(),
             open_pending: None,
+            doc_trocado: false,
             splash_t0: None,
             start_t0: None,
             card_spin: Default::default(),
@@ -1088,6 +1097,28 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         self.save();
     }
 
+    /// Tira o documento aberto de cena, com os desfazer dele, para outro ocupar o lugar.
+    pub fn guardar_aberto(&mut self) -> DocGuardado {
+        let vazio = OpenDoc { doc: Document::new("Peça"), entry: None, frozen: None, file: None, modified: false, ramo: None };
+        let hist = crate::historico::Historico::new(self.settings.historico_mb);
+        DocGuardado { open: std::mem::replace(&mut self.open, vazio), hist: std::mem::replace(&mut self.hist, hist) }
+    }
+
+    /// Devolve o documento guardado como estava.
+    pub fn devolver_aberto(&mut self, g: DocGuardado) {
+        let DocGuardado { open, hist } = g;
+        self.load_doc(open.doc, open.entry, open.frozen);
+        self.open.file = open.file;
+        self.open.modified = open.modified;
+        self.open.ramo = open.ramo;
+        self.hist = hist;
+    }
+
+    /// Há o que desfazer no documento aberto?
+    pub fn pode_desfazer(&self) -> bool {
+        self.hist.pode_desfazer()
+    }
+
     /// Guarda o estado de antes de uma mudança feita de fora do documento e pede o recálculo.
     pub fn push_undo_pub(&mut self, antes: Document) {
         let depois = self.open.doc.clone();
@@ -1400,7 +1431,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     }
 
     fn load_doc(&mut self, doc: Document, entry: Option<u64>, frozen: Option<String>) {
+        // o comando, o sketch e a seleção falam do documento que está saindo
+        self.finish_sketch();
+        self.session = None;
+        self.sketch_wait_plane = false;
+        self.picks.clear();
+        self.hover_pick = None;
+        self.ctx_pick = None;
         self.open = OpenDoc { doc, entry, frozen, file: None, modified: false, ramo: None };
+        self.doc_trocado = true;
         self.sel = Sel::None;
         self.hist.limpar();
         self.salvar.esquecer();
@@ -8543,6 +8582,7 @@ impl eframe::App for App {
         }
 
         let before = self.open.doc.clone();
+        self.doc_trocado = false;
         let sel_before = self.sel;
         let settings_before = self.settings.clone();
         let hidden_env_before = self.hidden_env;
@@ -8654,8 +8694,9 @@ impl eframe::App for App {
         self.sugestao_leve_ui(ctx);
         self.relatorio_ui(ctx);
 
-        // edição não destrutiva + desfazer + bloqueio de revisão congelada
-        if self.open.doc != before {
+        // edição não destrutiva + desfazer + bloqueio de revisão congelada. Documento trocado neste
+        // quadro não é edição: sem isso ele nasceria modificado, com o anterior no desfazer (B362)
+        if !self.doc_trocado && self.open.doc != before {
             crate::medir_quadros::valor("doc_mudou", 1.);
             if let Some(rev) = &self.open.frozen {
                 let msg = format!("Revisão {rev} está congelada. Abra a versão de trabalho para editar.");

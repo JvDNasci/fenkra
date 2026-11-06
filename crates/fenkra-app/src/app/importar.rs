@@ -502,6 +502,8 @@ impl App {
     fn receber_importacao(&mut self, caminho: PathBuf, importacao: Documento) {
         let Some(p) = &mut self.project else {
             self.load_doc(importacao.doc, None, None);
+            // fora de um projeto a importação só existe na memória
+            self.open.modified = true;
             self.started = true;
             return;
         };

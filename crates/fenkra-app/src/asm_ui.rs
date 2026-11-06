@@ -201,7 +201,7 @@ pub struct AsmState {
     /// há pedido na thread de composição
     pub compondo: bool,
     /// a vista mudou, mas o pedido ainda não saiu
-    envio_pendente: bool,
+    pub(crate) envio_pendente: bool,
     ultimo_envio: Option<std::time::Instant>,
     /// cópias da vista: a malha compartilhada e a posição de cada uma
     pub instancias: Vec<fenkra_montagem::lod::Instancia>,
@@ -243,12 +243,20 @@ pub struct AsmState {
     pub pais: Vec<AsmState>,
     /// o conjunto em volta do que está ativo, no sistema dele
     pub vista_contexto: Option<RecomputeResult>,
+    /// a composição ainda corre: o contexto da peça ativa fica pronto quando ela chegar
+    contexto_aguardando: bool,
+    /// o documento que estava aberto antes da peça ativa: volta quando ela fecha
+    doc_de_fora: Option<crate::app::DocGuardado>,
+    /// a peça ativa como entrou: a saída compara com ela para saber o que mudou
+    doc_ao_entrar: Option<Document>,
+    /// volta pedida de dentro da viewport, onde o documento aberto está trocado pela vista
+    pub(crate) volta_adiada: Option<Volta>,
     /// o contexto desta montagem enquanto uma peça dela está ativa (volta quando a peça fecha)
     vista_contexto_acima: Option<RecomputeResult>,
     /// elemento do contexto escolhido para virar referência (no sistema do ativo)
     contexto_pick: Option<Pick>,
     /// pedido de volta esperando a escolha entre salvar, descartar e cancelar
-    volta: Option<Volta>,
+    pub(crate) volta: Option<Volta>,
     /// janela da peça nova no contexto
     nova_peca: Option<NovaPecaUi>,
     /// substituição planejada, esperando a pessoa ver a tabela
@@ -376,6 +384,10 @@ impl AsmState {
             editing_part: None,
             pais: vec![],
             vista_contexto: None,
+            contexto_aguardando: false,
+            doc_de_fora: None,
+            doc_ao_entrar: None,
+            volta_adiada: None,
             vista_contexto_acima: None,
             contexto_pick: None,
             volta: None,
@@ -564,6 +576,20 @@ impl AsmState {
             ctx.request_repaint_after(std::time::Duration::from_millis(250));
         }
         mudou
+    }
+
+    /// Monta o contexto da peça ativa, se a vista já está em dia. Devolve `true` se montou.
+    fn contexto_da_ativa(&mut self) -> bool {
+        let Some((id, _)) = self.editing_part.clone().filter(|_| self.contexto_aguardando) else { return false };
+        if self.dirty || self.envio_pendente || self.compondo || self.view.is_none() {
+            return false;
+        }
+        let pl = self.asm.node(id).map(|n| n.placement).unwrap_or_default();
+        let mut vistas: Vec<&RecomputeResult> = self.view.iter().collect();
+        vistas.extend(self.vista_contexto_acima.iter());
+        self.vista_contexto = Some(fenkra_montagem::contexto::vista_no_sistema(&vistas, id, &pl));
+        self.contexto_aguardando = false;
+        true
     }
 
     fn enviar_pedido(&mut self, ctx: &egui::Context) {
@@ -1053,49 +1079,93 @@ fn eixo_do_suporte(st: &mut AsmState, p: Pick) -> Result<EixoFuro, String> {
 /// subconjunto passa a ser a montagem ativa, com a de cima guardada.
 pub fn edit_part(app: &mut App, id: Id) {
     let Some(st) = app.asm.as_mut() else { return };
-    match st.asm.node(id).map(|n| n.kind.clone()) {
-        Some(NodeKind::Part { path }) => {
-            let full = full_path(st.dir().as_deref(), &path);
-            match st.cache.get(&full, false).map(|p| p.doc.clone()) {
-                Ok(d) => {
-                    st.refresh();
-                    let pl = st.asm.node(id).map(|n| n.placement).unwrap_or_default();
-                    let mut vistas: Vec<&RecomputeResult> = st.view.iter().collect();
-                    vistas.extend(st.vista_contexto.iter());
-                    let ctx = fenkra_montagem::contexto::vista_no_sistema(&vistas, id, &pl);
-                    st.vista_contexto_acima = st.vista_contexto.replace(ctx);
-                    st.editing_part = Some((id, full.clone()));
-                    let n = fenkra_montagem::contexto::instancias(&st.asm, id);
-                    app.load_doc_pub(d, Some(full));
-                    app.settings.bench = crate::settings::Bench::Solidos;
-                    if n > 1 {
-                        app.toast(format!("{} {n} {}", tr("Esta peça tem"), tr("instâncias: a mudança vale para todas")), false);
-                    }
-                }
-                Err(e) => app.toast(format!("{}: {e}", tr("Não foi possível abrir a peça")), true),
-            }
+    // com uma peça ativa, a outra só abre depois da volta: abrir por cima perderia o que ela tem
+    if let Some((atual, _)) = st.editing_part {
+        if atual == id {
+            st.volta = None;
+            app.settings.bench = bancada_da_peca(&app.open.doc);
+        } else {
+            pedir_volta(app, Volta::Pai);
         }
+        return;
+    }
+    match st.asm.node(id).map(|n| n.kind.clone()) {
+        Some(NodeKind::Part { .. }) => app.ativar_com_confirmacao(id),
         Some(NodeKind::SubAssembly { path }) => ativar_subconjunto(app, id, &path),
         _ => app.toast(tr("Grupos não abrem para edição"), true),
     }
 }
 
+/// Bancada em que a peça abre.
+fn bancada_da_peca(d: &Document) -> crate::settings::Bench {
+    if d.sheet.is_some() {
+        crate::settings::Bench::Chapa
+    } else {
+        crate::settings::Bench::Solidos
+    }
+}
+
+/// Abre o componente como peça ativa. Lê só o documento: quem calcula é o cálculo de fundo da peça
+/// aberta. Calcular aqui parava a janela pelo tempo de reconstruir a peça inteira (B362).
+pub(crate) fn ativar_peca(app: &mut App, id: Id) {
+    let Some(st) = app.asm.as_mut() else { return };
+    if id == GEOMETRIA {
+        let doc = st.asm.geometria_mut().clone();
+        let f = st.file.clone().unwrap_or_else(|| PathBuf::from(&st.asm.name)).with_extension("geometria");
+        st.cache.definir_pendente(&f, doc.clone());
+        return entrar_na_peca(app, GEOMETRIA, f, doc);
+    }
+    let Some(NodeKind::Part { path }) = st.asm.node(id).map(|n| n.kind.clone()) else { return };
+    let full = full_path(st.dir().as_deref(), &path);
+    // a árvore semeia o documento na memória: sem o arquivo, ele abriria como se nada tivesse sumido
+    let achou = full.exists() || st.cache.e_pendente(&full);
+    let doc = if achou { st.cache.documento(&full).cloned() } else { Err(full.display().to_string()) };
+    match doc {
+        Ok(d) => {
+            let n = fenkra_montagem::contexto::instancias(&st.asm, id);
+            entrar_na_peca(app, id, full, d);
+            if n > 1 {
+                app.toast(format!("{} {n} {}", tr("Esta peça tem"), tr("instâncias: a mudança vale para todas")), false);
+            }
+        }
+        Err(e) => {
+            // arquivo sumido: a janela Resolver dá o caminho de saída
+            if !full.exists() && !st.referencias.iter().any(|p| p.comp == id) {
+                let nome = st.asm.name_of(id);
+                st.referencias.push(crate::asm_resolver::Pendencia { comp: id, nome, caminho: path, resolucao: fenkra_project::referencias::Resolucao::NaoEncontrado });
+            }
+            app.toast(format!("{}: {e}", tr("Não foi possível abrir a peça")), true);
+        }
+    }
+}
+
+/// Põe a peça no lugar do documento aberto, que fica guardado para a volta.
+fn entrar_na_peca(app: &mut App, id: Id, f: PathBuf, d: Document) {
+    let guardado = app.guardar_aberto();
+    let Some(st) = app.asm.as_mut() else { return };
+    st.doc_de_fora = Some(guardado);
+    st.doc_ao_entrar = Some(d.clone());
+    st.editing_part = Some((id, f.clone()));
+    st.vista_contexto_acima = st.vista_contexto.take();
+    st.contexto_aguardando = true;
+    st.contexto_da_ativa();
+    let bancada = bancada_da_peca(&d);
+    // formato mais novo que este programa: abre travado para não regravar por cima (B64)
+    let futuro = d.formato_futuro().then(|| format!("de formato v{}", d.format_version));
+    if futuro.is_some() {
+        app.toast(tr("Arquivo de formato mais novo: abre somente para leitura. Atualize o Fenkra para editar."), true);
+    }
+    app.load_doc_pub(d, Some(f));
+    app.open.frozen = futuro;
+    // o que está na tela é da peça que saiu: melhor a vista vazia até o cálculo desta chegar
+    app.result = None;
+    app.settings.bench = bancada;
+}
+
 /// Abre a geometria da montagem como o que está ativo: sketches, pontos, eixos e planos se fazem
 /// com os comandos de sempre, com o conjunto em volta.
 pub fn editar_geometria(app: &mut App) {
-    let Some(st) = app.asm.as_mut() else { return };
-    st.refresh();
-    let doc = st.asm.geometria_mut().clone();
-    let f = st.file.clone().unwrap_or_else(|| PathBuf::from(&st.asm.name)).with_extension("geometria");
-    st.cache.definir_pendente(&f, doc.clone());
-    let _ = st.cache.get(&f, false);
-    let mut vistas: Vec<&RecomputeResult> = st.view.iter().collect();
-    vistas.extend(st.vista_contexto.iter());
-    let ctx = fenkra_montagem::contexto::vista_no_sistema(&vistas, GEOMETRIA, &Placement::default());
-    st.vista_contexto_acima = st.vista_contexto.replace(ctx);
-    st.editing_part = Some((GEOMETRIA, f.clone()));
-    app.load_doc_pub(doc, Some(f));
-    app.settings.bench = crate::settings::Bench::Solidos;
+    app.ativar_com_confirmacao(GEOMETRIA);
 }
 
 /// O subconjunto vira a montagem ativa. A mãe fica guardada inteira, com os desfazer dela.
@@ -1129,7 +1199,8 @@ pub fn nivel_ativo(st: &AsmState) -> usize {
 
 /// Pede a saída do contexto. Com algo por salvar, pergunta: não se volta sem salvar ou descartar.
 pub fn pedir_volta(app: &mut App, destino: Volta) {
-    let parte_suja = app.open.modified;
+    // comando ou sketch aberto também é trabalho em andamento: ele fala de um documento que vai sair
+    let parte_suja = app.open.modified || app.session.is_some() || app.sketch.is_some();
     let Some(st) = app.asm.as_mut() else { return };
     let sujo = if st.editing_part.is_some() { parte_suja } else { st.modified };
     if sujo {
@@ -1140,7 +1211,7 @@ pub fn pedir_volta(app: &mut App, destino: Volta) {
 }
 
 /// Sai um nível (ou todos). `salvar`: grava antes; se a gravação falhar, fica onde está.
-fn concluir_volta(app: &mut App, destino: Volta, salvar: bool) {
+pub(crate) fn concluir_volta(app: &mut App, destino: Volta, salvar: bool) {
     let Some(st) = app.asm.as_mut() else { return };
     st.volta = None;
     st.contexto_pick = None;
@@ -1164,18 +1235,39 @@ fn concluir_volta(app: &mut App, destino: Volta, salvar: bool) {
 
 /// Fecha a peça ativa e volta ao conjunto. Devolve `false` se a gravação falhou.
 fn sair_da_peca(app: &mut App, salvar: bool) -> bool {
-    let Some((id, f)) = app.asm.as_ref().and_then(|s| s.editing_part.clone()) else { return true };
+    if app.asm.as_ref().is_none_or(|s| s.editing_part.is_none()) {
+        return true;
+    }
     if salvar {
+        app.finish_sketch();
+        app.conclude_session();
+        // concluir ainda não marcou o documento: isso só acontece no fim do quadro
+        app.open.modified = true;
         app.save_pub();
         if app.open.modified {
             return false;
         }
     }
     let st = app.asm.as_mut().unwrap();
+    fechar_contexto(st);
+    // o documento aberto não fica para trás: salvá-lo depois gravaria por cima do arquivo da peça
+    match st.doc_de_fora.take() {
+        Some(g) => app.devolver_aberto(g),
+        None => app.load_doc_pub(Document::new("Peça"), None),
+    }
+    app.result = None;
+    app.settings.bench = crate::settings::Bench::Montagem;
+    app.fit_now();
+    true
+}
+
+/// Desfaz o contexto da peça ativa e traz para a montagem o que ela mudou.
+fn fechar_contexto(st: &mut AsmState) {
+    let Some((id, f)) = st.editing_part.clone() else { return };
     // o que mudou se mede no que ficou guardado, pois um Ctrl+S antes de voltar também conta
-    let antes = st.cache.peek(&f).map(|p| p.doc.clone());
+    let antes = st.doc_ao_entrar.take();
     st.cache.forget(&f);
-    let depois = st.cache.get(&f, false).ok().map(|p| p.doc.clone());
+    let depois = st.cache.documento(&f).ok().cloned();
     if id == GEOMETRIA {
         // a geometria mora dentro da montagem: o documento volta para lá, e nada fica no cache
         st.cache.descartar_pendente(&f);
@@ -1188,22 +1280,28 @@ fn sair_da_peca(app: &mut App, salvar: bool) -> bool {
         st.cache.descartar_pendente(&f);
         st.asm.delete(id);
         st.sel = None;
-    } else if antes != depois {
+    } else if depois.is_some() && antes != depois {
         st.pecas_alteradas.insert(id);
         st.modified = true;
     }
     st.editing_part = None;
+    st.contexto_aguardando = false;
     st.vista_contexto = st.vista_contexto_acima.take();
     st.solve();
     // a peça pode ter mudado um furo: os prendedores dele acompanham
     if let Some(m) = crate::asm_fixadores::apos_mudar_peca(st) {
         st.aviso = Some((m, false));
     }
-    // o documento aberto não fica para trás: salvá-lo depois gravaria por cima do arquivo
-    app.load_doc_pub(Document::new("Peça"), None);
-    app.settings.bench = crate::settings::Bench::Montagem;
-    app.fit_now();
-    true
+}
+
+/// Outro documento tomou o lugar da peça ativa (abrir, novo, salvar como): quem está aberto fica, e
+/// a montagem deixa de tratá-lo como a peça dela.
+fn soltar_peca(app: &mut App) {
+    let Some(st) = app.asm.as_mut() else { return };
+    st.volta = None;
+    st.doc_de_fora = None;
+    fechar_contexto(st);
+    app.toast(tr("Outro documento foi aberto: a peça saiu do contexto da montagem"), false);
 }
 
 /// A mãe volta a ser a montagem ativa e recarrega o que o subconjunto mudou.
@@ -1227,12 +1325,7 @@ pub fn salvar_peca_pendente(app: &mut App) -> bool {
     let doc = app.open.doc.clone();
     let Some(st) = app.asm.as_mut() else { return false };
     let Some((_, f)) = st.editing_part.clone().filter(|(_, f)| st.cache.e_pendente(f)) else { return false };
-    let antes = st.cache.peek(&f).map(|p| p.doc.clone());
     st.cache.definir_pendente(&f, doc);
-    // `definir_pendente` esquece a leitura, e a saída compara com ela
-    if let Some(d) = antes {
-        st.cache.lembrar(&f, d);
-    }
     app.open.modified = false;
     app.toast(tr("Peça guardada: o arquivo nasce ao salvar a montagem"), false);
     true
@@ -1704,7 +1797,9 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     if let Some((comp, fid)) = ui.ctx().data(|m| m.get_temp::<(Id, Id)>(egui::Id::unique("asm_recurso_editar"))) {
         ui.ctx().data_mut(|m| m.remove::<(Id, Id)>(egui::Id::unique("asm_recurso_editar")));
         edit_part(app, comp);
-        if app.open.doc.feature(fid).is_some() {
+        // a pergunta de gravação pode ter adiado a abertura: o recurso só existe na peça ativa
+        let ativa = app.asm.as_ref().is_some_and(|s| s.editing_part.as_ref().is_some_and(|(i, _)| *i == comp));
+        if ativa && app.open.doc.feature(fid).is_some() {
             app.start_session(fid, false, None);
         }
         return;
@@ -3191,7 +3286,12 @@ pub fn context_overlay(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: 
         });
     });
     if let Some(v) = volta {
-        pedir_volta(app, v);
+        // aqui é dentro da viewport: na montagem o documento aberto está trocado pela vista, e sair
+        // agora faria a troca de volta cair no documento errado
+        if let Some(st) = app.asm.as_mut() {
+            st.volta_adiada = Some(v);
+        }
+        ui.ctx().request_repaint();
         return;
     }
     // clique no que está em volta: escolhe a referência. A peça ativa tem a vez, pois está na frente
@@ -3396,14 +3496,34 @@ fn publicacoes_panel(st: &mut AsmState, ui: &mut egui::Ui, comp: Id) -> Option<(
 
 /// Janelas do contexto: a escolha ao voltar e a peça nova.
 pub fn contexto_window(app: &mut App, ctx: &egui::Context) {
-    let montagem = app.settings.bench == crate::settings::Bench::Montagem;
+    crate::asm_abrir::demo_quadro(app);
     let Some(st) = app.asm.as_mut() else { return };
-    // a aba Montagem com uma peça ativa é um pedido de volta: sem isso a pessoa ganharia a montagem
-    // com a peça ainda aberta por cima
-    if montagem && st.editing_part.is_some() && st.volta.is_none() {
-        pedir_volta(app, Volta::Pai);
+    if let Some(v) = st.volta_adiada.take() {
+        pedir_volta(app, v);
     }
     let Some(st) = app.asm.as_mut() else { return };
+    // o documento aberto deixou de ser a peça ativa
+    if st.editing_part.as_ref().is_some_and(|(_, f)| app.open.file.as_ref() != Some(f)) {
+        soltar_peca(app);
+    }
+    let montagem = app.settings.bench == crate::settings::Bench::Montagem;
+    let Some(st) = app.asm.as_mut() else { return };
+    // a aba Montagem com uma peça ativa é um pedido de volta. A bancada fica na peça até a decisão:
+    // a montagem não pode aparecer com a peça ainda aberta por trás
+    if montagem && st.editing_part.is_some() {
+        app.settings.bench = bancada_da_peca(&app.open.doc);
+        if st.volta.is_none() {
+            pedir_volta(app, Volta::Pai);
+        }
+    }
+    let Some(st) = app.asm.as_mut() else { return };
+    // fora da bancada Montagem ninguém recebe a composição: o contexto da peça ativa vem daqui
+    if st.contexto_aguardando {
+        st.refresh_fundo(ctx);
+        if st.contexto_da_ativa() {
+            app.scene_dirty = true;
+        }
+    }
     if let Some(destino) = st.volta {
         let peca = st.editing_part.is_some();
         let mut escolha = None;
@@ -3422,12 +3542,7 @@ pub fn contexto_window(app: &mut App, ctx: &egui::Context) {
             });
         });
         match escolha {
-            Some(0) => {
-                st.volta = None;
-                if peca && montagem {
-                    app.settings.bench = crate::settings::Bench::Solidos;
-                }
-            }
+            Some(0) => st.volta = None,
             Some(1) => concluir_volta(app, destino, true),
             Some(_) => concluir_volta(app, destino, false),
             None => {}
