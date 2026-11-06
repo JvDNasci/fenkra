@@ -1,4 +1,4 @@
-# ADR 0069: visualizador dentro do PLM, aberto por arquivo local, sem servidor (B339)
+# ADR 0070: visualizador dentro do PLM, aberto por arquivo local, sem servidor (B339)
 
 Data: 2026-11-06. Estado: aceita. Itens: B339, B214 (parte 3D), B130 (prévia lado a lado).
 

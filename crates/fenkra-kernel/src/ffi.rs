@@ -318,6 +318,9 @@ pub mod bridge {
         fn topology(s: &Shape, face_info: &mut Vec<f64>, edge_mids: &mut Vec<f64>, edge_faces: &mut Vec<u32>) -> Result<()>;
         /// `angle`: desvio angular máximo entre normais vizinhas, em radianos.
         fn tessellate(s: &Shape, deflection: f64, angle: f64) -> Result<MeshData>;
+        /// Malha só para a tela: sai de uma cópia, sem tocar na malha guardada na forma. `curv_tol` > 0
+        /// divide as arestas internas onde a curvatura interpolada erra mais que essa fração.
+        fn tessellate_view(s: &Shape, deflection: f64, angle: f64, curv_tol: f64, k_ref: f64) -> Result<MeshData>;
         /// Apaga a malha guardada nas faces da forma, inclusive as divididas com outras versões.
         fn discard_mesh(s: &Shape) -> Result<()>;
         /// Teto de fios do malhador; 0 volta ao padrão.

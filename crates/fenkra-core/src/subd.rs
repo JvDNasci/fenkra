@@ -451,6 +451,23 @@ fn mistura(duro: V3, liso: V3, vivas: &[(u32, f64)]) -> V3 {
 }
 
 /// Superfície pronta para desenhar: quatro cantos por quadrilátero, com a normal já quebrada nos vincos.
+/// Sistema 3 x 3 pela regra de Cramer; `None` se for degenerado.
+fn resolver3(m: [[f64; 3]; 3], d: [f64; 3]) -> Option<[f64; 3]> {
+    let det = |m: [[f64; 3]; 3]| m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    let base = det(m);
+    if base.abs() < 1e-30 {
+        return None;
+    }
+    let coluna = |c: usize| {
+        let mut x = m;
+        for l in 0..3 {
+            x[l][c] = d[l];
+        }
+        det(x) / base
+    };
+    Some([coluna(0), coluna(1), coluna(2)])
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct MalhaLisa {
     pub pos: Vec<V3>,
@@ -461,6 +478,51 @@ pub struct MalhaLisa {
 }
 
 impl MalhaLisa {
+    /// Curvaturas principais (maior, menor em valor) de cada vértice, em 1/mm. A gaiola não tem
+    /// superfície exata para ler: cada triângulo acha o operador de forma que melhor explica a variação
+    /// das normais ao longo das três arestas, e o vértice fica com a média ponderada pela área dos
+    /// triângulos em volta, juntando as cópias do mesmo ponto.
+    pub fn curvaturas(&self) -> Vec<[f32; 2]> {
+        let mut soldado = std::collections::HashMap::new();
+        let id: Vec<usize> = self.pos.iter().map(|p| { let n = soldado.len(); *soldado.entry(p.map(f64::to_bits)).or_insert(n) }).collect();
+        let mut soma = vec![[0f64; 3]; soldado.len()];
+        let sub = |a: V3, b: V3| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+        for t in &self.tris {
+            let [a, b, c] = t.map(|i| i as usize);
+            let (p, n) = ([self.pos[a], self.pos[b], self.pos[c]], [self.nrm[a], self.nrm[b], self.nrm[c]]);
+            let (e0, e2) = (sub(p[1], p[0]), sub(p[2], p[0]));
+            let g = cross(e0, e2);
+            let area = dot(g, g).sqrt() / 2.;
+            let (Some(u), Some(w)) = (unit(e0), unit(g)) else { continue };
+            let v = cross(w, u);
+            // mínimos quadrados de [e f; f g] nas três arestas: S · aresta = variação da normal
+            let (mut m, mut d) = ([[0f64; 3]; 3], [0f64; 3]);
+            for k in 0..3 {
+                let (i, j) = (k, (k + 1) % 3);
+                let (e, dn) = (sub(p[j], p[i]), sub(n[j], n[i]));
+                let (x, y, du, dv) = (dot(e, u), dot(e, v), dot(dn, u), dot(dn, v));
+                for (r, alvo) in [([x, y, 0.], du), ([0., x, y], dv)] {
+                    for l in 0..3 {
+                        d[l] += r[l] * alvo;
+                        for q in 0..3 {
+                            m[l][q] += r[l] * r[q];
+                        }
+                    }
+                }
+            }
+            let Some([se, sf, sg]) = resolver3(m, d) else { continue };
+            let (meio, raio) = ((se + sg) / 2., (((se - sg) / 2.).powi(2) + sf * sf).sqrt());
+            let (k1, k2) = if meio >= 0. { (meio + raio, meio - raio) } else { (meio - raio, meio + raio) };
+            for i in [a, b, c] {
+                let s = &mut soma[id[i]];
+                s[0] += k1 * area;
+                s[1] += k2 * area;
+                s[2] += area;
+            }
+        }
+        id.iter().map(|i| { let s = soma[*i]; let w = s[2].max(1e-30); [(s[0] / w) as f32, (s[1] / w) as f32] }).collect()
+    }
+
     /// Volume pela soma dos tetraedros (só faz sentido em malha fechada).
     pub fn volume(&self) -> f64 {
         self.tris.iter().map(|t| dot(self.pos[t[0] as usize], cross(self.pos[t[1] as usize], self.pos[t[2] as usize])) / 6.).sum()
@@ -687,4 +749,62 @@ fn normal_do_setor(n: &Nivel, t: &Topo, h: u32, normais: &[V3]) -> V3 {
         s = add(s, normais[t.face[b as usize] as usize]);
     }
     s
+}
+
+#[cfg(test)]
+mod testes_curvatura {
+    use super::*;
+
+    /// Grade em (a, b) com posição e normal dadas: a malha que a subdivisão entregaria.
+    fn grade(n: u32, f: impl Fn(f64, f64) -> (V3, V3)) -> MalhaLisa {
+        let mut m = MalhaLisa::default();
+        for i in 0..=n {
+            for j in 0..=n {
+                let (p, q) = f(i as f64 / n as f64, j as f64 / n as f64);
+                m.pos.push(p);
+                m.nrm.push(q);
+            }
+        }
+        let id = |i: u32, j: u32| i * (n + 1) + j;
+        for i in 0..n {
+            for j in 0..n {
+                m.tris.push([id(i, j), id(i + 1, j), id(i + 1, j + 1)]);
+                m.tris.push([id(i, j), id(i + 1, j + 1), id(i, j + 1)]);
+                m.face.extend([0, 0]);
+            }
+        }
+        m
+    }
+
+    #[test]
+    fn calota_de_esfera_da_o_inverso_do_raio_nas_duas_direcoes() {
+        let r = 40.;
+        let m = grade(40, |a, b| {
+            let (t, f) = ((a - 0.5) * 1.2, (b - 0.5) * 1.2);
+            let n = unit([t.tan(), f.tan(), 1.]).unwrap();
+            ([n[0] * r, n[1] * r, n[2] * r], n)
+        });
+        for k in m.curvaturas() {
+            assert!((k[0].abs() - 0.025).abs() < 5e-4 && (k[1].abs() - 0.025).abs() < 5e-4, "{k:?}");
+        }
+    }
+
+    #[test]
+    fn cilindro_da_curvatura_numa_direcao_so() {
+        let r = 30.;
+        let m = grade(40, |a, b| {
+            let t = a * 2.;
+            ([t.cos() * r, t.sin() * r, b * 80.], [t.cos(), t.sin(), 0.])
+        });
+        for k in m.curvaturas() {
+            let (maior, menor) = (k[0].abs().max(k[1].abs()), k[0].abs().min(k[1].abs()));
+            assert!((maior - 1. / 30.).abs() < 5e-4 && menor < 5e-4, "{k:?}");
+        }
+    }
+
+    #[test]
+    fn plano_nao_tem_curvatura() {
+        let m = grade(4, |a, b| ([a * 10., b * 10., 0.], [0., 0., 1.]));
+        assert!(m.curvaturas().iter().all(|k| k[0].abs() < 1e-9 && k[1].abs() < 1e-9));
+    }
 }

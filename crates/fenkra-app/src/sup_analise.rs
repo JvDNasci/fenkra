@@ -72,16 +72,17 @@ pub struct EscalaCurvatura {
 }
 
 impl EscalaCurvatura {
-    /// Cor do vértice. A escala é logarítmica: um raio dez vezes maior anda a mesma distância em
-    /// qualquer ponto dela, e o raio grande não some perto do plano.
+    /// Cor de um ponto. A escala é logarítmica: um raio dez vezes maior anda a mesma distância em
+    /// qualquer ponto dela, e o raio grande não some perto do plano. A viewport faz esta mesma conta
+    /// por pixel (`cor_curvatura` no shader).
     pub fn cor(&self, k1: f32, k2: f32) -> [f32; 3] {
         let k = self.tipo.valor(k1, k2) * self.raio;
         rampa(&self.paradas, (1. + k * 15.).log2() / 4.)
     }
 
-    /// Cor do vértice `i` da malha.
-    pub fn cor_da_malha(&self, m: &fenkra_kernel::Mesh, i: usize) -> Option<[f32; 3]> {
-        Some(self.cor(*m.curvature.get(i * 2)?, *m.curvature.get(i * 2 + 1)?))
+    /// Curvaturas do vértice `i` da malha, como a cena as manda para o shader.
+    pub fn atributo_da_malha(&self, m: &fenkra_kernel::Mesh, i: usize) -> Option<[f32; 3]> {
+        Some([*m.curvature.get(i * 2)?, *m.curvature.get(i * 2 + 1)?, 0.])
     }
 }
 

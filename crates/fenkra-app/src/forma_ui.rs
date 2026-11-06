@@ -297,7 +297,7 @@ pub fn gaiola_do_arraste(tipo: PrimitivaForma, plano: &[V3; 4], a: V3, b: V3) ->
 }
 
 /// Superfície na cena: cor do corpo, salvo no modo Gaiola.
-pub fn na_cena(doc: &Document, r: &RecomputeResult, oculta: Option<Id>, s: &mut Scene, cresce: &mut dyn FnMut(Vec3)) {
+pub fn na_cena(doc: &Document, r: &RecomputeResult, oculta: Option<Id>, mapa: Option<&crate::sup_inclinacao::EscalaMapa>, s: &mut Scene, cresce: &mut dyn FnMut(Vec3)) {
     for f in &r.formas {
         if oculta == Some(f.id) {
             continue;
@@ -305,10 +305,17 @@ pub fn na_cena(doc: &Document, r: &RecomputeResult, oculta: Option<Id>, s: &mut 
         let Some(feat) = doc.feature(f.id) else { continue };
         let cor = doc.collectors.iter().find(|c| c.id == feat.target).map_or([200, 200, 205], |c| c.color).map(|x| x as f32 / 255.);
         let base = s.mesh.len() as u32;
-        for (p, n) in f.malha.pos.iter().zip(&f.malha.nrm) {
+        for (i, (p, n)) in f.malha.pos.iter().zip(&f.malha.nrm).enumerate() {
             let pos = p.map(|x| x as f32);
             cresce(Vec3::from(pos));
-            s.mesh.push(MeshVertex { pos, nrm: n.map(|x| x as f32), col: [cor[0], cor[1], cor[2], 1.], mat: [0.45, 0., 1., 0.] });
+            // a gaiola não tem superfície exata: a curvatura vem da estimativa da malha lisa
+            let medida = match mapa {
+                Some(crate::sup_inclinacao::EscalaMapa::Inclinacao(_)) => Some([0., 0.]),
+                Some(_) => f.curvatura.get(i).copied(),
+                None => None,
+            };
+            let (col, marca) = medida.map_or(([cor[0], cor[1], cor[2], 1.], 0.), |k| ([k[0], k[1], 0., 1.], crate::render::MAPA_POR_PIXEL));
+            s.mesh.push(MeshVertex { pos, nrm: n.map(|x| x as f32), col, mat: [0.45, 0., 1., marca] });
         }
         s.indices.extend(f.malha.tris.iter().flat_map(|t| t.iter().map(|i| base + i)));
     }

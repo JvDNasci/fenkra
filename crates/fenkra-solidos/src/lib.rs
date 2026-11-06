@@ -7,6 +7,7 @@
 pub mod erro;
 pub mod forma_brep;
 pub mod forma_vinculo;
+pub mod polimento;
 pub mod geo3d;
 pub mod regioes;
 pub mod analise;
@@ -575,6 +576,8 @@ pub struct SurfaceViz {
 pub struct FormaViz {
     pub id: Id,
     pub malha: fenkra_core::subd::MalhaLisa,
+    /// curvaturas estimadas por vértice (1/mm); vazio fora do mapa de curvatura (B346)
+    pub curvatura: Vec<[f32; 2]>,
 }
 
 /// Contorno de um recorte de chapa nos dois estados: o desenhado no estado do comando e o levado
@@ -671,6 +674,8 @@ pub struct RecomputeResult {
     pub points: Vec<PointViz>,
     pub curves: Vec<CurveViz>,
     pub surfaces: Vec<SurfaceViz>,
+    /// malha de tela de cada corpo e superfície que tiver uma, por coletor ou referência (B346)
+    pub exibicao: HashMap<Id, Arc<Mesh>>,
     /// formas livres ainda sem B-rep
     pub formas: Vec<FormaViz>,
     /// relatório de cada forma convertida
@@ -944,6 +949,8 @@ pub struct Cache {
     /// Atualizar esta feature (B59): calcula só até este comando (inclusive); os de depois ficam
     /// listados em `desatualizados`. Vale para o próximo cálculo e é limpo ao terminar.
     pub ate: Option<Id>,
+    /// malha de tela: o que a vista pede e o que já foi feito (B346)
+    pub polir: polimento::Estado,
 }
 
 impl Cache {
@@ -5948,7 +5955,7 @@ fn formas_visiveis(doc: &Document, status: &HashMap<Id, Status>, resolvidas: &[f
                     return None;
                 }
                 let g = resolvidas.iter().find(|x| x.id == f.id).map_or(&fm.gaiola, |x| &x.gaiola);
-                g.lisa(fm.niveis as u32).ok().map(|malha| FormaViz { id: f.id, malha })
+                g.lisa(fm.niveis as u32).ok().map(|malha| FormaViz { id: f.id, malha, curvatura: vec![] })
             }
             _ => None,
         })
@@ -6273,6 +6280,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     let (mut points, mut curves, mut surfaces) = (vec![], vec![], vec![]);
     cache.refs.retain(|id, _| doc.reference(*id).is_some());
     cache.notes.retain(|id, _| doc.reference(*id).is_some());
+    cache.polir.esquecer_superficies(doc);
     for r in &doc.references {
         let key = hash_of(&[&ref_sig(doc, r.id, &cx.vars, 0)], if ref_reads_bodies(doc, r.id, 0) { tail } else { global });
         let v = match cache.refs.get(&r.id).filter(|(k, _)| *k == key) {
@@ -6289,11 +6297,17 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                         Geo::Point(p) => RefViz::Point(p),
                         Geo::Curve(c) => RefViz::Curve(c.pts),
                         Geo::Surface(sh) => {
+                            cache.polir.lembrar_superficie(r.id, key, &sh);
                             RefViz::Surface(tesselar(&sh, &cx.qualidade).map_err(|e| e.0)?)
                         }
                     })
                 });
-                cache.refs.insert(r.id, (key, v.clone()));
+                // erro de cálculo interrompido não vale como resultado: guardado, a referência ficaria
+                // quebrada até mudar, e o pedido novo que cancelou este já vem recalcular
+                let cancelado = cancelar.as_ref().is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed));
+                if v.is_ok() || !cancelado {
+                    cache.refs.insert(r.id, (key, v.clone()));
+                }
                 match cx.notes.borrow().get(&r.id) {
                     Some(n) => cache.notes.insert(r.id, n.clone()),
                     None => cache.notes.remove(&r.id),
@@ -6374,10 +6388,12 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     // malhas dos corpos
     let mut vivas = std::collections::HashSet::new();
     let mut bodies = vec![];
+    let mut formas_de_tela = vec![];
     for c in &doc.collectors {
         let Some((s, owners, roles)) = cx.body_owned(c.id) else { continue };
         let key = (c.id, cx.body_sig.get(&c.id).copied().unwrap_or(0));
         vivas.insert(key);
+        formas_de_tela.push((c.id, key.1, s.clone()));
         let r = match cache.meshes.get(&key) {
             Some(m) => Ok(m.clone()),
             None => {
@@ -6410,7 +6426,14 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     }
     bodies.extend(doc.collectors.iter().filter_map(|c| cx.malhas.get(&c.id).map(|m| corpo_malha::resultado(c, m))));
     cache.limitar(&vivas, &fills_vivos, TETO_CACHE_MALHAS);
-    let formas = formas_visiveis(doc, &cx.status, &cx.formas_resolvidas);
+    let mut formas = formas_visiveis(doc, &cx.status, &cx.formas_resolvidas);
+    cache.polir.formas(doc, &mut formas, &cx.formas_resolvidas);
+    let exibicao = {
+        let corpos = formas_de_tela.into_iter().filter_map(|(id, sig, forma)| Some(polimento::Alvo { id, sig, forma, base: &bodies.iter().find(|b: &&BodyResult| b.collector == id)?.mesh }));
+        let sups = surfaces.iter().filter_map(|sf: &SurfaceViz| cache.polir.superficie(sf.id).map(|(sig, forma)| polimento::Alvo { id: sf.id, sig, forma, base: &sf.mesh }));
+        let alvos: Vec<_> = corpos.chain(sups).collect();
+        cache.polir.aplicar(&alvos, &cx.qualidade, cancelar.as_deref())
+    };
 
     RecomputeResult {
         notes: cache.notes.clone(),
@@ -6422,6 +6445,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         curves,
         surfaces,
         formas,
+        exibicao,
         status: cx.status,
         params: cx.vars,
         param_error,

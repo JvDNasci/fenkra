@@ -48,14 +48,9 @@ impl EscalaInclinacao {
     pub fn cor(&self, n: [f32; 3]) -> [f32; 3] {
         rampa(&self.paradas, self.faixa(self.angulo(n)))
     }
-
-    pub fn cor_da_malha(&self, m: &fenkra_kernel::Mesh, i: usize) -> Option<[f32; 3]> {
-        let k = i * 3;
-        Some(self.cor([*m.normals.get(k)?, *m.normals.get(k + 1)?, *m.normals.get(k + 2)?]))
-    }
 }
 
-/// O que a cena pinta por vértice: curvatura ou inclinação.
+/// O que a cena pinta: curvatura ou inclinação. A cor sai no shader, por pixel (B346).
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum EscalaMapa {
     Curvatura(EscalaCurvatura),
@@ -69,10 +64,31 @@ impl From<EscalaCurvatura> for EscalaMapa {
 }
 
 impl EscalaMapa {
-    pub fn cor_da_malha(&self, m: &fenkra_kernel::Mesh, i: usize) -> Option<[f32; 3]> {
+    /// O que vai em `col` do vértice `i`: as curvaturas, ou nada na inclinação, que só lê a normal.
+    pub fn atributo_da_malha(&self, m: &fenkra_kernel::Mesh, i: usize) -> Option<[f32; 3]> {
         match self {
-            EscalaMapa::Curvatura(e) => e.cor_da_malha(m, i),
-            EscalaMapa::Inclinacao(e) => e.cor_da_malha(m, i),
+            EscalaMapa::Curvatura(e) => e.atributo_da_malha(m, i),
+            EscalaMapa::Inclinacao(_) => Some([0.; 3]),
+        }
+    }
+
+    /// Escala para o shader.
+    pub fn gpu(&self) -> crate::render::MapaGpu {
+        use crate::sup_analise::TipoCurvatura as T;
+        match self {
+            EscalaMapa::Curvatura(e) => crate::render::MapaGpu {
+                tipo: match e.tipo {
+                    T::Maxima => 0.,
+                    T::Media => 1.,
+                    T::Gaussiana => 2.,
+                },
+                raio: e.raio,
+                minimo: 0.,
+                tampa: TAMPA_GRAUS,
+                dir: [0., 0., 1.],
+                paradas: e.paradas,
+            },
+            EscalaMapa::Inclinacao(e) => crate::render::MapaGpu { tipo: 0., raio: 1., minimo: e.minimo, tampa: TAMPA_GRAUS, dir: e.dir, paradas: e.paradas },
         }
     }
 }

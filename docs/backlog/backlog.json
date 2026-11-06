@@ -225,7 +225,7 @@
    "tokens_k": 60,
    "teste": "Visual",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -5865,7 +5865,7 @@
    "tokens_k": 450,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.5
   },
   {

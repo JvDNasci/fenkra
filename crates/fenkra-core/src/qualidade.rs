@@ -53,6 +53,64 @@ impl Default for QualidadeMalha {
     }
 }
 
+/// Malha só para a tela (B346): o que a vista pede, além da malha de trabalho. A malha de trabalho
+/// segue a qualidade; esta segue a câmera, porque o que importa na tela é o erro em pixels.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Polimento {
+    /// desvio linear (mm)
+    pub desvio_mm: f64,
+    /// ângulo máximo entre normais vizinhas (graus)
+    pub angulo_graus: f64,
+    /// divide também onde a curvatura muda, para o mapa de curvatura
+    pub curvatura: bool,
+    /// teto de triângulos da peça inteira
+    pub teto_triangulos: usize,
+}
+
+impl Polimento {
+    /// Erro de silhueta aceito na tela: abaixo de meio pixel o polígono some no anti-serrilhamento.
+    pub const PIXELS: f64 = 0.5;
+    /// Ângulo das análises de reflexo. Com a normal exata nos vértices, o que entorta a listra é o
+    /// pixel cair na corda e não na superfície: o erro cresce com o quadrado do ângulo e passa de 5%
+    /// do período da listra acima de 5° (medido no cilindro, ver ADR 0069).
+    pub const ANGULO_ANALISE: f64 = 5.;
+    /// Ângulo do sombreado: sem listra, o olho só percebe a silhueta e o brilho.
+    pub const ANGULO_SOMBREADO: f64 = 10.;
+    /// Tetos de triângulos da peça: `TETO_LEVE` é o do modo leve.
+    pub const TETO: usize = 1_500_000;
+    pub const TETO_LEVE: usize = 300_000;
+
+    /// O que pedir para uma vista de `px_por_mm`. O desvio anda em potências de 2: zoom pequeno não
+    /// refaz a malha. `analise` é zebra, isofotas ou mapa; no modo leve só a análise pede malha.
+    pub fn para_vista(px_por_mm: f64, analise: bool, curvatura: bool, leve: bool) -> Option<Polimento> {
+        if !px_por_mm.is_finite() || px_por_mm <= 0. || (leve && !analise) {
+            return None;
+        }
+        let pixels = if leve { 3. * Self::PIXELS } else { Self::PIXELS };
+        let desvio = (pixels / px_por_mm).clamp(DESVIO_MIN, DESVIO_MAX);
+        Some(Polimento {
+            desvio_mm: 2f64.powf(desvio.log2().floor()).max(DESVIO_MIN),
+            angulo_graus: if analise { Self::ANGULO_ANALISE } else { Self::ANGULO_SOMBREADO },
+            curvatura,
+            teto_triangulos: if leve { Self::TETO_LEVE } else { Self::TETO },
+        })
+    }
+
+    /// Desvio e ângulo que cabem no teto, partindo de uma malha com `triangulos_curvos` nas faces
+    /// curvas feita com `desvio` e `angulo` (graus). Numa superfície de dupla curvatura os triângulos
+    /// crescem com o inverso do desvio e com o inverso do quadrado do ângulo. `folga` é a fração do
+    /// teto que este corpo pode usar.
+    pub fn dentro_do_teto(&self, triangulos_curvos: usize, desvio: f64, angulo: f64, folga: f64) -> (f64, f64) {
+        let previsto = triangulos_curvos as f64 * (desvio / self.desvio_mm).max((angulo / self.angulo_graus).powi(2)).max(1.);
+        let teto = self.teto_triangulos as f64 * folga.clamp(0., 1.);
+        if previsto <= teto || triangulos_curvos == 0 {
+            return (self.desvio_mm.min(desvio), self.angulo_graus.min(angulo));
+        }
+        let escala = previsto / teto.max(1.);
+        ((self.desvio_mm * escala).min(desvio), (self.angulo_graus * escala.sqrt()).min(angulo))
+    }
+}
+
 /// Desvio linear (mm) com um fator próprio (desenho e PMI usam fatores mais grossos), com o
 /// mesmo piso e teto da qualidade da malha. Diagonal inválida vale como uma peça de 100 mm.
 pub fn desvio_com_fator(diagonal: f64, fator: f64) -> f64 {
@@ -116,6 +174,41 @@ impl PresetStl {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn polimento_pede_meio_pixel_e_anda_em_degraus() {
+        let p = Polimento::para_vista(10., false, false, false).unwrap();
+        assert_eq!(p.desvio_mm, 2f64.powi(-5), "0,05 mm cai no degrau de baixo");
+        assert_eq!(Polimento::para_vista(11., false, false, false).unwrap().desvio_mm, p.desvio_mm, "zoom de 10% não refaz");
+        assert!(Polimento::para_vista(25., false, false, false).unwrap().desvio_mm < p.desvio_mm);
+        assert_eq!(p.angulo_graus, Polimento::ANGULO_SOMBREADO);
+        assert_eq!(Polimento::para_vista(10., true, false, false).unwrap().angulo_graus, Polimento::ANGULO_ANALISE);
+    }
+
+    #[test]
+    fn modo_leve_so_pede_malha_na_analise_e_com_teto_menor() {
+        assert_eq!(Polimento::para_vista(10., false, false, true), None);
+        let p = Polimento::para_vista(10., true, true, true).unwrap();
+        assert_eq!(p.teto_triangulos, Polimento::TETO_LEVE);
+        assert!(p.desvio_mm > Polimento::para_vista(10., true, true, false).unwrap().desvio_mm);
+    }
+
+    #[test]
+    fn vista_impossivel_nao_pede_malha() {
+        assert_eq!(Polimento::para_vista(0., true, false, false), None);
+        assert_eq!(Polimento::para_vista(f64::NAN, true, false, false), None);
+        assert!(Polimento::para_vista(1e9, true, false, false).unwrap().desvio_mm >= DESVIO_MIN);
+    }
+
+    #[test]
+    fn teto_alarga_o_pedido_sem_passar_da_malha_de_trabalho() {
+        let p = Polimento { desvio_mm: 0.01, angulo_graus: 5., curvatura: false, teto_triangulos: 1000 };
+        assert_eq!(p.dentro_do_teto(10, 0.1, 20., 1.), (0.01, 5.), "cabe: vale o pedido");
+        let (d, a) = p.dentro_do_teto(900, 0.1, 20., 1.);
+        assert!(d > 0.01 && a > 5., "{d} {a}");
+        assert!(d <= 0.1 && a <= 20., "nunca mais grosso que a malha de trabalho");
+        assert_eq!(p.dentro_do_teto(0, 0.1, 20., 1.), (0.01, 5.), "peça plana não cresce");
+    }
+
     use super::*;
 
     #[test]

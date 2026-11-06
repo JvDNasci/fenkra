@@ -4,6 +4,7 @@
 #include "fenkra-kernel/src/ffi.rs.h"
 
 #include <algorithm>
+#include <array>
 #include <functional>
 #include <map>
 #include <atomic>
@@ -12,6 +13,7 @@
 #include <limits>
 #include <mutex>
 #include <optional>
+#include <unordered_map>
 #include <shared_mutex>
 #include <stdexcept>
 #include <string>
@@ -1072,17 +1074,136 @@ static gp_Dir face_normal_at_edge(const TopoDS_Edge& e, const TopoDS_Face& f, co
     return d;
 }
 
-MeshData tessellate(const Shape& s, double deflection, double angle) {
-    return guard("tesselação", [&] {
+// Nó da malha de uma face: tudo vem da superfície exata no (u, v) do nó.
+struct NoFace {
+    gp_Pnt2d uv;
+    gp_Pnt p;
+    gp_Vec n;
+    float k1 = 0, k2 = 0;
+};
+
+// Lê normal e curvaturas da superfície. Polo e ápice degeneram: ali a derivada some, e a normal e a
+// curvatura só existem como limite. Por isso, se o ponto não responde, a leitura anda um passo
+// pequeno para dentro da face, na direção de `dentro` (um vizinho na malha).
+struct LeitorFace {
+    BRepAdaptor_Surface& su;
+    GeomLProp_SLProps* props;  // nulo no plano
+    bool normal_em(const gp_Pnt2d& uv, gp_Vec& e) const {
+        gp_Pnt p;
+        gp_Vec du, dv;
+        su.D1(uv.X(), uv.Y(), p, du, dv);
+        e = du.Crossed(dv);
+        return e.Magnitude() > 1e-12;
+    }
+    bool curvatura_em(const gp_Pnt2d& uv, float& k1, float& k2) const {
+        props->SetParameters(uv.X(), uv.Y());
+        if (!props->IsCurvatureDefined()) return false;
+        k1 = float(props->MaxCurvature());
+        k2 = float(props->MinCurvature());
+        return true;
+    }
+    // `ref` diz o lado da normal; `dentro` é o (u, v) para onde andar se o ponto degenerar
+    void ler(NoFace& no, const gp_Vec& ref, const gp_Pnt2d& dentro) const {
+        const auto passo = [&](double t) { return gp_Pnt2d(no.uv.X() + t * (dentro.X() - no.uv.X()), no.uv.Y() + t * (dentro.Y() - no.uv.Y())); };
+        gp_Vec e = ref;
+        bool ok = normal_em(no.uv, e);
+        for (double t : {1e-4, 1e-2}) {
+            if (ok) break;
+            ok = normal_em(passo(t), e);
+        }
+        if (ok) e = e.Dot(ref) < 0 ? -e : e;
+        else e = ref;
+        if (e.Magnitude() > 1e-12) e.Normalize();
+        no.n = e;
+        if (!props) return;
+        bool kok = curvatura_em(no.uv, no.k1, no.k2);
+        for (double t : {1e-4, 1e-2}) {
+            if (kok) break;
+            kok = curvatura_em(passo(t), no.k1, no.k2);
+        }
+    }
+};
+
+// Valor que o mapa de curvatura lê: maior curvatura em módulo e média.
+static inline float k_maior(const NoFace& n) { return std::max(std::abs(n.k1), std::abs(n.k2)); }
+static inline float k_media(const NoFace& n) { return std::abs(n.k1 + n.k2) / 2; }
+
+// Curvatura amostrada onde ela muda (B346). O malhador só olha a flecha: numa superfície quase plana
+// sobra triângulo longo, e a curvatura, que varia muito mesmo sem flecha, sai interpolada entre vértices
+// distantes, com a forma dos triângulos. Aqui cada aresta interna é conferida no meio, na superfície
+// exata, e dividida se a interpolação errar mais que `tol`. A borda da face fica como está: é o que
+// garante que a face continua encostada na vizinha, sem fresta. A divisão é por aresta, então os dois
+// triângulos de uma aresta recebem o mesmo nó.
+static void refinar_por_curvatura(std::vector<NoFace>& nos, std::vector<std::array<int, 3>>& tris, const LeitorFace& leitor, double tol, double k_ref, double menor_aresta) {
+    constexpr size_t kMaxNos = 400000;
+    const auto chave = [](int a, int b) { return (uint64_t(uint32_t(std::min(a, b))) << 32) | uint32_t(std::max(a, b)); };
+    for (int nivel = 0; nivel < 5 && nos.size() < kMaxNos; ++nivel) {
+        std::unordered_map<uint64_t, int> uso;
+        uso.reserve(tris.size() * 2);
+        for (const auto& t : tris) {
+            for (int e = 0; e < 3; ++e) uso[chave(t[e], t[(e + 1) % 3])]++;
+        }
+        std::unordered_map<uint64_t, int> meio;
+        for (const auto& [k, n] : uso) {
+            if (n != 2) continue;  // borda da face ou costura
+            const NoFace a = nos[int(k >> 32)];
+            const NoFace b = nos[int(k & 0xffffffffu)];
+            if (a.p.Distance(b.p) < menor_aresta) continue;
+            NoFace m;
+            m.uv = gp_Pnt2d((a.uv.X() + b.uv.X()) / 2, (a.uv.Y() + b.uv.Y()) / 2);
+            m.p = leitor.su.Value(m.uv.X(), m.uv.Y());
+            leitor.ler(m, a.n + b.n, a.uv);
+            const auto erro = [&](float vm, float va, float vb) { return std::abs(vm - (va + vb) / 2) / (std::abs(vm) + k_ref); };
+            if (std::max(erro(k_maior(m), k_maior(a), k_maior(b)), erro(k_media(m), k_media(a), k_media(b))) > tol) {
+                meio.emplace(k, int(nos.size()));
+                nos.push_back(m);
+            }
+        }
+        if (meio.empty()) return;
+        using Tri = std::array<int, 3>;
+        std::vector<Tri> novos;
+        novos.reserve(tris.size() * 2);
+        const auto corte = [&](int a, int b) {
+            const auto i = meio.find(chave(a, b));
+            return i == meio.end() ? -1 : i->second;
+        };
+        const auto por = [&](Tri x) { novos.push_back(x); };
+        for (const Tri& t : tris) {
+            const int a = t[0], b = t[1], c = t[2];
+            const int ab = corte(a, b), bc = corte(b, c), ca = corte(c, a);
+            const int n = (ab >= 0) + (bc >= 0) + (ca >= 0);
+            if (n == 0) {
+                por(t);
+            } else if (n == 3) {
+                por({a, ab, ca}); por({ab, b, bc}); por({ca, bc, c}); por({ab, bc, ca});
+            } else if (n == 1) {
+                if (ab >= 0) { por({a, ab, c}); por({ab, b, c}); }
+                else if (bc >= 0) { por({b, bc, a}); por({bc, c, a}); }
+                else { por({c, ca, b}); por({ca, a, b}); }
+            } else if (ca < 0) {
+                por({ab, b, bc}); por({a, ab, bc}); por({a, bc, c});
+            } else if (ab < 0) {
+                por({bc, c, ca}); por({b, bc, ca}); por({b, ca, a});
+            } else {
+                por({ca, a, ab}); por({c, ca, ab}); por({c, ab, b});
+            }
+        }
+        tris.swap(novos);
+    }
+}
+
+// Lê a malha da forma. `curv_tol` > 0 refina a curvatura (ver `refinar_por_curvatura`) e `k_ref` é a
+// curvatura abaixo da qual a diferença já não aparece na escala.
+static MeshData malha_da_forma(const TopoDS_Shape& forma, double deflection, double angle, double curv_tol, double k_ref) {
         MeshData m;
-        if (s.s.IsNull()) return m;
+        if (forma.IsNull()) return m;
         // mesma ordem de faces usada pelas etiquetas (IndexedMap)
         TopTools_IndexedMapOfShape fmap;
-        TopExp::MapShapes(s.s, TopAbs_FACE, fmap);
+        TopExp::MapShapes(forma, TopAbs_FACE, fmap);
         // sem limpar: a forma nova divide faces intactas com a versão anterior, e o malhador só refaz
         // a face cujo desvio passa de 10% do pedido, para mais ou para menos. A folga absorve a caixa
         // envolvente que muda um pouco na edição; quem precisa de mudança menor usa `discard_mesh`
-        if (mesh_angle_differs(fmap, angle)) BRepTools::Clean(s.s);
+        if (mesh_angle_differs(fmap, angle)) BRepTools::Clean(forma);
         IMeshTools_Parameters mp;
         mp.Deflection = deflection;
         mp.Angle = angle;
@@ -1091,7 +1212,7 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
         if (g_mesh_algo.load() == 1) mp.MeshAlgo = IMeshTools_MeshAlgoType_Delabella;
         {
             auto gate = enter_mesher();
-            BRepMesh_IncrementalMesh(s.s, mp, faixa_cancelavel());
+            BRepMesh_IncrementalMesh(forma, mp, faixa_cancelavel());
         }
         // malha pela metade não pode ir para o cache nem para a tela
         falhar_se_cancelado();
@@ -1112,19 +1233,27 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
             const uint32_t base = static_cast<uint32_t>(m.positions.size() / 3);
             const int nn = tri->NbNodes();
             std::vector<gp_Vec> nrm(nn, gp_Vec(0, 0, 0));
-            std::vector<gp_Pnt> pts(nn);
-            for (int i = 1; i <= nn; ++i) pts[i - 1] = tri->Node(i).Transformed(tr);
+            std::vector<NoFace> nos(nn);
+            for (int i = 1; i <= nn; ++i) nos[i - 1].p = tri->Node(i).Transformed(tr);
+            std::vector<std::array<int, 3>> tris;
+            tris.reserve(tri->NbTriangles());
+            // para onde andar se o nó degenerar: o meio dos outros dois nós de um triângulo dele
+            std::vector<gp_Pnt2d> dentro(tri->HasUVNodes() ? nn : 0);
             for (int t = 1; t <= tri->NbTriangles(); ++t) {
                 int a, b, c;
                 tri->Triangle(t).Get(a, b, c);
                 if (rev) std::swap(b, c);
-                gp_Vec n = gp_Vec(pts[a - 1], pts[b - 1]).Crossed(gp_Vec(pts[a - 1], pts[c - 1]));
+                gp_Vec n = gp_Vec(nos[a - 1].p, nos[b - 1].p).Crossed(gp_Vec(nos[a - 1].p, nos[c - 1].p));
                 nrm[a - 1] += n;
                 nrm[b - 1] += n;
                 nrm[c - 1] += n;
-                m.indices.push_back(base + a - 1);
-                m.indices.push_back(base + b - 1);
-                m.indices.push_back(base + c - 1);
+                tris.push_back({a - 1, b - 1, c - 1});
+                if (!dentro.empty()) {
+                    const gp_Pnt2d ua = tri->UVNode(a), ub = tri->UVNode(b), uc = tri->UVNode(c);
+                    dentro[a - 1] = gp_Pnt2d((ub.X() + uc.X()) / 2, (ub.Y() + uc.Y()) / 2);
+                    dentro[b - 1] = gp_Pnt2d((ua.X() + uc.X()) / 2, (ua.Y() + uc.Y()) / 2);
+                    dentro[c - 1] = gp_Pnt2d((ua.X() + ub.X()) / 2, (ua.Y() + ub.Y()) / 2);
+                }
             }
             std::optional<BRepAdaptor_Surface> su;
             if (tri->HasUVNodes()) su.emplace(face);
@@ -1132,45 +1261,41 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
             const bool curva = su && su->GetType() != GeomAbs_Plane;
             std::optional<GeomLProp_SLProps> props;
             if (curva) props.emplace(BRep_Tool::Surface(face), 2, 1e-7);
-            for (int i = 0; i < nn; ++i) {
-                m.positions.push_back(float(pts[i].X()));
-                m.positions.push_back(float(pts[i].Y()));
-                m.positions.push_back(float(pts[i].Z()));
-                gp_Vec n = nrm[i];
-                if (su) {
-                    // normal exata da superfície: a média dos triângulos revela a malha no sombreamento
-                    const gp_Pnt2d uv = tri->UVNode(i + 1);
-                    gp_Pnt p;
-                    gp_Vec du, dv;
-                    su->D1(uv.X(), uv.Y(), p, du, dv);
-                    gp_Vec e = du.Crossed(dv);
-                    // polos degeneram (e ≈ 0) e ficam com a média; o sentido segue o da malha
-                    if (e.Magnitude() > 1e-12) n = e.Dot(n) < 0 ? -e : e;
+            if (su) {
+                // normal exata da superfície: a média dos triângulos revela a malha no sombreamento
+                const LeitorFace leitor{*su, props ? &*props : nullptr};
+                for (int i = 0; i < nn; ++i) {
+                    nos[i].uv = tri->UVNode(i + 1);
+                    leitor.ler(nos[i], nrm[i], dentro[i]);
                 }
-                if (n.Magnitude() > 1e-12) n.Normalize();
-                m.normals.push_back(float(n.X()));
-                m.normals.push_back(float(n.Y()));
-                m.normals.push_back(float(n.Z()));
+                if (curva && curv_tol > 0) refinar_por_curvatura(nos, tris, leitor, curv_tol, k_ref, 2 * deflection);
+            } else {
+                for (int i = 0; i < nn; ++i) {
+                    if (nrm[i].Magnitude() > 1e-12) nrm[i].Normalize();
+                    nos[i].n = nrm[i];
+                }
+            }
+            for (const auto& t : tris) {
+                for (int i : t) m.indices.push_back(base + i);
+            }
+            for (const NoFace& no : nos) {
+                m.positions.push_back(float(no.p.X()));
+                m.positions.push_back(float(no.p.Y()));
+                m.positions.push_back(float(no.p.Z()));
+                m.normals.push_back(float(no.n.X()));
+                m.normals.push_back(float(no.n.Y()));
+                m.normals.push_back(float(no.n.Z()));
                 // curvaturas principais da superfície: dependem só da geometria, nunca da malha ou do zoom
-                float k1 = 0, k2 = 0;
-                if (curva) {
-                    const gp_Pnt2d uv = tri->UVNode(i + 1);
-                    props->SetParameters(uv.X(), uv.Y());
-                    if (props->IsCurvatureDefined()) {
-                        k1 = float(props->MaxCurvature());
-                        k2 = float(props->MinCurvature());
-                    }
-                }
-                m.curvature.push_back(k1);
-                m.curvature.push_back(k2);
+                m.curvature.push_back(no.k1);
+                m.curvature.push_back(no.k2);
             }
         }
 
         TopTools_IndexedMapOfShape edges;
-        TopExp::MapShapes(s.s, TopAbs_EDGE, edges);
+        TopExp::MapShapes(forma, TopAbs_EDGE, edges);
         // arestas de costura (seam) de cilindros/cones: existem na topologia mas não são arestas visuais
         TopTools_IndexedDataMapOfShapeListOfShape edge_faces;
-        TopExp::MapShapesAndAncestors(s.s, TopAbs_EDGE, TopAbs_FACE, edge_faces);
+        TopExp::MapShapesAndAncestors(forma, TopAbs_EDGE, TopAbs_FACE, edge_faces);
         auto is_seam = [&](const TopoDS_Edge& e) {
             const int k = edge_faces.FindIndex(e);
             if (k == 0) return false;
@@ -1223,19 +1348,32 @@ MeshData tessellate(const Shape& s, double deflection, double angle) {
             push_edge_geom(c, m.edge_geom);
             gp_Pnt mp = c.Value((c.FirstParameter() + c.LastParameter()) / 2);
             for (double v : {mp.X(), mp.Y(), mp.Z()}) m.edge_mids.push_back(float(v));
-            GCPnts_TangentialDeflection d(c, 0.2, deflection);
+            GCPnts_TangentialDeflection d(c, std::min(0.2, angle), deflection);
             for (int k = 1; k < d.NbPoints(); ++k) {
                 gp_Pnt p = d.Value(k), q = d.Value(k + 1);
                 for (double v : {p.X(), p.Y(), p.Z(), q.X(), q.Y(), q.Z()}) m.edges.push_back(float(v));
             }
         }
         TopTools_IndexedMapOfShape verts;
-        TopExp::MapShapes(s.s, TopAbs_VERTEX, verts);
+        TopExp::MapShapes(forma, TopAbs_VERTEX, verts);
         for (int i = 1; i <= verts.Extent(); ++i) {
             gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(verts(i)));
             for (double v : {p.X(), p.Y(), p.Z()}) m.vertices.push_back(float(v));
         }
         return m;
+}
+
+MeshData tessellate(const Shape& s, double deflection, double angle) {
+    return guard("tesselação", [&] { return malha_da_forma(s.s, deflection, angle, 0, 0); });
+}
+
+// Malha só para a tela (B346): sai de uma cópia sem triângulos, com a mesma ordem de faces e arestas.
+// A malha guardada na forma é a de trabalho (seleção, medidas, desenho) e não pode mudar com o zoom.
+MeshData tessellate_view(const Shape& s, double deflection, double angle, double curv_tol, double k_ref) {
+    return guard("tesselação", [&] {
+        if (s.s.IsNull()) return MeshData();
+        const TopoDS_Shape copia = BRepBuilderAPI_Copy(s.s, Standard_False, Standard_False).Shape();
+        return malha_da_forma(copia, deflection, angle, curv_tol, k_ref);
     });
 }
 
