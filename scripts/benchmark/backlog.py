@@ -372,7 +372,7 @@ c('B179', 3, 'P1', 'Conversão de subdivisão para B-rep com continuidade config
 c('B180', 4, 'P1', 'Análise de qualidade de superfície: zebra, curvatura e porco-espinho', 'Análises ao vivo em qualquer face ou curva, inclusive filetes e importados: zebra e reflexo por sombreador, isofotas, mapa de curvatura (gaussiana, média, mínima), porco-espinho de curvatura em curvas e seções, plano de corte dinâmico, mapa de inclinação (draft) e verificador de conexão G0 a G2 entre faces. Usa GeomLProp do OCCT para a curvatura exata e o pipeline do B139. Serve ao B154, ao B153 e à qualidade de filetes.',
   ['PESQ-BENCH2'], [], 150, 'Auto + Visual', 'Superfícies e wireframe'),
 c('B181', 4, 'P1', 'Pacote de visualização versionado (glTF + árvore + passos + pontos de captura)', 'Formato único e versionado que alimenta o HTML autocontido (B146), o app Visualizador (B156), as instruções (B124), a VR e a AR (B162): malhas glTF com meshopt, árvore com IDs estáveis do Fenkra em extras, estados de exibição, PMI, câmeras, passos, balões ligados ao BOM e pontos de captura exatos para medição. Inclui opção de decimação e teste de conformidade que abre 5 pacotes de referência em cada leitor.',
-  ['PESQ-BENCH2'], [], 150, 'Auto', 'Geral'),
+  ['PESQ-BENCH2'], [], 150, 'Auto', 'Geral', status='em andamento'),
 c('B182', 4, 'P1', 'Cena de apresentação: câmeras, luzes, ambientes e aparências na árvore', 'Nó Cena na árvore, publicável, com câmeras salvas, luzes, ambiente (HDRI, degradê, cor, chão com reflexo e sombra) e aparências por componente ou face com referência estável. Reutilizado por B139, B157, B124, B146 e B156, de modo que as imagens de passo e o render usem a mesma câmera e a mesma iluminação. Painéis suporte, modo, parâmetros e avançado.',
   ['PESQ-BENCH2'], [], 150, 'Auto + Visual', 'Navegação'),
 c('B183', 4, 'P3', 'Render por path tracing via Cycles/Blender como processo externo', 'Fase opcional do B157: gera glTF e script (B140), localiza o Blender instalado, executa em segundo plano com progresso e cancelamento e devolve a imagem ou o turntable ao Fenkra. Sem Blender, o render em tempo real do B157 segue funcionando. Cycles é Apache-2.0 e o Blender GPL fica fora do processo. Não inclui path tracer próprio nem nuvem de render.',
@@ -695,6 +695,8 @@ c('B336', 2, 'P1', 'Contador de vértices e volume sai da viewport e vai para as
   ['USR-UI'], [], 80, 'Auto + Visual', 'Interface', status='em andamento'),
 c('B337', 3, 'P1', 'Sólidos: varredura robusta com guia suave', 'Guia suave com muitos pontos hoje dá erro nomeado em vez de varrer: 48 de 120 splines de 8 a 25 pontos. Dividir a guia em arestas baixa isso. Também tratar varredura que sai inválida sem erro e nervura de chapa que passa de 60 s sem resposta.',
   ['USR-BUG'], [], 250, 'Auto', 'Sólidos', status='em andamento'),
+c('B338', 4, 'P1', 'Visualizador web detalhado para computador e celular', 'Visualizador detalhado que roda no navegador, de computador e de celular, sem instalar nada e sem app de loja. Abre o pacote gerado pelo Fenkra: modelo 3D, desenhos 2D nativos em vetor (não só PDF), MBD e PMI, árvore completa com visibilidade e isolar, busca de peça, atributos da peça, capturas salvas, corte e medição. Interface feita para toque e tela pequena. Não modela e não recalcula. Decisão do usuário: substitui app móvel e modelagem no celular.',
+  ['USR-VISUALIZADOR'], [], 600, 'Auto + Visual', 'Geral', status='em andamento'),
 ]
 def main():
     for x in B:
