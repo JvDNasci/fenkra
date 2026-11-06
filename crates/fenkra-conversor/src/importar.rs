@@ -61,10 +61,14 @@ pub fn unidade_suspeita(medidas: [f64; 3]) -> Option<Suspeita> {
 
 /// Milímetros por unidade declarada. O leitor já converteu para milímetros; o fator desfaz isso
 /// quando a pessoa diz que a declaração está errada.
-fn declarada_em_mm(unidades: &str) -> f64 {
+pub(crate) fn declarada_em_mm(unidades: &str) -> f64 {
     let u = unidades.to_uppercase();
     if u.contains("INCH") || u == "IN" {
         25.4
+    } else if u.contains("FOOT") || u.contains("FEET") {
+        304.8
+    } else if u.contains("MICRO") {
+        0.001
     } else if u.contains("CENTI") || u == "CM" {
         10.
     } else if u.contains("MILLI") || u == "MM" {
@@ -206,7 +210,12 @@ fn o_que_fica_fora(modelo: &ModeloNeutro, conjunto: bool, r: &mut Relatorio) {
     if modelo.tem_montagem() && !conjunto {
         r.nao_carrega.push(Nota::nova(FORA_MONTAGEM, &[]));
     }
-    if !xde.ignoradas.is_empty() {
+    if modelo.formato.e_malha() {
+        for item in &xde.ignoradas {
+            let (oque, n) = item.split_once('\t').unwrap_or((item, "1"));
+            r.nao_carrega.push(Nota::nova(FORA_MALHA_ITENS, &[oque.to_string(), n.to_string()]));
+        }
+    } else if !xde.ignoradas.is_empty() {
         let mut contagem = std::collections::BTreeMap::new();
         for tipo in &xde.ignoradas {
             *contagem.entry(tipo.as_str()).or_insert(0usize) += 1;
@@ -214,7 +223,10 @@ fn o_que_fica_fora(modelo: &ModeloNeutro, conjunto: bool, r: &mut Relatorio) {
         let lista: Vec<String> = contagem.iter().map(|(tipo, n)| format!("{tipo} ({n})")).collect();
         r.nao_carrega.push(Nota::nova(FORA_IGES, &[lista.join(", ")]));
     }
-    if modelo.formato == Formato::Iges {
+    if modelo.formato.e_malha() {
+        r.nao_carrega.push(Nota::nova(FORA_MALHA, &[modelo.formato.nome().to_string()]));
+    }
+    if modelo.formato == Formato::Iges || modelo.formato.e_malha() {
         for p in r.nao_fecharam.clone() {
             r.avisos.push(Nota::nova(AV_SUPERFICIES, &[p]));
         }
@@ -281,6 +293,10 @@ impl Registro {
         if formato == Formato::Dxf {
             return crate::dxf::importar(caminho, &bytes, o, extensao_diverge);
         }
+        if formato == Formato::Svg {
+            let d = crate::plano::ler_svg(&bytes)?;
+            return crate::dxf::importar_desenho(caminho, &bytes, d, Formato::Svg, o, extensao_diverge);
+        }
         let provedor = self.provedor(formato)?;
         let mut modelo = provedor.ler(formato, caminho, o)?;
 
@@ -304,6 +320,9 @@ impl Registro {
         };
         if extensao_diverge {
             r.avisos.push(Nota::nova(AV_EXTENSAO, &[formato.nome().to_string()]));
+        }
+        if formato.e_malha() && unidades.is_empty() && o.unidade.em_mm().is_none() {
+            r.avisos.push(Nota::nova(AV_MALHA_SEM_UNIDADE, &[formato.nome().to_string()]));
         }
         if let Some(mm) = o.unidade.em_mm() {
             r.escala = mm / declarada_em_mm(&unidades);
@@ -360,10 +379,53 @@ impl Registro {
         Ok(Importado { doc, relatorio: r, previa, conjunto: pecas })
     }
 
-    /// Lê e grava noutro formato, sem passar por documento.
+    /// Grava um documento. Formatos de receita saem da árvore, e os outros da forma recalculada.
+    pub fn gravar_documento(&self, doc: &Document, destino: &Path, saida: &crate::OpcoesExportar) -> Result<(), ErroConv> {
+        match Formato::por_extensao(destino) {
+            Some(Formato::Arvore) => {
+                let mut d = doc.clone();
+                crate::arvore::atualizar_pontos(&mut d);
+                let arquivo = crate::arvore::exportar_peca(&d).arquivo();
+                let texto = serde_json::to_string_pretty(&arquivo).map_err(|e| ErroConv::Gravacao(e.to_string()))?;
+                std::fs::write(destino, texto).map_err(|e| ErroConv::Gravacao(format!("não foi possível gravar '{}': {e}", destino.display())))
+            }
+            Some(f) if f.e_2d() => crate::plano::gravar(doc, f, destino),
+            _ => self.gravar(&ModeloNeutro::de_documento(doc)?, destino, saida),
+        }
+    }
+
+    /// Lê e grava noutro formato. Só passa por documento quem precisa dele: a peça do Fenkra, a árvore e
+    /// o desenho. Malha para malha nem sobe ao B-rep.
     pub fn converter(&self, origem: &Path, destino: &Path, o: &OpcoesImportar, saida: &crate::OpcoesExportar) -> Result<(), ErroConv> {
         let bytes = std::fs::read(origem).map_err(|e| ErroConv::Leitura(format!("não foi possível ler '{}': {e}", origem.display())))?;
+        let extensao = origem.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
+        let texto = || String::from_utf8_lossy(&bytes).to_string();
+        match extensao.as_str() {
+            "fkp" => {
+                let doc = Document::from_json(&texto()).map_err(|e| ErroConv::Leitura(format!("peça ilegível: {e}")))?;
+                return self.gravar_documento(&doc, destino, saida);
+            }
+            "fka" => {
+                let asm = fenkra_montagem::Assembly::from_json(&texto()).map_err(|e| ErroConv::Leitura(format!("montagem ilegível: {e}")))?;
+                let pasta = origem.parent().unwrap_or(Path::new("."));
+                if Formato::por_extensao(destino) == Some(Formato::Arvore) {
+                    let arquivo = crate::arvore::exportar_montagem(&asm, pasta)?;
+                    let json = serde_json::to_string_pretty(&arquivo).map_err(|e| ErroConv::Gravacao(e.to_string()))?;
+                    return std::fs::write(destino, json).map_err(|e| ErroConv::Gravacao(e.to_string()));
+                }
+                return self.gravar(&ModeloNeutro::da_montagem(&asm, pasta)?, destino, saida);
+            }
+            _ => {}
+        }
         let (formato, _) = detectar(origem, &bytes)?;
+        if formato == Formato::Arvore || formato.e_2d() {
+            let i = self.importar(origem, o)?;
+            return self.gravar_documento(&i.doc, destino, saida);
+        }
+        let saida_formato = self.formato_de_saida(destino)?;
+        if formato.e_malha() && saida_formato.e_malha() {
+            return crate::malha::converter(formato, origem, saida_formato, destino, o, saida);
+        }
         let modelo = self.provedor(formato)?.ler(formato, origem, o)?;
         self.gravar(&modelo, destino, saida)
     }

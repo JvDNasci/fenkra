@@ -227,17 +227,22 @@ fn previa_de(segmentos: &[[P2; 2]]) -> (Previa, Option<([f64; 3], [f64; 3])>) {
 /// Lê o DXF e monta um documento com os sketches, com selo, relatório e miniatura.
 pub(crate) fn importar(caminho: &Path, bytes: &[u8], o: &OpcoesImportar, extensao_diverge: bool) -> Result<Importado, ErroConv> {
     let d: Desenho = fenkra_dxf::ler(bytes).map_err(ErroConv::Leitura)?;
+    importar_desenho(caminho, bytes, d, Formato::Dxf, o, extensao_diverge)
+}
+
+/// Do desenho ao documento. Serve a todo formato 2D: cada um só precisa chegar num [`Desenho`].
+pub(crate) fn importar_desenho(caminho: &Path, bytes: &[u8], d: Desenho, formato: Formato, o: &OpcoesImportar, extensao_diverge: bool) -> Result<Importado, ErroConv> {
     let nome_arquivo = caminho.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
     let nome_doc = caminho.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "Importado".into());
     let hash = blake3::hash(bytes).to_hex().to_string();
-    let esquema = if d.versao.is_empty() { "DXF".to_string() } else { format!("DXF {}", d.versao) };
+    let esquema = if d.versao.is_empty() { formato.nome().to_string() } else { format!("{} {}", formato.nome(), d.versao) };
     let unidades = d.unidade.nome().to_string();
     let escala = o.unidade.em_mm().or(d.unidade.em_mm()).unwrap_or(1.);
     let mut r = Relatorio {
         arquivo: nome_arquivo.clone(),
         hash: hash.clone(),
         tamanho: bytes.len() as u64,
-        formato: Formato::Dxf.nome().into(),
+        formato: formato.nome().into(),
         provedor: "Fenkra".into(),
         versao: format!("Fenkra {}", env!("CARGO_PKG_VERSION")),
         esquema: esquema.clone(),
@@ -247,7 +252,7 @@ pub(crate) fn importar(caminho: &Path, bytes: &[u8], o: &OpcoesImportar, extensa
         ..Default::default()
     };
     if extensao_diverge {
-        r.avisos.push(Nota::nova(AV_EXTENSAO, &[Formato::Dxf.nome().to_string()]));
+        r.avisos.push(Nota::nova(AV_EXTENSAO, &[formato.nome().to_string()]));
     }
     if d.unidade.em_mm().is_none() && o.unidade.em_mm().is_none() {
         r.avisos.push(Nota::nova(AV_DXF_SEM_UNIDADE, &[]));
@@ -295,7 +300,7 @@ pub(crate) fn importar(caminho: &Path, bytes: &[u8], o: &OpcoesImportar, extensa
         r.camadas.push((if camada.is_empty() { "*".to_string() } else { camada.to_string() }, curvas));
     }
     if r.camadas.is_empty() {
-        return Err(ErroConv::Leitura(format!("o DXF '{nome_arquivo}' não tem curvas para um sketch")));
+        return Err(ErroConv::Leitura(format!("o {} '{nome_arquivo}' não tem curvas para um sketch", formato.nome())));
     }
     if juntados > 0 {
         r.avisos.push(Nota::nova(AV_DXF_JUNTADOS, &[juntados.to_string(), format!("{}", o.tolerancia)]));

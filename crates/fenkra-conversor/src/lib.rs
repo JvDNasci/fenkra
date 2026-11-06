@@ -12,12 +12,17 @@ mod documento;
 mod dxf;
 mod formato;
 mod importar;
+pub mod lote;
+pub mod malha;
+mod matriz;
 mod modelo;
 mod occt;
 mod opcoes;
+mod plano;
 pub mod processo;
 mod provedor;
 mod relatorio;
+mod sonda;
 
 pub use documento::montar_documento;
 pub use formato::{detectar, Formato};
@@ -25,6 +30,8 @@ pub use importar::{unidade_suspeita, Importado, Previa, Suspeita};
 pub use modelo::{InstanciaNeutra, ModeloNeutro, Ocorrencia, ProdutoNeutro};
 pub use occt::ProvedorOcct;
 pub use opcoes::{Destino, EsquemaSaida, Estrutura, ModoIges, OpcoesExportar, OpcoesImportar, Reparo, UnidadeArquivo, UnidadeSaida};
+pub use malha::{Cena, OpcoesMalha, ProvedorMalha};
+pub use matriz::{Capacidades, LinhaMatriz};
 pub use provedor::{Provedor, Registro};
 pub use relatorio::{Contagem, Defeito, LinhaReparo, Nota, Relatorio, TipoDefeito, NOTAS};
 

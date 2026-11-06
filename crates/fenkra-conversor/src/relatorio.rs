@@ -19,6 +19,8 @@ impl Nota {
     pub fn texto<'a>(&'a self, tr: &dyn Fn(&'a str) -> &'a str) -> String {
         let mut t = tr(&self.modelo).to_string();
         for (i, a) in self.args.iter().enumerate() {
+            // nesta frase o argumento é um termo do conversor, e não um nome do arquivo
+            let a = if self.modelo == FORA_MALHA_ITENS { tr(a) } else { a };
             t = t.replace(&format!("{{{i}}}"), a);
         }
         t
@@ -44,6 +46,9 @@ pub(crate) const FORA_DXF: &str = "Fora do sketch: {0}.";
 pub(crate) const AV_DXF_SEM_UNIDADE: &str = "O DXF não declara a unidade: os números foram lidos como milímetros. Confira a caixa e escolha a unidade do arquivo.";
 pub(crate) const AV_DXF_JUNTADOS: &str = "{0} pontas a menos de {1} mm viraram o mesmo ponto.";
 pub(crate) const FORA_IGES: &str = "Entidades que o leitor de IGES não traduziu: {0}.";
+pub(crate) const FORA_MALHA: &str = "Geometria exata: {0} guarda só triângulos; o corpo é facetado, sem cilindros nem arestas exatas.";
+pub(crate) const FORA_MALHA_ITENS: &str = "Fora do documento: {0} ({1}).";
+pub(crate) const AV_MALHA_SEM_UNIDADE: &str = "O {0} não declara a unidade: os números foram lidos como milímetros. Confira a caixa e escolha a unidade do arquivo.";
 pub(crate) const AV_SUPERFICIES: &str = "{0} ficou como superfície de referência: o reparo não chegou a um sólido fechado.";
 pub(crate) const AV_DEFEITOS_FORA: &str = "Defeitos demais para listar: {0} de {1} estão na lista.";
 
@@ -68,6 +73,9 @@ pub const NOTAS: &[&str] = &[
     AV_DXF_SEM_UNIDADE,
     AV_DXF_JUNTADOS,
     FORA_IGES,
+    FORA_MALHA,
+    FORA_MALHA_ITENS,
+    AV_MALHA_SEM_UNIDADE,
     AV_SUPERFICIES,
     AV_DEFEITOS_FORA,
 ];

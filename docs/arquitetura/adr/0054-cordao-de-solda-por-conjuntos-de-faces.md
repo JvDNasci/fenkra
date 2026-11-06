@@ -1,4 +1,4 @@
-# ADR 0052: cordão de solda por conjuntos de faces, cosmético por padrão
+# ADR 0054: cordão de solda por conjuntos de faces, cosmético por padrão
 
 Data: 2026-11-06. Item: B285. O símbolo guiado do desenho é do B251; o comprimento de solda de nós de tubo
 dobrado (`ResultadoDobra::solda`) é do B326 a B331.

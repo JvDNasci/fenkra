@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Exportar STEP e IGES (B104). Painel aberto só durante o comando: escolhe formato e opções e depois o
+//! Exportar arquivo (B104, B210). Painel aberto só durante o comando, na ordem de um diálogo só: suporte
+//! (o que o formato leva, lido da matriz do conversor), modo, parâmetros e avançado. Depois escolhe o
 //! arquivo. A gravação roda no programa: o modelo é nosso, não um arquivo de fora que possa derrubar o
-//! kernel. O STL segue pelo menu, que não tem opção além do preset.
+//! kernel. O STL com presets segue pelo menu.
 
 use super::*;
+use crate::ui_ext::dv;
 use fenkra_conversor::{EsquemaSaida, Estrutura, Formato, ModeloNeutro, ModoIges, OpcoesExportar, Registro, UnidadeSaida};
 
 const LARGURA: f32 = 300.;
@@ -38,11 +40,96 @@ fn dica_estrutura(e: Estrutura) -> &'static str {
     }
 }
 
+/// Formatos que têm versão em texto e em binário.
+fn tem_codificacao(f: Formato) -> bool {
+    matches!(f, Formato::Stl | Formato::Ply)
+}
+
+/// Formatos cuja norma fixa metros: a unidade do painel não vale para eles.
+fn unidade_fixa(f: Formato) -> bool {
+    matches!(f, Formato::Gltf | Formato::Glb | Formato::Vrml | Formato::X3d)
+}
+
+/// Lista de nomes traduzidos, para as linhas de suporte.
+fn lista(nomes: &[&'static str]) -> String {
+    nomes.iter().map(|n| tr(n)).collect::<Vec<_>>().join(", ")
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Acao {
     Nada,
     Gravar,
     Cancelar,
+}
+
+/// Suporte, modo, parâmetros e avançado de um formato. O lote usa o mesmo painel em cada perfil.
+pub(super) fn opcoes_ui(ui: &mut egui::Ui, formato: Formato, o: &mut OpcoesExportar, montagem: bool) {
+        let suporte = Registro::default().capacidades(formato);
+        ui.small(format!("{}: {}", tr("Leva"), lista(&suporte.leva()))).on_hover_text(tr("O que este formato carrega, conferido na matriz de formatos."));
+        let falta = suporte.nao_leva();
+        if !falta.is_empty() {
+            ui.small(format!("{}: {}", tr("Não leva"), lista(&falta))).on_hover_text(tr("O que fica para trás ao gravar neste formato."));
+        }
+        ui.add_space(4.);
+                if formato.e_malha() {
+            if tem_codificacao(formato) {
+                ui.checkbox(&mut o.malha.binario, tr("Binário")).on_hover_text(tr("Arquivo menor e sem perda de leitura. Desligado grava em texto, que se abre em qualquer editor."));
+            }
+        } else if formato == Formato::Step {
+            ui.label(tr("Esquema"));
+            egui::ComboBox::from_id_salt("exportar_esquema").selected_text(nome_esquema(o.esquema)).width(LARGURA - 40.).show_ui(ui, |ui| {
+                for e in [EsquemaSaida::Ap203, EsquemaSaida::Ap214, EsquemaSaida::Ap242] {
+                    ui.selectable_value(&mut o.esquema, e, nome_esquema(e));
+                }
+            }).response.on_hover_text(tr("AP214 leva cores e camadas; AP203 não; AP242 é o mais novo."));
+        } else if formato == Formato::Iges {
+            ui.label(tr("Modo do IGES"));
+            egui::ComboBox::from_id_salt("exportar_modo_iges").selected_text(tr(o.iges.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
+                for m in ModoIges::TODOS {
+                    ui.selectable_value(&mut o.iges, m, tr(m.nome())).on_hover_text(tr(dica_modo(m)));
+                }
+            }).response.on_hover_text(tr(dica_modo(o.iges)));
+        }
+        if montagem {
+            ui.label(tr("Estrutura"));
+            egui::ComboBox::from_id_salt("exportar_estrutura").selected_text(tr(o.estrutura.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
+                for e in Estrutura::TODAS {
+                    ui.selectable_value(&mut o.estrutura, e, tr(e.nome())).on_hover_text(tr(dica_estrutura(e)));
+                }
+            }).response.on_hover_text(tr(dica_estrutura(o.estrutura)));
+        }
+        if formato.e_malha() {
+            ui.label(tr("Desvio da malha"));
+            ui.add(dv(&mut o.malha.desvio).speed(0.005).range(0.001..=10.).suffix(" mm").dica(tr("Quanto a malha pode se afastar da superfície exata. Menor é mais fiel e mais pesado.")));
+            ui.label(tr("Ângulo da malha"));
+            ui.add(dv(&mut o.malha.angulo).speed(0.5).range(1.0..=60.).suffix(" °").dica(tr("Ângulo máximo entre triângulos vizinhos numa superfície curva. Menor deixa a curva mais lisa.")));
+        }
+        if unidade_fixa(formato) {
+            ui.small(tr("Este formato é sempre gravado em metros, como a norma dele manda.")).on_hover_text(tr("O tamanho da peça não muda: quem abre o arquivo vê a medida certa."));
+        } else if formato.e_2d() {
+            ui.small(tr("Grava os esboços da peça em milímetros, uma camada por esboço.")).on_hover_text(tr("Linha de construção fica de fora. Cada esboço sai nas coordenadas dele."));
+        } else {
+            ui.label(tr("Unidade do arquivo"));
+            egui::ComboBox::from_id_salt("exportar_unidade").selected_text(tr(nome_unidade(o.unidade))).width(LARGURA - 40.).show_ui(ui, |ui| {
+                for u in [UnidadeSaida::Milimetro, UnidadeSaida::Polegada, UnidadeSaida::Metro] {
+                    ui.selectable_value(&mut o.unidade, u, tr(nome_unidade(u)));
+                }
+            }).response.on_hover_text(tr("Em que unidade os números vão escritos. O tamanho da peça não muda."));
+            if !suporte.unidade {
+                ui.small(tr("O arquivo não diz a unidade: quem abrir precisa saber qual é.")).on_hover_text(tr("Este formato guarda só os números. Milímetro é o que a maioria dos programas supõe."));
+            }
+        }
+        let malha = formato.e_malha();
+        egui::CollapsingHeader::new(tr("Avançado")).id_salt("exportar_avancado").default_open(!malha).show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
+                ui.add_enabled(suporte.cor, egui::Checkbox::new(&mut o.cores, tr("Cores"))).on_hover_text(tr("Grava a cor da peça."));
+                ui.checkbox(&mut o.nomes, tr("Nomes")).on_hover_text(tr("Grava os nomes das peças."));
+                ui.add_enabled(suporte.camadas, egui::Checkbox::new(&mut o.camadas, tr("Camadas"))).on_hover_text(tr("Grava as camadas que a peça tiver."));
+                if malha {
+                    ui.checkbox(&mut o.malha.normais, tr("Normais")).on_hover_text(tr("Grava a normal de cada vértice nos formatos que têm esse campo: a superfície curva aparece lisa."));
+                }
+            });
+        });
 }
 
 /// Painel aberto durante o comando.
@@ -59,47 +146,14 @@ impl Dialogo {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui) -> Acao {
+        let registro = Registro::default();
         ui.label(tr("Formato"));
         egui::ComboBox::from_id_salt("exportar_formato").selected_text(self.formato.nome()).width(LARGURA - 40.).show_ui(ui, |ui| {
-            for f in [Formato::Step, Formato::Iges] {
+            for f in registro.formatos_de_gravacao().into_iter().filter(|f| *f != Formato::Arvore) {
                 ui.selectable_value(&mut self.formato, f, f.nome());
             }
         }).response.on_hover_text(tr("STEP leva a árvore de produtos e é o padrão atual. IGES serve a quem só lê superfícies."));
-        let o = &mut self.opcoes;
-        if self.formato == Formato::Step {
-            ui.label(tr("Esquema"));
-            egui::ComboBox::from_id_salt("exportar_esquema").selected_text(nome_esquema(o.esquema)).width(LARGURA - 40.).show_ui(ui, |ui| {
-                for e in [EsquemaSaida::Ap203, EsquemaSaida::Ap214, EsquemaSaida::Ap242] {
-                    ui.selectable_value(&mut o.esquema, e, nome_esquema(e));
-                }
-            }).response.on_hover_text(tr("AP214 leva cores e camadas; AP203 não; AP242 é o mais novo."));
-        } else {
-            ui.label(tr("Modo do IGES"));
-            egui::ComboBox::from_id_salt("exportar_modo_iges").selected_text(tr(o.iges.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
-                for m in ModoIges::TODOS {
-                    ui.selectable_value(&mut o.iges, m, tr(m.nome())).on_hover_text(tr(dica_modo(m)));
-                }
-            }).response.on_hover_text(tr(dica_modo(o.iges)));
-        }
-        if self.montagem {
-            ui.label(tr("Estrutura"));
-            egui::ComboBox::from_id_salt("exportar_estrutura").selected_text(tr(o.estrutura.nome())).width(LARGURA - 40.).show_ui(ui, |ui| {
-                for e in Estrutura::TODAS {
-                    ui.selectable_value(&mut o.estrutura, e, tr(e.nome())).on_hover_text(tr(dica_estrutura(e)));
-                }
-            }).response.on_hover_text(tr(dica_estrutura(o.estrutura)));
-        }
-        ui.label(tr("Unidade do arquivo"));
-        egui::ComboBox::from_id_salt("exportar_unidade").selected_text(tr(nome_unidade(o.unidade))).width(LARGURA - 40.).show_ui(ui, |ui| {
-            for u in [UnidadeSaida::Milimetro, UnidadeSaida::Polegada, UnidadeSaida::Metro] {
-                ui.selectable_value(&mut o.unidade, u, tr(nome_unidade(u)));
-            }
-        }).response.on_hover_text(tr("Em que unidade os números vão escritos. O tamanho da peça não muda."));
-        ui.horizontal_wrapped(|ui| {
-            ui.checkbox(&mut o.cores, tr("Cores")).on_hover_text(tr("Grava a cor da peça."));
-            ui.checkbox(&mut o.nomes, tr("Nomes")).on_hover_text(tr("Grava os nomes das peças."));
-            ui.checkbox(&mut o.camadas, tr("Camadas")).on_hover_text(tr("Grava as camadas que a peça tiver."));
-        });
+        opcoes_ui(ui, self.formato, &mut self.opcoes, self.montagem);
         ui.add_space(6.);
         let mut acao = Acao::Nada;
         ui.horizontal(|ui| {
@@ -146,12 +200,18 @@ impl App {
         }
         let nome = montagem.map(|s| s.asm.name.clone()).unwrap_or_else(|| self.open.doc.name.clone());
         let extensao = d.formato.extensoes()[0];
-        let Some(caminho) = rfd::FileDialog::new().add_filter(d.formato.nome(), d.formato.extensoes()).set_file_name(format!("{nome}.{extensao}")).save_file() else { return };
-        let modelo = match (self.asm.as_ref().filter(|_| d.montagem), &pasta) {
-            (Some(s), Some(pasta)) => ModeloNeutro::da_montagem(&s.asm, pasta),
-            _ => ModeloNeutro::de_documento(&self.open.doc),
+        // desenvolvimento: FENKRA_DEMO_EXPORTAR_ARQUIVO=<arquivo> grava sem perguntar, para conferir a saída
+        let demo = std::env::var("FENKRA_DEMO_EXPORTAR_ARQUIVO").ok().map(std::path::PathBuf::from);
+        let Some(caminho) = demo.or_else(|| rfd::FileDialog::new().add_filter(d.formato.nome(), d.formato.extensoes()).set_file_name(format!("{nome}.{extensao}")).save_file()) else { return };
+        let r = if d.formato.e_2d() {
+            Registro::default().gravar_documento(&self.open.doc, &caminho, &d.opcoes)
+        } else {
+            let modelo = match (self.asm.as_ref().filter(|_| d.montagem), &pasta) {
+                (Some(s), Some(pasta)) => ModeloNeutro::da_montagem(&s.asm, pasta),
+                _ => ModeloNeutro::de_documento(&self.open.doc),
+            };
+            modelo.and_then(|m| Registro::default().gravar(&m, &caminho, &d.opcoes))
         };
-        let r = modelo.and_then(|m| Registro::default().gravar(&m, &caminho, &d.opcoes));
         match r {
             Ok(()) => self.toast(format!("Exportado: {}", caminho.display()), false),
             Err(e) => self.toast(format!("Falha ao exportar: {e}"), true),
@@ -191,6 +251,44 @@ mod testes {
     }
 
     #[test]
+    fn malha_mostra_suporte_desvio_e_codificacao_so_onde_existe() {
+        let mut d = Dialogo::novo(Formato::Stl, OpcoesExportar::default(), false);
+        let t = textos(&mut d).join("\n");
+        assert!(t.contains("Binário") && t.contains("Desvio da malha") && !t.contains("Esquema"), "{t}");
+        assert!(t.contains("Leva: Malha"), "{t}");
+        assert!(t.contains("Não leva") && t.contains("não diz a unidade"), "{t}");
+        d.formato = Formato::Glb;
+        let t = textos(&mut d).join("\n");
+        assert!(!t.contains("Binário") && t.contains("sempre gravado em metros") && !t.contains("Unidade do arquivo"), "{t}");
+        assert!(t.contains("Montagem"), "{t}");
+    }
+
+    #[test]
+    fn termos_do_relatorio_de_malha_tem_traducao() {
+        for t in fenkra_conversor::malha::ITENS_FORA {
+            assert!(crate::i18n::tem_traducao(t), "sem tradução: {t}");
+        }
+    }
+
+    #[test]
+    fn formato_2d_nao_mostra_opcao_de_solido() {
+        let mut d = Dialogo::novo(Formato::Svg, OpcoesExportar::default(), false);
+        let t = textos(&mut d).join("\n");
+        assert!(t.contains("esboços") && !t.contains("Modo do IGES") && !t.contains("Desvio") && !t.contains("Unidade do arquivo"), "{t}");
+    }
+
+    #[test]
+    fn combo_de_formato_lista_o_que_o_conversor_grava() {
+        let gravaveis = Registro::default().formatos_de_gravacao();
+        assert!(gravaveis.contains(&Formato::Tmf) && gravaveis.contains(&Formato::Usdz));
+        for l in Registro::default().matriz() {
+            for (nome, _) in l.capacidades.colunas() {
+                assert!(crate::i18n::tem_traducao(nome), "sem tradução: {nome}");
+            }
+        }
+    }
+
+    #[test]
     fn estrutura_so_aparece_na_montagem() {
         let mut d = Dialogo::novo(Formato::Step, OpcoesExportar::default(), false);
         assert!(!textos(&mut d).join("\n").contains("Estrutura"));
@@ -207,6 +305,9 @@ mod testes {
         for s in [
             "Formato",
             "Esquema",
+            "Leva",
+            "Não leva",
+            "Avançado",
             "Modo do IGES",
             "Exportar arquivo",
             "Exportar…",

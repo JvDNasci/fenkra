@@ -169,3 +169,25 @@ fn arquivo_truncado_ou_inexistente_nao_derruba_quem_chamou() {
     let e = f.importar(&dir.join("sumiu.step"), OpcoesImportar::default(), &AtomicBool::new(false)).unwrap_err();
     assert!(matches!(e, ErroConv::Leitura(_)), "{e:?}");
 }
+
+/// B213: o lote roda cada item no filho de verdade. Arquivo que derruba ou trava custa um item.
+#[test]
+fn lote_roda_no_filho_e_item_sem_tempo_nao_deixa_arquivo() {
+    use fenkra_conversor::lote::{executar, simular, EntradaLote, PerfilSaida, PlanoLote, SeExistir};
+    let dir = pasta("lote");
+    let saida = dir.join("saida");
+    let origem = dir.join("bloco.step");
+    Registro::default().gravar(&modelo(), &origem, &OpcoesExportar::default()).unwrap();
+    let plano = PlanoLote { pasta: saida.clone(), perfis: vec![PerfilSaida { formato: Formato::Glb, opcoes: OpcoesExportar::default() }], se_existir: SeExistir::Pular, ..Default::default() };
+    let entrada = EntradaLote { caminho: origem, nome: "Bloco".into(), pn: "FK-0001".into(), rev: "A".into() };
+    let itens = simular(std::slice::from_ref(&entrada), &plano, &Registro::default());
+    let parar = AtomicBool::new(false);
+    let sem_tempo = filho(Duration::from_millis(1));
+    let r = executar(&itens, &plano, |t| sem_tempo.executar(t, &parar), |_, _| {});
+    assert!(matches!(r[0].saida, Err(ErroConv::Tempo(_))), "{:?}", r[0].saida);
+    assert_eq!(std::fs::read_dir(&saida).unwrap().count(), 0, "nada pela metade");
+    let certo = filho(Filho::LIMITE);
+    let r = executar(&itens, &plano, |t| certo.executar(t, &parar), |_, _| {});
+    assert!(r[0].saida.is_ok(), "{:?}", r[0].saida);
+    assert!(saida.join("FK-0001_A.glb").is_file());
+}

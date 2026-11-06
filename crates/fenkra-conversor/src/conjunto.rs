@@ -69,7 +69,7 @@ impl Montador<'_> {
 impl ModeloNeutro {
     /// O arquivo traz peças em lugares diferentes, e não uma peça só embrulhada em montagem?
     pub(crate) fn pede_conjunto(&self) -> bool {
-        self.formato == Formato::Step && self.ocorrencias().len() > 1 && (self.tem_montagem() || self.xde.raizes.len() > 1)
+        (self.formato == Formato::Step || self.formato.e_malha()) && self.ocorrencias().len() > 1 && (self.tem_montagem() || self.xde.raizes.len() > 1)
     }
 
     /// Um documento por produto e a montagem que aponta para eles. Devolve quantos corpos entraram.
