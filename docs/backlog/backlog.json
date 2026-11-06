@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 86470,
+ "tokens_total_k": 86670,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -17,14 +17,14 @@
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
-   "tokens_k": 18470,
-   "pct": 21.4
+   "tokens_k": 18670,
+   "pct": 21.5
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 21340,
-   "pct": 24.7
+   "pct": 24.6
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
@@ -5672,6 +5672,38 @@
    "tokens_k": 120,
    "teste": "Auto",
    "area": "Estrutural e soldas",
+   "status": "em andamento",
+   "pct": 0.1
+  },
+  {
+   "id": "B335",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Tela inicial no tema escolhido, com animação mais presente",
+   "oque": "A tela inicial usa o mesmo tema que a pessoa escolheu nas preferências, em tudo: fundo, cartões, textos e animação. As animações ficam mais visíveis, seguindo estudo de telas iniciais de softwares de modelagem CAD avançados, e respeitam a opção de reduzir movimento.",
+   "origem": [
+    "USR-UI"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "em andamento",
+   "pct": 0.1
+  },
+  {
+   "id": "B336",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Contador de vértices e volume sai da viewport e vai para as propriedades",
+   "oque": "A informação de vértices, faces e volume do canto inferior direito não ajuda durante a modelagem. Ela sai da viewport e passa às propriedades do objeto, em propriedades de massa e de geometria.",
+   "origem": [
+    "USR-UI"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto + Visual",
+   "area": "Interface",
    "status": "em andamento",
    "pct": 0.1
   }

@@ -689,6 +689,10 @@ c('B333', 3, 'P1', 'Estrutural: canto com gabarito (V com raio)', 'Canto de tubo
   ['USR-TUBO'], [], 300, 'Auto + Visual', 'Estrutural e soldas', status='em andamento'),
 c('B334', 3, 'P2', 'Estrutural: contorno plano do corte de tubo em DXF e SVG para laser', 'Exporta o contorno aberto dos cortes do tubo (V comum, V múltiplo e canto com raio) em escala real, com camadas de corte e marcação, para laser de tubo e para riscar à mão.',
   ['USR-TUBO'], [], 120, 'Auto', 'Estrutural e soldas', status='em andamento'),
+c('B335', 2, 'P1', 'Tela inicial no tema escolhido, com animação mais presente', 'A tela inicial usa o mesmo tema que a pessoa escolheu nas preferências, em tudo: fundo, cartões, textos e animação. As animações ficam mais visíveis, seguindo estudo de telas iniciais de softwares de modelagem CAD avançados, e respeitam a opção de reduzir movimento.',
+  ['USR-UI'], [], 120, 'Auto + Visual', 'Interface', status='em andamento'),
+c('B336', 2, 'P1', 'Contador de vértices e volume sai da viewport e vai para as propriedades', 'A informação de vértices, faces e volume do canto inferior direito não ajuda durante a modelagem. Ela sai da viewport e passa às propriedades do objeto, em propriedades de massa e de geometria.',
+  ['USR-UI'], [], 80, 'Auto + Visual', 'Interface', status='em andamento'),
 ]
 def main():
     for x in B:
