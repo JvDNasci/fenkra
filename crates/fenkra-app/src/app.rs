@@ -4265,6 +4265,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     if ui.button(tr("Exportar DXF…")).on_hover_text(tr("DXF 1:1 em milímetros, com camadas fixas: contorno, furos, dobra para cima, dobra para baixo e ferramenta.")).clicked() {
                         ui.ctx().data_mut(|m| m.insert_temp(egui::Id::new("planificada_pedido"), 2u8));
                     }
+                    if ui.button(tr("Nesting e dobra…")).on_hover_text(tr("Abre a janela de fabricação: nesting em chapas comerciais e simulação da sequência de dobra.")).clicked() {
+                        crate::chapa_fab_ui::abrir(ui.ctx());
+                    }
                 });
                 match &blank {
                     Some(Ok(p)) => {
@@ -8287,6 +8290,7 @@ impl eframe::App for App {
         crate::asm_ui::contexto_window(self, ctx);
         crate::asm_ui::gears_window(self, ctx);
         self.sheet_window(ctx);
+        crate::chapa_fab_ui::janela(ctx, &self.open.doc);
         crate::st_ui::windows(self, ctx);
         self.side_toolbars(ctx, area);
         self.settings_window(ctx);
