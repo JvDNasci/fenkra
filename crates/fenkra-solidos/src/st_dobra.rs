@@ -20,6 +20,9 @@ use std::f64::consts::PI;
 /// Aviso que aparece junto a qualquer valor que não é de engenharia confirmada.
 pub const AVISO_ESTIMATIVA: &str = "estimativa (modelo simples, sem fonte confirmada): não é valor de engenharia";
 
+/// Aviso dos modos em V e do canto com gabarito: a geometria vem de derivação sem protótipo.
+pub const AVISO_DERIVADA: &str = "geometria derivada, sem protótipo: a validar em peça real";
+
 /// Regra com os números já avaliados. Campo `None` = a regra não diz nada.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RegraAvaliada {
@@ -141,8 +144,11 @@ pub struct ResultadoDobra {
     pub ponta_longa: Option<f64>,
     /// gomos do corte simples em tubo redondo: (peça do meio, peça da ponta)
     pub gomos: Option<(f64, f64)>,
-    /// o modo gera geometria própria? (os cortes em V e o gabarito ficam para B328 e B333)
+    /// o modo gera geometria própria no 3D?
     pub geometria_pronta: bool,
+    /// número de rasgos em V (modos de corte) e folga de raiz usada no canto com gabarito
+    pub rasgos: usize,
+    pub folga_raiz: f64,
     /// origem dos valores usados (campo, origem)
     pub origens: Vec<(String, String)>,
     /// avisos; vazios = tudo dentro das regras
@@ -167,6 +173,16 @@ fn dims_plano(tipo: SectionKind, d: &[f64], plano: u8) -> (f64, f64, f64) {
         SectionKind::TuboRedondo => (g(0), g(0), g(1)),
         _ => (g(0), g(0), 0.),
     }
+}
+
+/// Posição X (contada do início do arco, ao longo da perna) em que a bissetriz do canto com
+/// gabarito cruza a face interna do tubo. A folga de raiz desloca a bissetriz de e/2 para o lado;
+/// sem folga, vale `(Ro − H)·tan(h)`. `hf` é metade do ângulo da dobra, em radianos.
+pub fn ix_do_canto(ro: f64, h: f64, t: f64, hf: f64, folga: f64) -> f64 {
+    let rf = ro - t;
+    let a = if rf > 0. { (folga / (2. * rf)).clamp(0., 1.).asin() } else { 0. };
+    let (ex, ey) = (rf * (hf - a).sin(), ro - rf * (hf - a).cos());
+    ex - (h - ey) * hf.tan()
 }
 
 fn ramanujan(a: f64, b: f64) -> f64 {
@@ -322,7 +338,12 @@ pub fn calcular(e: &EntradaDobra) -> ResultadoDobra {
             if e.modo == BendMode::CorteDobradeira {
                 r.origens.push(("modo".into(), "corte em V fechado por ferramenta; o retorno vem da regra".into()));
             }
-            r.avisos.push("cortes em V ainda não geram geometria (B328): o 3D mostra o canto vivo sem os rasgos".into());
+            r.rasgos = n;
+            r.geometria_pronta = r.erros.is_empty();
+            if n > 1 {
+                r.avisos.push("V múltiplo: no 3D as articulações ficam em canto vivo (sem raio de dobradiça); o raio só entra na conta".into());
+            }
+            r.avisos.push(AVISO_DERIVADA.into());
         }
         BendMode::VComRaio => {
             if redondo {
@@ -363,9 +384,18 @@ pub fn calcular(e: &EntradaDobra) -> ResultadoDobra {
                 _ => None,
             };
             if let Some((g, origem)) = raiz {
+                r.folga_raiz = g;
                 r.origens.push(("folga de raiz".into(), origem));
                 let a = (g / (2. * rf)).clamp(-1., 1.).asin();
                 r.folga_plana = Some(placa - 2. * rf * (hf - a).sin());
+            }
+            // abertura plana da parede interna: ℓ − 2·Ix, com Ix = (Ro − H)·tan(h − recuo da raiz)
+            let ix = ix_do_canto(ro, h, r.parede, hf, r.folga_raiz);
+            if placa - 2. * ix <= 1e-6 {
+                r.erros.push(format!("raio externo {ro:.1} mm grande demais: a abertura plana da parede interna zera (limite perto de 4,6 vezes a altura a 90°)"));
+            }
+            if ro <= h / 2. + 0.01 {
+                r.erros.push(format!("o raio externo {ro:.2} mm não passa da metade da altura ({:.2} mm): a curva se cruza", h / 2.));
             }
             // arcos de 4·rf·h nas duas laterais mais as bissetrizes
             r.solda = Some(4. * rf * hf + 2. * rf);
@@ -376,7 +406,8 @@ pub fn calcular(e: &EntradaDobra) -> ResultadoDobra {
             if !(30. - 1e-6..=150. + 1e-6).contains(&e.theta) {
                 r.avisos.push("o canto com gabarito foi derivado só de 30° a 150°".into());
             }
-            r.avisos.push("o contorno do corte do gabarito ainda não gera geometria (B333): o 3D mostra o canto vivo sem os cortes".into());
+            r.geometria_pronta = true;
+            r.avisos.push(AVISO_DERIVADA.into());
         }
         BendMode::CorteSimples => {
             r.tangente = 0.;
@@ -582,7 +613,7 @@ mod tests {
         assert!((r.abertura_v.unwrap() - 57.6).abs() < 0.01);
         assert!((r.lado_v.unwrap() - 40.73).abs() < 0.01);
         assert!((r.solda.unwrap() - 111.5).abs() < 0.1);
-        assert!(!r.geometria_pronta && r.avisos.iter().any(|a| a.contains("B328")));
+        assert!(r.geometria_pronta && r.avisos.iter().any(|a| a.contains("a validar em peça real")));
         // redondo não serve
         assert!(!calcular(&entrada(SectionKind::TuboRedondo, &[30., 1.2], 90., BendMode::VComum, 1.8)).erros.is_empty());
     }
