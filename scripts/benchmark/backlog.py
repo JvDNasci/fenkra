@@ -721,6 +721,8 @@ c('B349', 2, 'P0', 'Zebra e análises não pegam o sombreado de sketch', 'Nas an
   ['USR-TESTE'], [], 60, 'Auto + Visual', 'Interface', status='feito'),
 c('B350', 2, 'P0', 'Sólidos: varredura em guia com cantos gira a seção certo', 'Varredura em guia com cantos sai com a seção sem girar, com volume errado e aprovada pela checagem: L dá 628 em vez de 1257, U dá zero. Hoje só há aviso em varredura e nervura de chapa. Refazer a junção de canto e dar aviso também em membro e no tubo do filete. Muda documentos salvos, então precisa de migração.',
   ['USR-BUG'], [], 250, 'Auto + Visual', 'Sólidos', status='em andamento'),
+c('B351', 2, 'P0', 'Rosca: furo roscado corrigido, prévia leve e cosmética com textura', 'Furo com rosca não funciona direito, com ou sem escareado, e a prévia demora. A prévia passa a ser só linhas que simulam a rosca, sem gerar superfície. Rosca cosmética, interna ou externa, aparece pintada com textura de rosca, sem geometria. A superfície real só é construída ao confirmar com a opção modelada ligada.',
+  ['USR-TESTE'], [], 300, 'Auto + Visual', 'Sólidos', status='em andamento'),
 ]
 def main():
     for x in B:
