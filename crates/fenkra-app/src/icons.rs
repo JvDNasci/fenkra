@@ -144,7 +144,7 @@ modelos!(
     "sm_furo_flangeado", "sm_joggle", "sm_parametros", "sm_parede", "sm_rasgo_circular", "sm_recorte",
     "sm_veneziana", "spine", "spline", "spline_controle", "st_biblioteca", "st_canto_aparar",
     "st_canto_encaixe", "st_canto_meia", "st_canto_nenhum", "st_corte", "st_membro", "st_montagem", "st_placa",
-    "st_reforco", "sup_cilindro", "sup_concordancia", "sup_conectar", "sup_deslocada", "sup_esfera",
+    "st_reforco", "st_solda", "sup_cilindro", "sup_concordancia", "sup_conectar", "sup_deslocada", "sup_esfera",
     "sup_extraida", "sup_extrudada", "sup_filete", "sup_filete_aresta", "sup_multisecoes", "sup_preenchida",
     "sup_regrada", "sup_revolucao", "sup_tubo", "sup_varredura", "sup_varredura_av", "sweep_corrigido", "sweep_fixo",
     "sweep_frenet", "vista_direita", "vista_frente", "vista_iso", "vista_topo", "wf_repetir", "xf_afinidade",

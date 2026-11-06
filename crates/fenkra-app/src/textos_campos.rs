@@ -19,6 +19,11 @@ pub static CAMPOS: &[(&str, &str, &str)] = &[
     ("Desvio", "Desvio lateral em relação à linha de referência. Zero mantém alinhado; negativo vai para o outro lado.", "Sideways deviation from the reference line. Zero stays aligned; negative goes the other way."),
     ("Diâmetro do furo", "Diâmetro do furo na peça. Maior que zero; costuma seguir a tabela do fixador mais a folga.", "Hole diameter in the part. Above zero; usually follows the fastener table plus clearance."),
     ("Furo até a borda", "Distância do centro do furo até a borda. Em geral pelo menos 1,5 vez o diâmetro.", "Distance from the hole center to the edge. Usually at least 1.5 times the diameter."),
+    // cordão de solda (B285)
+    ("Perna do filete", "Comprimento de cada perna do filete, medido sobre as faces. Maior que zero; típico de 3 a 10 mm. A garganta vale a perna dividida por raiz de 2.", "Length of each fillet leg, measured on the faces. Above zero; typically 3 to 10 mm. The throat is the leg divided by the square root of 2."),
+    ("Comprimento do trecho", "Comprimento de cada trecho do cordão intermitente. Maior que zero; só entram trechos inteiros no caminho.", "Length of each segment of the intermittent bead. Above zero; only whole segments fit along the path."),
+    ("Vão entre trechos", "Distância livre entre o fim de um trecho e o começo do próximo. Maior que zero; passo é comprimento mais vão.", "Free distance between the end of one segment and the start of the next. Above zero; pitch is length plus gap."),
+    ("Passo entre trechos", "Distância de início a início entre trechos vizinhos. Não pode ser menor que o comprimento do trecho.", "Distance from start to start between neighboring segments. It cannot be smaller than the segment length."),
     ("Recuo da face", "Quanto o elemento recua a partir da face escolhida. Zero fica rente; positivo afunda.", "How far the element sets back from the chosen face. Zero is flush; positive sinks it."),
     ("A", "Primeira medida do comando. A prévia no 3D destaca qual dimensão ela é. Positiva.", "First measure of the command. The 3D preview highlights which dimension it is. Positive."),
     ("B", "Segunda medida do comando. A prévia no 3D destaca qual dimensão ela é. Positiva.", "Second measure of the command. The 3D preview highlights which dimension it is. Positive."),

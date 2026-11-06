@@ -361,6 +361,7 @@ pub fn etiqueta(k: &FeatureKind) -> &'static str {
         F::StructMember(_) => "st_membro",
         F::StructPlate(_) => "st_placa",
         F::StructGusset(_) => "st_reforco",
+        F::StructWeld(_) => "st_solda",
         _ => "outro",
     }
 }
