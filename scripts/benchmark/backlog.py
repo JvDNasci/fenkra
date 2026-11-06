@@ -711,6 +711,8 @@ c('B344', 4, 'P1', 'Engrenagem espinha de peixe, para não escapar no eixo', 'En
   ['USR-TRANSMISSAO'], [], 200, 'Auto + Visual', 'Biblioteca de normas', status='feito'),
 c('B345', 4, 'P1', 'Elementos de máquina de catálogo, prontos para personalizar com usinagem', 'Todo elemento de transmissão gerado sai pronto para adaptar: furo do eixo, rasgo de chaveta, cubo, rebaixo, furos de alívio e parafuso de fixação como usinagens editáveis sobre a peça padronizada, mantendo o vínculo com o catálogo.',
   ['USR-TRANSMISSAO'], [], 250, 'Auto + Visual', 'Biblioteca de normas', status='em andamento'),
+c('B346', 2, 'P0', 'Polimento visual: superfície lisa independente dos triângulos', 'A superfície mostra as facetas dos triângulos, sobretudo na zebra e na curvatura, enquanto softwares de modelagem CAD avançados mostram uma superfície polida mesmo com poucos triângulos. Separar representação de malha: sombreamento por pixel com normais da superfície exata, zebra e isofotas calculadas por pixel, curvatura amostrada na superfície e não nos vértices, refino adaptativo por curvatura e silhueta lisa. Aceite: esfera, cilindro e superfície livre com poucos triângulos sem faceta visível em sombreado, zebra e curvatura.',
+  ['USR-RENDER', 'B10'], [], 450, 'Auto + Visual', 'Interface', status='em andamento'),
 ]
 def main():
     for x in B:
