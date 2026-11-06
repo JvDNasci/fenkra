@@ -1,0 +1,249 @@
+{
+ "id": "iso4014",
+ "nome": "Parafuso de cabeça sextavada, rosca parcial",
+ "norma": "ISO 4014",
+ "revisao": "2011",
+ "versao": 1,
+ "gerador": "parafuso_sextavado",
+ "tipo": "parafuso_sextavado",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "fasten.it — DIN EN ISO 4014",
+   "url": "https://fasten.it/norms/norm/din_en_iso_4014"
+  },
+  {
+   "rotulo": "Westfield Fasteners — especificação ISO 4014 (tabela 1)",
+   "url": "https://www.westfieldfasteners.co.uk/Standards/ScrewBolt-HexHd4014-M-THRpart.pdf"
+  }
+ ],
+ "campos": [
+  "P",
+  "s",
+  "k",
+  "b"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "M3",
+   "valores": {
+    "P": 0.5,
+    "s": 5.5,
+    "k": 2,
+    "b": 12
+   },
+   "confirmado_por": 2,
+   "nota": "cotas P, s, k, b: 2 fontes (fasten.it e tabela do ISO 4014 da Westfield). Comprimentos: série da família ISO 4017 do repositório com L > b; a faixa de L da norma não foi conferida em duas fontes.",
+   "comprimentos": [
+    16,
+    20,
+    25,
+    30
+   ]
+  },
+  {
+   "designacao": "M4",
+   "valores": {
+    "P": 0.7,
+    "s": 7,
+    "k": 2.8,
+    "b": 14
+   },
+   "confirmado_por": 2,
+   "nota": "cotas P, s, k, b: 2 fontes (fasten.it e tabela do ISO 4014 da Westfield). Comprimentos: série da família ISO 4017 do repositório com L > b; a faixa de L da norma não foi conferida em duas fontes.",
+   "comprimentos": [
+    16,
+    20,
+    25,
+    30,
+    35,
+    40
+   ]
+  },
+  {
+   "designacao": "M5",
+   "valores": {
+    "P": 0.8,
+    "s": 8,
+    "k": 3.5,
+    "b": 16
+   },
+   "confirmado_por": 2,
+   "nota": "cotas P, s, k, b: 2 fontes (fasten.it e tabela do ISO 4014 da Westfield). Comprimentos: série da família ISO 4017 do repositório com L > b; a faixa de L da norma não foi conferida em duas fontes.",
+   "comprimentos": [
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50
+   ]
+  },
+  {
+   "designacao": "M6",
+   "valores": {
+    "P": 1,
+    "s": 10,
+    "k": 4,
+    "b": 18
+   },
+   "confirmado_por": 2,
+   "nota": "cotas P, s, k, b: 2 fontes (fasten.it e tabela do ISO 4014 da Westfield). Comprimentos: série da família ISO 4017 do repositório com L > b; a faixa de L da norma não foi conferida em duas fontes.",
+   "comprimentos": [
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60
+   ]
+  },
+  {
+   "designacao": "M8",
+   "valores": {
+    "P": 1.25,
+    "s": 13,
+    "k": 5.3,
+    "b": 22
+   },
+   "confirmado_por": 2,
+   "nota": "cotas P, s, k, b: 2 fontes (fasten.it e tabela do ISO 4014 da Westfield). Comprimentos: série da família ISO 4017 do repositório com L > b; a faixa de L da norma não foi conferida em duas fontes.",
+   "comprimentos": [
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70,
+    80
+   ]
+  },
+  {
+   "designacao": "M10",
+   "valores": {
+    "P": 1.5,
+    "s": 16,
+    "k": 6.4,
+    "b": 26
+   },
+   "confirmado_por": 2,
+   "nota": "cotas P, s, k, b: 2 fontes (fasten.it e tabela do ISO 4014 da Westfield). Comprimentos: série da família ISO 4017 do repositório com L > b; a faixa de L da norma não foi conferida em duas fontes.",
+   "comprimentos": [
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70,
+    80,
+    90,
+    100
+   ]
+  },
+  {
+   "designacao": "M12",
+   "valores": {
+    "P": 1.75,
+    "s": 18,
+    "k": 7.5,
+    "b": 30
+   },
+   "confirmado_por": 2,
+   "nota": "cotas P, s, k, b: 2 fontes (fasten.it e tabela do ISO 4014 da Westfield). Comprimentos: série da família ISO 4017 do repositório com L > b; a faixa de L da norma não foi conferida em duas fontes.",
+   "comprimentos": [
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70,
+    80,
+    90,
+    100,
+    110,
+    120
+   ]
+  },
+  {
+   "designacao": "M16",
+   "valores": {
+    "P": 2,
+    "s": 24,
+    "k": 10,
+    "b": 38
+   },
+   "confirmado_por": 2,
+   "nota": "cotas P, s, k, b: 2 fontes (fasten.it e tabela do ISO 4014 da Westfield). Comprimentos: série da família ISO 4017 do repositório com L > b; a faixa de L da norma não foi conferida em duas fontes.",
+   "comprimentos": [
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70,
+    80,
+    90,
+    100,
+    110,
+    120
+   ]
+  },
+  {
+   "designacao": "M20",
+   "valores": {
+    "P": 2.5,
+    "s": 30,
+    "k": 12.5,
+    "b": 46
+   },
+   "confirmado_por": 2,
+   "nota": "cotas P, s, k, b: 2 fontes (fasten.it e tabela do ISO 4014 da Westfield). Comprimentos: série da família ISO 4017 do repositório com L > b; a faixa de L da norma não foi conferida em duas fontes.",
+   "comprimentos": [
+    50,
+    55,
+    60,
+    65,
+    70,
+    80,
+    90,
+    100,
+    110,
+    120
+   ]
+  }
+ ],
+ "comprimentos": [
+  16,
+  20,
+  25,
+  30,
+  35,
+  40,
+  45,
+  50,
+  55,
+  60,
+  65,
+  70,
+  80,
+  90,
+  100,
+  110,
+  120
+ ]
+}

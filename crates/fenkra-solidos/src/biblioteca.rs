@@ -74,7 +74,8 @@ impl TipoFixador {
     /// Campos que a geometria do tipo precisa em todo tamanho.
     pub fn campos_obrigatorios(self) -> &'static [&'static str] {
         match self {
-            TipoFixador::ParafusoAllen => &["P", "dk", "k", "s", "b"],
+            // "b" é opcional: a cabeça abaulada (ISO 7380-1) não publica comprimento roscado de referência
+            TipoFixador::ParafusoAllen => &["P", "dk", "k", "s"],
             TipoFixador::ParafusoSextavado => &["P", "s", "k"],
             TipoFixador::Porca => &["s", "m"],
             TipoFixador::Arruela => &["d1", "d2", "h"],
@@ -468,6 +469,9 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso4032.json", include_str!("../../../biblioteca/fixadores/iso4032.json")),
     ("din934.json", include_str!("../../../biblioteca/fixadores/din934.json")),
     ("iso7089.json", include_str!("../../../biblioteca/fixadores/iso7089.json")),
+    ("iso4014.json", include_str!("../../../biblioteca/fixadores/iso4014.json")),
+    ("iso4035.json", include_str!("../../../biblioteca/fixadores/iso4035.json")),
+    ("iso7380_1.json", include_str!("../../../biblioteca/fixadores/iso7380_1.json")),
 ];
 
 /// A biblioteca pública embutida. Os arquivos são validados nos testes; aqui um arquivo inválido
@@ -603,7 +607,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 6);
+        assert_eq!(b.familias.len(), 9);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -611,7 +615,33 @@ mod tests {
             assert_eq!(f.nivel, "C");
             assert!(f.licenca.starts_with("CC BY 4.0"));
         }
-        assert_eq!(familias().iter().filter(|f| f.tipo.e_parafuso()).count(), 3);
+        assert_eq!(familias().iter().filter(|f| f.tipo.e_parafuso()).count(), 5);
+    }
+
+    #[test]
+    fn familias_do_b51_trazem_conferencia_e_dados_publicados() {
+        // ISO 4014: mesma cabeça da ISO 4017 (s = 16 e 18 em M10 e M12), mas com o comprimento roscado b
+        let t = tamanho("iso4014", "M10").unwrap();
+        assert_eq!((t.valor("s"), t.valor("k"), t.valor("b")), (Some(16.), Some(6.4), Some(26.)));
+        // rosca parcial: todo comprimento da série é maior que b
+        for t in &familia("iso4014").unwrap().tamanhos {
+            let b = t.valor("b").unwrap();
+            assert!(familia("iso4014").unwrap().comprimentos_de(t).iter().all(|l| *l > b), "{}", t.designacao);
+        }
+        // ISO 4035: porca baixa (m = 6 em M12, contra 10,8 da porca normal)
+        let t = tamanho("iso4035", "M12").unwrap();
+        assert_eq!((t.valor("s"), t.valor("m")), (Some(18.), Some(6.)));
+        // ISO 7380-1: sem "b"; calota dk x k
+        let t = tamanho("iso7380_1", "M8").unwrap();
+        assert_eq!((t.valor("dk"), t.valor("k"), t.valor("s"), t.valor("b")), (Some(14.), Some(4.4), Some(5.), None));
+        // toda linha nova: duas fontes nas cotas e a nota diz o que foi (ou não foi) conferido
+        for id in ["iso4014", "iso4035", "iso7380_1"] {
+            let f = familia(id).unwrap();
+            assert!(f.fontes.len() >= 2, "{id}");
+            for t in &f.tamanhos {
+                assert!(t.confirmado_por >= 2 && t.nota.as_deref().is_some_and(|n| n.contains("fontes") || n.contains("fonte")), "{id} {}", t.designacao);
+            }
+        }
     }
 
     #[test]
@@ -731,7 +761,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 7);
+        assert_eq!(m.familias.len(), 10);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

@@ -1,0 +1,112 @@
+{
+ "id": "iso4035",
+ "nome": "Porca sextavada baixa chanfrada (estilo 0)",
+ "norma": "ISO 4035",
+ "revisao": "2012",
+ "versao": 1,
+ "gerador": "porca",
+ "tipo": "porca",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "ISO 4035:2012, prévia pública (tabela 1), iTeh",
+   "url": "https://cdn.standards.iteh.ai/samples/61671/80e6085c74a64e5bb25f5198a1356852/ISO-4035-2012.pdf"
+  },
+  {
+   "rotulo": "fasten.it — DIN EN ISO 4035",
+   "url": "https://fasten.it/norms/norm/din_en_iso_4035"
+  },
+  {
+   "rotulo": "torqbolt.com — ISO 4035 (só m)",
+   "url": "https://torqbolt.com/iso-4035-hexagon-thin-nuts-dimensions-standards-specifications"
+  }
+ ],
+ "campos": [
+  "s",
+  "m"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "M3",
+   "valores": {
+    "s": 5.5,
+    "m": 1.8
+   },
+   "confirmado_por": 2,
+   "nota": "m máx.: 3 fontes (texto da ISO 4035:2012 na prévia da iTeh, fasten.it e torqbolt.com); s: ISO 4035:2012 e fasten.it (o torqbolt.com traz s de norma antiga em M10 e M12 e foi descartado nessas linhas)"
+  },
+  {
+   "designacao": "M4",
+   "valores": {
+    "s": 7,
+    "m": 2.2
+   },
+   "confirmado_por": 2,
+   "nota": "m máx.: 3 fontes (texto da ISO 4035:2012 na prévia da iTeh, fasten.it e torqbolt.com); s: ISO 4035:2012 e fasten.it (o torqbolt.com traz s de norma antiga em M10 e M12 e foi descartado nessas linhas)"
+  },
+  {
+   "designacao": "M5",
+   "valores": {
+    "s": 8,
+    "m": 2.7
+   },
+   "confirmado_por": 2,
+   "nota": "m máx.: 3 fontes (texto da ISO 4035:2012 na prévia da iTeh, fasten.it e torqbolt.com); s: ISO 4035:2012 e fasten.it (o torqbolt.com traz s de norma antiga em M10 e M12 e foi descartado nessas linhas)"
+  },
+  {
+   "designacao": "M6",
+   "valores": {
+    "s": 10,
+    "m": 3.2
+   },
+   "confirmado_por": 2,
+   "nota": "m máx.: 3 fontes (texto da ISO 4035:2012 na prévia da iTeh, fasten.it e torqbolt.com); s: ISO 4035:2012 e fasten.it (o torqbolt.com traz s de norma antiga em M10 e M12 e foi descartado nessas linhas)"
+  },
+  {
+   "designacao": "M8",
+   "valores": {
+    "s": 13,
+    "m": 4
+   },
+   "confirmado_por": 2,
+   "nota": "m máx.: 3 fontes (texto da ISO 4035:2012 na prévia da iTeh, fasten.it e torqbolt.com); s: ISO 4035:2012 e fasten.it (o torqbolt.com traz s de norma antiga em M10 e M12 e foi descartado nessas linhas)"
+  },
+  {
+   "designacao": "M10",
+   "valores": {
+    "s": 16,
+    "m": 5
+   },
+   "confirmado_por": 2,
+   "nota": "m máx.: 3 fontes (texto da ISO 4035:2012 na prévia da iTeh, fasten.it e torqbolt.com); s: ISO 4035:2012 e fasten.it (o torqbolt.com traz s de norma antiga em M10 e M12 e foi descartado nessas linhas)"
+  },
+  {
+   "designacao": "M12",
+   "valores": {
+    "s": 18,
+    "m": 6
+   },
+   "confirmado_por": 2,
+   "nota": "m máx.: 3 fontes (texto da ISO 4035:2012 na prévia da iTeh, fasten.it e torqbolt.com); s: ISO 4035:2012 e fasten.it (o torqbolt.com traz s de norma antiga em M10 e M12 e foi descartado nessas linhas)"
+  },
+  {
+   "designacao": "M16",
+   "valores": {
+    "s": 24,
+    "m": 8
+   },
+   "confirmado_por": 2,
+   "nota": "m máx.: 3 fontes (texto da ISO 4035:2012 na prévia da iTeh, fasten.it e torqbolt.com); s: ISO 4035:2012 e fasten.it (o torqbolt.com traz s de norma antiga em M10 e M12 e foi descartado nessas linhas)"
+  },
+  {
+   "designacao": "M20",
+   "valores": {
+    "s": 30,
+    "m": 10
+   },
+   "confirmado_por": 2,
+   "nota": "m máx.: 3 fontes (texto da ISO 4035:2012 na prévia da iTeh, fasten.it e torqbolt.com); s: ISO 4035:2012 e fasten.it (o torqbolt.com traz s de norma antiga em M10 e M12 e foi descartado nessas linhas)"
+  }
+ ]
+}
