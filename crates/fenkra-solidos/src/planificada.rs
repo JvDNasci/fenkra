@@ -143,6 +143,10 @@ fn eh_comando_de_chapa(k: &FeatureKind) -> bool {
             | FeatureKind::SmSurfFlange(_)
             | FeatureKind::SmArcSlot(_)
             | FeatureKind::SmCornerRelief(_)
+            | FeatureKind::SmCornerClose(_)
+            | FeatureKind::SmLoftFlange(_)
+            | FeatureKind::SmUnfoldPartial(_)
+            | FeatureKind::SmConvert(_)
     )
 }
 

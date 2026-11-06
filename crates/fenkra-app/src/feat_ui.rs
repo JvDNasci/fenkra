@@ -22,7 +22,7 @@ pub fn is_shape(k: &FeatureKind) -> bool {
 
 /// Comandos em que clicar numa face na viewport (com o comando aberto) acrescenta a face.
 pub fn wants_faces(k: &FeatureKind) -> bool {
-    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::StructPlate(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
+    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::StructPlate(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmCornerClose(_) | FeatureKind::SmConvert(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
         || matches!(k, FeatureKind::SmFlangedHole(h) if crate::slots::is_unset(h.sketch) || !h.points.is_empty())
         || matches!(k, FeatureKind::Fillet(o) if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }))
 }
@@ -38,6 +38,8 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         FeatureKind::StructPlate(pl) => pl.at = p,
         FeatureKind::SmFlangedHole(h) => h.points.push(p),
         FeatureKind::SmCornerRelief(c) => c.at = p,
+        FeatureKind::SmCornerClose(c) => c.at = p,
+        FeatureKind::SmConvert(c) => c.face = p,
         FeatureKind::SmArcSlot(c) => c.center = p,
         FeatureKind::SmSurfFlange(c) => c.face = p,
         // face-face: as duas últimas faces clicadas; completo: meio, lado 1, lado 2 (na ordem do clique)
@@ -179,7 +181,7 @@ fn sources_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, sources: &mut Vec<I
     });
 }
 
-fn sketch_pick(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, before: usize, s: &mut Id) {
+pub(crate) fn sketch_pick(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, before: usize, s: &mut Id) {
     ui.horizontal(|ui| {
         ui.add_sized([96., 18.], egui::Label::new(label));
         let text = crate::editor::profile_text(doc, *s);
@@ -190,6 +192,9 @@ fn sketch_pick(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, befor
 /// Painel das features novas. Devolve false se `kind` não é uma delas.
 #[allow(clippy::too_many_arguments)]
 pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut FeatureKind, vars: &Vars, picked_faces: &[[f64; 3]], seed: &Seed) -> bool {
+    // comando de aba unificado (B31): Suporte, Modo, Parâmetros e Avançado
+    crate::chapa_unif_ui::suporte(ui, kind);
+    crate::chapa_unif_ui::modos(ui, kind);
     match kind {
         FeatureKind::Forma(fm) => {
             crate::forma_ui::painel(ui, fm);
@@ -509,14 +514,13 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.label(RichText::new(tr("A espessura vem dos parâmetros da chapa (▭ Parâmetros).")).weak().small());
         }
         FeatureKind::SmFlange(fl) => {
-            section(ui, "Aba de aresta");
-            edge_line(ui, &fl.edge);
-            expr(ui, "Comprimento reto", &mut fl.length, vars, "mm");
-            expr(ui, "Ângulo", &mut fl.angle, vars, "°");
+            section(ui, "Parâmetros");
+            crate::editor::expr_lim(ui, "Comprimento reto", &mut fl.length, vars, "mm", Some((0.01, f64::INFINITY)));
+            crate::editor::expr_lim(ui, "Ângulo", &mut fl.angle, vars, "°", Some((0.01, 180.)));
             let mut own = fl.radius.is_some();
             ui.horizontal(|ui| {
                 if crate::editor::check(ui, &mut own, "raio próprio (senão o da chapa)").changed() {
-                    fl.radius = own.then(|| "2".to_string());
+                    fl.radius = own.then(|| crate::chapa_unif_ui::raio_da_regra(doc));
                 }
                 // cadeado: a aba sobrescreve o raio do estilo da chapa (B283)
                 if crate::chapa_estilo_ui::cadeado_comando(ui, doc, fl.radius.is_some()) {
@@ -524,7 +528,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 }
             });
             if let Some(r) = &mut fl.radius {
-                expr(ui, "Raio interno", r, vars, "mm");
+                crate::editor::expr_lim(ui, "Raio interno", r, vars, "mm", Some((0.01, f64::INFINITY)));
             }
             ui.horizontal_wrapped(|ui| {
                 ui.label(tr("Lado do material"));
@@ -532,8 +536,9 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     ui.selectable_value(&mut fl.side, k, tr(n));
                 }
             });
-            crate::editor::check(ui, &mut fl.flip, "dobrar para o outro lado");
-            section(ui, "Limites laterais");
+            crate::chapa_unif_ui::inverter(ui, &mut fl.flip);
+            section(ui, "Avançado");
+            // os recuos só valem na aba de aresta: no laço a extensão lateral faz esse papel
             expr(ui, "Recuo início", &mut fl.off1, vars, "mm");
             expr(ui, "Recuo fim", &mut fl.off2, vars, "mm");
             crate::editor::check(ui, &mut fl.miter, "pontas em meia-esquadria (45°) para a aba vizinha");
@@ -575,7 +580,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 2 => "Enrolada: três quartos de volta (raio = folga ÷ 2).",
                 _ => "Folga 0 = bainha esmagada; maior que 0 = aberta/circular.",
             })).weak().small());
-            crate::editor::check(ui, &mut h.flip, "dobrar para o outro lado");
+            crate::chapa_unif_ui::inverter(ui, &mut h.flip);
         }
         FeatureKind::SmJoggle(j) => {
             section(ui, "Joggle");
@@ -607,7 +612,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 None => expr(ui, "Rampa", &mut j.run, vars, "mm"),
             }
             crate::editor::check(ui, &mut j.keep_length, "compensação: manter o comprimento desenvolvido");
-            crate::editor::check(ui, &mut j.flip, "desviar o outro lado da linha");
+            crate::chapa_unif_ui::inverter(ui, &mut j.flip);
         }
         FeatureKind::SmBend(b) => {
             section(ui, "Dobra por linha");
@@ -636,12 +641,12 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             expr(ui, "Ângulo", &mut b.angle, vars, "°");
             let mut own = b.radius.is_some();
             if crate::editor::check(ui, &mut own, "raio próprio (senão o da chapa)").changed() {
-                b.radius = own.then(|| "2".to_string());
+                b.radius = own.then(|| crate::chapa_unif_ui::raio_da_regra(doc));
             }
             if let Some(r) = &mut b.radius {
                 expr(ui, "Raio interno", r, vars, "mm");
             }
-            crate::editor::check(ui, &mut b.flip, "mover o outro lado da linha");
+            crate::chapa_unif_ui::inverter(ui, &mut b.flip);
             crate::editor::check(ui, &mut b.down, "dobrar para o outro lado");
             ui.label(RichText::new(tr("O comprimento desenvolvido vem do fator K do raio da dobra. Na planificada a dobra é desfeita e a linha de dobra aparece no mapa.")).weak().small());
         }
@@ -651,7 +656,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.label(RichText::new(tr("Clique na face fixa e desenhe a linha na face, direto no 3D: a rampa sai do lado oposto ao da face fixa.")).weak().small());
             expr(ui, "Largura da rampa", &mut l.width, vars, "mm");
             expr(ui, "Altura da abertura", &mut l.height, vars, "mm");
-            crate::editor::check(ui, &mut l.flip, "rampa do outro lado da linha");
+            crate::chapa_unif_ui::inverter(ui, &mut l.flip);
             crate::editor::check(ui, &mut l.down, "levantar para o outro lado da chapa");
         }
         FeatureKind::SmStamp(s) => {
@@ -688,7 +693,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 ui.label(RichText::new(tr("0 = proporcional à espessura")).weak().small());
             }
             if s.kind != 3 {
-                crate::editor::check(ui, &mut s.flip, "estampar para o outro lado");
+                crate::chapa_unif_ui::inverter(ui, &mut s.flip);
             }
             ui.label(RichText::new(tr(match s.kind {
                 1 => "Nervura: seção trapezoidal varrida ao longo das linhas/curvas do sketch na face.",
@@ -741,7 +746,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     ui.ctx().data_mut(|m| m.insert_temp(key, name));
                 });
             }
-            crate::editor::check(ui, &mut h.flip, "colar para o outro lado");
+            crate::chapa_unif_ui::inverter(ui, &mut h.flip);
         }
         FeatureKind::SmCut(c) => {
             section(ui, "Recorte na chapa");
@@ -757,7 +762,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 2 => expr(ui, "Altura do colar", &mut c.height, vars, "mm"),
                 _ => {}
             }
-            crate::editor::check(ui, &mut c.flip, "cortar para o outro lado");
+            crate::chapa_unif_ui::inverter(ui, &mut c.flip);
             ui.horizontal_wrapped(|ui| {
                 for (normal, n, tip) in [
                     (false, "através da dobra", "O contorno desenhado num estado (dobrado ou planificado) é levado ao outro, inclusive pelo raio da dobra."),
@@ -775,12 +780,12 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             expr(ui, "Comprimento lado 2", &mut p.l2, vars, "mm");
             let mut own = p.radius.is_some();
             if crate::editor::check(ui, &mut own, "raio próprio nos cantos (senão o da chapa)").changed() {
-                p.radius = own.then(|| "2".to_string());
+                p.radius = own.then(|| crate::chapa_unif_ui::raio_da_regra(doc));
             }
             if let Some(r) = &mut p.radius {
                 expr(ui, "Raio interno", r, vars, "mm");
             }
-            crate::editor::check(ui, &mut p.flip, "material do outro lado da cadeia");
+            crate::chapa_unif_ui::inverter(ui, &mut p.flip);
             ui.label(RichText::new(tr("Desenhe a cadeia aberta (linhas e arcos) num plano que corta a aresta; os cantos ganham o raio de dobra.")).weak().small());
         }
         FeatureKind::SmCurveFlange(cf) => {
@@ -797,12 +802,12 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             expr(ui, "Ângulo", &mut cf.angle, vars, "°");
             let mut own = cf.radius.is_some();
             if crate::editor::check(ui, &mut own, "raio próprio (senão o da chapa)").changed() {
-                cf.radius = own.then(|| "2".to_string());
+                cf.radius = own.then(|| crate::chapa_unif_ui::raio_da_regra(doc));
             }
             if let Some(r) = &mut cf.radius {
                 expr(ui, "Raio interno", r, vars, "mm");
             }
-            crate::editor::check(ui, &mut cf.flip, "para o outro lado da chapa");
+            crate::chapa_unif_ui::inverter(ui, &mut cf.flip);
             ui.horizontal_wrapped(|ui| {
                 ui.label(tr("Lado do material"));
                 for (k, n, tip) in [
@@ -821,7 +826,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             crate::editor::check(ui, &mut sf.keep_base, "não relimitar a web pelo suporte");
             let mut own = sf.radius.is_some();
             if crate::editor::check(ui, &mut own, "raio de dobra próprio (senão o da chapa)").changed() {
-                sf.radius = own.then(|| "2".to_string());
+                sf.radius = own.then(|| crate::chapa_unif_ui::raio_da_regra(doc));
             }
             if let Some(r) = &mut sf.radius {
                 expr(ui, "Raio de dobra", r, vars, "mm");
@@ -852,7 +857,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.label(RichText::new(tr(help)).weak().small());
             section(ui, "EOP e direção");
             expr(ui, "Comprimento (EOP)", &mut sf.length, vars, "mm");
-            crate::editor::check(ui, &mut sf.flip, "inverter a direção (para o outro lado da web)");
+            crate::chapa_unif_ui::inverter(ui, &mut sf.flip);
         }
         FeatureKind::SmArcSlot(sl) => {
             section(ui, "Rasgo circular");
@@ -873,6 +878,10 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             });
             expr(ui, "Tamanho", &mut cr.size, vars, "mm");
         }
+        FeatureKind::SmCornerClose(cc) => crate::chapa_canto_ui::painel(ui, cc, vars),
+        FeatureKind::SmLoftFlange(lf) => crate::chapa_b35_ui::painel_perfis(ui, doc, idx, lf),
+        FeatureKind::SmUnfoldPartial(u) => crate::chapa_b35_ui::painel_desdobra(ui, doc, idx, u),
+        FeatureKind::SmConvert(c) => crate::chapa_b35_ui::painel_converte(ui, doc, me, c, vars),
         FeatureKind::MoveBody(m) => {
             section(ui, "Mover o corpo");
             let cur = match m.xf {

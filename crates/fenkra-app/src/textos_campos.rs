@@ -146,6 +146,9 @@ pub static CAMPOS: &[(&str, &str, &str)] = &[
     ("Largura da aba", "Largura do trecho da aresta que recebe a aba. Maior que zero e até o comprimento da aresta; vale em cada aresta do laço.", "Width of the edge stretch that receives the flange. Above zero and up to the edge length; applies to each edge in the loop."),
     ("Início da aba", "Distância da ponta de referência da aresta até onde a aba começa. Zero encosta na ponta; início mais a largura não passa do fim da aresta.", "Distance from the edge's reference end to where the flange starts. Zero touches the end; start plus width cannot pass the edge end."),
     ("Tamanho do canto", "Tamanho do alívio de canto sugerido ao criar o comando. Maior que zero; costuma ser 1 a 2 vezes a espessura.", "Corner relief size suggested when the command is created. Above zero; usually 1 to 2 times the thickness."),
+    ("Espessura esperada", "Espessura que o corpo deve ter para ser aceito como chapa. Maior que zero; vazio mede a do corpo, preenchido confere com tolerância de 2 %.", "Thickness the body must have to be accepted as sheet metal. Above zero; empty measures the body, filled checks it within 2 %."),
+    ("Folga do canto","Distância livre entre as faces que se encontram no canto fechado. De 0 a 10; zero une as pontas, 0,2 a 1 é o usual para a peça dobrar sem encostar.", "Free distance between the faces that meet at the closed corner. From 0 to 10; zero joins the ends, 0.2 to 1 is usual so the part folds without touching."),
+    ("Razão de sobreposição", "Quanto da espessura da aba coberta a aba de cima cobre. De 0 a 1; 1 cobre tudo até a face de fora, 0 não avança sobre o canto.", "How much of the covered flange's thickness the top flange covers. From 0 to 1; 1 covers up to the outer face, 0 does not advance over the corner."),
 ];
 
 /// Dica do campo pelo rótulo em português.

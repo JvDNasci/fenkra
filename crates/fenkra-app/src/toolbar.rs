@@ -277,8 +277,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("sm_parametros", "Parâmetros", "Parâmetros da chapa", "Espessura, raio de dobra e fator K da peça; tabela de dobras.", Cmd(C::SmParams))),
             One(it("sm_parede", "Parede base", "Parede base", "Primeira parede a partir de um perfil fechado do sketch selecionado (lê a espessura global).", Cmd(C::SmWall))),
             Family("sm_aba", vec![
-                it("sm_aba", "Aba", "Aba de aresta", "Dobra a partir da aresta selecionada: comprimento, ângulo, raio, recuos laterais e alívio de canto.", Cmd(C::SmFlange)),
-                it("sm_aba", "Aba por laço", "Aba por laço e extensão lateral", "Escolha uma aresta (laço da face inteira) ou várias: uma aba por aresta em um comando só, com mitra nos cantos. A extensão pode ser a aresta inteira, uma largura centrada ou deslocada, ou o trecho entre duas referências.", Cmd(C::SmFlangeLoop)),
+                it("sm_aba", "Aba", "Aba (comando unificado)", "Um comando só para toda aba: escolha o modo (aresta, laço, aresta curva, perfil ou superfície) no painel. Painel em Suporte, Modo, Parâmetros e Avançado; um botão único inverte a direção e o raio próprio nasce da regra da chapa.", Cmd(C::SmFlange)),
                 it("sm_bainha", "Bainha", "Bainha", "Dobra de 180° na borda: esmagada (folga 0) ou aberta/circular.", Cmd(C::SmHem)),
             ]),
             Family("sm_linha", vec![
@@ -293,6 +292,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             Family("sm_recorte", vec![
                 it("sm_recorte", "Recorte", "Recorte na chapa", "Perfil fechado do sketch, normal à chapa: normal, com folga, com saída (ângulo) ou flangeado (colar).", Cmd(C::SmCut)),
                 it("sm_alivio_canto", "Alívio de canto", "Alívio de canto", "Clique no canto (vértice): redondo, quadrado ou em gota, atravessando a chapa.", Cmd(C::SmCornerRelief)),
+                it("sm_fecha_canto", "Fechar canto", "Fechamento de canto entre abas", "Clique no vértice do canto entre duas abas de 90°: fecha o vão com tipo topo, sobreposto ou sob, folga entre as faces e razão de sobreposição; pode propagar a todos os cantos.", Cmd(C::SmCornerClose)),
                 it("sm_rasgo_circular", "Rasgo circular", "Rasgo circular", "Clique no centro (na face): rasgo em arco com raio, largura, ângulo inicial e varredura.", Cmd(C::SmArcSlot)),
             ]),
             Family("furo", vec![
@@ -303,12 +303,13 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("arestas_selecionar", "Raio", "Raio nos cantos da chapa", "Arredonda as arestas escolhidas (cantos da chapa ou das abas); acompanha dobrado e planificado.", Cmd(C::Fillet)),
                 it("chanfro", "Chanfro", "Chanfro nos cantos da chapa", "Chanfra as arestas escolhidas; acompanha dobrado e planificado.", Cmd(C::Chamfer)),
             ]),
-            Family("sm_aba_perfil", vec![
-                it("sm_aba_perfil", "Aba por perfil", "Aba por perfil (aba complexa)", "Cadeia aberta de um sketch (linhas e arcos) com os cantos no raio da chapa, puxada para os dois lados.", Cmd(C::SmProfileFlange)),
-                it("sm_aba_curva", "Aba curva", "Aba em aresta curva", "Clique numa aresta (reta ou curva) da chapa: a aba segue as arestas tangentes com o raio de dobra.", Cmd(C::SmCurveFlange)),
-                it("sm_aba_superficie", "Aba por superfície", "Aba por superfície (suporte)", "Escolha a superfície de suporte e clique na face da web: a web é relimitada pelo suporte e a aba sobe por ele com o raio (OML, EOP).", Cmd(C::SmSurfFlange)),
+            Family("sm_desdobrar", vec![
+                it("sm_desdobrar", "Dobrar/Desdobrar", "Dobrar / desdobrar", "Alterna a peça entre dobrada e planificada (comprimento desenvolvido pelo fator K).", Cmd(C::SmUnfold)),
+                it("sm_desdobrar_parcial", "Desdobrar parcial", "Desdobrar só algumas abas", "Escolha as abas a planificar: o resto da peça continua dobrado. Serve para editar uma parte, por exemplo um recorte que atravessa a dobra.", Cmd(C::SmUnfoldPartial(false))),
+                it("sm_redobrar_parcial", "Redobrar parcial", "Redobrar abas desdobradas", "Volta a dobrar as abas que um desdobrar parcial deixou planas.", Cmd(C::SmUnfoldPartial(true))),
             ]),
-            One(it("sm_desdobrar", "Dobrar/Desdobrar", "Dobrar / desdobrar", "Alterna a peça entre dobrada e planificada (comprimento desenvolvido pelo fator K).", Cmd(C::SmUnfold))),
+            One(it("sm_aba_perfis", "Aba entre perfis", "Aba entre perfis (lofted)", "Escolha dois contornos fechados em planos diferentes: a chapa passa de um ao outro, como um funil ou adaptador, com a espessura da chapa. Facetada (dobradeira) ou lisa (estampada).", Cmd(C::SmLoftFlange))),
+            One(it("sm_converter_chapa", "Converter em chapa", "Converter sólido em chapa", "Reconhece a espessura constante e as dobras de um corpo e o trata como chapa, para usar abas, alívios e planificação sobre ele. Clique na face fixa.", Cmd(C::SmConvert))),
         ],
         Group::DesArquivo => vec![
             One(it("des_novo", "Novo", "Novo desenho", "Folha A3 vazia; a origem das vistas é a peça ou montagem aberta (salva).", Cmd(C::Dwg(0)))),

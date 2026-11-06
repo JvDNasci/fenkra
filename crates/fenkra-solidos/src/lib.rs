@@ -38,6 +38,12 @@ pub mod chapa_linha;
 mod chapa_flat;
 mod arestas;
 mod chapa_laco;
+mod chapa_canto;
+pub mod chapa_desdobra;
+pub mod chapa_converte;
+mod chapa_perfis;
+#[cfg(test)]
+mod chapa_canto_tests;
 pub use chapa_laco::{laco_de_malha, recuos_extensao};
 pub mod planificada;
 pub use chapa_flat::{passos_planificados, PassoPlanificado};
@@ -3054,7 +3060,7 @@ impl Ctx<'_> {
         let k0 = if s.method == 0 { ev(&s.k, &self.vars, "fator K")? } else { 0.44 };
         let allowance = if s.method == 0 { 0. } else { ev(&s.allowance, &self.vars, "dedução/tolerância de dobra")? };
         let relief = if s.relief.trim().is_empty() { None } else { Some(ev(&s.relief, &self.vars, "alívio padrão da chapa")?) };
-        Ok(SheetValues { t, r, flat: s.flat, method: s.method, k0, allowance, relief, relief_kind: s.relief_kind })
+        Ok(SheetValues { t, r, flat: s.flat || chapa_desdobra::desdobrada_agora(self.doc), method: s.method, k0, allowance, relief, relief_kind: s.relief_kind })
     }
 
     /// Aresta da aba/bainha por dono + papel (ADR 0010): com chave v2, o ponto vira o ponto médio
@@ -3539,6 +3545,10 @@ impl Ctx<'_> {
                 | FeatureKind::SmStamp(_)
                 | FeatureKind::SmFlangedHole(_)
                 | FeatureKind::SmCornerRelief(_)
+                | FeatureKind::SmCornerClose(_)
+                | FeatureKind::SmLoftFlange(_)
+                | FeatureKind::SmUnfoldPartial(_)
+                | FeatureKind::SmConvert(_)
                 | FeatureKind::SmArcSlot(_)
                 | FeatureKind::SmSurfFlange(_)
                 | FeatureKind::SmProfileFlange(_)
@@ -3690,7 +3700,9 @@ impl Ctx<'_> {
     /// dizem de qual comando cada dobra veio).
     fn run(&mut self, f: &Feature) -> Result<Option<String>, String> {
         let n0 = self.sheet_maps.len();
+        chapa_desdobra::marca(f.id);
         let r = self.run_feature(f);
+        chapa_desdobra::marca(Id(0));
         for m in self.sheet_maps.iter_mut().skip(n0) {
             m.feature = f.id;
         }
@@ -4246,6 +4258,10 @@ impl Ctx<'_> {
             }
             FeatureKind::SmFlange(fl) => self.run_flange(f, fl, &ExtensaoAba::Inteira, false),
             FeatureKind::SmFlangeLoop(lp) => self.run_flange_loop(f, lp),
+            FeatureKind::SmCornerClose(cc) => self.run_corner_close(f, cc),
+            FeatureKind::SmLoftFlange(lf) => self.run_loft_flange(f, lf),
+            FeatureKind::SmUnfoldPartial(u) => self.run_unfold_partial(f, u),
+            FeatureKind::SmConvert(c) => self.run_convert(f, c),
             FeatureKind::SmJoggle(j) => {
                 let sp = self.sheet()?;
                 let depth = ev(&j.depth, &self.vars, "desvio")?;
@@ -5642,6 +5658,10 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         let mut ids = vec![];
         f.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
         let mut parts: Vec<String> = vec![js.clone(), vars_sig(&js, &cx.vars), format!("t{}", cx.body_sig.get(&f.target).copied().unwrap_or(0)), format!("{:?}", cx.last_sheet)];
+        // desdobrar parcial: a mesma aba muda de resultado quando outro comando a desdobra
+        if doc.features.iter().any(|g| matches!(g.kind, FeatureKind::SmUnfoldPartial(_))) {
+            parts.push(format!("d{}", chapa_desdobra::desdobradas(doc).contains(&f.id)));
+        }
         if let FeatureKind::Sketch(sk) = &f.kind {
             if let PlaneRef::Datum(pid) = sk.plane {
                 parts.push(ref_sig(doc, pid, &cx.vars, 0));
@@ -7122,6 +7142,9 @@ mod chapa_estilo_tests;
 
 #[cfg(test)]
 mod chapa_laco_tests;
+
+#[cfg(test)]
+mod chapa_b35_tests;
 
 #[cfg(test)]
 mod tests {

@@ -156,6 +156,12 @@ fn dica_do_campo(ui: &mut egui::Ui, rotulo_pt: &str, unit: &str) {
 }
 
 pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, unit: &str) {
+    expr_lim(ui, label, s, vars, unit, None)
+}
+
+/// Como `expr`, com a faixa válida do campo (B31): fora dela o texto fica vermelho e o limite
+/// aparece escrito ao lado, em vez de só falhar no recálculo.
+pub(crate) fn expr_lim(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, unit: &str, lim: Option<(f64, f64)>) {
     let rotulo_pt = label;
     let label = tr(label);
     ui.horizontal(|ui| {
@@ -191,8 +197,13 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
             (r, _) => r,
         };
         let bad = r.is_err();
+        // fora da faixa válida (B31): vermelho e o limite escrito
+        let fora = match (&r, lim) {
+            (Ok(v), Some((a, b))) => *v < a - 1e-9 || *v > b + 1e-9,
+            _ => false,
+        };
         let mut te = egui::TextEdit::singleline(s).desired_width(110.);
-        if bad {
+        if bad || fora {
             te = te.text_color(crate::theme::st_err());
         }
         let resp = ui.add(te);
@@ -232,6 +243,10 @@ pub(crate) fn expr(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Vars, 
                 resp.on_hover_text(e.to_string());
                 ui.label(RichText::new(tr("⚠")).color(crate::theme::st_err()));
             }
+        }
+        if let (true, Some((a, b))) = (fora, lim) {
+            let faixa = if b.is_finite() { format!("{} {} {} {} {unit}", tr("válido de"), fmt(a), tr("até"), fmt(b)) } else { format!("{} {} {unit}", tr("válido a partir de"), fmt(a)) };
+            ui.label(RichText::new(format!("⚠ {faixa}")).small().color(crate::theme::st_err()));
         }
     });
 }
