@@ -6748,7 +6748,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let (shift, ctrl, scroll, ppp, right_down, left_down) = ctx.input(|i| {
                 (i.modifiers.shift, i.modifiers.command, i.smooth_scroll_delta.y, i.pixels_per_point, i.pointer.secondary_down(), i.pointer.primary_down())
             });
-            let scroll = if arvore_com_roda { 0. } else { scroll };
+            let scroll = if arvore_com_roda || crate::forma_ui::roda_no_raio(&self.forma) { 0. } else { scroll };
             // B95: Alt + roda percorre o que está sob o ponteiro em vez de dar zoom
             let alt_roda = ctx.input(|i| i.modifiers.alt) && resp.hovered() && !ctrl;
             let passo_ciclo = if alt_roda { self.selecao_ciclo.roda(scroll) } else { 0 } + std::mem::take(&mut self.selecao_extra.avancar);
@@ -6824,7 +6824,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                 }
             }
-            if (resp.double_clicked() && self.sketch.is_none() && self.hover_pick.is_none()) || self.fit_pending {
+            // duplo clique numa forma livre abre a forma, e não ajusta a vista
+            let forma_clicada = if resp.double_clicked() && self.sketch.is_none() && self.session.is_none() {
+                self.result.as_ref().zip(resp.interact_pointer_pos()).and_then(|(r, m)| crate::forma_ui::forma_sob_o_mouse(r, &vp.camera, rect, m))
+            } else {
+                None
+            };
+            if let Some(id) = forma_clicada {
+                self.open_pending = Some(id);
+            }
+            if (resp.double_clicked() && self.sketch.is_none() && self.hover_pick.is_none() && forma_clicada.is_none()) || self.fit_pending {
                 if let Some(b) = vp.bounds {
                     let before = vp.camera;
                     vp.camera.fit(b);

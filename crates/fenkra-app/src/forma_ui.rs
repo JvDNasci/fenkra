@@ -6,15 +6,18 @@
 use crate::app::{fmt, App};
 use crate::editor::section;
 use crate::forma_edit::{self as fe, Elem, Espaco, Ferramenta, ModoVista, Tela};
+use crate::forma_vinculo_ui as fv;
 use crate::i18n::tr;
 use crate::render::{Camera, MeshVertex, Scene};
 use crate::settings::Bench;
 use eframe::egui::{self, Color32, Pos2, Rect, RichText, Stroke, Vec2};
 use fenkra_core::subd::{Gaiola, V3};
 use fenkra_core::subd_ops::{PrimitivaForma, TipoNo};
+use fenkra_core::subd_sel::{Influencia, Queda};
 use fenkra_core::*;
 use fenkra_solidos::RecomputeResult;
 use glam::Vec3;
+use std::collections::BTreeMap;
 
 fn v3(p: V3) -> Vec3 {
     Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32)
@@ -27,9 +30,56 @@ fn d3(p: Vec3) -> V3 {
 #[derive(Clone, Debug)]
 struct Arraste {
     base: Gaiola,
+    /// nós pegos pelo mouse; o resto anda pela influência
     nos: Vec<u32>,
+    /// fração de cada nó que anda
+    pesos: BTreeMap<u32, f64>,
     centro: V3,
     eixos: [V3; 3],
+    /// último gesto, para refazer quando a roda muda o raio no meio do arraste
+    gesto: Option<Gesto>,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum Gesto {
+    Mover(V3),
+    Girar(V3, f64),
+}
+
+impl Arraste {
+    fn novo(base: Gaiola, nos: Vec<u32>, centro: V3, eixos: [V3; 3], inf: Option<Influencia>) -> Arraste {
+        let pesos = inf.map_or_else(|| fe::pesos_cheios(&nos), |i| base.pesos_influencia(&nos, &i));
+        Arraste { base, nos, pesos, centro, eixos, gesto: None }
+    }
+
+    fn aplicar(&self, g: &mut Gaiola) {
+        match self.gesto {
+            Some(Gesto::Mover(d)) => fe::mover_com_pesos(g, &self.base, &self.pesos, d),
+            Some(Gesto::Girar(eixo, graus)) => fe::girar_com_pesos(g, &self.base, &self.pesos, self.centro, eixo, graus),
+            None => {}
+        }
+    }
+}
+
+/// Influência da barra do 3D.
+#[derive(Clone, Copy, Debug)]
+pub struct Alcance {
+    pub ligado: bool,
+    pub raio: f64,
+    pub queda: Queda,
+    pub so_conectados: bool,
+}
+
+impl Default for Alcance {
+    fn default() -> Self {
+        Alcance { ligado: false, raio: 30., queda: Queda::Suave, so_conectados: false }
+    }
+}
+
+impl Alcance {
+    fn influencia(&self) -> Option<Influencia> {
+        self.ligado.then_some(Influencia { raio: self.raio, queda: self.queda, so_conectados: self.so_conectados })
+    }
 }
 
 /// Rótulo do manipulador aberto para digitar: eixo (0 a 2 mover, 3 a 5 girar) e o texto.
@@ -58,6 +108,11 @@ pub struct Estado {
     pub hover: Option<Elem>,
     /// peso usado pelo chip Vinco
     pub peso: f64,
+    pub alcance: Alcance,
+    /// vínculo esperando o clique no modelo
+    pub pedido: Option<fv::Pedido>,
+    /// distância da fusão no plano de simetria
+    fusao: f64,
     arraste: Option<Arraste>,
     /// valores do manipulador no arraste atual
     off: [f64; 3],
@@ -80,7 +135,7 @@ fn aberta(app: &App) -> Option<Id> {
     matches!(app.open.doc.feature(id)?.kind, FeatureKind::Forma(_)).then_some(id)
 }
 
-fn gaiola(app: &App, id: Id) -> Option<&Gaiola> {
+pub(crate) fn gaiola(app: &App, id: Id) -> Option<&Gaiola> {
     match &app.open.doc.feature(id)?.kind {
         FeatureKind::Forma(f) => Some(&f.gaiola),
         _ => None,
@@ -98,14 +153,14 @@ fn congelada(app: &App, id: Id) -> bool {
     matches!(app.open.doc.feature(id).map(|f| &f.kind), Some(FeatureKind::Forma(f)) if f.congelada)
 }
 
-fn forma(app: &App, id: Id) -> Option<&Forma> {
+pub(crate) fn forma(app: &App, id: Id) -> Option<&Forma> {
     match &app.open.doc.feature(id)?.kind {
         FeatureKind::Forma(f) => Some(f),
         _ => None,
     }
 }
 
-fn forma_mut(app: &mut App, id: Id) -> Option<&mut Forma> {
+pub(crate) fn forma_mut(app: &mut App, id: Id) -> Option<&mut Forma> {
     match &mut app.open.doc.feature_mut(id)?.kind {
         FeatureKind::Forma(f) => Some(f),
         _ => None,
@@ -259,6 +314,33 @@ pub fn na_cena(doc: &Document, r: &RecomputeResult, oculta: Option<Id>, s: &mut 
     }
 }
 
+/// Distância do raio até a malha, para o duplo clique achar a forma, que não é corpo do modelo.
+pub fn raio_na_malha(o: Vec3, d: Vec3, m: &fenkra_core::subd::MalhaLisa) -> Option<f32> {
+    let mut melhor: Option<f32> = None;
+    for t in &m.tris {
+        let [a, b, c] = t.map(|i| v3(m.pos[i as usize]));
+        let (e1, e2) = (b - a, c - a);
+        let p = d.cross(e2);
+        let det = e1.dot(p);
+        if det.abs() < 1e-9 {
+            continue;
+        }
+        let s = o - a;
+        let (u, q) = (s.dot(p) / det, s.cross(e1));
+        let (v, w) = (d.dot(q) / det, e2.dot(q) / det);
+        if u >= 0. && v >= 0. && u + v <= 1. && w > 0. && melhor.is_none_or(|x| w < x) {
+            melhor = Some(w);
+        }
+    }
+    melhor
+}
+
+/// Forma livre sob o mouse: a mais perto entre as que ainda são superfície.
+pub fn forma_sob_o_mouse(r: &RecomputeResult, cam: &Camera, rect: Rect, m: Pos2) -> Option<Id> {
+    let (o, d) = cam.ray(rect, m);
+    r.formas.iter().filter_map(|f| raio_na_malha(o, d, &f.malha).map(|w| (w, f.id))).min_by(|a, b| a.0.total_cmp(&b.0)).map(|x| x.1)
+}
+
 /// Forma cuja superfície fica escondida na cena.
 pub fn oculta(app: &App) -> Option<Id> {
     aberta(app).filter(|_| app.forma.modo == ModoVista::Gaiola)
@@ -305,11 +387,25 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, fundo
         barra_do_relatorio(app, ui, rect, id);
         return;
     }
-    let Some(g) = gaiola(app, id).cloned() else { return };
+    if app.forma.arraste.is_none() {
+        fv::sincronizar(app, id);
+    }
+    let Some(g) = fv::gaiola_vista(app, id) else { return };
     let inteira = g.inteira();
     let so_leitura = congelada(app, id);
     let mouse = ui.input(|i| i.pointer.latest_pos()).filter(|p| rect.contains(*p));
     desenhar_gaiola(app, ui, rect, cam, &g, &inteira);
+    if !so_leitura {
+        raio_pela_roda(app, ui, id);
+        desenhar_alcance(app, ui, rect, cam, &g);
+    }
+    fv::desenhar(app, ui, rect, cam, id, &g);
+    if app.forma.pedido.is_some() {
+        fv::atender(app, ui, rect, id);
+        app.forma.hover = None;
+        barra(app, ui, rect, id, so_leitura);
+        return;
+    }
 
     // o que está sob o mouse, salvo durante um arraste de alça
     let ocupado = ui.ctx().dragged_id().is_some_and(|d| d != fundo.id) || app.forma.arraste.is_some();
@@ -573,7 +669,15 @@ fn alvo_do_mouse(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
             }
         }
         Ferramenta::Selecionar => {
-            if r.clicked() {
+            if r.double_clicked() {
+                // o primeiro clique já deixou o elemento selecionado
+                let shift = ui.input(|i| i.modifiers.shift);
+                let nova = if shift { crate::forma_sel::anel(g, &[alvo]) } else { crate::forma_sel::laco(g, &[alvo]) };
+                match nova {
+                    Ok(s) => app.forma.sel = s,
+                    Err(e) => app.toast(e, true),
+                }
+            } else if r.clicked() {
                 let somar = ui.input(|i| i.modifiers.shift || i.modifiers.command);
                 let sel = &mut app.forma.sel;
                 if somar {
@@ -601,11 +705,12 @@ fn alvo_do_mouse(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
                 let c = fe::centro(&g, &sel).unwrap_or([0.; 3]);
                 let n = fe::normal(&g, &sel).unwrap_or([0., 0., 1.]);
                 let e = if extruda { [[1., 0., 0.], [0., 1., 0.], n] } else { visao(cam) };
-                app.forma.arraste = Some(Arraste { nos: fe::nos_de(&g, &sel), centro: c, eixos: e, base: g });
+                let inf = app.forma.alcance.influencia().filter(|_| !extruda);
+                app.forma.arraste = Some(Arraste::novo(g.clone(), fe::nos_de(&g, &sel), c, e, inf));
                 app.forma.off = [0.; 3];
             }
             if r.dragged_by(egui::PointerButton::Primary) {
-                let Some(a) = app.forma.arraste.clone() else { return };
+                let Some(mut a) = app.forma.arraste.clone() else { return };
                 let d = ui.input(|i| i.pointer.press_origin()).map_or(Vec2::ZERO, |o| m - o);
                 let ppm = crate::gizmo::screen_axis(cam, rect, v3(a.centro), cam.basis().0).map_or(1., |t| t.2.max(1e-3)) as f64;
                 let vis = visao(cam);
@@ -617,9 +722,12 @@ fn alvo_do_mouse(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
                 } else {
                     fe::deslocamento(vis, [d.x as f64 / ppm, -d.y as f64 / ppm, 0.])
                 };
+                a.gesto = Some(Gesto::Mover(mv));
                 if let Some(g) = gaiola_mut(app, id) {
-                    fe::mover(g, &a.base, &a.nos, mv);
+                    a.aplicar(g);
                 }
+                app.forma.arraste = Some(a);
+                fv::deslizar(app, id);
             }
         }
     }
@@ -645,15 +753,14 @@ fn manipulador(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
                     app.forma.extrudar = false;
                 }
             }
-            app.forma.arraste = Some(Arraste { nos: fe::nos_de(&base, &sel), centro: c, eixos, base });
+            let inf = app.forma.alcance.influencia();
+            app.forma.arraste = Some(Arraste::novo(base.clone(), fe::nos_de(&base, &sel), c, eixos, inf));
         }
     };
     if let Some(v) = crate::gizmo::translate_alcas(ui, rect, cam, salt, v3(c), ax, off, [false; 3], [true; 3]) {
         inicio(app, &g, ui);
         app.forma.off = v;
-        if let (Some(a), Some(x)) = (app.forma.arraste.clone(), gaiola_mut(app, id)) {
-            fe::mover(x, &a.base, &a.nos, fe::deslocamento(eixos, v));
-        }
+        gesto(app, id, Gesto::Mover(fe::deslocamento(eixos, v)));
     }
     let ppm = crate::gizmo::screen_axis(cam, rect, v3(c), cam.basis().0).map_or(1., |t| t.2.max(1e-3));
     let raio = 95. / ppm;
@@ -663,9 +770,7 @@ fn manipulador(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
         if let Some(a) = crate::gizmo::rotate_arc_col(ui, rect, cam, salt.wrapping_mul(31).wrapping_add(k as u64 + 3), v3(c), ax[k], fonte, app.forma.giro[k], false, cor) {
             inicio(app, &g, ui);
             app.forma.giro[k] = a;
-            if let (Some(b), Some(x)) = (app.forma.arraste.clone(), gaiola_mut(app, id)) {
-                fe::girar(x, &b.base, &b.nos, b.centro, eixos[k], a);
-            }
+            gesto(app, id, Gesto::Girar(eixos[k], a));
         }
     }
     // rótulos: clicar abre a caixa de digitar
@@ -679,13 +784,85 @@ fn manipulador(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
     if let Some((alca, v)) = digitar(app, ui, rect, cam, c) {
         app.forma.digitando = None;
         inicio(app, &g, ui);
-        if let (Some(a), Some(x)) = (app.forma.arraste.take(), gaiola_mut(app, id)) {
-            if alca < 3 {
-                let mut vals = [0.; 3];
-                vals[alca] = v;
-                fe::mover(x, &a.base, &a.nos, fe::deslocamento(eixos, vals));
-            }
+        if alca < 3 {
+            let mut vals = [0.; 3];
+            vals[alca] = v;
+            gesto(app, id, Gesto::Mover(fe::deslocamento(eixos, vals)));
         }
+        app.forma.arraste = None;
+    }
+}
+
+/// Aplica o gesto do arraste em andamento e guarda para a roda poder refazê-lo.
+fn gesto(app: &mut App, id: Id, g: Gesto) {
+    let Some(mut a) = app.forma.arraste.take() else { return };
+    a.gesto = Some(g);
+    if let Some(x) = gaiola_mut(app, id) {
+        a.aplicar(x);
+    }
+    app.forma.arraste = Some(a);
+    fv::deslizar(app, id);
+}
+
+/// A roda está mudando o raio, e não o zoom: arraste em andamento com a influência ligada.
+pub fn roda_no_raio(st: &Estado) -> bool {
+    st.alcance.ligado && st.arraste.as_ref().is_some_and(|a| !a.nos.is_empty())
+}
+
+/// Roda durante o arraste: muda o raio e refaz o gesto com os pesos novos. A base é a de quando o
+/// arraste começou, então girar a roda para lá e para cá não acumula nada.
+fn raio_pela_roda(app: &mut App, ui: &egui::Ui, id: Id) {
+    let roda = ui.input(|i| i.smooth_scroll_delta.y) as f64;
+    if roda == 0. || !roda_no_raio(&app.forma) {
+        return;
+    }
+    let raio = (app.forma.alcance.raio * (roda * 0.004).exp()).clamp(0.01, 1e5);
+    app.forma.alcance.raio = raio;
+    let inf = app.forma.alcance.influencia();
+    let Some(a) = app.forma.arraste.as_mut() else { return };
+    if let Some(i) = inf {
+        a.pesos = a.base.pesos_influencia(&a.nos, &i);
+    }
+    let a = a.clone();
+    if let Some(x) = gaiola_mut(app, id) {
+        *x = a.base.clone();
+        a.aplicar(x);
+    }
+    fv::deslizar(app, id);
+}
+
+/// Círculo do alcance em volta da seleção, com o gradiente da curva de queda, e o peso de cada nó.
+fn desenhar_alcance(app: &App, ui: &egui::Ui, rect: Rect, cam: &Camera, g: &Gaiola) {
+    let Some(inf) = app.forma.alcance.influencia() else { return };
+    let base = app.forma.arraste.as_ref().map_or(g, |a| &a.base);
+    let nos = app.forma.arraste.as_ref().map_or_else(|| fe::nos_de(g, &app.forma.sel), |a| a.nos.clone());
+    let Some(c) = fe::centro(g, &app.forma.sel) else { return };
+    let Some((s, _, ppm)) = crate::gizmo::screen_axis(cam, rect, v3(c), cam.basis().0) else { return };
+    let (raio, cor) = (inf.raio as f32 * ppm, crate::theme::accent(ui.visuals()));
+    let p = ui.painter_at(rect);
+    let (aneis, setores) = (14usize, 56usize);
+    let mut m = egui::Mesh::default();
+    let tom = |x: f32| cor.gamma_multiply(0.42 * inf.queda.peso(x as f64) as f32);
+    for i in 0..=aneis {
+        let x = i as f32 / aneis as f32;
+        for k in 0..setores {
+            let t = k as f32 / setores as f32 * std::f32::consts::TAU;
+            m.colored_vertex(s + egui::vec2(t.cos(), t.sin()) * raio * x, tom(x.min(0.999)));
+        }
+    }
+    for i in 0..aneis as u32 {
+        for k in 0..setores as u32 {
+            let (n, a, b) = (setores as u32, i * setores as u32 + k, i * setores as u32 + (k + 1) % setores as u32);
+            m.add_triangle(a, b, a + n);
+            m.add_triangle(b, b + n, a + n);
+        }
+    }
+    p.add(egui::Shape::mesh(m));
+    p.circle_stroke(s, raio, Stroke::new(1.5, cor));
+    p.text(s + egui::vec2(0., -raio - 6.), egui::Align2::CENTER_BOTTOM, format!("{} {} mm", tr("Raio"), fmt(inf.raio)), egui::FontId::proportional(11.), ui.visuals().text_color());
+    for (n, w) in base.pesos_influencia(&nos, &inf) {
+        let Some(q) = g.pos(n).and_then(|q| cam.project(rect, v3(q))) else { continue };
+        p.circle_filled(q, 2. + 3. * w as f32, crate::theme::st_warn().gamma_multiply(0.35 + 0.65 * w as f32));
     }
 }
 
@@ -757,7 +934,7 @@ fn disco_de_tangencia(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera
     pinta.circle_filled(borda, 6., if r.hovered() || r.dragged() { crate::theme::st_warn() } else { cor });
     if r.drag_started() {
         app.forma.tangente_base = Some((n, atual.map_or(1., |t| t.tensao)));
-        app.forma.arraste = Some(Arraste { base: g.clone(), nos: vec![], centro: p, eixos: visao(cam) });
+        app.forma.arraste = Some(Arraste::novo(g.clone(), vec![], p, visao(cam), None));
     }
     if r.dragged() {
         if let (Some((n0, _)), Some(o)) = (app.forma.tangente_base, ui.input(|i| i.pointer.press_origin())) {
@@ -805,12 +982,16 @@ fn chip(ui: &mut egui::Ui, ligado: bool, icone: Option<&str>, texto: &str, dica:
 fn barra(app: &mut App, ui: &mut egui::Ui, rect: Rect, id: Id, so_leitura: bool) {
     let mut acao: Option<Box<dyn FnOnce(&mut App)>> = None;
     let st = &app.forma;
-    let (modo, espaco, ferramenta, peso) = (st.modo, st.espaco, st.ferramenta, st.peso);
+    let (modo, espaco, ferramenta, peso, alcance) = (st.modo, st.espaco, st.ferramenta, st.peso, st.alcance);
     let sel = st.sel.clone();
     let Some(g) = gaiola(app, id) else { return };
     let tipo = fe::tipo_da_selecao(g, &sel);
     let gaiola_custo = fe::custo_da_conversao(g, st.alerta.unwrap_or(1));
     let simetria = g.simetria;
+    let (fusao, pedido) = (st.fusao, st.pedido.clone());
+    let caminho = fe::caminho_da_selecao(g, &sel).ok();
+    let tem_no = !fe::nos_de(g, &sel).is_empty();
+    let presos = forma(app, id).map_or(vec![], |f| fv::presos_na_selecao(f, &sel));
     let tem_face = !fe::faces_de(&sel).is_empty();
     let extrudar = st.extrudar;
     let alerta = st.alerta;
@@ -878,6 +1059,106 @@ fn barra(app: &mut App, ui: &mut egui::Ui, rect: Rect, id: Id, so_leitura: bool)
                     }
                 });
             }
+            if !so_leitura {
+                ui.horizontal(|ui| {
+                    let al = alcance;
+                    if chip(ui, al.ligado, None, "Influência", "Puxar também leva a vizinhança, cada nó pela curva de queda. Durante o arraste, a roda muda o raio") {
+                        acao = Some(Box::new(move |a: &mut App| a.forma.alcance.ligado = !al.ligado));
+                    }
+                    if al.ligado {
+                        let mut r = al.raio;
+                        ui.label(tr("Raio"));
+                        if ui.add(crate::ui_ext::dv(&mut r).speed(0.5).range(0.01..=100000.).dica("Até onde o arraste chega, em mm")).changed() {
+                            acao = Some(Box::new(move |a: &mut App| a.forma.alcance.raio = r));
+                        }
+                        for (q, nome, dica) in [
+                            (Queda::Suave, "Suave", "Sino: começa e termina sem degrau"),
+                            (Queda::Linear, "Linear", "Cai em linha reta até o raio"),
+                            (Queda::Redonda, "Redonda", "Cheia no meio, cai de repente perto do raio"),
+                            (Queda::Aguda, "Aguda", "Pico: quase só o centro anda"),
+                            (Queda::Constante, "Constante", "Tudo dentro do raio anda igual"),
+                        ] {
+                            if chip(ui, al.queda == q, None, nome, dica) {
+                                acao = Some(Box::new(move |a: &mut App| a.forma.alcance.queda = q));
+                            }
+                        }
+                        if chip(ui, al.so_conectados, None, "Só conectados", "Mede a distância andando pelas arestas: malha solta e a outra asa da peça não acompanham") {
+                            acao = Some(Box::new(move |a: &mut App| a.forma.alcance.so_conectados = !al.so_conectados));
+                        }
+                    }
+                });
+            }
+            if !sel.is_empty() {
+                ui.horizontal(|ui| {
+                    type Regra = fn(&Gaiola, &[Elem]) -> Result<Vec<Elem>, String>;
+                    let regras: [(&str, &str, Regra); 6] = [
+                        ("Crescer", "Soma a volta da seleção", |g, s| Ok(crate::forma_sel::crescer(g, s))),
+                        ("Encolher", "Tira a beira da seleção", |g, s| Ok(crate::forma_sel::encolher(g, s))),
+                        ("Laço", "Segue a aresta reto até um nó irregular, ou dá a volta numa fileira de faces. Duplo clique faz o mesmo", crate::forma_sel::laco),
+                        ("Anel", "Pega as arestas paralelas. Shift com duplo clique faz o mesmo", crate::forma_sel::anel),
+                        ("Próximo", "Anda um passo na direção dos dois últimos", crate::forma_sel::proximo),
+                        ("Faixa", "Pega o caminho entre as duas últimas faces ou os dois últimos nós", crate::forma_sel::faixa),
+                    ];
+                    for (nome, dica, regra) in regras {
+                        if chip(ui, false, None, nome, dica) {
+                            acao = Some(Box::new(move |a: &mut App| {
+                                let Some(g) = gaiola(a, id).cloned() else { return };
+                                match regra(&g, &a.forma.sel) {
+                                    Ok(s) => a.forma.sel = s,
+                                    Err(e) => a.toast(e, true),
+                                }
+                            }));
+                        }
+                    }
+                });
+            }
+            if !so_leitura && (tem_no || simetria.is_some()) {
+                ui.horizontal(|ui| {
+                    if tem_no {
+                        if chip(ui, pedido == Some(fv::Pedido::No), None, "Vincular", "Prende os nós selecionados a um ponto, curva, plano ou face da peça: eles seguem a referência e deslizam nela") {
+                            acao = Some(Box::new(|a: &mut App| pedir(a, fv::Pedido::No)));
+                        }
+                        if chip(ui, pedido == Some(fv::Pedido::Cota), None, "Cota ao plano", "A distância do nó a um plano vira uma cota, que aceita parâmetro no painel") {
+                            acao = Some(Box::new(|a: &mut App| pedir(a, fv::Pedido::Cota)));
+                        }
+                    }
+                    if let Some(c) = &caminho {
+                        ui.label(tr("Casar borda"));
+                        for (k, nome, dica) in [
+                            (0u8, "G0", "A borda passa pela aresta da peça"),
+                            (1, "G1", "Também sai tangente à face vizinha"),
+                            (2, "G2", "Também casa a curvatura: vale onde a face não curva através da aresta, e o aviso diz quando não deu"),
+                        ] {
+                            if chip(ui, false, None, nome, dica) {
+                                let nos = c.clone();
+                                acao = Some(Box::new(move |a: &mut App| pedir(a, fv::Pedido::Borda { nos, continuidade: k, aresta: None })));
+                            }
+                        }
+                    }
+                    if !presos.is_empty() {
+                        let p = presos.clone();
+                        if chip(ui, false, None, "Soltar", "Tira os vínculos da seleção: os nós ficam onde estão") {
+                            acao = Some(Box::new(move |a: &mut App| {
+                                if let Some(f) = forma_mut(a, id) {
+                                    fv::soltar(f, &p);
+                                }
+                            }));
+                        }
+                    }
+                    if simetria.is_some() {
+                        ui.separator();
+                        let mut d = if fusao > 0. { fusao } else { 0.5 };
+                        if ui.add(crate::ui_ext::dv(&mut d).speed(0.05).range(0.001..=1000.).dica("Distância até o plano em que a beira da forma funde com o reflexo")).changed() {
+                            acao = Some(Box::new(move |a: &mut App| a.forma.fusao = d));
+                        }
+                        if chip(ui, false, None, "Fundir no plano", "Leva ao plano os nós da beira que estão a menos dessa distância, e as metades soldam") {
+                            acao = Some(Box::new(move |a: &mut App| {
+                                editar(a, id, |g| g.fundir_no_plano(d).map(|_| ()));
+                            }));
+                        }
+                    }
+                });
+            }
             if let (Some((t, w)), false) = (tipo, so_leitura) {
                 ui.horizontal(|ui| {
                     for (tp, nome, dica) in [
@@ -929,8 +1210,14 @@ fn barra(app: &mut App, ui: &mut egui::Ui, rect: Rect, id: Id, so_leitura: bool)
     }
 }
 
+/// Começa a esperar o clique no modelo. O que já estava escolhido não pode responder ao pedido.
+fn pedir(app: &mut App, p: fv::Pedido) {
+    app.picks.clear();
+    app.forma.pedido = Some(p);
+}
+
 /// Painel do comando: só o que não tem gesto no 3D.
-pub fn painel(ui: &mut egui::Ui, f: &mut Forma) {
+pub fn painel(ui: &mut egui::Ui, doc: &Document, f: &mut Forma, vars: &std::collections::HashMap<String, f64>) {
     section(ui, "Superfície");
     let mut n = f.niveis as u32;
     ui.horizontal(|ui| {
@@ -946,6 +1233,7 @@ pub fn painel(ui: &mut egui::Ui, f: &mut Forma) {
         ui.label(RichText::new(tr("Há faces que não são quadriláteros: a superfície funciona, mas com mais nós irregulares.")).weak().small());
     }
     if ui.checkbox(&mut f.congelada, tr("Congelar")).on_hover_text(tr("Guarda a gaiola e trava a edição, para não mexer sem querer")).changed() {}
+    fv::painel(ui, doc, f, vars);
 }
 
 /// Criação por arraste no plano.
@@ -989,13 +1277,32 @@ fn criar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
 /// Põe a forma na árvore e abre a edição.
 pub fn criar_feature(app: &mut App, gaiola: Gaiola) -> Id {
     let snapshot = app.open.doc.clone();
-    let id = app.open.doc.add_feature(FeatureKind::Forma(Forma { gaiola, niveis: 3, congelada: false, conversao: None }));
+    let id = app.open.doc.add_feature(FeatureKind::Forma(Forma { gaiola, niveis: 3, congelada: false, conversao: None, vinculos: Default::default() }));
     app.start_session(id, true, Some(snapshot));
     app.forma.sel.clear();
     app.forma.ferramenta = Ferramenta::Selecionar;
     app.request_recompute();
     app.scene_dirty = true;
     id
+}
+
+/// Desenvolvimento: um nó preso a um plano deslocado, um à origem e uma cota, para ver os elos no 3D.
+fn demo_vinculos(app: &mut App, id: Id) -> Option<Id> {
+    let pai = app.open.doc.add_geometry(RefKind::OffsetPlane { base: PlaneRef::Origin(OriginPlane::XY), offset: "70".into() });
+    let plano = PlaneRef::Datum(pai);
+    let f = forma_mut(app, id)?;
+    use fenkra_core::subd_vinculo::*;
+    let topo = f.gaiola.nos.iter().find(|n| n.p[2] > 60.).map(|n| n.id);
+    let lado = f.gaiola.nos.iter().find(|n| n.p[0] > 29. && n.p[2] > 29. && n.p[1].abs() < 1.).map(|n| n.id);
+    if let Some(no) = topo {
+        f.vinculos.definir_no(VinculoNo { no, alvo: AlvoNo::Plano { plano, uv: None } });
+    }
+    if let Some(no) = lado {
+        f.vinculos.definir_cota(CotaNo { no, plano: PlaneRef::Origin(OriginPlane::XY), expr: "45".into() });
+    }
+    app.forma.sel.clear();
+    app.request_recompute();
+    Some(pai)
 }
 
 /// Desenvolvimento: `FENKRA_DEMO_FORMA=1` abre a cúpula em edição, com o nó do topo selecionado.
@@ -1020,6 +1327,25 @@ pub fn demo(app: &mut App, modo: &str) {
         "liso" => app.forma.modo = ModoVista::Liso,
         "laco" => app.forma.ferramenta = Ferramenta::Laco,
         "tangencia" => app.forma.ferramenta = Ferramenta::Tangencia,
+        "suave" => {
+            app.forma.alcance = Alcance { ligado: true, raio: 45., ..Alcance::default() };
+        }
+        "selecao" => {
+            let g = gaiola(app, id).cloned().unwrap_or_default();
+            if let Some(&(a, b)) = g.arestas().iter().find(|(a, b)| [a, b].iter().all(|n| g.pos(**n).is_some_and(|p| p[2] > 29. && p[2] < 31.))) {
+                app.forma.sel = crate::forma_sel::laco(&g, &[Elem::Aresta(a, b)]).unwrap_or_default();
+            }
+        }
+        "vinculos" => {
+            demo_vinculos(app, id);
+        }
+        "perdido" => {
+            // o pai some: o estado de erro aparece na árvore e a forma fica onde estava
+            if let Some(pai) = demo_vinculos(app, id) {
+                app.open.doc.delete(pai, false);
+                app.request_recompute();
+            }
+        }
         "converter" | "g2" | "g0" => {
             let k = match modo {
                 "g2" => 2,
@@ -1031,5 +1357,20 @@ pub fn demo(app: &mut App, modo: &str) {
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod testes {
+    use super::*;
+
+    #[test]
+    fn raio_acha_a_superficie_da_forma_e_erra_fora_dela() {
+        let m = Gaiola::caixa([0.; 3], [20.; 3], [2, 2, 2]).lisa(2).unwrap();
+        let d = Vec3::new(0., 0., -1.);
+        let w = raio_na_malha(Vec3::new(0., 0., 50.), d, &m).expect("acerta o topo");
+        assert!(w > 35. && w < 45., "{w}");
+        assert!(raio_na_malha(Vec3::new(30., 0., 50.), d, &m).is_none());
+        assert!(raio_na_malha(Vec3::new(0., 0., 50.), -d, &m).is_none(), "para trás não conta");
     }
 }

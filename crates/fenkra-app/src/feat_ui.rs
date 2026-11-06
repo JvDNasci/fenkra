@@ -207,7 +207,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
     crate::chapa_unif_ui::modos(ui, kind);
     match kind {
         FeatureKind::Forma(fm) => {
-            crate::forma_ui::painel(ui, fm);
+            crate::forma_ui::painel(ui, doc, fm, vars);
             if let Some(c) = &mut fm.conversao {
                 section(ui, "Conversão");
                 expr(ui, "Tolerância", &mut c.tol, vars, "mm");

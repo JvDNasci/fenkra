@@ -79,7 +79,7 @@ preferências do usuário.
 | `FENKRA_MEDIR_QUADROS=<arquivo.csv>` | grava o tempo de CPU de cada quadro, as fases pesadas e os bytes na placa (B125, B259) |
 | `FENKRA_DEMO_ABA=<n>` | abre o painel de comando já na aba n (a primeira é 0), para capturas sem mouse |
 | `FENKRA_DEMO_DOBRA=1` | tubo retangular dobrado em U na bancada Estrutural; com `FENKRA_EDITAR=Membro` abre o painel do nó de dobra |
-| `FENKRA_DEMO_FORMA=<modo>` | abre uma cúpula em edição na bancada Forma livre; `gaiola`, `liso`, `laco` e `tangencia` já mudam o que aparece; `converter`, `g0` e `g2` abrem o relatório da conversão |
+| `FENKRA_DEMO_FORMA=<modo>` | abre uma cúpula em edição na bancada Forma livre; `gaiola`, `liso`, `laco`, `tangencia`, `suave` (círculo de influência), `selecao` (laço selecionado) `vinculos` (nós presos e cota) e `perdido` (o pai apagado) já mudam o que aparece; `converter`, `g0` e `g2` abrem o relatório da conversão |
 | `FENKRA_DEMO_DOBRA=1` | tubo retangular dobrado em U na bancada Estrutural; com `FENKRA_EDITAR=Membro` abre o painel do nó de dobra. Com `canto`, `v` ou `multiplo` no lugar do 1, as duas dobras usam V com raio, V comum ou V múltiplo (tubo fechado no 3D) |
 | `FENKRA_DEMO_ASM=<nome>` | montagem de exemplo com: `mec` (mecanismo), `cmd` (restrição com fantasma), `junta` (junta automática), `simbolos` (cota e junta no modelo), `manip` (manipulador numa dobradiça), `duzentas` (200 restrições) |
 | `FENKRA_DEMO_FOTO=<arquivo.png>` | grava a janela depois de 9 s e fecha o programa |

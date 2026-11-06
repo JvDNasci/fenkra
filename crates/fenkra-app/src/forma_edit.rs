@@ -5,7 +5,9 @@
 
 use fenkra_core::subd::{Gaiola, Simetria, V3};
 use fenkra_core::subd_ops::TipoNo;
-use std::collections::BTreeSet;
+use fenkra_core::subd_vinculo::{restringir, GeoNo};
+use fenkra_core::Forma;
+use std::collections::{BTreeMap, BTreeSet};
 
 fn add(a: V3, b: V3) -> V3 {
     [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
@@ -271,14 +273,38 @@ pub fn deslocamento(ax: [V3; 3], vals: [f64; 3]) -> V3 {
     add(add(mul(ax[0], vals[0]), mul(ax[1], vals[1])), mul(ax[2], vals[2]))
 }
 
+/// Distância mínima ao plano de simetria de quem não é da costura. Precisa ser maior que a tolerância
+/// do plano, senão o nó viraria costura sem ter aresta para isso e a malha quebraria no reflexo.
+const FOLGA_DO_PLANO: f64 = 0.01;
+
+/// Nó da costura só anda dentro do plano, e os outros param antes de atravessá-lo.
+fn segurar_no_lado(base: &Gaiola, id: u32, p: V3, q: &mut V3) {
+    let Some(s) = base.simetria else { return };
+    let e = s.eixo as usize;
+    if base.no_preso_ao_plano(id).is_some() {
+        q[e] = p[e];
+    } else if s.distancia(*q) < FOLGA_DO_PLANO {
+        q[e] = s.pos + FOLGA_DO_PLANO;
+    }
+}
+
+/// Peso cheio em cada nó: é o arraste sem influência.
+pub fn pesos_cheios(nos: &[u32]) -> BTreeMap<u32, f64> {
+    nos.iter().map(|n| (*n, 1.)).collect()
+}
+
 /// Move os nós a partir de como estavam (`base`). Nó da costura de simetria só anda dentro do plano.
+#[cfg(test)]
 pub fn mover(g: &mut Gaiola, base: &Gaiola, nos: &[u32], d: V3) {
-    for &id in nos {
+    mover_com_pesos(g, base, &pesos_cheios(nos), d);
+}
+
+/// Cada nó anda a sua fração do deslocamento: é o arraste com influência.
+pub fn mover_com_pesos(g: &mut Gaiola, base: &Gaiola, pesos: &BTreeMap<u32, f64>, d: V3) {
+    for (&id, &w) in pesos {
         let Some(p) = base.pos(id) else { continue };
-        let mut q = add(p, d);
-        if let Some(eixo) = base.no_preso_ao_plano(id) {
-            q[eixo as usize] = p[eixo as usize];
-        }
+        let mut q = add(p, mul(d, w));
+        segurar_no_lado(base, id, p, &mut q);
         if let Some(n) = g.no_mut(id) {
             n.p = q;
         }
@@ -287,22 +313,68 @@ pub fn mover(g: &mut Gaiola, base: &Gaiola, nos: &[u32], d: V3) {
 }
 
 /// Gira os nós em torno do eixo por `c`, a partir de como estavam.
+#[cfg(test)]
 pub fn girar(g: &mut Gaiola, base: &Gaiola, nos: &[u32], c: V3, eixo: V3, graus: f64) {
+    girar_com_pesos(g, base, &pesos_cheios(nos), c, eixo, graus);
+}
+
+/// Cada nó gira a sua fração do ângulo: a ponta da influência quase não torce.
+pub fn girar_com_pesos(g: &mut Gaiola, base: &Gaiola, pesos: &BTreeMap<u32, f64>, c: V3, eixo: V3, graus: f64) {
     let Some(k) = unit(eixo) else { return };
-    let (s, co) = graus.to_radians().sin_cos();
-    for &id in nos {
+    for (&id, &w) in pesos {
+        let (s, co) = (graus * w).to_radians().sin_cos();
         let Some(p) = base.pos(id) else { continue };
         let v = sub(p, c);
         let r = add(add(mul(v, co), mul(cross(k, v), s)), mul(k, dot(k, v) * (1. - co)));
         let mut q = add(c, r);
-        if let Some(e) = base.no_preso_ao_plano(id) {
-            q[e as usize] = p[e as usize];
-        }
+        segurar_no_lado(base, id, p, &mut q);
         if let Some(n) = g.no_mut(id) {
             n.p = q;
         }
     }
     g.refazer_tangencias();
+}
+
+/// Nó preso desliza: fica no ponto da referência mais perto de onde o arraste o largou, e a coordenada
+/// nela é guardada para o próximo recálculo.
+pub fn deslizar(f: &mut Forma, geos: &[(u32, GeoNo)]) {
+    for v in &mut f.vinculos.nos {
+        let Some((_, geo)) = geos.iter().find(|x| x.0 == v.no) else { continue };
+        let Some(n) = f.gaiola.no_mut(v.no) else { continue };
+        n.p = restringir(geo, n.p);
+        v.alvo.ancorar(geo, n.p);
+    }
+}
+
+/// As arestas selecionadas como um caminho em ordem. Volta fechada não repete o primeiro nó.
+pub fn caminho_da_selecao(g: &Gaiola, sel: &[Elem]) -> Result<Vec<u32>, String> {
+    let mut viz: BTreeMap<u32, Vec<u32>> = BTreeMap::new();
+    for e in sel {
+        match *e {
+            Elem::Aresta(a, b) => {
+                viz.entry(a).or_default().push(b);
+                viz.entry(b).or_default().push(a);
+            }
+            _ => return Err("selecione só arestas".into()),
+        }
+    }
+    if viz.is_empty() {
+        return Err("selecione as arestas da borda".into());
+    }
+    if viz.values().any(|v| v.len() > 2) {
+        return Err("as arestas se bifurcam: escolha um caminho só".into());
+    }
+    let inicio = viz.iter().find(|(_, v)| v.len() == 1).map_or_else(|| viz.keys().next().copied(), |x| Some(*x.0)).ok_or("selecione as arestas da borda")?;
+    let (mut caminho, mut anterior) = (vec![inicio], None);
+    while let Some(&n) = viz[caminho.last().ok_or("caminho vazio")?].iter().find(|x| Some(**x) != anterior && **x != inicio) {
+        anterior = caminho.last().copied();
+        caminho.push(n);
+    }
+    if caminho.len() != viz.len() {
+        return Err("as arestas não formam um caminho contínuo".into());
+    }
+    debug_assert!(caminho.iter().all(|n| g.no(*n).is_some()));
+    Ok(caminho)
 }
 
 /// Faces de uma seleção.
@@ -488,6 +560,58 @@ mod testes {
         assert_eq!(g.pos(id).unwrap()[2], 8.);
     }
 
+    /// Aceite do B302: puxar um nó com raio move os vizinhos pela curva escolhida.
+    #[test]
+    fn puxar_com_raio_move_os_vizinhos_pela_curva() {
+        use fenkra_core::subd_sel::{Influencia, Queda};
+        let g0 = Gaiola::plano([20., 20., 0.], [40., 40.], [4, 4]);
+        let no = |x: f64, y: f64| g0.nos.iter().find(|n| n.p[0] == x && n.p[1] == y).unwrap().id;
+        let c = no(20., 20.);
+        for q in Queda::TODAS {
+            let mut g = g0.clone();
+            let w = g.pesos_influencia(&[c], &Influencia { raio: 25., queda: q, so_conectados: false });
+            mover_com_pesos(&mut g, &g0, &w, [0., 0., 10.]);
+            assert_eq!(g.pos(c).unwrap()[2], 10.);
+            assert!((g.pos(no(30., 20.)).unwrap()[2] - 10. * q.peso(0.4)).abs() < 1e-9, "{q:?}");
+            assert!((g.pos(no(40., 20.)).unwrap()[2] - 10. * q.peso(0.8)).abs() < 1e-9, "{q:?}");
+            assert_eq!(g.pos(no(0., 0.)).unwrap()[2], 0., "{q:?}");
+        }
+    }
+
+    /// Aceite do B302: só conectados não afeta malha vizinha desconectada.
+    #[test]
+    fn so_conectados_nao_puxa_a_malha_vizinha() {
+        use fenkra_core::subd_sel::{Influencia, Queda};
+        let mut g0 = Gaiola::plano([10., 10., 0.], [20., 20.], [2, 2]);
+        let ids: Vec<u32> = [[0., 0., 3.], [20., 0., 3.], [20., 20., 3.], [0., 20., 3.]].map(|p| g0.novo_para_teste(p)).to_vec();
+        g0.face_para_teste(ids.clone());
+        let c = g0.nos.iter().find(|n| n.p == [10., 10., 0.]).unwrap().id;
+        let inf = Influencia { raio: 40., queda: Queda::Linear, so_conectados: true };
+        let mut g = g0.clone();
+        mover_com_pesos(&mut g, &g0, &g0.pesos_influencia(&[c], &inf), [0., 0., 10.]);
+        assert!(ids.iter().all(|n| g.pos(*n) == g0.pos(*n)), "a folha solta ficou");
+        let mut h = g0.clone();
+        mover_com_pesos(&mut h, &g0, &g0.pesos_influencia(&[c], &Influencia { so_conectados: false, ..inf }), [0., 0., 10.]);
+        assert!(ids.iter().all(|n| h.pos(*n) != g0.pos(*n)), "sem a opção ela anda");
+    }
+
+    #[test]
+    fn nos_da_costura_ficam_no_plano_mesmo_com_influencia() {
+        use fenkra_core::subd_sel::{Influencia, Queda};
+        let mut g0 = Gaiola::caixa([0.; 3], [20.; 3], [2, 2, 2]);
+        alternar_simetria(&mut g0, 0).unwrap();
+        let c = g0.nos.iter().find(|n| n.p[0] > 9. && n.p[1] == 0. && n.p[2] == 0.).unwrap().id;
+        let mut g = g0.clone();
+        let w = g0.pesos_influencia(&[c], &Influencia { raio: 100., queda: Queda::Constante, so_conectados: false });
+        mover_com_pesos(&mut g, &g0, &w, [-5., 0., 2.]);
+        for n in &g0.nos {
+            if n.p[0].abs() < 1e-9 {
+                assert_eq!(g.pos(n.id).unwrap()[0], 0.);
+            }
+        }
+        assert!(g.inteira().topologia().is_ok());
+    }
+
     #[test]
     fn no_da_costura_nao_sai_do_plano() {
         let mut g = Gaiola::caixa([0.; 3], [10.; 3], [2, 2, 2]);
@@ -498,6 +622,57 @@ mod testes {
         assert_eq!(g.pos(id).unwrap(), [0., 0., 7.]);
         girar(&mut g, &base, &[id], [0.; 3], [0., 1., 0.], 30.);
         assert_eq!(g.pos(id).unwrap()[0], 0.);
+    }
+
+    #[test]
+    fn no_para_antes_de_atravessar_o_plano_de_simetria() {
+        let mut g = Gaiola::caixa([0.; 3], [10.; 3], [2, 2, 2]);
+        alternar_simetria(&mut g, 0).unwrap();
+        let id = no_em(&g, [5., 0., 5.]);
+        let base = g.clone();
+        mover(&mut g, &base, &[id], [-30., 0., 0.]);
+        let x = g.pos(id).unwrap()[0];
+        assert!(x > 0. && x < 0.1, "{x}");
+        assert!(g.inteira().topologia().is_ok(), "o nó não virou costura");
+    }
+
+    #[test]
+    fn no_preso_desliza_na_curva_e_no_plano_e_nao_sai_do_ponto() {
+        use fenkra_core::subd_vinculo::*;
+        use fenkra_core::{CurveRef, OriginAxis, OriginPlane, PlaneRef, PointRef};
+        let g0 = Gaiola::plano([0., 0., 0.], [40., 40.], [2, 2]);
+        let (a, b, c) = (g0.nos[0].id, g0.nos[1].id, g0.nos[2].id);
+        let mut f = Forma { gaiola: g0, niveis: 3, congelada: false, conversao: None, vinculos: Default::default() };
+        f.vinculos.definir_no(VinculoNo { no: a, alvo: AlvoNo::Ponto(PointRef::Origin) });
+        f.vinculos.definir_no(VinculoNo { no: b, alvo: AlvoNo::Curva { curva: CurveRef::Axis(OriginAxis::X), t: None } });
+        f.vinculos.definir_no(VinculoNo { no: c, alvo: AlvoNo::Plano { plano: PlaneRef::Origin(OriginPlane::XY), uv: None } });
+        for n in [a, b, c] {
+            f.gaiola.no_mut(n).unwrap().p = [7., 8., 9.];
+        }
+        let geos = vec![
+            (a, GeoNo::Ponto([1., 2., 3.])),
+            (b, GeoNo::Curva(vec![[0., 0., 0.], [100., 0., 0.]])),
+            (c, GeoNo::Plano(QuadroV { o: [0.; 3], x: [1., 0., 0.], y: [0., 1., 0.], n: [0., 0., 1.] })),
+        ];
+        deslizar(&mut f, &geos);
+        assert_eq!(f.gaiola.pos(a).unwrap(), [1., 2., 3.]);
+        assert!((f.gaiola.pos(b).unwrap()[0] - 7.).abs() < 1e-9 && f.gaiola.pos(b).unwrap()[1] == 0.);
+        assert_eq!(f.gaiola.pos(c).unwrap(), [7., 8., 0.]);
+        assert!(matches!(f.vinculos.nos[1].alvo, AlvoNo::Curva { t: Some(t), .. } if (t - 0.07).abs() < 1e-9));
+        assert!(matches!(f.vinculos.nos[2].alvo, AlvoNo::Plano { uv: Some([u, v]), .. } if u == 7. && v == 8.));
+    }
+
+    #[test]
+    fn caminho_ordena_as_arestas_e_recusa_bifurcacao() {
+        let g = Gaiola::plano([20., 0., 0.], [40., 40.], [4, 4]);
+        let n = |x: f64, y: f64| g.nos.iter().find(|q| q.p[0] == x && q.p[1] == y).unwrap().id;
+        let e = |a: u32, b: u32| Elem::Aresta(a.min(b), a.max(b));
+        let (p, q, r, s) = (n(0., 0.), n(10., 0.), n(20., 0.), n(30., 0.));
+        let c = caminho_da_selecao(&g, &[e(r, s), e(p, q), e(q, r)]).unwrap();
+        assert!(c == vec![p, q, r, s] || c == vec![s, r, q, p], "{c:?}");
+        assert!(caminho_da_selecao(&g, &[e(p, q), e(r, s)]).is_err(), "buraco no meio");
+        assert!(caminho_da_selecao(&g, &[e(q, r), e(p, q), e(q, n(10., 10.))]).is_err(), "bifurca");
+        assert!(caminho_da_selecao(&g, &[Elem::No(p)]).is_err());
     }
 
     #[test]

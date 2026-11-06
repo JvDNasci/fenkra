@@ -414,6 +414,7 @@ impl<'a> Ctx<'a> {
     pub(crate) fn vazio(doc: &'a Document, vars: Vars) -> Ctx<'a> {
         Ctx {
             relatorios_forma: vec![],
+            formas_resolvidas: vec![],
             doc,
             vars,
             qualidade: Default::default(),

@@ -272,6 +272,7 @@ pub fn passos_planificados(doc: &Document) -> Vec<PassoPlanificado> {
         cut_outlines: vec![],
         roscas: vec![],
         relatorios_forma: vec![],
+        formas_resolvidas: vec![],
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
