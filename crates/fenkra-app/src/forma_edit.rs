@@ -5,7 +5,7 @@
 
 use fenkra_core::subd::{Gaiola, Simetria, V3};
 use fenkra_core::subd_ops::TipoNo;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 fn add(a: V3, b: V3) -> V3 {
     [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
@@ -271,11 +271,21 @@ pub fn deslocamento(ax: [V3; 3], vals: [f64; 3]) -> V3 {
     add(add(mul(ax[0], vals[0]), mul(ax[1], vals[1])), mul(ax[2], vals[2]))
 }
 
+/// Peso cheio em cada nó: é o arraste sem influência.
+pub fn pesos_cheios(nos: &[u32]) -> BTreeMap<u32, f64> {
+    nos.iter().map(|n| (*n, 1.)).collect()
+}
+
 /// Move os nós a partir de como estavam (`base`). Nó da costura de simetria só anda dentro do plano.
 pub fn mover(g: &mut Gaiola, base: &Gaiola, nos: &[u32], d: V3) {
-    for &id in nos {
+    mover_com_pesos(g, base, &pesos_cheios(nos), d);
+}
+
+/// Cada nó anda a sua fração do deslocamento: é o arraste com influência.
+pub fn mover_com_pesos(g: &mut Gaiola, base: &Gaiola, pesos: &BTreeMap<u32, f64>, d: V3) {
+    for (&id, &w) in pesos {
         let Some(p) = base.pos(id) else { continue };
-        let mut q = add(p, d);
+        let mut q = add(p, mul(d, w));
         if let Some(eixo) = base.no_preso_ao_plano(id) {
             q[eixo as usize] = p[eixo as usize];
         }
@@ -288,9 +298,14 @@ pub fn mover(g: &mut Gaiola, base: &Gaiola, nos: &[u32], d: V3) {
 
 /// Gira os nós em torno do eixo por `c`, a partir de como estavam.
 pub fn girar(g: &mut Gaiola, base: &Gaiola, nos: &[u32], c: V3, eixo: V3, graus: f64) {
+    girar_com_pesos(g, base, &pesos_cheios(nos), c, eixo, graus);
+}
+
+/// Cada nó gira a sua fração do ângulo: a ponta da influência quase não torce.
+pub fn girar_com_pesos(g: &mut Gaiola, base: &Gaiola, pesos: &BTreeMap<u32, f64>, c: V3, eixo: V3, graus: f64) {
     let Some(k) = unit(eixo) else { return };
-    let (s, co) = graus.to_radians().sin_cos();
-    for &id in nos {
+    for (&id, &w) in pesos {
+        let (s, co) = (graus * w).to_radians().sin_cos();
         let Some(p) = base.pos(id) else { continue };
         let v = sub(p, c);
         let r = add(add(mul(v, co), mul(cross(k, v), s)), mul(k, dot(k, v) * (1. - co)));
@@ -486,6 +501,58 @@ mod testes {
             mover(&mut g, &base, &[id], [0., 0., z]);
         }
         assert_eq!(g.pos(id).unwrap()[2], 8.);
+    }
+
+    /// Aceite do B302: puxar um nó com raio move os vizinhos pela curva escolhida.
+    #[test]
+    fn puxar_com_raio_move_os_vizinhos_pela_curva() {
+        use fenkra_core::subd_sel::{Influencia, Queda};
+        let g0 = Gaiola::plano([20., 20., 0.], [40., 40.], [4, 4]);
+        let no = |x: f64, y: f64| g0.nos.iter().find(|n| n.p[0] == x && n.p[1] == y).unwrap().id;
+        let c = no(20., 20.);
+        for q in Queda::TODAS {
+            let mut g = g0.clone();
+            let w = g.pesos_influencia(&[c], &Influencia { raio: 25., queda: q, so_conectados: false });
+            mover_com_pesos(&mut g, &g0, &w, [0., 0., 10.]);
+            assert_eq!(g.pos(c).unwrap()[2], 10.);
+            assert!((g.pos(no(30., 20.)).unwrap()[2] - 10. * q.peso(0.4)).abs() < 1e-9, "{q:?}");
+            assert!((g.pos(no(40., 20.)).unwrap()[2] - 10. * q.peso(0.8)).abs() < 1e-9, "{q:?}");
+            assert_eq!(g.pos(no(0., 0.)).unwrap()[2], 0., "{q:?}");
+        }
+    }
+
+    /// Aceite do B302: só conectados não afeta malha vizinha desconectada.
+    #[test]
+    fn so_conectados_nao_puxa_a_malha_vizinha() {
+        use fenkra_core::subd_sel::{Influencia, Queda};
+        let mut g0 = Gaiola::plano([10., 10., 0.], [20., 20.], [2, 2]);
+        let ids: Vec<u32> = [[0., 0., 3.], [20., 0., 3.], [20., 20., 3.], [0., 20., 3.]].map(|p| g0.novo_para_teste(p)).to_vec();
+        g0.face_para_teste(ids.clone());
+        let c = g0.nos.iter().find(|n| n.p == [10., 10., 0.]).unwrap().id;
+        let inf = Influencia { raio: 40., queda: Queda::Linear, so_conectados: true };
+        let mut g = g0.clone();
+        mover_com_pesos(&mut g, &g0, &g0.pesos_influencia(&[c], &inf), [0., 0., 10.]);
+        assert!(ids.iter().all(|n| g.pos(*n) == g0.pos(*n)), "a folha solta ficou");
+        let mut h = g0.clone();
+        mover_com_pesos(&mut h, &g0, &g0.pesos_influencia(&[c], &Influencia { so_conectados: false, ..inf }), [0., 0., 10.]);
+        assert!(ids.iter().all(|n| h.pos(*n) != g0.pos(*n)), "sem a opção ela anda");
+    }
+
+    #[test]
+    fn nos_da_costura_ficam_no_plano_mesmo_com_influencia() {
+        use fenkra_core::subd_sel::{Influencia, Queda};
+        let mut g0 = Gaiola::caixa([0.; 3], [20.; 3], [2, 2, 2]);
+        alternar_simetria(&mut g0, 0).unwrap();
+        let c = g0.nos.iter().find(|n| n.p[0] > 9. && n.p[1] == 0. && n.p[2] == 0.).unwrap().id;
+        let mut g = g0.clone();
+        let w = g0.pesos_influencia(&[c], &Influencia { raio: 100., queda: Queda::Constante, so_conectados: false });
+        mover_com_pesos(&mut g, &g0, &w, [-5., 0., 2.]);
+        for n in &g0.nos {
+            if n.p[0].abs() < 1e-9 {
+                assert_eq!(g.pos(n.id).unwrap()[0], 0.);
+            }
+        }
+        assert!(g.inteira().topologia().is_ok());
     }
 
     #[test]

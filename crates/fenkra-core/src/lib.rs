@@ -32,6 +32,7 @@ pub mod sketch;
 pub mod subd;
 pub mod subd_ops;
 pub mod subd_brep;
+pub mod subd_sel;
 pub mod trabalho;
 
 pub use doc::*;

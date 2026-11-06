@@ -6669,7 +6669,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let (shift, ctrl, scroll, ppp, right_down, left_down) = ctx.input(|i| {
                 (i.modifiers.shift, i.modifiers.command, i.smooth_scroll_delta.y, i.pixels_per_point, i.pointer.secondary_down(), i.pointer.primary_down())
             });
-            let scroll = if arvore_com_roda { 0. } else { scroll };
+            let scroll = if arvore_com_roda || crate::forma_ui::roda_no_raio(&self.forma) { 0. } else { scroll };
             // B95: Alt + roda percorre o que está sob o ponteiro em vez de dar zoom
             let alt_roda = ctx.input(|i| i.modifiers.alt) && resp.hovered() && !ctrl;
             let passo_ciclo = if alt_roda { self.selecao_ciclo.roda(scroll) } else { 0 } + std::mem::take(&mut self.selecao_extra.avancar);
