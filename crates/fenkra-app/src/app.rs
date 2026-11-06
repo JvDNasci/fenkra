@@ -24,6 +24,7 @@ mod diag;
 mod gravar;
 mod roda_app;
 mod demo_janelas;
+mod demo_estrutural;
 mod estado_doc;
 mod exportar;
 mod visualizacao;
@@ -768,7 +769,7 @@ impl App {
             app.load_doc(d, None, None);
             app.settings.bench = crate::settings::Bench::Estrutural;
             app.st_cut_open = true;
-            app.st_cantos_open = std::env::var("FENKRA_DEMO_CANTOS").is_ok();
+            app.st_cantos_open = std::env::var("FENKRA_DEMO_CANTOS").is_ok() || std::env::var("FENKRA_DEMO_LIMITE").is_ok();
             app.started = true;
         }
         // desenvolvimento: FENKRA_DEMO_ENCAIXE=1 abre um tubo redondo oblíquo encaixado noutro (B155) com o
@@ -860,6 +861,8 @@ impl App {
             app.st_cut_open = std::env::var("FENKRA_EDITAR").is_err();
             app.started = true;
         }
+        // desenvolvimento: FENKRA_DEMO_GOMOS e FENKRA_DEMO_SOLDA (casos da bancada Estrutural)
+        app.demo_estrutural();
         // desenvolvimento: FENKRA_EDITAR=<nome> abre esse comando como ambiente ao iniciar (depois das peças de demonstração)
         if let Ok(name) = std::env::var("FENKRA_EDITAR") {
             if let Some(id) = app.open.doc.features.iter().find(|f| f.name == name).map(|f| f.id) {
@@ -7160,6 +7163,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
 
             crate::st_ui::draw_falhas(ui, rect, &vp, &self.st_falhas);
             crate::st_cantos_ui::draw(ui, rect, &vp, &self.st_cantos, &mut self.st_cantos_sel);
+            crate::st_limite_ui::draw(ui, rect, &vp);
 
             // rótulos de pontos e curvas de referência
             if let (Some(r), true) = (&self.result, self.settings.filter.rotulos) {

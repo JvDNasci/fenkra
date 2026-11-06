@@ -66,6 +66,28 @@ fn aresta_perto(st: &mut DwgState, m: V2, so: Option<Id>) -> Option<(Id, V2, V2)
     melhor.map(|b| (b.1, b.2, b.3))
 }
 
+/// Centros das marcas de centro visíveis (B294) da folha, como pontos da vista: a cruz de um furo, e
+/// o centro do círculo de furos nas marcas circulares. Servem de âncora da cota (distância entre
+/// furos, entre furo e eixo).
+fn centros_marcados(st: &mut DwgState, m: V2) -> Option<(Id, V2)> {
+    let tol = 6. / st.zoom as f64;
+    let marcas: Vec<_> = st.d.centers.iter().filter(|c| c.visivel && !st.d.centros_ocultos.contains(&c.view)).cloned().collect();
+    let mut melhor: Option<(f64, Id, V2)> = None;
+    for mc in marcas {
+        let Some(v) = st.d.view(mc.view).filter(|v| v.sheet == st.sheet).cloned() else { continue };
+        let p = st.models.proj(&st.d, mc.view);
+        let Some(ax) = p.axes else { continue };
+        for a in mc.anchors.iter().chain(mc.centro.iter()) {
+            let q = ax.project(*a);
+            let d = dist(layout::to_sheet(&v, &p, q), m);
+            if d <= tol && melhor.as_ref().is_none_or(|b| d < b.0) {
+                melhor = Some((d, mc.view, q));
+            }
+        }
+    }
+    melhor.filter(|(_, v, _)| st.ci.view.is_none_or(|x| x == *v)).map(|(_, v, q)| (v, q))
+}
+
 /// O que há sob o cursor, ou por que não há nada. Vértice colado no cursor vence; depois arco,
 /// vértice mais longe e aresta.
 pub(super) fn alvo_sob(st: &mut DwgState, m: V2, snap: &SnapFn, view_at: &ViewAt) -> Result<(Id, Alvo), Motivo> {
@@ -75,6 +97,10 @@ pub(super) fn alvo_sob(st: &mut DwgState, m: V2, snap: &SnapFn, view_at: &ViewAt
         return Err(Motivo::ForaDeVista);
     }
     let px = 1. / st.zoom as f64;
+    // o centro de uma marca de centro vence: é a âncora de quem cota entre furos
+    if let Some((vid, q)) = centros_marcados(st, m) {
+        return Ok((vid, Alvo::Ponto(q)));
+    }
     let perto = snap(st, m, so);
     if let Some((vid, s, q)) = perto {
         if dist(s, m) <= 5. * px {

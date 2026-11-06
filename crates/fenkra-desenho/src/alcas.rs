@@ -74,7 +74,40 @@ pub fn travada_na_mae(d: &Drawing, id: Id) -> Option<(Id, bool)> {
             Dir::Esquerda | Dir::Direita | Dir::Tras => Some((*parent, false)),
             _ => None,
         },
+        ViewKind::Section { parent, .. } => {
+            let (_, u) = direcao_do_corte(d, id)?;
+            let pv = d.view(*parent)?;
+            let (dx, dy) = (v.pos[0] - pv.pos[0], v.pos[1] - pv.pos[1]);
+            // alinhada = o vetor mãe -> corte é paralelo à direção das setas
+            ((dx * u[1] - dy * u[0]).abs() < 0.05).then_some((*parent, u[0].abs() < u[1].abs()))
+        }
         _ => None,
+    }
+}
+
+/// Corte: a mãe e a direção, na folha, em que a vista do corte desliza presa a ela (a das setas da
+/// linha de corte). A linha vive nas coordenadas da projeção da mãe e a projeção para a folha só
+/// translada e escala, então a direção é a mesma nos dois sistemas.
+pub fn direcao_do_corte(d: &Drawing, id: Id) -> Option<(Id, V2)> {
+    let v = d.view(id)?;
+    let ViewKind::Section { parent, .. } = &v.kind else { return None };
+    let pts = crate::corte::caminho_da_vista(d, id);
+    let u = crate::corte::direcao_de_alinhamento(*pts.first()?, *pts.get(1)?)?;
+    Some((*parent, u))
+}
+
+/// Deslocamento `dm` (mm na folha) de uma vista de corte alinhada com a mãe: só a parte ao longo
+/// da direção das setas, a menos que `livre` (Ctrl). Outras vistas e cortes soltos andam livres.
+pub fn restringir_corte(d: &Drawing, id: Id, dm: V2, livre: bool) -> V2 {
+    if livre || travada_na_mae(d, id).is_none() {
+        return dm;
+    }
+    match direcao_do_corte(d, id) {
+        Some((_, u)) if matches!(d.view(id).map(|v| &v.kind), Some(ViewKind::Section { .. })) => {
+            let t = dm[0] * u[0] + dm[1] * u[1];
+            [u[0] * t, u[1] * t]
+        }
+        _ => dm,
     }
 }
 
@@ -216,6 +249,24 @@ mod tests {
         assert_eq!(travada_na_mae(&d, ids[0]), None);
         assert_eq!(travada_na_mae(&d, ids[1]), Some((ids[0], true)));
         assert_eq!(travada_na_mae(&d, ids[2]), Some((ids[0], false)));
+    }
+
+    #[test]
+    fn corte_alinhado_com_a_mae_so_desliza_na_direcao_das_setas() {
+        let mut d = Drawing::new("t", Format::A3);
+        let s = d.sheets[0].id;
+        let m = d.add_view(s, src(), ViewKind::Standard(Dir::Frente), [100., 100.], 1.);
+        // linha horizontal: as setas apontam na vertical, o corte fica abaixo da mãe, no mesmo x
+        let c = d.add_view(s, src(), ViewKind::Section { parent: m, a: [0., 5.], b: [40., 5.], label: "A".into() }, [100., 40.], 1.);
+        assert_eq!(travada_na_mae(&d, c), Some((m, true)), "alinhado: cadeado fechado");
+        assert_eq!(restringir_corte(&d, c, [7., -3.], false), [0., -3.], "só a parte vertical passa");
+        assert_eq!(restringir_corte(&d, c, [7., -3.], true), [7., -3.], "Ctrl solta");
+        // vista comum nunca é restringida por aqui
+        assert_eq!(restringir_corte(&d, m, [7., -3.], false), [7., -3.]);
+        // fora do alinhamento (solto com Ctrl antes): sem cadeado e sem restrição
+        d.views.iter_mut().find(|v| v.id == c).unwrap().pos = [150., 40.];
+        assert_eq!(travada_na_mae(&d, c), None);
+        assert_eq!(restringir_corte(&d, c, [7., -3.], false), [7., -3.]);
     }
 
     #[test]

@@ -85,6 +85,7 @@ preferências do usuário.
 | `FENKRA_DEMO_MALHA=<modo>` | acrescenta um corpo de malha ondulado à peça e abre o comando: `importar`, `reparar` (calota aberta), `decimar`, `booleana` |
 | `FENKRA_DEMO_IMPRESSAO=1` | abre o preparo de impressão com a peça aberta; `FENKRA_DEMO_IMPRESSAO_ARQUIVO=<arquivo>` grava o 3MF sem perguntar |
 | `FENKRA_EXIBIR=inclinacao\|isofotas\|dfm` | abre já no modo de análise (além de `zebra` e `curvatura`); com `dfm`, `FENKRA_DEMO_DFM=<parte do nome do perfil>` escolhe o processo (`fresagem`, `chapa`, `inje`, `3d`), liga o mapa de espessura e varre sozinho |
+| `FENKRA_DEMO_DWG=1` com `_ALCA`, `_DIALOGO`, `_CENTROS`, `_TABELA`, `_SIMBOLO` | desenho de exemplo já no estado a capturar: `_ALCA=corte\|detalhe\|projetada\|arrastando` (vista selecionada com alças; `arrastando` finge o arraste da vista de topo, com linha de alinhamento e cota ao vizinho), `_DIALOGO=novo\|exportar\|cota`, `_CENTROS=simples\|linear\|circular\|todos`, `_TABELA=1` (sem a coluna Rosca, com etiquetas e a linha A2 em destaque), `_SIMBOLO=rug\|solda` |
 | `FENKRA_DEMO_FOTO=<arquivo.png>` | grava a janela depois de 9 s e fecha o programa |
 | `FENKRA_DEMO_POLIMENTO=<caso>` | abre uma peça de prova do polimento da superfície (B346): `esfera`, `cilindro`, `toro`, `superficie` (painel de dupla curvatura), `filete`, `bolso`, `filete_sup` |
 | `FENKRA_DEMO_QUALIDADE=<desvio>,<ângulo>` | força a malha de trabalho, por exemplo `0.02,45` (a mais grossa aceita); `FENKRA_EXIBIR` também aceita `sombreado` e `render` |
@@ -102,6 +103,9 @@ preferências do usuário.
 | `FENKRA_DEMO_PREVIA=passo_<mm>` e `FENKRA_DEMO_PASSO=1` | caixa com esse lado e a extrusão aberta; a seta mostra o salto do arrasto em mm e em pixels |
 | `FENKRA_DEMO_SKETCH_CURSOR=x,y` | com `FENKRA_DEMO_SKETCH`, põe o cursor nessas coordenadas do plano do sketch |
 | `FENKRA_DEMO_ENCAIXE=1` | abre um tubo redondo oblíquo encaixado noutro (B155), com a janela de cantos e o cartão do encaixe abertos; `=folga` mostra também o rótulo flutuante da folga |
+| `FENKRA_DEMO_LIMITE=<x\|y\|z>:<mm>[:estender]` | com `FENKRA_DEMO_EST=1`, abre a janela de cantos com a seção de aparar/estender até limite (B37) e o plano escolhido |
+| `FENKRA_DEMO_GOMOS=1` | L de tubo redondo com corte simples em quatro gomos (B326); com `FENKRA_EDITAR=Membro` abre o painel do nó |
+| `FENKRA_DEMO_SOLDA=<cosmetico\|solido\|intermitente>` | tubo contra placa com o cordão de filete (B285) |
 | `FENKRA_DEMO_ESTADO=<nome>` | força o estado na barra: `sem`, `liberada`, `editado`, `leitura` ou `conflito` |
 | `FENKRA_DEMO_PROJETO=1` | abre um projeto de exemplo com o painel à vista; `comparar` já mostra a comparação com a revisão |
 | `FENKRA_DEMO_SECAO=1` | liga o corte de seção na prévia da casca |

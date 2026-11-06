@@ -292,7 +292,7 @@ pub fn ensure(app: &mut App) {
 }
 
 /// Desenvolvimento (`FENKRA_DEMO_DWG`): deixa a folha de exemplo no estado a capturar. `ALCA` =
-/// `corte`, `detalhe` ou `projetada` seleciona a vista (mostra as alças); `SIMBOLO` = `rug` ou
+/// `corte`, `detalhe` ou `projetada` seleciona a vista (mostra as alças; `arrastando` finge o arraste da vista de topo); `SIMBOLO` = `rug` ou
 /// `solda` cria e seleciona o símbolo (mostra o construtor); `DIALOGO` = `novo`, `exportar` abre o
 /// diálogo. Nada disso grava no disco.
 pub fn demo_ajustar(st: &mut DwgState) {
@@ -330,8 +330,13 @@ pub fn demo_ajustar(st: &mut DwgState) {
         "detalhe_perfil" => achar(st, &|k| matches!(k, ViewKind::Detail { .. })),
         "detalhe" => achar(st, &|k| matches!(k, ViewKind::Detail { .. })),
         "projetada" => achar(st, &|k| matches!(k, ViewKind::Projected { .. })),
+        // como se a vista de topo estivesse sendo arrastada: mostra a linha de alinhamento e a cota ao vizinho
+        "arrastando" => achar(st, &|k| matches!(k, ViewKind::Projected { dir: Dir::Topo, .. })),
         _ => None,
     };
+    if alca == "arrastando" {
+        st.dragging = true;
+    }
     let sheet = st.sheet;
     demo_centros_tabela(st);
     match std::env::var("FENKRA_DEMO_DWG_SIMBOLO").unwrap_or_default().as_str() {
@@ -365,8 +370,8 @@ pub fn demo_ajustar(st: &mut DwgState) {
 fn demo_centros_tabela(st: &mut DwgState) {
     use fenkra_desenho::centros::{self, ModoCentro};
     let modos = std::env::var("FENKRA_DEMO_DWG_CENTROS").unwrap_or_default();
-    // a vista de topo é a segunda do conjunto padrão
-    let topo = st.d.views.iter().find(|v| matches!(v.kind, ViewKind::Standard(Dir::Topo))).map(|v| v.id);
+    // a vista de topo do conjunto padrão é projetada da frente
+    let topo = st.d.views.iter().find(|v| matches!(v.kind, ViewKind::Standard(Dir::Topo) | ViewKind::Projected { dir: Dir::Topo, .. })).map(|v| v.id);
     if let (Some(vid), false) = (topo, modos.is_empty()) {
         let p = st.models.proj(&st.d, vid);
         if let Some(ax) = p.axes {
@@ -901,7 +906,14 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
         }
         // alças diretas da vista em foco (B250)
         if st.tool.is_none() && st.reassign.is_none() {
-            alcas::show(ui, &painter, st, &to_scr, &to_mm, z);
+            // numa camada acima das janelas flutuantes (painel de comando): uma alça sob o painel
+            // continua visível e clicável em vez de ficar escondida atrás dele
+            let ctx = ui.ctx().clone();
+            egui::Area::new(egui::Id::new("dwg_alcas")).order(egui::Order::Foreground).fixed_pos(rect.min).show(&ctx, |ui2| {
+                ui2.set_clip_rect(rect);
+                let pa = ui2.painter().with_clip_rect(rect);
+                alcas::show(ui2, &pa, st, &to_scr, &to_mm, z);
+            });
         }
         // ---------- ferramentas
         let snap = |st: &mut DwgState, p: V2, view_only: Option<Id>| -> Option<(Id, V2, V2)> {
@@ -1348,6 +1360,8 @@ fn arc_center(pl: &[V2]) -> Option<(V2, f64)> {
 }
 
 fn move_item(st: &mut DwgState, id: Id, dm: V2) {
+    // corte alinhado com a mãe só desliza na direção das setas (Ctrl solta)
+    let dm = fenkra_desenho::alcas::restringir_corte(&st.d, id, dm, st.ctrl_livre);
     if let Some(v) = st.d.views.iter_mut().find(|v| v.id == id) {
         v.pos = [v.pos[0] + dm[0], v.pos[1] + dm[1]];
         // a vista mãe leva junto as projetadas (e o alinhamento mantém o resto)
@@ -2094,6 +2108,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             }
             return;
         }
+        tabelas_ui::garantir_folhas(st, id);
         let tabela_pre = st.d.tables.iter().find(|t| t.id == id).cloned().map(|t| tabela::dados(&mut st.models, &t, &st.d).todas);
         let vistas_folha: Vec<(Id, String)> = st.d.views.iter().filter(|v| v.sheet == st.sheet).map(|v| (v.id, v.name.clone())).collect();
         if let Some(t) = st.d.tables.iter_mut().find(|t| t.id == id) {
