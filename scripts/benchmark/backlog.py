@@ -244,7 +244,7 @@ c('B117', 4, 'P1', 'Plano de inspeção e FAI', "Balões numerados do desenho/PM
 c('B118', 4, 'P1', 'Custeio por modelo de custo', 'Modelo de custo em arquivo (material, processos, taxas). Coluna de custo na BOM. (BN06; módulo Custeio; depende de B92, B86, B80, B37).',
   ['PESQ-MOD'], [], 300, 'Auto', 'PDM / PLM'),
 c('B119', 4, 'P0', 'Exportação 3MF e preparo de impressão', 'Base de entrada e saída para impressão: 3MF com unidade mm, tesselação configurável, múltiplos corpos, posição na mesa, metadados, miniatura e cores por face via Materials; escrita própria zip+XML validada com lib3mf (BSD-2) em CI; STL binário; verificação pré-impressão (estanque, não manifold, normais, partes soltas); assentar peça numa face e mapa de balanço mínimo; abertura no fatiador externo por processo separado com caminho configurável. A bancada completa de orientação e suportes é o B164.',
-  ['PESQ-MOD'], [], 250, 'Auto', 'Geral'),
+  ['PESQ-MOD'], [], 250, 'Auto', 'Geral', status='feito'),
 c('B120', 4, 'P2', 'Lattice e preenchimento implícito', 'Lattice e preenchimento implícito sobre corpo de malha: TPMS uniforme (giroide, Schwarz-P, diamante) intersectado com o corpo e casca externa, fração de volume como alvo, parede mínima por processo, superfície por marching cubes ou dual contouring sobre grade esparsa (OpenVDB Apache-2.0 ou grade própria em Rust). Vigas, 3MF Beam Lattice e gradiente por campo ficam em item separado.',
   ['PESQ-MOD'], [], 450, 'Auto', 'Geral'),
 c('B121', 4, 'P1', 'Estudo de movimento cinemático', 'Acrescentar: cursor direto por junta, que move o mecanismo sem calcular quadros; o cálculo fica para a reprodução no tempo. Gráficos com eixos, unidades e cursor de tempo; trajetória de um ponto desenhada no 3D; lista no 3D do grau de liberdade que ainda falta comandar.',
@@ -349,7 +349,7 @@ c('B169', 4, 'P1', 'Converter malha (STL/OBJ/3MF) em STEP sólido', 'Conversão 
   ['USR-STL'], [], 350, 'Auto + Visual', 'Superfícies e wireframe'),
 # ---------------------------------------------------------------- benchmarking 2 (docs/pesquisa/bench-*.md)
 c('B170', 4, 'P1', 'Núcleo de malha: corpo de malha na árvore, importação, reparo, decimação e BVH', 'Tipo de corpo de malha de primeira classe na árvore do Fenkra com importação e exportação de STL, OBJ, PLY e 3MF, solda de vértices, reparo (furos, normais, partes soltas, não manifold), decimação, BVH para consulta de distância e interseção, desvio malha x B-rep e booleanas de malha (Manifold, Apache-2.0, ou port Rust). Base compartilhada por B119, B120, B158, B164 e B169.',
-  ['PESQ-BENCH2'], [], 300, 'Auto', 'Geral'),
+  ['PESQ-BENCH2'], [], 300, 'Auto', 'Geral', status='feito'),
 c('B171', 4, 'P1', 'Biblioteca de processos, máquinas e ferramentas de fabricação', 'Biblioteca JSON editável e versionada de processos (FDM, SLA, SLS, metal, laser de tubo, dobradeira), máquinas (volume, camada, kerf, curso), materiais (contração, retorno elástico), ferramentas (punção, matriz, tochas) e folgas por processo, com perfis de regras DFM referenciando-a. Compartilhada por B112, B113, B164, B165, B166, B167 e B163.',
   ['PESQ-BENCH2'], [], 200, 'Auto', 'Geral'),
 c('B172', 4, 'P2', 'Corpo para impressão derivado (compensação sem alterar o projeto)', 'Objeto derivado do corpo de projeto que aplica contração por eixo, folgas em furos e pinos, gota em furos horizontais e conversões de DfAM, com marcação no 3D, reversão e exportação separada, preservando o corpo original e as exportações de engenharia. Calibração por cupom de teste gerado pelo Fenkra e medidas do usuário.',
