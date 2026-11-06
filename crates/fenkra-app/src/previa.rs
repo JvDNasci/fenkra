@@ -142,6 +142,7 @@ pub fn decorar(doc: &Document, r: &RecomputeResult, f: &Fantasma, s: &mut crate:
             helice(h, cor_linha(f.cor), cor_linha(f.entrada), &mut s.overlay);
         }
     }
+    crate::previa_leve_ui::desenhar(r, f, feat.target, s);
     crate::entradas::destacar(doc, r, f, s);
     plano_referenciado(doc, r, f, s);
 }
@@ -1018,6 +1019,30 @@ mod tests {
         let h = r.roscas.iter().find(|x| x.feature == th).expect("posição da rosca");
         assert!((h.radius - 5.).abs() < 1e-6 && (h.len - 10.).abs() < 1e-6);
         assert!(c.overlay.len() > 200, "hélice e anéis");
+    }
+
+    /// B356: o filete aberto não refaz a peça: o corpo fica como estava e as linhas de tangência caem a
+    /// 3 mm da aresta, uma em cada face (o resultado real só vem ao concluir).
+    #[test]
+    fn filete_leve_desenha_as_linhas_de_tangencia() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let mut d = caixa();
+        let antes = recompute(&d);
+        let base = corpos_base(Some(&antes));
+        // aresta do topo em y = -20 (caixa de 40 x 40 x 20)
+        let id = d.add_feature(FeatureKind::Fillet(EdgeOp { value: s("3"), edges: EdgeSel::Edges(vec![[0., -20., 20.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
+        let mut cache = fenkra_solidos::Cache::default();
+        cache.leve = Some(id);
+        let r = fenkra_solidos::recompute_cached(&d, &mut cache);
+        assert!((r.bodies[0].mass.volume - antes.bodies[0].mass.volume).abs() < 1e-6, "o corpo não muda na prévia");
+        let c = cena(&d, &r, id, &base);
+        let cor = cor_linha([40, 50, 60]);
+        // pontos do overlay na cor de entrada que ficam em y = -17 (face de cima) e em z = 17 (face da frente)
+        let em = |f: &dyn Fn(&LineVertex) -> bool| c.overlay.iter().filter(|v| v.col == cor && f(v)).count();
+        assert!(em(&|v| (v.pos[1] + 17.).abs() < 1e-3 && (v.pos[2] - 20.).abs() < 1e-3) >= 2, "linha na face de cima");
+        assert!(em(&|v| (v.pos[2] - 17.).abs() < 1e-3 && (v.pos[1] + 20.).abs() < 1e-3) >= 2, "linha na face da frente");
     }
 
     /// B07: espessura em face: o acréscimo vai para o fantasma e a face escolhida realça.

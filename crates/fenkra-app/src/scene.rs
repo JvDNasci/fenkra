@@ -163,12 +163,9 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             if let Some(i) = copias.get(&collector) {
                 if shows(!col.visible, env) {
                     let (rough, metal, alpha) = base.finish.params();
-                    let mut c = rgb(if base.color == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(base.color) } else { base.color });
-                    if body_sel {
-                        c = [c[0] * 0.55 + 0.45, c[1] * 0.55 + 0.38, c[2] * 0.55 + 0.08];
-                    }
+                    let c = rgb(if base.color == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(base.color) } else { base.color });
                     let textura = base.texture.filter(|t| (*t as u32) < crate::render::TEX_LAYERS).map(|t| t as f32 + 1.).unwrap_or(0.);
-                    let (copia, (lo, hi)) = copia_de(i, c, [rough, metal, alpha, textura], edge_col);
+                    let (copia, (lo, hi)) = copia_de(i, c, [rough, metal, alpha, textura], if body_sel { HILITE } else { edge_col });
                     grow(&mut bounds, lo);
                     grow(&mut bounds, hi);
                     match s.lotes.iter_mut().find(|l| l.prototipo.id == i.prototipo.id) {
@@ -193,10 +190,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 let app = owner.and_then(|w| feat_app.get(&w).copied()).unwrap_or(base);
                 let (rough, metal, alpha) = app.finish.params();
                 // corpo na cor padrão do documento ganha a cor de peça do tema
-                let mut c = rgb(if app.color == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(app.color) } else { app.color });
-                if body_sel || owner.is_some_and(|w| hi_features.contains(&w)) {
-                    c = [c[0] * 0.55 + 0.45, c[1] * 0.55 + 0.38, c[2] * 0.55 + 0.08];
-                }
+                let c = rgb(if app.color == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(app.color) } else { app.color });
                 let start = m.face_ranges[fi] as usize;
                 let end = m.face_ranges.get(fi + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
                 let textura = app.texture.filter(|t| (*t as u32) < crate::render::TEX_LAYERS).map(|t| t as f32 + 1.).unwrap_or(0.);
@@ -233,7 +227,8 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 let cor = o.fantasma.as_ref().map(|f| f.cor_de(doc));
                 match (fid, cor) {
                     (Some(id), Some(c)) if face_owner.contains(&id) => crate::previa::arestas_com_fantasma(&mut s.edges, &mut s.lines, m, o.tangent_edges, edge_col, c, face_owner, id),
-                    _ => push_edges(&mut s.edges, m, o.tangent_edges, edge_col),
+                    // a peça mantém a cor: o realce é só das arestas do item, nunca da área
+                    _ => arestas_com_realce(&mut s.edges, &mut s.lines, m, o.tangent_edges, edge_col, |face| body_sel || face_owner.get(face as usize).is_some_and(|w| hi(*w))),
                 }
             }
         }
@@ -381,10 +376,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             }
             let app = rf.and_then(|x| x.appearance).unwrap_or(Appearance { color: [222, 170, 110], finish: fenkra_core::Finish::Acetinado, texture: None });
             let (rough, metal, alpha) = app.finish.params();
-            let mut c = rgb(app.color);
-            if selected {
-                c = [c[0] * 0.55 + 0.45, c[1] * 0.55 + 0.38, c[2] * 0.55 + 0.08];
-            }
+            let c = rgb(app.color);
             let m = r.exibicao.get(&sf.id).filter(|_| o.fantasma.is_none()).map_or(&sf.mesh, |m| &**m);
             let base = s.mesh.len() as u32;
             for k in (0..m.positions.len()).step_by(3) {
@@ -662,6 +654,25 @@ mod testes_setas {
 }
 
 /// Arestas da malha; as de tangência (suaves) só se pedidas — o raio fica limpo como na peça real.
+/// Arestas do corpo, com as das faces realçadas por cima na cor de realce.
+fn arestas_com_realce(edges: &mut Vec<LineVertex>, lines: &mut Vec<LineVertex>, m: &fenkra_kernel::Mesh, tangent: bool, col: [f32; 4], realcada: impl Fn(u32) -> bool) {
+    if m.edge_faces.len() != m.edge_ranges.len() {
+        return push_edges(if realcada(0) { lines } else { edges }, m, tangent, if realcada(0) { HILITE } else { col });
+    }
+    let nseg = m.edges.len() / 6;
+    for (e, [a, b]) in m.edge_faces.iter().enumerate() {
+        if !tangent && m.edge_smooth.get(e).is_some_and(|s| *s != 0) {
+            continue;
+        }
+        let (dst, cor) = if realcada(*a) || realcada(*b) { (&mut *lines, HILITE) } else { (&mut *edges, col) };
+        let s0 = m.edge_ranges[e] as usize;
+        let s1 = m.edge_ranges.get(e + 1).map(|x| *x as usize).unwrap_or(nseg);
+        for q in m.edges[s0 * 6..s1 * 6].chunks_exact(3) {
+            dst.push(lv([q[0], q[1], q[2]], cor));
+        }
+    }
+}
+
 pub(crate) fn push_edges(dst: &mut Vec<LineVertex>, m: &fenkra_kernel::Mesh, tangent: bool, col: [f32; 4]) {
     let nseg = m.edges.len() / 6;
     if tangent || m.edge_smooth.len() != m.edge_ranges.len() {
@@ -710,6 +721,24 @@ mod testes_malha_de_tela {
         let (sel, filtro) = (Sel::None, Filter::default());
         let o = SceneOpts { sombra_perfil: true, instancias: &[], forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: None, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura, fantasma };
         build(d, r, &o)
+    }
+
+    #[test]
+    fn realce_nao_pinta_a_peca_e_acende_so_as_arestas() {
+        let mut d = esfera("40");
+        if let FeatureKind::Primitive(p) = &mut d.features[0].kind {
+            (p.kind, p.a, p.b, p.c) = (PrimKind::Caixa, "10".into(), "20".into(), "30".into());
+        }
+        let r = polida(&d);
+        let id = d.features[0].id;
+        let (sel, filtro) = (Sel::None, Filter::default());
+        let cena_com = |hilite| build(&d, &r, &SceneOpts { sombra_perfil: true, instancias: &[], forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura: None, fantasma: None });
+        let (normal, acesa) = (cena_com(None), cena_com(Some(id)));
+        assert!(!normal.mesh.is_empty());
+        assert_eq!(normal.mesh.len(), acesa.mesh.len());
+        assert!(normal.mesh.iter().zip(&acesa.mesh).all(|(a, b)| a.col == b.col), "a cor da peça não muda com o realce");
+        assert!(acesa.lines.iter().any(|l| l.col == HILITE), "as arestas do item acendem");
+        assert!(!normal.lines.iter().any(|l| l.col == HILITE));
     }
 
     #[test]

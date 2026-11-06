@@ -477,7 +477,8 @@ mod tests {
         st.refresh();
         let s = cena(&st, None, Some(a));
         assert_eq!(s.lotes[0].copias.len(), 2);
-        assert_ne!(s.lotes[0].copias[0].gpu.col, s.lotes[0].copias[1].gpu.col, "só a realçada muda de cor");
+        assert_eq!(s.lotes[0].copias[0].gpu.col, s.lotes[0].copias[1].gpu.col, "o realce não pinta a peça");
+        assert_ne!(s.lotes[0].copias[0].gpu.aresta, s.lotes[0].copias[1].gpu.aresta, "só as arestas da realçada acendem");
     }
 
     #[test]

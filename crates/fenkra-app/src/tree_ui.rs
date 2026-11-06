@@ -15,7 +15,7 @@ use std::hash::Hash;
 
 pub const ZOOM_MIN: f32 = 0.6;
 pub const ZOOM_MAX: f32 = 2.0;
-/// Largura máxima da área da árvore; o que passar disso se alcança arrastando.
+/// Largura máxima da área da árvore; o que passar disso se alcança pela roda (Shift + roda na horizontal).
 pub const LARGURA: f32 = 320.;
 /// Sobra mínima da árvore dentro da área, para ela nunca sumir de vez ao ser arrastada.
 const SOBRA: f32 = 48.;

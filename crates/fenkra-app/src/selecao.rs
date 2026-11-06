@@ -153,6 +153,11 @@ pub fn limpar_ao_concluir<S: Default, P>(sel: &mut S, multi: &mut Vec<fenkra_cor
     picks.clear();
 }
 
+/// Comando novo com erro não fica na árvore quando a pessoa sai dele sem concluir.
+pub fn descartar_ao_sair(novo: bool, status: Option<&fenkra_solidos::Status>) -> bool {
+    novo && matches!(status, Some(fenkra_solidos::Status::Error(_)))
+}
+
 /// Tipos de subelemento que o comando aberto aceita. Vale só enquanto o comando está aberto e some
 /// sozinho ao fechar: nada é gravado nas preferências, então o filtro da barra volta intacto.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -244,6 +249,16 @@ mod testes {
         assert_eq!(ids_do_conjunto(&multi, unico(&sel), std::iter::empty()), vec![fenkra_core::Id(3)], "só o que a pessoa marcou à parte segue");
         multi.clear();
         assert!(ids_do_conjunto(&multi, unico(&sel), std::iter::empty()).is_empty());
+    }
+
+    #[test]
+    fn so_comando_novo_com_erro_some_ao_sair_sem_concluir() {
+        use fenkra_solidos::Status;
+        let erro = Status::Error("sem perfil".into());
+        assert!(descartar_ao_sair(true, Some(&erro)));
+        assert!(!descartar_ao_sair(false, Some(&erro)), "o que já existia não some");
+        assert!(!descartar_ao_sair(true, Some(&Status::Ok)));
+        assert!(!descartar_ao_sair(true, None), "ainda calculando: não apaga");
     }
 
     #[test]

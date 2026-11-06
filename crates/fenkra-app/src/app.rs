@@ -2232,7 +2232,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             crate::forma_ui::comecar(self, p);
             return;
         }
-        self.conclude_session();
+        self.sair_da_sessao();
         let snapshot = self.open.doc.clone();
         let sel_now = self.sel;
         let s = |v: &str| v.to_string();
@@ -2897,7 +2897,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         if self.session.as_ref().is_some_and(|s| s.id == id) {
             return;
         }
-        self.conclude_session();
+        self.sair_da_sessao();
+        if self.open.doc.feature(id).is_none() && self.open.doc.reference(id).is_none() {
+            return;
+        }
         if scene::is_sketch_feature(&self.open.doc, id) {
             self.begin_sketch(id);
             return;
@@ -2906,11 +2909,35 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let corpos_antes = crate::previa::corpos_base(self.result.as_ref());
         self.session = Some(Session { id, snapshot, is_new, corpos_antes, ultima_valida: vec![] });
         // rosca modelada aberta para edição: refaz já na versão leve (só linhas), sem esperar a primeira alteração
-        if self.open.doc.feature(id).is_some_and(|f| fenkra_solidos::rosca_furo::modelada(&f.kind)) {
+        if self.open.doc.feature(id).is_some_and(|f| fenkra_solidos::rosca_furo::modelada(&f.kind) || fenkra_solidos::previa_leve::cobre(&f.kind)) {
             self.request_recompute();
         }
         self.reframe_pending = true;
         self.sel = if self.open.doc.reference(id).is_some() { Sel::Ref(id) } else { Sel::Feature(id) };
+    }
+
+    /// O X do painel de comando: cancela o comando aberto, como o botão Cancelar.
+    fn fechar_comando(&mut self) {
+        if self.session.is_some() {
+            self.cancel_session();
+        } else if self.sketch.is_some() {
+            self.finish_sketch();
+        } else if let Some(st) = self.asm.as_mut().filter(|s| s.cmd.is_some()) {
+            st.cmd = None;
+        } else {
+            self.sel = Sel::None;
+        }
+    }
+
+    /// Saída sem Concluir (outro comando, clique fora): comando novo que não ficou válido não
+    /// sobra na árvore; o restante é mantido.
+    fn sair_da_sessao(&mut self) {
+        let invalido = self.session.as_ref().is_some_and(|s| crate::selecao::descartar_ao_sair(s.is_new, self.status_of(s.id)));
+        if invalido {
+            self.cancel_session();
+        } else {
+            self.conclude_session();
+        }
     }
 
     /// Concluir: mantém as alterações.
@@ -2938,7 +2965,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.toast(format!("{} membros separados (um por linha)", parts.len()), false);
             }
             // concluir sempre atualiza (também no modo manual); a rosca modelada só vira sulco aqui (B351)
-            if self.needs_recompute() || self.open.doc.feature(s.id).is_some_and(|f| fenkra_solidos::rosca_furo::modelada(&f.kind)) {
+            if self.needs_recompute() || self.open.doc.feature(s.id).is_some_and(|f| fenkra_solidos::rosca_furo::modelada(&f.kind) || fenkra_solidos::previa_leve::cobre(&f.kind)) {
                 self.request_recompute();
             }
             self.scene_dirty = true;
@@ -3643,6 +3670,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                         ui.close();
                     }
                     ui.menu_button(tr("Painéis"), |ui| crate::paineis::menu(ui, &mut self.settings));
+                    let mut arvore = !self.settings.arvore_fechada;
+                    if ui.checkbox(&mut arvore, tr("Árvore")).changed() {
+                        self.settings.arvore_fechada = !arvore;
+                    }
                     ui.menu_button(tr("Estilo de exibição"), |ui| {
                         for m in crate::render::DisplayMode::ALL {
                             ui.radio_value(&mut self.settings.display, m, m.label());
@@ -3819,7 +3850,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let direita = !self.settings.editor_left;
         let padrao = if direita { paineis::abaixo_do_cubo(area, LARGURA) } else { paineis::ao_lado_da_arvore(area) };
         // encaixado desde o início: ele se afasta das barras da mesma borda em vez de cobri-las
-        let posicao = self.settings.painel("comando", if direita { Encaixe::Direita } else { Encaixe::Esquerda });
+        let posicao = paineis::Posicao { fechado: false, ..self.settings.painel("comando", if direita { Encaixe::Direita } else { Encaixe::Esquerda }) };
         let titulo = if self.sketch.is_some() {
             tr("Sketch").to_string()
         } else if let Some(s) = &self.session {
@@ -3832,6 +3863,9 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let cfg = Painel { nome: "comando".into(), titulo, padrao, largura: LARGURA, redimensiona: true };
         let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
             self.conclude_bar(ui);
+            if !matches!(self.settings.bench, crate::settings::Bench::Desenho | crate::settings::Bench::Montagem) && self.sketch.is_none() {
+                editor::barra_fixa(self, ui);
+            }
             // desenvolvimento: FENKRA_DEMO_ROLAR=<px> abre o painel já rolado, para capturar o que fica abaixo da dobra
             let mut rolagem = egui::ScrollArea::vertical();
             if let Some(px) = std::env::var("FENKRA_DEMO_ROLAR").ok().and_then(|v| v.parse::<f32>().ok()) {
@@ -3850,8 +3884,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
             });
         });
-        if let Some(p) = saida.movido {
+        if let Some(mut p) = saida.movido {
+            // o X do painel de comando encerra o comando: não existe comando aberto sem painel
+            let fechou = std::mem::take(&mut p.fechado);
             self.settings.guardar_painel("comando", p);
+            if fechou {
+                self.fechar_comando();
+            }
         }
     }
 
@@ -4003,7 +4042,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let topo = Rect::from_min_size(area.min + egui::vec2(6., 4.), egui::vec2(largura, 22.));
         let regiao = Rect::from_min_max(topo.left_bottom() + egui::vec2(0., 2.), egui::pos2(topo.right(), area.bottom() - 28.));
         self.arvore.regiao = regiao;
-        let (ponteiro, roda, pinca) = ctx.input(|i| (i.pointer.latest_pos(), i.smooth_scroll_delta.y, i.zoom_delta()));
+        if self.settings.arvore_fechada {
+            self.arvore.conteudo = Rect::NOTHING;
+            return;
+        }
+        let (ponteiro, roda, pinca) = ctx.input(|i| (i.pointer.latest_pos(), i.smooth_scroll_delta, i.zoom_delta()));
         let zona = self.arvore.conteudo.intersect(regiao);
         let sobre = ponteiro.is_some_and(|p| zona.contains(p));
         let centro = ponteiro.filter(|_| sobre).unwrap_or(regiao.min);
@@ -4011,7 +4054,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             self.arvore.zoom_em(centro, pinca);
         }
         if self.arvore_com_roda {
-            self.arvore.pan.y += roda;
+            self.arvore.pan += roda;
         }
         // atalhos: Alt + mais, menos, 0 (enquadrar) e L (localizar)
         let tecla = |k: egui::Key| ctx.input_mut(|i| i.consume_key(egui::Modifiers::ALT, k));
@@ -4052,7 +4095,28 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         if tree_ui::controle(&mut barra, "arvore_recolher", tr("Recolher todos os ramos")) {
             self.arvore.recolher = true;
         }
+        // opções da própria árvore: discretas, para não competir com os controles do dia a dia
+        let opcoes = barra.menu_button(RichText::new("⋯").weak(), |ui| {
+            let solta = self.settings.arvore_solta;
+            if ui.checkbox(&mut self.settings.arvore_solta, tr("Soltar a árvore")).on_hover_text(tr("Solta: arrastar o fundo desloca a árvore. Travada: ela fica no lugar e a roda do mouse rola a lista.")).changed() && solta {
+                self.arvore.pan = egui::Vec2::ZERO;
+            }
+            let rotulo = if self.settings.arvore_minimizada { tr("Expandir a árvore") } else { tr("Minimizar a árvore") };
+            if ui.button(rotulo).clicked() {
+                self.settings.arvore_minimizada = !self.settings.arvore_minimizada;
+                ui.close();
+            }
+            if ui.button(tr("Fechar a árvore")).on_hover_text(tr("Volta pelo menu Exibir, em Árvore")).clicked() {
+                self.settings.arvore_fechada = true;
+                ui.close();
+            }
+        });
+        opcoes.response.on_hover_text(tr("Opções da árvore"));
         contorno.aplicar(&barra);
+        if self.settings.arvore_minimizada {
+            self.arvore.conteudo = Rect::NOTHING;
+            return;
+        }
 
         tree_ui::comecar(&self.arvore);
         let zoom = self.arvore.zoom;
@@ -4060,10 +4124,13 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let mut ui = root.new_child(egui::UiBuilder::new().id_salt("arvore").max_rect(caixa));
         ui.set_clip_rect(regiao);
         tree_ui::estilo(&mut ui, zoom);
-        // arrastar a árvore: fica atrás das linhas, que continuam com o clique
+        // travada por padrão, para o arraste ser do recurso; solta, o fundo desloca a árvore
+        // a área fica mesmo travada: senão o arraste sobre a árvore vaza para o 3D e gira a vista
         if zona.is_positive() {
             let arrasto = ui.interact(zona, egui::Id::unique("arvore_mover"), egui::Sense::drag());
-            self.arvore.pan += arrasto.drag_delta();
+            if self.settings.arvore_solta {
+                self.arvore.pan += arrasto.drag_delta();
+            }
         }
         let contorno = Contorno::reservar(&ui, regiao);
         match self.left {
@@ -5594,7 +5661,19 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             actions.push(TreeAction::EditSketch(f.id));
         }
         let free = doc.is_free(f);
-        let resp = drag_item(ui, resp, f.id, free && self.renaming != Some(f.id));
+        let resp = drag_item(ui, resp, f.id, self.renaming != Some(f.id));
+        // soltar um recurso sobre outro leva ao lugar dele; pai e filho seguem validados no documento
+        if let Some(p) = resp.dnd_release_payload::<DragItem>() {
+            if p.0 != f.id && doc.feature(p.0).is_some() {
+                actions.push(TreeAction::Move(p.0, i));
+            }
+        }
+        let origem = resp.dnd_hover_payload::<DragItem>().filter(|p| p.0 != f.id).and_then(|p| doc.features.iter().position(|x| x.id == p.0));
+        if let Some(de) = origem {
+            // quem desce fica depois deste, quem sobe fica antes
+            let y = if de < i { resp.rect.bottom() } else { resp.rect.top() };
+            ui.painter().hline(resp.rect.x_range(), y, egui::Stroke::new(2., crate::theme::accent(ui.visuals())));
+        }
         let resp = match st.and_then(|s| s.message()) {
             Some(m) => resp.on_hover_text(m),
             None => resp,
@@ -5866,9 +5945,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 self.sel = Sel::Folder(id);
             }
             TreeAction::NewGeoIn(fo, k) => {
+                let snapshot = d.clone();
                 let id = d.add_geometry(k.make(&Default::default()));
                 let _ = d.move_to_folder(id, fo);
-                self.start_session(id, true, None);
+                self.start_session(id, true, Some(snapshot));
             }
             TreeAction::MoveTo(item, fo) => {
                 if d.move_to_folder(item, fo).is_err() {
@@ -7084,16 +7164,18 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             let (shift, ctrl, scroll, ppp, right_down, left_down) = ctx.input(|i| {
                 (i.modifiers.shift, i.modifiers.command, i.smooth_scroll_delta.y, i.pixels_per_point, i.pointer.secondary_down(), i.pointer.primary_down())
             });
-            let scroll = if arvore_com_roda || crate::forma_ui::roda_no_raio(&self.forma) { 0. } else { scroll };
+            // roda de comandos aberta: a câmera fica parada, a rolagem e o mouse são dela
+            let roda_aberta = self.roda.aberta();
+            let scroll = if arvore_com_roda || roda_aberta || crate::forma_ui::roda_no_raio(&self.forma) { 0. } else { scroll };
             // B95: Alt + roda percorre o que está sob o ponteiro em vez de dar zoom
             let alt_roda = ctx.input(|i| i.modifiers.alt) && resp.hovered() && !ctrl;
             let passo_ciclo = if alt_roda { self.selecao_ciclo.roda(scroll) } else { 0 } + std::mem::take(&mut self.selecao_extra.avancar);
             let scroll = if alt_roda { 0. } else { scroll };
-            let delta = resp.drag_delta();
+            let delta = if roda_aberta { egui::Vec2::ZERO } else { resp.drag_delta() };
             let (left, mid, right) = (
-                resp.dragged_by(egui::PointerButton::Primary),
-                resp.dragged_by(egui::PointerButton::Middle),
-                resp.dragged_by(egui::PointerButton::Secondary),
+                !roda_aberta && resp.dragged_by(egui::PointerButton::Primary),
+                !roda_aberta && resp.dragged_by(egui::PointerButton::Middle),
+                !roda_aberta && resp.dragged_by(egui::PointerButton::Secondary),
             );
             let sketching = self.sketch.is_some();
             use crate::settings::NavStyle as N;
@@ -8813,7 +8895,7 @@ impl eframe::App for App {
                 if self.fill_from_selection(sid, Some(tree_sel)) {
                     self.sel = if self.open.doc.reference(sid).is_some() { Sel::Ref(sid) } else { Sel::Feature(sid) };
                 } else {
-                    self.conclude_session();
+                    self.sair_da_sessao();
                 }
             }
         }

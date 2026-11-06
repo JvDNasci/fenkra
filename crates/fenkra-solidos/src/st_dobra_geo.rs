@@ -430,6 +430,7 @@ impl<'a> Ctx<'a> {
             cut_outlines: vec![],
             malhas: HashMap::new(),
             roscas: vec![],
+            previas: vec![],
             leve: None,
             steps: HashMap::new(),
             miter_next: false,

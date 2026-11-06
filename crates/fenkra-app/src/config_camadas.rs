@@ -39,6 +39,9 @@ use Classe::*;
 pub const CLASSIFICACAO: &[(&str, Classe)] = &[
     ("opcoes_importar", Sessao),
     ("opcoes_exportar", Sessao),
+    ("arvore_solta", Sessao),
+    ("arvore_minimizada", Sessao),
+    ("arvore_fechada", Sessao),
     ("impressao", Sessao),
     ("fatiador", Maquina),
     ("theme", Interface),

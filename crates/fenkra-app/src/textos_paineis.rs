@@ -3,6 +3,14 @@
 
 pub static TEXTOS: &[(&str, &str)] = &[
     ("fechar", "close"),
+    ("Árvore", "Tree"),
+    ("Soltar a árvore", "Unlock the tree"),
+    ("Solta: arrastar o fundo desloca a árvore. Travada: ela fica no lugar e a roda do mouse rola a lista.", "Unlocked: dragging the background moves the tree. Locked: it stays in place and the mouse wheel scrolls the list."),
+    ("Expandir a árvore", "Expand the tree"),
+    ("Minimizar a árvore", "Minimize the tree"),
+    ("Fechar a árvore", "Close the tree"),
+    ("Volta pelo menu Exibir, em Árvore", "Bring it back from the View menu, under Tree"),
+    ("Opções da árvore", "Tree options"),
     ("minimizar", "minimize"),
     ("expandir", "expand"),
     ("Barra esquerda", "Left toolbar"),
