@@ -176,6 +176,7 @@ pub enum Papel {
     Retirada,
     Ferramenta,
     Neutro,
+    Alvo,
 }
 
 /// Deficiências simuladas.

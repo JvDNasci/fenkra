@@ -701,6 +701,8 @@ mod tests {
         let mut cena = Scene::default();
         destacar(&d, &antes, &fantasma(id, &base), &mut cena);
         assert!(tem(&cena, [130, 140, 150]));
-        assert_eq!(cena.ghost.len(), antes.bodies[0].mesh.indices.len(), "todas as faces do corpo");
+        // o corpo alvo também aparece, na cor própria dele: conta só o que tem a cor da ferramenta
+        let n_ferramenta = cena.ghost.iter().filter(|v| (0..3).all(|i| (v.col[i] - [130., 140., 150.][i] / 255.).abs() < 1e-6)).count();
+        assert_eq!(n_ferramenta, antes.bodies[0].mesh.indices.len(), "todas as faces do corpo");
     }
 }

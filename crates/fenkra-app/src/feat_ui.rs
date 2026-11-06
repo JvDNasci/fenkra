@@ -110,7 +110,7 @@ pub fn face_marks(k: &FeatureKind) -> Vec<[f64; 3]> {
     }
 }
 
-fn faces_ui(ui: &mut egui::Ui, faces: &mut Vec<[f64; 3]>, picked: &[[f64; 3]]) {
+pub(crate) fn faces_ui(ui: &mut egui::Ui, faces: &mut Vec<[f64; 3]>, picked: &[[f64; 3]]) {
     section(ui, &format!("Faces ({})", faces.len()));
     let mut del = None;
     for (i, f) in faces.iter().enumerate() {
