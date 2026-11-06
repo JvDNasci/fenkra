@@ -390,6 +390,7 @@ impl Registro {
                 std::fs::write(destino, texto).map_err(|e| ErroConv::Gravacao(format!("não foi possível gravar '{}': {e}", destino.display())))
             }
             Some(f) if f.e_2d() => crate::plano::gravar(doc, f, destino),
+            Some(Formato::Step) if saida.pmi && saida.esquema == crate::EsquemaSaida::Ap242 => self.gravar(&ModeloNeutro::de_documento_pmi(doc)?.0, destino, saida),
             _ => self.gravar(&ModeloNeutro::de_documento(doc)?, destino, saida),
         }
     }
