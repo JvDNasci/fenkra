@@ -108,8 +108,14 @@ pub struct TransUi {
     pub editando: Option<Id>,
     pub msg: Vec<String>,
     pub malhas: Option<Arc<MalhasLayout>>,
-    /// distância das duas pontas lidas da seleção (mm), se houver
+    /// distância dos dois pontos clicados no 3D (mm), se houver
     pub pontos: Option<f64>,
+    /// pontos clicados no 3D; `medindo` diz que o próximo clique entra aqui
+    pub marcas: Vec<[f64; 3]>,
+    pub medindo: bool,
+    /// diferencial: a caixa gira, e `giro_relativo` (rpm) é o das laterais em relação a ela
+    pub caixa_solta: bool,
+    pub giro_relativo: f64,
 }
 
 impl Default for TransUi {
@@ -146,6 +152,10 @@ impl Default for TransUi {
             msg: vec![],
             malhas: None,
             pontos: None,
+            marcas: vec![],
+            medindo: false,
+            caixa_solta: false,
+            giro_relativo: 20.,
         }
     }
 }
@@ -164,7 +174,7 @@ impl TransUi {
                 Elemento::Engrenagens { pinhao: ParamEngrenagem { tipo, espinha_peixe: espinha, ..self.pinhao.clone() }, dentes_coroa: self.dentes_coroa }
             }
             Tipo::Conicas => Elemento::Conicas { par: self.conica.clone() },
-            Tipo::Diferencial => Elemento::Diferencial { lateral: self.diferencial.clone() },
+            Tipo::Diferencial => Elemento::Diferencial { lateral: self.diferencial.clone(), caixa_solta: self.caixa_solta, giro_relativo: self.giro_relativo },
             Tipo::SemFim => Elemento::SemFim { p: self.semfim.clone() },
             Tipo::Corrente => Elemento::Corrente { corrente: self.corrente.clone(), dentes1: self.z1, dentes2: self.z2, centros: self.centros, furo1: self.furo1, furo2: self.furo2 },
             Tipo::Correia => Elemento::Correia { designacao: self.correia.clone(), dentes1: self.z1, dentes2: self.z2, diametro1: self.dp1, diametro2: self.dp2, centros: self.centros, largura: self.largura_correia, furo1: self.furo1, furo2: self.furo2 },
@@ -188,9 +198,11 @@ impl TransUi {
                 self.tipo = Tipo::Conicas;
                 self.conica = par.clone();
             }
-            Elemento::Diferencial { lateral } => {
+            Elemento::Diferencial { lateral, caixa_solta, giro_relativo } => {
                 self.tipo = Tipo::Diferencial;
                 self.diferencial = lateral.clone();
+                self.caixa_solta = *caixa_solta;
+                self.giro_relativo = *giro_relativo;
             }
             Elemento::SemFim { p } => {
                 self.tipo = Tipo::SemFim;
@@ -298,6 +310,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::
         return;
     }
     let Some(st) = app.asm.as_ref() else { return };
+    if let Some(t) = &st.trans_open {
+        marcas_de_medida(t, ui, rect, cam);
+    }
     if !st.asm.transmissoes.iter().any(|r| matches!(r.elemento, Elemento::Corrente { .. })) {
         return;
     }
@@ -314,6 +329,92 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::
             p.circle_stroke(c, r, egui::Stroke::new(1., borda));
         }
     }
+}
+
+/// Pontos clicados para a distância, com a linha e a medida entre eles.
+fn marcas_de_medida(t: &TransUi, ui: &egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
+    let v = ui.visuals();
+    let p = ui.painter_at(rect);
+    let cor = crate::theme::accent(v);
+    let proj = |q: &[f64; 3]| cam.project(rect, glam::Vec3::new(q[0] as f32, q[1] as f32, q[2] as f32));
+    let tela: Vec<egui::Pos2> = t.marcas.iter().filter_map(proj).collect();
+    for (k, s) in tela.iter().enumerate() {
+        p.circle_filled(*s, 5., cor);
+        p.text(*s + egui::vec2(8., -8.), egui::Align2::LEFT_BOTTOM, (k + 1).to_string(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
+    }
+    if let ([a, b], Some(d)) = (&tela[..], t.pontos) {
+        p.line_segment([*a, *b], egui::Stroke::new(1.5, cor));
+        p.text(*a + (*b - *a) / 2. + egui::vec2(0., -10.), egui::Align2::CENTER_BOTTOM, format!("{} mm", fmt(d)), egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), crate::theme::readable(cor, v));
+    }
+}
+
+/// Ponto que o clique pede para a medida entre eixos: o vértice, o centro da aresta circular, o meio da
+/// aresta reta, e na parede de um furo o ponto do eixo na altura do clique.
+fn ponto_do_clique(st: &mut crate::asm_ui::AsmState, p: crate::picking::Pick) -> Option<[f64; 3]> {
+    use crate::picking::Pick;
+    use fenkra_montagem::Geom;
+    let clicado = match p {
+        Pick::Vertex { pos, .. } => pos.map(|v| v as f64),
+        Pick::Edge { mid, .. } => mid.map(|v| v as f64),
+        Pick::Face { point, .. } => point.map(|v| v as f64),
+        Pick::SkPoint { pos, .. } | Pick::CurveVtx { pos, .. } => return Some(pos.map(|v| v as f64)),
+        _ => return None,
+    };
+    let Ok(r) = st.mate_ref(p) else { return Some(clicado) };
+    let pl = st.asm.lugar(r.comp).unwrap_or_default();
+    Some(match (p, r.geom) {
+        (Pick::Vertex { .. }, _) => clicado,
+        (Pick::Edge { .. }, Geom::Axis { p: o, d }) if circular(pl.point(o), pl.dir(d), clicado) => pl.point(o),
+        (Pick::Face { .. }, Geom::Axis { p: o, d }) => no_eixo(pl.point(o), pl.dir(d), clicado),
+        _ => clicado,
+    })
+}
+
+/// O eixo da aresta passa longe do ponto dela? Numa aresta reta ele passa por cima.
+fn circular(o: [f64; 3], d: [f64; 3], q: [f64; 3]) -> bool {
+    fenkra_montagem::norm(fenkra_montagem::sub(no_eixo(o, d, q), q)) > 1e-6
+}
+
+/// Ponto do eixo mais perto de `q`.
+fn no_eixo(o: [f64; 3], d: [f64; 3], q: [f64; 3]) -> [f64; 3] {
+    let u = fenkra_montagem::unit(d);
+    let k = fenkra_montagem::dot(fenkra_montagem::sub(q, o), u);
+    [0, 1, 2].map(|i| o[i] + u[i] * k)
+}
+
+impl TransUi {
+    /// Recebe um ponto clicado; o segundo fecha a medida e vira a distância pedida.
+    pub fn marcar(&mut self, q: [f64; 3]) {
+        if self.marcas.len() >= 2 {
+            self.marcas.clear();
+        }
+        self.marcas.push(q);
+        if let [a, b] = self.marcas[..] {
+            let d = fenkra_montagem::norm(fenkra_montagem::sub(a, b));
+            self.pontos = Some(d);
+            self.usa_distancia = true;
+            self.restr.distancia = Some(d);
+            self.medindo = false;
+        }
+    }
+}
+
+/// Cliques na viewport com a medida de dois pontos ligada.
+pub fn apos_viewport(app: &mut App) -> bool {
+    if !app.asm.as_ref().is_some_and(|s| s.trans_open.as_ref().is_some_and(|t| t.medindo)) {
+        return false;
+    }
+    let picks = std::mem::take(&mut app.picks);
+    if let Some(st) = app.asm.as_mut() {
+        for p in picks {
+            if let Some(q) = ponto_do_clique(st, p) {
+                if let Some(t) = st.trans_open.as_mut() {
+                    t.marcar(q);
+                }
+            }
+        }
+    }
+    true
 }
 
 fn campo(ui: &mut egui::Ui, rotulo: &str, v: &mut f64, r: std::ops::RangeInclusive<f64>, suf: &str, vel: f64, dica: &str) {
@@ -579,10 +680,10 @@ fn painel_adaptacao(ui: &mut egui::Ui, t: &mut TransUi) {
             let mut a = t.restr.distancia.unwrap_or(90.);
             ui.add(crate::ui_ext::dv(&mut a).range(1.0..=5000.).speed(0.5).suffix(" mm"));
             t.restr.distancia = Some(a);
-            if let Some(d) = t.pontos {
-                if ui.small_button(format!("{} {} mm", tr("usar a medida dos dois pontos"), fmt(d))).on_hover_text(tr("Distância entre os dois pontos selecionados na montagem.")).clicked() {
-                    t.restr.distancia = Some(d);
-                }
+            let texto = if t.medindo { format!("{} {}/2", tr("clique no 3D:"), t.marcas.len() % 2 + 1) } else { tr("Medir no 3D").to_string() };
+            if ui.selectable_label(t.medindo, texto).on_hover_text(tr("Clique em dois pontos da montagem: vértice, aresta ou furo. A medida entra na distância, e o furo vale pelo eixo dele.")).clicked() {
+                t.medindo = !t.medindo;
+                t.marcas.clear();
             }
         }
         ui.checkbox(&mut t.usa_razao, tr("Razão")).on_hover_text(tr("Razão z2 ÷ z1 desejada; 1 ou mais."));
@@ -633,6 +734,56 @@ fn painel_adaptacao(ui: &mut egui::Ui, t: &mut TransUi) {
     }
 }
 
+/// Total da cadeia na janela de simulação: o que os elementos da montagem somam, com o botão que leva
+/// a saída de cada um para o comando do seguinte. Com a simulação em `t`, mostra o giro da saída.
+pub fn cadeia_na_simulacao(ui: &mut egui::Ui, st: &mut crate::asm_ui::AsmState) {
+    let Some(cadeia) = fenkra_montagem::transmissao::cadeia_da_montagem(&st.asm) else { return };
+    crate::editor::section(ui, "Cadeia de transmissão");
+    let r = match cadeia {
+        Ok(r) => r,
+        Err(e) => {
+            ui.label(RichText::new(tr(&e)).color(crate::theme::st_err()));
+            return;
+        }
+    };
+    let entrada = r.estagios.first().map_or(0., |e| e.rpm_entrada);
+    egui::Grid::new("sim_cadeia").num_columns(5).striped(true).show(ui, |ui| {
+        for t in ["Estágio", "Entrada", "Saída", "Torque", "Rendimento"] {
+            ui.label(RichText::new(tr(t)).small().strong());
+        }
+        ui.end_row();
+        for (k, (e, reg)) in r.estagios.iter().zip(&st.asm.transmissoes).enumerate() {
+            ui.label(RichText::new(format!("{} · {}", k + 1, tr(&reg.nome))).small());
+            ui.label(RichText::new(format!("{} rpm", fmt(e.rpm_entrada))).small());
+            ui.label(RichText::new(format!("{} rpm", fmt(e.rpm_saida))).small());
+            ui.label(RichText::new(format!("{} N·m", fmt(e.torque_saida))).small());
+            ui.label(RichText::new(format!("{} %", fmt(e.rendimento * 100.))).small());
+            ui.end_row();
+        }
+        ui.label(RichText::new(tr("Total")).small().strong());
+        ui.label(RichText::new(format!("{} rpm", fmt(entrada))).small().strong());
+        ui.label(RichText::new(format!("{} rpm", fmt(r.rpm_saida))).small().strong());
+        ui.label(RichText::new(format!("{} N·m", fmt(r.torque_saida))).small().strong());
+        ui.label(RichText::new(format!("{} %", fmt(r.rendimento_total * 100.))).small().strong());
+        ui.end_row();
+    });
+    let giro = r.rpm_saida * 6. * st.sim_t;
+    ui.label(RichText::new(format!("{} {} · {} {} W · {} {}°", tr("relação total"), fmt(r.razao_total), tr("perda"), fmt(r.perda_total), tr("giro da saída em t:"), fmt(giro))).small());
+    let seguidos = st.asm.transmissoes.iter().zip(&r.estagios).all(|(g, e)| (g.rpm - e.rpm_entrada).abs() < 1e-6);
+    if st.asm.transmissoes.len() > 1 {
+        if seguidos {
+            ui.label(RichText::new(tr("✔ cada estágio recebe o que o anterior entrega")).small().color(crate::theme::st_ok()));
+        } else if ui.button(tr("Levar a cadeia para os comandos")).on_hover_text(tr("A junta motora de cada estágio passa a girar com a saída do anterior.")).clicked() {
+            st.push_undo();
+            if let Err(e) = fenkra_montagem::transmissao::aplicar_cadeia(&mut st.asm) {
+                st.aviso = Some((e, true));
+            }
+            st.sim_frames.clear();
+            st.modified = true;
+        }
+    }
+}
+
 /// Janela do comando.
 pub fn janela(app: &mut App, ctx: &egui::Context) {
     let Some(st) = app.asm.as_mut() else { return };
@@ -642,7 +793,7 @@ pub fn janela(app: &mut App, ctx: &egui::Context) {
     let mut editar: Option<Id> = None;
     let registros: Vec<(Id, String)> = st.asm.transmissoes.iter().map(|r| (r.id, r.nome.clone())).collect();
     let layout = montar_layout(&t.elemento());
-    egui::Window::new(tr("⚙ Gerar elemento de transmissão")).id(egui::Id::new("janela_transmissao")).open(&mut open).default_width(500.).show(ctx, |ui| {
+    egui::Window::new(tr("⚙ Gerar elemento de transmissão")).id(egui::Id::new("janela_transmissao")).open(&mut open).default_width(500.).default_pos([16., 130.]).max_height(ctx.content_rect().height() - 170.).vscroll(true).show(ctx, |ui| {
         if crate::app::done_bar(ui) {
             fechar = true;
         }
@@ -681,7 +832,11 @@ pub fn janela(app: &mut App, ctx: &egui::Context) {
                 let mut p = t.diferencial.clone();
                 campos_conica(ui, &mut p, "Dentes do satélite");
                 t.diferencial = p;
-                ui.label(RichText::new(tr("Duas laterais (dentes desta peça) e dois satélites; as laterais precisam de número par de dentes. Na animação a caixa fica presa; a caixa solta está no cálculo.")).weak().small());
+                ui.label(RichText::new(tr("Duas laterais (dentes desta peça) e dois satélites; as laterais precisam de número par de dentes.")).weak().small());
+                ui.checkbox(&mut t.caixa_solta, tr("Caixa solta")).on_hover_text(tr("A caixa gira no rpm de entrada e leva os satélites; presa, ela fica parada e a lateral 2 gira ao contrário."));
+                if t.caixa_solta {
+                    campo(ui, "Giro das laterais na caixa", &mut t.giro_relativo, -5000.0..=5000., " rpm", 1., "Zero é a reta: as duas laterais giram com a caixa. Fora disso, uma adianta e a outra atrasa o mesmo tanto.");
+                }
             }
             Tipo::SemFim => campos_sem_fim(ui, &mut t.semfim),
             Tipo::Corrente => campos_corrente(ui, &mut t),

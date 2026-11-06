@@ -41,8 +41,15 @@ pub enum Elemento {
     Engrenagens { pinhao: ParamEngrenagem, dentes_coroa: u32 },
     /// par de cônicas retas a 90° (o par de dentes está no `ParamConica`)
     Conicas { par: ParamConica },
-    /// diferencial: duas laterais (`dentes`) e dois satélites (`dentes_par`), caixa presa na simulação
-    Diferencial { lateral: ParamConica },
+    /// diferencial: duas laterais (`dentes`) e dois satélites (`dentes_par`). Com `caixa_solta`, a caixa
+    /// gira e leva os satélites; `giro_relativo` (rpm) é o giro das laterais em relação a ela
+    Diferencial {
+        lateral: ParamConica,
+        #[serde(default)]
+        caixa_solta: bool,
+        #[serde(default)]
+        giro_relativo: f64,
+    },
     SemFim { p: ParamSemFim },
     Corrente { corrente: String, dentes1: u32, dentes2: u32, centros: f64, furo1: f64, furo2: f64 },
     Correia { designacao: String, dentes1: u32, dentes2: u32, diametro1: f64, diametro2: f64, centros: f64, largura: f64, furo1: f64, furo2: f64 },
@@ -79,7 +86,8 @@ impl Elemento {
                 Estagio::novo(t, pinhao.dentes as f64, *dentes_coroa as f64)
             }
             Elemento::Conicas { par } => Estagio::novo(TipoEstagio::Conica, par.dentes as f64, par.dentes_par as f64),
-            Elemento::Diferencial { lateral } => Estagio::novo(TipoEstagio::Conica, lateral.dentes as f64, lateral.dentes_par as f64),
+            Elemento::Diferencial { caixa_solta: true, .. } => Estagio::novo(TipoEstagio::Diferencial, 1., 1.),
+            Elemento::Diferencial { lateral, .. } => Estagio::novo(TipoEstagio::Conica, lateral.dentes as f64, lateral.dentes_par as f64),
             Elemento::SemFim { p } => {
                 let lam = (std::f64::consts::PI * p.modulo * p.entradas as f64 / (std::f64::consts::PI * p.diametro_primitivo)).atan().to_degrees();
                 let mut e = Estagio::novo(TipoEstagio::SemFim, p.entradas as f64, p.dentes_coroa as f64);
@@ -108,6 +116,9 @@ pub struct RegistroTransmissao {
     pub comps: Vec<Id>,
     pub juntas: Vec<Id>,
     pub acoplamentos: Vec<Id>,
+    /// junta que recebe o `rpm`; a cadeia escreve nela o que o estágio anterior entrega
+    #[serde(default)]
+    pub motora: Option<Id>,
 }
 
 /// Uma peça do conjunto antes de entrar na montagem.
@@ -131,6 +142,10 @@ pub struct Layout {
     pub acoplamentos: Vec<(usize, usize, f64)>,
     /// junta que recebe o comando de giro
     pub motora: usize,
+    /// outras juntas comandadas, com o giro delas (rpm)
+    pub comandos: Vec<(usize, f64)>,
+    /// peças que andam como uma só
+    pub rigidos: Vec<Vec<usize>>,
     /// as juntas são cilíndricas (giram e deslizam no eixo): a dupla hélice em V centra o par sozinha,
     /// sem retenção axial
     pub folga_axial: bool,
@@ -189,6 +204,7 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
     let mut avisos = vec![];
     let mut acopl = vec![];
     let (distancia, razao, motora);
+    let (mut comandos, mut rigidos) = (vec![], vec![]);
     match e {
         Elemento::Engrenagens { pinhao, dentes_coroa } => {
             if pinhao.tipo == TipoEngrenagem::Cremalheira {
@@ -232,7 +248,7 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
             avisos.extend(c1.avisos.iter().map(|a| format!("peça 1: {a}")));
             avisos.extend(c2.avisos.iter().map(|a| format!("peça 2: {a}")));
         }
-        Elemento::Diferencial { lateral } => {
+        Elemento::Diferencial { lateral, caixa_solta, giro_relativo } => {
             let (zs, zp) = (lateral.dentes, lateral.dentes_par);
             if zs % 2 != 0 {
                 return Err("o diferencial com dois satélites pede laterais com número par de dentes".into());
@@ -265,9 +281,33 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
             acopl.push((jp1, js2, -(zp as f64) / zs as f64));
             acopl.push((js1, jp2, -(zs as f64) / zp as f64));
             distancia = 0.;
-            razao = -1.;
-            motora = js1;
-            avisos.push("diferencial: na animação a caixa fica presa (a lateral 2 gira em sentido contrário); a caixa solta é a do cálculo, ω caixa = (ω1 + ω2) / 2".into());
+            if *caixa_solta {
+                // os acoplamentos valem entre juntas, e toda junta aqui é medida em relação ao eixo dela.
+                // Prender os eixos na caixa muda o referencial sem mudar a conta: com a caixa girando
+                // θc, as laterais ficam em θc ∓ α, e daí sai ω caixa = (ω1 + ω2) / 2
+                let eixos: Vec<usize> = [js1, jp1, js2, jp2].iter().map(|j| juntas[*j].0).collect();
+                for i in &eixos {
+                    pecas[*i].fixa = false;
+                }
+                let raio = (cs.diametro_topo / 2.).max(cp.altura_vertice + hub(&sat) + SOBRA_PINO / 2.) + 1.;
+                let comprimento = 2. * (cp.diametro_topo / 2. + 2.);
+                let doc = fenkra_solidos::transmissao_corrente::caixa_documento("Caixa do diferencial", 2. * raio + 8., 2. * raio, comprimento)?;
+                let chave = format!("caixa-d{:.2}-l{:.2}", 2. * raio, comprimento);
+                let lugar = Placement { origin: [0., 0., -comprimento / 2.], ..Default::default() };
+                // o eixo da caixa fica depois da ponta do eixo da lateral 2, que corre na mesma reta
+                let ponta = comprimento / 2. - cs.altura_vertice - hub(lateral) - SOBRA_PINO - 1.;
+                let jc = peca_com_eixo(&mut pecas, &mut juntas, PecaLayout { nome: "Caixa".into(), ..peca(doc, chave, lugar) }, lateral.furo, ponta - 2. * SOBRA_PINO, ponta)?;
+                let mut grupo = eixos;
+                grupo.push(juntas[jc].1);
+                rigidos.push(grupo);
+                comandos.push((js1, *giro_relativo));
+                razao = 1.;
+                motora = jc;
+            } else {
+                razao = -1.;
+                motora = js1;
+                avisos.push("diferencial: com a caixa presa, a lateral 2 gira em sentido contrário; solte a caixa para ver ω caixa = (ω1 + ω2) / 2".into());
+            }
         }
         Elemento::SemFim { p } => {
             let c = calculo_sem_fim(p)?;
@@ -390,7 +430,7 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
     }
     let _ = nome_curto("");
     let folga_axial = matches!(e, Elemento::Engrenagens { pinhao, .. } if pinhao.espinha_peixe && pinhao.tipo == TipoEngrenagem::Helicoidal);
-    Ok(Layout { pecas, juntas, acoplamentos: acopl, motora, folga_axial, distancia_centros: distancia, razao, avisos })
+    Ok(Layout { pecas, juntas, acoplamentos: acopl, motora, comandos, rigidos, folga_axial, distancia_centros: distancia, razao, avisos })
 }
 
 /// Rolos da corrente de um registro, no mundo, na posição da simulação agora: andam pelo laço com a
@@ -411,6 +451,36 @@ pub fn rolos_da_corrente(asm: &Assembly, reg: &RegistroTransmissao) -> Option<(V
     let n = dados::elos_da_corrente(c.passo, n1, n2, centros).max(1) as usize;
     let pontos = cam.elos(n, fase).iter().map(|q| roda1.point([q.x, q.y, z])).collect();
     Some((pontos, c.rolo))
+}
+
+/// Lei do comando de giro: graus no tempo `t`.
+fn comando_de_giro(rpm: f64) -> String {
+    format!("{}*t", rpm * 6.)
+}
+
+/// Todos os elementos da montagem como uma cadeia, na ordem em que foram gerados, com a entrada do
+/// primeiro. Sem elemento nenhum não há cadeia.
+pub fn cadeia_da_montagem(asm: &Assembly) -> Option<Result<ResultadoCadeia, String>> {
+    let primeiro = asm.transmissoes.first()?;
+    let estagios: Vec<Estagio> = asm.transmissoes.iter().map(|r| r.elemento.estagio()).collect();
+    Some(calcular_cadeia(&estagios, Entrada { rpm: primeiro.rpm, torque: primeiro.torque }))
+}
+
+/// Leva a cadeia para a simulação: cada elemento depois do primeiro passa a receber o que o anterior
+/// entrega, no comando da junta motora e na entrada do cálculo.
+pub fn aplicar_cadeia(asm: &mut Assembly) -> Result<ResultadoCadeia, String> {
+    let r = cadeia_da_montagem(asm).ok_or("a montagem não tem elementos de transmissão")??;
+    for k in 1..asm.transmissoes.len() {
+        let (rpm, torque) = (r.estagios[k].rpm_entrada, r.estagios[k].torque_entrada);
+        let reg = &mut asm.transmissoes[k];
+        reg.rpm = rpm;
+        reg.torque = torque;
+        let motora = reg.motora.or(reg.juntas.first().copied());
+        if let Some(j) = asm.joints.iter_mut().find(|j| Some(j.id) == motora) {
+            j.drive_angle = Some(comando_de_giro(rpm));
+        }
+    }
+    Ok(r)
 }
 
 /// Calcula o elemento ao vivo: estágio, resultado com a entrada dada.
@@ -471,11 +541,16 @@ pub fn inserir_transmissao(asm: &mut Assembly, dir: Option<&Path>, e: &Elemento,
     for (a, b, r) in &lay.acoplamentos {
         acopl.push(asm.add_coupling(CouplingKind::Gear, juntas[*a], juntas[*b], &format!("{r}")));
     }
-    if let Some(j) = asm.joints.iter_mut().find(|j| j.id == juntas[lay.motora]) {
-        j.drive_angle = Some(format!("{}*t", rpm * 6.));
+    for g in &lay.rigidos {
+        asm.add_rigid(g.iter().map(|i| comps[*i]).collect());
+    }
+    for (k, giro) in lay.comandos.iter().copied().chain([(lay.motora, rpm)]) {
+        if let Some(j) = asm.joints.iter_mut().find(|j| j.id == juntas[k]) {
+            j.drive_angle = Some(comando_de_giro(giro));
+        }
     }
     let id = asm.alloc();
-    asm.transmissoes.push(RegistroTransmissao { id, nome: e.rotulo().to_string(), elemento: e.clone(), rpm, torque, comps: comps.clone(), juntas: juntas.clone(), acoplamentos: acopl });
+    asm.transmissoes.push(RegistroTransmissao { id, nome: e.rotulo().to_string(), elemento: e.clone(), rpm, torque, comps: comps.clone(), juntas: juntas.clone(), acoplamentos: acopl, motora: Some(juntas[lay.motora]) });
     Ok(RelatorioTransmissao { registro: id, comps, juntas, razao: lay.razao, distancia_centros: lay.distancia_centros, avisos: lay.avisos })
 }
 
@@ -535,6 +610,90 @@ mod tests {
         assert!(em_t(&mut b, t));
         let pl: HashMap<Id, Placement> = b.nodes.iter().map(|n| (n.id, n.placement)).collect();
         crate::kin::measure(b.joints.iter().find(|j| j.id == junta).unwrap(), &pl).unwrap().0
+    }
+
+    /// Giro de uma peça em volta do Z do mundo, da posição de `a` até a de `b`, em graus.
+    fn giro_em_z(a: &Assembly, b: &Assembly, c: Id) -> f64 {
+        let ang = |m: &Assembly| {
+            let p = m.node(c).unwrap().placement.dir([1., 0., 0.]);
+            p[1].atan2(p[0]).to_degrees()
+        };
+        let d = ang(b) - ang(a);
+        (d + 540.).rem_euclid(360.) - 180.
+    }
+
+    #[test]
+    fn diferencial_de_caixa_solta_gira_na_media_das_laterais() {
+        let dir = pasta("caixa_solta");
+        let dif = Elemento::Diferencial { lateral: ParamConica { dentes: 24, dentes_par: 16, folga_dentes: 0.1, ..Default::default() }, caixa_solta: true, giro_relativo: 20. };
+        let mut a = Assembly::new("Diferencial");
+        let r = inserir_transmissao(&mut a, Some(&dir), &dif, 60., 5., &Placement::default()).unwrap();
+        assert_eq!(a.rigid.len(), 1, "os eixos dos satélites e das laterais andam com a caixa");
+        assert_eq!(a.joints.len(), 5);
+        assert_eq!(a.nodes.iter().filter(|n| n.fixed && !matches!(n.kind, NodeKind::Group)).count(), 1, "só o eixo da caixa fica preso");
+        let lugares = |t: f64| {
+            let mut b = a.clone();
+            assert!(em_t(&mut b, t), "t = {t}");
+            b
+        };
+        let (zero, depois) = (lugares(0.), lugares(0.05));
+        // 60 rpm = 360°/s na caixa e 20 rpm = 120°/s das laterais em relação a ela: 18° e 6° em 0,05 s
+        let caixa = r.comps[r.comps.len() - 1];
+        let laterais: Vec<Id> = [1, 5].iter().map(|k| r.comps[*k]).collect();
+        let (c, l1, l2) = (giro_em_z(&zero, &depois, caixa), giro_em_z(&zero, &depois, laterais[0]), giro_em_z(&zero, &depois, laterais[1]));
+        assert!((c - 18.).abs() < 1e-3, "caixa: {c}");
+        assert!(((l1 + l2) / 2. - c).abs() < 1e-3, "ω caixa = (ω1 + ω2) / 2: {l1} {l2} {c}");
+        assert!(((l1 - l2).abs() - 12.).abs() < 1e-3, "as laterais se afastam ±6°: {l1} {l2}");
+        // no cálculo a saída é a média das laterais: gira com a caixa, no mesmo sentido
+        let calc = calcular_elemento(&dif, Entrada { rpm: 60., torque: 5. }).unwrap();
+        assert!((calc.rpm_saida - 60.).abs() < 1e-9, "{}", calc.rpm_saida);
+        // caixa presa continua como era, sem grupo rígido
+        let presa = Elemento::Diferencial { lateral: ParamConica { dentes: 24, dentes_par: 16, ..Default::default() }, caixa_solta: false, giro_relativo: 0. };
+        let mut b = Assembly::new("Presa");
+        inserir_transmissao(&mut b, Some(&dir), &presa, 60., 5., &Placement::default()).unwrap();
+        assert!(b.rigid.is_empty());
+    }
+
+    #[test]
+    fn caixa_solta_nao_bate_nos_dentes_enquanto_gira() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("caixa_interferencia");
+        let dif = Elemento::Diferencial { lateral: ParamConica { dentes: 24, dentes_par: 16, folga_dentes: 0.1, ..Default::default() }, caixa_solta: true, giro_relativo: 20. };
+        let mut a = Assembly::new("Diferencial");
+        inserir_transmissao(&mut a, Some(&dir), &dif, 60., 5., &Placement::default()).unwrap();
+        for t in [0., 0.02] {
+            let mut b = a.clone();
+            assert!(em_t(&mut b, t));
+            let i = crate::view::interferences(&b, Some(&dir), &mut crate::load::PartCache::default(), 4.0);
+            // os eixos dos satélites entram na caixa de propósito: é ela que os segura
+            let grupo = &a.rigid[0].comps;
+            let batidas: Vec<_> = i.iter().filter(|x| !(grupo.contains(&x.0) && grupo.contains(&x.1))).collect();
+            assert!(batidas.is_empty(), "t = {t}: {i:?}");
+        }
+    }
+
+    #[test]
+    fn cadeia_de_dois_estagios_soma_e_segue_para_a_simulacao() {
+        let dir = pasta("cadeia");
+        let mut a = Assembly::new("Redutor");
+        assert!(cadeia_da_montagem(&a).is_none());
+        inserir_transmissao(&mut a, Some(&dir), &par_reto(), 600., 5., &Placement::default()).unwrap();
+        let r2 = inserir_transmissao(&mut a, Some(&dir), &par_reto(), 1., 1., &Placement { origin: [0., 200., 0.], ..Default::default() }).unwrap();
+        let c = cadeia_da_montagem(&a).unwrap().unwrap();
+        assert_eq!(c.estagios.len(), 2);
+        // duas reduções de −1/2: um quarto do giro, no mesmo sentido da entrada
+        assert!((c.voltas_total - 0.25).abs() < 1e-9 && (c.rpm_saida - 150.).abs() < 1e-6, "{c:?}");
+        assert!(c.torque_saida > 5. * 3.5 && c.torque_saida < 20., "o torque sobe, menos a perda: {}", c.torque_saida);
+        let aplicado = aplicar_cadeia(&mut a).unwrap();
+        assert_eq!(aplicado, c);
+        assert!((a.transmissoes[1].rpm + 300.).abs() < 1e-6, "o segundo recebe o que o primeiro entrega: {}", a.transmissoes[1].rpm);
+        // o segundo par anda na simulação com a entrada nova: 0,01 s a −300 rpm = −18°, e a saída +9°
+        let (j_in, j_out) = (r2.juntas[0], r2.juntas[1]);
+        assert_eq!(a.transmissoes[1].motora, Some(j_in));
+        assert!((angulo_de(&a, j_in, 0.01) + 18.).abs() < 1e-3);
+        assert!((angulo_de(&a, j_out, 0.01) - 9.).abs() < 1e-3);
     }
 
     fn par_reto() -> Elemento {
@@ -628,13 +787,13 @@ mod tests {
         // os eixos das duas peças são perpendiculares
         let eixos: Vec<V3> = a.joints.iter().map(|j| a.node(j.b.comp).unwrap().placement.dir([0., 0., 1.])).collect();
         assert!(dot(eixos[0], eixos[1]).abs() < 1e-9, "{eixos:?}");
-        let dif = Elemento::Diferencial { lateral: ParamConica { dentes: 24, dentes_par: 16, folga_dentes: 0.1, ..Default::default() } };
+        let dif = Elemento::Diferencial { lateral: ParamConica { dentes: 24, dentes_par: 16, folga_dentes: 0.1, ..Default::default() }, caixa_solta: false, giro_relativo: 0. };
         let mut d = Assembly::new("Diferencial");
         inserir_transmissao(&mut d, Some(&dir), &dif, 600., 5., &Placement::default()).unwrap();
         assert_eq!(d.joints.len(), 4);
         assert_eq!(d.couplings.len(), 3);
         // zs ímpar não fecha com dois satélites
-        let ruim = Elemento::Diferencial { lateral: ParamConica { dentes: 21, dentes_par: 12, ..Default::default() } };
+        let ruim = Elemento::Diferencial { lateral: ParamConica { dentes: 21, dentes_par: 12, ..Default::default() }, caixa_solta: false, giro_relativo: 0. };
         assert!(inserir_transmissao(&mut Assembly::new("x"), Some(&dir), &ruim, 600., 5., &Placement::default()).is_err());
         if !fenkra_kernel::AVAILABLE {
             return;

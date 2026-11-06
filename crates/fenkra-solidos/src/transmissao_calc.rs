@@ -34,6 +34,8 @@ pub enum TipoEstagio {
     Corrente,
     CorreiaDentada,
     CorreiaV,
+    /// caixa como entrada e as duas laterais como saída: sem redução, com o torque dividido entre elas
+    Diferencial,
 }
 
 impl TipoEstagio {
@@ -62,6 +64,7 @@ impl TipoEstagio {
             TipoEstagio::Corrente => "Corrente",
             TipoEstagio::CorreiaDentada => "Correia dentada",
             TipoEstagio::CorreiaV => "Correia em V",
+            TipoEstagio::Diferencial => "Diferencial de caixa solta",
         }
     }
 
@@ -70,7 +73,7 @@ impl TipoEstagio {
         match self {
             TipoEstagio::Externa | TipoEstagio::Interna => 0.98,
             TipoEstagio::Helicoidal | TipoEstagio::EspinhaDePeixe => 0.98,
-            TipoEstagio::Conica => 0.97,
+            TipoEstagio::Conica | TipoEstagio::Diferencial => 0.97,
             TipoEstagio::Cremalheira => 0.95,
             TipoEstagio::Corrente => 0.97,
             TipoEstagio::CorreiaDentada => 0.98,
@@ -84,7 +87,8 @@ impl TipoEstagio {
     pub fn sinal(self) -> f64 {
         match self {
             TipoEstagio::Externa | TipoEstagio::Helicoidal | TipoEstagio::EspinhaDePeixe | TipoEstagio::Conica | TipoEstagio::SemFim => -1.,
-            TipoEstagio::Interna | TipoEstagio::Corrente | TipoEstagio::CorreiaDentada | TipoEstagio::CorreiaV | TipoEstagio::Cremalheira => 1.,
+            // a entrada é a caixa, e a média das duas laterais gira com ela (ω caixa = (ω1 + ω2) / 2)
+            TipoEstagio::Interna | TipoEstagio::Corrente | TipoEstagio::CorreiaDentada | TipoEstagio::CorreiaV | TipoEstagio::Cremalheira | TipoEstagio::Diferencial => 1.,
         }
     }
 }

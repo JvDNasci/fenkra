@@ -179,6 +179,22 @@ pub fn pino_documento(nome: &str, furo: f64, comprimento: f64) -> Result<Documen
     Ok(m.doc)
 }
 
+/// Anel que leva os eixos dos satélites no diferencial de caixa solta: gira em volta do Z local.
+pub fn caixa_documento(nome: &str, externo: f64, interno: f64, comprimento: f64) -> Result<Document, String> {
+    if !(externo > interno && interno > 0. && comprimento > 0.) {
+        return Err("caixa: o diâmetro externo precisa passar do interno, e o comprimento ser positivo".into());
+    }
+    let mut m = Montador::novo(nome);
+    m.doc.props.part_type = PartType::Fabricada;
+    m.doc.props.material = "Aço 1045".into();
+    m.param("D", &externo.to_string())?;
+    m.param("d", &interno.to_string())?;
+    m.param("L", &comprimento.to_string())?;
+    m.prim("Corpo", PrimKind::Cilindro, PlaneRef::Origin(OriginPlane::XY), ["D/2", "L", "0", "0"], BoolOp::Add)?;
+    m.prim("Vão", PrimKind::Cilindro, PlaneRef::Origin(OriginPlane::XY), ["d/2", "L", "0", "0"], BoolOp::Cut)?;
+    Ok(m.doc)
+}
+
 // ---------------------------------------------------------------- caminho
 
 /// Laço de duas rodas: a menor na origem (raio `r1`), a maior em `(c, 0)` (raio `r2 >= r1`).

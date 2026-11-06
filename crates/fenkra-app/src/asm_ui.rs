@@ -976,7 +976,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
 /// clique numa peça a seleciona na árvore.
 pub fn after_viewport(app: &mut App, ctx: &egui::Context) {
     after_view_quick(app);
-    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_fixadores::apos_viewport(app) && !crate::asm_chaveta::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
+    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_fixadores::apos_viewport(app) && !crate::asm_chaveta::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::transmissao_ui::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
         selecao_do_clique(app, ctx.input(|i| i.modifiers.alt));
     }
     // duplo clique numa peça: abre para editar
@@ -3736,6 +3736,7 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
                 })
                 .color(if ok { Color32::from_rgb(120, 210, 130) } else { crate::theme::st_warn() }),
             );
+            crate::transmissao_ui::cadeia_na_simulacao(ui, st);
             crate::editor::section(ui, "Comandos (leis no tempo t, em segundos)");
             for j in st.asm.joints.iter_mut().filter(|j| !j.suppressed) {
                 let (ca, cl) = j.kind.drives();

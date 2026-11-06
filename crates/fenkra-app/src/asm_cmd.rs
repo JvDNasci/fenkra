@@ -684,15 +684,46 @@ pub fn demo(st: &mut AsmState, nome: &str) {
                 "helicoidais" => crate::transmissao_ui::Tipo::Helicoidais,
                 "espinha" => crate::transmissao_ui::Tipo::EspinhaDePeixe,
                 "conicas" => crate::transmissao_ui::Tipo::Conicas,
-                "diferencial" => crate::transmissao_ui::Tipo::Diferencial,
+                "diferencial" | "caixa_solta" => crate::transmissao_ui::Tipo::Diferencial,
                 "semfim" => crate::transmissao_ui::Tipo::SemFim,
                 "corrente" => crate::transmissao_ui::Tipo::Corrente,
                 "correia" => crate::transmissao_ui::Tipo::Correia,
                 _ => crate::transmissao_ui::Tipo::Retas,
             };
         }
+        t.caixa_solta = std::env::var("FENKRA_DEMO_TRANS").is_ok_and(|v| v == "caixa_solta");
+        if std::env::var("FENKRA_DEMO_TRANS_MEDIDA").is_ok() {
+            // dois pontos já clicados nas placas de exemplo, como o mouse os deixaria
+            t.medindo = true;
+            t.marcar([0., 0., 12.]);
+            t.marcar([96., 48., 12.]);
+        }
         st.trans_open = Some(t);
         st.fantasma_novo = true;
+        return;
+    }
+    if nome == "cadeia" || nome == "caixa_solta" {
+        use fenkra_montagem::transmissao::{inserir_transmissao, Elemento};
+        use fenkra_solidos::engrenagens::ParamEngrenagem;
+        use fenkra_solidos::engrenagens_conicas::ParamConica;
+        let Some(dir) = st.dir() else { return };
+        for id in st.asm.nodes.iter().map(|n| n.id).collect::<Vec<_>>() {
+            st.asm.delete(id);
+        }
+        let reto = Elemento::Engrenagens { pinhao: ParamEngrenagem { furo: 8., ..Default::default() }, dentes_coroa: 40 };
+        let lugar = Placement { origin: [0., 120., 0.], ..Default::default() };
+        let r = if nome == "cadeia" {
+            inserir_transmissao(&mut st.asm, Some(&dir), &reto, 600., 5., &Placement::default()).and_then(|_| inserir_transmissao(&mut st.asm, Some(&dir), &reto, 100., 1., &lugar))
+        } else {
+            let dif = Elemento::Diferencial { lateral: ParamConica { dentes: 24, dentes_par: 16, folga_dentes: 0.1, ..Default::default() }, caixa_solta: true, giro_relativo: 20. };
+            inserir_transmissao(&mut st.asm, Some(&dir), &dif, 60., 5., &Placement::default())
+        };
+        if let Err(e) = r {
+            st.aviso = Some((e, true));
+        }
+        st.sim_open = true;
+        st.sim_t = 0.5;
+        st.solve();
         return;
     }
     if nome == "eixo" || nome == "engrenagens_classico" {
