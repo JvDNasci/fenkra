@@ -767,6 +767,12 @@ c('B372', 2, 'P1', 'Roleta de comandos pensada no fluxo de cada bancada', 'Revis
   ['USR-TESTE'], [], 250, 'Auto + Visual', 'Interface'),
 c('B373', 2, 'P0', 'Furo e rosca: fluxo novo e rosca modelada de verdade', 'Rever o painel de furo e rosca, com rosca cosmética e modelada num fluxo claro. A rosca modelada corta como a física, contínua e sem faces soltas, do início do furo em diante, e serve para impressão 3D. Entrada da rosca editável (chanfro e folga em cima e embaixo, em medida ou porcentagem) e ângulo de início em relação a uma referência. Ponta, rosca e folga no fundo não podem falhar com a mensagem de que a rosca não cabe quando o corte passa do sólido.',
   ['USR-TESTE'], [], 400, 'Auto + Visual', 'Sólidos'),
+c('B374', 2, 'P0', 'Biblioteca: painel sem sobreposição e inserir em furo, ponto ou solto', 'Fontes, licenças e inserir em furo não se encavalam ao rolar. O item entra num furo, num ponto ou solto no espaço, para posicionar depois, e também vai para a montagem como peça.',
+  ['USR-TESTE'], [], 150, 'Auto + Visual', 'Biblioteca de normas'),
+c('B375', 2, 'P1', 'Fixadores inteligentes: comando paramétrico com pilhas por ponto, vetor ou furo', 'Um comando editável na árvore controla o conjunto: parafuso, diâmetro e pilhas superior e inferior, com quantas arruelas e porcas forem precisas, de qualquer tipo, reordenando por arraste. Alvos por furo, ponto ou vetor, sem exigir furo nas peças, e adicionar mais alvos depois. Regras de diâmetro por cor, cadastráveis em polegada e métrico, com seleção por cor ou por cerca na viewport. O prendedor inserido segue como peça normal.',
+  ['USR-TESTE'], [], 500, 'Auto + Visual', 'Montagem'),
+c('B376', 3, 'P1', 'Tutoriais por peça, com aula dos comandos', 'Tutoriais com mais detalhe, organizados por objetivo: quero desenhar uma peça assim, com a peça pronta e o passo a passo dos comandos. Cada comando leva à sua aula, incluindo as regras de fixadores inteligentes.',
+  ['USR-TESTE'], [], 400, 'Auto + Visual', 'Interface'),
 ]
 def main():
     for x in B:
