@@ -2660,7 +2660,7 @@
    "tokens_k": 250,
    "teste": "Auto",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.3
   },
   {
@@ -5736,7 +5736,7 @@
    "tokens_k": 600,
    "teste": "Auto + Visual",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.7
   },
   {
