@@ -22,7 +22,7 @@ pub fn is_shape(k: &FeatureKind) -> bool {
 
 /// Comandos em que clicar numa face na viewport (com o comando aberto) acrescenta a face.
 pub fn wants_faces(k: &FeatureKind) -> bool {
-    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::StructPlate(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmCornerClose(_) | FeatureKind::SmConvert(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
+    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::DirectEdit(_) | FeatureKind::Thread(_) | FeatureKind::StructPlate(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmCornerClose(_) | FeatureKind::SmConvert(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
         || matches!(k, FeatureKind::SmFlangedHole(h) if crate::slots::is_unset(h.sketch) || !h.points.is_empty())
         || matches!(k, FeatureKind::Fillet(o) if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }))
 }
@@ -33,6 +33,7 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         FeatureKind::Shell(s) => s.faces.push(p),
         FeatureKind::Draft(d) => d.faces.push(p),
         FeatureKind::Thickness(t) => t.faces.push(p),
+        FeatureKind::DirectEdit(d) => d.faces.push(p),
         FeatureKind::Thread(t) => t.face = p,
         // B255: o clique na face da ponta grava o ponto dela; o recálculo acha a ponta que a tem
         FeatureKind::StructPlate(pl) => pl.at = p,
@@ -67,6 +68,7 @@ pub fn toggle_face(k: &mut FeatureKind, p: [f64; 3], key: Option<FaceKey>, same:
         FeatureKind::Shell(s) => Some((&mut s.faces, &mut s.face_keys)),
         FeatureKind::Draft(d) => Some((&mut d.faces, &mut d.face_keys)),
         FeatureKind::Thickness(t) => Some((&mut t.faces, &mut t.face_keys)),
+        FeatureKind::DirectEdit(d) => Some((&mut d.faces, &mut d.face_keys)),
         _ => None,
     };
     match list {
@@ -96,6 +98,7 @@ pub fn face_marks(k: &FeatureKind) -> Vec<[f64; 3]> {
         FeatureKind::Shell(s) => s.faces.clone(),
         FeatureKind::Draft(d) => d.faces.clone(),
         FeatureKind::Thickness(t) => t.faces.clone(),
+        FeatureKind::DirectEdit(d) => d.faces.clone(),
         FeatureKind::Thread(t) => vec![t.face],
         FeatureKind::StructPlate(pl) => vec![pl.at],
         FeatureKind::Fillet(o) => match o.mode {
@@ -318,6 +321,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             faces_ui(ui, &mut t.faces, picked_faces);
             t.face_keys = carry_keys(&before, &t.face_keys, &t.faces);
         }
+        FeatureKind::DirectEdit(e) => crate::edicao_direta_ui::painel(ui, e, vars, picked_faces),
         FeatureKind::Pattern(p) => {
             section(ui, "Tipo");
             let cur = match p.kind {

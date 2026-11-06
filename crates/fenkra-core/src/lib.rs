@@ -12,6 +12,7 @@ pub mod aba_unif;
 pub mod config;
 pub mod configuracoes;
 pub mod doc;
+pub mod edicao_direta;
 pub mod estilo_chapa;
 pub mod expr;
 pub mod formato;
@@ -35,6 +36,7 @@ pub mod subd_brep;
 pub mod trabalho;
 
 pub use doc::*;
+pub use edicao_direta::{DirectEdit, OpDireta};
 pub use regras::{EstiloRegras, Origem};
 pub use qualidade::{PresetMalha, PresetStl, QualidadeMalha};
 pub use sketch::SketchData;

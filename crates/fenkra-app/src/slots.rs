@@ -245,6 +245,7 @@ pub fn feature_incomplete(k: &FeatureKind) -> bool {
             FeatureKind::Shell(x) => x.faces.is_empty(),
             FeatureKind::Draft(x) => x.faces.is_empty(),
             FeatureKind::Thickness(x) => x.faces.is_empty(),
+            FeatureKind::DirectEdit(x) => x.faces.is_empty(),
             _ => false,
         }
 }

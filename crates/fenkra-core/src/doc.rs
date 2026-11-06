@@ -1714,6 +1714,8 @@ pub enum FeatureKind {
     Shell(Shell),
     Draft(Draft),
     Thickness(Thickness),
+    /// Edição direta de faces (mover, apagar com cura, deslocar, trocar raio de filete).
+    DirectEdit(crate::edicao_direta::DirectEdit),
     Pattern(Pattern),
     Mirror(Mirror),
     Scale(Scale),
@@ -2728,6 +2730,7 @@ impl FeatureKind {
             Shell(_) => "Casca",
             Draft(_) => "Saída",
             Thickness(_) => "Espessura",
+            DirectEdit(d) => d.op.rotulo(),
             Pattern(p) => match p.kind {
                 PatternKind::Linear { .. } => "PadrãoLinear",
                 PatternKind::Circular { .. } => "PadrãoCircular",
@@ -2802,6 +2805,7 @@ impl FeatureKind {
             Shell(_) => "▢",
             Draft(_) => "⏢",
             Thickness(_) => "▤",
+            DirectEdit(_) => "◧",
             Pattern(_) => "⁂",
             Mirror(_) => "⇋",
             Scale(_) => "⤢",
@@ -2961,6 +2965,12 @@ impl FeatureKind {
                 exprs(&mut d.angle)
             }
             Thickness(t) => exprs(&mut t.value),
+            DirectEdit(d) => {
+                exprs(&mut d.value);
+                for e in d.delta.iter_mut() {
+                    exprs(e)
+                }
+            }
             Pattern(p) => {
                 for x in &mut p.sources {
                     ids(x)

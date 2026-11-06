@@ -1690,6 +1690,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 (FeatureKind::Shell(s), Promoted::Faces(k)) if s.faces.len() == k.len() => s.face_keys = k.clone(),
                 (FeatureKind::Draft(d), Promoted::Faces(k)) if d.faces.len() == k.len() => d.face_keys = k.clone(),
                 (FeatureKind::Thickness(t), Promoted::Faces(k)) if t.faces.len() == k.len() => t.face_keys = k.clone(),
+                (FeatureKind::DirectEdit(t), Promoted::Faces(k)) if t.faces.len() == k.len() => t.face_keys = k.clone(),
                 _ => {}
             }
         }
@@ -2357,6 +2358,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone(), closed: false }))),
             Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: face_keys.clone() }))),
             Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2"), face_keys: face_keys.clone(), remove: false }))),
+            Cmd::DirectEdit(i) => {
+                let mut e = fenkra_core::DirectEdit::novo(fenkra_core::OpDireta::ALL[i as usize % fenkra_core::OpDireta::ALL.len()]);
+                e.faces = faces.clone();
+                e.face_keys = face_keys.clone();
+                Sel::Feature(d.add_feature(FeatureKind::DirectEdit(e)))
+            }
             Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None, start: String::new() }))),
             Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints | Cmd::Mirror => {
                 let sources: Vec<Id> = match sel_now {
@@ -7384,6 +7391,8 @@ pub enum Cmd {
     Dwg(u8),
     /// mover o corpo: 0 translação, 1 rotação, 2 simetria, 3 afinidade
     MoveBody(u8),
+    /// edição direta de faces (B33): 0 mover, 1 apagar, 2 deslocar, 3 raio do filete
+    DirectEdit(u8),
     /// extrusão com ângulo de saída e filetes num clique
     ExtrudeDraftFillet,
     SplitBody,

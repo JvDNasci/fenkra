@@ -34,6 +34,7 @@ pub mod refs;
 pub mod chapa;
 pub mod massa;
 pub mod termino;
+mod edicao_direta;
 pub mod padrao;
 pub mod furo_norma;
 pub mod chapa_linha;
@@ -4232,6 +4233,8 @@ impl Ctx<'_> {
             FeatureKind::Shell(sh) if sh.faces.is_empty() && !sh.closed => Ok(Some("escolha na viewport as faces a remover — até lá a casca não é aplicada".into())),
             FeatureKind::Draft(d) if d.faces.is_empty() => Ok(Some("escolha na viewport as faces que recebem a saída — até lá nada é aplicado".into())),
             FeatureKind::Thickness(t) if t.faces.is_empty() => Ok(Some("escolha na viewport as faces a engrossar — até lá nada é aplicado".into())),
+            FeatureKind::DirectEdit(d) if d.faces.is_empty() => Ok(Some("escolha na viewport as faces a editar — até lá nada é aplicado".into())),
+            FeatureKind::DirectEdit(d) => self.edicao_direta(f, d),
             FeatureKind::Shell(sh) => {
                 let t = ev(&sh.thickness, &self.vars, "espessura")?;
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para esvaziar")?;

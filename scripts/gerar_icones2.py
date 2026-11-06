@@ -356,6 +356,11 @@ def desenhos():
     ic("multisecoes_remover", B=Q(6, 6, 36, 36), R=Q(12, 26, 10, 10) + C(32, 16, 6) + L((12, 26), (28, 12)) + L((22, 36), (37, 20)))
     ic("saida", b="M24 40V8", B="M6 40h36", R=L((24, 40), (34, 8)) + SA(24, 40, 28, -90, -75, 3.5))
     ic("espessura", B=Q(8, 24, 32, 16), R="M8 24V10h32v14" + S2(24, 12, 24, 22, 3.5))
+    # edição direta de faces (B33)
+    ic("edit_mover_face", B=CUBO(18, 14, 12, 6, 12), R=F_DIR(30, 8, 8, 4, 8) + S(32, 30, 44, 22, 5))
+    ic("edit_apagar_face", B=CUBO(24, 8, 16, 8, 18), R=F_DIR(24, 8, 16, 8, 18) + XIS(33, 28, 4.5))
+    ic("edit_deslocar_face", B=Q(6, 14, 22, 24), R="M38 14v24" + S2(28, 26, 38, 26, 4.5))
+    ic("edit_raio_filete", b="M8 40V8h32", B="M8 40V24M24 8h16", R="M8 24A16 16 0 0 1 24 8" + L((24, 24), pol(24, 24, 16, -135)), pr=[(24, 24)])
     ic("escala", B=CUBO(16, 22, 10, 5, 10), R=L((8, 24), (8, 14), (24, 6), (40, 14), (40, 32), (28, 38)) + S(22, 26, 36, 18, 5))
     ic("extrair", B=CUBO(18, 16, 13, 6.5, 14), R=S(24, 18, 37, 10, 5) + Z((30, 22), (42, 16), (42, 28), (30, 34)))
     ic("rosca", B="M16 6v36M32 6v36", R="M16 12l16 4M16 20l16 4M16 28l16 4M16 36l16 4")
@@ -712,7 +717,7 @@ ic("forma_tangencia", B="M6 36c10-14 26-14 36 0", R=L((8, 25), (40, 25)) + S(24,
 ic("forma_simetria", b="M24 4v40", R="M20 10c-16 2-16 26 0 28M28 10c16 2 16 26 0 28")
 ic("forma_converter", b=Q(6, 12, 18, 24), R=CUBO(32, 12, 10, 5, 12) + "M18 24h4", pb=[(6, 12), (24, 12), (24, 36), (6, 36)])
 
-SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", "sm_converter_chapa", "sm_aba_laco", "sm_fecha_canto", "sm_canto_topo", "sm_canto_sobreposto", "sm_canto_sob", "importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo", "an_conexao", "an_desvio", "an_pente", "sup_regrada"}
+SO_INTERFACE = {"edit_mover_face", "edit_apagar_face", "edit_deslocar_face", "edit_raio_filete", "sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", "sm_converter_chapa", "sm_aba_laco", "sm_fecha_canto", "sm_canto_topo", "sm_canto_sobreposto", "sm_canto_sob", "importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo", "an_conexao", "an_desvio", "an_pente", "sup_regrada"}
 
 
 # ---------- saída ----------

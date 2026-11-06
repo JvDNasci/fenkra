@@ -112,6 +112,7 @@ pub fn campo_ativo(k: &FeatureKind) -> Option<Espera> {
         FeatureKind::Shell(x) if x.faces.is_empty() => Some(Espera::Face),
         FeatureKind::Draft(x) if x.faces.is_empty() => Some(Espera::Face),
         FeatureKind::Thickness(x) if x.faces.is_empty() => Some(Espera::Face),
+        FeatureKind::DirectEdit(x) if x.faces.is_empty() => Some(Espera::Face),
         FeatureKind::Thread(t) if t.face == z => Some(Espera::Face),
         FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => match (&o.mode, &o.edges) {
             (EdgeMode::FaceFace(a, b), _) if *a == z || *b == z => Some(Espera::Face),
@@ -139,6 +140,7 @@ pub fn contagem(k: &FeatureKind) -> Option<(Espera, usize)> {
         FeatureKind::Shell(x) => Some((Espera::Face, x.faces.len())),
         FeatureKind::Draft(x) => Some((Espera::Face, x.faces.len())),
         FeatureKind::Thickness(x) => Some((Espera::Face, x.faces.len())),
+        FeatureKind::DirectEdit(x) => Some((Espera::Face, x.faces.len())),
         FeatureKind::Thread(t) => Some((Espera::Face, usize::from(t.face != z))),
         FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => match &o.mode {
             EdgeMode::FaceFace(a, b) => Some((Espera::Face, [a, b].iter().filter(|p| ***p != z).count())),
@@ -183,10 +185,12 @@ pub fn legenda(k: &FeatureKind, destaque: Color32) -> Vec<(Color32, &'static str
     match k {
         FeatureKind::Shell(_) => vec![aberta, (destaque, "Parede nova")],
         FeatureKind::Draft(_) => vec![(crate::theme::st_warn(), "Face"), (crate::theme::papel_neutro(), "Plano neutro")],
-        FeatureKind::Thickness(_) | FeatureKind::Thread(_) => vec![(crate::theme::st_warn(), "Face")],
+        FeatureKind::Thickness(_) | FeatureKind::Thread(_) | FeatureKind::DirectEdit(_) => vec![(crate::theme::st_warn(), "Face")],
         FeatureKind::Fillet(_) | FeatureKind::Chamfer(_) => vec![(crate::theme::st_warn(), "Aresta ou face")],
-        FeatureKind::Combine(_) => vec![(crate::theme::papel_ferramenta(), "Corpo ferramenta")],
-        FeatureKind::SplitBody(_) | FeatureKind::SewSurface(_) => vec![(crate::theme::papel_ferramenta(), "Ferramenta")],
+        FeatureKind::Combine(_) => vec![(crate::theme::papel_alvo(), "Corpo alvo"), (crate::theme::papel_ferramenta(), "Corpo ferramenta")],
+        FeatureKind::MoveBody(_) => vec![(crate::theme::papel_alvo(), "Corpo alvo")],
+        FeatureKind::SplitBody(_) => vec![(crate::theme::papel_alvo(), "Corpo alvo"), (crate::theme::papel_ferramenta(), "Ferramenta")],
+        FeatureKind::SewSurface(_) => vec![(crate::theme::papel_ferramenta(), "Ferramenta")],
         FeatureKind::ThickSurface(_) | FeatureKind::CloseSurface(_) => vec![(crate::theme::st_warn(), "Superfície")],
         _ => vec![],
     }

@@ -180,6 +180,13 @@ pub mod bridge {
         ) -> Result<UniquePtr<Shape>>;
         /// Prismas das faces planas escolhidas, deslocados ao longo da normal externa (valor negativo = para dentro).
         fn faces_offset_tool(s: &Shape, pts: &[f64], value: f64) -> Result<UniquePtr<Shape>>;
+        fn shape_valid(s: &Shape) -> bool;
+        /// Filete variável com pontos de controle: raio inicial, final e pares (posição 0 a 1, raio).
+        fn fillet_var_t(s: &Shape, r0: f64, r1: f64, ctrl: &[f64], smooth: bool, mids: &[f64], tol: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        /// Edição direta: apaga as faces e as vizinhas se estendem (cura).
+        fn defeature_t(s: &Shape, pts: &[f64], tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        /// Edição direta: desloca as faces pela distância ao longo da normal.
+        fn face_offset_t(s: &Shape, pts: &[f64], value: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn extrude_taper(face: &Shape, dx: f64, dy: f64, dz: f64, len: f64, angle_deg: f64) -> Result<UniquePtr<Shape>>;
         /// Perfil de parede fina (espessura t centrada no contorno).
         fn thin_profile(face: &Shape, t: f64) -> Result<UniquePtr<Shape>>;

@@ -259,6 +259,40 @@ std::unique_ptr<Shape> faces_offset_tool(const Shape& s, rust::Slice<const doubl
     });
 }
 
+// Verificação de sólido válido (B33): a análise de topologia e geometria do kernel aprova o corpo.
+bool shape_valid(const Shape& s) {
+    if (s.s.IsNull()) return false;
+    BRepCheck_Analyzer an(s.s);
+    return an.IsValid();
+}
+
+// Edição direta (B33): apaga as faces e deixa as vizinhas se estenderem até se encontrar ("cura").
+std::unique_ptr<Shape> defeature_t(const Shape& s, rust::Slice<const double> pts, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+    return guard("apagar face", [&] {
+        BRepAlgoAPI_Defeaturing df;
+        df.SetShape(s.s);
+        for (auto& f : faces_near(s.s, pts)) df.AddFaceToRemove(f);
+        df.SetToFillHistory(true);
+        df.Build();
+        if (df.HasErrors() || df.Shape().IsNull()) throw std::runtime_error("as vizinhas não conseguem fechar o corpo sem esta face");
+        return tagged_result(df, s.s, tags, out);
+    });
+}
+
+// Edição direta (B33): desloca as faces pela distância dada ao longo da normal, com as vizinhas
+// acompanhando (também em faces cilíndricas, esféricas e cônicas: muda o raio).
+std::unique_ptr<Shape> face_offset_t(const Shape& s, rust::Slice<const double> pts, double value, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
+    return guard("deslocar face", [&] {
+        BRepOffset_MakeOffset mk;
+        mk.Initialize(s.s, 0.0, 1e-5, BRepOffset_Skin, Standard_True, Standard_False, GeomAbs_Intersection, Standard_False, Standard_False);
+        for (auto& f : faces_near(s.s, pts)) mk.SetOffsetOnFace(f, value);
+        mk.MakeOffsetShape();
+        if (!mk.IsDone() || mk.Shape().IsNull()) throw std::runtime_error("o deslocamento desfaz o corpo: reduza a distância");
+        fill(out, carry(s.s, to_vec(tags), mk.Shape(), [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return mk.Modified(f); }, -1));
+        return wrap(mk.Shape());
+    });
+}
+
 std::unique_ptr<Shape> extrude_taper(const Shape& face, double dx, double dy, double dz, double len, double angle_deg) {
     return guard("extrusão com ângulo", [&] {
         if (len <= 1e-9) throw std::runtime_error("comprimento da extrusão deve ser maior que zero");
