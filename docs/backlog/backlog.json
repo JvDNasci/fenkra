@@ -997,7 +997,7 @@
    "tokens_k": 80,
    "teste": "Auto",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -1728,7 +1728,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -1745,7 +1745,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -1761,7 +1761,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -1950,7 +1950,7 @@
    "tokens_k": 350,
    "teste": "Auto",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -4264,7 +4264,7 @@
    "tokens_k": 450,
    "teste": "Auto + Visual",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.5
   },
   {
@@ -4280,7 +4280,7 @@
    "tokens_k": 400,
    "teste": "Auto + Visual",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -4728,7 +4728,7 @@
    "tokens_k": 120,
    "teste": "Visual",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -4936,7 +4936,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -4952,7 +4952,7 @@
    "tokens_k": 320,
    "teste": "Auto + Visual",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.4
   },
   {
