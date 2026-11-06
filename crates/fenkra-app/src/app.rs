@@ -711,8 +711,15 @@ impl App {
         }
         // desenvolvimento: FENKRA_DEMO_DOBRA=1 abre um tubo retangular dobrado em U (duas dobras de dobradeira, a primeira
         // com uma regra de exemplo); junto com FENKRA_EDITAR=Membro mostra o painel do nó
-        if std::env::var("FENKRA_DEMO_DOBRA").is_ok() {
+        // com `canto`, `v` ou `multiplo` no lugar do 1: tubo 30x30x1,2 com as duas dobras em V com raio, V comum ou V múltiplo
+        if let Ok(modo_dobra) = std::env::var("FENKRA_DEMO_DOBRA") {
             let s = |x: &str| x.to_string();
+            let modo_v = match modo_dobra.as_str() {
+                "canto" => Some((BendMode::VComRaio, "40", "")),
+                "v" => Some((BendMode::VComum, "10", "")),
+                "multiplo" => Some((BendMode::VComum, "40", "3")),
+                _ => None,
+            };
             let mut d = Document::new("Tubo dobrado");
             let mut paths = vec![];
             for (a, b) in [([0., 0., 0.], [400., 0., 0.]), ([400., 0., 0.], [400., 300., 0.]), ([400., 300., 0.], [0., 300., 0.])] {
@@ -723,9 +730,9 @@ impl App {
             let f = d.add_feature(FeatureKind::StructMember(StructMember {
                 paths,
                 family: s("Tubo retangular"),
-                designation: s("60x30x3"),
+                designation: if modo_v.is_some() { s("30x30x1.2") } else { s("60x30x3") },
                 kind: SectionKind::TuboRetangular,
-                dims: vec![s("60"), s("30"), s("3")],
+                dims: if modo_v.is_some() { vec![s("30"), s("30"), s("1.2")] } else { vec![s("60"), s("30"), s("3")] },
                 anchor: 0,
                 angle: s("0"),
                 off_x: s("0"),
@@ -739,8 +746,13 @@ impl App {
                 mirror: false,
             }));
             if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|x| &mut x.kind) {
-                let b1 = TubeBend { mode: BendMode::Dobradeira, radius: s("150"), rule: s("Exemplo de bancada"), ..Default::default() };
-                let b2 = TubeBend { mode: BendMode::Dobradeira, radius: s("100"), plane_dim: 0, ..Default::default() };
+                let mut b1 = TubeBend { mode: BendMode::Dobradeira, radius: s("150"), rule: s("Exemplo de bancada"), ..Default::default() };
+                let mut b2 = TubeBend { mode: BendMode::Dobradeira, radius: s("100"), plane_dim: 0, ..Default::default() };
+                if let Some((modo, raio, rasgos)) = modo_v {
+                    for b in [&mut b1, &mut b2] {
+                        *b = TubeBend { mode: modo, radius: s(raio), cuts: s(rasgos), ..Default::default() };
+                    }
+                }
                 m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b1) });
                 m.joints.push(StructJoint { mine: 2, other: f, other_path: 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b2) });
             }
@@ -3490,7 +3502,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let cfg = Painel { nome: "comando".into(), titulo, padrao, largura: LARGURA, redimensiona: true };
         let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
             self.conclude_bar(ui);
-            egui::ScrollArea::vertical().show(ui, |ui| {
+            // desenvolvimento: FENKRA_DEMO_ROLAR=<px> abre o painel já rolado, para capturar o que fica abaixo da dobra
+            let mut rolagem = egui::ScrollArea::vertical();
+            if let Some(px) = std::env::var("FENKRA_DEMO_ROLAR").ok().and_then(|v| v.parse::<f32>().ok()) {
+                rolagem = rolagem.vertical_scroll_offset(px);
+            }
+            rolagem.show(ui, |ui| {
                 if self.settings.bench == crate::settings::Bench::Desenho {
                     crate::dwg_ui::panel(self, ui)
                 } else if self.settings.bench == crate::settings::Bench::Montagem {

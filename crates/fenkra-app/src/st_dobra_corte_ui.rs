@@ -93,9 +93,9 @@ pub fn painel(ui: &mut egui::Ui, t: &TuboDobrado, dobra: &DobraDoTubo, joint: us
     ui.add_space(4.);
     ui.label(RichText::new(format!("⚠ {}", tr(AVISO_DERIVADA))).color(theme::st_warn()))
         .on_hover_text(tr("As fórmulas do corte vêm de derivação própria, conferida só por conta numérica. Faça um protótipo em peça real antes de cortar a série."));
-    egui::CollapsingHeader::new(tr("Tubo aberto e gabarito")).id_salt(("st_dobra_aberto_cab", joint)).default_open(false).show(ui, |ui| {
+    egui::CollapsingHeader::new(tr("Tubo aberto e gabarito")).id_salt(("st_dobra_aberto_cab", joint)).default_open(std::env::var("FENKRA_DEMO_GABARITO").is_ok()).show(ui, |ui| {
         let chave = egui::Id::new(("st_dobra_aberto", joint));
-        let mut aberto: bool = ui.ctx().data(|d| d.get_temp(chave)).unwrap_or(false);
+        let mut aberto: bool = ui.ctx().data(|d| d.get_temp(chave)).unwrap_or(std::env::var("FENKRA_DEMO_GABARITO").is_ok_and(|v| v == "aberto"));
         ui.horizontal(|ui| {
             ui.selectable_value(&mut aberto, false, tr("Fechado (3D)")).on_hover_text(tr("O tubo dobrado: é o sólido que aparece no 3D."));
             ui.selectable_value(&mut aberto, true, tr("Aberto (planificado)")).on_hover_text(tr("O tubo reto antes de dobrar, com os cortes nas paredes, em escala real."));

@@ -251,7 +251,9 @@ pub fn resultado_ui(ui: &mut egui::Ui, r: &ResultadoDobra, inicio: f64, fim: f64
         .on_hover_text(tr(AVISO_ESTIMATIVA));
         ui.label(RichText::new(tr("Alongamento e afinamento são estimativas de um modelo simples, sem fonte confirmada: não são valores de engenharia.")).weak().small());
     }
-    for a in &r.avisos {
+    // com corte plano, o painel "Tubo aberto e gabarito" já mostra o aviso da geometria derivada, com a explicação
+    let com_painel_de_corte = fenkra_solidos::st_dobra_corte::tem_corte(r);
+    for a in r.avisos.iter().filter(|a| !(com_painel_de_corte && *a == fenkra_solidos::st_dobra::AVISO_DERIVADA)) {
         ui.label(RichText::new(format!("⚠ {a}")).color(theme::st_warn()));
     }
     if !r.origens.is_empty() {
