@@ -254,6 +254,8 @@ pub struct AsmState {
     pub explode_factor: f64,
     /// o manipulador mexe na explosão (não na posição real)
     pub explode_mode: bool,
+    /// marca de limite em arrasto: o desfazer é um só por arrasto
+    pub limite_em_arrasto: bool,
     pub display_open: bool,
     /// janela da lista de peças (nível escolhido)
     pub bom_open: Option<fenkra_montagem::bom::BomLevel>,
@@ -351,6 +353,7 @@ impl AsmState {
             live: Default::default(),
             explode_factor: 0.,
             explode_mode: false,
+            limite_em_arrasto: false,
             display_open: false,
             bom_open: None,
             fasteners_open: None,
@@ -1603,15 +1606,20 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 (_, Some(e)) => format!("  ↕ {e} mm"),
                 _ => String::new(),
             };
-            let mut t = RichText::new(format!("⚙ {}  ({} ↔ {}){drive}{}", j.name, st.asm.name_of(j.a.comp), st.asm.name_of(j.b.comp), if failed { " ✖" } else { "" })).small();
+            let limite = crate::asm_limites::tem_limite(j);
+            let no_limite = st.report.no_limite.contains(&j.id);
+            let mut t = RichText::new(format!("⚙ {}  ({} ↔ {}){drive}{}{}", j.name, st.asm.name_of(j.a.comp), st.asm.name_of(j.b.comp), if limite { "  ⊢⊣" } else { "" }, if failed { " ✖" } else { "" })).small();
             if failed {
                 t = t.color(crate::theme::st_err());
+            } else if no_limite {
+                t = t.color(crate::theme::st_warn());
             }
             if j.suppressed {
                 t = t.strikethrough().weak();
             }
             crate::tree_ui::marca(ui);
             let r = ui.selectable_label(st.sel == Some(j.id) || st.simbolos.hover == Some(j.id), t);
+            let r = if limite { r.on_hover_text(format!("{}{}", crate::asm_limites::resumo(j), if no_limite { format!("\n{}", tr("Parada no limite")) } else { String::new() })) } else { r };
             if st.sel == Some(j.id) {
                 crate::tree_ui::achar(r.rect);
             }
@@ -2511,8 +2519,15 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                         }
                     }
                 }
+                crate::editor::section(ui, "Limites");
+                let (copia, graus) = (j.clone(), j.kind.graus());
+                let pedido = crate::asm_limites::painel(ui, "asm_junta_limites", graus, &mut j.limites, crate::asm_limites::medidor(&copia, &pl), |g| kin::aceita_levar(&copia, g));
                 crate::editor::check(ui, &mut j.suppressed, "suprimida");
                 let jid = j.id;
+                if let Some((g, v)) = pedido.levar {
+                    st.report = kin::levar_a(&mut st.asm, jid, g, v);
+                    st.dirty = true;
+                }
                 if !others.is_empty() {
                     crate::editor::section(ui, "Acoplar a outra junta");
                     for (oid, on) in &others {
@@ -2745,7 +2760,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         if st.asm.patterns != before.patterns {
             st.asm.update_patterns();
         }
-        let positions_only = st.asm.mates == before.mates && st.asm.rigid == before.rigid && st.asm.features == before.features;
+        let positions_only = st.asm.mates == before.mates && st.asm.joints == before.joints && st.asm.couplings == before.couplings && st.asm.rigid == before.rigid && st.asm.features == before.features;
         st.undo.push(before);
         st.modified = true;
         if !positions_only || st.asm.params != st.undo.last().unwrap().params {

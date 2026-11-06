@@ -83,6 +83,19 @@ impl JointKind {
             _ => (false, false),
         }
     }
+    /// Graus de liberdade que a junta deixa e que têm medida. O came não tem nenhum próprio: o
+    /// movimento dele vem das outras juntas do mecanismo.
+    pub fn graus(&self) -> &'static [Grau] {
+        match self {
+            JointKind::Revolute | JointKind::Screw { .. } => &[Grau::Giro],
+            JointKind::Prismatic => &[Grau::Curso],
+            JointKind::Cylindrical => &[Grau::Giro, Grau::Curso],
+            JointKind::Spherical => &[Grau::Inclinacao, Grau::Giro],
+            JointKind::Planar => &[Grau::CursoX, Grau::CursoY, Grau::Giro],
+            JointKind::PointCurve { .. } => &[Grau::Trajeto],
+            JointKind::Rigid | JointKind::Cam { .. } => &[],
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -103,16 +116,194 @@ pub struct Joint {
     pub drive_len: Option<String>,
     #[serde(default)]
     pub suppressed: bool,
-    /// faixa de movimento: por enquanto só guia o Animar, o solucionador não a impõe
+    /// faixa de movimento de cada grau de liberdade: o solucionador a impõe como desigualdade
     #[serde(default)]
     pub limites: Limites,
+    /// posição no plano (x, y) e na trajetória, medidas na criação: o zero dos limites desses graus
+    #[serde(default)]
+    pub zero: [f64; 3],
+}
+
+/// Um extremo da faixa. Desligar não apaga o valor: ligar de novo volta ao que estava.
+#[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct Limite {
+    pub ligado: bool,
+    pub valor: f64,
+}
+
+/// Mínimo e máximo de um grau de liberdade, cada um com a sua caixa.
+#[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct Faixa {
+    pub min: Limite,
+    pub max: Limite,
+}
+
+impl Faixa {
+    /// Faixa com os dois extremos ligados.
+    pub fn nova(min: f64, max: f64) -> Self {
+        Faixa { min: Limite { ligado: true, valor: min }, max: Limite { ligado: true, valor: max } }
+    }
+
+    pub fn ligada(&self) -> bool {
+        self.min.ligado || self.max.ligado
+    }
+
+    fn lo(&self) -> f64 {
+        if self.min.ligado {
+            self.min.valor
+        } else {
+            f64::NEG_INFINITY
+        }
+    }
+
+    fn hi(&self) -> f64 {
+        if self.max.ligado {
+            self.max.valor
+        } else {
+            f64::INFINITY
+        }
+    }
+
+    /// `v` trazido para dentro da faixa. O `clamp` da biblioteca entra em pânico com mínimo acima do
+    /// máximo, e a pessoa pode digitar isso.
+    pub fn prender(&self, v: f64) -> f64 {
+        v.max(self.lo()).min(self.hi())
+    }
+
+    /// Extremos ligados, e o padrão no lugar dos desligados.
+    pub fn ou(&self, padrao: (f64, f64)) -> (f64, f64) {
+        (if self.min.ligado { self.min.valor } else { padrao.0 }, if self.max.ligado { self.max.valor } else { padrao.1 })
+    }
+
+    /// Quanto `v` passou da faixa, com sinal: zero dentro dela. No grau cíclico, com os dois extremos
+    /// ligados, vale a volta mais curta: 270° e −90° são a mesma posição, e a medida só vai a ±180°.
+    /// Com um extremo só a faixa não fecha no círculo, e a medida conta como está.
+    pub fn desvio(&self, v: f64, ciclico: bool) -> f64 {
+        let (lo, hi) = (self.lo(), self.hi());
+        let fora = |x: f64| {
+            if x < lo {
+                x - lo
+            } else if x > hi {
+                x - hi
+            } else {
+                0.
+            }
+        };
+        if !(ciclico && self.min.ligado && self.max.ligado) {
+            return fora(v);
+        }
+        [v, v - 360., v + 360.].map(fora).into_iter().min_by(|a, b| a.abs().total_cmp(&b.abs())).unwrap_or(0.)
+    }
+
+    /// `v` está encostado num extremo ligado?
+    pub fn encostado(&self, v: f64, tol: f64) -> bool {
+        (self.min.ligado && (v - self.min.valor).abs() <= tol) || (self.max.ligado && (v - self.max.valor).abs() <= tol)
+    }
+}
+
+/// Faixa como os arquivos anteriores gravavam: `null` ou `[mínimo, máximo]`.
+fn faixa_lida<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Faixa, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Lida {
+        Atual(Faixa),
+        Antiga(Option<(f64, f64)>),
+    }
+    Ok(match Lida::deserialize(d)? {
+        Lida::Atual(f) => f,
+        Lida::Antiga(Some((lo, hi))) => Faixa::nova(lo, hi),
+        Lida::Antiga(None) => Faixa::default(),
+    })
+}
+
+/// Grau de liberdade de uma junta, do jeito que se mede e se limita.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Grau {
+    /// giro em volta do eixo z da junta
+    Giro,
+    /// avanço ao longo do eixo z
+    Curso,
+    /// posição no plano da junta, na direção x
+    CursoX,
+    /// posição no plano da junta, na direção y
+    CursoY,
+    /// ângulo entre os dois eixos z: um cone que limita os dois tombamentos da esférica
+    Inclinacao,
+    /// comprimento andado sobre a trajetória
+    Trajeto,
+}
+
+impl Grau {
+    pub fn label(self) -> &'static str {
+        match self {
+            Grau::Giro => "Ângulo",
+            Grau::Curso => "Curso",
+            Grau::CursoX => "Posição X",
+            Grau::CursoY => "Posição Y",
+            Grau::Inclinacao => "Inclinação",
+            Grau::Trajeto => "Trajeto",
+        }
+    }
+    /// Grau medido em graus.
+    pub fn angular(self) -> bool {
+        matches!(self, Grau::Giro | Grau::Inclinacao)
+    }
+    pub fn unidade(self) -> &'static str {
+        if self.angular() {
+            "°"
+        } else {
+            " mm"
+        }
+    }
+    /// Faixa que o limite ganha ao ser ligado pela primeira vez.
+    pub fn padrao(self) -> (f64, f64) {
+        match self {
+            Grau::Giro => (-90., 90.),
+            Grau::Inclinacao => (0., 45.),
+            Grau::Trajeto => (0., 100.),
+            _ => (-50., 50.),
+        }
+    }
 }
 
 /// Mínimo e máximo de cada grau de liberdade da junta (graus e mm, relativos à criação).
 #[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct Limites {
-    pub angulo: Option<(f64, f64)>,
-    pub curso: Option<(f64, f64)>,
+    #[serde(default, deserialize_with = "faixa_lida")]
+    pub angulo: Faixa,
+    #[serde(default, deserialize_with = "faixa_lida")]
+    pub curso: Faixa,
+    #[serde(default)]
+    pub curso_x: Faixa,
+    #[serde(default)]
+    pub curso_y: Faixa,
+    #[serde(default)]
+    pub inclinacao: Faixa,
+    #[serde(default)]
+    pub trajeto: Faixa,
+}
+
+impl Limites {
+    pub fn faixa(&self, g: Grau) -> &Faixa {
+        match g {
+            Grau::Giro => &self.angulo,
+            Grau::Curso => &self.curso,
+            Grau::CursoX => &self.curso_x,
+            Grau::CursoY => &self.curso_y,
+            Grau::Inclinacao => &self.inclinacao,
+            Grau::Trajeto => &self.trajeto,
+        }
+    }
+    pub fn faixa_mut(&mut self, g: Grau) -> &mut Faixa {
+        match g {
+            Grau::Giro => &mut self.angulo,
+            Grau::Curso => &mut self.curso,
+            Grau::CursoX => &mut self.curso_x,
+            Grau::CursoY => &mut self.curso_y,
+            Grau::Inclinacao => &mut self.inclinacao,
+            Grau::Trajeto => &mut self.trajeto,
+        }
+    }
 }
 
 /// Relação entre duas juntas: engrenagem (ângulo × ângulo), pinhão-cremalheira (ângulo → curso)
@@ -160,6 +351,79 @@ fn len_of(j: &Joint, pa: &Placement, pb: &Placement) -> f64 {
     dot(sub(ob, oa), za)
 }
 
+/// Comprimento da polilinha do começo até o ponto dela mais perto de `q`.
+fn arco_ate(curva: &[V3], q: V3) -> f64 {
+    let (mut melhor, mut andado, mut achado) = (f64::MAX, 0., 0.);
+    for w in curva.windows(2) {
+        let e = sub(w[1], w[0]);
+        let l = norm(e);
+        let t = (dot(sub(q, w[0]), e) / (l * l).max(1e-18)).clamp(0., 1.);
+        let d = norm(sub(q, [0, 1, 2].map(|i| w[0][i] + e[i] * t)));
+        if d < melhor {
+            melhor = d;
+            achado = andado + l * t;
+        }
+        andado += l;
+    }
+    achado
+}
+
+/// Posição no plano da junta e na trajetória, sem descontar o zero da criação.
+fn posicao_crua(j: &Joint, pa: &Placement, pb: &Placement) -> [f64; 3] {
+    let (oa, za, xa) = j.a.frame.world(pa);
+    let (ob, _, _) = j.b.frame.world(pb);
+    let d = sub(ob, oa);
+    let s = if let JointKind::PointCurve { curve } = &j.kind { arco_ate(curve, pa.to_local(ob)) } else { 0. };
+    [dot(d, xa), dot(d, cross(za, xa)), s]
+}
+
+/// Valor de um grau de liberdade agora, na mesma referência dos limites (graus ou mm).
+pub fn medir_grau(j: &Joint, g: Grau, pa: &Placement, pb: &Placement) -> f64 {
+    let cru = posicao_crua(j, pa, pb);
+    match g {
+        Grau::Giro => wrap180(angle_of(j, pa, pb) - j.angle0),
+        Grau::Curso => len_of(j, pa, pb) - j.len0,
+        Grau::CursoX => cru[0] - j.zero[0],
+        Grau::CursoY => cru[1] - j.zero[1],
+        Grau::Trajeto => cru[2] - j.zero[2],
+        Grau::Inclinacao => {
+            let (za, zb) = (j.a.frame.world(pa).1, j.b.frame.world(pb).1);
+            norm(cross(za, zb)).atan2(dot(za, zb)).to_degrees()
+        }
+    }
+}
+
+/// Encostou no limite: abaixo disto (graus ou mm) a junta conta como parada no batente.
+const TOL_BATENTE: f64 = 1e-4;
+
+/// A junta está parada em algum limite ligado? Não é falha: é o batente fazendo o papel dele.
+pub fn no_batente(j: &Joint, pl: &HashMap<Id, Placement>) -> bool {
+    let (Some(pa), Some(pb)) = (pl.get(&j.a.comp), pl.get(&j.b.comp)) else { return false };
+    !j.suppressed && j.kind.graus().iter().any(|g| j.limites.faixa(*g).encostado(medir_grau(j, *g, pa, pb), TOL_BATENTE))
+}
+
+/// Resíduos de desigualdade: um por grau limitado, zero dentro da faixa e igual ao que passou dela
+/// fora. O quadrado disso tem derivada contínua na borda, então o mínimos quadrados para ali sem
+/// tratamento especial. Ficam fora de [`residuals`] porque um batente não tira grau de liberdade:
+/// quem conta GDL não pode ver essas linhas, nem quando a junta está encostada.
+pub fn residuos_limite(a: &Assembly, pl: &HashMap<Id, Placement>, r: &mut Vec<f64>, per: &mut Vec<(Id, usize, usize)>) {
+    for j in a.joints.iter().filter(|j| !j.suppressed) {
+        let (Some(pa), Some(pb)) = (pl.get(&j.a.comp), pl.get(&j.b.comp)) else { continue };
+        let s = r.len();
+        for g in j.kind.graus() {
+            let f = j.limites.faixa(*g);
+            if f.ligada() {
+                let d = f.desvio(medir_grau(j, *g, pa, pb), *g == Grau::Giro);
+                // mesma escala do comando de ângulo: 1° pesa como 0,17 mm
+                r.push(if g.angular() { d.to_radians() * 10. } else { d });
+            }
+        }
+        if r.len() > s {
+            per.push((j.id, s, r.len()));
+        }
+    }
+}
+
 /// Ângulo e curso atuais da junta, relativos à criação (o que os comandos medem).
 pub fn measure(j: &Joint, pl: &HashMap<Id, Placement>) -> Option<(f64, f64)> {
     let (pa, pb) = (pl.get(&j.a.comp)?, pl.get(&j.b.comp)?);
@@ -172,9 +436,10 @@ impl Assembly {
         let id = self.alloc();
         let name = self.unique_pub(kind.label());
         let pl = |c: Id| self.node(c).map(|n| n.placement).unwrap_or_default();
-        let mut j = Joint { id, name, kind, a, b, angle0: 0., len0: 0., drive_angle: None, drive_len: None, suppressed: false, limites: Limites::default() };
+        let mut j = Joint { id, name, kind, a, b, angle0: 0., len0: 0., drive_angle: None, drive_len: None, suppressed: false, limites: Limites::default(), zero: [0.; 3] };
         j.angle0 = angle_of(&j, &pl(a.comp), &pl(b.comp));
         j.len0 = len_of(&j, &pl(a.comp), &pl(b.comp));
+        j.zero = posicao_crua(&j, &pl(a.comp), &pl(b.comp));
         self.joints.push(j);
         id
     }
@@ -227,6 +492,43 @@ impl Assembly {
             made.push(id);
         }
         made
+    }
+}
+
+/// Leva a junta ao valor `v` do grau `g` pelo solucionador: quem está preso nela vem junto, e o que
+/// as restrições e os limites não deixam, fica. Sem comando gravado: depois disso a junta segue livre.
+pub fn levar_a(a: &mut Assembly, id: Id, g: Grau, v: f64) -> crate::solve::SolveReport {
+    let Some(i) = a.joints.iter().position(|j| j.id == id) else { return Default::default() };
+    let (ang, len) = (a.joints[i].drive_angle.clone(), a.joints[i].drive_len.clone());
+    match g {
+        Grau::Giro => a.joints[i].drive_angle = Some(valor_cota(v)),
+        Grau::Curso => a.joints[i].drive_len = Some(valor_cota(v)),
+        Grau::CursoX | Grau::CursoY => {
+            let j = a.joints[i].clone();
+            let (Some(pa), Some(pb)) = (a.lugar(j.a.comp), a.lugar(j.b.comp)) else { return Default::default() };
+            let (_, za, xa) = j.a.frame.world(&pa);
+            let d = if g == Grau::CursoX { xa } else { cross(za, xa) };
+            let falta = v - medir_grau(&j, g, &pa, &pb);
+            let peca_b_presa = a.node(j.b.comp).is_none_or(|n| n.fixed);
+            let (comp, lugar, k) = if peca_b_presa { (j.a.comp, pa, -falta) } else { (j.b.comp, pb, falta) };
+            return crate::solve::solve_toward(a, comp, lugar.moved(d.map(|e| e * k), [0.; 3], lugar.origin), 0.05);
+        }
+        Grau::Inclinacao | Grau::Trajeto => return crate::solve::solve(a),
+    }
+    let rep = crate::solve::solve(a);
+    a.joints[i].drive_angle = ang;
+    a.joints[i].drive_len = len;
+    rep
+}
+
+/// O grau aceita valor digitado? A inclinação e o trajeto não têm um caminho único até o valor, e o
+/// comando gravado na junta já manda no ângulo e no curso.
+pub fn aceita_levar(j: &Joint, g: Grau) -> bool {
+    match g {
+        Grau::Giro => j.drive_angle.is_none(),
+        Grau::Curso => j.drive_len.is_none(),
+        Grau::CursoX | Grau::CursoY => true,
+        Grau::Inclinacao | Grau::Trajeto => false,
     }
 }
 
@@ -306,10 +608,11 @@ pub fn residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<Strin
         }
         if drives {
             if let Some(e) = &j.drive_angle {
-                r.push(wrap180(ang() - num(e)) * std::f64::consts::PI / 180. * 10.);
+                // comando além do limite para no batente, em vez de brigar com ele
+                r.push(wrap180(ang() - j.limites.angulo.prender(num(e))) * std::f64::consts::PI / 180. * 10.);
             }
             if let Some(e) = &j.drive_len {
-                r.push(along - j.len0 - num(e));
+                r.push(along - j.len0 - j.limites.curso.prender(num(e)));
             }
         }
         per.push((j.id, s, r.len()));
@@ -393,6 +696,191 @@ mod tests {
         let f = JFrame::from_axis([0.; 3], [0., 0., 1.]);
         let j = a.add_joint(JointKind::Revolute, JRef { comp: base, frame: f }, JRef { comp: braco, frame: f });
         (a, braco, j)
+    }
+
+    /// Limita o giro da manivela.
+    fn com_limite(a: &mut Assembly, j: Id, lo: f64, hi: f64) {
+        a.joints.iter_mut().find(|x| x.id == j).unwrap().limites.angulo = Faixa::nova(lo, hi);
+    }
+
+    fn giro(a: &Assembly, j: Id) -> f64 {
+        let pl: HashMap<Id, Placement> = a.nodes.iter().map(|n| (n.id, n.placement)).collect();
+        measure(a.joints.iter().find(|x| x.id == j).unwrap(), &pl).unwrap().0
+    }
+
+    #[test]
+    fn comando_alem_do_limite_para_no_batente_sem_falhar() {
+        let (mut a, _, j) = manivela();
+        com_limite(&mut a, j, -90., 90.);
+        a.joints.iter_mut().find(|x| x.id == j).unwrap().drive_angle = Some("120".into());
+        let rep = solve_with(&mut a, &HashMap::new());
+        assert!(rep.converged, "{rep:?}");
+        assert!((giro(&a, j) - 90.).abs() < 1e-6, "{}", giro(&a, j));
+        assert_eq!(rep.no_limite, vec![j], "fica marcada como parada no limite");
+    }
+
+    #[test]
+    fn arrastar_alem_do_limite_para_na_marca() {
+        let (mut a, braco, j) = manivela();
+        com_limite(&mut a, j, -30., 45.);
+        let inicio = a.node(braco).unwrap().placement;
+        // puxa a peça em passos, como o arraste faz, até 80° dando a volta pelo eixo
+        for g in (5..=80).step_by(5) {
+            let alvo = inicio.moved([0.; 3], [0., 0., (g as f64).to_radians()], [0.; 3]);
+            let rep = crate::solve::solve_toward(&mut a, braco, alvo, 0.05);
+            assert!(rep.converged, "{g}: {rep:?}");
+        }
+        assert!((giro(&a, j) - 45.).abs() < 1e-5, "{}", giro(&a, j));
+    }
+
+    #[test]
+    fn peca_fora_da_faixa_volta_para_o_limite_mais_perto() {
+        let (mut a, _, j) = manivela();
+        a.joints.iter_mut().find(|x| x.id == j).unwrap().drive_angle = Some("60".into());
+        solve_with(&mut a, &HashMap::new());
+        a.joints.iter_mut().find(|x| x.id == j).unwrap().drive_angle = None;
+        com_limite(&mut a, j, -10., 20.);
+        assert!(solve_with(&mut a, &HashMap::new()).converged);
+        assert!((giro(&a, j) - 20.).abs() < 1e-6, "{}", giro(&a, j));
+    }
+
+    #[test]
+    fn caixa_desligada_nao_limita_e_nao_perde_o_valor() {
+        let (mut a, _, j) = manivela();
+        com_limite(&mut a, j, -10., 20.);
+        a.joints.iter_mut().find(|x| x.id == j).unwrap().limites.angulo.max.ligado = false;
+        a.joints.iter_mut().find(|x| x.id == j).unwrap().drive_angle = Some("60".into());
+        let rep = solve_with(&mut a, &HashMap::new());
+        assert!(rep.no_limite.is_empty());
+        assert!((giro(&a, j) - 60.).abs() < 1e-6);
+        a.joints.iter_mut().find(|x| x.id == j).unwrap().limites.angulo.max.ligado = true;
+        solve_with(&mut a, &HashMap::new());
+        assert!((giro(&a, j) - 20.).abs() < 1e-6, "o valor guardado volta a valer");
+    }
+
+    #[test]
+    fn limite_nao_tira_grau_de_liberdade_nem_encostado() {
+        let (mut a, _, j) = manivela();
+        com_limite(&mut a, j, -90., 0.);
+        let rep = solve_with(&mut a, &HashMap::new());
+        assert_eq!(rep.no_limite, vec![j]);
+        assert_eq!(analyze(&a).0, 1);
+        assert_eq!(rep.dof, 1, "o batente não desconta, nem com a junta encostada nele");
+    }
+
+    #[test]
+    fn restricao_que_pede_alem_do_limite_e_conflito_de_verdade() {
+        let (mut a, braco, j) = manivela();
+        a.node_mut(a.nodes[0].id).unwrap().fixed = true;
+        com_limite(&mut a, j, -30., 30.);
+        // o braço precisa ficar a 90°: o eixo x dele contra o x do mundo
+        let n = |comp, v: V3| MateRef { comp, geom: Geom::Plane { p: [0.; 3], n: v }, pick: None };
+        let m = a.add_mate(MateKind::Angle("90".into()), n(a.nodes[0].id, [1., 0., 0.]), n(braco, [1., 0., 0.]));
+        let rep = solve_with(&mut a, &HashMap::new());
+        assert!(!rep.converged, "{rep:?}");
+        assert!(rep.failed.contains(&j) && rep.failed.contains(&m), "{rep:?}");
+    }
+
+    #[test]
+    fn prismatica_limita_o_curso() {
+        let mut a = Assembly::new("trilho");
+        let b = a.add_component("Base", NodeKind::Part { path: "b".into() }, Placement::default(), None);
+        a.node_mut(b).unwrap().fixed = true;
+        let c = a.add_component("Carro", NodeKind::Part { path: "c".into() }, Placement::default(), None);
+        let f = JFrame::from_axis([0.; 3], [1., 0., 0.]);
+        let j = a.add_joint(JointKind::Prismatic, JRef { comp: b, frame: f }, JRef { comp: c, frame: f });
+        a.joints[0].limites.curso = Faixa::nova(0., 25.);
+        a.joints[0].drive_len = Some("40".into());
+        let rep = solve_with(&mut a, &HashMap::new());
+        assert!(rep.converged && rep.no_limite == vec![j], "{rep:?}");
+        assert!((a.node(c).unwrap().placement.origin[0] - 25.).abs() < 1e-6);
+    }
+
+    #[test]
+    fn planar_limita_cada_direcao() {
+        let mut a = Assembly::new("mesa");
+        let b = a.add_component("Base", NodeKind::Part { path: "b".into() }, Placement::default(), None);
+        a.node_mut(b).unwrap().fixed = true;
+        let c = a.add_component("Mesa", NodeKind::Part { path: "c".into() }, Placement { origin: [5., 0., 0.], ..Default::default() }, None);
+        let f = JFrame { o: [0.; 3], z: [0., 0., 1.], x: [1., 0., 0.] };
+        let j = a.add_joint(JointKind::Planar, JRef { comp: b, frame: f }, JRef { comp: c, frame: f });
+        assert_eq!(a.joints[0].zero[0], 5., "o zero é a posição da criação");
+        a.joints[0].limites.curso_x = Faixa::nova(-1., 3.);
+        a.joints[0].limites.curso_y = Faixa::nova(-2., 2.);
+        levar_a(&mut a, j, Grau::CursoX, 10.);
+        levar_a(&mut a, j, Grau::CursoY, -10.);
+        let p = a.node(c).unwrap().placement.origin;
+        assert!((p[0] - 8.).abs() < 1e-5 && (p[1] + 2.).abs() < 1e-5, "{p:?}");
+    }
+
+    #[test]
+    fn esferica_limita_o_cone() {
+        let mut a = Assembly::new("bola");
+        let b = a.add_component("Base", NodeKind::Part { path: "b".into() }, Placement::default(), None);
+        a.node_mut(b).unwrap().fixed = true;
+        let c = a.add_component("Haste", NodeKind::Part { path: "c".into() }, Placement::default(), None);
+        let f = JFrame::from_axis([0.; 3], [0., 0., 1.]);
+        a.add_joint(JointKind::Spherical, JRef { comp: b, frame: f }, JRef { comp: c, frame: f });
+        a.joints[0].limites.inclinacao.max = Limite { ligado: true, valor: 20. };
+        let alvo = Placement::default().moved([0.; 3], [50f64.to_radians(), 0., 0.], [0.; 3]);
+        assert!(crate::solve::solve_toward(&mut a, c, alvo, 0.05).converged);
+        let z = a.node(c).unwrap().placement.dir([0., 0., 1.]);
+        assert!((z[2].acos().to_degrees() - 20.).abs() < 1e-4, "{z:?}");
+    }
+
+    #[test]
+    fn ponto_em_curva_limita_o_trajeto() {
+        let mut a = Assembly::new("trilho curvo");
+        let b = a.add_component("Base", NodeKind::Part { path: "b".into() }, Placement::default(), None);
+        a.node_mut(b).unwrap().fixed = true;
+        let c = a.add_component("Cursor", NodeKind::Part { path: "c".into() }, Placement { origin: [10., 0., 0.], ..Default::default() }, None);
+        let f = JFrame::from_axis([0.; 3], [0., 0., 1.]);
+        let curva = vec![[0., 0., 0.], [50., 0., 0.], [50., 50., 0.]];
+        a.add_joint(JointKind::PointCurve { curve: curva }, JRef { comp: b, frame: f }, JRef { comp: c, frame: f });
+        assert_eq!(a.joints[0].zero[2], 10.);
+        a.joints[0].limites.trajeto.max = Limite { ligado: true, valor: 15. };
+        let alvo = Placement { origin: [40., 0., 0.], ..Default::default() };
+        assert!(crate::solve::solve_toward(&mut a, c, alvo, 0.05).converged);
+        assert!((a.node(c).unwrap().placement.origin[0] - 25.).abs() < 1e-4, "{:?}", a.node(c).unwrap().placement.origin);
+    }
+
+    #[test]
+    fn giro_ciclico_vale_a_volta_mais_curta() {
+        let f = Faixa::nova(0., 270.);
+        assert_eq!(f.desvio(-100., true), 0., "−100° é o mesmo lugar que 260°");
+        assert_eq!(f.desvio(-45., true), -45., "−45° fica a 45° do mínimo");
+        assert_eq!(Faixa::nova(-170., 170.).desvio(175., true), 5.);
+        let so_max = Faixa { max: Limite { ligado: true, valor: 170. }, ..Default::default() };
+        assert_eq!(so_max.desvio(-175., true), 0., "com um extremo só a faixa não fecha no círculo");
+    }
+
+    #[test]
+    fn minimo_acima_do_maximo_nao_entra_em_panico() {
+        let (mut a, _, j) = manivela();
+        com_limite(&mut a, j, 30., -30.);
+        a.joints[0].drive_angle = Some("10".into());
+        let rep = solve_with(&mut a, &HashMap::new());
+        assert!(rep.failed.contains(&j), "{rep:?}");
+    }
+
+    #[test]
+    fn arquivo_antigo_com_faixa_em_par_ainda_abre() {
+        let l: Limites = serde_json::from_str(r#"{"angulo":[-45.0,90.0],"curso":null}"#).unwrap();
+        assert_eq!(l.angulo, Faixa::nova(-45., 90.));
+        assert!(!l.curso.ligada());
+        let volta: Limites = serde_json::from_str(&serde_json::to_string(&l).unwrap()).unwrap();
+        assert_eq!(volta, l);
+    }
+
+    #[test]
+    fn levar_a_nao_deixa_comando_gravado() {
+        let (mut a, _, j) = manivela();
+        com_limite(&mut a, j, -90., 90.);
+        assert!(levar_a(&mut a, j, Grau::Giro, 37.).converged);
+        assert!((giro(&a, j) - 37.).abs() < 1e-6);
+        assert!(a.joints[0].drive_angle.is_none());
+        assert!(solve_with(&mut a, &HashMap::new()).converged);
+        assert!((giro(&a, j) - 37.).abs() < 1e-6, "a peça fica onde foi deixada");
     }
 
     #[test]

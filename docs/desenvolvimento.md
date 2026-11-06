@@ -70,7 +70,7 @@ preferências do usuário.
 | `FENKRA_DEMO_INICIO=1` | mostra a tela inicial |
 | `FENKRA_DEMO_TEMA=<nome>` | usa o tema (Escuro, Claro, NeoTech Minimalista…) |
 | `FENKRA_DEMO_CHAPA`, `_EST`, `_SUP`, `_ASM`, `_PMI`, `_DWG` | abre o exemplo de cada bancada |
-| `FENKRA_DEMO_ASM=<nome>` | montagem de exemplo com: `mec` (mecanismo), `cmd` (restrição com fantasma), `junta` (junta automática), `simbolos` (cota e junta no modelo), `manip` (manipulador numa dobradiça), `duzentas` (200 restrições), `inserir` e `inserir_vazia` (peça no cursor), `interf`, `interf_oculta` e `interf_transparente` (realce da interferência), `repeticao` (fantasmas e marcas), `fixadores` (assistente), `encaixe` (pontos de encaixe), `grade<N>` (N peças iguais) |
+| `FENKRA_DEMO_ASM=<nome>` | montagem de exemplo com: `mec` (mecanismo), `cmd` (restrição com fantasma), `junta` (junta automática), `simbolos` (cota e junta no modelo), `manip` (manipulador numa dobradiça), `limites` (arco e trilho de uma junta escolhida), `limites_cmd` (limites na criação da junta), `duzentas` (200 restrições), `inserir` e `inserir_vazia` (peça no cursor), `interf`, `interf_oculta` e `interf_transparente` (realce da interferência), `repeticao` (fantasmas e marcas), `fixadores` (assistente), `encaixe` (pontos de encaixe), `grade<N>` (N peças iguais) |
 | `FENKRA_DEMO_ABA=<n>` | abre o painel de comando já na aba n (a primeira é 0), para capturas sem mouse |
 | `FENKRA_DEMO_DOBRA=1` | tubo retangular dobrado em U na bancada Estrutural; com `FENKRA_EDITAR=Membro` abre o painel do nó de dobra |
 | `FENKRA_DEMO_FORMA=<modo>` | abre uma cúpula em edição na bancada Forma livre; `gaiola`, `liso`, `laco` e `tangencia` já mudam o que aparece; `converter`, `g0` e `g2` abrem o relatório da conversão |

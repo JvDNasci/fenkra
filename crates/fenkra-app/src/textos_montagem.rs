@@ -118,7 +118,6 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Vai até os limites da junta, em vez da faixa padrão", "Goes up to the joint limits, instead of the default range"),
     ("Limites", "Limits"),
     ("Curso", "Travel"),
-    ("Liga a faixa de movimento deste grau de liberdade", "Turns on the motion range of this degree of freedom"),
     ("Mínimo", "Minimum"),
     ("Máximo", "Maximum"),
     ("Esta junta não tem curso nem ângulo para limitar.", "This joint has no travel or angle to limit."),

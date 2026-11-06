@@ -703,7 +703,7 @@ mod tests {
 
     fn junta(a: &mut Assembly, nome: &str, ca: Id, cb: Id, f: JFrame) -> Id {
         let id = a.alloc();
-        a.joints.push(Joint { id, name: nome.into(), kind: JointKind::Revolute, a: JRef { comp: ca, frame: f }, b: JRef { comp: cb, frame: f }, angle0: 0., len0: 0., drive_angle: None, drive_len: None, suppressed: false, limites: Default::default() });
+        a.joints.push(Joint { id, name: nome.into(), kind: JointKind::Revolute, a: JRef { comp: ca, frame: f }, b: JRef { comp: cb, frame: f }, angle0: 0., len0: 0., drive_angle: None, drive_len: None, suppressed: false, limites: Default::default(), zero: [0.; 3] });
         id
     }
 

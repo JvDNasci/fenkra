@@ -497,7 +497,11 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
     }
     if junta {
         let reconhecida = pen.previa().and_then(|p| p.id.and_then(|id| p.copia.joints.iter().find(|j| j.id == id)));
-        let (giro, curso) = reconhecida.map_or((false, false), |j| j.kind.drives());
+        let graus = reconhecida.map_or(&[][..], |j| j.kind.graus());
+        let medidas: Vec<(kin::Grau, f64)> = pen.previa().zip(reconhecida).map_or(vec![], |(p, j)| {
+            let lugar = |id| p.copia.lugar(id).unwrap_or_default();
+            graus.iter().map(|g| (*g, kin::medir_grau(j, *g, &lugar(j.a.comp), &lugar(j.b.comp)))).collect()
+        });
         if let (Tipo::JuntaAutomatica, Some(j)) = (&pen.c.tipo, reconhecida) {
             ui.label(RichText::new(format!("{} {}", tr("Reconhecida:"), tr(j.kind.label()))).strong());
         }
@@ -535,26 +539,10 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
                 pen.animacao = None;
             }
         });
-        // limites guardados na junta (o solucionador ainda não os impõe)
+        // faixa de movimento: o solucionador a impõe, e a prévia já respeita
         egui::CollapsingHeader::new(tr("Limites")).id_salt("asm_cmd_limites").show(ui, |ui| {
-            for (rotulo, ligado, faixa, unidade, padrao) in [("Ângulo", giro, &mut pen.c.limites.angulo, "°", (-90., 90.)), ("Curso", curso, &mut pen.c.limites.curso, " mm", (-50., 50.))] {
-                if !ligado {
-                    continue;
-                }
-                ui.horizontal(|ui| {
-                    let mut on = faixa.is_some();
-                    if ui.checkbox(&mut on, tr(rotulo)).on_hover_text(tr("Liga a faixa de movimento deste grau de liberdade")).changed() {
-                        *faixa = on.then_some(padrao);
-                    }
-                    if let Some((lo, hi)) = faixa {
-                        ui.add(crate::ui_ext::dv(lo).speed(1.).suffix(unidade).dica("Mínimo"));
-                        ui.add(crate::ui_ext::dv(hi).speed(1.).suffix(unidade).dica("Máximo"));
-                    }
-                });
-            }
-            if !giro && !curso {
-                ui.label(RichText::new(tr("Esta junta não tem curso nem ângulo para limitar.")).weak().small());
-            }
+            let medida = |g| medidas.iter().find(|m| m.0 == g).map(|m| m.1);
+            crate::asm_limites::painel(ui, "asm_cmd_limites_graus", graus, &mut pen.c.limites, medida, |_| false);
         });
     }
     if aceita_alin || aceita_lado {
@@ -700,6 +688,27 @@ pub fn demo(st: &mut AsmState, nome: &str) {
             let fr = fenkra_montagem::kin::JFrame::from_axis([48., 24., 0.], [0., 0., 1.]);
             st.asm.add_joint(JointKind::Revolute, fenkra_montagem::kin::JRef { comp: base, frame: fr }, fenkra_montagem::kin::JRef { comp: tampa, frame: fr });
             st.solve();
+        }
+        "limites" => {
+            // cilíndrica: arco e trilho na mesma junta, com um dos extremos desligado
+            let fr = fenkra_montagem::kin::JFrame::from_axis([48., 24., 0.], [0., 0., 1.]);
+            let id = st.asm.add_joint(JointKind::Cylindrical, fenkra_montagem::kin::JRef { comp: base, frame: fr }, fenkra_montagem::kin::JRef { comp: tampa, frame: fr });
+            if let Some(j) = st.asm.joints.iter_mut().find(|j| j.id == id) {
+                j.limites.angulo = kin::Faixa::nova(-40., 75.);
+                j.limites.curso = kin::Faixa::nova(0., 30.);
+                j.limites.curso.min.ligado = false;
+            }
+            st.solve();
+            st.sel = Some(id);
+        }
+        "limites_cmd" => {
+            let mut pen = Pendente::novo(Tipo::Junta(JointKind::Revolute));
+            pen.c.receber(eixo(base));
+            pen.c.receber(eixo(tampa));
+            pen.c.limites.angulo = kin::Faixa::nova(-30., 110.);
+            pen.textos = [vec![tr("Eixo").to_string()], vec![tr("Eixo").to_string()]];
+            st.cmd = Some(pen);
+            atualizar(st);
         }
         "manip" => {
             let fr = fenkra_montagem::kin::JFrame::from_axis([48., 24., 0.], [0., 0., 1.]);

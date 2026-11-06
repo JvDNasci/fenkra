@@ -543,8 +543,8 @@ pub fn animar(base: &Assembly, previa: &Previa, op: &OpcoesAnimar) -> Result<Vec
     }
     let n = op.quadros.max(8);
     let fase = |k: usize| (std::f64::consts::TAU * k as f64 / n as f64).sin();
-    let faixa_giro = if op.limites { j.limites.angulo.unwrap_or((-op.giro, op.giro)) } else { (-op.giro, op.giro) };
-    let faixa_curso = if op.limites { j.limites.curso.unwrap_or((-op.curso, op.curso)) } else { (-op.curso, op.curso) };
+    let faixa_giro = if op.limites { j.limites.angulo.ou((-op.giro, op.giro)) } else { (-op.giro, op.giro) };
+    let faixa_curso = if op.limites { j.limites.curso.ou((-op.curso, op.curso)) } else { (-op.curso, op.curso) };
     let mut quadros = Vec::with_capacity(n);
     let (ca, cl) = j.kind.drives();
     // o came gira pela junta da peça dele, e o seguidor acompanha
@@ -917,9 +917,9 @@ mod tests {
     fn animar_inclui_os_limites_quando_pedido() {
         let (a, f, m) = par();
         let mut c = revolucao_entre_furos(f, m);
-        c.limites.angulo = Some((-10., 110.));
+        c.limites.angulo = crate::kin::Faixa::nova(-10., 110.);
         let p = c.resolver(&a).unwrap();
-        assert_eq!(p.copia.joints[0].limites.angulo, Some((-10., 110.)));
+        assert_eq!(p.copia.joints[0].limites.angulo, crate::kin::Faixa::nova(-10., 110.));
         let ang = |q: &Vec<Vec<Movido>>, k: usize| {
             let v = q[k].iter().find(|x| x.comp == m).unwrap().depois.dir([1., 0., 0.]);
             v[1].atan2(v[0]).to_degrees()

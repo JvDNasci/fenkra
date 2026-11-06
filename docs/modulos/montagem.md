@@ -13,7 +13,8 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Manipulador** (Mover e girar) — `manipulador.rs`, `solve::liberdade`: referência, pivô, passo, colisão com escopo, alças só do que as restrições deixam, valor digitado (B261).
 - **Subconjunto da seleção** (Subconjunto) — extract_subassembly leva o que é de dentro, religa ao nó o que liga com o exterior e relata o resto; inserir_de_volta desfaz sem perda (B73).
 - **Restrição rápida / inteligente** (Restrição rápida) — quick_options, after_view_quick.
-- **Juntas cinemáticas** (Juntas) — AsmJoint, kin.rs; comandos; tipo automático, modos de origem, alinhamento e Animar na criação (B260). Limites guardados, sem efeito no solucionador (B36).
+- **Juntas cinemáticas** (Juntas) — AsmJoint, kin.rs; comandos; tipo automático, modos de origem, alinhamento e Animar na criação (B260).
+- **Limites de junta** (Juntas) — `kin.rs`, `asm_limites.rs`: Mínimo, Atual e Máximo por grau de liberdade, caixa por extremo que guarda o valor, marca na árvore, arco e trilho arrastáveis no 3D. O solucionador impõe a faixa: comando e arraste param no batente, sem contar como falha (B36).
 - **Acoplamentos mecânicos** (Engrenagem, cremalheira, polia, came) — MateKind Gear/RackPinion; couplings; teste came_e_seguidor.
 - **Graus de liberdade** (GDL na árvore) — dof_per_comp; selos na árvore.
 - **Padrão de componentes** (Repetição) — `repeticao.rs`, `asm_repeticao.rs`: direção por aresta, eixo ou face, Pelos furos, vários componentes, segunda direção, fantasmas, seta e marcas para pular (B263).
@@ -32,6 +33,6 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 
 ## ❌ Ainda não existe
 
-- **Restrições avançadas** (—) — Sem largura, simetria ou caminho. `BM-MON-01`
+- **Restrições avançadas** (—) — Sem largura, simetria ou caminho; o limite existe nas juntas, não em Distância e Ângulo. `BM-MON-01`
 - **Origem da montagem** (—) — Sem origem na montagem (DR-31). `DR-31`
 - **Conexão parafusada** (—) — Fixadores só preenchem furos já existentes. `B58`

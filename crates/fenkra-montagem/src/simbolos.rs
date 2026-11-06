@@ -4,7 +4,7 @@
 //! nenhum. Aqui não há desenho: a tela pergunta onde cada coisa fica e `arranjar` decide o que cabe,
 //! para uma montagem grande não virar uma mancha.
 
-use crate::kin::{Joint, JointKind};
+use crate::kin::{medir_grau, Faixa, Grau, Joint, JointKind};
 use crate::*;
 use std::collections::HashMap;
 
@@ -183,6 +183,53 @@ fn da_junta(a: &Assembly, j: &Joint) -> Option<Simbolo> {
         suprimido: j.suppressed,
         editavel: false,
     })
+}
+
+/// Faixa de um grau de liberdade no 3D: um arco em volta de `eixo`, ou um trilho ao longo dele.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct MarcaLimite {
+    pub grau: Grau,
+    /// centro do arco, ou o ponto do trilho onde o grau vale zero
+    pub origem: V3,
+    pub eixo: V3,
+    /// direção em que o arco vale zero, perpendicular ao eixo
+    pub zero: V3,
+    pub faixa: Faixa,
+    pub atual: f64,
+}
+
+impl MarcaLimite {
+    /// Ponto do mundo onde o grau vale `v`. O `raio` só conta no arco.
+    pub fn ponto(&self, v: f64, raio: f64) -> V3 {
+        if !self.grau.angular() {
+            return [0, 1, 2].map(|i| self.origem[i] + self.eixo[i] * v);
+        }
+        if raio == 0. {
+            return self.origem;
+        }
+        let d = rotvec(self.zero, self.eixo.map(|e| e * v.to_radians()));
+        [0, 1, 2].map(|i| self.origem[i] + d[i] * raio)
+    }
+}
+
+/// Marcas dos graus limitados da junta, nas posições de agora. A trajetória não entra: ela já é a
+/// própria curva, e não um arco nem um trilho.
+pub fn marcas_limite(a: &Assembly, j: &Joint) -> Vec<MarcaLimite> {
+    let (Some(pa), Some(pb)) = (a.lugar(j.a.comp), a.lugar(j.b.comp)) else { return vec![] };
+    let (oa, za, xa) = j.a.frame.world(&pa);
+    let ya = cross(za, xa);
+    let em = |base: V3, d: V3, k: f64| [0, 1, 2].map(|i| base[i] + d[i] * k);
+    let lugar = |g: Grau| match g {
+        Grau::Giro => Some((oa, za, rotvec(xa, za.map(|e| e * j.angle0.to_radians())))),
+        Grau::Curso => Some((em(oa, za, j.len0), za, xa)),
+        Grau::CursoX => Some((em(em(oa, xa, j.zero[0]), ya, j.zero[1]), xa, za)),
+        Grau::CursoY => Some((em(em(oa, xa, j.zero[0]), ya, j.zero[1]), ya, za)),
+        // tomba do eixo z em direção ao x
+        Grau::Inclinacao => Some((oa, ya, za)),
+        Grau::Trajeto => None,
+    };
+    let graus = j.kind.graus().iter().filter(|g| j.limites.faixa(**g).ligada());
+    graus.filter_map(|g| lugar(*g).map(|(origem, eixo, zero)| MarcaLimite { grau: *g, origem, eixo, zero, faixa: *j.limites.faixa(*g), atual: medir_grau(j, *g, &pa, &pb) })).collect()
 }
 
 /// Símbolos da montagem nas posições de agora. Peça oculta leva junto o que só ela segura.

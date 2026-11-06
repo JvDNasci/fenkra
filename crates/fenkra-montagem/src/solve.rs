@@ -18,6 +18,8 @@ pub struct SolveReport {
     /// restrições não satisfeitas (impossíveis ou em conflito)
     pub failed: Vec<Id>,
     pub converged: bool,
+    /// juntas paradas num limite: não é falha, e sim o batente segurando a peça
+    pub no_limite: Vec<Id>,
 }
 
 /// Geometria no mundo.
@@ -470,6 +472,7 @@ fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id,
     let res = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| {
         let pl = place(&b, a, x);
         let mut r = all_residuals(a, &pl, &vars, true, per);
+        crate::kin::residuos_limite(a, &pl, &mut r, per);
         if let Some((id, t, w)) = pull {
             if let Some(p) = pl.get(&id) {
                 r.extend((0..3).map(|i| (p.origin[i] - t.origin[i]) * w));
@@ -486,7 +489,6 @@ fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id,
     let mut c = cost(&r);
     let mut lambda = 1e-3;
     let mut it = 0;
-    let mut rank = 0;
     if n > 0 && !r.is_empty() {
         for k in 0..200 {
             it = k + 1;
@@ -494,7 +496,6 @@ fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id,
                 break;
             }
             let j = jacobian(&res, &x, &r);
-            rank = matrix_rank(&j, r.len(), n);
             // (JᵀJ + λ diag) dx = -Jᵀ r
             let mut jtj = vec![0.; n * n];
             let mut jtr = vec![0.; n];
@@ -534,19 +535,18 @@ fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id,
                 break;
             }
         }
-    } else if !r.is_empty() {
-        rank = 0;
     }
-    if rank == 0 && n > 0 && !r.is_empty() {
-        rank = matrix_rank(&jacobian(&res, &x, &r), r.len(), n);
-    }
+    // posto só das igualdades, na posição final: o batente e a puxada não tiram grau de liberdade
+    let iguais = |x: &[f64], per: &mut Vec<(Id, usize, usize)>| all_residuals(a, &place(&b, a, x), &vars, true, per);
+    let r0 = iguais(&x, &mut per);
+    let rank = if n > 0 && !r0.is_empty() { matrix_rank(&jacobian(&iguais, &x, &r0), r0.len(), n) } else { 0 };
     // restrições que ficaram de fora (conflito)
     let pl = place(&b, a, &x);
     let mut failed = vec![];
-    let r2 = all_residuals(a, &pl, &vars, true, &mut per);
-    let _ = &res;
+    let mut r2 = all_residuals(a, &pl, &vars, true, &mut per);
+    crate::kin::residuos_limite(a, &pl, &mut r2, &mut per);
     for (id, s, e) in &per {
-        if r2[*s..*e].iter().any(|v| v.abs() > 1e-6) {
+        if r2[*s..*e].iter().any(|v| v.abs() > 1e-6) && !failed.contains(id) {
             failed.push(*id);
         }
     }
@@ -559,7 +559,8 @@ fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id,
     }
     // as repetições acompanham os originais nas posições novas
     a.update_patterns();
-    SolveReport { residual: c.sqrt(), iterations: it, dof: n.saturating_sub(rank), failed: failed.clone(), converged: failed.is_empty() }
+    let no_limite = a.joints.iter().filter(|j| crate::kin::no_batente(j, &pl)).map(|j| j.id).collect();
+    SolveReport { residual: c.sqrt(), iterations: it, dof: n.saturating_sub(rank), failed: failed.clone(), converged: failed.is_empty(), no_limite }
 }
 
 /// Graus de liberdade de cada componente (os outros parados): 0 = totalmente definido, 6 = solto.
