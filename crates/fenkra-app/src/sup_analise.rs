@@ -245,7 +245,11 @@ pub fn overlay(app: &App, ui: &egui::Ui, rect: Rect, cam: &Camera, id: Id) {
     let cor = crate::theme::st_err();
     pintor.circle_stroke(q, 7., egui::Stroke::new(2., cor));
     let t = pintor.layout_no_wrap(n.text.clone(), egui::FontId::proportional(12.), cor);
-    let caixa = Rect::from_min_size(q + egui::vec2(12., -8.), t.size() + egui::vec2(8., 4.));
+    // a etiqueta fica sempre dentro da vista: o pior caso perto da borda a deixava cortada
+    let tam = t.size() + egui::vec2(8., 4.);
+    let canto = q + egui::vec2(12., -8.);
+    let min = egui::pos2(canto.x.min(rect.right() - tam.x - 4.).max(rect.left() + 4.), canto.y.min(rect.bottom() - tam.y - 26.).max(rect.top() + 4.));
+    let caixa = Rect::from_min_size(min, tam);
     pintor.rect_filled(caixa, 3., ui.visuals().extreme_bg_color.gamma_multiply(0.9));
     pintor.galley(caixa.min + egui::vec2(4., 2.), t, cor);
 }
