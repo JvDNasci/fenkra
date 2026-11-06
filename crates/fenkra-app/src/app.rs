@@ -2646,7 +2646,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             // comandos de montagem são tratados em asm_ui::command
             Cmd::AsmNew | Cmd::AsmOpen | Cmd::AsmSave | Cmd::AsmInsert | Cmd::AsmSubAsm | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid
             | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom
-            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmCatalogo | Cmd::AsmGears => return,
+            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmCatalogo | Cmd::AsmGears | Cmd::AsmChaveta | Cmd::AsmCalculo => return,
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
                 let _ = d.add_param(&n, "10", Unit::Comprimento);
@@ -7366,6 +7366,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_repeticao::overlay(self, ui, rect, &cam);
                 crate::asm_fixadores::overlay(self, ui, rect, &cam);
                 crate::asm_encaixe::overlay(self, ui, rect, &cam);
+                crate::asm_chaveta::overlay(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
                 crate::feat_ui::cut_overlay(self, ui, rect, &cam);
                 crate::st_solda_ui::overlay(self, ui, rect, &cam);
@@ -7560,6 +7561,10 @@ pub enum Cmd {
     AsmCatalogo,
     /// gerar engrenagens (par engrenado ou peça avulsa) com cálculo ao vivo (janela)
     AsmGears,
+    /// pareia eixo e cubo e insere a chaveta restrita aos rasgos (painel + fantasma)
+    AsmChaveta,
+    /// calculadoras de projeto: parafuso, ajuste forçado, mola e viga (painel)
+    AsmCalculo,
     // ---- chapa metálica
     SmParams,
     SmWall,
@@ -8326,6 +8331,8 @@ impl eframe::App for App {
         crate::asm_repeticao::painel(self, ctx, area);
         crate::asm_exibicao::painel(self, ctx, area);
         crate::asm_fixadores::painel(self, ctx, area);
+        crate::asm_chaveta::painel(self, ctx, area);
+        crate::calculo_ui::painel(self, ctx, area);
         crate::asm_ui::contexto_window(self, ctx);
         crate::asm_ui::gears_window(self, ctx);
         self.sheet_window(ctx);
@@ -8542,6 +8549,7 @@ impl eframe::App for App {
                 crate::asm_interf::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::asm_repeticao::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::engrenagens_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
+                crate::asm_chaveta::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::eixo_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 importar::defeitos_na_cena(self.importar_relatorio.as_ref(), self.importar_defeito, &mut s);
                 features::na_cena(self.features.as_ref(), &ctx.global_style().visuals, &mut s);

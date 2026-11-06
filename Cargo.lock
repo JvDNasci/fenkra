@@ -1439,6 +1439,7 @@ dependencies = [
  "fenkra-dxf",
  "fenkra-kernel",
  "fenkra-malha",
+ "fenkra-tolerancias",
  "serde",
  "serde_json",
 ]

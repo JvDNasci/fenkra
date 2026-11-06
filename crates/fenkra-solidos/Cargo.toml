@@ -11,6 +11,7 @@ fenkra-core = { path = "../fenkra-core" }
 fenkra-dxf = { path = "../fenkra-dxf" }
 fenkra-kernel = { path = "../fenkra-kernel" }
 fenkra-malha = { path = "../fenkra-malha" }
+fenkra-tolerancias = { path = "../fenkra-tolerancias" }
 blake3 = "1"
 serde.workspace = true
 serde_json.workspace = true
