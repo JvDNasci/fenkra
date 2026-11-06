@@ -8,6 +8,7 @@
 
 use crate::app::{fmt, App};
 use crate::i18n::tr;
+use crate::sketch_canto::ModoChanfro;
 use crate::sketch_ui::Tool;
 use eframe::egui::{self, RichText};
 
@@ -83,7 +84,15 @@ pub fn dica_campo(rotulo: &str) -> &'static str {
 }
 
 const DICA_ESPERA: &str = "Este valor abre quando o passo dele chegar.";
-const DICA_LADOS: &str = "Número de lados do polígono regular.";
+const DICA_LADOS: &str = "Número de lados do polígono regular, de 3 a 40. Com o desenho aberto, as teclas + e - trocam.";
+const DICA_INSCRITO: &str = "O círculo passa pelos vértices: o raio vai do centro a um vértice.";
+const DICA_CIRCUNSCRITO: &str = "O círculo fica dentro, tangente aos lados: o raio vai do centro ao meio de um lado.";
+const DICA_CHANFRO_IGUAIS: &str = "O corte recua a mesma distância nas duas linhas.";
+const DICA_CHANFRO_DUAS: &str = "Cada linha recua a sua distância. A primeira vai na linha sob o cursor.";
+const DICA_CHANFRO_ANGULO: &str = "Recua a distância na linha sob o cursor e corta nesse ângulo com ela.";
+const DICA_SEGUNDA: &str = "Recuo na outra linha do canto. Vazio: igual à primeira distância.";
+const DICA_ANGULO_CANTO: &str = "Ângulo do corte com a linha sob o cursor, em graus.";
+const DICA_MANTER: &str = "O canto antigo fica como ponto de construção sobre as duas linhas, e as cotas presas nele ou no comprimento das linhas continuam valendo.";
 const DICA_RAIO_CANTO: &str = "Raio do próximo filete. Vazio: o maior que cabe, limitado pelas linhas do canto.";
 const DICA_DIST_CANTO: &str = "Distância do próximo chanfro. Vazio: a maior que cabe, limitada pelas linhas do canto.";
 const DICA_CONSTRUCAO: &str = "A geometria nova nasce como construção: ajuda a desenhar e não entra no perfil.";
@@ -91,6 +100,31 @@ const DICA_COTA_DIGITAR: &str = "O valor digitado no campo do cursor vira cota d
 const DICA_AUTO_REST: &str = "Linhas quase horizontais ou verticais e os apoios dos snaps viram restrições ao criar.";
 const DICA_AUTO_COTA: &str = "A forma nasce com as cotas principais.";
 const DICA_SNAPS: &str = "O cursor procura pontos, curvas e alinhamentos antes da grade.";
+
+const MODOS_CHANFRO: [(ModoChanfro, &str, &str); 3] = [
+    (ModoChanfro::Iguais, "Distâncias iguais", DICA_CHANFRO_IGUAIS),
+    (ModoChanfro::DuasDistancias, "Duas distâncias", DICA_CHANFRO_DUAS),
+    (ModoChanfro::DistanciaAngulo, "Distância e ângulo", DICA_CHANFRO_ANGULO),
+];
+
+/// Campo de número do canto: com foco guarda o texto da pessoa; sem foco, mostra o valor em vigor.
+fn campo_canto(ui: &mut egui::Ui, id: &str, nome: &str, dica: &str, texto: &mut String, atual: Option<f64>, vars: &std::collections::HashMap<String, f64>) -> Option<Option<f64>> {
+    ui.label(tr(nome)).on_hover_text(tr(dica));
+    let id = ui.make_persistent_id(id);
+    if !ui.memory(|m| m.has_focus(id)) {
+        *texto = atual.map(fmt).unwrap_or_default();
+    }
+    let r = ui.add(egui::TextEdit::singleline(texto).id(id).hint_text(tr("automático")).desired_width(110.)).on_hover_text(tr(dica));
+    ui.end_row();
+    if !r.changed() {
+        return None;
+    }
+    let t = texto.trim();
+    if t.is_empty() {
+        return Some(None);
+    }
+    fenkra_core::expr::eval_str(t, vars).ok().map(|v| Some(v).filter(|v| *v > 0.))
+}
 
 /// A ferramenta desenha geometria nova.
 fn desenha(t: Tool) -> bool {
@@ -122,6 +156,23 @@ pub fn comando(app: &mut App, ui: &mut egui::Ui) {
                 if ui.add(egui::Button::image_and_text(img, tr(nome_modo(m))).selected(m == tool)).on_hover_text(dica).clicked() {
                     edit.escolher(m);
                 }
+            }
+        });
+    }
+
+    if tool == Tool::Polygon {
+        ui.add_space(2.);
+        ui.horizontal_wrapped(|ui| {
+            for (circ, nome, dica) in [(false, "Inscrito", DICA_INSCRITO), (true, "Circunscrito", DICA_CIRCUNSCRITO)] {
+                ui.selectable_value(&mut edit.polygon_circunscrito, circ, tr(nome)).on_hover_text(tr(dica));
+            }
+        });
+    }
+    if tool == Tool::Chamfer {
+        ui.add_space(2.);
+        ui.horizontal_wrapped(|ui| {
+            for (modo, nome, dica) in MODOS_CHANFRO {
+                ui.selectable_value(&mut edit.chanfro_modo, modo, tr(nome)).on_hover_text(tr(dica));
             }
         });
     }
@@ -159,27 +210,28 @@ pub fn comando(app: &mut App, ui: &mut egui::Ui) {
         }
         if tool == Tool::Polygon {
             ui.label(tr("lados")).on_hover_text(tr(DICA_LADOS));
-            ui.add(crate::ui_ext::slider(&mut edit.polygon_sides, 3..=24)).on_hover_text(tr(DICA_LADOS));
+            ui.add(crate::ui_ext::slider(&mut edit.polygon_sides, fenkra_core::sketch::POLIGONO_LADOS_MIN..=fenkra_core::sketch::POLIGONO_LADOS_MAX)).on_hover_text(tr(DICA_LADOS));
             ui.end_row();
         }
         if matches!(tool, Tool::Fillet | Tool::Chamfer) {
             let chanfro = tool == Tool::Chamfer;
             let (nome, dica) = if chanfro { ("distância", DICA_DIST_CANTO) } else { ("raio", DICA_RAIO_CANTO) };
-            ui.label(tr(nome)).on_hover_text(tr(dica));
-            let id = ui.make_persistent_id(("sk_canto", chanfro));
-            if !ui.memory(|m| m.has_focus(id)) {
-                edit.texto_canto = edit.valor_canto(chanfro).map(fmt).unwrap_or_default();
+            let atual = edit.valor_canto(chanfro);
+            if let Some(v) = campo_canto(ui, if chanfro { "sk_canto_d" } else { "sk_canto_r" }, nome, dica, &mut edit.texto_canto, atual, &vars) {
+                edit.definir_canto(chanfro, v);
             }
-            let r = ui.add(egui::TextEdit::singleline(&mut edit.texto_canto).id(id).hint_text(tr("automático")).desired_width(110.)).on_hover_text(tr(dica));
-            if r.changed() {
-                let t = edit.texto_canto.trim().to_string();
-                if t.is_empty() {
-                    edit.definir_canto(chanfro, None);
-                } else if let Ok(v) = fenkra_core::expr::eval_str(&t, &vars) {
-                    edit.definir_canto(chanfro, Some(v).filter(|v| *v > 0.));
+            if chanfro && edit.chanfro_modo == ModoChanfro::DuasDistancias {
+                let atual = edit.chanfro_segundo;
+                if let Some(v) = campo_canto(ui, "sk_canto_d2", "2ª distância", DICA_SEGUNDA, &mut edit.texto_canto2, atual, &vars) {
+                    edit.chanfro_segundo = v;
                 }
             }
-            ui.end_row();
+            if chanfro && edit.chanfro_modo == ModoChanfro::DistanciaAngulo {
+                let atual = Some(edit.chanfro_angulo);
+                if let Some(Some(v)) = campo_canto(ui, "sk_canto_a", "ângulo", DICA_ANGULO_CANTO, &mut edit.texto_angulo, atual, &vars) {
+                    edit.chanfro_angulo = v;
+                }
+            }
         }
     });
     if foco_saiu {
@@ -187,6 +239,11 @@ pub fn comando(app: &mut App, ui: &mut egui::Ui) {
     }
 
     // ---- avançado
+    if matches!(tool, Tool::Fillet | Tool::Chamfer) {
+        egui::CollapsingHeader::new(tr("Avançado")).id_salt("sk_avancado_canto").default_open(false).show(ui, |ui| {
+            ui.checkbox(&mut edit.manter_canto, tr("manter canto")).on_hover_text(tr(DICA_MANTER));
+        });
+    }
     if desenha(tool) || tool == Tool::Offset {
         egui::CollapsingHeader::new(tr("Avançado")).id_salt("sk_avancado").default_open(false).show(ui, |ui| {
             ui.checkbox(&mut edit.construction, tr("construção")).on_hover_text(tr(DICA_CONSTRUCAO));
@@ -272,6 +329,12 @@ mod tests {
                 assert_ne!(d, dica_campo("?"), "{rotulo} sem dica própria");
                 assert!(tem_traducao(d) && tem_traducao(rotulo), "{rotulo} sem tradução");
             }
+        }
+        for (_, nome, dica) in MODOS_CHANFRO {
+            assert!(tem_traducao(nome) && tem_traducao(dica), "{nome}");
+        }
+        for d in ["Inscrito", "Circunscrito", DICA_INSCRITO, DICA_CIRCUNSCRITO, DICA_SEGUNDA, DICA_ANGULO_CANTO, DICA_MANTER, "manter canto", "2ª distância"] {
+            assert!(tem_traducao(d), "{d}");
         }
         for d in [DICA_ESPERA, DICA_LADOS, DICA_RAIO_CANTO, DICA_DIST_CANTO, DICA_CONSTRUCAO, DICA_COTA_DIGITAR, DICA_AUTO_REST, DICA_AUTO_COTA, DICA_SNAPS] {
             assert!(tem_traducao(d), "{d}");

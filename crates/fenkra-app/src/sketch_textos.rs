@@ -3,6 +3,31 @@
 //! Ficam num arquivo próprio para não disputar linhas com a tabela geral de `i18n.rs`.
 
 pub static TEXTOS: &[(&str, &str)] = &[
+    // entidades e ferramentas (B32)
+    ("Clique no centro e depois num ponto do círculo de construção: inscrito, o ponto é um vértice; circunscrito, o meio de um lado. De 3 a 40 lados, no painel ou com as teclas + e -; a tecla do modo troca inscrito e circunscrito.", "Click the center, then a point on the construction circle: inscribed, the point is a vertex; circumscribed, the middle of a side. From 3 to 40 sides, in the panel or with the + and - keys; the mode key switches inscribed and circumscribed."),
+    ("Selecione curvas, clique no ponto base e nos destinos: cada clique cria uma cópia, com as restrições e cotas internas, até o Esc.", "Select curves, click the base point and the destinations: each click makes a copy, with its internal constraints and dimensions, until Esc."),
+    ("Passe sobre um canto entre duas linhas, ou numa linha perto dele, e veja o arco em prévia. O clique insere o arco tangente e abre a cota do raio; os filetes seguintes de mesmo raio ficam iguais ao primeiro, sem cota nova. Manter canto, em Avançado, deixa um ponto com as cotas do canto antigo.", "Pass over a corner between two lines, or a line near it, to preview the arc. The click inserts the tangent arc and opens the radius dimension; following fillets with the same radius stay equal to the first, with no new dimension. Keep corner, under Advanced, leaves a point with the dimensions of the old corner."),
+    ("Passe sobre um canto entre duas linhas, ou numa linha perto dele, e veja o corte em prévia. O clique corta o canto com uma linha reta e abre a cota da distância. No painel: distâncias iguais, duas distâncias ou distância e ângulo; a primeira medida vai na linha sob o cursor.", "Pass over a corner between two lines, or a line near it, to preview the cut. The click cuts the corner with a straight line and opens the distance dimension. In the panel: equal distances, two distances or distance and angle; the first value goes on the line under the cursor."),
+    ("ponto do círculo", "point on the circle"),
+    ("destino; cada clique faz uma cópia, Esc encerra", "destination; each click makes a copy, Esc finishes"),
+    ("Número de lados do polígono regular, de 3 a 40. Com o desenho aberto, as teclas + e - trocam.", "Number of sides of the regular polygon, from 3 to 40. While drawing, the + and - keys change it."),
+    ("Inscrito", "Inscribed"),
+    ("Circunscrito", "Circumscribed"),
+    ("O círculo passa pelos vértices: o raio vai do centro a um vértice.", "The circle passes through the vertices: the radius goes from the center to a vertex."),
+    ("O círculo fica dentro, tangente aos lados: o raio vai do centro ao meio de um lado.", "The circle stays inside, tangent to the sides: the radius goes from the center to the middle of a side."),
+    ("Distâncias iguais", "Equal distances"),
+    ("Duas distâncias", "Two distances"),
+    ("Distância e ângulo", "Distance and angle"),
+    ("O corte recua a mesma distância nas duas linhas.", "The cut sets back the same distance on both lines."),
+    ("Cada linha recua a sua distância. A primeira vai na linha sob o cursor.", "Each line sets back its own distance. The first goes on the line under the cursor."),
+    ("Recua a distância na linha sob o cursor e corta nesse ângulo com ela.", "Sets back the distance on the line under the cursor and cuts at this angle to it."),
+    ("Recuo na outra linha do canto. Vazio: igual à primeira distância.", "Setback on the other line of the corner. Empty: equal to the first distance."),
+    ("Ângulo do corte com a linha sob o cursor, em graus.", "Angle of the cut to the line under the cursor, in degrees."),
+    ("O canto antigo fica como ponto de construção sobre as duas linhas, e as cotas presas nele ou no comprimento das linhas continuam valendo.", "The old corner stays as a construction point on both lines, and dimensions on it or on the length of the lines remain valid."),
+    ("2ª distância", "2nd distance"),
+    ("manter canto", "keep corner"),
+    ("esse ângulo não fecha o corte neste canto", "this angle does not close the cut at this corner"),
+    ("este canto não comporta esse valor", "this corner cannot take this value"),
     // relimitação (B18)
     ("clique no trecho a remover; Shift estende; clique no vazio encerra", "click the segment to remove; Shift extends; click empty space to finish"),
     ("clique perto da ponta a estender; Shift apara; clique no vazio encerra", "click near the end to extend; Shift trims; click empty space to finish"),

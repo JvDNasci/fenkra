@@ -14,6 +14,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
+/// Lados que o polígono regular aceita.
+pub const POLIGONO_LADOS_MIN: usize = 3;
+pub const POLIGONO_LADOS_MAX: usize = 40;
+
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct SkPoint {
     pub id: Id,
@@ -149,6 +153,36 @@ impl Kind {
             | Kind::PointLineDistance(a, b, _) => vec![*a, *b],
             Kind::Symmetric(a, b, c) => vec![*a, *b, *c],
         }
+    }
+    fn refs_mut(&mut self) -> Vec<&mut Id> {
+        match self {
+            Kind::Horizontal(a) | Kind::Vertical(a) | Kind::Fixed(a) | Kind::Length(a, _) | Kind::Radius(a, _) | Kind::Diameter(a, _) | Kind::LineAngle(a, _) => vec![a],
+            Kind::Coincident(a, b)
+            | Kind::Parallel(a, b)
+            | Kind::Perpendicular(a, b)
+            | Kind::Equal(a, b)
+            | Kind::Tangent(a, b)
+            | Kind::Concentric(a, b)
+            | Kind::Midpoint(a, b)
+            | Kind::PointOnCurve(a, b)
+            | Kind::HorizontalPts(a, b)
+            | Kind::VerticalPts(a, b)
+            | Kind::Distance(a, b, _)
+            | Kind::DistanceX(a, b, _)
+            | Kind::DistanceY(a, b, _)
+            | Kind::Angle(a, b, _)
+            | Kind::AngleSupp(a, b, _)
+            | Kind::PointLineDistance(a, b, _) => vec![a, b],
+            Kind::Symmetric(a, b, c) => vec![a, b, c],
+        }
+    }
+    /// A mesma restrição com os alvos trocados por `f`; `None` se algum alvo não tem correspondente.
+    pub fn remapeada(&self, f: impl Fn(Id) -> Option<Id>) -> Option<Kind> {
+        let mut k = self.clone();
+        for r in k.refs_mut() {
+            *r = f(*r)?;
+        }
+        Some(k)
     }
 }
 
@@ -880,7 +914,27 @@ impl SketchData {
 
     /// Polígono regular inscrito em círculo de construção, com um vértice no ângulo `a0` (radianos).
     pub fn add_polygon(&mut self, al: &mut impl FnMut() -> Id, c: [f64; 2], r: f64, n: usize, a0: f64) -> Id {
-        let n = n.max(3);
+        self.poligono_regular(al, c, r, n, a0).0
+    }
+
+    /// Polígono regular em volta de um círculo de construção de raio `r`, com o meio de um lado no
+    /// ângulo `a0` (radianos). Devolve esse círculo, que é o que recebe a cota.
+    ///
+    /// Tangência em todos os lados não bastaria: com número par de lados, lados iguais em volta de um
+    /// círculo ainda deixam o polígono abrir como um losango. Por isso a regularidade continua vindo
+    /// do círculo dos vértices, e o círculo interno só amarra o apótema, tangente a um lado.
+    pub fn add_polygon_circunscrito(&mut self, al: &mut impl FnMut() -> Id, c: [f64; 2], r: f64, n: usize, a0: f64) -> Id {
+        let meio = std::f64::consts::PI / n.clamp(POLIGONO_LADOS_MIN, POLIGONO_LADOS_MAX) as f64;
+        let (fora, lado) = self.poligono_regular(al, c, r / meio.cos(), n, a0 - meio);
+        let Some(Curve::Circle { c: pc, .. }) = self.curve(fora).map(|k| k.geom.clone()) else { return fora };
+        let dentro = self.add_curve(al, Curve::Circle { c: pc, r }, true);
+        self.add_constraint(al, Kind::Tangent(lado, dentro));
+        dentro
+    }
+
+    /// Círculo dos vértices e primeiro lado. Vértices no círculo com lados iguais fixam a forma.
+    fn poligono_regular(&mut self, al: &mut impl FnMut() -> Id, c: [f64; 2], r: f64, n: usize, a0: f64) -> (Id, Id) {
+        let n = n.clamp(POLIGONO_LADOS_MIN, POLIGONO_LADOS_MAX);
         let pc = self.add_point(al, c[0], c[1]);
         let circ = self.add_curve(al, Curve::Circle { c: pc, r }, true);
         let pts: Vec<Id> = (0..n)
@@ -896,7 +950,22 @@ impl SketchData {
         for i in 1..n {
             self.add_constraint(al, Kind::Equal(lines[0], lines[i]));
         }
-        circ
+        (circ, lines[0])
+    }
+
+    /// Repete nas cópias as restrições que só falam de elementos copiados (`map`: original e cópia).
+    /// `Fixed` fica de fora: ele prende um lugar do plano, e a cópia está em outro.
+    pub fn copiar_restricoes(&mut self, al: &mut impl FnMut() -> Id, map: &HashMap<Id, Id>) {
+        let novas: Vec<Constraint> = self
+            .constraints
+            .iter()
+            .filter(|c| !matches!(c.kind, Kind::Fixed(_)))
+            .filter_map(|c| Some(Constraint { kind: c.kind.remapeada(|r| map.get(&r).copied())?, ..c.clone() }))
+            .collect();
+        for mut c in novas {
+            c.id = al();
+            self.constraints.push(c);
+        }
     }
 
     /// Remove curva e pontos que só ela usava, além das restrições que ficam sem alvo.
@@ -2037,6 +2106,91 @@ mod tests {
         let r = s.solve(&Vars::new(), &[]);
         assert!(!r.converged);
         assert!(!r.failing.is_empty());
+    }
+
+    /// Prende centro e giro do polígono e confere que só falta a cota do círculo que comanda.
+    fn poligono_preso(s: &mut SketchData, al: &mut impl FnMut() -> Id, circ: Id) -> f64 {
+        let Some(Curve::Circle { c, .. }) = s.curve(circ).map(|k| k.geom.clone()) else { panic!() };
+        s.add_constraint(al, Kind::Fixed(c));
+        let Curve::Line { a, .. } = s.curves.iter().find(|k| matches!(k.geom, Curve::Line { .. })).unwrap().geom else { panic!() };
+        s.add_constraint(al, Kind::HorizontalPts(c, a));
+        let r = s.solve(&HashMap::new(), &[]);
+        assert!(r.converged && r.failing.is_empty(), "{r:?}");
+        assert_eq!(r.dof, 1, "só o tamanho fica livre");
+        s.add_constraint(al, Kind::Radius(circ, "20".into()));
+        let r = s.solve(&HashMap::new(), &[]);
+        assert!(r.converged && r.dof == 0, "{r:?}");
+        s.radius_of(circ).unwrap()
+    }
+
+    fn lados(s: &SketchData) -> Vec<f64> {
+        s.curves.iter().filter_map(|c| if let Curve::Line { a, b } = c.geom { Some(len2(sub(s.pos(a), s.pos(b)))) } else { None }).collect()
+    }
+
+    #[test]
+    fn poligono_inscrito_passa_pelos_vertices_e_aceita_de_3_a_40_lados() {
+        let mut n = 0;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        for (pedidos, feitos) in [(3, 3), (40, 40), (2, 3), (64, 40)] {
+            let mut s = SketchData::default();
+            let circ = s.add_polygon(&mut al, [5., 7.], 10., pedidos, 0.);
+            assert_eq!(lados(&s).len(), feitos);
+            assert!((poligono_preso(&mut s, &mut al, circ) - 20.).abs() < 1e-6);
+            let l = 2. * 20. * (std::f64::consts::PI / feitos as f64).sin();
+            assert!(lados(&s).iter().all(|x| (x - l).abs() < 1e-6), "{feitos}: {:?}", lados(&s));
+        }
+    }
+
+    #[test]
+    fn poligono_circunscrito_tem_o_circulo_tangente_aos_lados() {
+        let mut n = 0;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        // par de lados incluído: é onde só tangência deixaria virar losango
+        for lados_n in [3usize, 4, 6, 7, 40] {
+            let mut s = SketchData::default();
+            let circ = s.add_polygon_circunscrito(&mut al, [0., 0.], 10., lados_n, 0.3);
+            // o meio do primeiro lado fica sobre o raio em `a0`, a 10 do centro
+            let Curve::Line { a, b } = s.curves.iter().find(|k| matches!(k.geom, Curve::Line { .. })).unwrap().geom else { panic!() };
+            let m = [(s.pos(a)[0] + s.pos(b)[0]) / 2., (s.pos(a)[1] + s.pos(b)[1]) / 2.];
+            assert!((m[0] - 10. * 0.3f64.cos()).abs() < 1e-9 && (m[1] - 10. * 0.3f64.sin()).abs() < 1e-9, "{m:?}");
+            assert!((poligono_preso(&mut s, &mut al, circ) - 20.).abs() < 1e-6);
+            // lado de um polígono com apótema 20: 2 r tan(pi/n)
+            let l = 2. * 20. * (std::f64::consts::PI / lados_n as f64).tan();
+            assert!(lados(&s).iter().all(|x| (x - l).abs() < 1e-6), "{lados_n}: {:?}", lados(&s));
+            assert_eq!(s.loops().0.len(), 1, "os círculos de construção não entram no perfil");
+        }
+    }
+
+    #[test]
+    fn copiar_restricoes_so_leva_as_internas() {
+        let mut n = 0;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let mut s = SketchData::default();
+        let p: Vec<Id> = [[0., 0.], [10., 0.], [50., 0.]].iter().map(|q| s.add_point(&mut al, q[0], q[1])).collect();
+        let l = s.add_curve(&mut al, Curve::Line { a: p[0], b: p[1] }, false);
+        let fora = s.add_curve(&mut al, Curve::Line { a: p[1], b: p[2] }, false);
+        s.add_constraint(&mut al, Kind::Horizontal(l));
+        let cota = s.add_constraint(&mut al, Kind::Length(l, "10".into()));
+        s.constraints.iter_mut().find(|c| c.id == cota).unwrap().label = Some([1., 2.]);
+        s.add_constraint(&mut al, Kind::Fixed(p[0]));
+        s.add_constraint(&mut al, Kind::Parallel(l, fora));
+        let (qa, qb) = (s.add_point(&mut al, 0., 9.), s.add_point(&mut al, 10., 9.));
+        let c = s.add_curve(&mut al, Curve::Line { a: qa, b: qb }, false);
+        let total = s.constraints.len();
+        s.copiar_restricoes(&mut al, &HashMap::from([(l, c), (p[0], qa), (p[1], qb)]));
+        assert_eq!(s.constraints.len(), total + 2, "horizontal e cota; a fixa e a que olha para fora ficam");
+        let nova = s.constraints.iter().find(|k| matches!(&k.kind, Kind::Length(x, _) if *x == c)).unwrap();
+        assert_eq!(nova.label, Some([1., 2.]), "a cota copiada leva o lugar do texto");
+        assert_ne!(nova.id, cota);
     }
 
     #[test]

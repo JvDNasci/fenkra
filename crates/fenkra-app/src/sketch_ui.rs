@@ -14,6 +14,7 @@ use fenkra_core::{FeatureKind, Id, PlaneRef, SketchData};
 use fenkra_kernel::Frame;
 use std::collections::HashMap;
 use crate::i18n::tr;
+use crate::sketch_canto::{Canto, ModoChanfro, Pedido};
 use crate::sketch_snap::TipoSnap;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -91,7 +92,7 @@ impl Tool {
             Tool::Arc3 => ("sk_arco3", "Arco 3P", "Arco por 3 pontos  (A)", "Clique no início, no fim e em um ponto intermediário do arco."),
             Tool::ArcCenter => ("sk_arco_centro", "Arco centro", "Arco por centro", "Clique no centro, no início e no fim (sentido anti-horário)."),
             Tool::Slot => ("sk_rasgo", "Rasgo", "Rasgo centro a centro", "Clique nos dois centros e depois na borda do rasgo: a largura total é medida na perpendicular ao eixo. Cria dois arcos tangentes às linhas, com raios iguais."),
-            Tool::Polygon => ("sk_poligono", "Polígono", "Polígono regular", "Clique no centro e depois num vértice. Lados iguais inscritos num círculo de construção; o número de lados fica no painel."),
+            Tool::Polygon => ("sk_poligono", "Polígono", "Polígono regular", "Clique no centro e depois num ponto do círculo de construção: inscrito, o ponto é um vértice; circunscrito, o meio de um lado. De 3 a 40 lados, no painel ou com as teclas + e -; a tecla do modo troca inscrito e circunscrito."),
             Tool::Point => ("sk_ponto", "Ponto", "Ponto  (P)", "Ponto isolado: serve de centro de furo ou referência para cotas."),
             Tool::DimH => ("cota_horizontal", "Horizontal", "Cota horizontal", "Dois pontos ou uma linha: distância na horizontal do sketch."),
             Tool::DimV => ("cota_vertical", "Vertical", "Cota vertical", "Dois pontos ou uma linha: distância na vertical do sketch."),
@@ -99,11 +100,11 @@ impl Tool {
             Tool::DimRadius => ("cota_raio", "Raio", "Cota de raio", "Clique num círculo ou arco."),
             Tool::DimDiameter => ("cota_diametro", "Diâmetro", "Cota de diâmetro", "Clique num círculo ou arco."),
             Tool::Move => ("sk_mover", "Mover", "Mover seleção", "Selecione curvas (ou clique nelas com a ferramenta), depois clique no ponto base e no destino. As restrições continuam valendo."),
-            Tool::Copy => ("sk_copiar", "Copiar", "Copiar seleção", "Selecione curvas, clique no ponto base e no destino: cria uma cópia."),
+            Tool::Copy => ("sk_copiar", "Copiar", "Copiar seleção", "Selecione curvas, clique no ponto base e nos destinos: cada clique cria uma cópia, com as restrições e cotas internas, até o Esc."),
             Tool::Mirror => ("sk_espelhar", "Espelhar", "Espelhar seleção", "Selecione curvas e clique na linha de simetria: cria a cópia espelhada com restrições de simetria."),
             Tool::Offset => ("sk_offset", "Offset", "Offset (curva paralela)", "Clique numa linha, círculo ou arco e depois onde a nova curva deve passar. A distância vira cota."),
-            Tool::Fillet => ("sk_filete", "Filete", "Filete de canto", "Passe sobre um canto entre duas linhas, ou numa linha perto dele, e veja o arco em prévia. O clique insere o arco tangente e abre a cota do raio; o próximo filete repete o último raio."),
-            Tool::Chamfer => ("sk_chanfro", "Chanfro", "Chanfro de canto", "Passe sobre um canto entre duas linhas, ou numa linha perto dele, e veja o corte em prévia. O clique corta o canto com uma linha reta (distâncias iguais) e abre a cota da distância."),
+            Tool::Fillet => ("sk_filete", "Filete", "Filete de canto", "Passe sobre um canto entre duas linhas, ou numa linha perto dele, e veja o arco em prévia. O clique insere o arco tangente e abre a cota do raio; os filetes seguintes de mesmo raio ficam iguais ao primeiro, sem cota nova. Manter canto, em Avançado, deixa um ponto com as cotas do canto antigo."),
+            Tool::Chamfer => ("sk_chanfro", "Chanfro", "Chanfro de canto", "Passe sobre um canto entre duas linhas, ou numa linha perto dele, e veja o corte em prévia. O clique corta o canto com uma linha reta e abre a cota da distância. No painel: distâncias iguais, duas distâncias ou distância e ângulo; a primeira medida vai na linha sob o cursor."),
             Tool::Spline => ("sk_spline", "Spline", "Spline por pontos", "Cada clique adiciona um ponto por onde a curva passa. Enter, duplo clique ou botão direito termina. Os pontos continuam editáveis e podem receber cotas e restrições."),
             Tool::Trim => ("sk_aparar", "Aparar", "Aparar", "Pare o cursor no trecho: ele fica vermelho tracejado e os cortes aparecem. Clique para remover. Vale para linha, arco, círculo e spline. Shift estende; clique no vazio, botão direito ou Esc encerra."),
             Tool::Extend => ("sk_estender", "Estender", "Estender", "Pare o cursor perto da ponta de uma linha, arco ou spline: a prévia vai até a próxima curva no caminho. Clique para estender. Shift apara; clique no vazio, botão direito ou Esc encerra."),
@@ -200,6 +201,8 @@ pub struct SketchEdit {
     pub report: SolveReport,
     pub construction: bool,
     pub polygon_sides: usize,
+    /// o círculo do polígono fica dentro, tangente aos lados, em vez de passar nos vértices
+    pub polygon_circunscrito: bool,
     pub prev_ortho: bool,
     hits: Vec<(Rect, Ent)>,
     /// mostra a checagem de contornos
@@ -217,8 +220,18 @@ pub struct SketchEdit {
     /// último raio de filete e última distância de chanfro: o próximo canto repete
     last_fillet: Option<f64>,
     last_chamfer: Option<f64>,
-    /// texto do campo de raio ou distância do canto, no painel
+    /// segunda distância e ângulo do chanfro: o próximo canto repete
+    pub(crate) chanfro_segundo: Option<f64>,
+    pub(crate) chanfro_angulo: f64,
+    pub(crate) chanfro_modo: ModoChanfro,
+    /// o canto antigo fica como ponto de construção, com as suas cotas
+    pub(crate) manter_canto: bool,
+    /// canto que comanda os seguintes, com o tipo e o modo em que foi feito
+    canto_mestre: Option<(Canto, bool, ModoChanfro)>,
+    /// texto dos campos de raio ou distância do canto, no painel
     pub(crate) texto_canto: String,
+    pub(crate) texto_canto2: String,
+    pub(crate) texto_angulo: String,
     /// cota de filete (`false`) ou chanfro (`true`) aberta para digitar
     round_dim: Option<(Id, bool)>,
     /// campos de valor junto ao cursor
@@ -404,6 +417,7 @@ impl SketchEdit {
             report: SolveReport::default(),
             construction: false,
             polygon_sides: 6,
+            polygon_circunscrito: false,
             prev_ortho,
             hits: vec![],
             check: false,
@@ -414,6 +428,13 @@ impl SketchEdit {
             handles: None,
             last_fillet: None,
             last_chamfer: None,
+            chanfro_segundo: None,
+            chanfro_angulo: 45.,
+            chanfro_modo: ModoChanfro::Iguais,
+            manter_canto: false,
+            canto_mestre: None,
+            texto_angulo: String::new(),
+            texto_canto2: String::new(),
             round_dim: None,
             entry: ValueEntry::default(),
             typed: vec![],
@@ -453,6 +474,10 @@ impl SketchEdit {
     }
     /// Próximo modo do comando (tecla M).
     pub fn percorrer_modo(&mut self) {
+        if self.tool == Tool::Polygon {
+            self.polygon_circunscrito = !self.polygon_circunscrito;
+            return;
+        }
         self.trocar_modo(crate::sketch_painel::proximo_modo(self.tool));
     }
     /// Botão da barra ou do painel: outro modo do mesmo comando continua o passo; o resto recomeça.
@@ -474,6 +499,44 @@ impl SketchEdit {
             self.last_fillet = v;
         }
     }
+    /// O que o painel pede do próximo canto.
+    fn pedido_canto(&self, chanfro: bool) -> Pedido {
+        let base = if chanfro { Pedido::chanfro(self.last_chamfer) } else { Pedido::filete(self.last_fillet) };
+        Pedido { modo: if chanfro { self.chanfro_modo } else { ModoChanfro::Iguais }, segundo: self.chanfro_segundo, angulo: self.chanfro_angulo, manter: self.manter_canto, ..base }
+    }
+    /// Canto que o próximo deve seguir: o último feito, se o painel ainda pede o que ele mede. Com a
+    /// cota dele aberta o valor é o que estiver lá, e o painel só o recebe quando ela fechar.
+    fn mestre_canto(&self, sk: &SketchData, chanfro: bool) -> Option<Canto> {
+        let (m, tipo, modo) = self.canto_mestre?;
+        if tipo != chanfro || (chanfro && modo != self.chanfro_modo) {
+            return None;
+        }
+        let valor = crate::sketch_canto::medida(sk, m.cota)?;
+        let aberta = self.dim_edit.is_some() && self.round_dim.is_some_and(|r| r.0 == m.cota);
+        // a medida vem da geometria resolvida, que guarda o resíduo do solver
+        let perto = |a: f64, b: f64| (a - b).abs() < 1e-3;
+        if !aberta && !self.valor_canto(chanfro).is_some_and(|v| perto(v, valor)) {
+            return None;
+        }
+        let segunda = m.segunda.and_then(|id| crate::sketch_canto::medida(sk, id));
+        let pedida = if modo == ModoChanfro::DistanciaAngulo { Some(self.chanfro_angulo) } else { self.chanfro_segundo };
+        match (segunda, pedida) {
+            (Some(a), Some(b)) if !perto(a, b) => None,
+            _ => Some(m),
+        }
+    }
+    /// Destino de Mover ou Copiar confirmado. Copiar repete do mesmo ponto base até o Esc.
+    fn destino_feito(&mut self, copia: bool) {
+        self.clicks.truncate(usize::from(copia));
+    }
+    /// Canto feito: o que nasceu com cota passa a comandar e abre a cota para digitar.
+    fn canto_feito(&mut self, c: Canto, chanfro: bool, seguiu: bool) {
+        if !seguiu {
+            self.canto_mestre = Some((c, chanfro, self.chanfro_modo));
+            self.dim_edit = Some((c.cota, String::new(), true));
+            self.round_dim = Some((c.cota, chanfro));
+        }
+    }
     /// Há um passo de desenho em andamento, com campos de valor à espera.
     pub fn in_step(&self) -> bool {
         !self.clicks.is_empty() || self.chain_last.is_some()
@@ -487,6 +550,7 @@ impl SketchEdit {
         self.menu = None;
         self.entry = ValueEntry::default();
         self.typed.clear();
+        self.canto_mestre = None;
         // seleção prévia: as ferramentas que a aproveitam (ver `sketch_fluxo::usa_selecao`) a mantêm
         if !crate::sketch_fluxo::usa_selecao(t) {
             self.sel.clear();
@@ -618,7 +682,7 @@ fn seg_dist(p: Pos2, a: Pos2, b: Pos2) -> f32 {
     (a + ab * t - p).length()
 }
 
-fn d2(a: [f64; 2], b: [f64; 2]) -> f64 {
+pub(crate) fn d2(a: [f64; 2], b: [f64; 2]) -> f64 {
     ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt()
 }
 
@@ -748,7 +812,7 @@ pub fn apply_constraint(sk: &mut SketchData, al: &mut impl FnMut() -> Id, k: CKi
     Ok(())
 }
 
-fn line_ends(sk: &SketchData, l: Id) -> Option<(Id, Id)> {
+pub(crate) fn line_ends(sk: &SketchData, l: Id) -> Option<(Id, Id)> {
     match sk.curve(l).map(|c| &c.geom) {
         Some(Curve::Line { a, b }) => Some((*a, *b)),
         _ => None,
@@ -1224,6 +1288,7 @@ struct Build {
     construction: bool,
     auto_dims: bool,
     sides: usize,
+    circunscrito: bool,
 }
 
 /// Meio-largura do rasgo: distância do cursor ao eixo entre os centros, na perpendicular.
@@ -1342,7 +1407,7 @@ fn build_shape(sk: &mut SketchData, al: &mut impl FnMut() -> Id, tool: Tool, cl:
         Tool::Polygon => {
             let r = d2(c[0], c[1]).max(0.1);
             let a0 = (c[1][1] - c[0][1]).atan2(c[1][0] - c[0][0]);
-            let circ = sk.add_polygon(al, c[0], r, o.sides, a0);
+            let circ = if o.circunscrito { sk.add_polygon_circunscrito(al, c[0], r, o.sides, a0) } else { sk.add_polygon(al, c[0], r, o.sides, a0) };
             if let (Some(p), Some(Curve::Circle { c: pc, .. })) = (cl[0].point, sk.curve(circ).map(|c| c.geom.clone())) {
                 sk.merge_points(pc, p);
             }
@@ -1380,13 +1445,17 @@ fn shift_curves(sk: &mut SketchData, al: &mut impl FnMut() -> Id, curves: &[Id],
             (*p, sk.add_point(al, q[0] + d[0], q[1] + d[1]))
         })
         .collect();
-    clone_curves(sk, al, curves, &map, false);
+    let mut map = map;
+    map.extend(clone_curves(sk, al, curves, &map, false));
+    sk.copiar_restricoes(al, &map);
     vec![]
 }
 
-/// Copia as curvas trocando os pontos por `map`. `flip`: o espelho inverte o sentido do arco.
-fn clone_curves(sk: &mut SketchData, al: &mut impl FnMut() -> Id, curves: &[Id], map: &HashMap<Id, Id>, flip: bool) {
+/// Copia as curvas trocando os pontos por `map`, e devolve cada curva com a sua cópia. `flip`: o
+/// espelho inverte o sentido do arco.
+fn clone_curves(sk: &mut SketchData, al: &mut impl FnMut() -> Id, curves: &[Id], map: &HashMap<Id, Id>, flip: bool) -> HashMap<Id, Id> {
     let m = |x: Id| map[&x];
+    let mut copias = HashMap::new();
     for c in curves {
         if let Some(cv) = sk.curve(*c).cloned() {
             let g = match cv.geom {
@@ -1400,9 +1469,10 @@ fn clone_curves(sk: &mut SketchData, al: &mut impl FnMut() -> Id, curves: &[Id],
                 Curve::Ellipse { .. } if flip => continue,
                 Curve::Ellipse { c, s, e, major, minor, t0, t1 } => Curve::Ellipse { c: m(c), s: m(s), e: m(e), major, minor, t0, t1 },
             };
-            sk.add_curve(al, g, cv.construction);
+            copias.insert(*c, sk.add_curve(al, g, cv.construction));
         }
     }
+    copias
 }
 
 /// Espelha as curvas na linha `axis`, com restrições de simetria.
@@ -1468,7 +1538,7 @@ fn offset_curve(sk: &mut SketchData, al: &mut impl FnMut() -> Id, c: Id, uv: [f6
 }
 
 /// Linhas que chegam ao ponto: (linha, ponta oposta).
-fn lines_at(sk: &SketchData, p: Id) -> Vec<(Id, Id)> {
+pub(crate) fn lines_at(sk: &SketchData, p: Id) -> Vec<(Id, Id)> {
     sk.curves
         .iter()
         .filter_map(|c| match c.geom {
@@ -1477,174 +1547,6 @@ fn lines_at(sk: &SketchData, p: Id) -> Vec<(Id, Id)> {
             _ => None,
         })
         .collect()
-}
-
-/// Canto indicado pelo que está sob o cursor: o próprio ponto ou, numa linha, a ponta mais próxima.
-/// `None` se o que está ali não é geometria; `Err` diz por que aquele elemento não serve.
-fn corner_of(sk: &SketchData, e: Ent, cursor: [f64; 2]) -> Option<Result<Id, &'static str>> {
-    let p = match e {
-        Ent::Pt(p) => p,
-        Ent::Cv(c) => match line_ends(sk, c) {
-            Some((a, b)) => {
-                if d2(sk.pos(a), cursor) <= d2(sk.pos(b), cursor) {
-                    a
-                } else {
-                    b
-                }
-            }
-            None => return Some(Err("filete e chanfro funcionam entre duas linhas")),
-        },
-        Ent::Cs(_) => return None,
-    };
-    Some(if lines_at(sk, p).len() == 2 { Ok(p) } else { Err("esse ponto não é um canto entre duas linhas") })
-}
-
-/// Canto formado por duas linhas selecionadas antes de escolher Filete ou Chanfro.
-fn corner_da_selecao(sk: &SketchData, sel: &[Ent]) -> Option<Id> {
-    let [Ent::Cv(c1), Ent::Cv(c2)] = sel else { return None };
-    let (a1, b1) = line_ends(sk, *c1)?;
-    let (a2, b2) = line_ends(sk, *c2)?;
-    [a1, b1].into_iter().find(|p| (*p == a2 || *p == b2) && lines_at(sk, *p).len() == 2)
-}
-
-/// Filete ou chanfro em vários cantos, com o mesmo valor. O primeiro leva a cota; os outros ficam
-/// iguais a ele por restrição, então editar uma cota muda a cadeia toda. `base`: a cota que já existe
-/// e comanda os novos. Canto em que o valor não cabe fica como estava. Devolve a cota e os que sobraram.
-fn corners_em_lote(sk: &mut SketchData, al: &mut impl FnMut() -> Id, cantos: &[Id], chamfer: bool, valor: Option<f64>, base: Option<Id>) -> Result<(Id, usize), &'static str> {
-    let faz = |sk: &mut SketchData, al: &mut dyn FnMut() -> Id, p: Id, v: Option<f64>| {
-        let mut al = al;
-        if chamfer {
-            chamfer_corner(sk, &mut al, p, v)
-        } else {
-            fillet_corner(sk, &mut al, p, v)
-        }
-    };
-    let (dim, resto) = match base {
-        Some(d) => (d, cantos),
-        None => {
-            let (p, r) = cantos.split_first().ok_or("não há canto entre duas linhas na seleção")?;
-            (faz(sk, al, *p, valor)?, r)
-        }
-    };
-    let cota = |sk: &SketchData, id: Id| sk.constraints.iter().find(|x| x.id == id).map(|x| x.kind.clone());
-    let curva_da = |k: &Kind| match k {
-        Kind::Radius(c, _) | Kind::Length(c, _) => Some(*c),
-        _ => None,
-    };
-    let k0 = cota(sk, dim).ok_or("a cota do canto sumiu")?;
-    let (Some(medida), Some(mestre)) = (sk.measure(&k0), curva_da(&k0)) else { return Err("a cota do canto sumiu") };
-    let mut sobra = 0;
-    for p in resto {
-        // tenta numa cópia: `corner_setback` encolhe o valor que não cabe, e aqui ele tem de ser igual
-        let mut g = sk.clone();
-        let feito = faz(&mut g, al, *p, Some(medida)).ok().and_then(|id| Some((id, cota(&g, id)?)));
-        match feito {
-            Some((id, k)) if g.measure(&k).is_some_and(|m| (m - medida).abs() < 1e-6) => {
-                let Some(c) = curva_da(&k) else { continue };
-                g.constraints.retain(|x| x.id != id);
-                g.add_constraint(al, Kind::Equal(mestre, c));
-                *sk = g;
-            }
-            _ => sobra += 1,
-        }
-    }
-    Ok((dim, sobra))
-}
-
-/// Recuo do canto nas duas linhas. Limitado para sobrar linha: um valor repetido de um canto maior
-/// não pode consumir o lado inteiro.
-fn corner_setback(want: Option<f64>, l1: f64, l2: f64) -> f64 {
-    let room = l1.min(l2);
-    want.filter(|t| *t > 0.).map_or(0.3 * room, |t| t.min(0.9 * room))
-}
-
-/// As linhas passam a terminar nos pontos novos.
-fn retarget_corner(sk: &mut SketchData, p: Id, ends: [(Id, Id); 2]) {
-    for (lid, tp) in ends {
-        if let Some(fenkra_core::sketch::SkCurve { geom: Curve::Line { a, b }, .. }) = sk.curves.iter_mut().find(|c| c.id == lid) {
-            if *a == p {
-                *a = tp
-            } else {
-                *b = tp
-            }
-        }
-    }
-}
-
-/// Filete no canto `p`. `radius`: o valor a repetir. Devolve a cota do raio.
-fn fillet_corner(sk: &mut SketchData, al: &mut impl FnMut() -> Id, p: Id, radius: Option<f64>) -> Result<Id, &'static str> {
-    let lines = lines_at(sk, p);
-    let [(l1id, e1), (l2id, e2)] = lines[..] else { return Err("esse ponto não é um canto entre duas linhas") };
-    let pc = sk.pos(p);
-    let (q1, q2) = (sk.pos(e1), sk.pos(e2));
-    let unit = |q: [f64; 2]| {
-        let l = d2(q, pc).max(1e-12);
-        ([(q[0] - pc[0]) / l, (q[1] - pc[1]) / l], l)
-    };
-    let ((u1, l1), (u2, l2)) = (unit(q1), unit(q2));
-    let th = (u1[0] * u2[0] + u1[1] * u2[1]).clamp(-1., 1.).acos();
-    if th < 1e-3 || (std::f64::consts::PI - th) < 1e-3 {
-        return Err("as linhas são colineares");
-    }
-    let t = corner_setback(radius.map(|r| r / (th / 2.).tan()), l1, l2);
-    let r = t * (th / 2.).tan();
-    let bis = {
-        let b = [u1[0] + u2[0], u1[1] + u2[1]];
-        let l = (b[0] * b[0] + b[1] * b[1]).sqrt().max(1e-12);
-        [b[0] / l, b[1] / l]
-    };
-    let dc = t / (th / 2.).cos();
-    let ctr = [pc[0] + bis[0] * dc, pc[1] + bis[1] * dc];
-    let t1 = sk.add_point(al, pc[0] + u1[0] * t, pc[1] + u1[1] * t);
-    let t2 = sk.add_point(al, pc[0] + u2[0] * t, pc[1] + u2[1] * t);
-    let cc = sk.add_point(al, ctr[0], ctr[1]);
-    retarget_corner(sk, p, [(l1id, t1), (l2id, t2)]);
-    let (s1, s2) = (sk.pos(t1), sk.pos(t2));
-    let ccw = (s1[0] - ctr[0]) * (s2[1] - ctr[1]) - (s1[1] - ctr[1]) * (s2[0] - ctr[0]) > 0.;
-    let arc = sk.add_curve(al, if ccw { Curve::Arc { c: cc, s: t1, e: t2 } } else { Curve::Arc { c: cc, s: t2, e: t1 } }, false);
-    sk.add_constraint(al, Kind::Tangent(l1id, arc));
-    sk.add_constraint(al, Kind::Tangent(l2id, arc));
-    let id = sk.add_constraint(al, Kind::Radius(arc, fmt(r)));
-    // o canto antigo some se ninguém mais o usa
-    if !sk.curves.iter().any(|c| SketchData::curve_points(&c.geom).contains(&p)) {
-        sk.points.retain(|x| x.id != p || x.fixed);
-        sk.prune_constraints();
-    }
-    Ok(id)
-}
-
-/// Chanfro de distâncias iguais no canto `p`. Devolve a cota da distância.
-fn chamfer_corner(sk: &mut SketchData, al: &mut impl FnMut() -> Id, p: Id, dist: Option<f64>) -> Result<Id, &'static str> {
-    let lines = lines_at(sk, p);
-    let [(l1id, e1), (l2id, e2)] = lines[..] else { return Err("esse ponto não é um canto entre duas linhas") };
-    let pc = sk.pos(p);
-    let (q1, q2) = (sk.pos(e1), sk.pos(e2));
-    let (l1, l2) = (d2(q1, pc).max(1e-12), d2(q2, pc).max(1e-12));
-    let u1 = [(q1[0] - pc[0]) / l1, (q1[1] - pc[1]) / l1];
-    let u2 = [(q2[0] - pc[0]) / l2, (q2[1] - pc[1]) / l2];
-    if (u1[0] * u2[1] - u1[1] * u2[0]).abs() < 1e-3 {
-        return Err("as linhas são colineares");
-    }
-    let t = corner_setback(dist, l1, l2);
-    let t1 = sk.add_point(al, pc[0] + u1[0] * t, pc[1] + u1[1] * t);
-    let t2 = sk.add_point(al, pc[0] + u2[0] * t, pc[1] + u2[1] * t);
-    retarget_corner(sk, p, [(l1id, t1), (l2id, t2)]);
-    sk.add_curve(al, Curve::Line { a: t1, b: t2 }, false);
-    // distâncias iguais nas duas linhas (chanfro simétrico): o canto vira construção
-    let cpt = sk.add_point(al, pc[0], pc[1]);
-    let e1 = sk.add_curve(al, Curve::Line { a: cpt, b: t1 }, true);
-    let e2 = sk.add_curve(al, Curve::Line { a: cpt, b: t2 }, true);
-    sk.add_constraint(al, Kind::Parallel(e1, l1id));
-    sk.add_constraint(al, Kind::Parallel(e2, l2id));
-    sk.add_constraint(al, Kind::PointOnCurve(t1, l1id));
-    sk.add_constraint(al, Kind::PointOnCurve(t2, l2id));
-    sk.add_constraint(al, Kind::Equal(e1, e2));
-    let id = sk.add_constraint(al, Kind::Length(e1, fmt(t)));
-    if !sk.curves.iter().any(|c| c.id != e1 && c.id != e2 && SketchData::curve_points(&c.geom).contains(&p)) {
-        sk.points.retain(|x| x.id != p || x.fixed);
-        sk.prune_constraints();
-    }
-    Ok(id)
 }
 
 /// Distância que o offset de `curve` vai ter, medida no resultado `after` com a cota `dim`.
@@ -1832,8 +1734,14 @@ fn dims_from_fields(sk: &mut SketchData, al: &mut impl FnMut() -> Id, tool: Tool
                 wanted.extend(text("altura").map(|t| Kind::Length(h, t)));
             }
         }
-        Tool::Circle | Tool::ArcCenter | Tool::Arc3 | Tool::Polygon => {
+        Tool::Circle | Tool::ArcCenter | Tool::Arc3 => {
             if let Some(r) = round {
+                wanted.extend(text("raio").map(|t| Kind::Radius(r, t)));
+            }
+        }
+        // o último círculo é o que comanda: no circunscrito há o dos vértices antes dele
+        Tool::Polygon => {
+            if let Some(&r) = rounds.last() {
                 wanted.extend(text("raio").map(|t| Kind::Radius(r, t)));
             }
         }
@@ -1897,6 +1805,23 @@ fn draw_fields(painter: &egui::Painter, at: Pos2, entry: &ValueEntry, fields: &[
     painter.text(Pos2::new(at.x, y + 1.), egui::Align2::LEFT_TOP, tr("digite o valor · Tab trava e avança · Enter confirma"), egui::FontId::proportional(10.), vis.weak_text_color());
 }
 
+/// Com o campo vazio, + e - trocam os lados do polígono em vez de abrir a expressão.
+fn lados_pelo_teclado(keys: Vec<EntryKey>, digitando: bool, lados: &mut usize) -> Vec<EntryKey> {
+    use fenkra_core::sketch::{POLIGONO_LADOS_MAX, POLIGONO_LADOS_MIN};
+    if digitando {
+        return keys;
+    }
+    let mut resto = vec![];
+    for k in keys {
+        match k {
+            EntryKey::Char('+' | '=') if resto.is_empty() => *lados = (*lados + 1).min(POLIGONO_LADOS_MAX),
+            EntryKey::Char('-') if resto.is_empty() => *lados = lados.saturating_sub(1).max(POLIGONO_LADOS_MIN),
+            _ => resto.push(k),
+        }
+    }
+    resto
+}
+
 /// Dica junto ao cursor das ferramentas de forma.
 pub(crate) fn shape_hint(tool: Tool, clicks: usize) -> &'static str {
     match (tool, clicks) {
@@ -1906,7 +1831,7 @@ pub(crate) fn shape_hint(tool: Tool, clicks: usize) -> &'static str {
         (Tool::RectCenter, _) => "canto",
         (Tool::Circle, 0) | (Tool::Polygon, 0) | (Tool::ArcCenter, 0) => "centro",
         (Tool::Circle, _) => "raio",
-        (Tool::Polygon, _) => "vértice",
+        (Tool::Polygon, _) => "ponto do círculo",
         (Tool::ArcCenter, 1) => "início do arco",
         (Tool::ArcCenter, _) => "fim do arco",
         (Tool::Circle3, n) => ["1º ponto", "2º ponto", "3º ponto"][n.min(2)],
@@ -1923,7 +1848,8 @@ pub(crate) fn edit_hint(tool: Tool, no_curves: bool, nothing_selected: bool, cli
         (Tool::Move, true, _) => "clique nas curvas a mover",
         (Tool::Copy, true, _) => "clique nas curvas a copiar",
         (Tool::Move | Tool::Copy, false, 0) => "ponto base",
-        (Tool::Move | Tool::Copy, false, _) => "destino",
+        (Tool::Move, false, _) => "destino",
+        (Tool::Copy, false, _) => "destino; cada clique faz uma cópia, Esc encerra",
         (Tool::Mirror, true, _) => "selecione as curvas a espelhar",
         (Tool::Mirror, false, _) => "clique na linha de simetria",
         (Tool::Offset, _, _) if nothing_selected => "clique na curva; duplo clique pega a cadeia",
@@ -1968,7 +1894,7 @@ pub(crate) fn curve_uv(sk: &SketchData, c: &fenkra_core::sketch::SkCurve) -> Vec
 }
 
 /// Curvas de `after` que não estão iguais em `before`: é o que o comando vai fazer.
-fn changed_curves(before: &SketchData, after: &SketchData) -> Vec<(Vec<[f64; 2]>, bool)> {
+pub(crate) fn changed_curves(before: &SketchData, after: &SketchData) -> Vec<(Vec<[f64; 2]>, bool)> {
     after
         .curves
         .iter()
@@ -2634,6 +2560,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 })
                 .collect()
         });
+        let keys = if tool == Tool::Polygon { lados_pelo_teclado(keys, edit.entry.typing(), &mut edit.polygon_sides) } else { keys };
         for k in keys {
             confirm |= edit.entry.key(k, n_fields, &vars).1;
             if matches!(k, EntryKey::Tab { .. }) {
@@ -2944,7 +2871,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 edit.clicks.clear();
             }
             let cl = edit.clicks.clone();
-            let opts = Build { construction: edit.construction, auto_dims: settings.auto_dims, sides: edit.polygon_sides };
+            let opts = Build { construction: edit.construction, auto_dims: settings.auto_dims, sides: edit.polygon_sides, circunscrito: edit.polygon_circunscrito };
             let done = !cl.is_empty() && cl.len() >= tool.clicks_needed();
             // prévia: a forma real, criada num clone com o cursor no lugar do próximo clique
             if let (Some(s), false, false) = (cur_snap, cl.is_empty(), done) {
@@ -3107,7 +3034,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         }
                     }
                     if cl.len() >= 2 {
-                        edit.clicks.clear();
+                        edit.destino_feito(copy);
                         let d = [cl[1].uv[0] - cl[0].uv[0], cl[1].uv[1] - cl[0].uv[1]];
                         let pins = shift_curves(&mut sk, &mut al, &sel_curves, d, copy);
                         edit.report = sk.solve(&vars, &pins);
@@ -3185,31 +3112,25 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     }
                 }
                 Tool::Fillet | Tool::Chamfer => {
+                    use crate::sketch_canto as ca;
                     let chamfer = tool == Tool::Chamfer;
-                    let last = if chamfer { edit.last_chamfer } else { edit.last_fillet };
-                    let run = |sk: &mut SketchData, al: &mut dyn FnMut() -> Id, p: Id| {
-                        let mut al = al;
-                        if chamfer {
-                            chamfer_corner(sk, &mut al, p, last)
-                        } else {
-                            fillet_corner(sk, &mut al, p, last)
-                        }
-                    };
+                    let pedido = edit.pedido_canto(chamfer);
+                    const NAO_CABE: &str = "alguns cantos não comportam esse valor e ficaram como estavam";
                     // seleção prévia: duas linhas que formam um canto viram o filete/chanfro de uma vez
                     // e a cadeia selecionada, todos os seus cantos de uma vez, com o mesmo valor
-                    let lote = match corner_da_selecao(&sk, &edit.sel) {
+                    let lote = match ca::corner_da_selecao(&sk, &edit.sel) {
                         Some(p) => vec![p],
                         None => crate::sketch_cadeia::cantos(&sk, &sel_curves),
                     };
                     if !lote.is_empty() {
                         edit.sel.clear();
-                        match corners_em_lote(&mut sk, &mut al, &lote, chamfer, last, None) {
-                            Ok((id, sobra)) => {
-                                edit.dim_edit = Some((id, String::new(), true));
-                                edit.round_dim = Some((id, chamfer));
+                        let mestre = edit.mestre_canto(&sk, chamfer);
+                        match ca::em_lote(&mut sk, &mut al, &lote, &pedido, mestre) {
+                            Ok((c, sobra)) => {
+                                edit.canto_feito(c, chamfer, mestre.is_some());
                                 edit.report = sk.solve(&vars, &[]);
                                 if sobra > 0 {
-                                    toast = Some(("alguns cantos não comportam esse valor e ficaram como estavam".to_string(), true));
+                                    toast = Some((NAO_CABE.to_string(), true));
                                 }
                             }
                             Err(m) => toast = Some((m.to_string(), true)),
@@ -3218,37 +3139,34 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     // duplo clique: o 1º clique fez um canto; o 2º leva o mesmo valor ao resto da cadeia
                     if let (true, Some(Ent::Cv(c))) = (double, over) {
                         let resto = crate::sketch_cadeia::cantos(&sk, &crate::sketch_cadeia::cadeia(&sk, c).curvas());
-                        let base = edit.round_dim.filter(|x| x.1 == chamfer).map(|x| x.0);
                         if !resto.is_empty() {
-                            match corners_em_lote(&mut sk, &mut al, &resto, chamfer, last, base) {
-                                Ok((id, sobra)) => {
-                                    if base.is_none() {
-                                        edit.dim_edit = Some((id, String::new(), true));
-                                        edit.round_dim = Some((id, chamfer));
-                                    }
+                            let mestre = edit.mestre_canto(&sk, chamfer);
+                            match ca::em_lote(&mut sk, &mut al, &resto, &pedido, mestre) {
+                                Ok((c, sobra)) => {
+                                    edit.canto_feito(c, chamfer, mestre.is_some());
                                     edit.report = sk.solve(&vars, &[]);
                                     if sobra > 0 {
-                                        toast = Some(("alguns cantos não comportam esse valor e ficaram como estavam".to_string(), true));
+                                        toast = Some((NAO_CABE.to_string(), true));
                                     }
                                 }
                                 Err(m) => toast = Some((m.to_string(), true)),
                             }
                         }
                     }
-                    match over.zip(cursor_uv).and_then(|(e, uv)| corner_of(&sk, e, uv)) {
-                        Some(Ok(p)) => {
+                    let mestre = edit.mestre_canto(&sk, chamfer);
+                    match over.zip(cursor_uv).and_then(|(e, uv)| Some((e, uv, ca::corner_of(&sk, e, uv)?))) {
+                        Some((e, uv, Ok(p))) => {
+                            let pedido = ca::Pedido { primeira: ca::primeira_linha(&sk, e, p, uv), ..pedido };
                             let mut g = sk.clone();
-                            match run(&mut g, &mut ghost_ids(), p) {
-                                Ok(id) => {
+                            match ca::canto_seguinte(&mut g, &mut ghost_ids(), p, &pedido, mestre) {
+                                Ok(c) => {
                                     draw_ghost(&painter, &v, &sk, &g);
-                                    let k = g.constraints.iter().find(|x| x.id == id).map(|x| x.kind.clone());
-                                    if let (Some(d), Some(h)) = (k.and_then(|k| g.measure(&k)), hover) {
+                                    if let (Some(d), Some(h)) = (ca::medida(&g, c.cota), hover) {
                                         draw_tag(&painter, h + egui::vec2(0., -14.), format!("{} {}", tr(if chamfer { "distância" } else { "raio" }), fmt(d)), dark);
                                     }
                                     if primary_click && !double {
-                                        if let Ok(id) = run(&mut sk, &mut al, p) {
-                                            edit.dim_edit = Some((id, String::new(), true));
-                                            edit.round_dim = Some((id, chamfer));
+                                        if let Ok(c) = ca::canto_seguinte(&mut sk, &mut al, p, &pedido, mestre) {
+                                            edit.canto_feito(c, chamfer, mestre.is_some());
                                             edit.report = sk.solve(&vars, &[]);
                                         }
                                     }
@@ -3256,7 +3174,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                                 Err(m) => refusal = Some(m),
                             }
                         }
-                        Some(Err(m)) => refusal = Some(m),
+                        Some((_, _, Err(m))) => refusal = Some(m),
                         None => {}
                     }
                 }
@@ -3665,6 +3583,13 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             let m = sk.constraints.iter().find(|x| x.id == id).and_then(|x| sk.measure(&x.kind));
             if chamfer {
                 edit.last_chamfer = m.or(edit.last_chamfer);
+                // a segunda medida do canto que acabou de nascer é a que os próximos repetem
+                let segunda = edit.canto_mestre.filter(|x| x.0.cota == id).and_then(|x| x.0.segunda).and_then(|s| crate::sketch_canto::medida(&sk, s));
+                match (edit.chanfro_modo, segunda) {
+                    (crate::sketch_canto::ModoChanfro::DuasDistancias, Some(d)) => edit.chanfro_segundo = Some(d),
+                    (crate::sketch_canto::ModoChanfro::DistanciaAngulo, Some(a)) => edit.chanfro_angulo = a,
+                    _ => {}
+                }
             } else {
                 edit.last_fillet = m.or(edit.last_fillet);
             }
@@ -3928,7 +3853,7 @@ pub fn begin(app: &mut App, id: Id) {
 
 /// Filete de raio dado no canto `p`: devolve a cota.
 pub(crate) fn filete_com_raio(sk: &mut SketchData, al: &mut impl FnMut() -> Id, p: Id, r: f64) -> Id {
-    fillet_corner(sk, al, p, Some(r)).expect("canto entre duas linhas")
+    crate::sketch_canto::um_canto(sk, al, p, &crate::sketch_canto::Pedido::filete(Some(r))).expect("canto entre duas linhas").cota
 }
 
 #[cfg(test)]
@@ -4012,7 +3937,7 @@ mod tests {
     }
 
     fn opts() -> Build {
-        Build { construction: false, auto_dims: true, sides: 6 }
+        Build { construction: false, auto_dims: true, sides: 6, circunscrito: false }
     }
 
     fn shape(tool: Tool, c: &[[f64; 2]]) -> SketchData {
@@ -4055,6 +3980,143 @@ mod tests {
         }
         let m = measures(Tool::ArcCenter, &[[0., 0.], [10., 0.]], [0., 10.]);
         assert!((m[0].value - 90.).abs() < 1e-9 && m[0].angle);
+    }
+
+    #[test]
+    fn poligono_circunscrito_mede_o_apotema_e_vira_solido() {
+        let mut sk = SketchData::default();
+        let cl = [snap([0., 0.]), snap([10., 0.])];
+        build_shape(&mut sk, &mut ghost_ids(), Tool::Polygon, &cl, &Build { circunscrito: true, ..opts() });
+        // o clique cai no meio de um lado, e os vértices ficam mais longe que ele
+        let raio = 10. / (std::f64::consts::PI / 6.).cos();
+        assert!(sk.points.iter().filter(|p| p.x.hypot(p.y) > 1.).all(|p| (p.x.hypot(p.y) - raio).abs() < 1e-9));
+        assert!(!sk.points.iter().any(|p| (p.x - 10.).abs() < 1e-9 && p.y.abs() < 1e-9), "nenhum vértice sob o cursor");
+        // o raio digitado vai para o círculo interno, o que o campo mediu
+        let made: Vec<Id> = sk.curves.iter().map(|c| c.id).collect();
+        dims_from_fields(&mut sk, &mut ghost_ids(), Tool::Polygon, &made, &[("raio", "12".into(), 12.)], &HashMap::new());
+        let dentro = made.iter().copied().filter(|c| is_round(&sk, *c)).last().unwrap();
+        assert!(sk.constraints.iter().any(|k| matches!(k.kind, Kind::Radius(c, _) if c == dentro)));
+        assert!(sk.solve(&HashMap::new(), &[]).converged);
+        assert!((sk.radius_of(dentro).unwrap() - 12.).abs() < 1e-6);
+        // seis lados com apótema 12: área 6 r2 tan(30°)
+        let (ok, volume, caixa) = crate::sketch_canto::tests::extruda(sk, 10.);
+        assert!(ok);
+        assert!((volume - 10. * 6. * 144. * (std::f64::consts::PI / 6.).tan()).abs() < 1e-3, "{volume}");
+        assert!((caixa[0] - 24.).abs() < 1e-3 && (caixa[1] - 2. * 12. / (std::f64::consts::PI / 6.).cos()).abs() < 1e-3, "{caixa:?}");
+    }
+
+    #[test]
+    fn mais_e_menos_trocam_os_lados_sem_abrir_o_campo() {
+        let mut n = 6;
+        let k = |c| EntryKey::Char(c);
+        assert!(lados_pelo_teclado(vec![k('+'), k('+'), k('-')], false, &mut n).is_empty());
+        assert_eq!(n, 7);
+        n = 40;
+        lados_pelo_teclado(vec![k('+')], false, &mut n);
+        assert_eq!(n, 40);
+        n = 3;
+        lados_pelo_teclado(vec![k('-')], false, &mut n);
+        assert_eq!(n, 3);
+        // com o campo aberto, ou depois de um dígito, o sinal é da expressão
+        assert_eq!(lados_pelo_teclado(vec![k('-')], true, &mut n), vec![k('-')]);
+        assert_eq!(lados_pelo_teclado(vec![k('2'), k('-')], false, &mut n), vec![k('2'), k('-')]);
+        assert_eq!(n, 3);
+    }
+
+    #[test]
+    fn tecla_do_modo_alterna_inscrito_e_circunscrito_sem_perder_o_centro() {
+        let mut e = SketchEdit::new(Id(1), false);
+        e.set_tool(Tool::Polygon);
+        e.clique_de_teste([1., 2.]);
+        e.percorrer_modo();
+        assert!(e.polygon_circunscrito);
+        assert_eq!(e.indice_passo(), 1);
+        e.percorrer_modo();
+        assert!(!e.polygon_circunscrito);
+    }
+
+    #[test]
+    fn copiar_leva_as_restricoes_internas_e_cada_copia_vira_solido() {
+        let mut al = ids();
+        let mut sk = SketchData::default();
+        let (p, l) = sk.add_rect(&mut al, [0., 0.], [20., 10.], false);
+        sk.add_constraint(&mut al, Kind::Length(l[0], "20".into()));
+        sk.add_constraint(&mut al, Kind::Length(l[1], "10".into()));
+        sk.add_constraint(&mut al, Kind::Fixed(p[0]));
+        assert_eq!(sk.solve(&HashMap::new(), &[]).dof, 0);
+        let antes = sk.constraints.len();
+        for x in [30., 60.] {
+            shift_curves(&mut sk, &mut al, &l, [x, 0.], true);
+        }
+        // a cópia leva tudo menos a fixa, que prende um lugar do plano: sobra só a posição dela
+        assert_eq!(sk.constraints.len(), antes + 2 * (antes - 1));
+        let r = sk.solve(&HashMap::new(), &[]);
+        assert!(r.converged && r.failing.is_empty(), "{r:?}");
+        assert_eq!(r.dof, 4, "cada cópia só anda em x e y");
+        let (ok, volume, caixa) = crate::sketch_canto::tests::extruda(sk, 5.);
+        assert!(ok);
+        assert!((volume - 3. * 200. * 5.).abs() < 1e-3, "{volume}");
+        assert!((caixa[0] - 80.).abs() < 1e-3 && (caixa[1] - 10.).abs() < 1e-3, "{caixa:?}");
+    }
+
+    #[test]
+    fn copiar_repete_do_mesmo_ponto_base_e_mover_termina() {
+        let mut e = SketchEdit::new(Id(1), false);
+        e.set_tool(Tool::Copy);
+        e.sel = vec![Ent::Cv(Id(9))];
+        e.clique_de_teste([0., 0.]);
+        e.clique_de_teste([5., 0.]);
+        e.destino_feito(true);
+        assert_eq!(e.indice_passo(), 2, "espera o próximo destino");
+        assert!(e.cancel(), "o Esc encerra a repetição");
+        assert_eq!((e.indice_passo(), e.tool), (1, Tool::Copy));
+        e.set_tool(Tool::Move);
+        e.sel = vec![Ent::Cv(Id(9))];
+        e.clique_de_teste([0., 0.]);
+        e.clique_de_teste([5., 0.]);
+        e.destino_feito(false);
+        assert_eq!(e.indice_passo(), 1);
+    }
+
+    /// O próximo canto só segue o mestre enquanto o painel pedir o que ele mede.
+    #[test]
+    fn canto_mestre_vale_para_o_mesmo_valor_e_modo() {
+        let mut al = ids();
+        let mut sk = SketchData::default();
+        let (p, _) = sk.add_rect(&mut al, [0., 0.], [40., 30.], false);
+        let mut e = SketchEdit::new(Id(1), false);
+        e.set_tool(Tool::Fillet);
+        let c = crate::sketch_canto::um_canto(&mut sk, &mut al, p[2], &e.pedido_canto(false)).unwrap();
+        e.canto_feito(c, false, false);
+        assert_eq!(e.mestre_canto(&sk, false), Some(c), "com a cota aberta, vale o que está nela");
+        assert_eq!(e.mestre_canto(&sk, true), None, "filete não comanda chanfro");
+        e.dim_edit = None;
+        e.round_dim = None;
+        assert_eq!(e.mestre_canto(&sk, false), None, "cota fechada sem valor no painel");
+        let m = crate::sketch_canto::medida(&sk, c.cota);
+        e.definir_canto(false, m);
+        assert_eq!(e.mestre_canto(&sk, false), Some(c));
+        e.definir_canto(false, Some(m.unwrap() + 1.));
+        assert_eq!(e.mestre_canto(&sk, false), None, "outro raio no painel começa outra cota");
+        e.definir_canto(false, m);
+        e.set_tool(Tool::Select);
+        e.set_tool(Tool::Fillet);
+        assert_eq!(e.mestre_canto(&sk, false), None, "sair do comando encerra a sequência");
+        // no chanfro, o modo e a segunda medida também contam
+        e.set_tool(Tool::Chamfer);
+        e.chanfro_modo = ModoChanfro::DuasDistancias;
+        e.definir_canto(true, Some(4.));
+        e.chanfro_segundo = Some(2.);
+        let c = crate::sketch_canto::um_canto(&mut sk, &mut al, p[3], &e.pedido_canto(true)).unwrap();
+        e.canto_feito(c, true, false);
+        e.dim_edit = None;
+        e.round_dim = None;
+        assert_eq!(e.mestre_canto(&sk, true), Some(c));
+        e.chanfro_segundo = Some(3.);
+        assert_eq!(e.mestre_canto(&sk, true), None);
+        e.chanfro_segundo = Some(2.);
+        e.chanfro_modo = ModoChanfro::Iguais;
+        assert_eq!(e.mestre_canto(&sk, true), None);
     }
 
     #[test]
@@ -4106,37 +4168,6 @@ mod tests {
         let (a, b) = (sk.add_point(&mut al, 0., 0.), sk.add_point(&mut al, 5., 5.));
         let sp = sk.add_curve(&mut al, Curve::Spline { pts: vec![a, b] }, false);
         assert!(offset_curve(&mut sk, &mut al, sp, [1., 1.], false).is_err(), "spline recusa com explicação");
-    }
-
-    fn canto() -> (SketchData, Id, Id, Id) {
-        let (mut sk, l1) = line_sketch([40., 0.], [0., 0.]);
-        let mut al = ids();
-        let Some(Curve::Line { b: p, .. }) = sk.curve(l1).map(|c| c.geom.clone()) else { panic!() };
-        let q = sk.add_point(&mut al, 0., 30.);
-        let l2 = sk.add_curve(&mut al, Curve::Line { a: p, b: q }, false);
-        (sk, l1, l2, p)
-    }
-
-    #[test]
-    fn filete_aceita_a_linha_e_repete_o_raio() {
-        let (sk, l1, _, p) = canto();
-        // clicar na linha perto do canto resolve para o canto; longe, a ponta solta explica a recusa
-        assert_eq!(corner_of(&sk, Ent::Cv(l1), [3., 0.]), Some(Ok(p)));
-        assert!(matches!(corner_of(&sk, Ent::Cv(l1), [38., 0.]), Some(Err(_))));
-        let mut g = sk.clone();
-        let id = fillet_corner(&mut g, &mut ghost_ids(), p, Some(5.)).unwrap();
-        let k = g.constraints.iter().find(|c| c.id == id).unwrap().kind.clone();
-        assert!((g.measure(&k).unwrap() - 5.).abs() < 1e-9);
-        assert!(g.solve(&HashMap::new(), &[]).converged);
-        assert!(g.point(p).is_none(), "o canto antigo saiu");
-        let gh = changed_curves(&sk, &g);
-        assert_eq!(gh.len(), 3, "arco e as duas linhas encurtadas");
-        // sem valor a repetir, 30% do lado menor; com valor grande demais, sobra linha
-        let mut g = sk.clone();
-        chamfer_corner(&mut g, &mut ghost_ids(), p, None).unwrap();
-        assert!(g.solve(&HashMap::new(), &[]).converged);
-        assert!((corner_setback(None, 40., 30.) - 9.).abs() < 1e-9);
-        assert!((corner_setback(Some(500.), 40., 30.) - 27.).abs() < 1e-9);
     }
 
     #[test]
@@ -4327,57 +4358,6 @@ mod tests {
         let opts = dim_options(&sk, &[Ent::Cv(l1), Ent::Cv(l2)]);
         assert!(matches!(choose_dim(&sk, &opts, Some([3., 1.5]), (false, false)), Some(Kind::Angle(..))));
         assert!(matches!(choose_dim(&sk, &opts, Some([-3., 3.]), (false, false)), Some(Kind::AngleSupp(..))));
-    }
-
-    #[test]
-    fn filete_e_chanfro_percorrem_a_cadeia_com_um_valor_so() {
-        for chamfer in [false, true] {
-            let mut al = ids();
-            let mut sk = SketchData::default();
-            let (_, rect) = sk.add_rect(&mut al, [0., 0.], [40., 30.], false);
-            let cantos = crate::sketch_cadeia::cantos(&sk, &rect);
-            assert_eq!(cantos.len(), 4);
-            let (dim, sobra) = corners_em_lote(&mut sk, &mut al, &cantos, chamfer, Some(5.), None).unwrap();
-            assert_eq!(sobra, 0);
-            let iguais = sk.constraints.iter().filter(|k| matches!(k.kind, Kind::Equal(..))).count();
-            assert!(iguais >= 3, "{iguais}");
-            assert_eq!(sk.constraints.iter().filter(|k| matches!(k.kind, Kind::Radius(..))).count(), usize::from(!chamfer));
-            let (loops, _) = sk.loops();
-            assert_eq!(loops.len(), 1, "o contorno segue fechado");
-            // uma cota só comanda os quatro cantos
-            let k = sk.constraints.iter_mut().find(|x| x.id == dim).unwrap();
-            *k.kind.value_mut().unwrap() = "3".into();
-            assert!(sk.solve(&HashMap::new(), &[]).converged);
-            for c in sk.curves.iter().filter(|c| matches!(c.geom, Curve::Arc { .. })) {
-                assert!((sk.radius_of(c.id).unwrap() - 3.).abs() < 1e-6);
-            }
-        }
-    }
-
-    #[test]
-    fn canto_em_que_o_valor_nao_cabe_fica_como_estava() {
-        let mut al = ids();
-        let mut sk = SketchData::default();
-        let (_, rect) = sk.add_rect(&mut al, [0., 0.], [40., 10.], false);
-        let cantos = crate::sketch_cadeia::cantos(&sk, &rect);
-        // 8 de recuo em cada ponta do lado de 10 não cabem: o segundo canto desse lado é recusado
-        let (_, sobra) = corners_em_lote(&mut sk, &mut al, &cantos, false, Some(8.), None).unwrap();
-        assert!(sobra >= 1, "{sobra}");
-    }
-
-    #[test]
-    fn duas_linhas_selecionadas_dao_o_canto_do_filete() {
-        let (mut sk, l1) = line_sketch([0., 0.], [40., 0.]);
-        let (_, b) = line_ends(&sk, l1).unwrap();
-        let mut n = 100u64;
-        let mut al = || {
-            n += 1;
-            Id(n)
-        };
-        let q = sk.add_point(&mut al, 40., 30.);
-        let l2 = sk.add_curve(&mut al, Curve::Line { a: b, b: q }, false);
-        assert_eq!(corner_da_selecao(&sk, &[Ent::Cv(l1), Ent::Cv(l2)]), Some(b));
-        assert_eq!(corner_da_selecao(&sk, &[Ent::Cv(l1)]), None);
     }
 
     #[test]

@@ -108,6 +108,7 @@ mod forma_edit;
 mod forma_ui;
 mod sketch_fluxo;
 mod sketch_cadeia;
+mod sketch_canto;
 mod sketch_cota;
 mod sketch_relimita;
 mod sketch_arraste;

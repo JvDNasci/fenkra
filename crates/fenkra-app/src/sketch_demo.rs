@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Desenvolvimento: `FENKRA_DEMO_SKETCH=<caso>` abre um sketch pronto, com o estado que só o mouse
 //! produziria, para conferir por captura. Casos: `retangulo` e `canto` (painel do comando), `setas`,
-//! `pegas`, `barra`, `conflito` (fantasma das restrições), `sombra`, `oculto` e `fatia`.
+//! `pegas`, `barra`, `conflito` (fantasma das restrições), `sombra`, `oculto`, `fatia`, `poligono`,
+//! `chanfro` e `copia`.
 
 use crate::sketch_ui::{CKind, Ent, SketchEdit, Tool};
 use fenkra_core::sketch::{Curve, Kind};
@@ -75,6 +76,26 @@ pub fn aplicar(e: &mut SketchEdit, sk: &SketchData) {
             e.demo_cursor = Some([30., 58.]);
         }
         "canto" => e.set_tool(Tool::Fillet),
+        "poligono" => {
+            e.set_tool(Tool::Polygon);
+            e.polygon_sides = 8;
+            e.polygon_circunscrito = true;
+            e.demo_clique([0., 0.]);
+            e.demo_cursor = Some([18., 8.]);
+        }
+        "chanfro" => {
+            e.set_tool(Tool::Chamfer);
+            e.chanfro_modo = crate::sketch_canto::ModoChanfro::DistanciaAngulo;
+            e.chanfro_angulo = 30.;
+            e.definir_canto(true, Some(20.));
+            e.demo_cursor = Some([36., 25.]);
+        }
+        "copia" => {
+            e.set_tool(Tool::Copy);
+            e.sel = linhas.iter().copied().map(Ent::Cv).collect();
+            e.demo_clique([0., 0.]);
+            e.demo_cursor = Some([90., 40.]);
+        }
         "setas" => {
             e.demo_cursor = Some([0., 25.]);
         }

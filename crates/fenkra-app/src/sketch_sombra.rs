@@ -93,7 +93,7 @@ fn arco(a: P, m: P, b: P) -> Vec<P> {
 }
 
 /// Contorno fechado como polígono, sem repetir o primeiro ponto.
-fn poligono(laco: &[Seg]) -> Vec<P> {
+pub(crate) fn poligono(laco: &[Seg]) -> Vec<P> {
     let mut v: Vec<P> = vec![];
     for s in laco {
         match s {
