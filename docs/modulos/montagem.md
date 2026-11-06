@@ -8,6 +8,8 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Restrições padrão** (Restrições) — MateCmd: Coincident, Contact, Distance, Angle, Parallel, Perpendicular, Auto, AlignOnce. Distância e Ângulo nascem com a medida atual; Inverter alinhamento e Inverter lado separados (B71).
 - **Pontos de encaixe** (Restrições e juntas) — `encaixe.rs`, `asm_encaixe.rs`: candidatos da face sob o cursor com sistema de eixos, tecla L trava, giro de 90°, Inverter e deslocamento com fórmula (B99).
 - **Prévia e confirmar** (Restrições e juntas) — `proposta::Comando` resolve numa cópia; fantasma na posição final, Enter aceita, Tab inverte, Esc cancela (B244, ADR 0018).
+- **Diagnóstico de conflito** (Restrições e juntas) — `conflito.rs`: sem solução, a prévia fica vermelha e aponta o menor conjunto de restrições em conflito, no painel, na árvore e no 3D; o painel mostra os GDL antes e depois (B103, ADR 0046).
+- **Solver por aglomerados** (Restrições e juntas) — `solve.rs`: a montagem se divide em grupos independentes, e o que já está travado entre si vira um corpo só antes da conta (B103, ADR 0046).
 - **Símbolos no modelo** (Restrições e juntas) — `simbolos.rs`, `asm_simbolos.rs`: ancorados na geometria, cota e arco arrastáveis, ocultar por tipo, grade para montagens grandes (B245).
 - **Origem da montagem** (Árvore) — `ORIGEM`, planos, eixos e ponto usados como referência (B22, ADR 0018).
 - **Manipulador** (Mover e girar) — `manipulador.rs`, `solve::liberdade`: referência, pivô, passo, colisão com escopo, alças só do que as restrições deixam, valor digitado (B261).

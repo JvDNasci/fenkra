@@ -406,8 +406,8 @@ pub fn no_batente(j: &Joint, pl: &HashMap<Id, Placement>) -> bool {
 /// fora. O quadrado disso tem derivada contínua na borda, então o mínimos quadrados para ali sem
 /// tratamento especial. Ficam fora de [`residuals`] porque um batente não tira grau de liberdade:
 /// quem conta GDL não pode ver essas linhas, nem quando a junta está encostada.
-pub fn residuos_limite(a: &Assembly, pl: &HashMap<Id, Placement>, r: &mut Vec<f64>, per: &mut Vec<(Id, usize, usize)>) {
-    for j in a.joints.iter().filter(|j| !j.suppressed) {
+pub fn residuos_limite(a: &Assembly, pl: &HashMap<Id, Placement>, r: &mut Vec<f64>, per: &mut Vec<(Id, usize, usize)>, juntas: &[usize]) {
+    for j in juntas.iter().map(|i| &a.joints[*i]).filter(|j| !j.suppressed) {
         let (Some(pa), Some(pb)) = (pl.get(&j.a.comp), pl.get(&j.b.comp)) else { continue };
         let s = r.len();
         for g in j.kind.graus() {
@@ -534,9 +534,9 @@ pub fn aceita_levar(j: &Joint, g: Grau) -> bool {
 
 /// Resíduos das juntas e acoplamentos (entram no solucionador). `drives = false` ignora os
 /// comandos (para contar os graus de liberdade do mecanismo).
-pub fn residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<String, f64>, drives: bool, r: &mut Vec<f64>, per: &mut Vec<(Id, usize, usize)>) {
+pub(crate) fn residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<String, f64>, drives: bool, r: &mut Vec<f64>, per: &mut Vec<(Id, usize, usize)>, escopo: &crate::solve::Escopo) {
     let num = |e: &String| expr::eval_str(e, vars).unwrap_or(0.);
-    for j in a.joints.iter().filter(|j| !j.suppressed) {
+    for j in escopo.juntas.iter().map(|i| &a.joints[*i]).filter(|j| !j.suppressed) {
         let (Some(pa), Some(pb)) = (pl.get(&j.a.comp), pl.get(&j.b.comp)) else { continue };
         let s = r.len();
         let (oa, za, _) = j.a.frame.world(pa);
@@ -617,7 +617,7 @@ pub fn residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<Strin
         }
         per.push((j.id, s, r.len()));
     }
-    for c in &a.couplings {
+    for c in escopo.acoplamentos.iter().map(|i| &a.couplings[*i]) {
         let (Some(ja), Some(jb)) = (a.joints.iter().find(|j| j.id == c.a), a.joints.iter().find(|j| j.id == c.b)) else { continue };
         let (Some((aa, la)), Some((ab, lb))) = (measure(ja, pl), measure(jb, pl)) else { continue };
         let k = num(&c.ratio);

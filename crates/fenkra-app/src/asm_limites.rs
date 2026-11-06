@@ -160,7 +160,7 @@ fn desenhar(ui: &mut egui::Ui, rect: Rect, cam: &Camera, marcas: &[MarcaLimite],
 /// Marca de um extremo, com a pílula do valor. Devolve o valor em arrasto e se ele acabou.
 #[allow(clippy::too_many_arguments)]
 fn arrastavel(ui: &mut egui::Ui, rect: Rect, cam: &Camera, m: &MarcaLimite, raio: f64, chave: (u64, bool, u8), em: Pos2, cor: Color32, valor: f64) -> Option<(f64, bool)> {
-    let r = ui.interact(Rect::from_center_size(em, egui::vec2(crate::handles::PEGA, crate::handles::PEGA)), egui::Id::new(("asm_limite", chave)), egui::Sense::drag()).on_hover_text(tr("Arraste para mudar o limite"));
+    let r = ui.interact(Rect::from_center_size(em, egui::vec2(crate::handles::PEGA, crate::handles::PEGA)), egui::Id::unique(("asm_limite", chave)), egui::Sense::drag()).on_hover_text(tr("Arraste para mudar o limite"));
     let quente = r.hovered() || r.dragged();
     let p = ui.painter_at(rect);
     p.circle_filled(em, if quente { 6.5 } else { 4.5 }, cor);

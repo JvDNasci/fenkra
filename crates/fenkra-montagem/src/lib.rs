@@ -9,6 +9,7 @@
 
 pub mod avulso;
 pub mod bom;
+pub mod conflito;
 pub mod contexto;
 pub mod display;
 pub mod encaixe;

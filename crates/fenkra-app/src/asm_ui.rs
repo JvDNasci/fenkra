@@ -1560,7 +1560,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     ui.add_space(6.);
     let _ = crate::tree_ui::grupo(ui, "arvore_restricoes", Some("rest_contato"), format!("{} ({})", tr("Restrições e juntas"), st.asm.mates.len() + st.asm.rigid.len() + st.asm.joints.len() + st.asm.couplings.len() + st.asm.patterns.len()), true).corpo(ui, |ui| {
         for m in &st.asm.mates {
-            let failed = st.report.failed.contains(&m.id);
+            let failed = st.report.failed.contains(&m.id) || st.em_conflito(m.id);
             let txt = format!("{} {}  ({} ↔ {}){}", m.kind.icon(), m.name, st.asm.name_of(m.a.comp), st.asm.name_of(m.b.comp), if failed { " ✖" } else { "" });
             let mut t = RichText::new(txt).small();
             if failed {
@@ -1600,7 +1600,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             });
         }
         for j in &st.asm.joints {
-            let failed = st.report.failed.contains(&j.id);
+            let failed = st.report.failed.contains(&j.id) || st.em_conflito(j.id);
             let drive = match (&j.drive_angle, &j.drive_len) {
                 (Some(e), _) => format!("  ⟳ {e}°"),
                 (_, Some(e)) => format!("  ↕ {e} mm"),
@@ -2783,6 +2783,11 @@ impl AsmState {
     }
 
     /// Componentes das seleções da viewport (sem repetir, na ordem do clique).
+    /// A restrição está no conflito da prévia aberta? Fica em vermelho na árvore antes de aceitar.
+    pub(crate) fn em_conflito(&self, id: Id) -> bool {
+        self.cmd.as_ref().and_then(|c| c.previa()).is_some_and(|p| p.falhou() && p.conflito.envolvidas.contains(&id))
+    }
+
     pub(crate) fn comps_of(&self, picks: &[Pick]) -> Vec<Id> {
         let mut out = vec![];
         for p in picks {

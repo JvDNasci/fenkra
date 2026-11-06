@@ -123,6 +123,10 @@ pub struct Previa {
     pub report: SolveReport,
     /// restrições que passaram a falhar por causa da proposta (as que já falhavam não contam)
     pub novas_falhas: Vec<Id>,
+    /// por que falhou: o menor conjunto de itens que não fecha junto com a proposta
+    pub conflito: crate::conflito::Nucleo,
+    /// graus de liberdade da montagem antes da proposta; os de depois estão em `report.dof`
+    pub gdl_antes: usize,
     /// valor medido (ou digitado) de Distância e Ângulo, para o campo do painel
     pub valor: Option<String>,
     pub aceita_alinhamento: bool,
@@ -133,6 +137,11 @@ impl Previa {
     /// A própria proposta ficou sem solução, ou derrubou outra restrição.
     pub fn falhou(&self) -> bool {
         !self.novas_falhas.is_empty()
+    }
+
+    /// A proposta fecha, mas não tira grau de liberdade nenhum: repete o que já estava restrito.
+    pub fn redundante(&self) -> bool {
+        !self.falhou() && self.id.is_some() && self.report.dof == self.gdl_antes
     }
 }
 
@@ -305,15 +314,17 @@ impl Comando {
                 j.suppressed = true;
             }
         }
+        let partida = copia.clone();
         let report = solve::solve(&mut copia);
         let so_posicionar = self.tipo == Tipo::Alinhar;
         if so_posicionar {
             copia.mates.retain(|m| m.id != id);
         }
-        let ja_falhavam = solve::solve(&mut base.clone()).failed;
-        let novas_falhas = report.failed.iter().copied().filter(|f| !ja_falhavam.contains(f)).collect();
+        let antes = solve::solve(&mut base.clone());
+        let novas_falhas: Vec<Id> = report.failed.iter().copied().filter(|f| !antes.failed.contains(f)).collect();
+        let conflito = if novas_falhas.is_empty() { Default::default() } else { crate::conflito::nucleo(&partida, id, &antes.failed) };
         let movidos = movidos(base, &copia);
-        Ok(Previa { copia, id: (!so_posicionar).then_some(id), movidos, report, novas_falhas, valor, aceita_alinhamento, aceita_lado })
+        Ok(Previa { copia, id: (!so_posicionar).then_some(id), movidos, report, novas_falhas, conflito, gdl_antes: antes.dof, valor, aceita_alinhamento, aceita_lado })
     }
 
     fn montar_restricao(&self, c: &mut Assembly, a: &Elemento, b: &Elemento) -> Result<(Id, Option<String>, bool, bool), String> {
@@ -635,6 +646,72 @@ fn sistema_com(g: &Geom, p: &Placement, outra: &Geom, q: &Placement) -> JFrame {
     match (*g, *outra) {
         (Geom::Point(o), Geom::Axis { d, .. } | Geom::Plane { n: d, .. }) => JFrame::from_axis(o, p.dir_to_local(q.dir(d))),
         _ => sistema(g),
+    }
+}
+
+#[cfg(test)]
+mod testes_conflito {
+    use super::*;
+
+    fn plano(comp: Id, z: f64, n: f64) -> Elemento {
+        Elemento::novo(MateRef { comp, geom: Geom::Plane { p: [0., 0., z], n: [0., 0., n] }, pick: None }, Classe::Face)
+    }
+
+    fn montagem() -> (Assembly, Id, Id, Id) {
+        let mut a = Assembly::new("c");
+        let base = a.add_component("Base", NodeKind::Part { path: "b".into() }, Placement::default(), None);
+        a.node_mut(base).unwrap().fixed = true;
+        let tampa = a.add_component("Tampa", NodeKind::Part { path: "t".into() }, Placement { origin: [0., 0., 30.], ..Default::default() }, None);
+        let d = a.add_mate(MateKind::Distance("30".into()), plano(base, 0., 1.).r, plano(tampa, 0., 1.).r);
+        a.mates.iter_mut().find(|m| m.id == d).unwrap().sentido = Sentido::Mesmo;
+        assert!(solve::solve(&mut a).converged);
+        (a, base, tampa, d)
+    }
+
+    fn proposta(tipo: Tipo, a: Elemento, b: Elemento) -> Comando {
+        let mut c = Comando::novo(tipo);
+        c.receber(a);
+        c.receber(b);
+        c
+    }
+
+    #[test]
+    fn previa_sem_solucao_aponta_a_restricao_e_nao_toca_a_montagem() {
+        let (a, base, tampa, d) = montagem();
+        let antes = a.clone();
+        let c = proposta(Tipo::Restricao(MateKind::Contact), plano(base, 0., 1.), plano(tampa, 0., -1.));
+        let p = c.resolver(&a).unwrap();
+        assert!(p.falhou());
+        assert_eq!(p.conflito.envolvidas, vec![d]);
+        assert!(p.conflito.minimo && !p.conflito.sozinho);
+        assert_eq!(a, antes, "nada muda antes de aceitar");
+        assert!(p.report.dof > 0, "a contagem existe também na falha");
+    }
+
+    #[test]
+    fn previa_conta_os_gdl_e_avisa_o_redundante() {
+        let (a, base, tampa, _) = montagem();
+        // 30 mm de novo, pelo mesmo par: fecha e não tira nada
+        let mut c = proposta(Tipo::Restricao(MateKind::Distance("30".into())), plano(base, 0., 1.), plano(tampa, 0., 1.));
+        c.valor = Some("30".into());
+        let p = c.resolver(&a).unwrap();
+        assert!(!p.falhou());
+        assert!(p.redundante(), "{} {}", p.gdl_antes, p.report.dof);
+        // um eixo tira quatro
+        let eixo = |comp| Elemento::novo(MateRef { comp, geom: Geom::Axis { p: [0.; 3], d: [0., 0., 1.] }, pick: None }, Classe::Face);
+        let p = proposta(Tipo::Restricao(MateKind::Coincident { flip: false }), eixo(base), eixo(tampa)).resolver(&a).unwrap();
+        assert!(!p.falhou() && !p.redundante());
+        assert_eq!(p.gdl_antes, 3);
+        assert_eq!(p.report.dof, 1);
+    }
+
+    #[test]
+    fn duas_pecas_fixas_dizem_que_nao_fecha_nem_sozinha() {
+        let (mut a, base, tampa, d) = montagem();
+        a.mates.retain(|m| m.id != d);
+        a.node_mut(tampa).unwrap().fixed = true;
+        let p = proposta(Tipo::Restricao(MateKind::Contact), plano(base, 0., 1.), plano(tampa, 0., -1.)).resolver(&a).unwrap();
+        assert!(p.falhou() && p.conflito.sozinho, "{:?}", p.conflito);
     }
 }
 
