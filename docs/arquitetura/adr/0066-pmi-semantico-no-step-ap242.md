@@ -1,4 +1,4 @@
-# ADR 0063: PMI semântico no STEP AP242 pela ponte XDE
+# ADR 0066: PMI semântico no STEP AP242 pela ponte XDE
 
 Data: 2026-11-06. Item: B191.
 

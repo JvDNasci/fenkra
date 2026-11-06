@@ -673,7 +673,26 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         crate::asm_fixadores::demo(st);
         return;
     }
-    if nome == "engrenagens" || nome == "eixo" {
+    if nome == "engrenagens" || nome == "transmissao" {
+        // comando Gerar elemento de transmissão aberto (prévia 3D do par e cálculo ao vivo)
+        let mut t = crate::transmissao_ui::TransUi::default();
+        if let Ok(v) = std::env::var("FENKRA_DEMO_TRANS") {
+            t.tipo = match v.as_str() {
+                "helicoidais" => crate::transmissao_ui::Tipo::Helicoidais,
+                "espinha" => crate::transmissao_ui::Tipo::EspinhaDePeixe,
+                "conicas" => crate::transmissao_ui::Tipo::Conicas,
+                "diferencial" => crate::transmissao_ui::Tipo::Diferencial,
+                "semfim" => crate::transmissao_ui::Tipo::SemFim,
+                "corrente" => crate::transmissao_ui::Tipo::Corrente,
+                "correia" => crate::transmissao_ui::Tipo::Correia,
+                _ => crate::transmissao_ui::Tipo::Retas,
+            };
+        }
+        st.trans_open = Some(t);
+        st.fantasma_novo = true;
+        return;
+    }
+    if nome == "eixo" || nome == "engrenagens_classico" {
         // janela de engrenagens aberta (prévia do par) ou com o eixo gráfico ligado
         let mut g = crate::asm_ui::GearsUi::default();
         if nome == "eixo" {

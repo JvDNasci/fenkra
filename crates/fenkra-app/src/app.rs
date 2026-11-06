@@ -7368,6 +7368,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_ui::fasteners_overlay(self, ui, rect, &cam);
                 crate::asm_ui::fasteners_handles(self, ui, rect, &cam);
                 crate::engrenagens_ui::overlay(self, ui, rect, &cam);
+                crate::transmissao_ui::overlay(self, ui, rect, &cam);
                 crate::eixo_ui::alcas(self, ui, rect, &cam);
                 crate::biblioteca_ui::candidatos_overlay(self, ui, rect, &cam);
                 crate::biblioteca_ui::overlay(self, ui, rect, &cam);
@@ -8344,6 +8345,7 @@ impl eframe::App for App {
         crate::calculo_ui::painel(self, ctx, area);
         crate::asm_ui::contexto_window(self, ctx);
         crate::asm_ui::gears_window(self, ctx);
+        crate::transmissao_ui::janela(self, ctx);
         self.sheet_window(ctx);
         crate::chapa_fab_ui::janela(ctx, &self.open.doc);
         crate::st_ui::windows(self, ctx);
@@ -8560,6 +8562,7 @@ impl eframe::App for App {
                 crate::engrenagens_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::asm_chaveta::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 crate::eixo_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
+                crate::transmissao_ui::na_cena(self.asm.as_ref().filter(|_| asm_view.is_some()), &ctx.global_style().visuals, &mut s);
                 importar::defeitos_na_cena(self.importar_relatorio.as_ref(), self.importar_defeito, &mut s);
                 features::na_cena(self.features.as_ref(), &ctx.global_style().visuals, &mut s);
                 crate::medir_quadros::valor("bytes_faces", (std::mem::size_of_val(s.mesh.as_slice()) + std::mem::size_of_val(s.indices.as_slice())) as f64);

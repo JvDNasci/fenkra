@@ -74,6 +74,8 @@ mod textos_ajuda;
 mod textos_biblioteca;
 mod alca_cota;
 mod engrenagens_ui;
+mod transmissao_ui;
+mod textos_transmissao;
 mod eixo_ui;
 mod textos_biblioteca3;
 mod textos_conversor;
