@@ -144,6 +144,8 @@ pub struct ResultadoDobra {
     pub ponta_longa: Option<f64>,
     /// gomos do corte simples em tubo redondo: (peça do meio, peça da ponta)
     pub gomos: Option<(f64, f64)>,
+    /// número de esquadrias (juntas) dos gomos; 0 quando não há gomos
+    pub juntas_gomos: usize,
     /// o modo gera geometria própria no 3D?
     pub geometria_pronta: bool,
     /// número de rasgos em V (modos de corte) e folga de raiz usada no canto com gabarito
@@ -425,7 +427,7 @@ pub fn calcular(e: &EntradaDobra) -> ResultadoDobra {
                     let phi = th / m as f64;
                     let meio = 2. * e.raio * (phi / 2.).tan();
                     r.gomos = Some((meio, meio / 2.));
-                    r.avisos.push("gomos: o 3D mostra uma esquadria só; as peças intermediárias entram na lista de corte, não no 3D".into());
+                    r.juntas_gomos = m;
                 }
             } else {
                 r.solda = Some(2. * h / hf.cos() + 2. * b);

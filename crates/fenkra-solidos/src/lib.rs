@@ -16,7 +16,9 @@ pub mod corpo_malha;
 pub mod mesh_io;
 pub mod structural;
 pub mod perfis_catalogo;
+pub mod perfis_catalogo_tubos;
 pub mod st_cantos;
+pub mod st_limite;
 pub mod st_encaixe;
 pub mod st_encaixe_doc;
 #[cfg(test)]
@@ -25,8 +27,10 @@ pub mod st_dobra;
 mod st_dobra_geo;
 pub mod st_dobra_corte;
 pub mod st_dobra_saida;
+pub mod st_dobra_vista;
 pub mod st_dobra_maquina;
 mod st_dobra_v;
+mod st_dobra_gomos;
 pub use st_dobra_geo::tubos_dobrados;
 pub mod hardware;
 pub mod biblioteca;
@@ -5305,6 +5309,17 @@ impl Ctx<'_> {
                                         }
                                         continue;
                                     }
+                                    // gomos do tubo redondo: as pernas param nos planos das pontas do
+                                    // polígono (`tratar_gomos`), sem esquadria única no nó
+                                    BendMode::CorteSimples if no.res.gomos.is_some() && no.res.erros.is_empty() => {
+                                        let e = diag(&gi).max(diag(og));
+                                        if geo3d::dist(p, gi.start) < 1e-4 {
+                                            geo[i].ext.0 = geo[i].ext.0.max(e);
+                                        } else {
+                                            geo[i].ext.1 = geo[i].ext.1.max(e);
+                                        }
+                                        continue;
+                                    }
                                     _ => CornerMode::MeiaEsquadria,
                                 },
                             }
@@ -5392,6 +5407,29 @@ impl Ctx<'_> {
                                     falhas.push((i, format!("dobra: {e}")));
                                 }
                                 for i in [no.antes, no.depois] {
+                                    if let Some(q) = kept.iter().position(|x| *x == i) {
+                                        kept.remove(q);
+                                        shapes.remove(q);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // B326: gomos do tubo redondo no corte simples: corta as pernas e traz as peças do meio
+                let mut pecas_gomos: Vec<(String, st_dobra_gomos::PecaGomo)> = vec![];
+                for c in &plano_dobra.cadeias {
+                    for no in c.nos.iter().filter(|n| n.bend.mode == BendMode::CorteSimples && n.res.gomos.is_some() && n.res.erros.is_empty()) {
+                        let (Some(pa), Some(pd)) = (kept.iter().position(|x| *x == no.antes), kept.iter().position(|x| *x == no.depois)) else { continue };
+                        match self.tratar_gomos(&geo, no, no.res.juntas_gomos, &shapes[pa], &shapes[pd]) {
+                            Ok((t, pecas)) => {
+                                shapes[pa] = t.antes;
+                                shapes[pd] = t.depois;
+                                pecas_gomos.extend(pecas.into_iter().map(|p| (format!("{} {}–{}", m.designation, no.antes + 1, no.depois + 1), p)));
+                            }
+                            Err(e) => {
+                                for i in [no.antes, no.depois] {
+                                    falhas.push((i, format!("gomos: {e}")));
                                     if let Some(q) = kept.iter().position(|x| *x == i) {
                                         kept.remove(q);
                                         shapes.remove(q);
@@ -5514,9 +5552,13 @@ impl Ctx<'_> {
                         };
                         log_struct(f, i, StructItem::Member, &name, profile.clone(), len, frame, sh, &m.material);
                     }
+                    // peças do meio dos gomos: itens próprios da lista de corte (índice depois das linhas)
+                    for (k, (nome, p)) in pecas_gomos.iter().enumerate() {
+                        log_struct(f, geo.len() + k, StructItem::Member, &format!("{} {} (gomo)", m.family, nome), profile.clone(), p.comprimento, p.frame, &p.shape, &m.material);
+                    }
                 }
                 let mut all = Shape::empty();
-                for sh in &shapes {
+                for sh in shapes.iter().chain(pecas_gomos.iter().map(|(_, p)| &p.shape)) {
                     all = if all.is_null() { sh.clone() } else { all.compound(sh) };
                 }
                 self.tools.insert(f.id, (all.clone(), BoolOp::Add));

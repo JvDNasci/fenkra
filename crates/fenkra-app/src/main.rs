@@ -98,6 +98,8 @@ mod textos_dobra_tubo;
 mod st_dobra_ui;
 mod st_dobra_corte_ui;
 mod st_cantos_ui;
+mod st_limite_ui;
+mod textos_st_limite;
 mod st_encaixe_ui;
 mod textos_encaixe;
 mod st_montagem_ui;

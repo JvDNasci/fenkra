@@ -56,6 +56,7 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
     // a prévia do encaixe só vale no quadro em que o cartão a pediu
     crate::st_encaixe_ui::limpar(ctx);
     if !app.st_cantos_open {
+        crate::st_limite_ui::limpar(ctx);
         if !app.st_cantos.is_empty() {
             app.st_cantos.clear();
         }
@@ -79,6 +80,8 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
         if crate::app::done_bar(ui) {
             ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
         }
+        crate::st_limite_ui::secao(ui, app, &mut novo, &mut aviso);
+        ui.separator();
         if cantos.is_empty() {
             ui.label(RichText::new(tr("Nenhum canto: as linhas dos membros não se encontram em pontas.")).weak());
             return;

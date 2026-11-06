@@ -9,8 +9,9 @@
 //! Nível de confiança: `Coerente` quer dizer que as cotas, a área e a massa são consistentes entre si
 //! (massa = área × 7,85 g/cm³ dentro de 1 %, e a seção desenhada dentro de 6 % da área publicada, 8 % nos tubos), mas
 //! a linha ainda não foi cotejada, uma a uma, com a tabela impressa do fabricante. Só `DuasFontes`
-//! significa conferida em duas tabelas independentes; nenhuma linha tem esse nível ainda.
+//! significa conferida em duas tabelas independentes; as linhas de tubo EN 10210 presentes nas duas tabelas colhidas (Eurocode Applied e AMESweb) têm esse nível.
 
+use crate::perfis_catalogo_tubos as tubos;
 use crate::structural::{self, Family};
 use fenkra_core::SectionKind;
 
@@ -43,6 +44,8 @@ pub struct Linha {
     pub fonte: &'static str,
     pub edicao: &'static str,
     pub nivel: Nivel,
+    /// segunda tabela independente que confere a linha (só em `DuasFontes`)
+    pub fonte2: Option<&'static str>,
 }
 
 const POL: f64 = 25.4;
@@ -58,17 +61,20 @@ const NBR: (&str, &str) = ("Catálogo de perfis laminados W e U (medidas da ASTM
 const EN365: (&str, &str) = ("EN 10365 (IPE, HEA, HEB, UPN)", "2017");
 const EN56: (&str, &str) = ("EN 10056-1 (cantoneiras de abas iguais)", "2017");
 const EN219: (&str, &str) = ("EN 10219-2 (tubos quadrados de seção fechada)", "2019");
+const EN210: (&str, &str) = ("EN 10210-2, tabela de propriedades do Eurocode Applied (EN 1993)", "2019");
+const EN210_2A: &str = "EN 10210-2, tabela do AMESweb";
+const EN219_ROY: (&str, &str) = ("EN 10219-2, tabela do RoyMech (conformado a frio)", "1997");
 
 /// Linha em polegadas e libras por pé (tabelas americanas).
 #[allow(clippy::too_many_arguments)]
 fn pol(grupo: &'static str, familia: &'static str, kind: SectionKind, des: &str, d: &[f64], a_pol2: f64, lb_ft: f64, f: (&'static str, &'static str)) -> Linha {
-    Linha { grupo, familia, kind, designacao: des.into(), dims: d.iter().map(|v| r2(v * POL)).collect(), area_cm2: r2(a_pol2 * POL2), massa_kg_m: r2(lb_ft * LBFT), fonte: f.0, edicao: f.1, nivel: Nivel::Coerente }
+    Linha { grupo, familia, kind, designacao: des.into(), dims: d.iter().map(|v| r2(v * POL)).collect(), area_cm2: r2(a_pol2 * POL2), massa_kg_m: r2(lb_ft * LBFT), fonte: f.0, edicao: f.1, nivel: Nivel::Coerente, fonte2: None }
 }
 
 /// Linha em milímetros, cm² e kg/m.
 #[allow(clippy::too_many_arguments)]
 fn mm(grupo: &'static str, familia: &'static str, kind: SectionKind, des: &str, d: &[f64], a: f64, m: f64, f: (&'static str, &'static str)) -> Linha {
-    Linha { grupo, familia, kind, designacao: des.into(), dims: d.to_vec(), area_cm2: a, massa_kg_m: m, fonte: f.0, edicao: f.1, nivel: Nivel::Coerente }
+    Linha { grupo, familia, kind, designacao: des.into(), dims: d.to_vec(), area_cm2: a, massa_kg_m: m, fonte: f.0, edicao: f.1, nivel: Nivel::Coerente, fonte2: None }
 }
 
 /// Todas as linhas do catálogo.
@@ -206,6 +212,24 @@ pub fn linhas() -> Vec<Linha> {
         s(120., 5., 22.7, 17.8),
         s(120., 8., 35.2, 27.6),
     ]);
+    v.extend(tubos_en());
+    v
+}
+
+/// Tubos redondos, quadrados e retangulares das tabelas colhidas (dados em `perfis_catalogo_tubos`).
+fn tubos_en() -> Vec<Linha> {
+    use SectionKind::*;
+    let mut v = vec![];
+    let mut tab = |dados: &[tubos::Dado], grupo: &'static str, familia: &'static str, kind: SectionKind, f: (&'static str, &'static str), des: &dyn Fn(&[f64]) -> String| {
+        for (d, a, m, duas) in dados {
+            let (nivel, fonte2) = if *duas { (Nivel::DuasFontes, Some(EN210_2A)) } else { (Nivel::Coerente, None) };
+            v.push(Linha { grupo, familia, kind, designacao: des(d), dims: d.to_vec(), area_cm2: *a, massa_kg_m: *m, fonte: f.0, edicao: f.1, nivel, fonte2 });
+        }
+    };
+    tab(tubos::CHS_10210, "EN 10210", "Tubo redondo (EN 10210)", TuboRedondo, EN210, &|d| format!("CHS {}x{}", d[0], d[1]));
+    tab(tubos::SHS_10210, "EN 10210", "Tubo quadrado (EN 10210)", TuboQuadrado, EN210, &|d| format!("SHS {}x{}x{}", d[0], d[0], d[1]));
+    tab(tubos::RHS_10210, "EN 10210", "Tubo retangular (EN 10210)", TuboRetangular, EN210, &|d| format!("RHS {}x{}x{}", d[1], d[0], d[2]));
+    tab(tubos::RHS_10219, "EN 10219", "Tubo retangular (EN 10219)", TuboRetangular, EN219_ROY, &|d| format!("RHS {}x{}x{}", d[1], d[0], d[2]));
     v
 }
 
@@ -273,7 +297,7 @@ mod tests {
     #[test]
     fn secao_desenhada_fica_perto_da_area_publicada() {
         // a seção do Fenkra não tem raios de concordância nem abas inclinadas: até 6 % de diferença
-        // nos perfis abertos e 8 % nos tubos (os cantos externos vivos somam área)
+        // nos perfis abertos e 9 % nos tubos de perfil fechado (os cantos externos vivos somam área, mais nos tubos pequenos de parede grossa)
         let mut falhas = vec![];
         for l in linhas() {
             let Some(a) = area_da_secao_cm2(l.kind, &l.dims) else {
@@ -281,7 +305,7 @@ mod tests {
                 continue;
             };
             let erro = (a - l.area_cm2).abs() / l.area_cm2;
-            let lim = if l.kind == SectionKind::TuboQuadrado { 0.08 } else { 0.06 };
+            let lim = if matches!(l.kind, SectionKind::TuboQuadrado | SectionKind::TuboRetangular) { 0.09 } else { 0.06 };
             if erro > lim {
                 falhas.push(format!("{} {}: seção desenhada {a:.2} cm², publicada {} ({:.1} %)", l.familia, l.designacao, l.area_cm2, erro * 100.));
             }
@@ -300,8 +324,9 @@ mod tests {
                 assert!(!(a.familia == b.familia && a.designacao == b.designacao), "repetida: {} {}", a.familia, a.designacao);
             }
         }
-        // nenhuma linha se declara conferida em duas fontes sem que isso tenha sido feito
-        assert!(ls.iter().all(|l| l.nivel == Nivel::Coerente));
+        // só se declara conferida em duas fontes a linha que nomeia a segunda
+        assert!(ls.iter().all(|l| (l.nivel == Nivel::DuasFontes) == l.fonte2.is_some()));
+        assert!(ls.iter().filter(|l| l.nivel == Nivel::DuasFontes).count() >= 40);
     }
 
     #[test]
