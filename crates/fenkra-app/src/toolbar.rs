@@ -407,6 +407,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             Family("st_ligacao", vec![
                 it("st_placa", "Placa", "Placa de extremidade", "Fecha a ponta do membro mais perto do vértice selecionado (base de fixação).", Cmd(C::StPlate)),
                 it("st_reforco", "Reforço", "Reforço (gusset)", "Chapa triangular ou com chanfro de alívio no encontro de dois membros.", Cmd(C::StGusset)),
+                it("st_solda", "Cordão de solda", "Cordão de solda por faces", "Cordão entre dois conjuntos de faces: cosmético (alimenta o símbolo do desenho) ou sólido, contínuo ou intermitente.", Cmd(C::StWeld)),
             ]),
             One(it("st_biblioteca", "Biblioteca", "Biblioteca de perfis", "Cadastre famílias de perfis padronizados (tamanhos, ancoragem e rotação padrão).", Cmd(C::StLibrary))),
             One(it("st_canto_meia", "Cantos", "Cantos da estrutura", "Lista os cantos onde os membros se encontram, realça cada um no 3D, troca o tratamento e quem continua, e agrupa cantos iguais.", Cmd(C::StCorners))),

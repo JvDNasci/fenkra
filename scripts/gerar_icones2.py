@@ -681,6 +681,7 @@ def desenhos():
     ic("st_montagem", B=L((8, 42), (8, 10), (40, 10), (40, 42)), R=L((8, 26), (24, 10)) + L((40, 26), (24, 10)) + C(8, 10, 3.5) + C(40, 10, 3.5))
     ic("st_placa", B=L((6, 18), (30, 18)) + L((6, 30), (30, 30)), R=Q(30, 8, 8, 32))
     ic("st_reforco", B="M8 6v36h34M14 6v30h28", R=Z((14, 24), (14, 36), (32, 36)))
+    ic("st_solda", B=L((6, 40), (42, 40)) + L((16, 6), (16, 40)), R=Z((16, 26), (16, 40), (30, 40)) + L((34, 34), (40, 34)) + L((34, 27), (40, 27)))
 
     # ---------- controles da interface: não têm par em assets/icons ----------
     LUPA = C(21, 21, 13) + "M31 31l11 11"
@@ -712,7 +713,7 @@ ic("forma_tangencia", B="M6 36c10-14 26-14 36 0", R=L((8, 25), (40, 25)) + S(24,
 ic("forma_simetria", b="M24 4v40", R="M20 10c-16 2-16 26 0 28M28 10c16 2 16 26 0 28")
 ic("forma_converter", b=Q(6, 12, 18, 24), R=CUBO(32, 12, 10, 5, 12) + "M18 24h4", pb=[(6, 12), (24, 12), (24, 36), (6, 36)])
 
-SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", "sm_converter_chapa", "sm_aba_laco", "sm_fecha_canto", "sm_canto_topo", "sm_canto_sobreposto", "sm_canto_sob", "importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo", "an_conexao", "an_desvio", "an_pente", "sup_regrada"}
+SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", "sm_converter_chapa", "sm_aba_laco", "sm_fecha_canto", "sm_canto_topo", "sm_canto_sobreposto", "sm_canto_sob", "importar_arquivo", "asm_catalogo", "arvore_zoom_mais", "arvore_zoom_menos", "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais", "exportar_arquivo", "liberar_revisao", "onde_usado", "comparar", "estado_sem_revisao", "estado_liberada", "estado_editado", "estado_leitura", "estado_conflito", "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter", "des_cota_inteligente", "curso", "mapa_macro", "perfil_fluxo", "an_conexao", "an_desvio", "an_pente", "sup_regrada", "st_solda"}
 
 
 # ---------- saída ----------

@@ -1082,6 +1082,11 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         self.gen_done < self.gen_sent
     }
 
+    /// Geração do último cálculo concluído (para quem guarda resultados derivados do documento).
+    pub fn geracao(&self) -> u64 {
+        self.gen_done
+    }
+
     /// A geometria mudou desde o último pedido de cálculo?
     fn needs_recompute(&self) -> bool {
         match &self.sent_doc {
@@ -2350,6 +2355,15 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             Cmd::Stiffener => {
                 let sk = sk_or_unset;
                 Sel::Feature(d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("3"), depth: s("20"), reverse: false, to_body: false, side: 0 })))
+            }
+            Cmd::StWeld => {
+                // as faces já selecionadas formam o conjunto 1; o próximo clique entra no conjunto 2
+                let mut w = StructWeld::novo("5");
+                for (i, p) in faces.iter().enumerate() {
+                    w.adicionar(*p, face_keys.get(i).cloned().flatten());
+                }
+                w.picking_b = !w.faces.is_empty();
+                Sel::Feature(d.add_feature(FeatureKind::StructWeld(w)))
             }
             Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone(), closed: false }))),
             Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: face_keys.clone() }))),
@@ -6937,8 +6951,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     let same = |a: [f64; 3], b: [f64; 3]| crate::picking::same_face(r, body, a, b);
                     // referência v2: o picking sabe a face; o resultado sabe o dono e o papel dela
                     let key = r.bodies.get(body).and_then(|b| b.face_key(face));
+                    let tira = ctx.input(|i| i.modifiers.shift);
                     if let Some(f) = self.open.doc.feature_mut(fid) {
-                        crate::feat_ui::toggle_face(&mut f.kind, point.map(|v| v as f64), key, same);
+                        // cordão de solda: Shift+clique só tira a face; sem Shift o clique alterna
+                        if !(tira && crate::st_solda_ui::tirar_face(&mut f.kind, point.map(|v| v as f64), same)) {
+                            crate::feat_ui::toggle_face(&mut f.kind, point.map(|v| v as f64), key, same);
+                        }
                     }
                 } else if let (Some(cid), true, Some(crate::picking::Pick::Face { body, .. })) = (combine_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
                     let coletor = r.bodies.get(body).map(|b| b.collector);
@@ -7133,6 +7151,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_encaixe::overlay(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
                 crate::feat_ui::cut_overlay(self, ui, rect, &cam);
+                crate::st_solda_ui::overlay(self, ui, rect, &cam);
                 crate::previa::overlay(self, ui, rect, &cam);
                 crate::forma_ui::overlay(self, ui, rect, &cam, &resp);
             }
@@ -7360,6 +7379,8 @@ pub enum Cmd {
     StMember,
     StPlate,
     StGusset,
+    /// cordão de solda por conjuntos de faces (B285)
+    StWeld,
     StLibrary,
     StCutList,
     StCorners,
