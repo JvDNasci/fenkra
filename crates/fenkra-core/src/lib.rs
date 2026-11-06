@@ -17,6 +17,7 @@ pub mod formato;
 pub mod macros;
 pub mod materiais;
 pub mod parametros;
+pub mod gdt;
 pub mod pmi;
 pub mod pmi_cotas;
 pub mod pmi_feature;

@@ -354,6 +354,38 @@ pub struct GdtExtra {
     /// segunda linha (quadro composto): tolerância e referências
     #[serde(default)]
     pub second: Option<(String, String)>,
+    /// característica própria da segunda linha: quadro de segmento único (`None` = composto, uma
+    /// só casa de símbolo para as duas linhas)
+    #[serde(default)]
+    pub second_ch: Option<GdtChar>,
+    /// forma da zona; `None` deriva de `zone_dia` (arquivos antigos)
+    #[serde(default)]
+    pub zona: Option<crate::gdt::Zona>,
+    /// deslocamento da zona não uniforme
+    #[serde(default)]
+    pub uz: String,
+    /// altura da zona projetada
+    #[serde(default)]
+    pub proj: String,
+    /// modificadores do valor e da chamada (tipados; `modifier` guarda só o que veio de antes)
+    #[serde(default)]
+    pub mods: Vec<crate::gdt::Modif>,
+    /// modificadores de cada referência, na ordem delas
+    #[serde(default)]
+    pub datum_mods: Vec<Vec<crate::gdt::Modif>>,
+    /// letras de "entre dois pontos"
+    #[serde(default)]
+    pub entre: (String, String),
+    /// tolerância por unidade: comprimento (valor/comprimento)
+    #[serde(default)]
+    pub por_unidade: String,
+    /// valor máximo da tolerância por unidade
+    #[serde(default)]
+    pub max_valor: String,
+    #[serde(default)]
+    pub norma: crate::gdt::Norma,
+    #[serde(default)]
+    pub elemento: crate::gdt::Elemento,
 }
 
 /// Moldura do rótulo (`Padrao` = a do tipo: quadro no GD&T e na legenda, sem moldura nas cotas).
@@ -971,17 +1003,22 @@ impl Pmi {
             PmiKind::Weld { kind, size, all_around, .. } => format!("{}{} {}", if *all_around { "○ " } else { "" }, kind.symbol(), size),
             PmiKind::Datum { letter } => format!("[{letter}]"),
             PmiKind::Gdt { ch, tol, datums, extra } => {
-                let cells = |tol: &str, datums: &str| {
-                    let mut s = format!("| {} | {}{}{} |", ch.symbol(), if extra.zone_dia { "Ø" } else { "" }, tol, if extra.modifier.trim().is_empty() { String::new() } else { format!(" {}", extra.modifier.trim()) });
-                    for d in datums.split(|c: char| c == '|' || c == ',' || c.is_whitespace()).filter(|d| !d.is_empty()) {
-                        s += &format!(" {d} |");
-                    }
-                    s
-                };
-                match &extra.second {
-                    Some((t2, d2)) => format!("{}\n{}", cells(tol, datums), cells(t2, d2)),
-                    None => cells(tol, datums),
-                }
+                let linhas = extra.linhas(*ch, tol, datums);
+                let chamada = extra.chamada();
+                let corpo = linhas
+                    .iter()
+                    .map(|l| {
+                        let mut s = format!("| {} |", l.sym.unwrap_or(*ch).symbol());
+                        for c in &l.celulas {
+                            s += &format!(" {} |", crate::gdt::celula_texto(c));
+                        }
+                        s
+                    })
+                    .collect::<Vec<_>>()
+                    .join("
+");
+                if chamada.is_empty() { corpo } else { format!("{chamada}
+{corpo}") }
             }
             PmiKind::TitleBlock { template } => template.clone(),
             PmiKind::Balloon { item } => item.clone(),
@@ -1296,7 +1333,7 @@ mod tests {
         assert!((a - 90.).abs() < 1e-9);
         p.kind = PmiKind::Gdt { ch: GdtChar::Planeza, tol: "0,05".into(), datums: "A".into(), extra: Default::default() };
         assert_eq!(p.display(None), "| ⏥ | 0,05 | A |");
-        p.kind = PmiKind::Gdt { ch: GdtChar::Posicao, tol: "0,1".into(), datums: "A B C".into(), extra: GdtExtra { zone_dia: true, modifier: "Ⓜ".into(), second: None } };
+        p.kind = PmiKind::Gdt { ch: GdtChar::Posicao, tol: "0,1".into(), datums: "A B C".into(), extra: GdtExtra { zone_dia: true, modifier: "Ⓜ".into(), ..Default::default() } };
         assert_eq!(p.display(None), "| ⌖ | Ø0,1 Ⓜ | A | B | C |");
     }
 

@@ -4,6 +4,7 @@
 //! ponta escolhida, legenda em tabela. O estilo de cada anotação herda o estilo geral.
 
 use eframe::egui::{self, Color32, FontFamily, FontId, Painter, Pos2, Rect, Stroke};
+use fenkra_core::gdt::{FcfLinha, Modif, Parte};
 use fenkra_core::pmi::*;
 use std::cell::RefCell;
 
@@ -480,40 +481,100 @@ impl Pen {
 
     /// Quadro de controle geométrico: a primeira casa (símbolo) ocupa todas as linhas; cada linha
     /// tem as casas de tolerância e de referências. `at` é o ponto de ancoragem do quadro.
-    pub fn fcf(&self, p: &Cv, at: Pos2, sym: &str, rows: &[Vec<String>]) -> Rect {
+    pub fn fcf(&self, p: &Cv, at: Pos2, ch: fenkra_core::pmi::GdtChar, linhas: &[FcfLinha], chamada: &str) -> Rect {
         let start = p.len();
         let h = self.size * 1.7;
         let pad = self.size * 0.5;
+        let gap = self.size * 0.25;
         let fill = self.fill(PmiBg::Branco);
         let tc = self.text_col(fill);
-        let gs = p.layout_no_wrap(sym.to_string(), self.font(1.25), tc);
-        let w0 = (gs.size().x + pad * 2.).max(h);
-        let cells: Vec<Vec<std::sync::Arc<egui::Galley>>> = rows.iter().map(|r| r.iter().map(|c| p.layout_no_wrap(c.clone(), self.font(1.), tc)).collect()).collect();
-        let row_w: Vec<f32> = cells.iter().map(|r| r.iter().map(|g| (g.size().x + pad * 2.).max(h * 0.9)).sum()).collect();
-        let total_w = w0 + row_w.iter().cloned().fold(0., f32::max);
-        let total_h = h * rows.len().max(1) as f32;
-        let r = self.place(at, egui::vec2(total_w, total_h));
         let st = self.frame_stroke();
-        // fundo e casa do símbolo
-        if let Some(f) = fill {
-            p.rect_filled(Rect::from_min_size(r.min, egui::vec2(w0, total_h)), 0., f);
+        let w0 = h;
+        // cada parte da célula: texto (galley) ou modificador (traço vetorial ou sigla)
+        enum Pt {
+            T(std::sync::Arc<egui::Galley>),
+            M(Modif, Option<std::sync::Arc<egui::Galley>>),
         }
-        p.extend(self.outline_shapes(&rect_pts(Rect::from_min_size(r.min, egui::vec2(w0, total_h))), true, st, self.frame_dash));
-        p.galley(egui::pos2(r.left() + (w0 - gs.size().x) / 2., r.top() + (total_h - gs.size().y) / 2.), gs, tc);
+        let mod_w = self.size * 1.15;
+        let pw = |q: &Pt| match q {
+            Pt::T(g) => g.size().x,
+            Pt::M(_, Some(g)) => g.size().x,
+            Pt::M(_, None) => mod_w,
+        };
+        let cel_w = |c: &Vec<Pt>| (c.iter().map(pw).sum::<f32>() + gap * c.len().saturating_sub(1) as f32 + pad * 2.).max(h * 0.9);
+        let cells: Vec<Vec<Vec<Pt>>> = linhas
+            .iter()
+            .map(|l| {
+                l.celulas
+                    .iter()
+                    .map(|c| {
+                        c.iter()
+                            .map(|q| match q {
+                                Parte::Texto(t) => Pt::T(p.layout_no_wrap(t.clone(), self.font(1.), tc)),
+                                Parte::Mod(m) if m.circulado().is_some() => Pt::M(*m, None),
+                                Parte::Mod(m) => Pt::M(*m, Some(p.layout_no_wrap(m.texto(), self.font(0.9), tc))),
+                            })
+                            .collect()
+                    })
+                    .collect()
+            })
+            .collect();
+        let row_w: Vec<f32> = cells.iter().map(|r| r.iter().map(cel_w).sum()).collect();
+        let total_w = w0 + row_w.iter().cloned().fold(0., f32::max);
+        let frame_h = h * linhas.len().max(1) as f32;
+        let cg = if chamada.is_empty() { None } else { Some(p.layout_no_wrap(chamada.to_string(), self.font(0.9), tc)) };
+        let up = cg.as_ref().map(|g| g.size().y + self.size * 0.2).unwrap_or(0.);
+        let r = self.place(at, egui::vec2(total_w, frame_h + up));
+        let top0 = r.top() + up;
+        if let Some(g) = cg {
+            p.galley(egui::pos2(r.left(), r.top()), g, tc);
+        }
+        // símbolo da característica: um por grupo (composto: a casa vale para todas as linhas)
+        let mut i = 0;
+        while i < linhas.len() {
+            let mut j = i + 1;
+            while j < linhas.len() && linhas[j].sym.is_none() {
+                j += 1;
+            }
+            let sym = linhas[i].sym.unwrap_or(ch);
+            let box_ = Rect::from_min_size(egui::pos2(r.left(), top0 + h * i as f32), egui::vec2(w0, h * (j - i) as f32));
+            if let Some(f) = fill {
+                p.rect_filled(box_, 0., f);
+            }
+            p.extend(self.outline_shapes(&rect_pts(box_), true, st, self.frame_dash));
+            self.simbolo(p, &sym.tracado(), box_.center(), h * 0.62, st.color);
+            i = j;
+        }
         for (i, row) in cells.iter().enumerate() {
-            let top = r.top() + h * i as f32;
+            let top = top0 + h * i as f32;
             let row_rect = Rect::from_min_size(egui::pos2(r.left() + w0, top), egui::vec2(row_w[i], h));
             if let Some(f) = fill {
                 p.rect_filled(row_rect, 0., f);
             }
             p.extend(self.outline_shapes(&rect_pts(row_rect), true, st, self.frame_dash));
             let mut x = r.left() + w0;
-            for (k, g) in row.iter().enumerate() {
-                let cw = (g.size().x + pad * 2.).max(h * 0.9);
+            for (k, c) in row.iter().enumerate() {
+                let cw = cel_w(c);
                 if k > 0 {
                     p.extend(self.outline_shapes(&[egui::pos2(x, top), egui::pos2(x, top + h)], false, st, self.frame_dash));
                 }
-                p.galley(egui::pos2(x + (cw - g.size().x) / 2., top + (h - g.size().y) / 2.), g.clone(), tc);
+                let uso = c.iter().map(pw).sum::<f32>() + gap * c.len().saturating_sub(1) as f32;
+                let mut qx = x + (cw - uso) / 2.;
+                for q in c {
+                    match q {
+                        Pt::T(g) => {
+                            p.galley(egui::pos2(qx, top + (h - g.size().y) / 2.), g.clone(), tc);
+                        }
+                        Pt::M(m, Some(g)) => {
+                            let _ = m;
+                            p.galley(egui::pos2(qx, top + (h - g.size().y) / 2.), g.clone(), tc);
+                        }
+                        Pt::M(m, None) => {
+                            self.simbolo(p, &m.tracado(), egui::pos2(qx + mod_w / 2., top + h / 2.), mod_w, st.color);
+                        }
+                    }
+                    qx += pw(q) + gap;
+                }
                 x += cw;
             }
         }
@@ -521,6 +582,21 @@ impl Pen {
         out.max.x = r.left() + total_w;
         self.turn(p, start, out.center());
         out
+    }
+
+    /// Desenha um símbolo vetorial (quadro unitário, y para cima) centrado em `c`, de lado `lado`.
+    fn simbolo(&self, p: &Cv, tracos: &[fenkra_core::gdt::Traco], c: Pos2, lado: f32, col: Color32) {
+        let st = Stroke::new((self.size * 0.09).max(1.), col);
+        for t in tracos {
+            let pts: Vec<Pos2> = t.pts.iter().map(|q| egui::pos2(c.x + q[0] as f32 * lado, c.y - q[1] as f32 * lado)).collect();
+            if t.cheio {
+                p.add(egui::Shape::convex_polygon(pts, col, Stroke::NONE));
+            } else if t.fechado {
+                p.add(egui::Shape::closed_line(pts, st));
+            } else {
+                p.add(egui::Shape::line(pts, st));
+            }
+        }
     }
 
     /// Símbolo de referência: triângulo cheio apoiado na peça em `anchor`, haste até o quadrado
