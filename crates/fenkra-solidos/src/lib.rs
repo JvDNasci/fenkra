@@ -34,6 +34,7 @@ pub mod catalogo;
 pub mod fixadores;
 pub mod engrenagens;
 pub mod engrenagens_dim;
+pub mod transmissao_calc;
 pub mod eixos_recursos;
 pub mod eixos;
 pub mod profile;
