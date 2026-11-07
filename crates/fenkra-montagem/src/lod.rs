@@ -111,9 +111,20 @@ impl Prototipo {
 pub struct Instancia {
     pub corpo: usize,
     pub prototipo: Arc<Prototipo>,
+    /// subconjunto com peças de aparências diferentes: desenha estas no lugar do protótipo, que
+    /// segue valendo para a seleção e a caixa
+    pub partes: Arc<Vec<Parte>>,
     pub posicao: Placement,
     /// a pessoa pediu a versão simplificada deste componente: fica sempre no nível mais grosso
     pub simplificada: bool,
+}
+
+/// Pedaço de um subconjunto em que todas as peças têm a mesma aparência. Uma cópia tem uma cor só,
+/// então cada aparência precisa do próprio protótipo para continuar sendo desenhada como cópia.
+#[derive(Clone)]
+pub struct Parte {
+    pub prototipo: Arc<Prototipo>,
+    pub aparencia: fenkra_core::Appearance,
 }
 
 /// Qualidades geradas para uma peça: a escolhida, o rascunho do B61 e a de longe, sem repetir nem
@@ -152,6 +163,96 @@ mod tests {
             a.add_component("Placa", NodeKind::Part { path: "placa.fkp".into() }, Placement { origin: [(k % 10) as f64 * 150., (k / 10) as f64 * 100., 0.], ..Default::default() }, None);
         }
         (a, dir)
+    }
+
+    const VERMELHO: fenkra_core::Appearance = fenkra_core::Appearance { color: [200, 30, 30], finish: fenkra_core::Finish::MetalPolido, texture: None };
+    const AZUL: fenkra_core::Appearance = fenkra_core::Appearance { color: [30, 60, 200], finish: fenkra_core::Finish::Borracha, texture: None };
+
+    fn pasta_limpa(nome: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("fenkra_lod_{nome}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn peca_pintada(dir: &std::path::Path, nome: &str, aparencia: fenkra_core::Appearance) {
+        let mut d = fenkra_solidos::example_document();
+        d.appearance = Some(aparencia);
+        std::fs::write(dir.join(nome), d.to_json()).unwrap();
+    }
+
+    /// Subconjunto com as duas peças e a montagem de topo que o usa.
+    fn topo_de(dir: &std::path::Path, b: &str) -> Assembly {
+        let mut sub = Assembly::new("Sub");
+        sub.add_component("A", NodeKind::Part { path: "a.fkp".into() }, Placement::default(), None);
+        sub.add_component("B", NodeKind::Part { path: b.into() }, Placement { origin: [200., 0., 0.], ..Default::default() }, None);
+        std::fs::write(dir.join("sub.fka"), sub.to_json()).unwrap();
+        let mut topo = Assembly::new("Topo");
+        topo.add_component("Sub", NodeKind::SubAssembly { path: "sub.fka".into() }, Placement::default(), None);
+        topo
+    }
+
+    #[test]
+    fn a_montagem_mostra_a_cor_e_o_acabamento_da_peca() {
+        let dir = pasta_limpa("pintada");
+        peca_pintada(&dir, "a.fkp", VERMELHO);
+        let mut a = Assembly::new("A");
+        let id = a.add_component("A", NodeKind::Part { path: "a.fkp".into() }, Placement::default(), None);
+        let c = compor(&a, Some(&dir), &mut PartCache::default(), &mut vec![], None).unwrap();
+        assert_eq!((c.doc.collectors[0].color, c.doc.collectors[0].finish), (VERMELHO.color, VERMELHO.finish));
+
+        // a cor do nó vence, e o acabamento continua o da peça
+        a.node_mut(id).unwrap().color = Some([1, 2, 3]);
+        let c = compor(&a, Some(&dir), &mut PartCache::default(), &mut vec![], None).unwrap();
+        assert_eq!((c.doc.collectors[0].color, c.doc.collectors[0].finish), ([1, 2, 3], VERMELHO.finish));
+    }
+
+    #[test]
+    fn subconjunto_mostra_cada_peca_com_a_aparencia_dela() {
+        let dir = pasta_limpa("sub_pintado");
+        peca_pintada(&dir, "a.fkp", VERMELHO);
+        peca_pintada(&dir, "b.fkp", AZUL);
+        let mut topo = topo_de(&dir, "b.fkp");
+        let c = compor(&topo, Some(&dir), &mut PartCache::default(), &mut vec![], None).unwrap();
+        let i = &c.instancias[0];
+        let aparencias: Vec<_> = i.partes.iter().map(|p| p.aparencia).collect();
+        assert_eq!(aparencias, vec![VERMELHO, AZUL]);
+        // as partes somam o conjunto, sem faltar nem repetir triângulo
+        let soma: usize = i.partes.iter().map(|p| p.prototipo.fina().indices.len()).sum();
+        assert_eq!(soma, i.prototipo.fina().indices.len());
+
+        // pintar o nó do subconjunto cobre tudo
+        let id = topo.nodes[0].id;
+        topo.node_mut(id).unwrap().color = Some([9, 9, 9]);
+        let c = compor(&topo, Some(&dir), &mut PartCache::default(), &mut vec![], None).unwrap();
+        assert!(c.instancias[0].partes.is_empty());
+        assert_eq!(c.doc.collectors[0].color, [9, 9, 9]);
+    }
+
+    #[test]
+    fn subconjunto_de_uma_aparencia_so_nao_guarda_malha_a_mais() {
+        let dir = pasta_limpa("sub_igual");
+        peca_pintada(&dir, "a.fkp", VERMELHO);
+        let topo = topo_de(&dir, "a.fkp");
+        let c = compor(&topo, Some(&dir), &mut PartCache::default(), &mut vec![], None).unwrap();
+        assert!(c.instancias[0].partes.is_empty());
+        assert_eq!((c.doc.collectors[0].color, c.doc.collectors[0].finish), (VERMELHO.color, VERMELHO.finish));
+    }
+
+    #[test]
+    fn pintar_um_no_dentro_do_subconjunto_refaz_as_partes() {
+        let dir = pasta_limpa("sub_repinta");
+        peca_pintada(&dir, "a.fkp", VERMELHO);
+        peca_pintada(&dir, "b.fkp", AZUL);
+        let topo = topo_de(&dir, "b.fkp");
+        let mut cache = PartCache::default();
+        compor(&topo, Some(&dir), &mut cache, &mut vec![], None).unwrap();
+        let mut sub = Assembly::from_json(&std::fs::read_to_string(dir.join("sub.fka")).unwrap()).unwrap();
+        let id = sub.nodes[1].id;
+        sub.node_mut(id).unwrap().color = Some([0, 200, 0]);
+        std::fs::write(dir.join("sub.fka"), sub.to_json()).unwrap();
+        let c = compor(&topo, Some(&dir), &mut cache, &mut vec![], None).unwrap();
+        assert_eq!(c.instancias[0].partes[1].aparencia.color, [0, 200, 0], "o cache não pode segurar a cor antiga");
     }
 
     #[test]
