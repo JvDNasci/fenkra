@@ -24,6 +24,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_abrir::TEXTOS.iter())
             .chain(crate::textos_biblioteca::TEXTOS.iter())
             .chain(crate::textos_biblioteca3::TEXTOS.iter())
+            .chain(crate::textos_biblioteca4::TEXTOS.iter())
             .chain(crate::textos_chaveta::TEXTOS.iter())
             .chain(crate::textos_calculo::TEXTOS.iter())
             .chain(crate::textos_transmissao::TEXTOS.iter())
