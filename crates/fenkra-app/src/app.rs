@@ -998,8 +998,9 @@ lado oposto");
             let src = Source { path: "placa.fkp".into(), display_state: String::new(), hidden: vec![] };
             let mut d = Drawing::new("Placa de exemplo", Format::A3);
             let sh = d.sheets[0].id;
-            let ids = d.add_standard_set(sh, src.clone(), [95., 235.], 1., 100.);
             let mut m = fenkra_desenho::source::Models::new(Some(dir.clone()));
+            // B412: a distancia entre vistas acompanha o tamanho da peca
+            let (ids, _) = fenkra_desenho::conjunto::criar_sem_sobrepor(&mut d, &mut m, sh, src.clone(), [95., 235.], 1., 4.);
             let f = m.proj(&d, ids[0]);
             let t = m.proj(&d, ids[1]);
             let ym = (t.lo[1] + t.hi[1]) / 2.;
@@ -1029,15 +1030,39 @@ lado oposto");
             let id = d.alloc();
             d.notes.push(Note { id, sheet: sh, kind: NoteKind::Text, pos: [25., 25.], leader: None, text: "Quebrar cantos vivos 0,5x45°
 Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_core::pmi::PmiStyle { anchor: 6, frame: fenkra_core::pmi::PmiFrame::Caixa, ..Default::default() }, ..Default::default() });
+            let mut demo_sel: Option<Id> = None;
             match std::env::var("FENKRA_DEMO_DWG").as_deref() {
                 Ok("abnt") => d.title.style = TitleStyle::Abnt,
                 Ok("ansi") => d.title.style = TitleStyle::Ansi,
+                // B370: nota com três setas (lados e pontas diferentes), selecionada para editar
+                Ok("setas") => {
+                    use fenkra_core::pmi::{PmiArrow, PmiFrame};
+                    let id = d.alloc();
+                    let mut n = Note { id, sheet: sh, kind: NoteKind::Text, pos: [200., 120.], leader: Some([150., 150.]), text: "Rebarbar
+Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: PmiFrame::Caixa, ..Default::default() }, ..Default::default() };
+                    let k = fenkra_desenho::setas_nota::adicionar(&mut n, [250., 170.]);
+                    fenkra_desenho::setas_nota::definir_lado(&mut n, k, 3);
+                    fenkra_desenho::setas_nota::definir_seta(&mut n, k, PmiArrow::Ponto);
+                    let k = fenkra_desenho::setas_nota::adicionar(&mut n, [190., 80.]);
+                    fenkra_desenho::setas_nota::definir_lado(&mut n, k, 4);
+                    fenkra_desenho::setas_nota::definir_seta(&mut n, k, PmiArrow::Aberta);
+                    d.notes.push(n);
+                    demo_sel = Some(id);
+                }
+                // B415: tabela de furos com y = 30 (sobre a legenda), selecionada para ver o aviso
+                Ok("tabela_fora") => {
+                    if let Some(t) = d.tables.last_mut() {
+                        t.pos = [270., 30.];
+                        demo_sel = Some(t.id);
+                    }
+                }
                 _ => {}
             }
             let f = dir.join("placa.fkd");
             let _ = std::fs::write(&f, d.to_json());
             let mut dst = crate::dwg_ui::DwgState::new(d, Some(f));
             crate::dwg_ui::demo_ajustar(&mut dst);
+            dst.sel = demo_sel.or(dst.sel);
             app.dwg = Some(dst);
             app.settings.bench = crate::settings::Bench::Desenho;
             app.started = true;

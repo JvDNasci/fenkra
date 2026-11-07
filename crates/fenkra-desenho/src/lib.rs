@@ -17,6 +17,7 @@ pub mod layout;
 pub mod novo;
 pub mod ocupacao;
 pub mod opcoes;
+pub mod setas_nota;
 pub mod simbolos;
 pub mod solda_cordao;
 pub mod tabela;
@@ -563,6 +564,10 @@ pub struct Note {
     pub pos: V2,
     #[serde(default)]
     pub leader: Option<V2>,
+    /// outras pontas da nota (B370), na folha; a primeira ponta é `leader`. Lado e seta de cada uma
+    /// ficam em `style.leader_side` / `style.leader_arrow`, como no PMI
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub leaders_extra: Vec<V2>,
     pub text: String,
     #[serde(default = "size35")]
     pub size: f64,
@@ -590,7 +595,7 @@ pub struct Note {
 
 impl Default for Note {
     fn default() -> Self {
-        Note { id: Id(0), sheet: Id(0), kind: NoteKind::Text, pos: [0., 0.], leader: None, text: String::new(), size: 3.5, weld: None, rough: None, gdt: None, style: Default::default(), view: None, anchor3: None, snapped: false }
+        Note { id: Id(0), sheet: Id(0), kind: NoteKind::Text, pos: [0., 0.], leader: None, leaders_extra: vec![], text: String::new(), size: 3.5, weld: None, rough: None, gdt: None, style: Default::default(), view: None, anchor3: None, snapped: false }
     }
 }
 

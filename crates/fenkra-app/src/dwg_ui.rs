@@ -20,6 +20,7 @@ mod corte_ui;
 mod cordao;
 mod ghost;
 mod options;
+mod setas_ui;
 mod simbolos;
 mod tabelas_ui;
 #[cfg(test)]
@@ -2086,14 +2087,13 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             let mut lead = n.leader.is_some();
             if crate::editor::check(ui, &mut lead, "Chamada (seta)").changed() {
                 n.leader = lead.then(|| [n.pos[0] - 15., n.pos[1] - 10.]);
+                if !lead {
+                    n.leaders_extra.clear();
+                    n.style.leader_side.clear();
+                    n.style.leader_arrow.clear();
+                }
             }
-            if let Some(l) = n.leader.as_mut() {
-                ui.horizontal(|ui| {
-                    ui.label(tr("Ponta (x, y)"));
-                    { let __r = ui.add(crate::ui_ext::dv(&mut l[0]).speed(0.5)); crate::ui_ext::wheel(ui, &__r, &mut l[0]); __r };
-                    { let __r = ui.add(crate::ui_ext::dv(&mut l[1]).speed(0.5)); crate::ui_ext::wheel(ui, &__r, &mut l[1]); __r };
-                });
-            }
+            setas_ui::secao(ui, n);
             if let Some(v) = n.view {
                 let vname = st.d.views.iter().find(|x| x.id == v).map(|x| x.name.clone()).unwrap_or_default();
                 ui.label(RichText::new(format!("{} {vname}{}", tr("Pertence à vista"), if n.anchor3.is_some() { tr(" — ponta presa ao modelo (acompanha a peça)") } else { "" })).weak().small());
@@ -2111,6 +2111,8 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         tabelas_ui::garantir_folhas(st, id);
         let tabela_pre = st.d.tables.iter().find(|t| t.id == id).cloned().map(|t| tabela::dados(&mut st.models, &t, &st.d).todas);
         let vistas_folha: Vec<(Id, String)> = st.d.views.iter().filter(|v| v.sheet == st.sheet).map(|v| (v.id, v.name.clone())).collect();
+        // B415: tabela sobre a legenda ou fora da moldura avisa e oferece o canto livre
+        let aviso_pos = fenkra_desenho::ocupacao::avisos_de_tabelas(&mut st.models, &st.d).into_iter().find(|a| a.tabela == id).map(|a| (a, fenkra_desenho::ocupacao::posicao_livre(&mut st.models, &st.d, id)));
         if let Some(t) = st.d.tables.iter_mut().find(|t| t.id == id) {
             ui.heading(tr(t.kind.label()));
             ui.label(RichText::new(&t.source.path).small());
@@ -2131,6 +2133,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     t.source = s;
                 }
             }
+            tabelas_ui::aviso_de_posicao(ui, t, aviso_pos);
             tabelas_ui::controles(ui, t, &tabela_pre.unwrap_or_default(), &vistas_folha);
             ui.separator();
             let mut csv = None;
@@ -2643,6 +2646,9 @@ mod tests {
 
     #[test]
     fn os_textos_do_bloqueio_tem_traducao() {
+        for t in ["A tabela está sobre a legenda da folha.", "A tabela sai da moldura da folha.", "Mover para a área livre", "Remover seta", "Adicionar seta", "Seta", "Setas", "Ancoragem na nota"] {
+            assert!(crate::i18n::tem_traducao(t), "{t}");
+        }
         for t in ["Selecione uma vista mãe: clique nela na folha", "Falta a origem: escolha uma peça ou montagem salva", "A folha não tem vistas para cotar", "Atualizada", "Desatualizada", "Erro"] {
             assert!(crate::i18n::tem_traducao(t), "{t}");
         }

@@ -6,6 +6,23 @@
 use super::*;
 use fenkra_desenho::tabela;
 
+/// B415: aviso de tabela sobre a legenda ou fora da folha, com o botao que leva a tabela para o
+/// canto livre (`nova` e a posicao sugerida; sem ela, nem a folha vazia comporta a tabela).
+pub fn aviso_de_posicao(ui: &mut egui::Ui, t: &mut Table, aviso: Option<(fenkra_desenho::ocupacao::AvisoTabela, Option<V2>)>) {
+    let Some((a, nova)) = aviso else { return };
+    ui.colored_label(ui.visuals().warn_fg_color, format!("⚠ {}", tr(a.texto())));
+    match nova {
+        Some(p) => {
+            if ui.button(tr("Mover para a área livre")).on_hover_text(tr("leva a tabela para um canto da folha fora da legenda e das vistas")).clicked() {
+                t.pos = p;
+            }
+        }
+        None => {
+            ui.label(RichText::new(tr("A tabela não cabe na folha: divida em blocos ou use uma folha maior.")).weak().small());
+        }
+    }
+}
+
 /// Controles da tabela selecionada. `todas` são os cabeçalhos da tabela crua; `vistas` as vistas da
 /// folha (para a vista de origem dos furos).
 pub fn controles(ui: &mut egui::Ui, t: &mut Table, todas: &[String], vistas: &[(Id, String)]) {

@@ -1385,7 +1385,7 @@ fn turn_pt(p: V2, c: V2, deg: f64, mirror: bool, inverse: bool) -> V2 {
 }
 
 /// Chamada da caixa lo–hi até `tip`: sai do lado voltado para a ponta, com um patamar.
-fn leader_box(o: &mut Out, lo: V2, hi: V2, tip: V2, s: f64, st: &PmiStyle) {
+fn leader_box(o: &mut Out, lo: V2, hi: V2, tip: V2, s: f64, st: &PmiStyle, k: usize) {
     if st.hide_leader {
         return;
     }
@@ -1398,16 +1398,37 @@ fn leader_box(o: &mut Out, lo: V2, hi: V2, tip: V2, s: f64, st: &PmiStyle) {
     let d = v2sub(a, c);
     let (w, h) = (hi[0] - lo[0], hi[1] - lo[1]);
     let land = s * 1.2;
-    let (att, out) = if d[0].abs() * h >= d[1].abs() * w {
-        if d[0] < 0. { ([lo[0], c[1]], [-land, 0.]) } else { ([hi[0], c[1]], [land, 0.]) }
-    } else if d[1] > 0. {
-        ([c[0], hi[1]], [0., land * 0.7])
-    } else {
-        ([c[0], lo[1]], [0., -land * 0.7])
+    // B370: lado fixo por ponta (1 esquerda, 2 direita, 3 topo, 4 base), como no PMI; 0 = automático
+    let lado = st.leader_side.get(k).copied().unwrap_or(0).min(4);
+    let lado = if lado != 0 { lado } else if d[0].abs() * h >= d[1].abs() * w { if d[0] < 0. { 1 } else { 2 } } else if d[1] > 0. { 3 } else { 4 };
+    let (att, out) = match lado {
+        1 => ([lo[0], c[1]], [-land, 0.]),
+        2 => ([hi[0], c[1]], [land, 0.]),
+        3 => ([c[0], hi[1]], [0., land * 0.7]),
+        _ => ([c[0], lo[1]], [0., -land * 0.7]),
     };
     let att2 = turn_pt(att, c, ang, mir, false);
     let knee = turn_pt(v2add(att, out), c, ang, mir, false);
+    let antes = o.arrow_kind;
+    o.arrow_kind = ponta_da_chamada(st, k, antes);
     leader_line(o, vec![att2, knee, tip], s, st, true);
+    o.arrow_kind = antes;
+}
+
+/// Ponta da chamada `k`: a própria (B368/B370) ou, em `Padrao`, a do estilo.
+fn ponta_da_chamada(st: &PmiStyle, k: usize, estilo: PmiArrow) -> PmiArrow {
+    match st.leader_arrow.get(k).copied().unwrap_or_default() {
+        PmiArrow::Padrao => estilo,
+        a => a,
+    }
+}
+
+/// Chamada reta da nota até a ponta `k`, com a ponta própria.
+fn chamada_reta(o: &mut Out, de: V2, ate: V2, s: f64, st: &PmiStyle, k: usize) {
+    let antes = o.arrow_kind;
+    o.arrow_kind = ponta_da_chamada(st, k, antes);
+    leader_line(o, vec![de, ate], s, st, true);
+    o.arrow_kind = antes;
 }
 
 /// Linha de chamada com o estilo (cor, espessura, tipo de linha) e a ponta em `pts.last()`.
@@ -1519,15 +1540,15 @@ fn note(o: &mut Out, n: &Note) {
         NoteKind::Text => {
             let lines: Vec<String> = n.text.lines().map(|l| format!("{}{l}{}", st.prefix, st.suffix)).collect();
             let (lo, hi) = text_box(o, n.pos, &lines, s, st, PmiFrame::Nenhuma, PmiBg::Nenhum);
-            if let Some(t) = n.leader {
-                leader_box(o, lo, hi, t, s, st);
+            for (k, t) in crate::setas_nota::pontas(n).into_iter().enumerate() {
+                leader_box(o, lo, hi, t, s, st, k);
             }
         }
         NoteKind::Balloon if st.frame != PmiFrame::Padrao => {
             // balão com outra moldura (quadrado, losango…)
             let (lo, hi) = text_box(o, n.pos, &[n.text.clone()], s, st, PmiFrame::Circulo, PmiBg::Nenhum);
-            if let Some(t) = n.leader {
-                leader_box(o, lo, hi, t, s, st);
+            for (k, t) in crate::setas_nota::pontas(n).into_iter().enumerate() {
+                leader_box(o, lo, hi, t, s, st, k);
             }
         }
         NoteKind::Balloon => {
@@ -1537,7 +1558,7 @@ fn note(o: &mut Out, n: &Note) {
             o.dline(circle(n.pos, r), true, Style::Thin, st.frame_dash);
             o.color = col;
             o.text([n.pos[0], n.pos[1] - s / 2.], n.text.clone(), s, 0., Align::Center);
-            if let Some(t) = n.leader {
+            for t in crate::setas_nota::pontas(n) {
                 let u = v2unit(v2sub(t, n.pos));
                 leader_line(o, vec![v2add(n.pos, v2mul(u, r)), t], s, st, false);
                 if !st.hide_leader {
@@ -1557,8 +1578,8 @@ fn note(o: &mut Out, n: &Note) {
                 }
                 Some(r) => rough_extended(o, p, &n.text, r, s),
             }
-            if let Some(t) = n.leader {
-                leader_line(o, vec![p, t], s, st, true);
+            for (k, t) in crate::setas_nota::pontas(n).into_iter().enumerate() {
+                chamada_reta(o, p, t, s, st, k);
             }
         }
         NoteKind::Weld => {
@@ -1578,8 +1599,8 @@ fn note(o: &mut Out, n: &Note) {
                     WeldPrim::Text(q, t, al) => o.text(m(q), t, s, 0., if al < 0 { Align::Right } else if al == 0 { Align::Center } else { Align::Left }),
                 }
             }
-            if let Some(t) = n.leader {
-                leader_line(o, vec![p, t], s, st, true);
+            for (k, t) in crate::setas_nota::pontas(n).into_iter().enumerate() {
+                chamada_reta(o, p, t, s, st, k);
             }
         }
         NoteKind::CenterMark => {
@@ -1596,8 +1617,8 @@ fn note(o: &mut Out, n: &Note) {
             let g = n.gdt.clone().unwrap_or_default();
             let linhas = g.extra.linhas(g.ch, &g.tol, &g.datums);
             let (lo, hi) = fcf(o, n.pos, g.ch, &linhas, &g.extra.chamada(), s, st);
-            if let Some(t) = n.leader {
-                leader_box(o, lo, hi, t, s, st);
+            for (k, t) in crate::setas_nota::pontas(n).into_iter().enumerate() {
+                leader_box(o, lo, hi, t, s, st, k);
             }
         }
         NoteKind::Datum => {

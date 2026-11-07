@@ -26,6 +26,17 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("furo(s) ligados à vista; acompanham a peça", "hole(s) linked to the view; they follow the part"),
     ("Visível", "Visible"),
     ("Marcas de centro visíveis", "Center marks visible"),
+    // B415: tabela fora do lugar
+    ("A tabela está sobre a legenda da folha.", "The table sits on top of the title block."),
+    ("A tabela sai da moldura da folha.", "The table goes past the sheet frame."),
+    ("Mover para a área livre", "Move to free area"),
+    ("leva a tabela para um canto da folha fora da legenda e das vistas", "moves the table to a sheet corner clear of the title block and the views"),
+    ("A tabela não cabe na folha: divida em blocos ou use uma folha maior.", "The table does not fit on the sheet: split it into blocks or use a larger sheet."),
+    // B370: setas da nota
+    ("Remover seta", "Remove arrow"),
+    ("Tira só esta seta; a nota e as outras setas ficam", "Removes only this arrow; the note and the other arrows stay"),
+    ("Adicionar seta", "Add arrow"),
+    ("Acrescenta outra seta da nota, perto do texto; arraste ou edite a posição depois", "Adds another arrow to the note, near the text; drag it or edit its position afterwards"),
     // B295: tabelas
     ("Colunas", "Columns"),
     ("tirar a coluna: a tabela reflui", "remove the column: the table reflows"),
