@@ -35,7 +35,7 @@ pub fn selo(ui: &egui::Ui, rect: Rect, d: &Document) {
     let fonte = FontId::proportional(crate::acessibilidade::fonte_3d(13.));
     let galeria = painter.layout_no_wrap(tr(t).to_string(), fonte.clone(), tinta);
     let tam = galeria.size() + egui::vec2(20., 10.);
-    let caixa = Rect::from_center_size(egui::pos2(rect.center().x, rect.top() + 26.), tam);
+    let caixa = Rect::from_center_size(egui::pos2(rect.center().x, rect.top() + 46.), tam);
     painter.rect_filled(caixa, 8., fundo);
     painter.rect_stroke(caixa, 8., Stroke::new(1., v.widgets.noninteractive.fg_stroke.color), StrokeKind::Inside);
     painter.text(caixa.center(), Align2::CENTER_CENTER, tr(t), fonte, tinta);
