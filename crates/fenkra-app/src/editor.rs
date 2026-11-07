@@ -611,6 +611,11 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         _ => None,
     };
     let sel = app.sel;
+    // B419: causa estrutural do erro do comando selecionado, para o código e a sugestão
+    let tipo_erro = match (sel, &status) {
+        (Sel::Feature(id), Some(Status::Error(_))) => app.result.as_ref().and_then(|r| r.tipos_de_erro(&app.open.doc).get(&id).copied()),
+        _ => None,
+    };
     let doc_ro = app.open.doc.clone();
     let frozen = app.open.frozen.clone();
     let bodies: Vec<(Id, f64, f64)> = app.result.as_ref().map(|r| r.bodies.iter().map(|b| (b.collector, b.mass.volume, b.mass.area)).collect()).unwrap_or_default();
@@ -748,7 +753,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             let dens = MATERIALS.iter().find(|(m, _)| *m == p.material).map(|(_, d)| *d).unwrap_or(7.85);
             for (cid, vol, area) in &bodies {
                 let name = doc.collectors.iter().find(|c| c.id == *cid).map(|c| c.name.clone()).unwrap_or_default();
-                ui.label(format!("{name}: {}", crate::app::loc(format!("{:.1} cm³ · {:.1} cm² · {:.3} kg", vol / 1000., area / 100., vol * dens / 1e6))));
+                ui.label(format!("{name}: {}", crate::app::loc(format!("{:.1} cm³ · {:.1} cm² · {}", vol / 1000., area / 100., crate::massa_fmt::texto_kg(*vol, dens, true)))));
             }
             if bodies.is_empty() {
                 ui.label(RichText::new(tr("sem corpos")).weak());
@@ -895,6 +900,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             match &status {
                 Some(Status::Error(m)) => {
                     ui.label(RichText::new(format!("✖ {m}")).color(crate::theme::st_err()));
+                    let d = crate::erro_acao::diagnosticar(tipo_erro, &f.name, m);
+                    ui.label(RichText::new(format!("{}  💡 {}", d.codigo, tr(d.sugestao))).small().weak());
                 }
                 Some(Status::Warning(m)) => {
                     ui.label(RichText::new(format!("⚠ {m}")).color(crate::theme::st_warn()));
@@ -953,6 +960,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     match &status {
                         Some(Status::Error(m)) => {
                             ui.label(RichText::new(m).color(crate::theme::st_err()).small());
+                            let d = crate::erro_acao::diagnosticar(tipo_erro, &f.name, m);
+                            ui.label(RichText::new(format!("{}  💡 {}", d.codigo, tr(d.sugestao))).small().weak());
                         }
                         Some(Status::Warning(m)) => {
                             ui.label(RichText::new(m).color(crate::theme::st_warn()).small());

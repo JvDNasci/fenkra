@@ -585,8 +585,10 @@ pub fn hover_help_cmd(ui: &egui::Ui, resp: egui::Response, icon: &str, title: &s
     }
     let start = ui.ctx().data_mut(|d| *d.get_temp_mut_or_insert_with(key, || now));
     let shift = ui.input(|i| i.modifiers.shift);
-    let estagio2 = (now - start >= crate::ajuda_cmd::ESTAGIO_2 || shift) && !advanced.is_empty();
-    if !advanced.is_empty() && !estagio2 {
+    // dica simples (B377): só nome e frase, sem animação nem passo a passo
+    let simples = crate::dica_anim::simples();
+    let estagio2 = !simples && (now - start >= crate::ajuda_cmd::ESTAGIO_2 || shift) && !advanced.is_empty();
+    if !simples && !advanced.is_empty() && !estagio2 {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
     }
     let atalho = crate::ajuda_cmd::atalho_do_comando(ui.ctx(), icon);
@@ -603,12 +605,16 @@ pub fn hover_help_cmd(ui: &egui::Ui, resp: egui::Response, icon: &str, title: &s
         }
         if estagio2 {
             ui.separator();
+            let t = if shift { now - start } else { now - start - crate::ajuda_cmd::ESTAGIO_2 };
             if !icon.is_empty() && crate::midia::exibir::tem(icon) {
-                let t = if shift { now - start } else { now - start - crate::ajuda_cmd::ESTAGIO_2 };
                 crate::midia::exibir::desenhar(ui, icon, t.max(0.), 300.);
+            } else if !icon.is_empty() {
+                // sem pacote de mídia: a animação feita pelo próprio programa
+                crate::dica_anim::desenhar(ui, icon, t.max(0.), 300.);
+                ui.add_space(4.);
             }
             crate::ajuda_cmd::mini_fluxo(ui, advanced);
-        } else if !advanced.is_empty() {
+        } else if !advanced.is_empty() && !simples {
             ui.label(egui::RichText::new(tr("(mantenha o mouse para ver o passo a passo)")).small().weak());
         }
     })

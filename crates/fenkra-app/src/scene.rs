@@ -228,7 +228,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 match (fid, cor) {
                     (Some(id), Some(c)) if face_owner.contains(&id) => crate::previa::arestas_com_fantasma(&mut s.edges, &mut s.lines, m, o.tangent_edges, edge_col, c, face_owner, id),
                     // a peça mantém a cor: o realce é só das arestas do item, nunca da área
-                    _ => arestas_com_realce(&mut s.edges, &mut s.lines, m, o.tangent_edges, edge_col, |face| body_sel || face_owner.get(face as usize).is_some_and(|w| hi(*w))),
+                    _ => arestas_com_realce(&mut s.edges, &mut s.lines, m, o.tangent_edges, crate::contraste::aresta_para(edge_col, rgb(if base.color == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(base.color) } else { base.color })), |face| body_sel || face_owner.get(face as usize).is_some_and(|w| hi(*w))),
                 }
             }
         }

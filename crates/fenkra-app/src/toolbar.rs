@@ -316,7 +316,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("chanfro", "Chanfro", "Chanfro nos cantos da chapa", "Chanfra as arestas escolhidas; acompanha dobrado e planificado.", Cmd(C::Chamfer)),
             ]),
             Family("sm_desdobrar", vec![
-                it("sm_desdobrar", "Dobrar/Desdobrar", "Dobrar / desdobrar", "Alterna a peça entre dobrada e planificada (comprimento desenvolvido pelo fator K).", Cmd(C::SmUnfold)),
+                it("sm_desdobrar", "Planificar", "Planificar a chapa (e dobrar de novo)", "Mostra a chapa plana, com o comprimento desenvolvido pelo fator K. Com o botão aceso, a chapa está plana: clique de novo para dobrar.", Cmd(C::SmUnfold)),
                 it("sm_desdobrar_parcial", "Desdobrar parcial", "Desdobrar só algumas abas", "Escolha as abas a planificar: o resto da peça continua dobrado. Serve para editar uma parte, por exemplo um recorte que atravessa a dobra.", Cmd(C::SmUnfoldPartial(false))),
                 it("sm_redobrar_parcial", "Redobrar parcial", "Redobrar abas desdobradas", "Volta a dobrar as abas que um desdobrar parcial deixou planas.", Cmd(C::SmUnfoldPartial(true))),
             ]),
@@ -620,6 +620,8 @@ pub struct ToolState {
     pub sketch_tool: Option<Tool>,
     pub construction: bool,
     pub check: bool,
+    /// a chapa aberta está planificada (aceso o botão Planificar)
+    pub chapa_plana: bool,
 }
 
 fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
@@ -634,6 +636,7 @@ fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
         Act::SkAutoDims => s.auto_dims,
         Act::HiddenEnv => st.hidden_env,
         Act::Display(m) => s.display == m,
+        Act::Cmd(Cmd::SmUnfold) => st.chapa_plana,
         _ => false,
     }
 }

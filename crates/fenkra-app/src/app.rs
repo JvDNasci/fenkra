@@ -22,6 +22,7 @@ use crate::i18n::tr;
 mod arvore;
 mod diag;
 mod gravar;
+mod gerenciador;
 mod roda_app;
 mod demo_janelas;
 mod demo_pmi;
@@ -182,6 +183,8 @@ pub struct App {
     macro_log: Vec<String>,
     /// janela "Personalizar comandos" e o grupo escolhido nela
     customize_open: bool,
+    /// painel do gerenciador de salvamento e exportação (B378)
+    gerenciador_aberto: bool,
     customize_sel: usize,
     /// janela de importação de publicações e peça escolhida (nome, caminho, publicações)
     link_open: bool,
@@ -206,6 +209,7 @@ pub struct App {
     pub viewport: Option<Viewport>,
     pub scene_dirty: bool,
     fit_pending: bool,
+    enquadrar_abertura: crate::abertura::Enquadrar,
     hist: crate::historico::Historico,
     /// o documento foi trocado neste quadro: a diferença do fim do quadro não é edição (B362)
     doc_trocado: bool,
@@ -419,6 +423,7 @@ impl App {
             clip: None,
             link_open: false,
             customize_open: false,
+            gerenciador_aberto: false,
             macro_open: false,
             tex_key: vec![],
             macro_log: vec![],
@@ -433,6 +438,7 @@ impl App {
             viewport,
             scene_dirty: true,
             fit_pending: true,
+            enquadrar_abertura: Default::default(),
             hist: crate::historico::Historico::new(settings.historico_mb),
             salvar: Default::default(),
             importacao_pendente: None,
@@ -1118,6 +1124,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
 
     pub fn fit_now(&mut self) {
         self.fit_pending = true;
+        self.enquadrar_abertura.depois_da_cena();
         self.scene_dirty = true;
     }
 
@@ -1477,6 +1484,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         self.hist.limpar();
         self.salvar.esquecer();
         self.fit_pending = true;
+        self.enquadrar_abertura.peca_aberta();
         self.request_recompute();
     }
 
@@ -1571,7 +1579,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let path = path.to_path_buf();
         match std::fs::read_to_string(&path).map_err(|e| e.to_string()).and_then(|s| Document::from_json(&s).map_err(|e| e.to_string())) {
             Ok(d) => {
-                let bench = if d.sheet.is_some() { Some(crate::settings::Bench::Chapa) } else { None };
+                let bench = Some(crate::abertura::bancada_do_conteudo(&d));
                 // formato mais novo que este programa: abre travado para não regravar por cima (B64)
                 let futuro = d.formato_futuro().then(|| format!("de formato v{}", d.format_version));
                 if let Some(f) = &futuro {
@@ -3058,6 +3066,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             sketch_tool: self.sketch.as_ref().map(|e| e.tool),
             construction: self.sketch.as_ref().is_some_and(|e| e.construction),
             check: self.sketch.as_ref().is_some_and(|e| e.check),
+            chapa_plana: self.open.doc.sheet.as_ref().is_some_and(|sp| sp.flat),
         }
     }
 
@@ -3615,20 +3624,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         self.salvar_ativo();
                         ui.close();
                     }
-                    if ui.button(tr("Salvar tudo…   Ctrl+Shift+S")).clicked() {
-                        self.abrir_plano();
-                        ui.close();
-                    }
-                    if ui.button(tr("Salvar como com referências…")).clicked() {
+                    if ui.button(tr("Salvar como…")).on_hover_text(tr("Grava uma cópia e decide o que fazer com as peças que ela usa.")).clicked() {
                         self.abrir_salvar_como(ui.ctx());
-                        ui.close();
-                    }
-                    if ui.button(tr("Empacotar…")).clicked() {
-                        self.abrir_empacotar(ui.ctx());
-                        ui.close();
-                    }
-                    if ui.button(tr("Reparar links…")).clicked() {
-                        self.abrir_reparar_links(ui.ctx());
                         ui.close();
                     }
                     ui.separator();
@@ -3638,60 +3635,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         self.com_confirmacao(Acao::Importar);
                         ui.close();
                     }
-                    let tem_relatorio = self.open.doc.origem.as_ref().is_some_and(|o| o.relatorio.is_some());
-                    if ui.add_enabled(tem_relatorio, egui::Button::new(tr("Relatório da importação…"))).on_hover_text(tr("Abre o relatório guardado neste documento, mesmo sem o arquivo de origem.")).clicked() {
-                        self.abrir_relatorio_embutido();
+                    if ui.button(tr("Salvar e exportar…")).on_hover_text(tr("Todos os formatos de gravação e exportação, agrupados: salvar, troca com outros CADs, malha, fabricação com nesting e dados.")).clicked() {
+                        self.abrir_gerenciador();
                         ui.close();
                     }
-                    let r = ui.add_enabled(self.features.is_none(), egui::Button::new(tr("Features encontradas…")));
-                    if r.on_hover_text(tr("Procura furos, filetes e chanfros no corpo importado e mostra no 3D. Estrutura inferida, não o histórico original.")).clicked() {
-                        self.abrir_features();
-                        ui.close();
-                    }
-                    if ui.button(tr("Exportar STEP…")).clicked() {
-                        self.abrir_painel_exportar(fenkra_conversor::Formato::Step);
-                        ui.close();
-                    }
-                    if ui.button(tr("Exportar IGES…")).clicked() {
-                        self.abrir_painel_exportar(fenkra_conversor::Formato::Iges);
-                        ui.close();
-                    }
-                    if ui.button(tr("Preparar impressão…")).on_hover_text(tr("Põe os corpos na mesa, confere se imprimem e grava 3MF ou STL.")).clicked() {
-                        self.abrir_impressao();
-                        ui.close();
-                    }
-                    if ui.button(tr("Exportar malha…")).on_hover_text(tr("Grava em formatos abertos de malha e visualização: 3MF, OBJ, PLY, glTF, USD e outros, com desvio, cor e estrutura.")).clicked() {
-                        self.abrir_painel_exportar(fenkra_conversor::Formato::Glb);
-                        ui.close();
-                    }
-                    if ui.button(tr("Exportar visualização…")).on_hover_text(tr("Grava o pacote .fkv ou uma página web autocontida que abre a peça, a montagem ou o desenho no navegador do computador ou do celular, sem instalar nada.")).clicked() {
-                        self.exportar_visualizacao(false);
-                        ui.close();
-                    }
-                    if ui.button(tr("Exportar visualização simplificada…")).on_hover_text(tr("Igual à anterior, com a malha reduzida e sem os pontos de medição exatos: protege a geometria e pesa menos.")).clicked() {
-                        self.exportar_visualizacao(true);
-                        ui.close();
-                    }
-                    if ui.add(egui::Button::image_and_text(crate::icons::get("conversao_lote"), tr("Conversão em lote…"))).on_hover_text(tr("Converte arquivos, pastas e documentos do projeto para vários formatos de uma vez, com simulação antes de gravar.")).clicked() {
-                        self.abrir_painel_lote();
-                        ui.close();
-                    }
-                    if ui.add(egui::Button::image_and_text(crate::icons::get("formatos_suportados"), tr("Formatos suportados…"))).on_hover_text(tr("Mostra o que o Fenkra lê e grava, e o que atravessa em cada formato.")).clicked() {
-                        self.abrir_formatos();
-                        ui.close();
-                    }
-                    if ui.button(tr("Exportar árvore paramétrica…")).on_hover_text(tr("Grava a receita da peça ou da montagem em JSON aberto: esboços, cotas, comandos, nomes e cores. Não leva a geometria pronta.")).clicked() {
-                        self.exportar_arvore();
-                        ui.close();
-                    }
-                    ui.menu_button(tr("Exportar STL"), |ui| {
-                        for p in fenkra_core::PresetStl::TODOS {
-                            if ui.button(tr(p.nome())).clicked() {
-                                self.export("stl", p);
-                                ui.close();
-                            }
-                        }
-                    });
                     ui.separator();
                     if ui.button(tr("Novo projeto…")).clicked() {
                         self.new_project();
@@ -4327,10 +4274,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     pub fn apply_view(&mut self, v: &fenkra_core::NamedView) {
         if let Some(vp) = self.viewport.as_mut() {
             let before = vp.camera;
-            vp.camera.target = Vec3::from(v.target.map(|x| x as f32));
+            let (alvo, dist) = crate::abertura::vista_enquadrada(Vec3::from(v.target.map(|x| x as f32)), v.dist as f32, vp.bounds);
+            vp.camera.target = alvo;
             vp.camera.yaw = v.yaw as f32;
             vp.camera.pitch = v.pitch as f32;
-            vp.camera.dist = v.dist as f32;
+            vp.camera.dist = dist;
             vp.camera.ortho = v.ortho;
             vp.animate_from(before);
         }
@@ -4654,6 +4602,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 errs.push((x.id, x.name.clone(), m.clone(), false));
             }
         }
+        let tipos = r.tipos_de_erro(doc);
+        let diag: Vec<crate::erro_acao::Acionavel> = errs.iter().map(|(id, name, msg, _)| crate::erro_acao::diagnosticar(tipos.get(id).copied(), name, msg)).collect();
         let mut open = true;
         let mut act: Option<(Id, u8)> = None;
         egui::Window::new(tr("🩹 Assistente de reparo"))
@@ -4669,14 +4619,29 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 ui.label(RichText::new(tr("Estes itens não puderam ser calculados (referência apagada, face que mudou, entrada inválida). Escolha refazer a referência ou apagar.")).weak());
                 ui.add_space(6.);
                 egui::ScrollArea::vertical().max_height(380.).show(ui, |ui| {
-                    for (id, name, msg, is_feat) in &errs {
+                    for ((id, name, _msg, is_feat), d) in errs.iter().zip(&diag) {
                         egui::Frame::group(ui.style()).show(ui, |ui| {
                             ui.set_width(ui.available_width());
-                            ui.label(RichText::new(format!("✖ {name}")).strong().color(crate::theme::st_err()));
-                            ui.label(RichText::new(msg).small());
+                            ui.horizontal_wrapped(|ui| {
+                                ui.label(RichText::new(format!("✖ {name}")).strong().color(crate::theme::st_err()));
+                                ui.label(RichText::new(d.codigo).monospace().small().weak());
+                                if let Some(c) = &d.campo {
+                                    ui.label(RichText::new(format!("{}: {c}", tr("campo"))).small().weak());
+                                }
+                            });
+                            ui.label(RichText::new(&d.causa).small());
+                            ui.label(RichText::new(format!("💡 {}", tr(d.sugestao))).small().color(crate::theme::accent(ui.visuals())));
                             ui.horizontal(|ui| {
-                                if ui.button(tr("✏ Refazer referência")).on_hover_text(tr("abre o comando para escolher a nova entrada")).clicked() {
-                                    act = Some((*id, 0));
+                                // o botão da ação certa vem primeiro e em destaque
+                                let (rotulo, dica) = match d.acao {
+                                    crate::erro_acao::Acao::CorrigirAntes(_) => (tr("✏ Corrigir o comando de antes"), tr("abre o primeiro comando que falhou na linha do tempo")),
+                                    crate::erro_acao::Acao::AjustarValor => (tr("✏ Ajustar o valor"), tr("abre o comando para mudar o campo citado")),
+                                    crate::erro_acao::Acao::RefazerContorno => (tr("✏ Refazer o contorno"), tr("abre o comando para escolher o contorno de novo")),
+                                    crate::erro_acao::Acao::RefazerReferencia => (tr("✏ Refazer referência"), tr("abre o comando para escolher a nova entrada")),
+                                };
+                                let alvo = if let crate::erro_acao::Acao::CorrigirAntes(c) = d.acao { c } else { *id };
+                                if ui.add(egui::Button::new(RichText::new(rotulo).strong())).on_hover_text(dica).clicked() {
+                                    act = Some((alvo, 0));
                                 }
                                 if *is_feat && ui.button(tr("⏸ Suprimir")).clicked() {
                                     act = Some((*id, 1));
@@ -5267,7 +5232,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         // ---------- publicações desta peça (o que outras peças podem importar)
         let n_pub = Self::publicados(doc);
         let h = crate::tree_ui::grupo(ui, "arvore_pub", Some("asm_link"), format!("{} ({n_pub})", tr("Publicações")), false).corpo(ui, |ui| {
-            for r in doc.references.iter().filter(|r| r.published) {
+            let publicadas: Vec<&RefElement> = doc.references.iter().filter(|r| r.published).collect();
+            // a lista longa se divide por classe (planos, pontos, curvas, superfícies)
+            crate::arvore_grupos::por_classe(ui, ("pub_cls", 0), &publicadas, |ui, r| {
                 crate::tree_ui::marca(ui);
                 let resp = self.row_label(ui, r.id, &r.name, self.sel == Sel::Ref(r.id), RichText::new(format!("📤 {}", r.name)), actions);
                 let resp = drag_item(ui, resp, r.id, self.renaming != Some(r.id));
@@ -5284,7 +5251,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         ui.close();
                     }
                 });
-            }
+            });
             for c in doc.collectors.iter().filter(|c| c.published) {
                 crate::tree_ui::marca(ui);
                 let resp = self.row_label(ui, c.id, &c.name, self.sel == Sel::Collector(c.id), RichText::new(format!("📤 ▣ {}", c.name)), actions);
@@ -5505,9 +5472,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 for s in &subs {
                     self.geo_folder(ui, doc, s, first_geo, new_sel, actions);
                 }
-                for r in &refs {
-                    self.ref_row(ui, doc, r, new_sel, actions);
-                }
+                crate::arvore_grupos::por_classe(ui, ("geo_cls", fo.id.0 as u64), &refs, |ui, r| self.ref_row(ui, doc, r, new_sel, actions));
                 for (i, f) in &sketches {
                     self.feature_row(ui, doc, *i, f, new_sel, actions);
                 }
@@ -7208,7 +7173,19 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     ui.label(RichText::new(format!("Parâmetros: {e}")).small().color(crate::theme::st_err()));
                 }
                 let passo_sk = self.sketch.as_ref().map(|e| e.dica_passo());
+                use crate::ajuda_cmd::Tela;
+                let tela = match self.settings.bench {
+                    _ if self.in_asm() => Tela::Montagem,
+                    crate::settings::Bench::Montagem => Tela::Montagem,
+                    crate::settings::Bench::Desenho => Tela::Desenho,
+                    crate::settings::Bench::Chapa => Tela::Chapa,
+                    crate::settings::Bench::Estrutural => Tela::Estrutural,
+                    crate::settings::Bench::Superficies => Tela::Superficies,
+                    crate::settings::Bench::FormaLivre => Tela::FormaLivre,
+                    crate::settings::Bench::Solidos => Tela::Peca,
+                };
                 let ctx_ajuda = crate::ajuda_cmd::Contexto {
+                    tela,
                     sketch: passo_sk.as_deref(),
                     n_comandos: n,
                     ultimo_e_sketch: self.open.doc.features.last().is_some_and(|f| matches!(f.kind, FeatureKind::Sketch(_))),
@@ -7454,6 +7431,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
 
             crate::desempenho::marca("vp_rotulos");
+            crate::chapa_estado::selo(ui, rect, &self.open.doc);
             let cam = vp.camera;
             // comando em edição: entradas realçadas com o papel de cada uma
             if let (Some(r), Some(sid)) = (&self.result, self.session.as_ref().map(|x| x.id)) {
@@ -8498,6 +8476,7 @@ impl eframe::App for App {
         crate::ajuda_cmd::publicar_atalhos(ctx, &self.settings.keys);
         crate::desempenho::marca("pre_atalhos");
         crate::ui_ext::definir_modo_roda(crate::ui_ext::ModoRoda::de_u8(self.settings.wheel_mode));
+        crate::dica_anim::definir(self.settings.dica_simples, self.settings.acessibilidade.reduzir_movimento);
         // cores salvas: preferências ↔ paleta usada pelos painéis
         {
             let mut dirty = crate::palette::DIRTY.lock().unwrap();
@@ -8542,6 +8521,7 @@ impl eframe::App for App {
                     r.elapsed_ms = a.elapsed_ms;
                 }
                 self.result = Some(r);
+                self.enquadrar_abertura.resultado(g == self.gen_sent);
                 if g == self.gen_sent {
                     self.result_doc = self.sent_doc.clone();
                 }
@@ -8785,6 +8765,7 @@ impl eframe::App for App {
         if active {
             self.painel_comando(ctx, area);
         }
+        self.gerenciador_ui(ctx, area);
         // B357: os painéis de análise existem enquanto a tela está no modo e fecham pelo ✕
         crate::sup_analise::painel_curvatura(self, ctx, area);
         crate::analise_janela::painel_listras(self, ctx, area);
@@ -9060,6 +9041,9 @@ impl eframe::App for App {
                 crate::medir_quadros::valor("bytes_faces", (std::mem::size_of_val(s.mesh.as_slice()) + std::mem::size_of_val(s.indices.as_slice())) as f64);
                 crate::medir_quadros::valor("bytes_arestas", std::mem::size_of_val(s.edges.as_slice()) as f64);
                 crate::medir_quadros::fase("subir", || vp.set_scene(rs, &s));
+                if self.enquadrar_abertura.cena_subiu() {
+                    self.fit_pending = true;
+                }
                 let grande = vp.cena_grande;
                 self.scene_dirty = false;
                 if grande {
@@ -9458,6 +9442,7 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 ui.checkbox(&mut s.acessibilidade.reduzir_movimento, tr("reduzir movimento")).on_hover_text(tr("A câmera salta em vez de deslizar e a interface não anima transições."));
                 ui.add(crate::ui_ext::slider(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
                 ui.checkbox(&mut s.show_labels, tr("mostrar o nome embaixo dos ícones"));
+                ui.checkbox(&mut s.dica_simples, tr("dicas simples (sem animação nem passo a passo)")).on_hover_text(tr("A dica mostra só o nome e a frase do comando. Desligada, parar o mouse sobre um botão mostra também a animação e o passo a passo."));
                 ui.separator();
                 ui.label(RichText::new(tr("Seções da árvore")).strong());
                 ui.horizontal_wrapped(|ui| {

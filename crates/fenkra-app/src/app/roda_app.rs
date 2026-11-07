@@ -19,8 +19,12 @@ impl App {
         };
         let selecao = match self.picks.last() {
             None => Selecao::Nada,
+            // corpo de superfície: a face dele é uma superfície
+            Some(crate::picking::Pick::Face { body, .. }) if *body >= crate::picking::SURF_BASE => Selecao::Superficie,
             Some(crate::picking::Pick::Face { .. }) => Selecao::Face,
-            Some(crate::picking::Pick::Edge { .. }) => Selecao::Aresta,
+            Some(crate::picking::Pick::Edge { .. } | crate::picking::Pick::SkCurve { .. }) => Selecao::Aresta,
+            Some(crate::picking::Pick::Vertex { .. } | crate::picking::Pick::SkPoint { .. } | crate::picking::Pick::CurveVtx { .. }) => Selecao::Vertice,
+            Some(crate::picking::Pick::Geo(id)) if self.open.doc.reference(*id).is_some_and(|r| r.kind.class() == fenkra_core::RefClass::Surface) => Selecao::Superficie,
             Some(_) => Selecao::Outra,
         };
         Contexto { bancada: self.settings.bench, modo, selecao }

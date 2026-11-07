@@ -332,8 +332,22 @@ pub fn mini_fluxo(ui: &mut egui::Ui, advanced: &str) {
     }
 }
 
+/// Tela em que a pessoa está: a dica do próximo passo fala do fluxo dela (B430).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum Tela {
+    #[default]
+    Peca,
+    Chapa,
+    Estrutural,
+    Superficies,
+    FormaLivre,
+    Montagem,
+    Desenho,
+}
+
 /// O que a barra de status precisa saber para sugerir o próximo passo.
 pub struct Contexto<'a> {
+    pub tela: Tela,
     /// texto do passo atual da ferramenta de sketch em edição
     pub sketch: Option<&'a str>,
     pub n_comandos: usize,
@@ -345,8 +359,20 @@ pub struct Contexto<'a> {
 pub fn proximo_passo(c: &Contexto) -> Option<String> {
     let t = if let Some(passo) = c.sketch {
         passo.to_owned()
+    } else if c.tela == Tela::Montagem {
+        // montagem e desenho têm fluxo próprio: a dica de peça ("selecione uma face") não serve
+        tr(if c.n_selecionados > 0 { "escolha uma restrição para a seleção: coincidência, distância ou fixar" } else { "insira uma peça e restrinja: clique em duas faces ou arestas" }).to_owned()
+    } else if c.tela == Tela::Desenho {
+        tr(if c.n_selecionados > 0 { "ajuste a vista selecionada no painel ou arraste-a na folha" } else { "adicione uma vista da peça, depois cotas, tabelas e o carimbo" }).to_owned()
     } else if c.n_comandos == 0 {
-        tr("crie um Sketch num plano da Origem").to_owned()
+        match c.tela {
+            Tela::Chapa => tr("defina a espessura nos parâmetros e crie a Parede base"),
+            Tela::Estrutural => tr("desenhe o esqueleto em linhas 3D e aplique um Membro"),
+            Tela::Superficies => tr("crie as curvas de referência e gere a superfície"),
+            Tela::FormaLivre => tr("escolha uma primitiva e arraste no plano"),
+            _ => tr("crie um Sketch num plano da Origem"),
+        }
+        .to_owned()
     } else if c.ultimo_e_sketch {
         tr("transforme o sketch em sólido: Extrusão ou Revolução").to_owned()
     } else if c.n_selecionados > 0 {
@@ -392,6 +418,25 @@ mod testes {
     /// Dívida de quando a regra nasceu; só pode encolher.
     const PASSO_A_PASSO_SEM_TRADUCAO: usize = 10;
 
+    /// B430: cada tela fala do próprio fluxo, e a de montagem e a de desenho não repetem a dica de peça.
+    #[test]
+    fn dica_de_status_muda_com_a_tela() {
+        let base = Contexto { tela: Tela::Peca, sketch: None, n_comandos: 3, ultimo_e_sketch: false, n_selecionados: 0 };
+        let peca = proximo_passo(&base).unwrap();
+        let montagem = proximo_passo(&Contexto { tela: Tela::Montagem, ..base }).unwrap();
+        let desenho = proximo_passo(&Contexto { tela: Tela::Desenho, ..base }).unwrap();
+        assert!(peca.contains("face ou aresta"));
+        assert!(montagem.contains("restrinja") && !montagem.contains("face ou aresta, ou use"));
+        assert!(desenho.contains("vista") && !desenho.contains("face ou aresta"));
+        let vazio = Contexto { n_comandos: 0, ..base };
+        assert!(proximo_passo(&Contexto { tela: Tela::Chapa, ..vazio }).unwrap().contains("Parede base"));
+        assert!(proximo_passo(&Contexto { tela: Tela::Estrutural, ..vazio }).unwrap().contains("Membro"));
+        assert!(proximo_passo(&Contexto { tela: Tela::FormaLivre, ..vazio }).unwrap().contains("primitiva"));
+        assert!(proximo_passo(&vazio).unwrap().contains("Sketch"));
+        // com seleção, a dica de montagem fala de restrição
+        assert!(proximo_passo(&Contexto { tela: Tela::Montagem, n_selecionados: 2, ..base }).unwrap().contains("coincidência"));
+    }
+
     #[test]
     fn busca_ignora_acento_e_caixa() {
         assert_eq!(normalizar("Extrusão"), "extrusao");
@@ -433,7 +478,7 @@ mod testes {
 
     #[test]
     fn proximo_passo_segue_o_estado() {
-        let base = Contexto { sketch: None, n_comandos: 0, ultimo_e_sketch: false, n_selecionados: 0 };
+        let base = Contexto { tela: Tela::Peca, sketch: None, n_comandos: 0, ultimo_e_sketch: false, n_selecionados: 0 };
         assert!(proximo_passo(&base).unwrap().contains("Sketch"));
         let c = Contexto { n_comandos: 1, ultimo_e_sketch: true, ..base };
         assert!(proximo_passo(&c).unwrap().contains("Extrusão"));
