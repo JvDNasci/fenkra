@@ -52,8 +52,8 @@ pub fn desenhos(r: &mut Reg) {
     // conjunto com lista de peças
     let mut d = Drawing::new("Kart, conjunto", Format::A1);
     let sh = d.sheets[0].id;
-    d.add_standard_set(sh, src("KART-PLANO.fka"), [300., 300.], 0.2, 60.);
-    tabela(&mut d, sh, TableKind::Bom, "KART.fka", [560., 40.], BomLevel::Estruturada);
+    d.add_standard_set(sh, src("KART-PLANO.fka"), [190., 420.], 0.1, 140.);
+    tabela(&mut d, sh, TableKind::Bom, "KART.fka", [560., 570.], BomLevel::Estruturada);
     relata(r, "DW-KART", "Folha de conjunto", &d, &mut m, "pdf");
     // quadro: lista de corte
     let mut d = Drawing::new("Quadro", Format::A2);
@@ -61,7 +61,7 @@ pub fn desenhos(r: &mut Reg) {
     let v = d.add_view(sh, src("QUADRO.fkp"), ViewKind::Standard(Dir::Topo), [200., 180.], 0.25);
     d.add_view(sh, src("QUADRO.fkp"), ViewKind::Standard(Dir::Frente), [200., 320.], 0.25);
     d.add_view(sh, src("QUADRO.fkp"), ViewKind::Detail { parent: v, center: [100., 100.], radius: 120., label: "A".into() }, [470., 300.], 0.5);
-    tabela(&mut d, sh, TableKind::CutList, "QUADRO.fkp", [400., 30.], BomLevel::default());
+    tabela(&mut d, sh, TableKind::CutList, "QUADRO.fkp", [380., 150.], BomLevel::default());
     relata(r, "DW-QUADRO", "Quadro com lista de corte", &d, &mut m, "pdf");
     // eixo, disco e manga: detalhe e corte
     let mut d = Drawing::new("Eixo", Format::A3);
@@ -145,6 +145,81 @@ pub fn pmi(r: &mut Reg) {
     }
 }
 
+/// Fecho de cada peça: capturas de PMI (todas, nenhuma e, havendo, tolerâncias) e referências ocultas.
+fn acabamento(d: &mut Document) {
+    let r = recompute(d);
+    let (lo, hi) = caixa(&r);
+    let alvo = [0, 1, 2].map(|i| (lo[i] + hi[i]) / 2.);
+    let dist = (0..3).map(|i| (hi[i] - lo[i]).powi(2)).sum::<f64>().sqrt().max(50.) * 1.6;
+    let view = |n: &str| NamedView { name: n.into(), target: alvo, yaw: 35f64.to_radians(), pitch: 25f64.to_radians(), dist, ortho: false };
+    let todas: Vec<Id> = d.pmi.iter().map(|x| x.id).collect();
+    let gdt: Vec<Id> = d.pmi.iter().filter(|x| matches!(x.kind, PmiKind::Gdt { .. } | PmiKind::Datum { .. } | PmiKind::Diameter | PmiKind::Roughness { .. })).map(|x| x.id).collect();
+    let notas: Vec<Id> = d.pmi.iter().filter(|x| matches!(x.kind, PmiKind::Note | PmiKind::TitleBlock { .. })).map(|x| x.id).collect();
+    d.pmi_captures.clear();
+    let mut lista = vec![("Todas as anotações", todas), ("Sem anotações", vec![]), ("Notas e legenda", notas)];
+    if !gdt.is_empty() {
+        lista.push(("Tolerâncias", gdt));
+    }
+    for (n, shown) in lista {
+        let id = d.alloc();
+        d.pmi_captures.push(fenkra_core::pmi::PmiCapture { id, name: n.into(), view: view(n), shown, hidden: vec![], with_model: false });
+    }
+    d.origin_visible = false;
+    for e in d.references.iter_mut() {
+        e.visible = false;
+    }
+}
+
+/// Material e pintura de kart de corrida: quadro vermelho, carroceria branca e vermelha, pneu preto.
+fn pinta(d: &mut Document, cod: &str) {
+    use fenkra_core::Finish::*;
+    let g = |p: &[&str]| p.iter().any(|x| cod.starts_with(x));
+    let (mat, cor, acab): (&str, [u8; 3], Finish) = if g(&["QUADRO", "CH-01", "CH-02", "CH-03", "CH-04", "CH-05", "CH-06", "CH-07", "CH-10", "PR-01", "PR-02", "PR-03", "PR-04", "PR-05", "PR-10", "PO-03"]) {
+        ("Aço AISI 4130", [196, 18, 32], Brilhante)
+    } else if g(&["PR-06", "PR-08", "PR-09"]) {
+        ("Polipropileno", [238, 238, 240], Brilhante)
+    } else if g(&["PR-07"]) {
+        ("Polipropileno", [196, 18, 32], Brilhante)
+    } else if g(&["RD-03", "RD-04"]) {
+        ("Borracha", [24, 24, 27], Borracha)
+    } else if g(&["RD-01", "RD-02"]) {
+        ("Alumínio 7075", [214, 172, 64], MetalEscovado)
+    } else if g(&["TR-01", "TR-02"]) {
+        ("Alumínio 7075", [236, 118, 22], MetalEscovado)
+    } else if g(&["EX-08", "EX-10"]) {
+        ("Ferro fundido cinzento", [168, 170, 176], MetalPolido)
+    } else if g(&["EX-01", "DI-03", "DI-06", "DI-09", "PO-07", "TR-03", "FX", "EX-03", "EX-04", "DI-07", "DI-11", "EX-12"]) {
+        ("Aço 1045", [150, 154, 160], MetalPolido)
+    } else if g(&["EX-02", "EX-05", "EX-06", "EX-07", "EX-09", "EX-11", "DI-02", "DI-04", "DI-10", "DI-08", "MO-02"]) {
+        ("Alumínio 6061", [192, 196, 202], MetalEscovado)
+    } else if g(&["MO-01"]) {
+        ("Alumínio 6061", [64, 66, 72], Acetinado)
+    } else if g(&["MO-03"]) {
+        ("Aço inox 304", [176, 178, 184], MetalPolido)
+    } else if g(&["PO-01", "DI-01"]) {
+        ("Polipropileno", [28, 28, 32], Fosco)
+    } else if g(&["PO-08"]) {
+        ("Polipropileno", [226, 224, 210], Acetinado)
+    } else if g(&["PO-05", "PO-06"]) {
+        ("Aço 1020", [245, 196, 0], Brilhante)
+    } else {
+        ("Aço 1020", [58, 60, 66], Acetinado)
+    };
+    d.props.material = mat.into();
+    d.appearance = Some(Appearance { color: cor, finish: acab, texture: None });
+}
+
+/// Contorno K-25: repete a cor de cada peça no nó, porque a montagem não mostra a aparência da peça.
+fn cores_nos_nos(a: &mut Assembly, dir: &Path) {
+    for n in a.nodes.iter_mut() {
+        if let fenkra_montagem::NodeKind::Part { path } = &n.kind {
+            if let Some(cor) = std::fs::read_to_string(dir.join(path)).ok().and_then(|t| Document::from_json(&t).ok()).and_then(|d| d.appearance).map(|x| x.color) {
+                n.color = Some(cor);
+            }
+        }
+    }
+}
+
 /// Toda peça ganha nota simples e legenda; todo conjunto ganha número de item e balões.
 pub fn pmi_geral(r: &mut Reg) {
     let dir = modelo();
@@ -158,13 +233,16 @@ pub fn pmi_geral(r: &mut Reg) {
                 if !d.pmi.iter().any(|x| matches!(x.kind, PmiKind::TitleBlock { .. })) {
                     anota(&mut d, "Legenda", PmiKind::TitleBlock { template: "{codigo} {descricao} {material} {massa}".into() }, vec![[0.; 3]], "", None);
                     anota(&mut d, "Nota", PmiKind::Note, vec![[0.; 3]], "Tolerância geral ISO 2768-m", None);
-                    let _ = std::fs::write(&p, d.to_json());
                 }
+                acabamento(&mut d);
+                pinta(&mut d, &nome);
+                let _ = std::fs::write(&p, d.to_json());
                 pecas += 1;
             }
             Some("fka") if nome.starts_with("SC-") => {
                 let mut a = Assembly::from_json(&std::fs::read_to_string(&p).unwrap()).unwrap();
                 a.assign_items(Some(&dir));
+                cores_nos_nos(&mut a, &dir);
                 let rows = fenkra_montagem::bom::bom(&a, Some(&dir), BomLevel::Topo);
                 a.pmi.clear();
                 let nos: Vec<(String, [f64; 3])> = a.nodes.iter().map(|n| (n.name.split(':').next().unwrap_or("").to_string(), n.placement.origin)).collect();
@@ -183,7 +261,13 @@ pub fn pmi_geral(r: &mut Reg) {
             _ => {}
         }
     }
-    r.usa("PMI", &["Balão", "Legenda 3D", "Nota"]);
+    let pl = dir.join("KART-PLANO.fka");
+    if let Ok(mut a) = Assembly::from_json(&std::fs::read_to_string(&pl).unwrap_or_default()) {
+        cores_nos_nos(&mut a, &dir);
+        let _ = std::fs::write(&pl, a.to_json());
+    }
+    r.usa("Interface", &["Aparência da peça", "Material"]);
+    r.usa("PMI", &["Balão", "Legenda 3D", "Nota", "Captura PMI: todas", "Captura PMI: sem anotações", "Captura PMI: notas", "Captura PMI: tolerâncias"]);
     r.registra(Linha { cod: "PMI-GERAL".into(), nome: "Legendas e balões".into(), bancada: "PMI".into(), ok: pecas > 0 && baloes > 0, volume: 0., caixa: [0.; 3], corpos: baloes, nota: format!("{pecas} peças com legenda e nota, {baloes} balões nos subconjuntos") });
 }
 

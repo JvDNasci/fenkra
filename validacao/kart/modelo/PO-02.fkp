@@ -1,0 +1,471 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "6d874d1a91542236db9a947967b2134f",
+  "name": "PO-02 Chapa de reforço do banco",
+  "props": {
+    "pn": "FK-PO-02",
+    "description": "Chapa de reforço do banco",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      58,
+      60,
+      66
+    ],
+    "finish": "Acetinado",
+    "texture": null
+  },
+  "next_id": 25,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 8,
+      "name": "Plano1",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "mestre_E_REFORCO"
+        }
+      },
+      "visible": false,
+      "folder": 9,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_E_REFORCO",
+      "expr": "2",
+      "unit": "Comprimento",
+      "comment": "link: mestre.E_REFORCO",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 9,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_E_REFORCO",
+      "source": "mestre",
+      "publication": "E_REFORCO",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 2.0
+      },
+      "target": 3,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": {
+    "thickness": "mestre_E_REFORCO",
+    "radius": "2",
+    "k": "0.44",
+    "flat": false,
+    "material": "",
+    "method": 0,
+    "allowance": "",
+    "style": "",
+    "overrides": [],
+    "relief": "",
+    "relief_kind": 0,
+    "corner": ""
+  },
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 14,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 15,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 22,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          0.025682449340820312,
+          0.0,
+          1.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 113.09519378622599,
+        "ortho": false
+      },
+      "shown": [
+        14,
+        15
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 23,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          0.025682449340820312,
+          0.0,
+          1.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 113.09519378622599,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 24,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          0.025682449340820312,
+          0.0,
+          1.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 113.09519378622599,
+        "ortho": false
+      },
+      "shown": [
+        14,
+        15
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 6,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 4,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 5,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 4,
+                  "r": 25.0
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 7,
+      "name": "ParedeBase1",
+      "kind": {
+        "SmWall": {
+          "sketch": 6,
+          "reverse": false,
+          "offset": "",
+          "mid": false,
+          "surface": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 12,
+      "name": "Sketch2",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 8
+          },
+          "points": [
+            {
+              "id": 10,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 11,
+              "construction": false,
+              "geom": {
+                "Point": {
+                  "p": 10
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 13,
+      "name": "Furo1",
+      "kind": {
+        "Hole": {
+          "sketch": 12,
+          "kind": "Simples",
+          "diameter": "8.5",
+          "depth": "ThroughAll",
+          "thread": null,
+          "thread_modeled": false,
+          "standard": null,
+          "points": [],
+          "dir": null,
+          "reverse": false,
+          "tip": null,
+          "taper": "0",
+          "left_hand": false,
+          "extra": {
+            "thread_depth": "",
+            "thread_relief": "",
+            "tip_offset": "",
+            "thread_relief_unit": null,
+            "thread_top_gap": "",
+            "thread_top_gap_unit": "Mm",
+            "thread_chamfer": "",
+            "thread_chamfer_unit": "Mm",
+            "thread_start_angle": "",
+            "thread_start_ref": null
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 4
+}

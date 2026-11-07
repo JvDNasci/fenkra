@@ -1,0 +1,251 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.34",
+  "uid": "fb73b8624452210b663b500de885fc9f",
+  "name": "CV-SUP2 Preenchimento de contorno",
+  "props": {
+    "pn": "FK-CV-SUP2",
+    "description": "Preenchimento de contorno",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 13,
+  "origin_visible": true,
+  "references": [
+    {
+      "id": 2,
+      "name": "Q0",
+      "kind": {
+        "PointCoords": {
+          "x": "0",
+          "y": "0",
+          "z": "0",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 4,
+      "name": "Q1",
+      "kind": {
+        "PointCoords": {
+          "x": "200",
+          "y": "0",
+          "z": "20",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 5,
+      "name": "Q2",
+      "kind": {
+        "PointCoords": {
+          "x": "200",
+          "y": "150",
+          "z": "0",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 6,
+      "name": "Q3",
+      "kind": {
+        "PointCoords": {
+          "x": "0",
+          "y": "150",
+          "z": "30",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 7,
+      "name": "Linha1",
+      "kind": {
+        "LinePoints": {
+          "a": {
+            "Ref": 2
+          },
+          "b": {
+            "Ref": 4
+          },
+          "start": "0",
+          "end": "0"
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 8,
+      "name": "Linha2",
+      "kind": {
+        "LinePoints": {
+          "a": {
+            "Ref": 4
+          },
+          "b": {
+            "Ref": 5
+          },
+          "start": "0",
+          "end": "0"
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 9,
+      "name": "Linha3",
+      "kind": {
+        "LinePoints": {
+          "a": {
+            "Ref": 5
+          },
+          "b": {
+            "Ref": 6
+          },
+          "start": "0",
+          "end": "0"
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 10,
+      "name": "Linha4",
+      "kind": {
+        "LinePoints": {
+          "a": {
+            "Ref": 6
+          },
+          "b": {
+            "Ref": 2
+          },
+          "start": "0",
+          "end": "0"
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 11,
+      "name": "Superficie1",
+      "kind": {
+        "SurfFill": {
+          "curves": [
+            {
+              "Ref": 7
+            },
+            {
+              "Ref": 8
+            },
+            {
+              "Ref": 9
+            },
+            {
+              "Ref": 10
+            }
+          ],
+          "conds": [],
+          "points": [],
+          "tol": "0.1"
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 3,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 12,
+      "name": "Engrossar1",
+      "kind": {
+        "ThickSurface": {
+          "surface": {
+            "Ref": 11
+          },
+          "t1": "1.5",
+          "t2": "0",
+          "op": "Add"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 1
+}

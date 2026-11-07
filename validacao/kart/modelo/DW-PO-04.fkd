@@ -1,0 +1,140 @@
+{
+  "format_version": 1,
+  "uid": "e8bd4e9d1df193a6410aedfddb82edaf",
+  "name": "Assoalho",
+  "next_id": 4,
+  "sheets": [
+    {
+      "id": 1,
+      "name": "Folha 1",
+      "format": "A3",
+      "portrait": false,
+      "zones": true
+    }
+  ],
+  "views": [
+    {
+      "id": 2,
+      "sheet": 1,
+      "name": "Planificada",
+      "source": {
+        "path": "PO-04.fkp",
+        "display_state": "",
+        "hidden": []
+      },
+      "kind": "Flat",
+      "pos": [
+        200.0,
+        150.0
+      ],
+      "scale": 0.4,
+      "hidden_lines": false,
+      "tangent_edges": true,
+      "label": true,
+      "render": "Arestas",
+      "color": null,
+      "line_width": 0.0,
+      "ann": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "hatch": {
+        "pattern": null,
+        "angle": null,
+        "step": null,
+        "alternate": true
+      },
+      "corte": {
+        "pontos": [],
+        "profundidade": null,
+        "fatia": false,
+        "sem_corte": [],
+        "borda": "Lisa"
+      },
+      "detalhe": {
+        "contorno": []
+      }
+    }
+  ],
+  "dims": [],
+  "notes": [],
+  "tables": [
+    {
+      "id": 3,
+      "sheet": 1,
+      "kind": "Bends",
+      "source": {
+        "path": "PO-04.fkp",
+        "display_state": "",
+        "hidden": []
+      },
+      "pos": [
+        20.0,
+        20.0
+      ],
+      "level": "Topo",
+      "cfg": {
+        "colunas": [],
+        "ordenar": null,
+        "dividir": 0,
+        "em_folhas": false,
+        "renumerar": false,
+        "vista_origem": null,
+        "etiquetas": false
+      }
+    }
+  ],
+  "centers": [],
+  "centros_ocultos": [],
+  "title": {
+    "company": "Fenkra",
+    "title": "{descricao}",
+    "pn": "{codigo}",
+    "material": "{material}",
+    "drawn_by": "{autor}",
+    "date": "{data}",
+    "revision": "A",
+    "notes": "",
+    "style": "Iso7200",
+    "checked_by": "",
+    "approved_by": "",
+    "density": 7.85
+  },
+  "text_height": 3.5,
+  "decimals": 1,
+  "projection": "Primeiro"
+}

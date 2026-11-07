@@ -1,0 +1,682 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "73f59782c2c48c3aae5cb34828e72997",
+  "name": "MO-01 Volume do motor",
+  "props": {
+    "pn": "FK-MO-01",
+    "description": "Volume do motor",
+    "material": "Alumínio 6061",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      64,
+      66,
+      72
+    ],
+    "finish": "Acetinado",
+    "texture": null
+  },
+  "next_id": 41,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 18,
+      "name": "Plano1",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "150"
+        }
+      },
+      "visible": false,
+      "folder": 19,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 25,
+      "name": "Plano2",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XZ"
+          },
+          "offset": "90"
+        }
+      },
+      "visible": false,
+      "folder": 19,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_DC",
+      "expr": "213",
+      "unit": "Comprimento",
+      "comment": "link: mestre.DC",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 19,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_DC",
+      "source": "mestre",
+      "publication": "DC",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 213.0
+      },
+      "target": 3,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 30,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 31,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 38,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          0.0,
+          -22.5,
+          140.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 709.4786818502724,
+        "ortho": false
+      },
+      "shown": [
+        30,
+        31
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 39,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          0.0,
+          -22.5,
+          140.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 709.4786818502724,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 40,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          0.0,
+          -22.5,
+          140.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 709.4786818502724,
+        "ortho": false
+      },
+      "shown": [
+        30,
+        31
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 16,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 4,
+              "x": -130.0,
+              "y": -90.0,
+              "fixed": false
+            },
+            {
+              "id": 5,
+              "x": 130.0,
+              "y": -90.0,
+              "fixed": false
+            },
+            {
+              "id": 6,
+              "x": 130.0,
+              "y": 90.0,
+              "fixed": false
+            },
+            {
+              "id": 7,
+              "x": -130.0,
+              "y": 90.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 8,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 4,
+                  "b": 5
+                }
+              }
+            },
+            {
+              "id": 9,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 5,
+                  "b": 6
+                }
+              }
+            },
+            {
+              "id": 10,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 6,
+                  "b": 7
+                }
+              }
+            },
+            {
+              "id": 11,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 7,
+                  "b": 4
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 12,
+              "kind": {
+                "Horizontal": 8
+              }
+            },
+            {
+              "id": 13,
+              "kind": {
+                "Horizontal": 10
+              }
+            },
+            {
+              "id": 14,
+              "kind": {
+                "Vertical": 9
+              }
+            },
+            {
+              "id": 15,
+              "kind": {
+                "Vertical": 11
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 17,
+      "name": "Extrusão1",
+      "kind": {
+        "Extrude": {
+          "sketch": 16,
+          "op": "Add",
+          "extent": {
+            "Blind": "150"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 22,
+      "name": "Sketch2",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 18
+          },
+          "points": [
+            {
+              "id": 20,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 21,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 20,
+                  "r": 55.0
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 23,
+      "name": "Extrusão2",
+      "kind": {
+        "Extrude": {
+          "sketch": 22,
+          "op": "Add",
+          "extent": {
+            "Blind": "130"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 24,
+      "name": "Filete1",
+      "kind": {
+        "Fillet": {
+          "value": "8",
+          "edges": {
+            "Edges": [
+              [
+                130.0,
+                90.0,
+                75.0
+              ],
+              [
+                -130.0,
+                90.0,
+                75.0
+              ],
+              [
+                130.0,
+                -90.0,
+                75.0
+              ],
+              [
+                -130.0,
+                -90.0,
+                75.0
+              ]
+            ]
+          },
+          "mode": "Constant",
+          "prop": "Tangente",
+          "keys": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "extra": {
+            "flips": [],
+            "partial": null,
+            "smooth": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 28,
+      "name": "Sketch3",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 25
+          },
+          "points": [
+            {
+              "id": 26,
+              "x": 0.0,
+              "y": 75.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 27,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 26,
+                  "r": 11.0
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 29,
+      "name": "Extrusão3",
+      "kind": {
+        "Extrude": {
+          "sketch": 28,
+          "op": "Add",
+          "extent": {
+            "Blind": "45"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 7
+}

@@ -1,0 +1,1421 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "7ae885c11c23a185cccbfaaea277f9fc",
+  "name": "PR-09 Proteção traseira",
+  "props": {
+    "pn": "FK-PR-09",
+    "description": "Proteção traseira",
+    "material": "Polipropileno",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      238,
+      238,
+      240
+    ],
+    "finish": "Brilhante",
+    "texture": null
+  },
+  "next_id": 18,
+  "origin_visible": false,
+  "references": [],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_LT",
+      "expr": "1380",
+      "unit": "Comprimento",
+      "comment": "link: mestre.LT",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 5,
+      "name": "mestre_VAO_TRAS",
+      "expr": "30",
+      "unit": "Comprimento",
+      "comment": "link: mestre.VAO_TRAS",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_LT",
+      "source": "mestre",
+      "publication": "LT",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 1380.0
+      },
+      "target": 3,
+      "xform": null
+    },
+    {
+      "id": 4,
+      "name": "mestre_VAO_TRAS",
+      "source": "mestre",
+      "publication": "VAO_TRAS",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 30.0
+      },
+      "target": 5,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 7,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 8,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 15,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          10.310394287109375,
+          0.0,
+          140.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 2242.0468232480994,
+        "ortho": false
+      },
+      "shown": [
+        7,
+        8
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 16,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          10.310394287109375,
+          0.0,
+          140.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 2242.0468232480994,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 17,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          10.310394287109375,
+          0.0,
+          140.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 2242.0468232480994,
+        "ortho": false
+      },
+      "shown": [
+        7,
+        8
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 6,
+      "name": "Forma1",
+      "kind": {
+        "Forma": {
+          "gaiola": {
+            "nos": [
+              {
+                "id": 0,
+                "p": [
+                  88.566,
+                  -690.0,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 1,
+                "p": [
+                  72.696,
+                  -460.00000000000006,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 2,
+                "p": [
+                  72.696,
+                  -460.00000000000006,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 3,
+                "p": [
+                  88.566,
+                  -690.0,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 4,
+                "p": [
+                  72.696,
+                  -460.00000000000006,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 5,
+                "p": [
+                  88.566,
+                  -690.0,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 6,
+                "p": [
+                  63.174,
+                  -230.00000000000003,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 7,
+                "p": [
+                  63.174,
+                  -230.00000000000003,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 8,
+                "p": [
+                  63.174,
+                  -230.00000000000003,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 9,
+                "p": [
+                  60.0,
+                  0.0,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 10,
+                "p": [
+                  60.0,
+                  0.0,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 11,
+                "p": [
+                  60.0,
+                  0.0,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 12,
+                "p": [
+                  63.174,
+                  229.99999999999994,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 13,
+                "p": [
+                  63.174,
+                  229.99999999999994,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 14,
+                "p": [
+                  63.174,
+                  229.99999999999994,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 15,
+                "p": [
+                  72.696,
+                  460.00000000000006,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 16,
+                "p": [
+                  72.696,
+                  460.00000000000006,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 17,
+                "p": [
+                  72.696,
+                  460.00000000000006,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 18,
+                "p": [
+                  88.566,
+                  690.0,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 19,
+                "p": [
+                  88.566,
+                  690.0,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 20,
+                "p": [
+                  88.566,
+                  690.0,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 21,
+                "p": [
+                  -31.434,
+                  -690.0,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 22,
+                "p": [
+                  -47.303999999999995,
+                  -460.00000000000006,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 23,
+                "p": [
+                  -47.303999999999995,
+                  -460.00000000000006,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 24,
+                "p": [
+                  -31.434,
+                  -690.0,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 25,
+                "p": [
+                  -47.303999999999995,
+                  -460.00000000000006,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 26,
+                "p": [
+                  -31.434,
+                  -690.0,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 27,
+                "p": [
+                  -56.826,
+                  -230.00000000000003,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 28,
+                "p": [
+                  -56.826,
+                  -230.00000000000003,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 29,
+                "p": [
+                  -56.826,
+                  -230.00000000000003,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 30,
+                "p": [
+                  -60.0,
+                  0.0,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 31,
+                "p": [
+                  -60.0,
+                  0.0,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 32,
+                "p": [
+                  -60.0,
+                  0.0,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 33,
+                "p": [
+                  -56.826,
+                  229.99999999999994,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 34,
+                "p": [
+                  -56.826,
+                  229.99999999999994,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 35,
+                "p": [
+                  -56.826,
+                  229.99999999999994,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 36,
+                "p": [
+                  -47.303999999999995,
+                  460.00000000000006,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 37,
+                "p": [
+                  -47.303999999999995,
+                  460.00000000000006,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 38,
+                "p": [
+                  -47.303999999999995,
+                  460.00000000000006,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 39,
+                "p": [
+                  -31.434,
+                  690.0,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 40,
+                "p": [
+                  -31.434,
+                  690.0,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 41,
+                "p": [
+                  -31.434,
+                  690.0,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 42,
+                "p": [
+                  28.566,
+                  690.0,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 43,
+                "p": [
+                  28.566,
+                  690.0,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 44,
+                "p": [
+                  28.566,
+                  690.0,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 45,
+                "p": [
+                  28.566,
+                  -690.0,
+                  140.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 46,
+                "p": [
+                  28.566,
+                  -690.0,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 47,
+                "p": [
+                  28.566,
+                  -690.0,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 48,
+                "p": [
+                  12.696000000000003,
+                  -460.00000000000006,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 49,
+                "p": [
+                  3.174000000000001,
+                  -230.00000000000003,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 50,
+                "p": [
+                  0.0,
+                  0.0,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 51,
+                "p": [
+                  3.173999999999998,
+                  229.99999999999994,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 52,
+                "p": [
+                  12.696000000000003,
+                  460.00000000000006,
+                  240.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 53,
+                "p": [
+                  12.696000000000003,
+                  -460.00000000000006,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 54,
+                "p": [
+                  3.174000000000001,
+                  -230.00000000000003,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 55,
+                "p": [
+                  0.0,
+                  0.0,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 56,
+                "p": [
+                  3.173999999999998,
+                  229.99999999999994,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              },
+              {
+                "id": 57,
+                "p": [
+                  12.696000000000003,
+                  460.00000000000006,
+                  40.0
+                ],
+                "canto": false,
+                "tangente": null
+              }
+            ],
+            "faces": [
+              {
+                "id": 0,
+                "nos": [
+                  0,
+                  1,
+                  2,
+                  3
+                ]
+              },
+              {
+                "id": 1,
+                "nos": [
+                  3,
+                  2,
+                  4,
+                  5
+                ]
+              },
+              {
+                "id": 2,
+                "nos": [
+                  1,
+                  6,
+                  7,
+                  2
+                ]
+              },
+              {
+                "id": 3,
+                "nos": [
+                  2,
+                  7,
+                  8,
+                  4
+                ]
+              },
+              {
+                "id": 4,
+                "nos": [
+                  6,
+                  9,
+                  10,
+                  7
+                ]
+              },
+              {
+                "id": 5,
+                "nos": [
+                  7,
+                  10,
+                  11,
+                  8
+                ]
+              },
+              {
+                "id": 6,
+                "nos": [
+                  9,
+                  12,
+                  13,
+                  10
+                ]
+              },
+              {
+                "id": 7,
+                "nos": [
+                  10,
+                  13,
+                  14,
+                  11
+                ]
+              },
+              {
+                "id": 8,
+                "nos": [
+                  12,
+                  15,
+                  16,
+                  13
+                ]
+              },
+              {
+                "id": 9,
+                "nos": [
+                  13,
+                  16,
+                  17,
+                  14
+                ]
+              },
+              {
+                "id": 10,
+                "nos": [
+                  15,
+                  18,
+                  19,
+                  16
+                ]
+              },
+              {
+                "id": 11,
+                "nos": [
+                  16,
+                  19,
+                  20,
+                  17
+                ]
+              },
+              {
+                "id": 12,
+                "nos": [
+                  24,
+                  23,
+                  22,
+                  21
+                ]
+              },
+              {
+                "id": 13,
+                "nos": [
+                  26,
+                  25,
+                  23,
+                  24
+                ]
+              },
+              {
+                "id": 14,
+                "nos": [
+                  23,
+                  28,
+                  27,
+                  22
+                ]
+              },
+              {
+                "id": 15,
+                "nos": [
+                  25,
+                  29,
+                  28,
+                  23
+                ]
+              },
+              {
+                "id": 16,
+                "nos": [
+                  28,
+                  31,
+                  30,
+                  27
+                ]
+              },
+              {
+                "id": 17,
+                "nos": [
+                  29,
+                  32,
+                  31,
+                  28
+                ]
+              },
+              {
+                "id": 18,
+                "nos": [
+                  31,
+                  34,
+                  33,
+                  30
+                ]
+              },
+              {
+                "id": 19,
+                "nos": [
+                  32,
+                  35,
+                  34,
+                  31
+                ]
+              },
+              {
+                "id": 20,
+                "nos": [
+                  34,
+                  37,
+                  36,
+                  33
+                ]
+              },
+              {
+                "id": 21,
+                "nos": [
+                  35,
+                  38,
+                  37,
+                  34
+                ]
+              },
+              {
+                "id": 22,
+                "nos": [
+                  37,
+                  40,
+                  39,
+                  36
+                ]
+              },
+              {
+                "id": 23,
+                "nos": [
+                  38,
+                  41,
+                  40,
+                  37
+                ]
+              },
+              {
+                "id": 24,
+                "nos": [
+                  39,
+                  40,
+                  42,
+                  43
+                ]
+              },
+              {
+                "id": 25,
+                "nos": [
+                  43,
+                  42,
+                  19,
+                  18
+                ]
+              },
+              {
+                "id": 26,
+                "nos": [
+                  40,
+                  41,
+                  44,
+                  42
+                ]
+              },
+              {
+                "id": 27,
+                "nos": [
+                  42,
+                  44,
+                  20,
+                  19
+                ]
+              },
+              {
+                "id": 28,
+                "nos": [
+                  46,
+                  45,
+                  24,
+                  21
+                ]
+              },
+              {
+                "id": 29,
+                "nos": [
+                  0,
+                  3,
+                  45,
+                  46
+                ]
+              },
+              {
+                "id": 30,
+                "nos": [
+                  45,
+                  47,
+                  26,
+                  24
+                ]
+              },
+              {
+                "id": 31,
+                "nos": [
+                  3,
+                  5,
+                  47,
+                  45
+                ]
+              },
+              {
+                "id": 32,
+                "nos": [
+                  26,
+                  47,
+                  48,
+                  25
+                ]
+              },
+              {
+                "id": 33,
+                "nos": [
+                  25,
+                  48,
+                  49,
+                  29
+                ]
+              },
+              {
+                "id": 34,
+                "nos": [
+                  29,
+                  49,
+                  50,
+                  32
+                ]
+              },
+              {
+                "id": 35,
+                "nos": [
+                  32,
+                  50,
+                  51,
+                  35
+                ]
+              },
+              {
+                "id": 36,
+                "nos": [
+                  35,
+                  51,
+                  52,
+                  38
+                ]
+              },
+              {
+                "id": 37,
+                "nos": [
+                  38,
+                  52,
+                  44,
+                  41
+                ]
+              },
+              {
+                "id": 38,
+                "nos": [
+                  47,
+                  5,
+                  4,
+                  48
+                ]
+              },
+              {
+                "id": 39,
+                "nos": [
+                  48,
+                  4,
+                  8,
+                  49
+                ]
+              },
+              {
+                "id": 40,
+                "nos": [
+                  49,
+                  8,
+                  11,
+                  50
+                ]
+              },
+              {
+                "id": 41,
+                "nos": [
+                  50,
+                  11,
+                  14,
+                  51
+                ]
+              },
+              {
+                "id": 42,
+                "nos": [
+                  51,
+                  14,
+                  17,
+                  52
+                ]
+              },
+              {
+                "id": 43,
+                "nos": [
+                  52,
+                  17,
+                  20,
+                  44
+                ]
+              },
+              {
+                "id": 44,
+                "nos": [
+                  22,
+                  53,
+                  46,
+                  21
+                ]
+              },
+              {
+                "id": 45,
+                "nos": [
+                  27,
+                  54,
+                  53,
+                  22
+                ]
+              },
+              {
+                "id": 46,
+                "nos": [
+                  30,
+                  55,
+                  54,
+                  27
+                ]
+              },
+              {
+                "id": 47,
+                "nos": [
+                  33,
+                  56,
+                  55,
+                  30
+                ]
+              },
+              {
+                "id": 48,
+                "nos": [
+                  36,
+                  57,
+                  56,
+                  33
+                ]
+              },
+              {
+                "id": 49,
+                "nos": [
+                  39,
+                  43,
+                  57,
+                  36
+                ]
+              },
+              {
+                "id": 50,
+                "nos": [
+                  53,
+                  1,
+                  0,
+                  46
+                ]
+              },
+              {
+                "id": 51,
+                "nos": [
+                  54,
+                  6,
+                  1,
+                  53
+                ]
+              },
+              {
+                "id": 52,
+                "nos": [
+                  55,
+                  9,
+                  6,
+                  54
+                ]
+              },
+              {
+                "id": 53,
+                "nos": [
+                  56,
+                  12,
+                  9,
+                  55
+                ]
+              },
+              {
+                "id": 54,
+                "nos": [
+                  57,
+                  15,
+                  12,
+                  56
+                ]
+              },
+              {
+                "id": 55,
+                "nos": [
+                  43,
+                  18,
+                  15,
+                  57
+                ]
+              }
+            ],
+            "vincos": [],
+            "simetria": null,
+            "prox_no": 58,
+            "prox_face": 56
+          },
+          "niveis": 2,
+          "congelada": false,
+          "conversao": {
+            "continuidade": 1,
+            "tol": "0.05",
+            "pausada": false
+          },
+          "vinculos": {
+            "nos": [],
+            "cotas": [],
+            "bordas": []
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 1
+}

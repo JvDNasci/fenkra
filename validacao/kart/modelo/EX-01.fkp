@@ -1,0 +1,1316 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "5a6e65ec12c46aeecd72cfc98017eecd",
+  "name": "EX-01 Eixo traseiro",
+  "props": {
+    "pn": "FK-EX-01",
+    "description": "Eixo traseiro",
+    "material": "Aço 1045",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      150,
+      154,
+      160
+    ],
+    "finish": "MetalPolido",
+    "texture": null
+  },
+  "next_id": 81,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 18,
+      "name": "Plano1",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "YZ"
+          },
+          "offset": "mestre_D_EIXO/2"
+        }
+      },
+      "visible": false,
+      "folder": 19,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_D_EIXO",
+      "expr": "50",
+      "unit": "Comprimento",
+      "comment": "link: mestre.D_EIXO",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 5,
+      "name": "mestre_E_EIXO",
+      "expr": "2.5",
+      "unit": "Comprimento",
+      "comment": "link: mestre.E_EIXO",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 7,
+      "name": "mestre_L_EIXO",
+      "expr": "1040",
+      "unit": "Comprimento",
+      "comment": "link: mestre.L_EIXO",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 19,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_D_EIXO",
+      "source": "mestre",
+      "publication": "D_EIXO",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 50.0
+      },
+      "target": 3,
+      "xform": null
+    },
+    {
+      "id": 4,
+      "name": "mestre_E_EIXO",
+      "source": "mestre",
+      "publication": "E_EIXO",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 2.5
+      },
+      "target": 5,
+      "xform": null
+    },
+    {
+      "id": 6,
+      "name": "mestre_L_EIXO",
+      "source": "mestre",
+      "publication": "L_EIXO",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 1040.0
+      },
+      "target": 7,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 64,
+      "name": "tol diâmetro",
+      "kind": "Diameter",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          25.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "0.05",
+      "tol_minus": "0",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": [
+        {
+          "class": "FaceCilindrica",
+          "point": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "dir": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "radius": 25.0,
+          "concave": false
+        },
+        {
+          "class": "FaceCilindrica",
+          "point": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "dir": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "radius": 25.0,
+          "concave": false
+        }
+      ]
+    },
+    {
+      "id": 65,
+      "name": "A",
+      "kind": {
+        "Datum": {
+          "letter": "A"
+        }
+      },
+      "anchors": [
+        [
+          25.0,
+          300.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": [
+        {
+          "class": "FaceCilindrica",
+          "point": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "dir": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "radius": 25.0,
+          "concave": false
+        }
+      ]
+    },
+    {
+      "id": 66,
+      "name": "Batimento",
+      "kind": {
+        "Gdt": {
+          "ch": "BatimentoCircular",
+          "tol": "0.05",
+          "datums": "A",
+          "extra": {
+            "zone_dia": false,
+            "modifier": "",
+            "second": null,
+            "second_ch": null,
+            "zona": null,
+            "uz": "",
+            "proj": "",
+            "mods": [],
+            "datum_mods": [],
+            "entre": [
+              "",
+              ""
+            ],
+            "por_unidade": "",
+            "max_valor": "",
+            "norma": "Iso",
+            "elemento": "Superficie"
+          }
+        }
+      },
+      "anchors": [
+        [
+          25.0,
+          500.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": [
+        {
+          "class": "FaceCilindrica",
+          "point": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "dir": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "radius": 25.0,
+          "concave": false
+        }
+      ]
+    },
+    {
+      "id": 67,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 68,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 77,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 1667.8417191088608,
+        "ortho": false
+      },
+      "shown": [
+        64,
+        65,
+        66,
+        67,
+        68
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 78,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 1667.8417191088608,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 79,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 1667.8417191088608,
+        "ortho": false
+      },
+      "shown": [
+        67,
+        68
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 80,
+      "name": "Tolerâncias",
+      "view": {
+        "name": "Tolerâncias",
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 1667.8417191088608,
+        "ortho": false
+      },
+      "shown": [
+        64,
+        65,
+        66
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 16,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XZ"
+          },
+          "points": [
+            {
+              "id": 8,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 12,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 10,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 8,
+                  "r": 25.0
+                }
+              }
+            },
+            {
+              "id": 14,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 12,
+                  "r": 22.5
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 9,
+              "kind": {
+                "Fixed": 8
+              }
+            },
+            {
+              "id": 11,
+              "kind": {
+                "Diameter": [
+                  10,
+                  "mestre_D_EIXO"
+                ]
+              }
+            },
+            {
+              "id": 13,
+              "kind": {
+                "Fixed": 12
+              }
+            },
+            {
+              "id": 15,
+              "kind": {
+                "Diameter": [
+                  14,
+                  "mestre_D_EIXO-2*mestre_E_EIXO"
+                ]
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 17,
+      "name": "Tubo do eixo",
+      "kind": {
+        "Extrude": {
+          "sketch": 16,
+          "op": "Add",
+          "extent": {
+            "Symmetric": "mestre_L_EIXO"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 32,
+      "name": "Sketch2",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 18
+          },
+          "points": [
+            {
+              "id": 20,
+              "x": 460.0,
+              "y": -4.0,
+              "fixed": false
+            },
+            {
+              "id": 21,
+              "x": 510.0,
+              "y": -4.0,
+              "fixed": false
+            },
+            {
+              "id": 22,
+              "x": 510.0,
+              "y": 4.0,
+              "fixed": false
+            },
+            {
+              "id": 23,
+              "x": 460.0,
+              "y": 4.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 24,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 20,
+                  "b": 21
+                }
+              }
+            },
+            {
+              "id": 25,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 21,
+                  "b": 22
+                }
+              }
+            },
+            {
+              "id": 26,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 22,
+                  "b": 23
+                }
+              }
+            },
+            {
+              "id": 27,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 23,
+                  "b": 20
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 28,
+              "kind": {
+                "Horizontal": 24
+              }
+            },
+            {
+              "id": 29,
+              "kind": {
+                "Horizontal": 26
+              }
+            },
+            {
+              "id": 30,
+              "kind": {
+                "Vertical": 25
+              }
+            },
+            {
+              "id": 31,
+              "kind": {
+                "Vertical": 27
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 33,
+      "name": "Rasgo do cubo",
+      "kind": {
+        "Extrude": {
+          "sketch": 32,
+          "op": "Cut",
+          "extent": {
+            "Blind": "4"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 34,
+      "name": "Espelho1",
+      "kind": {
+        "Mirror": {
+          "plane": {
+            "Origin": "XZ"
+          },
+          "sources": [
+            33
+          ]
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 47,
+      "name": "Sketch3",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 18
+          },
+          "points": [
+            {
+              "id": 35,
+              "x": -120.0,
+              "y": -4.0,
+              "fixed": false
+            },
+            {
+              "id": 36,
+              "x": -80.0,
+              "y": -4.0,
+              "fixed": false
+            },
+            {
+              "id": 37,
+              "x": -80.0,
+              "y": 4.0,
+              "fixed": false
+            },
+            {
+              "id": 38,
+              "x": -120.0,
+              "y": 4.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 39,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 35,
+                  "b": 36
+                }
+              }
+            },
+            {
+              "id": 40,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 36,
+                  "b": 37
+                }
+              }
+            },
+            {
+              "id": 41,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 37,
+                  "b": 38
+                }
+              }
+            },
+            {
+              "id": 42,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 38,
+                  "b": 35
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 43,
+              "kind": {
+                "Horizontal": 39
+              }
+            },
+            {
+              "id": 44,
+              "kind": {
+                "Horizontal": 41
+              }
+            },
+            {
+              "id": 45,
+              "kind": {
+                "Vertical": 40
+              }
+            },
+            {
+              "id": 46,
+              "kind": {
+                "Vertical": 42
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 48,
+      "name": "Rasgo da coroa",
+      "kind": {
+        "Extrude": {
+          "sketch": 47,
+          "op": "Cut",
+          "extent": {
+            "Blind": "4"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 61,
+      "name": "Sketch4",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 18
+          },
+          "points": [
+            {
+              "id": 49,
+              "x": 160.0,
+              "y": -4.0,
+              "fixed": false
+            },
+            {
+              "id": 50,
+              "x": 200.0,
+              "y": -4.0,
+              "fixed": false
+            },
+            {
+              "id": 51,
+              "x": 200.0,
+              "y": 4.0,
+              "fixed": false
+            },
+            {
+              "id": 52,
+              "x": 160.0,
+              "y": 4.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 53,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 49,
+                  "b": 50
+                }
+              }
+            },
+            {
+              "id": 54,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 50,
+                  "b": 51
+                }
+              }
+            },
+            {
+              "id": 55,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 51,
+                  "b": 52
+                }
+              }
+            },
+            {
+              "id": 56,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 52,
+                  "b": 49
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 57,
+              "kind": {
+                "Horizontal": 53
+              }
+            },
+            {
+              "id": 58,
+              "kind": {
+                "Horizontal": 55
+              }
+            },
+            {
+              "id": 59,
+              "kind": {
+                "Vertical": 54
+              }
+            },
+            {
+              "id": 60,
+              "kind": {
+                "Vertical": 56
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 62,
+      "name": "Rasgo do disco",
+      "kind": {
+        "Extrude": {
+          "sketch": 61,
+          "op": "Cut",
+          "extent": {
+            "Blind": "4"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 63,
+      "name": "Chanfro1",
+      "kind": {
+        "Chamfer": {
+          "value": "1.5",
+          "edges": {
+            "Edges": [
+              [
+                -25.0,
+                520.0,
+                3.0616168932349032e-15
+              ],
+              [
+                -25.0,
+                520.0,
+                3.0616168932349032e-15
+              ],
+              [
+                -25.0,
+                -520.0,
+                3.0616168932349032e-15
+              ],
+              [
+                -25.0,
+                -520.0,
+                3.0616168932349032e-15
+              ]
+            ]
+          },
+          "mode": "Constant",
+          "prop": "Tangente",
+          "keys": [
+            null,
+            null,
+            null,
+            null
+          ],
+          "extra": {
+            "flips": [],
+            "partial": null,
+            "smooth": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 10
+}

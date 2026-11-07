@@ -1,0 +1,413 @@
+{
+  "format_version": 1,
+  "name": "TESTE-TRANSMISSAO",
+  "uid": "8caca5d529a27851951b625e2f73f642",
+  "props": {
+    "pn": "",
+    "description": "",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "next_id": 7,
+  "nodes": [
+    {
+      "id": 1,
+      "name": "MO-02",
+      "number": 1,
+      "kind": {
+        "Part": {
+          "path": "MO-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": null
+    },
+    {
+      "id": 2,
+      "name": "TR-02",
+      "number": 2,
+      "kind": {
+        "Part": {
+          "path": "TR-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          170.4,
+          0.0,
+          265.8
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": null
+    },
+    {
+      "id": 3,
+      "name": "TR-01",
+      "number": 3,
+      "kind": {
+        "Part": {
+          "path": "TR-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": null
+    }
+  ],
+  "mates": [],
+  "rigid": [],
+  "params": [],
+  "patterns": [],
+  "joints": [
+    {
+      "id": 4,
+      "name": "Revolução",
+      "kind": "Revolute",
+      "a": {
+        "comp": 1,
+        "frame": {
+          "o": [
+            170.4,
+            0.0,
+            265.8
+          ],
+          "z": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "x": [
+            -1.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "b": {
+        "comp": 2,
+        "frame": {
+          "o": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "x": [
+            -1.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "angle0": 0.0,
+      "len0": 0.0,
+      "drive_angle": "t",
+      "drive_len": null,
+      "suppressed": false,
+      "limites": {
+        "angulo": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_x": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_y": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "inclinacao": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "trajeto": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        }
+      },
+      "zero": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fontes": [
+        null,
+        null
+      ]
+    },
+    {
+      "id": 5,
+      "name": "Revolução.2",
+      "kind": "Revolute",
+      "a": {
+        "comp": 1,
+        "frame": {
+          "o": [
+            0.0,
+            0.0,
+            138.0
+          ],
+          "z": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "x": [
+            -1.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "b": {
+        "comp": 3,
+        "frame": {
+          "o": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            1.0,
+            0.0
+          ],
+          "x": [
+            -1.0,
+            0.0,
+            0.0
+          ]
+        }
+      },
+      "angle0": 0.0,
+      "len0": 0.0,
+      "drive_angle": null,
+      "drive_len": null,
+      "suppressed": false,
+      "limites": {
+        "angulo": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_x": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_y": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "inclinacao": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "trajeto": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        }
+      },
+      "zero": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fontes": [
+        null,
+        null
+      ]
+    }
+  ],
+  "couplings": [
+    {
+      "id": 6,
+      "name": "Engrenagem",
+      "kind": "Gear",
+      "a": 4,
+      "b": 5,
+      "ratio": "0.13414634146341464"
+    }
+  ],
+  "display_states": [],
+  "animations": [],
+  "explosoes": [],
+  "pmi": [],
+  "items": [],
+  "pmi_captures": [],
+  "features": [],
+  "pilhas": [],
+  "interf": {
+    "ignorados": [],
+    "menores_que": 0.0
+  },
+  "relational": false,
+  "politicas_link": [],
+  "religacoes": [],
+  "geometria": null,
+  "esqueleto": null,
+  "contexto_livre": false,
+  "origem_oculta": false
+}

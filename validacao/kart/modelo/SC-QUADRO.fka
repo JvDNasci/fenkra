@@ -1,0 +1,1114 @@
+{
+  "format_version": 1,
+  "name": "SC-QUADRO",
+  "uid": "2d0d3247ce08160da83b919eef6a213b",
+  "props": {
+    "pn": "",
+    "description": "",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "next_id": 42,
+  "nodes": [
+    {
+      "id": 1,
+      "name": "QUADRO",
+      "number": 1,
+      "kind": {
+        "Part": {
+          "path": "QUADRO.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 2,
+      "name": "CH-08",
+      "number": 2,
+      "kind": {
+        "Part": {
+          "path": "CH-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          350.0,
+          75.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 3,
+      "name": "CH-08:2",
+      "number": 3,
+      "kind": {
+        "Part": {
+          "path": "CH-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          75.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 4,
+      "name": "CH-08:3",
+      "number": 4,
+      "kind": {
+        "Part": {
+          "path": "CH-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -350.0,
+          75.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 5,
+      "name": "CH-10",
+      "number": 5,
+      "kind": {
+        "Part": {
+          "path": "CH-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          -60.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 6,
+      "name": "CH-10:2",
+      "number": 6,
+      "kind": {
+        "Part": {
+          "path": "CH-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          -20.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 7,
+      "name": "CH-10:3",
+      "number": 7,
+      "kind": {
+        "Part": {
+          "path": "CH-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          20.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 8,
+      "name": "CH-10:4",
+      "number": 8,
+      "kind": {
+        "Part": {
+          "path": "CH-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          60.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 9,
+      "name": "CH-11",
+      "number": 9,
+      "kind": {
+        "Part": {
+          "path": "CH-11.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          170.0,
+          -260.0,
+          65.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 10,
+      "name": "CH-12",
+      "number": 10,
+      "kind": {
+        "Part": {
+          "path": "CH-12.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          820.0,
+          0.0,
+          130.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 11,
+      "name": "CH-13",
+      "number": 11,
+      "kind": {
+        "Part": {
+          "path": "CH-13.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1140.0,
+          60.0,
+          65.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 12,
+      "name": "CH-13:2",
+      "number": 12,
+      "kind": {
+        "Part": {
+          "path": "CH-13.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1140.0,
+          -60.0,
+          65.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 13,
+      "name": "CH-14",
+      "number": 13,
+      "kind": {
+        "Part": {
+          "path": "CH-14.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          60.0,
+          190.0,
+          75.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    }
+  ],
+  "mates": [],
+  "rigid": [],
+  "params": [],
+  "patterns": [],
+  "joints": [],
+  "couplings": [],
+  "display_states": [],
+  "animations": [],
+  "explosoes": [],
+  "pmi": [
+    {
+      "id": 35,
+      "name": "Balão QUADRO",
+      "kind": {
+        "Balloon": {
+          "item": "1",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 36,
+      "name": "Balão CH-08",
+      "kind": {
+        "Balloon": {
+          "item": "2",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          350.0,
+          75.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 37,
+      "name": "Balão CH-10",
+      "kind": {
+        "Balloon": {
+          "item": "3",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          -60.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 38,
+      "name": "Balão CH-11",
+      "kind": {
+        "Balloon": {
+          "item": "4",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          170.0,
+          -260.0,
+          65.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 39,
+      "name": "Balão CH-12",
+      "kind": {
+        "Balloon": {
+          "item": "5",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          820.0,
+          0.0,
+          130.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 40,
+      "name": "Balão CH-13",
+      "kind": {
+        "Balloon": {
+          "item": "6",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          1140.0,
+          60.0,
+          65.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 41,
+      "name": "Balão CH-14",
+      "kind": {
+        "Balloon": {
+          "item": "7",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          60.0,
+          190.0,
+          75.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "items": [
+    {
+      "key": "QUADRO.fkp",
+      "no": 1
+    },
+    {
+      "key": "CH-08.fkp",
+      "no": 2
+    },
+    {
+      "key": "CH-10.fkp",
+      "no": 3
+    },
+    {
+      "key": "CH-11.fkp",
+      "no": 4
+    },
+    {
+      "key": "CH-12.fkp",
+      "no": 5
+    },
+    {
+      "key": "CH-13.fkp",
+      "no": 6
+    },
+    {
+      "key": "CH-14.fkp",
+      "no": 7
+    }
+  ],
+  "pmi_captures": [],
+  "features": [],
+  "pilhas": [],
+  "conjuntos": [],
+  "regras_cor": [],
+  "interf": {
+    "ignorados": [],
+    "menores_que": 0.0
+  },
+  "relational": false,
+  "politicas_link": [],
+  "religacoes": [],
+  "geometria": null,
+  "esqueleto": null,
+  "contexto_livre": false,
+  "origem_oculta": false
+}

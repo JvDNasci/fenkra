@@ -59,6 +59,8 @@ fn main() {
     pc!("EX-08", "Disco de freio", "Sólidos", ACO_C, p::ex08(u));
     pc!("RD-01", "Aro dianteiro", "Sólidos", AL, p::aro(130.));
     pc!("RD-02", "Aro traseiro", "Sólidos", AL, p::aro(210.));
+    pc!("RD-02A", "Aro sem os pinos (diagnóstico K-10)", "Sólidos", AL, cobertura::aro_etapa(210., 1));
+    pc!("RD-02B", "Aro com furos e sem padrão de pinos (diagnóstico K-10)", "Sólidos", AL, cobertura::aro_etapa(210., 2));
     pc!("RD-03", "Pneu dianteiro", "Superfícies", "", p::pneu(u, "DR_D", "LR_D"));
     pc!("RD-04", "Pneu traseiro", "Superfícies", "", p::pneu(u, "DR_T", "LR_T"));
     pc!("DI-01", "Volante", "Forma livre", "", formas::di01(u));
@@ -120,6 +122,20 @@ fn main() {
     pc!("CV-EST", "Placa, reforço e solda", "Estrutural", ACO, cobertura::estrutural_extra());
     pc!("CV-SUP1", "Extrusão e deslocada de superfície", "Superfícies", "", cobertura::superficies());
     pc!("CV-SUP2", "Preenchimento de contorno", "Superfícies", "", cobertura::preencher());
+    if filtro == "ACAB" {
+        saidas::pmi_geral(&mut r);
+        saidas::desenhos(&mut r);
+        return;
+    }
+    if filtro == "DIAG" {
+        r.peca("RD-02A", "Aro sem os pinos (diagnóstico K-10)", "Sólidos", AL, || cobertura::aro_etapa(210., 1));
+        r.peca("RD-02B", "Aro com furos e sem padrão de pinos (diagnóstico K-10)", "Sólidos", AL, || cobertura::aro_etapa(210., 2));
+        r.peca("CV-EST", "Placa, reforço e solda", "Estrutural", ACO, cobertura::estrutural_extra);
+        conjunto::teste_invertido();
+        conjunto::testa_fixadores(&mut r);
+        conjunto::testa_gerador(&mut r, u);
+        return;
+    }
     if filtro.is_empty() || filtro == "SC" {
         conjunto::kart(u, &mut r);
     }

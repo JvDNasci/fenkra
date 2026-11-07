@@ -1,0 +1,573 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "b73fadfbf575489ebd796fbba4dd6795",
+  "name": "RD-02A Aro sem os pinos (diagnóstico K-10)",
+  "props": {
+    "pn": "FK-RD-02A",
+    "description": "Aro sem os pinos (diagnóstico K-10)",
+    "material": "Alumínio 7075",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      214,
+      172,
+      64
+    ],
+    "finish": "MetalEscovado",
+    "texture": null
+  },
+  "next_id": 44,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 26,
+      "name": "Plano1",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XZ"
+          },
+          "offset": "0"
+        }
+      },
+      "visible": false,
+      "folder": 27,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 33,
+      "name": "Plano2",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "0"
+        }
+      },
+      "visible": false,
+      "folder": 27,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 27,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 39,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 40,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 41,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 455.9322850421431,
+        "ortho": false
+      },
+      "shown": [
+        39,
+        40
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 42,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 455.9322850421431,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 43,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 455.9322850421431,
+        "ortho": false
+      },
+      "shown": [
+        39,
+        40
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 18,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 2,
+              "x": 58.0,
+              "y": -105.0,
+              "fixed": false
+            },
+            {
+              "id": 3,
+              "x": 68.1,
+              "y": -105.0,
+              "fixed": false
+            },
+            {
+              "id": 4,
+              "x": 68.1,
+              "y": -100.0,
+              "fixed": false
+            },
+            {
+              "id": 5,
+              "x": 63.1,
+              "y": -97.0,
+              "fixed": false
+            },
+            {
+              "id": 6,
+              "x": 63.1,
+              "y": 97.0,
+              "fixed": false
+            },
+            {
+              "id": 7,
+              "x": 68.1,
+              "y": 100.0,
+              "fixed": false
+            },
+            {
+              "id": 8,
+              "x": 68.1,
+              "y": 105.0,
+              "fixed": false
+            },
+            {
+              "id": 9,
+              "x": 58.0,
+              "y": 105.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 10,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 2,
+                  "b": 3
+                }
+              }
+            },
+            {
+              "id": 11,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 3,
+                  "b": 4
+                }
+              }
+            },
+            {
+              "id": 12,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 4,
+                  "b": 5
+                }
+              }
+            },
+            {
+              "id": 13,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 5,
+                  "b": 6
+                }
+              }
+            },
+            {
+              "id": 14,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 6,
+                  "b": 7
+                }
+              }
+            },
+            {
+              "id": 15,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 7,
+                  "b": 8
+                }
+              }
+            },
+            {
+              "id": 16,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 8,
+                  "b": 9
+                }
+              }
+            },
+            {
+              "id": 17,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 9,
+                  "b": 2
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 19,
+      "name": "Revolução1",
+      "kind": {
+        "Revolve": {
+          "sketch": 18,
+          "axis": {
+            "Origin": "Y"
+          },
+          "angle": "360",
+          "symmetric": false,
+          "op": "Add",
+          "thin": null,
+          "thin_side": 0,
+          "angle2": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 24,
+      "name": "Sketch2",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XZ"
+          },
+          "points": [
+            {
+              "id": 20,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 22,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 21,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 20,
+                  "r": 59.0
+                }
+              }
+            },
+            {
+              "id": 23,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 22,
+                  "r": 27.0
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 25,
+      "name": "Extrusão1",
+      "kind": {
+        "Extrude": {
+          "sketch": 24,
+          "op": "Add",
+          "extent": {
+            "Symmetric": "8"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 4
+}

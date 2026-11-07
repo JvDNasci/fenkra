@@ -1,0 +1,617 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.34",
+  "uid": "fbf2e4edcc9d67ea7ac13318bed2f975",
+  "name": "CV-SOL1 Furos, rosca modelada e espessura",
+  "props": {
+    "pn": "FK-CV-SOL1",
+    "description": "Furos, rosca modelada e espessura",
+    "material": "Alumínio 6061",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 35,
+  "origin_visible": true,
+  "references": [
+    {
+      "id": 16,
+      "name": "Plano1",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "50"
+        }
+      },
+      "visible": true,
+      "folder": 17,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 17,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 14,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 2,
+              "x": -45.0,
+              "y": -32.0,
+              "fixed": false
+            },
+            {
+              "id": 3,
+              "x": 45.0,
+              "y": -32.0,
+              "fixed": false
+            },
+            {
+              "id": 4,
+              "x": 45.0,
+              "y": 32.0,
+              "fixed": false
+            },
+            {
+              "id": 5,
+              "x": -45.0,
+              "y": 32.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 6,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 2,
+                  "b": 3
+                }
+              }
+            },
+            {
+              "id": 7,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 3,
+                  "b": 4
+                }
+              }
+            },
+            {
+              "id": 8,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 4,
+                  "b": 5
+                }
+              }
+            },
+            {
+              "id": 9,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 5,
+                  "b": 2
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 10,
+              "kind": {
+                "Horizontal": 6
+              }
+            },
+            {
+              "id": 11,
+              "kind": {
+                "Horizontal": 8
+              }
+            },
+            {
+              "id": 12,
+              "kind": {
+                "Vertical": 7
+              }
+            },
+            {
+              "id": 13,
+              "kind": {
+                "Vertical": 9
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 15,
+      "name": "Extrusão1",
+      "kind": {
+        "Extrude": {
+          "sketch": 14,
+          "op": "Add",
+          "extent": {
+            "Blind": "50"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 20,
+      "name": "Sketch2",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 16
+          },
+          "points": [
+            {
+              "id": 18,
+              "x": -30.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 19,
+              "construction": false,
+              "geom": {
+                "Point": {
+                  "p": 18
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 21,
+      "name": "Furo1",
+      "kind": {
+        "Hole": {
+          "sketch": 20,
+          "kind": "Simples",
+          "diameter": "6.8",
+          "depth": {
+            "Blind": "25"
+          },
+          "thread": "M8x1.25",
+          "thread_modeled": false,
+          "standard": "M8 normal",
+          "points": [],
+          "dir": null,
+          "reverse": false,
+          "tip": null,
+          "taper": "0",
+          "left_hand": false,
+          "extra": {
+            "thread_depth": "",
+            "thread_relief": "",
+            "tip_offset": "",
+            "thread_relief_unit": null,
+            "thread_top_gap": "",
+            "thread_top_gap_unit": "Mm",
+            "thread_chamfer": "",
+            "thread_chamfer_unit": "Mm",
+            "thread_start_angle": "",
+            "thread_start_ref": null
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 24,
+      "name": "Sketch3",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 16
+          },
+          "points": [
+            {
+              "id": 22,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 23,
+              "construction": false,
+              "geom": {
+                "Point": {
+                  "p": 22
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 25,
+      "name": "Furo2",
+      "kind": {
+        "Hole": {
+          "sketch": 24,
+          "kind": "Simples",
+          "diameter": "6.8",
+          "depth": {
+            "Blind": "25"
+          },
+          "thread": "M8x1.25",
+          "thread_modeled": true,
+          "standard": "M8 normal",
+          "points": [],
+          "dir": null,
+          "reverse": false,
+          "tip": null,
+          "taper": "0",
+          "left_hand": false,
+          "extra": {
+            "thread_depth": "",
+            "thread_relief": "",
+            "tip_offset": "",
+            "thread_relief_unit": null,
+            "thread_top_gap": "",
+            "thread_top_gap_unit": "Mm",
+            "thread_chamfer": "",
+            "thread_chamfer_unit": "Mm",
+            "thread_start_angle": "",
+            "thread_start_ref": null
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 28,
+      "name": "Sketch4",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 16
+          },
+          "points": [
+            {
+              "id": 26,
+              "x": 30.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 27,
+              "construction": false,
+              "geom": {
+                "Point": {
+                  "p": 26
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 29,
+      "name": "Furo3",
+      "kind": {
+        "Hole": {
+          "sketch": 28,
+          "kind": {
+            "Rebaixado": {
+              "diameter": "14",
+              "depth": "8"
+            }
+          },
+          "diameter": "8.5",
+          "depth": "ThroughAll",
+          "thread": null,
+          "thread_modeled": false,
+          "standard": null,
+          "points": [],
+          "dir": null,
+          "reverse": false,
+          "tip": null,
+          "taper": "0",
+          "left_hand": false,
+          "extra": {
+            "thread_depth": "",
+            "thread_relief": "",
+            "tip_offset": "",
+            "thread_relief_unit": null,
+            "thread_top_gap": "",
+            "thread_top_gap_unit": "Mm",
+            "thread_chamfer": "",
+            "thread_chamfer_unit": "Mm",
+            "thread_start_angle": "",
+            "thread_start_ref": null
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 32,
+      "name": "Sketch5",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 16
+          },
+          "points": [
+            {
+              "id": 30,
+              "x": 0.0,
+              "y": 22.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 31,
+              "construction": false,
+              "geom": {
+                "Point": {
+                  "p": 30
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 33,
+      "name": "Furo4",
+      "kind": {
+        "Hole": {
+          "sketch": 32,
+          "kind": {
+            "Escareado": {
+              "diameter": "12",
+              "angle": "90"
+            }
+          },
+          "diameter": "6.5",
+          "depth": "ThroughAll",
+          "thread": null,
+          "thread_modeled": false,
+          "standard": null,
+          "points": [],
+          "dir": null,
+          "reverse": false,
+          "tip": null,
+          "taper": "0",
+          "left_hand": false,
+          "extra": {
+            "thread_depth": "",
+            "thread_relief": "",
+            "tip_offset": "",
+            "thread_relief_unit": null,
+            "thread_top_gap": "",
+            "thread_top_gap_unit": "Mm",
+            "thread_chamfer": "",
+            "thread_chamfer_unit": "Mm",
+            "thread_start_angle": "",
+            "thread_start_ref": null
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 34,
+      "name": "Espessura1",
+      "kind": {
+        "Thickness": {
+          "faces": [
+            [
+              45.0,
+              0.0,
+              25.0
+            ]
+          ],
+          "value": "3",
+          "face_keys": [],
+          "remove": false
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 11
+}

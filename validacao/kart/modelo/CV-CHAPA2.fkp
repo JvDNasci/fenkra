@@ -1,0 +1,259 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.34",
+  "uid": "70f2972175acad58520ebde521774d90",
+  "name": "CV-CHAPA2 Protetor com bainha e desvio",
+  "props": {
+    "pn": "FK-CV-CHAPA2",
+    "description": "Protetor com bainha e desvio",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 18,
+  "origin_visible": true,
+  "references": [],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": {
+    "thickness": "1.5",
+    "radius": "2",
+    "k": "0.44",
+    "flat": false,
+    "material": "",
+    "method": 0,
+    "allowance": "",
+    "style": "",
+    "overrides": [],
+    "relief": "",
+    "relief_kind": 0,
+    "corner": ""
+  },
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 14,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 2,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 3,
+              "x": 290.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 4,
+              "x": 290.0,
+              "y": 60.0,
+              "fixed": false
+            },
+            {
+              "id": 5,
+              "x": 0.0,
+              "y": 60.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 6,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 2,
+                  "b": 3
+                }
+              }
+            },
+            {
+              "id": 7,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 3,
+                  "b": 4
+                }
+              }
+            },
+            {
+              "id": 8,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 4,
+                  "b": 5
+                }
+              }
+            },
+            {
+              "id": 9,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 5,
+                  "b": 2
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 10,
+              "kind": {
+                "Horizontal": 6
+              }
+            },
+            {
+              "id": 11,
+              "kind": {
+                "Horizontal": 8
+              }
+            },
+            {
+              "id": 12,
+              "kind": {
+                "Vertical": 7
+              }
+            },
+            {
+              "id": 13,
+              "kind": {
+                "Vertical": 9
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 15,
+      "name": "ParedeBase1",
+      "kind": {
+        "SmWall": {
+          "sketch": 14,
+          "reverse": false,
+          "offset": "",
+          "mid": false,
+          "surface": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 16,
+      "name": "Bainha1",
+      "kind": {
+        "SmHem": {
+          "edge": [
+            145.0,
+            60.0,
+            1.5
+          ],
+          "length": "10",
+          "gap": "0",
+          "flip": false,
+          "kind": 0,
+          "edge_key": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 17,
+      "name": "Joggle1",
+      "kind": {
+        "SmJoggle": {
+          "a": [
+            100.0,
+            0.0,
+            1.5
+          ],
+          "b": [
+            100.0,
+            60.0,
+            1.5
+          ],
+          "depth": "6",
+          "run": "12",
+          "flip": false,
+          "angle": null,
+          "plane": null,
+          "keep_length": false
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 4
+}

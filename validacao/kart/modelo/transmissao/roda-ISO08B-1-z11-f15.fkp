@@ -1,0 +1,1437 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "4671dcaa0fae0ea6990b0b9a73bc98a8",
+  "name": "Roda ISO 08B-1 z11",
+  "props": {
+    "pn": "",
+    "description": "Roda ISO 08B-1 z11",
+    "material": "Aço 1045",
+    "part_type": "Fabricada",
+    "custom": [
+      [
+        "catalogo",
+        "roda-ISO08B-1-z11-f15"
+      ],
+      [
+        "usinagens",
+        "[]"
+      ]
+    ],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 161,
+  "origin_visible": true,
+  "references": [
+    {
+      "id": 154,
+      "name": "Plano_cubo",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "w"
+        }
+      },
+      "visible": false,
+      "folder": 155,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 157,
+      "name": "Plano_cubo_base",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "w-0.5"
+        }
+      },
+      "visible": false,
+      "folder": 155,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 159,
+      "name": "Plano_furo",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "-1"
+        }
+      },
+      "visible": false,
+      "folder": 155,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 2,
+      "name": "p",
+      "expr": "12.7",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 3,
+      "name": "d1",
+      "expr": "8.51",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 4,
+      "name": "w",
+      "expr": "6.9750000000000005",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 5,
+      "name": "furo",
+      "expr": "15",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 6,
+      "name": "dcubo",
+      "expr": "27",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 7,
+      "name": "N",
+      "expr": "11",
+      "unit": "Numero",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 155,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 152,
+      "name": "Perfil_dentes",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 8,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 9,
+              "x": 20.784908025915698,
+              "y": -3.9232288998659177,
+              "fixed": false
+            },
+            {
+              "id": 10,
+              "x": 19.44455129754775,
+              "y": -2.982057405187919,
+              "fixed": false
+            },
+            {
+              "id": 11,
+              "x": 18.55363626571272,
+              "y": -1.6077829246979307,
+              "fixed": false
+            },
+            {
+              "id": 12,
+              "x": 18.241556133814818,
+              "y": 5.262980851675708e-16,
+              "fixed": false
+            },
+            {
+              "id": 13,
+              "x": 18.55363626571272,
+              "y": 1.6077829246979298,
+              "fixed": false
+            },
+            {
+              "id": 14,
+              "x": 19.44455129754775,
+              "y": 2.9820574051879194,
+              "fixed": false
+            },
+            {
+              "id": 15,
+              "x": 20.784908025915698,
+              "y": 3.923228899865918,
+              "fixed": false
+            },
+            {
+              "id": 17,
+              "x": 24.609470111610207,
+              "y": 6.431941741439107,
+              "fixed": false
+            },
+            {
+              "id": 19,
+              "x": 24.180173913413867,
+              "y": 7.893990325340048,
+              "fixed": false
+            },
+            {
+              "id": 21,
+              "x": 19.606434985861686,
+              "y": 7.9367394937528815,
+              "fixed": false
+            },
+            {
+              "id": 23,
+              "x": 17.970019426619487,
+              "y": 8.003851781343796,
+              "fixed": false
+            },
+            {
+              "id": 24,
+              "x": 16.477545130095393,
+              "y": 8.678300012040962,
+              "fixed": false
+            },
+            {
+              "id": 25,
+              "x": 15.34577354191002,
+              "y": 9.862129819847814,
+              "fixed": false
+            },
+            {
+              "id": 26,
+              "x": 14.739078980695709,
+              "y": 11.38340614289653,
+              "fixed": false
+            },
+            {
+              "id": 27,
+              "x": 14.74557552013886,
+              "y": 13.021184435783239,
+              "fixed": false
+            },
+            {
+              "id": 28,
+              "x": 15.364319626883818,
+              "y": 14.537599837988065,
+              "fixed": false
+            },
+            {
+              "id": 30,
+              "x": 17.22543343157703,
+              "y": 18.715777751240022,
+              "fixed": false
+            },
+            {
+              "id": 32,
+              "x": 16.073843346653362,
+              "y": 19.71363624009407,
+              "fixed": false
+            },
+            {
+              "id": 34,
+              "x": 12.20305737024633,
+              "y": 17.276849176426662,
+              "fixed": false
+            },
+            {
+              "id": 36,
+              "x": 10.790133357829452,
+              "y": 16.44859457981314,
+              "fixed": false
+            },
+            {
+              "id": 37,
+              "x": 9.169949840443222,
+              "y": 16.209084012894614,
+              "fixed": false
+            },
+            {
+              "id": 38,
+              "x": 7.577816278503325,
+              "y": 16.593103104373427,
+              "fixed": false
+            },
+            {
+              "id": 39,
+              "x": 6.24496826066342,
+              "y": 17.544878342029815,
+              "fixed": false
+            },
+            {
+              "id": 40,
+              "x": 5.364983702343842,
+              "y": 18.92617741131016,
+              "fixed": false
+            },
+            {
+              "id": 41,
+              "x": 5.065668305411236,
+              "y": 20.536385545321014,
+              "fixed": false
+            },
+            {
+              "id": 43,
+              "x": 4.372443346114817,
+              "y": 25.057486564388675,
+              "fixed": false
+            },
+            {
+              "id": 45,
+              "x": 2.8641810896803634,
+              "y": 25.274341938515832,
+              "fixed": false
+            },
+            {
+              "id": 47,
+              "x": 0.9252952622609318,
+              "y": 21.131681317967946,
+              "fixed": false
+            },
+            {
+              "id": 49,
+              "x": 0.1844561873677164,
+              "y": 19.67102481940745,
+              "fixed": false
+            },
+            {
+              "id": 50,
+              "x": -1.0490397317802138,
+              "y": 18.593598367569065,
+              "fixed": false
+            },
+            {
+              "id": 51,
+              "x": -2.596044111036907,
+              "y": 18.05588339452456,
+              "fixed": false
+            },
+            {
+              "id": 52,
+              "x": -4.231875757292309,
+              "y": 18.135975633755194,
+              "fixed": false
+            },
+            {
+              "id": 53,
+              "x": -5.718952533781922,
+              "y": 18.82224278472551,
+              "fixed": false
+            },
+            {
+              "id": 54,
+              "x": -6.841296910727524,
+              "y": 20.015013945180954,
+              "fixed": false
+            },
+            {
+              "id": 56,
+              "x": -9.868766607530464,
+              "y": 23.443620441083635,
+              "fixed": false
+            },
+            {
+              "id": 58,
+              "x": -11.254838425929616,
+              "y": 22.810622651425387,
+              "fixed": false
+            },
+            {
+              "id": 60,
+              "x": -10.646241553668407,
+              "y": 18.277353950379744,
+              "fixed": false
+            },
+            {
+              "id": 62,
+              "x": -10.47978451927813,
+              "y": 16.64804366765959,
+              "fixed": false
+            },
+            {
+              "id": 63,
+              "x": -10.934966601323982,
+              "y": 15.074776616628501,
+              "fixed": false
+            },
+            {
+              "id": 64,
+              "x": -11.945678838094087,
+              "y": 13.786048283689858,
+              "fixed": false
+            },
+            {
+              "id": 65,
+              "x": -13.365129123312991,
+              "y": 12.969028804443735,
+              "fixed": false
+            },
+            {
+              "id": 66,
+              "x": -14.987161748619597,
+              "y": 12.74237906560292,
+              "fixed": false
+            },
+            {
+              "id": 67,
+              "x": -16.57619869600439,
+              "y": 13.139016836776644,
+              "fixed": false
+            },
+            {
+              "id": 69,
+              "x": -20.976712892657606,
+              "y": 14.386570472441129,
+              "fixed": false
+            },
+            {
+              "id": 71,
+              "x": -21.800526264195213,
+              "y": 13.10469184466531,
+              "fixed": false
+            },
+            {
+              "id": 73,
+              "x": -18.83767189905627,
+              "y": 9.620095845157865,
+              "fixed": false
+            },
+            {
+              "id": 75,
+              "x": -17.816767687672215,
+              "y": 8.339426280885355,
+              "fixed": false
+            },
+            {
+              "id": 76,
+              "x": -17.349118837729335,
+              "y": 6.769819803190149,
+              "fixed": false
+            },
+            {
+              "id": 77,
+              "x": -17.502644938189757,
+              "y": 5.139240250346113,
+              "fixed": false
+            },
+            {
+              "id": 78,
+              "x": -18.255048426171616,
+              "y": 3.684506964500089,
+              "fixed": false
+            },
+            {
+              "id": 79,
+              "x": -19.49705300249524,
+              "y": 2.616900026499578,
+              "fixed": false
+            },
+            {
+              "id": 80,
+              "x": -21.0482745171231,
+              "y": 2.091474718552499,
+              "fixed": false
+            },
+            {
+              "id": 82,
+              "x": -25.42470104873673,
+              "y": 0.7618860294480727,
+              "fixed": false
+            },
+            {
+              "id": 84,
+              "x": -25.42470104873673,
+              "y": -0.7618860294480665,
+              "fixed": false
+            },
+            {
+              "id": 86,
+              "x": -21.048274517123097,
+              "y": -2.0914747185525027,
+              "fixed": false
+            },
+            {
+              "id": 88,
+              "x": -19.49705300249524,
+              "y": -2.6169000264995725,
+              "fixed": false
+            },
+            {
+              "id": 89,
+              "x": -18.255048426171616,
+              "y": -3.6845069645000845,
+              "fixed": false
+            },
+            {
+              "id": 90,
+              "x": -17.502644938189757,
+              "y": -5.139240250346109,
+              "fixed": false
+            },
+            {
+              "id": 91,
+              "x": -17.349118837729335,
+              "y": -6.769819803190145,
+              "fixed": false
+            },
+            {
+              "id": 92,
+              "x": -17.816767687672215,
+              "y": -8.339426280885352,
+              "fixed": false
+            },
+            {
+              "id": 93,
+              "x": -18.83767189905627,
+              "y": -9.62009584515786,
+              "fixed": false
+            },
+            {
+              "id": 95,
+              "x": -21.800526264195224,
+              "y": -13.104691844665295,
+              "fixed": false
+            },
+            {
+              "id": 97,
+              "x": -20.976712892657613,
+              "y": -14.386570472441115,
+              "fixed": false
+            },
+            {
+              "id": 99,
+              "x": -16.57619869600439,
+              "y": -13.13901683677664,
+              "fixed": false
+            },
+            {
+              "id": 101,
+              "x": -14.987161748619599,
+              "y": -12.742379065602917,
+              "fixed": false
+            },
+            {
+              "id": 102,
+              "x": -13.365129123312993,
+              "y": -12.969028804443731,
+              "fixed": false
+            },
+            {
+              "id": 103,
+              "x": -11.94567883809409,
+              "y": -13.786048283689858,
+              "fixed": false
+            },
+            {
+              "id": 104,
+              "x": -10.934966601323985,
+              "y": -15.0747766166285,
+              "fixed": false
+            },
+            {
+              "id": 105,
+              "x": -10.479784519278134,
+              "y": -16.648043667659586,
+              "fixed": false
+            },
+            {
+              "id": 106,
+              "x": -10.64624155366841,
+              "y": -18.27735395037974,
+              "fixed": false
+            },
+            {
+              "id": 108,
+              "x": -11.254838425929611,
+              "y": -22.81062265142539,
+              "fixed": false
+            },
+            {
+              "id": 110,
+              "x": -9.868766607530473,
+              "y": -23.44362044108363,
+              "fixed": false
+            },
+            {
+              "id": 112,
+              "x": -6.841296910727527,
+              "y": -20.015013945180943,
+              "fixed": false
+            },
+            {
+              "id": 114,
+              "x": -5.718952533781925,
+              "y": -18.822242784725503,
+              "fixed": false
+            },
+            {
+              "id": 115,
+              "x": -4.231875757292312,
+              "y": -18.13597563375519,
+              "fixed": false
+            },
+            {
+              "id": 116,
+              "x": -2.5960441110369095,
+              "y": -18.055883394524557,
+              "fixed": false
+            },
+            {
+              "id": 117,
+              "x": -1.049039731780217,
+              "y": -18.59359836756906,
+              "fixed": false
+            },
+            {
+              "id": 118,
+              "x": 0.18445618736771285,
+              "y": -19.67102481940745,
+              "fixed": false
+            },
+            {
+              "id": 119,
+              "x": 0.9252952622609278,
+              "y": -21.131681317967942,
+              "fixed": false
+            },
+            {
+              "id": 121,
+              "x": 2.8641810896803683,
+              "y": -25.274341938515832,
+              "fixed": false
+            },
+            {
+              "id": 123,
+              "x": 4.3724433461148,
+              "y": -25.05748656438868,
+              "fixed": false
+            },
+            {
+              "id": 125,
+              "x": 5.0656683054112275,
+              "y": -20.53638554532102,
+              "fixed": false
+            },
+            {
+              "id": 127,
+              "x": 5.364983702343835,
+              "y": -18.926177411310164,
+              "fixed": false
+            },
+            {
+              "id": 128,
+              "x": 6.244968260663407,
+              "y": -17.544878342029826,
+              "fixed": false
+            },
+            {
+              "id": 129,
+              "x": 7.577816278503314,
+              "y": -16.59310310437343,
+              "fixed": false
+            },
+            {
+              "id": 130,
+              "x": 9.169949840443211,
+              "y": -16.209084012894618,
+              "fixed": false
+            },
+            {
+              "id": 131,
+              "x": 10.790133357829442,
+              "y": -16.448594579813143,
+              "fixed": false
+            },
+            {
+              "id": 132,
+              "x": 12.20305737024632,
+              "y": -17.276849176426666,
+              "fixed": false
+            },
+            {
+              "id": 134,
+              "x": 16.07384334665336,
+              "y": -19.713636240094072,
+              "fixed": false
+            },
+            {
+              "id": 136,
+              "x": 17.22543343157701,
+              "y": -18.715777751240047,
+              "fixed": false
+            },
+            {
+              "id": 138,
+              "x": 15.364319626883807,
+              "y": -14.537599837988079,
+              "fixed": false
+            },
+            {
+              "id": 140,
+              "x": 14.74557552013886,
+              "y": -13.021184435783232,
+              "fixed": false
+            },
+            {
+              "id": 141,
+              "x": 14.739078980695709,
+              "y": -11.383406142896527,
+              "fixed": false
+            },
+            {
+              "id": 142,
+              "x": 15.34577354191002,
+              "y": -9.86212981984781,
+              "fixed": false
+            },
+            {
+              "id": 143,
+              "x": 16.477545130095393,
+              "y": -8.678300012040957,
+              "fixed": false
+            },
+            {
+              "id": 144,
+              "x": 17.970019426619487,
+              "y": -8.003851781343792,
+              "fixed": false
+            },
+            {
+              "id": 145,
+              "x": 19.60643498586169,
+              "y": -7.936739493752878,
+              "fixed": false
+            },
+            {
+              "id": 147,
+              "x": 24.18017391341387,
+              "y": -7.89399032534004,
+              "fixed": false
+            },
+            {
+              "id": 149,
+              "x": 24.6094701116102,
+              "y": -6.43194174143912,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 16,
+              "construction": false,
+              "geom": {
+                "Spline": {
+                  "pts": [
+                    9,
+                    10,
+                    11,
+                    12,
+                    13,
+                    14,
+                    15
+                  ]
+                }
+              }
+            },
+            {
+              "id": 18,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 15,
+                  "b": 17
+                }
+              }
+            },
+            {
+              "id": 20,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 8,
+                  "s": 17,
+                  "e": 19
+                }
+              }
+            },
+            {
+              "id": 22,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 19,
+                  "b": 21
+                }
+              }
+            },
+            {
+              "id": 29,
+              "construction": false,
+              "geom": {
+                "Spline": {
+                  "pts": [
+                    21,
+                    23,
+                    24,
+                    25,
+                    26,
+                    27,
+                    28
+                  ]
+                }
+              }
+            },
+            {
+              "id": 31,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 28,
+                  "b": 30
+                }
+              }
+            },
+            {
+              "id": 33,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 8,
+                  "s": 30,
+                  "e": 32
+                }
+              }
+            },
+            {
+              "id": 35,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 32,
+                  "b": 34
+                }
+              }
+            },
+            {
+              "id": 42,
+              "construction": false,
+              "geom": {
+                "Spline": {
+                  "pts": [
+                    34,
+                    36,
+                    37,
+                    38,
+                    39,
+                    40,
+                    41
+                  ]
+                }
+              }
+            },
+            {
+              "id": 44,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 41,
+                  "b": 43
+                }
+              }
+            },
+            {
+              "id": 46,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 8,
+                  "s": 43,
+                  "e": 45
+                }
+              }
+            },
+            {
+              "id": 48,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 45,
+                  "b": 47
+                }
+              }
+            },
+            {
+              "id": 55,
+              "construction": false,
+              "geom": {
+                "Spline": {
+                  "pts": [
+                    47,
+                    49,
+                    50,
+                    51,
+                    52,
+                    53,
+                    54
+                  ]
+                }
+              }
+            },
+            {
+              "id": 57,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 54,
+                  "b": 56
+                }
+              }
+            },
+            {
+              "id": 59,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 8,
+                  "s": 56,
+                  "e": 58
+                }
+              }
+            },
+            {
+              "id": 61,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 58,
+                  "b": 60
+                }
+              }
+            },
+            {
+              "id": 68,
+              "construction": false,
+              "geom": {
+                "Spline": {
+                  "pts": [
+                    60,
+                    62,
+                    63,
+                    64,
+                    65,
+                    66,
+                    67
+                  ]
+                }
+              }
+            },
+            {
+              "id": 70,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 67,
+                  "b": 69
+                }
+              }
+            },
+            {
+              "id": 72,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 8,
+                  "s": 69,
+                  "e": 71
+                }
+              }
+            },
+            {
+              "id": 74,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 71,
+                  "b": 73
+                }
+              }
+            },
+            {
+              "id": 81,
+              "construction": false,
+              "geom": {
+                "Spline": {
+                  "pts": [
+                    73,
+                    75,
+                    76,
+                    77,
+                    78,
+                    79,
+                    80
+                  ]
+                }
+              }
+            },
+            {
+              "id": 83,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 80,
+                  "b": 82
+                }
+              }
+            },
+            {
+              "id": 85,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 8,
+                  "s": 82,
+                  "e": 84
+                }
+              }
+            },
+            {
+              "id": 87,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 84,
+                  "b": 86
+                }
+              }
+            },
+            {
+              "id": 94,
+              "construction": false,
+              "geom": {
+                "Spline": {
+                  "pts": [
+                    86,
+                    88,
+                    89,
+                    90,
+                    91,
+                    92,
+                    93
+                  ]
+                }
+              }
+            },
+            {
+              "id": 96,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 93,
+                  "b": 95
+                }
+              }
+            },
+            {
+              "id": 98,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 8,
+                  "s": 95,
+                  "e": 97
+                }
+              }
+            },
+            {
+              "id": 100,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 97,
+                  "b": 99
+                }
+              }
+            },
+            {
+              "id": 107,
+              "construction": false,
+              "geom": {
+                "Spline": {
+                  "pts": [
+                    99,
+                    101,
+                    102,
+                    103,
+                    104,
+                    105,
+                    106
+                  ]
+                }
+              }
+            },
+            {
+              "id": 109,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 106,
+                  "b": 108
+                }
+              }
+            },
+            {
+              "id": 111,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 8,
+                  "s": 108,
+                  "e": 110
+                }
+              }
+            },
+            {
+              "id": 113,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 110,
+                  "b": 112
+                }
+              }
+            },
+            {
+              "id": 120,
+              "construction": false,
+              "geom": {
+                "Spline": {
+                  "pts": [
+                    112,
+                    114,
+                    115,
+                    116,
+                    117,
+                    118,
+                    119
+                  ]
+                }
+              }
+            },
+            {
+              "id": 122,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 119,
+                  "b": 121
+                }
+              }
+            },
+            {
+              "id": 124,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 8,
+                  "s": 121,
+                  "e": 123
+                }
+              }
+            },
+            {
+              "id": 126,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 123,
+                  "b": 125
+                }
+              }
+            },
+            {
+              "id": 133,
+              "construction": false,
+              "geom": {
+                "Spline": {
+                  "pts": [
+                    125,
+                    127,
+                    128,
+                    129,
+                    130,
+                    131,
+                    132
+                  ]
+                }
+              }
+            },
+            {
+              "id": 135,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 132,
+                  "b": 134
+                }
+              }
+            },
+            {
+              "id": 137,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 8,
+                  "s": 134,
+                  "e": 136
+                }
+              }
+            },
+            {
+              "id": 139,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 136,
+                  "b": 138
+                }
+              }
+            },
+            {
+              "id": 146,
+              "construction": false,
+              "geom": {
+                "Spline": {
+                  "pts": [
+                    138,
+                    140,
+                    141,
+                    142,
+                    143,
+                    144,
+                    145
+                  ]
+                }
+              }
+            },
+            {
+              "id": 148,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 145,
+                  "b": 147
+                }
+              }
+            },
+            {
+              "id": 150,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 8,
+                  "s": 147,
+                  "e": 149
+                }
+              }
+            },
+            {
+              "id": 151,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 149,
+                  "b": 9
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 153,
+      "name": "Dentes",
+      "kind": {
+        "Extrude": {
+          "sketch": 152,
+          "op": "Add",
+          "extent": {
+            "Blind": "w"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 156,
+      "name": "Cubo",
+      "kind": {
+        "Primitive": {
+          "kind": "Cilindro",
+          "plane": {
+            "Datum": 154
+          },
+          "a": "dcubo/2",
+          "b": "12",
+          "c": "0",
+          "d": "0",
+          "op": "Add"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 158,
+      "name": "Cubo_base",
+      "kind": {
+        "Primitive": {
+          "kind": "Cilindro",
+          "plane": {
+            "Datum": 157
+          },
+          "a": "dcubo/2",
+          "b": "0.5",
+          "c": "0",
+          "d": "0",
+          "op": "Add"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 160,
+      "name": "Furo",
+      "kind": {
+        "Primitive": {
+          "kind": "Cilindro",
+          "plane": {
+            "Datum": 159
+          },
+          "a": "furo/2",
+          "b": "20.975",
+          "c": "0",
+          "d": "0",
+          "op": "Cut"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 5
+}

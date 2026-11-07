@@ -1,0 +1,429 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "0e715a4a2e96eba40cf73a56ac6bee8a",
+  "name": "FX-04 Porca autotravante M6 (contorno: porca comum)",
+  "props": {
+    "pn": "FK-FX-04",
+    "description": "Porca autotravante M6 (contorno: porca comum)",
+    "material": "Aço 1045",
+    "part_type": "Hardware",
+    "custom": [
+      [
+        "Norma",
+        "ISO 4032:2012"
+      ],
+      [
+        "Classe",
+        "8"
+      ],
+      [
+        "Biblioteca: geração",
+        "2"
+      ],
+      [
+        "Biblioteca: família",
+        "iso4032@1"
+      ]
+    ],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      150,
+      154,
+      160
+    ],
+    "finish": "MetalPolido",
+    "texture": null
+  },
+  "next_id": 24,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 6,
+      "name": "Plano_porca",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "-m"
+        }
+      },
+      "visible": false,
+      "folder": 7,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 9,
+      "name": "Plano_furo",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "-m-1"
+        }
+      },
+      "visible": false,
+      "folder": 7,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 11,
+      "name": "Eixo",
+      "kind": {
+        "LineDir": {
+          "point": "Origin",
+          "dir": {
+            "Origin": "Z"
+          },
+          "start": "-m",
+          "end": "0"
+        }
+      },
+      "visible": false,
+      "folder": 7,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 12,
+      "name": "Plano_apoio",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "0"
+        }
+      },
+      "visible": false,
+      "folder": 7,
+      "published": true,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 2,
+      "name": "d",
+      "expr": "6",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 3,
+      "name": "s",
+      "expr": "10",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 4,
+      "name": "m",
+      "expr": "5.2",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 5,
+      "name": "cc",
+      "expr": "s/cos(30)",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 7,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 13,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 14,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 21,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          0.0,
+          0.0,
+          -2.5999999046325684
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 80.0,
+        "ortho": false
+      },
+      "shown": [
+        13,
+        14
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 22,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          0.0,
+          0.0,
+          -2.5999999046325684
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 80.0,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 23,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          0.0,
+          0.0,
+          -2.5999999046325684
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 80.0,
+        "ortho": false
+      },
+      "shown": [
+        13,
+        14
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 8,
+      "name": "Corpo",
+      "kind": {
+        "Primitive": {
+          "kind": "Prisma",
+          "plane": {
+            "Datum": 6
+          },
+          "a": "6",
+          "b": "cc/2",
+          "c": "m",
+          "d": "0",
+          "op": "Add"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 10,
+      "name": "Furo",
+      "kind": {
+        "Primitive": {
+          "kind": "Cilindro",
+          "plane": {
+            "Datum": 9
+          },
+          "a": "d/2",
+          "b": "m+2",
+          "c": "0",
+          "d": "0",
+          "op": "Cut"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 2
+}

@@ -1,0 +1,288 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.34",
+  "uid": "7e0175911b1daad51ca7fda7fdcc9eb2",
+  "name": "CV-CHAPA3 Caixa com alívio de canto",
+  "props": {
+    "pn": "FK-CV-CHAPA3",
+    "description": "Caixa com alívio de canto",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 19,
+  "origin_visible": true,
+  "references": [],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": {
+    "thickness": "2",
+    "radius": "2",
+    "k": "0.44",
+    "flat": false,
+    "material": "",
+    "method": 0,
+    "allowance": "",
+    "style": "",
+    "overrides": [],
+    "relief": "",
+    "relief_kind": 0,
+    "corner": ""
+  },
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 14,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 2,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 3,
+              "x": 120.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 4,
+              "x": 120.0,
+              "y": 80.0,
+              "fixed": false
+            },
+            {
+              "id": 5,
+              "x": 0.0,
+              "y": 80.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 6,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 2,
+                  "b": 3
+                }
+              }
+            },
+            {
+              "id": 7,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 3,
+                  "b": 4
+                }
+              }
+            },
+            {
+              "id": 8,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 4,
+                  "b": 5
+                }
+              }
+            },
+            {
+              "id": 9,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 5,
+                  "b": 2
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 10,
+              "kind": {
+                "Horizontal": 6
+              }
+            },
+            {
+              "id": 11,
+              "kind": {
+                "Horizontal": 8
+              }
+            },
+            {
+              "id": 12,
+              "kind": {
+                "Vertical": 7
+              }
+            },
+            {
+              "id": 13,
+              "kind": {
+                "Vertical": 9
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 15,
+      "name": "ParedeBase1",
+      "kind": {
+        "SmWall": {
+          "sketch": 14,
+          "reverse": false,
+          "offset": "",
+          "mid": false,
+          "surface": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 16,
+      "name": "Aba1",
+      "kind": {
+        "SmFlange": {
+          "edge": [
+            60.0,
+            0.0,
+            2.0
+          ],
+          "length": "30",
+          "angle": "90",
+          "radius": null,
+          "off1": "0",
+          "off2": "0",
+          "flip": false,
+          "relief": null,
+          "relief_kind": 0,
+          "side": 0,
+          "miter": false,
+          "min_gap": true,
+          "edge_key": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 17,
+      "name": "Aba2",
+      "kind": {
+        "SmFlange": {
+          "edge": [
+            120.0,
+            40.0,
+            2.0
+          ],
+          "length": "30",
+          "angle": "90",
+          "radius": null,
+          "off1": "0",
+          "off2": "0",
+          "flip": false,
+          "relief": null,
+          "relief_kind": 0,
+          "side": 0,
+          "miter": false,
+          "min_gap": true,
+          "edge_key": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 18,
+      "name": "AlívioCanto1",
+      "kind": {
+        "SmCornerRelief": {
+          "at": [
+            120.0,
+            0.0,
+            2.0
+          ],
+          "size": "6",
+          "kind": 0
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 5
+}

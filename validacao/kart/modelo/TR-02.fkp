@@ -1,0 +1,573 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "b2b2e89882ae76376d5b33b777a746bd",
+  "name": "TR-02 Pinhão de 11 dentes",
+  "props": {
+    "pn": "FK-TR-02",
+    "description": "Pinhão de 11 dentes",
+    "material": "Alumínio 7075",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      236,
+      118,
+      22
+    ],
+    "finish": "MetalEscovado",
+    "texture": null
+  },
+  "next_id": 36,
+  "origin_visible": false,
+  "references": [],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_DP_PINHAO",
+      "expr": "27.593545052641954",
+      "unit": "Comprimento",
+      "comment": "link: mestre.DP_PINHAO",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 5,
+      "name": "mestre_N_PINHAO",
+      "expr": "11",
+      "unit": "Comprimento",
+      "comment": "link: mestre.N_PINHAO",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 7,
+      "name": "mestre_PASSO",
+      "expr": "7.774",
+      "unit": "Comprimento",
+      "comment": "link: mestre.PASSO",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_DP_PINHAO",
+      "source": "mestre",
+      "publication": "DP_PINHAO",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 27.593545052641954
+      },
+      "target": 3,
+      "xform": null
+    },
+    {
+      "id": 4,
+      "name": "mestre_N_PINHAO",
+      "source": "mestre",
+      "publication": "N_PINHAO",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 11.0
+      },
+      "target": 5,
+      "xform": null
+    },
+    {
+      "id": 6,
+      "name": "mestre_PASSO",
+      "source": "mestre",
+      "publication": "PASSO",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 7.774
+      },
+      "target": 7,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 25,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 26,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 33,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          0.01725482940673828,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 80.0,
+        "ortho": false
+      },
+      "shown": [
+        25,
+        26
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 34,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          0.01725482940673828,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 80.0,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 35,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          0.01725482940673828,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 80.0,
+        "ortho": false
+      },
+      "shown": [
+        25,
+        26
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 16,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XZ"
+          },
+          "points": [
+            {
+              "id": 8,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 12,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 10,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 8,
+                  "r": 16.79677252632098
+                }
+              }
+            },
+            {
+              "id": 14,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 12,
+                  "r": 7.5
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 9,
+              "kind": {
+                "Fixed": 8
+              }
+            },
+            {
+              "id": 11,
+              "kind": {
+                "Diameter": [
+                  10,
+                  "mestre_DP_PINHAO+6"
+                ]
+              }
+            },
+            {
+              "id": 13,
+              "kind": {
+                "Fixed": 12
+              }
+            },
+            {
+              "id": 15,
+              "kind": {
+                "Diameter": [
+                  14,
+                  "15"
+                ]
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 17,
+      "name": "Extrusão1",
+      "kind": {
+        "Extrude": {
+          "sketch": 16,
+          "op": "Add",
+          "extent": {
+            "Symmetric": "4.5"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 22,
+      "name": "Sketch2",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XZ"
+          },
+          "points": [
+            {
+              "id": 18,
+              "x": 13.796772526320977,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 20,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 18,
+                  "r": 2.45
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 19,
+              "kind": {
+                "Fixed": 18
+              }
+            },
+            {
+              "id": 21,
+              "kind": {
+                "Diameter": [
+                  20,
+                  "4.9"
+                ]
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 23,
+      "name": "Assento do rolo",
+      "kind": {
+        "Extrude": {
+          "sketch": 22,
+          "op": "Cut",
+          "extent": "ThroughAll",
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 24,
+      "name": "Dentes",
+      "kind": {
+        "Pattern": {
+          "kind": {
+            "Circular": {
+              "axis": {
+                "Origin": "Y"
+              },
+              "count": "mestre_N_PINHAO",
+              "angle": "360"
+            }
+          },
+          "sources": [
+            23
+          ],
+          "skip": []
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 5
+}

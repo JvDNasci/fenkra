@@ -1,0 +1,892 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "bb72f159e03c68ce17adf67307285aa3",
+  "name": "CH-09 Suporte em C do pino-mestre",
+  "props": {
+    "pn": "FK-CH-09",
+    "description": "Suporte em C do pino-mestre",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      58,
+      60,
+      66
+    ],
+    "finish": "Acetinado",
+    "texture": null
+  },
+  "next_id": 48,
+  "origin_visible": false,
+  "references": [],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_CASTER",
+      "expr": "12",
+      "unit": "Comprimento",
+      "comment": "link: mestre.CASTER",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 5,
+      "name": "mestre_D_TUBO",
+      "expr": "30",
+      "unit": "Comprimento",
+      "comment": "link: mestre.D_TUBO",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_CASTER",
+      "source": "mestre",
+      "publication": "CASTER",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 12.0
+      },
+      "target": 3,
+      "xform": null
+    },
+    {
+      "id": 4,
+      "name": "mestre_D_TUBO",
+      "source": "mestre",
+      "publication": "D_TUBO",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 30.0
+      },
+      "target": 5,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 32,
+      "name": "tol furo",
+      "kind": "Diameter",
+      "anchors": [
+        [
+          28.0,
+          0.0,
+          35.0
+        ],
+        [
+          33.0,
+          0.0,
+          35.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "0.05",
+      "tol_minus": "0",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": [
+        {
+          "class": "FaceCilindrica",
+          "point": [
+            28.0,
+            0.0,
+            0.0
+          ],
+          "dir": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "radius": 5.0,
+          "concave": true
+        },
+        {
+          "class": "FaceCilindrica",
+          "point": [
+            28.0,
+            0.0,
+            0.0
+          ],
+          "dir": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "radius": 5.0,
+          "concave": true
+        }
+      ]
+    },
+    {
+      "id": 33,
+      "name": "Posição",
+      "kind": {
+        "Gdt": {
+          "ch": "Posicao",
+          "tol": "0.1",
+          "datums": "",
+          "extra": {
+            "zone_dia": false,
+            "modifier": "",
+            "second": null,
+            "second_ch": null,
+            "zona": null,
+            "uz": "",
+            "proj": "",
+            "mods": [],
+            "datum_mods": [],
+            "entre": [
+              "",
+              ""
+            ],
+            "por_unidade": "",
+            "max_valor": "",
+            "norma": "Iso",
+            "elemento": "Superficie"
+          }
+        }
+      },
+      "anchors": [
+        [
+          33.0,
+          0.0,
+          35.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": [
+        {
+          "class": "FaceCilindrica",
+          "point": [
+            28.0,
+            0.0,
+            0.0
+          ],
+          "dir": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "radius": 5.0,
+          "concave": true
+        }
+      ]
+    },
+    {
+      "id": 34,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          35.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Quebrar cantos vivos",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 35,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          40.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 44,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          20.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 137.63720427268206,
+        "ortho": false
+      },
+      "shown": [
+        32,
+        33,
+        34,
+        35
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 45,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          20.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 137.63720427268206,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 46,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          20.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 137.63720427268206,
+        "ortho": false
+      },
+      "shown": [
+        34,
+        35
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 47,
+      "name": "Tolerâncias",
+      "view": {
+        "name": "Tolerâncias",
+        "target": [
+          20.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 137.63720427268206,
+        "ortho": false
+      },
+      "shown": [
+        32,
+        33
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 22,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XZ"
+          },
+          "points": [
+            {
+              "id": 6,
+              "x": 0.0,
+              "y": -35.0,
+              "fixed": false
+            },
+            {
+              "id": 7,
+              "x": 40.0,
+              "y": -35.0,
+              "fixed": false
+            },
+            {
+              "id": 8,
+              "x": 40.0,
+              "y": -23.0,
+              "fixed": false
+            },
+            {
+              "id": 9,
+              "x": 12.0,
+              "y": -23.0,
+              "fixed": false
+            },
+            {
+              "id": 10,
+              "x": 12.0,
+              "y": 23.0,
+              "fixed": false
+            },
+            {
+              "id": 11,
+              "x": 40.0,
+              "y": 23.0,
+              "fixed": false
+            },
+            {
+              "id": 12,
+              "x": 40.0,
+              "y": 35.0,
+              "fixed": false
+            },
+            {
+              "id": 13,
+              "x": 0.0,
+              "y": 35.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 14,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 6,
+                  "b": 7
+                }
+              }
+            },
+            {
+              "id": 15,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 7,
+                  "b": 8
+                }
+              }
+            },
+            {
+              "id": 16,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 8,
+                  "b": 9
+                }
+              }
+            },
+            {
+              "id": 17,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 9,
+                  "b": 10
+                }
+              }
+            },
+            {
+              "id": 18,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 10,
+                  "b": 11
+                }
+              }
+            },
+            {
+              "id": 19,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 11,
+                  "b": 12
+                }
+              }
+            },
+            {
+              "id": 20,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 12,
+                  "b": 13
+                }
+              }
+            },
+            {
+              "id": 21,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 13,
+                  "b": 6
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 23,
+      "name": "Extrusão1",
+      "kind": {
+        "Extrude": {
+          "sketch": 22,
+          "op": "Add",
+          "extent": {
+            "Symmetric": "30"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 28,
+      "name": "Pino",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 24,
+              "x": 28.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 26,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 24,
+                  "r": 5.0
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 25,
+              "kind": {
+                "Fixed": 24
+              }
+            },
+            {
+              "id": 27,
+              "kind": {
+                "Diameter": [
+                  26,
+                  "10"
+                ]
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 29,
+      "name": "Furo do pino",
+      "kind": {
+        "Extrude": {
+          "sketch": 28,
+          "op": "Cut",
+          "extent": "ThroughAll",
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 30,
+      "name": "Filete1",
+      "kind": {
+        "Fillet": {
+          "value": "6",
+          "edges": {
+            "Edges": [
+              [
+                0.0,
+                0.0,
+                35.0
+              ],
+              [
+                0.0,
+                0.0,
+                -35.0
+              ]
+            ]
+          },
+          "mode": "Constant",
+          "prop": "Tangente",
+          "keys": [
+            null,
+            null
+          ],
+          "extra": {
+            "flips": [],
+            "partial": null,
+            "smooth": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 31,
+      "name": "Chanfro1",
+      "kind": {
+        "Chamfer": {
+          "value": "1",
+          "edges": {
+            "Edges": [
+              [
+                23.0,
+                15.0,
+                35.0
+              ],
+              [
+                23.0,
+                6.123233998228043e-16,
+                -35.0
+              ]
+            ]
+          },
+          "mode": "Constant",
+          "prop": "Tangente",
+          "keys": [
+            null,
+            null
+          ],
+          "extra": {
+            "flips": [],
+            "partial": null,
+            "smooth": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 6
+}

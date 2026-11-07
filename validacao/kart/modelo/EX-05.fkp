@@ -1,0 +1,789 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "fd0a9081ed6045ecfab85dedaa17475b",
+  "name": "EX-05 Cubo traseiro",
+  "props": {
+    "pn": "FK-EX-05",
+    "description": "Cubo traseiro",
+    "material": "Alumínio 6061",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      192,
+      196,
+      202
+    ],
+    "finish": "MetalEscovado",
+    "texture": null
+  },
+  "next_id": 52,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 18,
+      "name": "Plano1",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XZ"
+          },
+          "offset": "-72"
+        }
+      },
+      "visible": false,
+      "folder": 19,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_D_EIXO",
+      "expr": "50",
+      "unit": "Comprimento",
+      "comment": "link: mestre.D_EIXO",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 19,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_D_EIXO",
+      "source": "mestre",
+      "publication": "D_EIXO",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 50.0
+      },
+      "target": 3,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 41,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 42,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 49,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          0.07815933227539062,
+          36.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 336.83085552784104,
+        "ortho": false
+      },
+      "shown": [
+        41,
+        42
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 50,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          0.07815933227539062,
+          36.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 336.83085552784104,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 51,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          0.07815933227539062,
+          36.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 336.83085552784104,
+        "ortho": false
+      },
+      "shown": [
+        41,
+        42
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 16,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 4,
+              "x": 25.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 5,
+              "x": 42.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 6,
+              "x": 42.0,
+              "y": 60.0,
+              "fixed": false
+            },
+            {
+              "id": 7,
+              "x": 70.0,
+              "y": 60.0,
+              "fixed": false
+            },
+            {
+              "id": 8,
+              "x": 70.0,
+              "y": 72.0,
+              "fixed": false
+            },
+            {
+              "id": 9,
+              "x": 25.0,
+              "y": 72.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 10,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 4,
+                  "b": 5
+                }
+              }
+            },
+            {
+              "id": 11,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 5,
+                  "b": 6
+                }
+              }
+            },
+            {
+              "id": 12,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 6,
+                  "b": 7
+                }
+              }
+            },
+            {
+              "id": 13,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 7,
+                  "b": 8
+                }
+              }
+            },
+            {
+              "id": 14,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 8,
+                  "b": 9
+                }
+              }
+            },
+            {
+              "id": 15,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 9,
+                  "b": 4
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 17,
+      "name": "Revolução1",
+      "kind": {
+        "Revolve": {
+          "sketch": 16,
+          "axis": {
+            "Origin": "Y"
+          },
+          "angle": "360",
+          "symmetric": false,
+          "op": "Add",
+          "thin": null,
+          "thin_side": 0,
+          "angle2": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 22,
+      "name": "Sketch2",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 18
+          },
+          "points": [
+            {
+              "id": 20,
+              "x": 56.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 21,
+              "construction": false,
+              "geom": {
+                "Point": {
+                  "p": 20
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 23,
+      "name": "Furo1",
+      "kind": {
+        "Hole": {
+          "sketch": 22,
+          "kind": "Simples",
+          "diameter": "8.5",
+          "depth": "ThroughAll",
+          "thread": null,
+          "thread_modeled": false,
+          "standard": null,
+          "points": [],
+          "dir": null,
+          "reverse": false,
+          "tip": null,
+          "taper": "0",
+          "left_hand": false,
+          "extra": {
+            "thread_depth": "",
+            "thread_relief": "",
+            "tip_offset": "",
+            "thread_relief_unit": null,
+            "thread_top_gap": "",
+            "thread_top_gap_unit": "Mm",
+            "thread_chamfer": "",
+            "thread_chamfer_unit": "Mm",
+            "thread_start_angle": "",
+            "thread_start_ref": null
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 24,
+      "name": "PadrãoCircular1",
+      "kind": {
+        "Pattern": {
+          "kind": {
+            "Circular": {
+              "axis": {
+                "Origin": "Y"
+              },
+              "count": "4",
+              "angle": "360"
+            }
+          },
+          "sources": [
+            23
+          ],
+          "skip": []
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 37,
+      "name": "Sketch3",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XZ"
+          },
+          "points": [
+            {
+              "id": 25,
+              "x": -4.0,
+              "y": 20.0,
+              "fixed": false
+            },
+            {
+              "id": 26,
+              "x": 4.0,
+              "y": 20.0,
+              "fixed": false
+            },
+            {
+              "id": 27,
+              "x": 4.0,
+              "y": 29.0,
+              "fixed": false
+            },
+            {
+              "id": 28,
+              "x": -4.0,
+              "y": 29.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 29,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 25,
+                  "b": 26
+                }
+              }
+            },
+            {
+              "id": 30,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 26,
+                  "b": 27
+                }
+              }
+            },
+            {
+              "id": 31,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 27,
+                  "b": 28
+                }
+              }
+            },
+            {
+              "id": 32,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 28,
+                  "b": 25
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 33,
+              "kind": {
+                "Horizontal": 29
+              }
+            },
+            {
+              "id": 34,
+              "kind": {
+                "Horizontal": 31
+              }
+            },
+            {
+              "id": 35,
+              "kind": {
+                "Vertical": 30
+              }
+            },
+            {
+              "id": 36,
+              "kind": {
+                "Vertical": 32
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 38,
+      "name": "Rasgo",
+      "kind": {
+        "Extrude": {
+          "sketch": 37,
+          "op": "Cut",
+          "extent": "ThroughAll",
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 39,
+      "name": "Chanfro1",
+      "kind": {
+        "Chamfer": {
+          "value": "1",
+          "edges": {
+            "Edges": [
+              [
+                -42.0,
+                0.0,
+                -5.143516516159909e-15
+              ]
+            ]
+          },
+          "mode": "Constant",
+          "prop": "Tangente",
+          "keys": [
+            null
+          ],
+          "extra": {
+            "flips": [],
+            "partial": null,
+            "smooth": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 40,
+      "name": "Filete1",
+      "kind": {
+        "Fillet": {
+          "value": "3",
+          "edges": {
+            "Edges": [
+              [
+                -42.0,
+                60.0,
+                -5.143516516159909e-15
+              ]
+            ]
+          },
+          "mode": "Constant",
+          "prop": "Tangente",
+          "keys": [
+            null
+          ],
+          "extra": {
+            "flips": [],
+            "partial": null,
+            "smooth": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 9
+}

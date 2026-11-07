@@ -1,0 +1,210 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.34",
+  "uid": "c45b2b2af01043e8d3900537cd8ad6d7",
+  "name": "CV-SUP1 Extrusão e deslocada de superfície",
+  "props": {
+    "pn": "FK-CV-SUP1",
+    "description": "Extrusão e deslocada de superfície",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 11,
+  "origin_visible": true,
+  "references": [
+    {
+      "id": 2,
+      "name": "P0",
+      "kind": {
+        "PointCoords": {
+          "x": "-100",
+          "y": "0",
+          "z": "0",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 4,
+      "name": "P1",
+      "kind": {
+        "PointCoords": {
+          "x": "-40",
+          "y": "50",
+          "z": "0",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 5,
+      "name": "P2",
+      "kind": {
+        "PointCoords": {
+          "x": "40",
+          "y": "50",
+          "z": "0",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 6,
+      "name": "P3",
+      "kind": {
+        "PointCoords": {
+          "x": "100",
+          "y": "0",
+          "z": "0",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 7,
+      "name": "Curva1",
+      "kind": {
+        "Spline": {
+          "points": [
+            {
+              "Ref": 2
+            },
+            {
+              "Ref": 4
+            },
+            {
+              "Ref": 5
+            },
+            {
+              "Ref": 6
+            }
+          ],
+          "closed": false,
+          "tangents": []
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 8,
+      "name": "Superficie1",
+      "kind": {
+        "SurfExtrude": {
+          "curve": {
+            "Ref": 7
+          },
+          "dir": {
+            "Origin": "Z"
+          },
+          "length": "120",
+          "length2": "0",
+          "until": null,
+          "until2": null
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 9,
+      "name": "Superficie2",
+      "kind": {
+        "SurfOffset": {
+          "surface": {
+            "Ref": 8
+          },
+          "dist": "5",
+          "both": false,
+          "join": "Automatico"
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 3,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 10,
+      "name": "Engrossar1",
+      "kind": {
+        "ThickSurface": {
+          "surface": {
+            "Ref": 9
+          },
+          "t1": "2",
+          "t2": "0",
+          "op": "Add"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 1
+}

@@ -118,7 +118,8 @@ pub fn estrutural_extra() -> R {
     d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "6", "8")));
     d.add_feature(FeatureKind::StructGusset(StructGusset::novo([400., 0., 0.], "60", "4", "10")));
     let mut w = StructWeld::novo("3");
-    w.faces = vec![[0., 15., 15.], [-6., 0., 0.]];
+    // tubo contra a placa: um ponto no costado do tubo, outro na face da placa voltada para ele
+    w.faces = vec![[10., 15., 0.], [0., 20., 0.]];
     w.face_keys = vec![None, None];
     w.split = 1;
     d.add_feature(FeatureKind::StructWeld(w));
@@ -159,5 +160,19 @@ pub fn padrao_pontos() -> R {
     let h = d.add_feature(furo(c, "6"));
     d.add_feature(FeatureKind::Pattern(Pattern { kind: PatternKind::Points { points: vec![PointRef::Fixed([40., -40., 10.]), PointRef::Fixed([40., 40., 10.]), PointRef::Fixed([-40., 40., 10.])], base: PointRef::Fixed([-40., -40., 10.]) }, sources: vec![h], skip: vec![] }));
     pc(&mut d, FeatureKind::Chamfer(EdgeOp { value: "2".into(), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
+    Ok(d)
+}
+
+/// Diagnóstico da interferência falsa do aro: corta a árvore depois da alma (1) ou dos furos (2).
+pub fn aro_etapa(l: f64, n: usize) -> R {
+    let mut d = crate::pecas::aro(l)?;
+    let corpos: Vec<usize> = d.features.iter().enumerate().filter(|(_, f)| !matches!(f.kind, FeatureKind::Sketch(_))).map(|(i, _)| i).collect();
+    // 0 revolução, 1 alma, 2 furo, 3 padrão, 4 pino, 5 padrão
+    let corte = match n {
+        1 => corpos[1] + 1,
+        _ => corpos[3] + 1,
+    };
+    d.features.truncate(corte);
+    d.rollback = d.features.len();
     Ok(d)
 }

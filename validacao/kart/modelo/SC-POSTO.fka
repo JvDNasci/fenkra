@@ -1,0 +1,796 @@
+{
+  "format_version": 1,
+  "name": "SC-POSTO",
+  "uid": "eb07a05ee009d5f3bf847792c30c8703",
+  "props": {
+    "pn": "",
+    "description": "",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "next_id": 30,
+  "nodes": [
+    {
+      "id": 1,
+      "name": "PO-01",
+      "number": 1,
+      "kind": {
+        "Part": {
+          "path": "PO-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          343.2,
+          0.0,
+          105.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        28,
+        28,
+        32
+      ]
+    },
+    {
+      "id": 2,
+      "name": "PO-02",
+      "number": 2,
+      "kind": {
+        "Part": {
+          "path": "PO-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          300.0,
+          190.0,
+          200.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 3,
+      "name": "PO-02:2",
+      "number": 3,
+      "kind": {
+        "Part": {
+          "path": "PO-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          300.0,
+          -190.0,
+          200.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 4,
+      "name": "PO-02:3",
+      "number": 4,
+      "kind": {
+        "Part": {
+          "path": "PO-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          520.0,
+          190.0,
+          200.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 5,
+      "name": "PO-02:4",
+      "number": 5,
+      "kind": {
+        "Part": {
+          "path": "PO-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          520.0,
+          -190.0,
+          200.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 6,
+      "name": "PO-03",
+      "number": 6,
+      "kind": {
+        "Part": {
+          "path": "PO-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 7,
+      "name": "PO-03:2",
+      "number": 7,
+      "kind": {
+        "Part": {
+          "path": "PO-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          600.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 8,
+      "name": "PO-04",
+      "number": 8,
+      "kind": {
+        "Part": {
+          "path": "PO-04.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          300.0,
+          0.0,
+          29.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 9,
+      "name": "PO-08",
+      "number": 9,
+      "kind": {
+        "Part": {
+          "path": "PO-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          707.2,
+          0.0,
+          65.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        226,
+        224,
+        210
+      ]
+    }
+  ],
+  "mates": [],
+  "rigid": [],
+  "params": [],
+  "patterns": [],
+  "joints": [],
+  "couplings": [],
+  "display_states": [],
+  "animations": [],
+  "explosoes": [],
+  "pmi": [
+    {
+      "id": 25,
+      "name": "Balão PO-01",
+      "kind": {
+        "Balloon": {
+          "item": "1",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          343.2,
+          0.0,
+          105.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 26,
+      "name": "Balão PO-02",
+      "kind": {
+        "Balloon": {
+          "item": "2",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          300.0,
+          190.0,
+          200.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 27,
+      "name": "Balão PO-03",
+      "kind": {
+        "Balloon": {
+          "item": "3",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 28,
+      "name": "Balão PO-04",
+      "kind": {
+        "Balloon": {
+          "item": "4",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          300.0,
+          0.0,
+          29.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 29,
+      "name": "Balão PO-08",
+      "kind": {
+        "Balloon": {
+          "item": "5",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          707.2,
+          0.0,
+          65.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "items": [
+    {
+      "key": "PO-01.fkp",
+      "no": 1
+    },
+    {
+      "key": "PO-02.fkp",
+      "no": 2
+    },
+    {
+      "key": "PO-03.fkp",
+      "no": 3
+    },
+    {
+      "key": "PO-04.fkp",
+      "no": 4
+    },
+    {
+      "key": "PO-08.fkp",
+      "no": 5
+    }
+  ],
+  "pmi_captures": [],
+  "features": [],
+  "pilhas": [],
+  "conjuntos": [],
+  "regras_cor": [],
+  "interf": {
+    "ignorados": [],
+    "menores_que": 0.0
+  },
+  "relational": false,
+  "politicas_link": [],
+  "religacoes": [],
+  "geometria": null,
+  "esqueleto": null,
+  "contexto_livre": false,
+  "origem_oculta": false
+}

@@ -1,0 +1,1371 @@
+{
+  "format_version": 1,
+  "name": "SC-CARROCERIA",
+  "uid": "2de51a88eb1b5d38ecd8e50008f102ee",
+  "props": {
+    "pn": "",
+    "description": "",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "next_id": 55,
+  "nodes": [
+    {
+      "id": 1,
+      "name": "PR-02",
+      "number": 1,
+      "kind": {
+        "Part": {
+          "path": "PR-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 2,
+      "name": "PR-01",
+      "number": 2,
+      "kind": {
+        "Part": {
+          "path": "PR-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 3,
+      "name": "PR-03",
+      "number": 3,
+      "kind": {
+        "Part": {
+          "path": "PR-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 4,
+      "name": "PR-04",
+      "number": 4,
+      "kind": {
+        "Part": {
+          "path": "PR-04.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 5,
+      "name": "PR-04:2",
+      "number": 5,
+      "kind": {
+        "Part": {
+          "path": "PR-04.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          800.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 6,
+      "name": "PR-05",
+      "number": 6,
+      "kind": {
+        "Part": {
+          "path": "PR-05.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 7,
+      "name": "PR-05:2",
+      "number": 7,
+      "kind": {
+        "Part": {
+          "path": "PR-05.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          800.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 8,
+      "name": "PR-10",
+      "number": 8,
+      "kind": {
+        "Part": {
+          "path": "PR-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 9,
+      "name": "PR-10:2",
+      "number": 9,
+      "kind": {
+        "Part": {
+          "path": "PR-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 10,
+      "name": "PR-06",
+      "number": 10,
+      "kind": {
+        "Part": {
+          "path": "PR-06.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1240.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        238,
+        238,
+        240
+      ]
+    },
+    {
+      "id": 11,
+      "name": "PR-07",
+      "number": 11,
+      "kind": {
+        "Part": {
+          "path": "PR-07.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          940.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 12,
+      "name": "PR-08",
+      "number": 12,
+      "kind": {
+        "Part": {
+          "path": "PR-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          520.0,
+          530.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        238,
+        238,
+        240
+      ]
+    },
+    {
+      "id": 13,
+      "name": "PR-08:2",
+      "number": 13,
+      "kind": {
+        "Part": {
+          "path": "PR-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          520.0,
+          -530.0,
+          0.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        238,
+        238,
+        240
+      ]
+    },
+    {
+      "id": 14,
+      "name": "PR-09",
+      "number": 14,
+      "kind": {
+        "Part": {
+          "path": "PR-09.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          -320.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        238,
+        238,
+        240
+      ]
+    }
+  ],
+  "mates": [],
+  "rigid": [],
+  "params": [],
+  "patterns": [],
+  "joints": [],
+  "couplings": [],
+  "display_states": [],
+  "animations": [],
+  "explosoes": [],
+  "pmi": [
+    {
+      "id": 45,
+      "name": "Balão PR-02",
+      "kind": {
+        "Balloon": {
+          "item": "1",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 46,
+      "name": "Balão PR-01",
+      "kind": {
+        "Balloon": {
+          "item": "2",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 47,
+      "name": "Balão PR-03",
+      "kind": {
+        "Balloon": {
+          "item": "3",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 48,
+      "name": "Balão PR-04",
+      "kind": {
+        "Balloon": {
+          "item": "4",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 49,
+      "name": "Balão PR-05",
+      "kind": {
+        "Balloon": {
+          "item": "5",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 50,
+      "name": "Balão PR-10",
+      "kind": {
+        "Balloon": {
+          "item": "6",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 51,
+      "name": "Balão PR-06",
+      "kind": {
+        "Balloon": {
+          "item": "7",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          1240.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 52,
+      "name": "Balão PR-07",
+      "kind": {
+        "Balloon": {
+          "item": "8",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          940.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 53,
+      "name": "Balão PR-08",
+      "kind": {
+        "Balloon": {
+          "item": "9",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          520.0,
+          530.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 54,
+      "name": "Balão PR-09",
+      "kind": {
+        "Balloon": {
+          "item": "10",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          -320.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "items": [
+    {
+      "key": "PR-02.fkp",
+      "no": 1
+    },
+    {
+      "key": "PR-01.fkp",
+      "no": 2
+    },
+    {
+      "key": "PR-03.fkp",
+      "no": 3
+    },
+    {
+      "key": "PR-04.fkp",
+      "no": 4
+    },
+    {
+      "key": "PR-05.fkp",
+      "no": 5
+    },
+    {
+      "key": "PR-10.fkp",
+      "no": 6
+    },
+    {
+      "key": "PR-06.fkp",
+      "no": 7
+    },
+    {
+      "key": "PR-07.fkp",
+      "no": 8
+    },
+    {
+      "key": "PR-08.fkp",
+      "no": 9
+    },
+    {
+      "key": "PR-09.fkp",
+      "no": 10
+    }
+  ],
+  "pmi_captures": [],
+  "features": [],
+  "pilhas": [],
+  "conjuntos": [],
+  "regras_cor": [],
+  "interf": {
+    "ignorados": [],
+    "menores_que": 0.0
+  },
+  "relational": false,
+  "politicas_link": [],
+  "religacoes": [],
+  "geometria": null,
+  "esqueleto": null,
+  "contexto_livre": false,
+  "origem_oculta": false
+}

@@ -1,0 +1,2409 @@
+{
+  "format_version": 1,
+  "name": "SC-DIRECAO",
+  "uid": "f23ca5aa9b19eef797d9721fcddc004b",
+  "props": {
+    "pn": "",
+    "description": "",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "next_id": 71,
+  "nodes": [
+    {
+      "id": 1,
+      "name": "CH-09",
+      "number": 1,
+      "kind": {
+        "Part": {
+          "path": "CH-09.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1012.0,
+          320.0,
+          130.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 2,
+      "name": "CH-09:2",
+      "number": 2,
+      "kind": {
+        "Part": {
+          "path": "CH-09.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1012.0,
+          -320.0,
+          130.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 3,
+      "name": "DI-08",
+      "number": 3,
+      "kind": {
+        "Part": {
+          "path": "DI-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          320.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            0.9781476007338064,
+            0.0,
+            0.20791169081775948
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 4,
+      "name": "DI-08D",
+      "number": 4,
+      "kind": {
+        "Part": {
+          "path": "DI-08D.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          -320.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            0.9781476007338064,
+            0.0,
+            0.20791169081775948
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 5,
+      "name": "DI-03",
+      "number": 5,
+      "kind": {
+        "Part": {
+          "path": "DI-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          811.127332427021,
+          0.0,
+          120.0
+        ],
+        "rot": [
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.9063077870366499,
+            0.0,
+            -0.42261826174069944
+          ],
+          [
+            -0.42261826174069944,
+            0.0,
+            0.9063077870366499
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 6,
+      "name": "DI-05",
+      "number": 6,
+      "kind": {
+        "Part": {
+          "path": "DI-05.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          820.1904102973874,
+          0.0,
+          124.22618261740699
+        ],
+        "rot": [
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.9063077870366499,
+            0.0,
+            -0.42261826174069944
+          ],
+          [
+            -0.42261826174069944,
+            0.0,
+            0.9063077870366499
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 7,
+      "name": "DI-01",
+      "number": 7,
+      "kind": {
+        "Part": {
+          "path": "DI-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          574.4611058522293,
+          0.0,
+          627.5323607405239
+        ],
+        "rot": [
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.9063077870366499,
+            0.0,
+            -0.42261826174069944
+          ],
+          [
+            -0.42261826174069944,
+            0.0,
+            0.9063077870366499
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        28,
+        28,
+        32
+      ]
+    },
+    {
+      "id": 8,
+      "name": "DI-02",
+      "number": 8,
+      "kind": {
+        "Part": {
+          "path": "DI-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          580.3777615165991,
+          0.0,
+          614.8440517220108
+        ],
+        "rot": [
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.9063077870366499,
+            0.0,
+            -0.42261826174069944
+          ],
+          [
+            -0.42261826174069944,
+            0.0,
+            0.9063077870366499
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 13,
+      "name": "DI-06",
+      "number": 9,
+      "kind": {
+        "Part": {
+          "path": "DI-06.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          858.8611694053332,
+          45.0,
+          147.77554333092172
+        ],
+        "rot": [
+          [
+            0.9323032617085969,
+            -0.3616775196324918,
+            0.0
+          ],
+          [
+            0.35809828919916586,
+            0.9230770089661341,
+            -0.1403369188444939
+          ],
+          [
+            0.050756708720542845,
+            0.13083656717685632,
+            0.9901038072895356
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 16,
+      "name": "DI-06:2",
+      "number": 10,
+      "kind": {
+        "Part": {
+          "path": "DI-06.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          858.8611694053332,
+          -45.0,
+          147.77554333092172
+        ],
+        "rot": [
+          [
+            -0.9323032617085969,
+            -0.3616775196324918,
+            0.0
+          ],
+          [
+            0.35809828919916586,
+            -0.9230770089661341,
+            -0.1403369188444939
+          ],
+          [
+            0.050756708720542845,
+            -0.13083656717685632,
+            0.9901038072895356
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 19,
+      "name": "DI-10",
+      "number": 11,
+      "kind": {
+        "Part": {
+          "path": "DI-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          476.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            0.9781476007338064,
+            0.0,
+            0.20791169081775948
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 20,
+      "name": "RD-01",
+      "number": 12,
+      "kind": {
+        "Part": {
+          "path": "RD-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          520.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            0.9781476007338064,
+            0.0,
+            0.20791169081775948
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        214,
+        172,
+        64
+      ]
+    },
+    {
+      "id": 21,
+      "name": "RD-03",
+      "number": 13,
+      "kind": {
+        "Part": {
+          "path": "RD-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          520.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            0.9781476007338064,
+            0.0,
+            0.20791169081775948
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        24,
+        24,
+        27
+      ]
+    },
+    {
+      "id": 23,
+      "name": "DI-10:2",
+      "number": 14,
+      "kind": {
+        "Part": {
+          "path": "DI-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          -476.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            -0.9781476007338064,
+            0.0,
+            -0.20791169081775948
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 24,
+      "name": "RD-01:2",
+      "number": 15,
+      "kind": {
+        "Part": {
+          "path": "RD-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          -520.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            -0.9781476007338064,
+            0.0,
+            -0.20791169081775948
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        214,
+        172,
+        64
+      ]
+    },
+    {
+      "id": 25,
+      "name": "RD-03:2",
+      "number": 16,
+      "kind": {
+        "Part": {
+          "path": "RD-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          -520.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            -0.9781476007338064,
+            0.0,
+            -0.20791169081775948
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        24,
+        24,
+        27
+      ]
+    }
+  ],
+  "mates": [],
+  "rigid": [
+    {
+      "id": 9,
+      "name": "Fixação conjunta",
+      "comps": [
+        5,
+        6,
+        7,
+        8
+      ]
+    },
+    {
+      "id": 22,
+      "name": "Fixação conjunta.2",
+      "comps": [
+        3,
+        19,
+        20,
+        21
+      ]
+    },
+    {
+      "id": 26,
+      "name": "Fixação conjunta.3",
+      "comps": [
+        4,
+        23,
+        24,
+        25
+      ]
+    }
+  ],
+  "params": [],
+  "patterns": [],
+  "joints": [
+    {
+      "id": 10,
+      "name": "Revolução",
+      "kind": "Revolute",
+      "a": {
+        "comp": 1,
+        "frame": {
+          "o": [
+            -200.87266757297903,
+            -320.0,
+            -10.0
+          ],
+          "z": [
+            -0.42261826174069944,
+            0.0,
+            0.9063077870366499
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "b": {
+        "comp": 5,
+        "frame": {
+          "o": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "angle0": 90.0,
+      "len0": 0.0,
+      "drive_angle": "t",
+      "drive_len": null,
+      "suppressed": false,
+      "limites": {
+        "angulo": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_x": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_y": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "inclinacao": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "trajeto": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        }
+      },
+      "zero": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fontes": [
+        null,
+        null
+      ]
+    },
+    {
+      "id": 11,
+      "name": "Revolução.2",
+      "kind": "Revolute",
+      "a": {
+        "comp": 1,
+        "frame": {
+          "o": [
+            28.0,
+            0.0,
+            0.0
+          ],
+          "z": [
+            -0.20791169081775934,
+            0.0,
+            0.9781476007338057
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "b": {
+        "comp": 3,
+        "frame": {
+          "o": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "angle0": 0.0,
+      "len0": 0.0,
+      "drive_angle": null,
+      "drive_len": null,
+      "suppressed": false,
+      "limites": {
+        "angulo": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_x": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_y": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "inclinacao": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "trajeto": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        }
+      },
+      "zero": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fontes": [
+        null,
+        null
+      ]
+    },
+    {
+      "id": 12,
+      "name": "Revolução.3",
+      "kind": "Revolute",
+      "a": {
+        "comp": 1,
+        "frame": {
+          "o": [
+            28.0,
+            -640.0,
+            0.0
+          ],
+          "z": [
+            -0.20791169081775934,
+            0.0,
+            0.9781476007338057
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "b": {
+        "comp": 4,
+        "frame": {
+          "o": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "angle0": 0.0,
+      "len0": 0.0,
+      "drive_angle": null,
+      "drive_len": null,
+      "suppressed": false,
+      "limites": {
+        "angulo": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_x": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_y": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "inclinacao": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "trajeto": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        }
+      },
+      "zero": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fontes": [
+        null,
+        null
+      ]
+    },
+    {
+      "id": 14,
+      "name": "Esférica",
+      "kind": "Spherical",
+      "a": {
+        "comp": 6,
+        "frame": {
+          "o": [
+            45.0,
+            -45.0,
+            5.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "b": {
+        "comp": 13,
+        "frame": {
+          "o": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "angle0": -106.03155437854979,
+      "len0": 0.0,
+      "drive_angle": null,
+      "drive_len": null,
+      "suppressed": false,
+      "limites": {
+        "angulo": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_x": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_y": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "inclinacao": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "trajeto": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        }
+      },
+      "zero": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fontes": [
+        null,
+        null
+      ]
+    },
+    {
+      "id": 15,
+      "name": "Esférica.2",
+      "kind": "Spherical",
+      "a": {
+        "comp": 3,
+        "frame": {
+          "o": [
+            -90.0,
+            -35.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "b": {
+        "comp": 13,
+        "frame": {
+          "o": [
+            0.0,
+            259.9999758078745,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "angle0": -19.180394090282817,
+      "len0": 0.0,
+      "drive_angle": null,
+      "drive_len": null,
+      "suppressed": false,
+      "limites": {
+        "angulo": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_x": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_y": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "inclinacao": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "trajeto": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        }
+      },
+      "zero": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fontes": [
+        null,
+        null
+      ]
+    },
+    {
+      "id": 17,
+      "name": "Esférica.3",
+      "kind": "Spherical",
+      "a": {
+        "comp": 6,
+        "frame": {
+          "o": [
+            -45.0,
+            -45.0,
+            5.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "b": {
+        "comp": 16,
+        "frame": {
+          "o": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "angle0": 106.03155437854979,
+      "len0": 0.0,
+      "drive_angle": null,
+      "drive_len": null,
+      "suppressed": false,
+      "limites": {
+        "angulo": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_x": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_y": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "inclinacao": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "trajeto": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        }
+      },
+      "zero": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fontes": [
+        null,
+        null
+      ]
+    },
+    {
+      "id": 18,
+      "name": "Esférica.4",
+      "kind": "Spherical",
+      "a": {
+        "comp": 4,
+        "frame": {
+          "o": [
+            -90.0,
+            35.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "b": {
+        "comp": 16,
+        "frame": {
+          "o": [
+            0.0,
+            259.9999758078745,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "angle0": -160.8196059097172,
+      "len0": 0.0,
+      "drive_angle": null,
+      "drive_len": null,
+      "suppressed": false,
+      "limites": {
+        "angulo": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_x": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_y": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "inclinacao": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "trajeto": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        }
+      },
+      "zero": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fontes": [
+        null,
+        null
+      ]
+    }
+  ],
+  "couplings": [],
+  "display_states": [],
+  "animations": [],
+  "explosoes": [],
+  "pmi": [
+    {
+      "id": 60,
+      "name": "Balão CH-09",
+      "kind": {
+        "Balloon": {
+          "item": "1",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          1012.0,
+          320.0,
+          130.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 61,
+      "name": "Balão DI-08",
+      "kind": {
+        "Balloon": {
+          "item": "2",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          1040.0,
+          320.0,
+          130.00000000000006
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 62,
+      "name": "Balão DI-08D",
+      "kind": {
+        "Balloon": {
+          "item": "3",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          1040.0,
+          -320.0,
+          130.00000000000006
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 63,
+      "name": "Balão DI-03",
+      "kind": {
+        "Balloon": {
+          "item": "4",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          811.127332427021,
+          0.0,
+          120.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 64,
+      "name": "Balão DI-05",
+      "kind": {
+        "Balloon": {
+          "item": "5",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          820.1904102973874,
+          0.0,
+          124.22618261740699
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 65,
+      "name": "Balão DI-01",
+      "kind": {
+        "Balloon": {
+          "item": "6",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          574.4611058522293,
+          0.0,
+          627.5323607405239
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 66,
+      "name": "Balão DI-02",
+      "kind": {
+        "Balloon": {
+          "item": "7",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          580.3777615165991,
+          0.0,
+          614.8440517220108
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 67,
+      "name": "Balão DI-06",
+      "kind": {
+        "Balloon": {
+          "item": "8",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          858.8611694053332,
+          45.0,
+          147.77554333092172
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 68,
+      "name": "Balão DI-10",
+      "kind": {
+        "Balloon": {
+          "item": "9",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          1040.0,
+          476.0,
+          130.00000000000006
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 69,
+      "name": "Balão RD-01",
+      "kind": {
+        "Balloon": {
+          "item": "10",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          1040.0,
+          520.0,
+          130.00000000000006
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 70,
+      "name": "Balão RD-03",
+      "kind": {
+        "Balloon": {
+          "item": "11",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          1040.0,
+          520.0,
+          130.00000000000006
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "items": [
+    {
+      "key": "CH-09.fkp",
+      "no": 1
+    },
+    {
+      "key": "DI-08.fkp",
+      "no": 2
+    },
+    {
+      "key": "DI-08D.fkp",
+      "no": 3
+    },
+    {
+      "key": "DI-03.fkp",
+      "no": 4
+    },
+    {
+      "key": "DI-05.fkp",
+      "no": 5
+    },
+    {
+      "key": "DI-01.fkp",
+      "no": 6
+    },
+    {
+      "key": "DI-02.fkp",
+      "no": 7
+    },
+    {
+      "key": "DI-06.fkp",
+      "no": 8
+    },
+    {
+      "key": "DI-10.fkp",
+      "no": 9
+    },
+    {
+      "key": "RD-01.fkp",
+      "no": 10
+    },
+    {
+      "key": "RD-03.fkp",
+      "no": 11
+    }
+  ],
+  "pmi_captures": [],
+  "features": [],
+  "pilhas": [],
+  "conjuntos": [],
+  "regras_cor": [],
+  "interf": {
+    "ignorados": [],
+    "menores_que": 0.0
+  },
+  "relational": false,
+  "politicas_link": [],
+  "religacoes": [],
+  "geometria": null,
+  "esqueleto": null,
+  "contexto_livre": false,
+  "origem_oculta": false
+}

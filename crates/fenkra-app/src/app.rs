@@ -1050,6 +1050,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         // desenvolvimento: FENKRA_DEMO_ARQUIVO=<caminho> abre esse .fkp, .fka ou .fkd ao iniciar
         if let Ok(p) = std::env::var("FENKRA_DEMO_ARQUIVO") {
             app.open_path(std::path::Path::new(&p));
+            // o comando pedido em FENKRA_EDITAR é procurado depois de abrir
+            if let Ok(n) = std::env::var("FENKRA_EDITAR") {
+                app.open_pending = app.open.doc.features.iter().find(|f| f.name == n).map(|f| f.id);
+            }
         }
         // desenvolvimento: FENKRA_ABRIR=<nome> abre esse comando para edição ao iniciar
         if let Ok(n) = std::env::var("FENKRA_ABRIR") {

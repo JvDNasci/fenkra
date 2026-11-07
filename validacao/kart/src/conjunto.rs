@@ -366,15 +366,70 @@ pub fn kart(u: &[(String, LinkedGeo)], r: &mut Reg) {
     let ach = analisar(&k, Some(&dir), &mut cache, &OpcoesInterf { sub_unico: false, ..Default::default() });
     println!("interferência: {} achados em {:.1}s", ach.len(), t.elapsed().as_secs_f64());
     teste_invertido();
+    testa_fixadores(r);
     for x in ach.iter().take(8) {
         println!("  {} x {}: {:.0} mm³", x.a.nome, x.b.nome, x.volume);
     }
 }
 
+/// Coroa, pinhão e corrente pelo gerador: a 219 e, para medir o comando, a ISO 08B-1.
+pub fn testa_gerador(r: &mut Reg, u: &[(String, LinkedGeo)]) {
+    use fenkra_montagem::transmissao::{inserir_transmissao, Elemento};
+    let dir = modelo();
+    let (np, nc, dc) = (valor(u, "N_PINHAO") as u32, valor(u, "N_COROA") as u32, valor(u, "DC"));
+    for (cod, corr, centros) in [("TR-GER219", "219", dc), ("TR-GER08B", "ISO 08B-1", 330.)] {
+        let mut a = Assembly::new("TESTE-GERADOR");
+        let e = Elemento::Corrente { corrente: corr.into(), dentes1: np, dentes2: nc, centros, furo1: 15., furo2: 90. };
+        let t = std::time::Instant::now();
+        let x = inserir_transmissao(&mut a, Some(&dir), &e, 8000., 20., &Placement::default());
+        let (ok, nota) = match &x {
+            Ok(rel) => {
+                let j = rel.juntas.first().copied();
+                if let Some(id) = j {
+                    a.joints.iter_mut().find(|q| q.id == id).unwrap().drive_angle = Some("t".into());
+                }
+                let q = simulate(&mut a, 0., 360., 8);
+                let oks = q.iter().filter(|f| f.ok).count();
+                grava(&a, cod);
+                (true, format!("1 chamada; peças={} juntas={} razão={:.4} centros={:.2} avisos={:?}; simulação de 1 volta ok em {oks}/9 quadros [{:.1}s]", rel.comps.len(), rel.juntas.len(), rel.razao, rel.distancia_centros, rel.avisos, t.elapsed().as_secs_f64()))
+            }
+            Err(m) => (false, m.clone()),
+        };
+        r.usa("Transmissão", &["Gerador de corrente"]);
+        r.registra(Linha { cod: cod.into(), nome: format!("Gerador com corrente {corr}"), bancada: "Transmissão".into(), ok, volume: 0., caixa: [0.; 3], corpos: a.nodes.len(), nota });
+    }
+}
+
+/// Etapa 12: fixadores nos furos alinhados de duas chapas de reforço e do suporte.
+pub fn testa_fixadores(r: &mut Reg) {
+    let dir = modelo();
+    let mut a = Assembly::new("TESTE-FIXADORES");
+    let b = peca(&mut a, "PO-02", pl([0.; 3]));
+    fixa(&mut a, b);
+    peca(&mut a, "PO-02", pl([0., 0., 2.]));
+    let mut cache = PartCache::default();
+    let mut op = fenkra_montagem::OpcoesFixadores::default();
+    op.folga = 0;
+    let mut rel = fenkra_montagem::preencher_furos(&mut a, Some(&dir), &mut cache, &op);
+    for f in [1, 2] {
+        if rel.as_ref().is_ok_and(|x| x.fixadores > 0) {
+            println!("fixadores: deu com folga {}", op.folga);
+            break;
+        }
+        op.folga = f;
+        rel = fenkra_montagem::preencher_furos(&mut a, Some(&dir), &mut cache, &op);
+    }
+    let nota = format!("{rel:?}").chars().take(260).collect::<String>();
+    let ok = rel.as_ref().is_ok_and(|x| x.fixadores > 0);
+    grava(&a, "TESTE-FIXADORES");
+    r.usa("Biblioteca", &["Preencher furos", "Pilha de fixadores"]);
+    r.registra(Linha { cod: "FX-PILHA".into(), nome: "Fixadores em furos alinhados".into(), bancada: "Biblioteca".into(), ok, volume: 0., caixa: [0.; 3], corpos: a.nodes.len(), nota });
+}
+
 /// Interferência falsa: chaveta solta no furo da peça, sem encostar.
 pub fn teste_invertido() {
     let dir = modelo();
-    for cod in ["RD-02", "RD-01", "EX-05", "EX-02", "RD-04"] {
+    for cod in ["RD-02", "RD-02A", "RD-02B", "EX-05", "EX-02"] {
         let mut a = Assembly::new("T");
         let c = peca(&mut a, cod, pl([0.; 3]));
         fixa(&mut a, c);

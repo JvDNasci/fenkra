@@ -1,0 +1,468 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "63cba7eca5feed63e43e579f57bbf134",
+  "name": "TR-04 Protetor de corrente",
+  "props": {
+    "pn": "FK-TR-04",
+    "description": "Protetor de corrente",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      58,
+      60,
+      66
+    ],
+    "finish": "Acetinado",
+    "texture": null
+  },
+  "next_id": 29,
+  "origin_visible": false,
+  "references": [],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": {
+    "thickness": "1.5",
+    "radius": "2",
+    "k": "0.44",
+    "flat": false,
+    "material": "",
+    "method": 0,
+    "allowance": "",
+    "style": "",
+    "overrides": [],
+    "relief": "",
+    "relief_kind": 0,
+    "corner": ""
+  },
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 18,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 19,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 26,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          5.0,
+          20.0,
+          60.75
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 508.6672782870941,
+        "ortho": false
+      },
+      "shown": [
+        18,
+        19
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 27,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          5.0,
+          20.0,
+          60.75
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 508.6672782870941,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 28,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          5.0,
+          20.0,
+          60.75
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 508.6672782870941,
+        "ortho": false
+      },
+      "shown": [
+        18,
+        19
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 14,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 2,
+              "x": -140.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 3,
+              "x": 150.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 4,
+              "x": 150.0,
+              "y": 40.0,
+              "fixed": false
+            },
+            {
+              "id": 5,
+              "x": -140.0,
+              "y": 40.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 6,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 2,
+                  "b": 3
+                }
+              }
+            },
+            {
+              "id": 7,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 3,
+                  "b": 4
+                }
+              }
+            },
+            {
+              "id": 8,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 4,
+                  "b": 5
+                }
+              }
+            },
+            {
+              "id": 9,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 5,
+                  "b": 2
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 10,
+              "kind": {
+                "Horizontal": 6
+              }
+            },
+            {
+              "id": 11,
+              "kind": {
+                "Horizontal": 8
+              }
+            },
+            {
+              "id": 12,
+              "kind": {
+                "Vertical": 7
+              }
+            },
+            {
+              "id": 13,
+              "kind": {
+                "Vertical": 9
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 15,
+      "name": "ParedeBase1",
+      "kind": {
+        "SmWall": {
+          "sketch": 14,
+          "reverse": false,
+          "offset": "",
+          "mid": false,
+          "surface": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 16,
+      "name": "Aba1",
+      "kind": {
+        "SmFlange": {
+          "edge": [
+            0.0,
+            0.0,
+            1.5
+          ],
+          "length": "118",
+          "angle": "90",
+          "radius": null,
+          "off1": "0",
+          "off2": "0",
+          "flip": false,
+          "relief": null,
+          "relief_kind": 0,
+          "side": 0,
+          "miter": false,
+          "min_gap": true,
+          "edge_key": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 17,
+      "name": "Aba2",
+      "kind": {
+        "SmFlange": {
+          "edge": [
+            0.0,
+            40.0,
+            1.5
+          ],
+          "length": "118",
+          "angle": "90",
+          "radius": null,
+          "off1": "0",
+          "off2": "0",
+          "flip": false,
+          "relief": null,
+          "relief_kind": 0,
+          "side": 0,
+          "miter": false,
+          "min_gap": true,
+          "edge_key": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 4
+}

@@ -1,0 +1,1766 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "fc9c9f9cd9a4046e7da458f24b5646ec",
+  "name": "MESTRE Desenho mestre",
+  "props": {
+    "pn": "FK-MESTRE",
+    "description": "Desenho mestre",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 120,
+  "origin_visible": true,
+  "references": [
+    {
+      "id": 59,
+      "name": "PL_EIXO_T",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "Z_EIXO_T"
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 61,
+      "name": "PL_EIXO_D",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "YZ"
+          },
+          "offset": "EE"
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 62,
+      "name": "PL_SOLO",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "0"
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 63,
+      "name": "LGE0",
+      "kind": {
+        "PointCoords": {
+          "x": "-100",
+          "y": "LARG_Q/2",
+          "z": "Z_Q+35",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 64,
+      "name": "LGE1",
+      "kind": {
+        "PointCoords": {
+          "x": "120",
+          "y": "LARG_Q/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 65,
+      "name": "LGE2",
+      "kind": {
+        "PointCoords": {
+          "x": "EE*0.6",
+          "y": "LARG_Q/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 66,
+      "name": "LGE3",
+      "kind": {
+        "PointCoords": {
+          "x": "EE-170",
+          "y": "LARG_QD/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 67,
+      "name": "LGE4",
+      "kind": {
+        "PointCoords": {
+          "x": "EE+60",
+          "y": "LARG_QD/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 68,
+      "name": "LONG_E",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 63
+            },
+            {
+              "Ref": 64
+            },
+            {
+              "Ref": 65
+            },
+            {
+              "Ref": 66
+            },
+            {
+              "Ref": 67
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 69,
+      "name": "LONG_E_0",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 63
+            },
+            {
+              "Ref": 64
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 70,
+      "name": "LONG_E_1",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 64
+            },
+            {
+              "Ref": 65
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 71,
+      "name": "LONG_E_2",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 65
+            },
+            {
+              "Ref": 66
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 72,
+      "name": "LONG_E_3",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 66
+            },
+            {
+              "Ref": 67
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 73,
+      "name": "LGD0",
+      "kind": {
+        "PointCoords": {
+          "x": "-100",
+          "y": "-LARG_Q/2",
+          "z": "Z_Q+35",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 74,
+      "name": "LGD1",
+      "kind": {
+        "PointCoords": {
+          "x": "120",
+          "y": "-LARG_Q/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 75,
+      "name": "LGD2",
+      "kind": {
+        "PointCoords": {
+          "x": "EE*0.6",
+          "y": "-LARG_Q/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 76,
+      "name": "LGD3",
+      "kind": {
+        "PointCoords": {
+          "x": "EE-170",
+          "y": "-LARG_QD/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 77,
+      "name": "LGD4",
+      "kind": {
+        "PointCoords": {
+          "x": "EE+60",
+          "y": "-LARG_QD/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 78,
+      "name": "LONG_D",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 73
+            },
+            {
+              "Ref": 74
+            },
+            {
+              "Ref": 75
+            },
+            {
+              "Ref": 76
+            },
+            {
+              "Ref": 77
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 79,
+      "name": "LONG_D_0",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 73
+            },
+            {
+              "Ref": 74
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 80,
+      "name": "LONG_D_1",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 74
+            },
+            {
+              "Ref": 75
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 81,
+      "name": "LONG_D_2",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 75
+            },
+            {
+              "Ref": 76
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 82,
+      "name": "LONG_D_3",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 76
+            },
+            {
+              "Ref": 77
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 83,
+      "name": "TR_DIANT_A",
+      "kind": {
+        "PointCoords": {
+          "x": "EE-40",
+          "y": "-LARG_QD/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 84,
+      "name": "TR_DIANT_B",
+      "kind": {
+        "PointCoords": {
+          "x": "EE-40",
+          "y": "LARG_QD/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 85,
+      "name": "TR_DIANT",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 83
+            },
+            {
+              "Ref": 84
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 86,
+      "name": "TR_MONT_A",
+      "kind": {
+        "PointCoords": {
+          "x": "EE*0.42",
+          "y": "-LARG_Q/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 87,
+      "name": "TR_MONT_B",
+      "kind": {
+        "PointCoords": {
+          "x": "EE*0.42",
+          "y": "LARG_Q/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 88,
+      "name": "TR_MONT",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 86
+            },
+            {
+              "Ref": 87
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 89,
+      "name": "TR_TRAS_A",
+      "kind": {
+        "PointCoords": {
+          "x": "120",
+          "y": "-LARG_Q/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 90,
+      "name": "TR_TRAS_B",
+      "kind": {
+        "PointCoords": {
+          "x": "120",
+          "y": "LARG_Q/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 91,
+      "name": "TR_TRAS",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 89
+            },
+            {
+              "Ref": 90
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 92,
+      "name": "ARCO_0",
+      "kind": {
+        "PointCoords": {
+          "x": "EE+60",
+          "y": "-LARG_QD/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 93,
+      "name": "ARCO_1",
+      "kind": {
+        "PointCoords": {
+          "x": "EE+190",
+          "y": "-200",
+          "z": "Z_Q+95",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 94,
+      "name": "ARCO_2",
+      "kind": {
+        "PointCoords": {
+          "x": "EE+190",
+          "y": "200",
+          "z": "Z_Q+95",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 95,
+      "name": "ARCO_3",
+      "kind": {
+        "PointCoords": {
+          "x": "EE+60",
+          "y": "LARG_QD/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 96,
+      "name": "ARCO",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 92
+            },
+            {
+              "Ref": 93
+            },
+            {
+              "Ref": 94
+            },
+            {
+              "Ref": 95
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 97,
+      "name": "ARCO_0",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 92
+            },
+            {
+              "Ref": 93
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 98,
+      "name": "ARCO_1",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 93
+            },
+            {
+              "Ref": 94
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 99,
+      "name": "ARCO_2",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 94
+            },
+            {
+              "Ref": 95
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 100,
+      "name": "BANCO_AE_A",
+      "kind": {
+        "PointCoords": {
+          "x": "300",
+          "y": "LARG_Q/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 101,
+      "name": "BANCO_AE_B",
+      "kind": {
+        "PointCoords": {
+          "x": "300",
+          "y": "190",
+          "z": "Z_Q+170",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 102,
+      "name": "BANCO_AE",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 100
+            },
+            {
+              "Ref": 101
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 103,
+      "name": "BANCO_AD_A",
+      "kind": {
+        "PointCoords": {
+          "x": "300",
+          "y": "-LARG_Q/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 104,
+      "name": "BANCO_AD_B",
+      "kind": {
+        "PointCoords": {
+          "x": "300",
+          "y": "-190",
+          "z": "Z_Q+170",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 105,
+      "name": "BANCO_AD",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 103
+            },
+            {
+              "Ref": 104
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 106,
+      "name": "BANCO_FE_A",
+      "kind": {
+        "PointCoords": {
+          "x": "EE*0.5",
+          "y": "LARG_Q/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 107,
+      "name": "BANCO_FE_B",
+      "kind": {
+        "PointCoords": {
+          "x": "EE*0.5",
+          "y": "190",
+          "z": "Z_Q+90",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 108,
+      "name": "BANCO_FE",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 106
+            },
+            {
+              "Ref": 107
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 109,
+      "name": "BANCO_FD_A",
+      "kind": {
+        "PointCoords": {
+          "x": "EE*0.5",
+          "y": "-LARG_Q/2",
+          "z": "Z_Q",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 110,
+      "name": "BANCO_FD_B",
+      "kind": {
+        "PointCoords": {
+          "x": "EE*0.5",
+          "y": "-190",
+          "z": "Z_Q+90",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 111,
+      "name": "BANCO_FD",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 109
+            },
+            {
+              "Ref": 110
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 112,
+      "name": "RODA_TE",
+      "kind": {
+        "PointCoords": {
+          "x": "0",
+          "y": "BT/2",
+          "z": "Z_EIXO_T",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 113,
+      "name": "RODA_TD",
+      "kind": {
+        "PointCoords": {
+          "x": "0",
+          "y": "-BT/2",
+          "z": "Z_EIXO_T",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 114,
+      "name": "RODA_DE",
+      "kind": {
+        "PointCoords": {
+          "x": "EE",
+          "y": "BD/2",
+          "z": "Z_EIXO_D",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 115,
+      "name": "RODA_DD",
+      "kind": {
+        "PointCoords": {
+          "x": "EE",
+          "y": "-BD/2",
+          "z": "Z_EIXO_D",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 116,
+      "name": "PINO_E",
+      "kind": {
+        "PointCoords": {
+          "x": "EE",
+          "y": "PM/2",
+          "z": "Z_EIXO_D",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 117,
+      "name": "PINO_D",
+      "kind": {
+        "PointCoords": {
+          "x": "EE",
+          "y": "-PM/2",
+          "z": "Z_EIXO_D",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 118,
+      "name": "BANCO",
+      "kind": {
+        "PointCoords": {
+          "x": "EE*0.33",
+          "y": "0",
+          "z": "Z_Q+60",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 119,
+      "name": "MOTOR",
+      "kind": {
+        "PointCoords": {
+          "x": "DC*0.8",
+          "y": "-LARG_Q/2-120",
+          "z": "Z_EIXO_T+DC*0.6",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 60,
+      "published": true,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 2,
+      "name": "EE",
+      "expr": "1040",
+      "unit": "Comprimento",
+      "comment": "entre-eixos",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "1010",
+      "max": "1070"
+    },
+    {
+      "id": 3,
+      "name": "BT",
+      "expr": "1170",
+      "unit": "Comprimento",
+      "comment": "bitola traseira, centro a centro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 4,
+      "name": "BD",
+      "expr": "1040",
+      "unit": "Comprimento",
+      "comment": "bitola dianteira, centro a centro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "verificacao": "BD >= EE*2/3"
+    },
+    {
+      "id": 5,
+      "name": "LR_T",
+      "expr": "210",
+      "unit": "Comprimento",
+      "comment": "largura da roda traseira",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "max": "215"
+    },
+    {
+      "id": 6,
+      "name": "LR_D",
+      "expr": "130",
+      "unit": "Comprimento",
+      "comment": "largura da roda dianteira",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "max": "135"
+    },
+    {
+      "id": 7,
+      "name": "DR_T",
+      "expr": "276",
+      "unit": "Comprimento",
+      "comment": "diâmetro da roda traseira",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "max": "300"
+    },
+    {
+      "id": 8,
+      "name": "DR_D",
+      "expr": "260",
+      "unit": "Comprimento",
+      "comment": "diâmetro da roda dianteira",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "max": "280"
+    },
+    {
+      "id": 9,
+      "name": "LT",
+      "expr": "BT+LR_T",
+      "unit": "Comprimento",
+      "comment": "largura total traseira",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "1340",
+      "max": "1400",
+      "verificacao": "LT <= 1400"
+    },
+    {
+      "id": 10,
+      "name": "LD",
+      "expr": "BD+LR_D",
+      "unit": "Comprimento",
+      "comment": "largura total dianteira",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 11,
+      "name": "BAL_D",
+      "expr": "640",
+      "unit": "Comprimento",
+      "comment": "balanço dianteiro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "350",
+      "max": "680"
+    },
+    {
+      "id": 12,
+      "name": "BAL_T",
+      "expr": "380",
+      "unit": "Comprimento",
+      "comment": "balanço traseiro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "max": "400"
+    },
+    {
+      "id": 13,
+      "name": "COMP",
+      "expr": "EE+BAL_D+BAL_T",
+      "unit": "Comprimento",
+      "comment": "comprimento total",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "max": "2100"
+    },
+    {
+      "id": 14,
+      "name": "ALT",
+      "expr": "620",
+      "unit": "Comprimento",
+      "comment": "altura sem o banco",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "max": "650"
+    },
+    {
+      "id": 15,
+      "name": "VAO",
+      "expr": "30",
+      "unit": "Comprimento",
+      "comment": "vão livre do quadro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 16,
+      "name": "D_TUBO",
+      "expr": "30",
+      "unit": "Comprimento",
+      "comment": "tubo principal, diâmetro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 17,
+      "name": "E_TUBO",
+      "expr": "2.4",
+      "unit": "Comprimento",
+      "comment": "tubo principal, parede",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 18,
+      "name": "R_DOBRA",
+      "expr": "90",
+      "unit": "Comprimento",
+      "comment": "raio de dobra do tubo principal, no centro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 19,
+      "name": "PM",
+      "expr": "640",
+      "unit": "Comprimento",
+      "comment": "largura entre pinos-mestres",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 20,
+      "name": "CASTER",
+      "expr": "12",
+      "unit": "Angulo",
+      "comment": "cáster",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 21,
+      "name": "D_EIXO",
+      "expr": "50",
+      "unit": "Comprimento",
+      "comment": "eixo traseiro, diâmetro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "max": "50"
+    },
+    {
+      "id": 22,
+      "name": "E_EIXO",
+      "expr": "2.5",
+      "unit": "Comprimento",
+      "comment": "eixo traseiro, parede",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "1.9"
+    },
+    {
+      "id": 23,
+      "name": "L_EIXO",
+      "expr": "1040",
+      "unit": "Comprimento",
+      "comment": "eixo traseiro, comprimento",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 24,
+      "name": "D_DISCO",
+      "expr": "200",
+      "unit": "Comprimento",
+      "comment": "disco de freio, diâmetro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 25,
+      "name": "E_DISCO",
+      "expr": "6",
+      "unit": "Comprimento",
+      "comment": "disco de freio, espessura",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 26,
+      "name": "LARG_Q",
+      "expr": "700",
+      "unit": "Comprimento",
+      "comment": "largura do quadro entre longarinas, atrás",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 27,
+      "name": "LARG_QD",
+      "expr": "560",
+      "unit": "Comprimento",
+      "comment": "largura do quadro entre longarinas, na frente",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 28,
+      "name": "Z_Q",
+      "expr": "VAO+D_TUBO/2",
+      "unit": "Comprimento",
+      "comment": "altura do eixo das longarinas",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 29,
+      "name": "Z_EIXO_T",
+      "expr": "DR_T/2",
+      "unit": "Comprimento",
+      "comment": "altura do eixo traseiro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 30,
+      "name": "Z_EIXO_D",
+      "expr": "DR_D/2",
+      "unit": "Comprimento",
+      "comment": "altura do eixo dianteiro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 31,
+      "name": "D_COLUNA",
+      "expr": "20",
+      "unit": "Comprimento",
+      "comment": "coluna de direção, diâmetro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "18"
+    },
+    {
+      "id": 32,
+      "name": "E_COLUNA",
+      "expr": "2",
+      "unit": "Comprimento",
+      "comment": "coluna de direção, parede",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "1.8"
+    },
+    {
+      "id": 33,
+      "name": "D_VOLANTE",
+      "expr": "320",
+      "unit": "Comprimento",
+      "comment": "volante, diâmetro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 34,
+      "name": "N_PINHAO",
+      "expr": "11",
+      "unit": "Numero",
+      "comment": "dentes do pinhão",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "11",
+      "max": "12"
+    },
+    {
+      "id": 35,
+      "name": "N_COROA",
+      "expr": "82",
+      "unit": "Numero",
+      "comment": "dentes da coroa",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 36,
+      "name": "ELOS",
+      "expr": "106",
+      "unit": "Numero",
+      "comment": "elos da corrente",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "94",
+      "max": "116"
+    },
+    {
+      "id": 37,
+      "name": "PASSO",
+      "expr": "7.774",
+      "unit": "Comprimento",
+      "comment": "passo da corrente 219",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 38,
+      "name": "DP_PINHAO",
+      "expr": "PASSO/sin(180/N_PINHAO)",
+      "unit": "Comprimento",
+      "comment": "diâmetro primitivo do pinhão",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 39,
+      "name": "DP_COROA",
+      "expr": "PASSO/sin(180/N_COROA)",
+      "unit": "Comprimento",
+      "comment": "diâmetro primitivo da coroa",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 40,
+      "name": "DC",
+      "expr": "213",
+      "unit": "Comprimento",
+      "comment": "distância entre centros da corrente",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 41,
+      "name": "D_PC_SUP",
+      "expr": "16",
+      "unit": "Comprimento",
+      "comment": "para-choque superior, diâmetro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "16"
+    },
+    {
+      "id": 42,
+      "name": "RETO_PC_SUP",
+      "expr": "385",
+      "unit": "Comprimento",
+      "comment": "para-choque superior, trecho reto",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "375",
+      "max": "395"
+    },
+    {
+      "id": 43,
+      "name": "Z_PC_SUP",
+      "expr": "225",
+      "unit": "Comprimento",
+      "comment": "para-choque superior, topo",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "200",
+      "max": "250"
+    },
+    {
+      "id": 44,
+      "name": "D_PC_INF",
+      "expr": "20",
+      "unit": "Comprimento",
+      "comment": "para-choque inferior, diâmetro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "20"
+    },
+    {
+      "id": 45,
+      "name": "RETO_PC_INF",
+      "expr": "305",
+      "unit": "Comprimento",
+      "comment": "para-choque inferior, trecho reto",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "295",
+      "max": "315"
+    },
+    {
+      "id": 46,
+      "name": "Z_PC_INF",
+      "expr": "90",
+      "unit": "Comprimento",
+      "comment": "para-choque inferior, topo",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "70",
+      "max": "110"
+    },
+    {
+      "id": 47,
+      "name": "Y_LAT_INF",
+      "expr": "500",
+      "unit": "Comprimento",
+      "comment": "barra lateral inferior, distância ao centro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "480",
+      "max": "520"
+    },
+    {
+      "id": 48,
+      "name": "Y_LAT_SUP",
+      "expr": "560",
+      "unit": "Comprimento",
+      "comment": "barra lateral superior, distância ao centro",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "480",
+      "max": "600"
+    },
+    {
+      "id": 49,
+      "name": "Z_LAT_SUP",
+      "expr": "170",
+      "unit": "Comprimento",
+      "comment": "barra lateral superior, topo",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "160"
+    },
+    {
+      "id": 50,
+      "name": "L_NARIZ",
+      "expr": "1050",
+      "unit": "Comprimento",
+      "comment": "bico, largura",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "1000"
+    },
+    {
+      "id": 51,
+      "name": "L_PAINEL",
+      "expr": "280",
+      "unit": "Comprimento",
+      "comment": "painel frontal, largura",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "250",
+      "max": "300"
+    },
+    {
+      "id": 52,
+      "name": "VAO_PONTAO",
+      "expr": "40",
+      "unit": "Comprimento",
+      "comment": "pontão, vão do solo",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "25",
+      "max": "60"
+    },
+    {
+      "id": 53,
+      "name": "VAO_TRAS",
+      "expr": "30",
+      "unit": "Comprimento",
+      "comment": "proteção traseira, vão até as rodas",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "15",
+      "max": "50"
+    },
+    {
+      "id": 54,
+      "name": "E_ASSOALHO",
+      "expr": "1.5",
+      "unit": "Comprimento",
+      "comment": "assoalho, espessura",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "1.4"
+    },
+    {
+      "id": 55,
+      "name": "D_FURO_ASS",
+      "expr": "8",
+      "unit": "Comprimento",
+      "comment": "assoalho, furos",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "max": "10"
+    },
+    {
+      "id": 56,
+      "name": "E_REFORCO",
+      "expr": "2",
+      "unit": "Comprimento",
+      "comment": "chapa de reforço do banco, espessura",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "1.5"
+    },
+    {
+      "id": 57,
+      "name": "TANQUE_L",
+      "expr": "8",
+      "unit": "Numero",
+      "comment": "tanque, litros",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm",
+      "min": "8"
+    },
+    {
+      "id": 58,
+      "name": "MASSA_MIN",
+      "expr": "150",
+      "unit": "Numero",
+      "comment": "massa mínima com piloto, kg",
+      "published": true,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 60,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [],
+  "rollback": 0
+}

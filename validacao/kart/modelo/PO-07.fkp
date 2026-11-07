@@ -1,0 +1,348 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "a0751be9721f2a94dfd7ba65c7dedfc8",
+  "name": "PO-07 Vareta do pedal",
+  "props": {
+    "pn": "FK-PO-07",
+    "description": "Vareta do pedal",
+    "material": "Aço 1045",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      150,
+      154,
+      160
+    ],
+    "finish": "MetalPolido",
+    "texture": null
+  },
+  "next_id": 18,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 2,
+      "name": "A",
+      "kind": {
+        "PointCoords": {
+          "x": "0",
+          "y": "0",
+          "z": "0",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 4,
+      "name": "B",
+      "kind": {
+        "PointCoords": {
+          "x": "520",
+          "y": "0",
+          "z": "0",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 5,
+      "name": "Vareta",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 2
+            },
+            {
+              "Ref": 4
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": false,
+      "folder": 3,
+      "published": true,
+      "appearance": null
+    }
+  ],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 3,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 7,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 8,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 15,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          260.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 832.1107618580595,
+        "ortho": false
+      },
+      "shown": [
+        7,
+        8
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 16,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          260.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 832.1107618580595,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 17,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          260.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 832.1107618580595,
+        "ortho": false
+      },
+      "shown": [
+        7,
+        8
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 6,
+      "name": "Membro1",
+      "kind": {
+        "StructMember": {
+          "paths": [
+            {
+              "Ref": 5
+            }
+          ],
+          "family": "Tubo redondo",
+          "designation": "barra",
+          "kind": "BarraRedonda",
+          "dims": [
+            "6"
+          ],
+          "anchor": 0,
+          "angle": "0",
+          "off_x": "0",
+          "off_y": "0",
+          "ext1": "0",
+          "ext2": "0",
+          "corner": "Nenhum",
+          "gap": "0",
+          "joints": [],
+          "material": "",
+          "mirror": false
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 1
+}

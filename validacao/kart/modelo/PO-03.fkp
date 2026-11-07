@@ -1,0 +1,375 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "c7f54608e3c78d97c12a5f0f91cae057",
+  "name": "PO-03 Escora do banco",
+  "props": {
+    "pn": "FK-PO-03",
+    "description": "Escora do banco",
+    "material": "Aço AISI 4130",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      196,
+      18,
+      32
+    ],
+    "finish": "Brilhante",
+    "texture": null
+  },
+  "next_id": 20,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 4,
+      "name": "A",
+      "kind": {
+        "PointCoords": {
+          "x": "300",
+          "y": "mestre_LARG_Q/2",
+          "z": "230",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 6,
+      "name": "B",
+      "kind": {
+        "PointCoords": {
+          "x": "120",
+          "y": "mestre_LARG_Q/2-120",
+          "z": "430",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 7,
+      "name": "Escora",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 4
+            },
+            {
+              "Ref": 6
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": true,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_LARG_Q",
+      "expr": "700",
+      "unit": "Comprimento",
+      "comment": "link: mestre.LARG_Q",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 5,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_LARG_Q",
+      "source": "mestre",
+      "publication": "LARG_Q",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 700.0
+      },
+      "target": 3,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 9,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 10,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 17,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          210.00000381469727,
+          290.0,
+          330.00000762939453
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 510.448613538823,
+        "ortho": false
+      },
+      "shown": [
+        9,
+        10
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 18,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          210.00000381469727,
+          290.0,
+          330.00000762939453
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 510.448613538823,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 19,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          210.00000381469727,
+          290.0,
+          330.00000762939453
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 510.448613538823,
+        "ortho": false
+      },
+      "shown": [
+        9,
+        10
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 8,
+      "name": "Membro1",
+      "kind": {
+        "StructMember": {
+          "paths": [
+            {
+              "Ref": 7
+            }
+          ],
+          "family": "Tubo redondo",
+          "designation": "Ø18x1,5",
+          "kind": "TuboRedondo",
+          "dims": [
+            "18",
+            "1.5"
+          ],
+          "anchor": 0,
+          "angle": "0",
+          "off_x": "0",
+          "off_y": "0",
+          "ext1": "0",
+          "ext2": "0",
+          "corner": "Nenhum",
+          "gap": "0",
+          "joints": [],
+          "material": "",
+          "mirror": false
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 1
+}

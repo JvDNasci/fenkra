@@ -1,0 +1,739 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "5fedc1df1793bdb5c7278292a11d30db",
+  "name": "CH-08 Suporte do mancal",
+  "props": {
+    "pn": "FK-CH-08",
+    "description": "Suporte do mancal",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      58,
+      60,
+      66
+    ],
+    "finish": "Acetinado",
+    "texture": null
+  },
+  "next_id": 47,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 20,
+      "name": "Plano1",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "4"
+        }
+      },
+      "visible": false,
+      "folder": 21,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_D_EIXO",
+      "expr": "50",
+      "unit": "Comprimento",
+      "comment": "link: mestre.D_EIXO",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 21,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_D_EIXO",
+      "source": "mestre",
+      "publication": "D_EIXO",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 50.0
+      },
+      "target": 3,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": {
+    "thickness": "4",
+    "radius": "2",
+    "k": "0.44",
+    "flat": false,
+    "material": "",
+    "method": 0,
+    "allowance": "",
+    "style": "",
+    "overrides": [],
+    "relief": "",
+    "relief_kind": 0,
+    "corner": ""
+  },
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 36,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 37,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 44,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          0.0,
+          0.0,
+          23.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 292.0602677530787,
+        "ortho": false
+      },
+      "shown": [
+        36,
+        37
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 45,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          0.0,
+          0.0,
+          23.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 292.0602677530787,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 46,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          0.0,
+          0.0,
+          23.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 292.0602677530787,
+        "ortho": false
+      },
+      "shown": [
+        36,
+        37
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 16,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 4,
+              "x": -70.0,
+              "y": -45.0,
+              "fixed": false
+            },
+            {
+              "id": 5,
+              "x": 70.0,
+              "y": -45.0,
+              "fixed": false
+            },
+            {
+              "id": 6,
+              "x": 70.0,
+              "y": 45.0,
+              "fixed": false
+            },
+            {
+              "id": 7,
+              "x": -70.0,
+              "y": 45.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 8,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 4,
+                  "b": 5
+                }
+              }
+            },
+            {
+              "id": 9,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 5,
+                  "b": 6
+                }
+              }
+            },
+            {
+              "id": 10,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 6,
+                  "b": 7
+                }
+              }
+            },
+            {
+              "id": 11,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 7,
+                  "b": 4
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 12,
+              "kind": {
+                "Horizontal": 8
+              }
+            },
+            {
+              "id": 13,
+              "kind": {
+                "Horizontal": 10
+              }
+            },
+            {
+              "id": 14,
+              "kind": {
+                "Vertical": 9
+              }
+            },
+            {
+              "id": 15,
+              "kind": {
+                "Vertical": 11
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 17,
+      "name": "ParedeBase1",
+      "kind": {
+        "SmWall": {
+          "sketch": 16,
+          "reverse": false,
+          "offset": "",
+          "mid": false,
+          "surface": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 18,
+      "name": "Aba1",
+      "kind": {
+        "SmFlange": {
+          "edge": [
+            70.0,
+            0.0,
+            4.0
+          ],
+          "length": "40",
+          "angle": "90",
+          "radius": null,
+          "off1": "0",
+          "off2": "0",
+          "flip": false,
+          "relief": null,
+          "relief_kind": 0,
+          "side": 0,
+          "miter": false,
+          "min_gap": true,
+          "edge_key": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 19,
+      "name": "Aba2",
+      "kind": {
+        "SmFlange": {
+          "edge": [
+            -70.0,
+            0.0,
+            4.0
+          ],
+          "length": "40",
+          "angle": "90",
+          "radius": null,
+          "off1": "0",
+          "off2": "0",
+          "flip": false,
+          "relief": null,
+          "relief_kind": 0,
+          "side": 0,
+          "miter": false,
+          "min_gap": true,
+          "edge_key": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 24,
+      "name": "Sketch2",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 20
+          },
+          "points": [
+            {
+              "id": 22,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 23,
+              "construction": false,
+              "geom": {
+                "Point": {
+                  "p": 22
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 25,
+      "name": "Furo1",
+      "kind": {
+        "Hole": {
+          "sketch": 24,
+          "kind": "Simples",
+          "diameter": "mestre_D_EIXO+30",
+          "depth": "ThroughAll",
+          "thread": null,
+          "thread_modeled": false,
+          "standard": null,
+          "points": [],
+          "dir": null,
+          "reverse": false,
+          "tip": null,
+          "taper": "0",
+          "left_hand": false,
+          "extra": {
+            "thread_depth": "",
+            "thread_relief": "",
+            "tip_offset": "",
+            "thread_relief_unit": null,
+            "thread_top_gap": "",
+            "thread_top_gap_unit": "Mm",
+            "thread_chamfer": "",
+            "thread_chamfer_unit": "Mm",
+            "thread_start_angle": "",
+            "thread_start_ref": null
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 34,
+      "name": "Sketch3",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 20
+          },
+          "points": [
+            {
+              "id": 26,
+              "x": -50.0,
+              "y": -30.0,
+              "fixed": false
+            },
+            {
+              "id": 28,
+              "x": 50.0,
+              "y": -30.0,
+              "fixed": false
+            },
+            {
+              "id": 30,
+              "x": -50.0,
+              "y": 30.0,
+              "fixed": false
+            },
+            {
+              "id": 32,
+              "x": 50.0,
+              "y": 30.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 27,
+              "construction": false,
+              "geom": {
+                "Point": {
+                  "p": 26
+                }
+              }
+            },
+            {
+              "id": 29,
+              "construction": false,
+              "geom": {
+                "Point": {
+                  "p": 28
+                }
+              }
+            },
+            {
+              "id": 31,
+              "construction": false,
+              "geom": {
+                "Point": {
+                  "p": 30
+                }
+              }
+            },
+            {
+              "id": 33,
+              "construction": false,
+              "geom": {
+                "Point": {
+                  "p": 32
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 35,
+      "name": "Furo2",
+      "kind": {
+        "Hole": {
+          "sketch": 34,
+          "kind": "Simples",
+          "diameter": "8.5",
+          "depth": "ThroughAll",
+          "thread": null,
+          "thread_modeled": false,
+          "standard": null,
+          "points": [],
+          "dir": null,
+          "reverse": false,
+          "tip": null,
+          "taper": "0",
+          "left_hand": false,
+          "extra": {
+            "thread_depth": "",
+            "thread_relief": "",
+            "tip_offset": "",
+            "thread_relief_unit": null,
+            "thread_top_gap": "",
+            "thread_top_gap_unit": "Mm",
+            "thread_chamfer": "",
+            "thread_chamfer_unit": "Mm",
+            "thread_start_angle": "",
+            "thread_start_ref": null
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 8
+}

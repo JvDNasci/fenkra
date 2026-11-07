@@ -1,0 +1,602 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "00c2e6ed4be98871c7acb662b5a3347c",
+  "name": "PR-04 Barra lateral inferior",
+  "props": {
+    "pn": "FK-PR-04",
+    "description": "Barra lateral inferior",
+    "material": "Aço AISI 4130",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      196,
+      18,
+      32
+    ],
+    "finish": "Brilhante",
+    "texture": null
+  },
+  "next_id": 31,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 10,
+      "name": "A",
+      "kind": {
+        "PointCoords": {
+          "x": "mestre_EE*0.25",
+          "y": "mestre_LARG_Q/2",
+          "z": "60",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 11,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 12,
+      "name": "B",
+      "kind": {
+        "PointCoords": {
+          "x": "mestre_EE*0.25+80",
+          "y": "mestre_Y_LAT_INF",
+          "z": "60",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 11,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 13,
+      "name": "C",
+      "kind": {
+        "PointCoords": {
+          "x": "mestre_EE*0.25+480",
+          "y": "mestre_Y_LAT_INF",
+          "z": "60",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 11,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 14,
+      "name": "D",
+      "kind": {
+        "PointCoords": {
+          "x": "mestre_EE*0.25+560",
+          "y": "mestre_LARG_Q/2",
+          "z": "60",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 11,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 15,
+      "name": "Barra",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 10
+            },
+            {
+              "Ref": 12
+            },
+            {
+              "Ref": 13
+            },
+            {
+              "Ref": 14
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": false,
+      "folder": 11,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 16,
+      "name": "Barra_0",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 10
+            },
+            {
+              "Ref": 12
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": false,
+      "folder": 11,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 17,
+      "name": "Barra_1",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 12
+            },
+            {
+              "Ref": 13
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": false,
+      "folder": 11,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 18,
+      "name": "Barra_2",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 13
+            },
+            {
+              "Ref": 14
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": false,
+      "folder": 11,
+      "published": true,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_Y_LAT_INF",
+      "expr": "500",
+      "unit": "Comprimento",
+      "comment": "link: mestre.Y_LAT_INF",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 5,
+      "name": "mestre_LARG_Q",
+      "expr": "700",
+      "unit": "Comprimento",
+      "comment": "link: mestre.LARG_Q",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 7,
+      "name": "mestre_Z_LAT_SUP",
+      "expr": "170",
+      "unit": "Comprimento",
+      "comment": "link: mestre.Z_LAT_SUP",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 9,
+      "name": "mestre_EE",
+      "expr": "1040",
+      "unit": "Comprimento",
+      "comment": "link: mestre.EE",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 11,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_Y_LAT_INF",
+      "source": "mestre",
+      "publication": "Y_LAT_INF",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 500.0
+      },
+      "target": 3,
+      "xform": null
+    },
+    {
+      "id": 4,
+      "name": "mestre_LARG_Q",
+      "source": "mestre",
+      "publication": "LARG_Q",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 700.0
+      },
+      "target": 5,
+      "xform": null
+    },
+    {
+      "id": 6,
+      "name": "mestre_Z_LAT_SUP",
+      "source": "mestre",
+      "publication": "Z_LAT_SUP",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 170.0
+      },
+      "target": 7,
+      "xform": null
+    },
+    {
+      "id": 8,
+      "name": "mestre_EE",
+      "source": "mestre",
+      "publication": "EE",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 1040.0
+      },
+      "target": 9,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 20,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 21,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 28,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          540.0000076293945,
+          427.6470642089844,
+          60.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 961.60422302067,
+        "ortho": false
+      },
+      "shown": [
+        20,
+        21
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 29,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          540.0000076293945,
+          427.6470642089844,
+          60.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 961.60422302067,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 30,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          540.0000076293945,
+          427.6470642089844,
+          60.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 961.60422302067,
+        "ortho": false
+      },
+      "shown": [
+        20,
+        21
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 19,
+      "name": "Tubo",
+      "kind": {
+        "StructMember": {
+          "paths": [
+            {
+              "Segment": {
+                "curve": 15,
+                "index": 0
+              }
+            },
+            {
+              "Segment": {
+                "curve": 15,
+                "index": 1
+              }
+            },
+            {
+              "Segment": {
+                "curve": 15,
+                "index": 2
+              }
+            }
+          ],
+          "family": "Tubo redondo",
+          "designation": "Ø20x2",
+          "kind": "TuboRedondo",
+          "dims": [
+            "20",
+            "2"
+          ],
+          "anchor": 0,
+          "angle": "0",
+          "off_x": "0",
+          "off_y": "0",
+          "ext1": "0",
+          "ext2": "0",
+          "corner": "Nenhum",
+          "gap": "0",
+          "joints": [
+            {
+              "mine": 1,
+              "other": 19,
+              "other_path": 0,
+              "mode": "Dobra",
+              "first": false,
+              "gap": null,
+              "bend": {
+                "mode": "Dobradeira",
+                "radius": "40",
+                "rule": "",
+                "k": "",
+                "springback": "",
+                "plane_dim": 0,
+                "cuts": "",
+                "root_gap": "",
+                "segments": ""
+              }
+            },
+            {
+              "mine": 2,
+              "other": 19,
+              "other_path": 1,
+              "mode": "Dobra",
+              "first": false,
+              "gap": null,
+              "bend": {
+                "mode": "Dobradeira",
+                "radius": "40",
+                "rule": "",
+                "k": "",
+                "springback": "",
+                "plane_dim": 0,
+                "cuts": "",
+                "root_gap": "",
+                "segments": ""
+              }
+            }
+          ],
+          "material": "",
+          "mirror": false
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 1
+}

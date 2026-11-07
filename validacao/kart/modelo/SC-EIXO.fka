@@ -1,0 +1,1577 @@
+{
+  "format_version": 1,
+  "name": "SC-EIXO",
+  "uid": "29f93ccc166b7c41a0ed7a8e3c8f1985",
+  "props": {
+    "pn": "",
+    "description": "",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "next_id": 60,
+  "nodes": [
+    {
+      "id": 1,
+      "name": "EX-01",
+      "number": 1,
+      "kind": {
+        "Part": {
+          "path": "EX-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 2,
+      "name": "EX-02",
+      "number": 2,
+      "kind": {
+        "Part": {
+          "path": "EX-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          300.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 3,
+      "name": "EX-03",
+      "number": 3,
+      "kind": {
+        "Part": {
+          "path": "EX-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          300.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 4,
+      "name": "EX-02:2",
+      "number": 4,
+      "kind": {
+        "Part": {
+          "path": "EX-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 5,
+      "name": "EX-03:2",
+      "number": 5,
+      "kind": {
+        "Part": {
+          "path": "EX-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 6,
+      "name": "EX-02:3",
+      "number": 6,
+      "kind": {
+        "Part": {
+          "path": "EX-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -300.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 7,
+      "name": "EX-03:3",
+      "number": 7,
+      "kind": {
+        "Part": {
+          "path": "EX-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -300.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 8,
+      "name": "EX-05",
+      "number": 8,
+      "kind": {
+        "Part": {
+          "path": "EX-05.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          448.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 9,
+      "name": "EX-05:2",
+      "number": 9,
+      "kind": {
+        "Part": {
+          "path": "EX-05.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -448.0,
+          138.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 10,
+      "name": "EX-07",
+      "number": 10,
+      "kind": {
+        "Part": {
+          "path": "EX-07.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          150.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 11,
+      "name": "EX-08",
+      "number": 11,
+      "kind": {
+        "Part": {
+          "path": "EX-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          191.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        168,
+        170,
+        176
+      ]
+    },
+    {
+      "id": 12,
+      "name": "EX-06",
+      "number": 12,
+      "kind": {
+        "Part": {
+          "path": "EX-06.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -100.0,
+          138.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 13,
+      "name": "TR-01",
+      "number": 13,
+      "kind": {
+        "Part": {
+          "path": "TR-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -142.5,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        236,
+        118,
+        22
+      ]
+    },
+    {
+      "id": 14,
+      "name": "RD-02",
+      "number": 14,
+      "kind": {
+        "Part": {
+          "path": "RD-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          585.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        214,
+        172,
+        64
+      ]
+    },
+    {
+      "id": 15,
+      "name": "RD-04",
+      "number": 15,
+      "kind": {
+        "Part": {
+          "path": "RD-04.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          585.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        24,
+        24,
+        27
+      ]
+    },
+    {
+      "id": 16,
+      "name": "RD-02:2",
+      "number": 16,
+      "kind": {
+        "Part": {
+          "path": "RD-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -585.0,
+          138.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        214,
+        172,
+        64
+      ]
+    },
+    {
+      "id": 17,
+      "name": "RD-04:2",
+      "number": 17,
+      "kind": {
+        "Part": {
+          "path": "RD-04.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -585.0,
+          138.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        24,
+        24,
+        27
+      ]
+    }
+  ],
+  "mates": [
+    {
+      "id": 19,
+      "name": "Coincidência",
+      "kind": {
+        "Coincident": {
+          "flip": false
+        }
+      },
+      "a": {
+        "comp": 2,
+        "geom": {
+          "Axis": {
+            "p": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "d": [
+              0.0,
+              1.0,
+              0.0
+            ]
+          }
+        },
+        "pick": null,
+        "viva": null
+      },
+      "b": {
+        "comp": 1,
+        "geom": {
+          "Axis": {
+            "p": [
+              0.0,
+              0.0,
+              0.0
+            ],
+            "d": [
+              0.0,
+              1.0,
+              0.0
+            ]
+          }
+        },
+        "pick": null,
+        "viva": null
+      },
+      "suppressed": false,
+      "sentido": "Livre",
+      "lado_invertido": false,
+      "desloc": [
+        "",
+        "",
+        ""
+      ]
+    }
+  ],
+  "rigid": [
+    {
+      "id": 18,
+      "name": "Fixação conjunta",
+      "comps": [
+        1,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17
+      ]
+    }
+  ],
+  "params": [],
+  "patterns": [],
+  "joints": [],
+  "couplings": [],
+  "display_states": [],
+  "animations": [],
+  "explosoes": [],
+  "pmi": [
+    {
+      "id": 50,
+      "name": "Balão EX-01",
+      "kind": {
+        "Balloon": {
+          "item": "1",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          138.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 51,
+      "name": "Balão EX-02",
+      "kind": {
+        "Balloon": {
+          "item": "2",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          300.0,
+          138.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 52,
+      "name": "Balão EX-03",
+      "kind": {
+        "Balloon": {
+          "item": "3",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          300.0,
+          138.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 53,
+      "name": "Balão EX-05",
+      "kind": {
+        "Balloon": {
+          "item": "4",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          448.0,
+          138.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 54,
+      "name": "Balão EX-07",
+      "kind": {
+        "Balloon": {
+          "item": "5",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          150.0,
+          138.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 55,
+      "name": "Balão EX-08",
+      "kind": {
+        "Balloon": {
+          "item": "6",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          191.0,
+          138.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 56,
+      "name": "Balão EX-06",
+      "kind": {
+        "Balloon": {
+          "item": "7",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          -100.0,
+          138.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 57,
+      "name": "Balão TR-01",
+      "kind": {
+        "Balloon": {
+          "item": "8",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          -142.5,
+          138.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 58,
+      "name": "Balão RD-02",
+      "kind": {
+        "Balloon": {
+          "item": "9",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          585.0,
+          138.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 59,
+      "name": "Balão RD-04",
+      "kind": {
+        "Balloon": {
+          "item": "10",
+          "manual": false
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          585.0,
+          138.0
+        ]
+      ],
+      "offset": [
+        60.0,
+        60.0,
+        80.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "items": [
+    {
+      "key": "EX-01.fkp",
+      "no": 1
+    },
+    {
+      "key": "EX-02.fkp",
+      "no": 2
+    },
+    {
+      "key": "EX-03.fkp",
+      "no": 3
+    },
+    {
+      "key": "EX-05.fkp",
+      "no": 4
+    },
+    {
+      "key": "EX-07.fkp",
+      "no": 5
+    },
+    {
+      "key": "EX-08.fkp",
+      "no": 6
+    },
+    {
+      "key": "EX-06.fkp",
+      "no": 7
+    },
+    {
+      "key": "TR-01.fkp",
+      "no": 8
+    },
+    {
+      "key": "RD-02.fkp",
+      "no": 9
+    },
+    {
+      "key": "RD-04.fkp",
+      "no": 10
+    }
+  ],
+  "pmi_captures": [],
+  "features": [],
+  "pilhas": [],
+  "conjuntos": [],
+  "regras_cor": [],
+  "interf": {
+    "ignorados": [],
+    "menores_que": 0.0
+  },
+  "relational": false,
+  "politicas_link": [],
+  "religacoes": [],
+  "geometria": null,
+  "esqueleto": null,
+  "contexto_livre": false,
+  "origem_oculta": false
+}

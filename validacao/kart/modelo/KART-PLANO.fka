@@ -1,0 +1,3739 @@
+{
+  "format_version": 1,
+  "name": "KART-PLANO",
+  "uid": "716af00a62503016898deb9281f20efa",
+  "props": {
+    "pn": "",
+    "description": "",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "next_id": 85,
+  "nodes": [
+    {
+      "id": 1,
+      "name": "QUADRO",
+      "number": 1,
+      "kind": {
+        "Part": {
+          "path": "QUADRO.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 2,
+      "name": "CH-08",
+      "number": 2,
+      "kind": {
+        "Part": {
+          "path": "CH-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          350.0,
+          75.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 3,
+      "name": "CH-08:2",
+      "number": 3,
+      "kind": {
+        "Part": {
+          "path": "CH-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          75.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 4,
+      "name": "CH-08:3",
+      "number": 4,
+      "kind": {
+        "Part": {
+          "path": "CH-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -350.0,
+          75.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 5,
+      "name": "CH-10",
+      "number": 5,
+      "kind": {
+        "Part": {
+          "path": "CH-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          -60.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 6,
+      "name": "CH-10:2",
+      "number": 6,
+      "kind": {
+        "Part": {
+          "path": "CH-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          -20.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 7,
+      "name": "CH-10:3",
+      "number": 7,
+      "kind": {
+        "Part": {
+          "path": "CH-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          20.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 8,
+      "name": "CH-10:4",
+      "number": 8,
+      "kind": {
+        "Part": {
+          "path": "CH-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          60.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 9,
+      "name": "CH-11",
+      "number": 9,
+      "kind": {
+        "Part": {
+          "path": "CH-11.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          170.0,
+          -260.0,
+          65.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 10,
+      "name": "CH-12",
+      "number": 10,
+      "kind": {
+        "Part": {
+          "path": "CH-12.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          820.0,
+          0.0,
+          130.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 11,
+      "name": "CH-13",
+      "number": 11,
+      "kind": {
+        "Part": {
+          "path": "CH-13.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1140.0,
+          60.0,
+          65.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 12,
+      "name": "CH-13:2",
+      "number": 12,
+      "kind": {
+        "Part": {
+          "path": "CH-13.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1140.0,
+          -60.0,
+          65.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 13,
+      "name": "CH-14",
+      "number": 13,
+      "kind": {
+        "Part": {
+          "path": "CH-14.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          60.0,
+          190.0,
+          75.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 14,
+      "name": "EX-01",
+      "number": 14,
+      "kind": {
+        "Part": {
+          "path": "EX-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 15,
+      "name": "EX-02",
+      "number": 15,
+      "kind": {
+        "Part": {
+          "path": "EX-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          300.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 16,
+      "name": "EX-03",
+      "number": 16,
+      "kind": {
+        "Part": {
+          "path": "EX-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          300.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 17,
+      "name": "EX-02:2",
+      "number": 17,
+      "kind": {
+        "Part": {
+          "path": "EX-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 18,
+      "name": "EX-03:2",
+      "number": 18,
+      "kind": {
+        "Part": {
+          "path": "EX-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 19,
+      "name": "EX-02:3",
+      "number": 19,
+      "kind": {
+        "Part": {
+          "path": "EX-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -300.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 20,
+      "name": "EX-03:3",
+      "number": 20,
+      "kind": {
+        "Part": {
+          "path": "EX-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -300.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 21,
+      "name": "EX-05",
+      "number": 21,
+      "kind": {
+        "Part": {
+          "path": "EX-05.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          448.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 22,
+      "name": "EX-05:2",
+      "number": 22,
+      "kind": {
+        "Part": {
+          "path": "EX-05.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -448.0,
+          138.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 23,
+      "name": "EX-07",
+      "number": 23,
+      "kind": {
+        "Part": {
+          "path": "EX-07.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          150.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 24,
+      "name": "EX-08",
+      "number": 24,
+      "kind": {
+        "Part": {
+          "path": "EX-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          191.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        168,
+        170,
+        176
+      ]
+    },
+    {
+      "id": 25,
+      "name": "EX-06",
+      "number": 25,
+      "kind": {
+        "Part": {
+          "path": "EX-06.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -100.0,
+          138.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 26,
+      "name": "TR-01",
+      "number": 26,
+      "kind": {
+        "Part": {
+          "path": "TR-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -142.5,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        236,
+        118,
+        22
+      ]
+    },
+    {
+      "id": 27,
+      "name": "RD-02",
+      "number": 27,
+      "kind": {
+        "Part": {
+          "path": "RD-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          585.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        214,
+        172,
+        64
+      ]
+    },
+    {
+      "id": 28,
+      "name": "RD-04",
+      "number": 28,
+      "kind": {
+        "Part": {
+          "path": "RD-04.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          585.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        24,
+        24,
+        27
+      ]
+    },
+    {
+      "id": 29,
+      "name": "RD-02:2",
+      "number": 29,
+      "kind": {
+        "Part": {
+          "path": "RD-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -585.0,
+          138.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        214,
+        172,
+        64
+      ]
+    },
+    {
+      "id": 30,
+      "name": "RD-04:2",
+      "number": 30,
+      "kind": {
+        "Part": {
+          "path": "RD-04.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -585.0,
+          138.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        24,
+        24,
+        27
+      ]
+    },
+    {
+      "id": 31,
+      "name": "CH-09",
+      "number": 31,
+      "kind": {
+        "Part": {
+          "path": "CH-09.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1012.0,
+          320.0,
+          130.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 32,
+      "name": "CH-09:2",
+      "number": 32,
+      "kind": {
+        "Part": {
+          "path": "CH-09.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1012.0,
+          -320.0,
+          130.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 33,
+      "name": "DI-08",
+      "number": 33,
+      "kind": {
+        "Part": {
+          "path": "DI-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          320.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            0.9781476007338064,
+            0.0,
+            0.20791169081775948
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 34,
+      "name": "DI-08D",
+      "number": 34,
+      "kind": {
+        "Part": {
+          "path": "DI-08D.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          -320.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            0.9781476007338064,
+            0.0,
+            0.20791169081775948
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 35,
+      "name": "DI-03",
+      "number": 35,
+      "kind": {
+        "Part": {
+          "path": "DI-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          811.127332427021,
+          0.0,
+          120.0
+        ],
+        "rot": [
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.9063077870366499,
+            0.0,
+            -0.42261826174069944
+          ],
+          [
+            -0.42261826174069944,
+            0.0,
+            0.9063077870366499
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 36,
+      "name": "DI-05",
+      "number": 36,
+      "kind": {
+        "Part": {
+          "path": "DI-05.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          820.1904102973874,
+          0.0,
+          124.22618261740699
+        ],
+        "rot": [
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.9063077870366499,
+            0.0,
+            -0.42261826174069944
+          ],
+          [
+            -0.42261826174069944,
+            0.0,
+            0.9063077870366499
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 37,
+      "name": "DI-01",
+      "number": 37,
+      "kind": {
+        "Part": {
+          "path": "DI-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          574.4611058522293,
+          0.0,
+          627.5323607405239
+        ],
+        "rot": [
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.9063077870366499,
+            0.0,
+            -0.42261826174069944
+          ],
+          [
+            -0.42261826174069944,
+            0.0,
+            0.9063077870366499
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        28,
+        28,
+        32
+      ]
+    },
+    {
+      "id": 38,
+      "name": "DI-02",
+      "number": 38,
+      "kind": {
+        "Part": {
+          "path": "DI-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          580.3777615165991,
+          0.0,
+          614.8440517220108
+        ],
+        "rot": [
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.9063077870366499,
+            0.0,
+            -0.42261826174069944
+          ],
+          [
+            -0.42261826174069944,
+            0.0,
+            0.9063077870366499
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 39,
+      "name": "DI-06",
+      "number": 39,
+      "kind": {
+        "Part": {
+          "path": "DI-06.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          858.8611694053332,
+          45.0,
+          147.77554333092172
+        ],
+        "rot": [
+          [
+            0.9323032617085969,
+            -0.3616775196324918,
+            0.0
+          ],
+          [
+            0.35809828919916586,
+            0.9230770089661341,
+            -0.1403369188444939
+          ],
+          [
+            0.050756708720542845,
+            0.13083656717685632,
+            0.9901038072895356
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 40,
+      "name": "DI-06:2",
+      "number": 40,
+      "kind": {
+        "Part": {
+          "path": "DI-06.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          858.8611694053332,
+          -45.0,
+          147.77554333092172
+        ],
+        "rot": [
+          [
+            -0.9323032617085969,
+            -0.3616775196324918,
+            0.0
+          ],
+          [
+            0.35809828919916586,
+            -0.9230770089661341,
+            -0.1403369188444939
+          ],
+          [
+            0.050756708720542845,
+            -0.13083656717685632,
+            0.9901038072895356
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 41,
+      "name": "DI-10",
+      "number": 41,
+      "kind": {
+        "Part": {
+          "path": "DI-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          476.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            0.9781476007338064,
+            0.0,
+            0.20791169081775948
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 42,
+      "name": "RD-01",
+      "number": 42,
+      "kind": {
+        "Part": {
+          "path": "RD-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          520.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            0.9781476007338064,
+            0.0,
+            0.20791169081775948
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        214,
+        172,
+        64
+      ]
+    },
+    {
+      "id": 43,
+      "name": "RD-03",
+      "number": 43,
+      "kind": {
+        "Part": {
+          "path": "RD-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          520.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            0.9781476007338064,
+            0.0,
+            0.20791169081775948
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        24,
+        24,
+        27
+      ]
+    },
+    {
+      "id": 44,
+      "name": "DI-10:2",
+      "number": 44,
+      "kind": {
+        "Part": {
+          "path": "DI-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          -476.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            -0.9781476007338064,
+            0.0,
+            -0.20791169081775948
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 45,
+      "name": "RD-01:2",
+      "number": 45,
+      "kind": {
+        "Part": {
+          "path": "RD-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          -520.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            -0.9781476007338064,
+            0.0,
+            -0.20791169081775948
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        214,
+        172,
+        64
+      ]
+    },
+    {
+      "id": 46,
+      "name": "RD-03:2",
+      "number": 46,
+      "kind": {
+        "Part": {
+          "path": "RD-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1040.0,
+          -520.0,
+          130.00000000000006
+        ],
+        "rot": [
+          [
+            -0.9781476007338064,
+            0.0,
+            -0.20791169081775948
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            -0.20791169081775948,
+            0.0,
+            0.9781476007338064
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        24,
+        24,
+        27
+      ]
+    },
+    {
+      "id": 47,
+      "name": "MO-01",
+      "number": 47,
+      "kind": {
+        "Part": {
+          "path": "MO-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          170.4,
+          -262.5,
+          190.8
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        64,
+        66,
+        72
+      ]
+    },
+    {
+      "id": 48,
+      "name": "MO-02",
+      "number": 48,
+      "kind": {
+        "Part": {
+          "path": "MO-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          170.4,
+          -262.5,
+          150.8
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 49,
+      "name": "TR-02",
+      "number": 49,
+      "kind": {
+        "Part": {
+          "path": "TR-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          170.4,
+          -142.5,
+          265.8
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        236,
+        118,
+        22
+      ]
+    },
+    {
+      "id": 50,
+      "name": "TR-03",
+      "number": 50,
+      "kind": {
+        "Part": {
+          "path": "TR-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          -142.5,
+          138.0
+        ],
+        "rot": [
+          [
+            0.8,
+            0.0,
+            0.6
+          ],
+          [
+            -0.6,
+            0.0,
+            0.8
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 51,
+      "name": "TR-04",
+      "number": 51,
+      "kind": {
+        "Part": {
+          "path": "TR-04.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          85.2,
+          -142.5,
+          198.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 52,
+      "name": "MO-03",
+      "number": 52,
+      "kind": {
+        "Part": {
+          "path": "MO-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          290.4,
+          -420.0,
+          265.8
+        ],
+        "rot": [
+          [
+            -0.08715574274765824,
+            0.0,
+            -0.9961946980917455
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.9961946980917455,
+            0.0,
+            -0.08715574274765824
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        176,
+        178,
+        184
+      ]
+    },
+    {
+      "id": 53,
+      "name": "EX-09",
+      "number": 53,
+      "kind": {
+        "Part": {
+          "path": "EX-09.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          90.0,
+          191.0,
+          118.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 54,
+      "name": "EX-10",
+      "number": 54,
+      "kind": {
+        "Part": {
+          "path": "EX-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          182.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        168,
+        170,
+        176
+      ]
+    },
+    {
+      "id": 55,
+      "name": "EX-10:2",
+      "number": 55,
+      "kind": {
+        "Part": {
+          "path": "EX-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          200.0,
+          138.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        168,
+        170,
+        176
+      ]
+    },
+    {
+      "id": 56,
+      "name": "EX-11",
+      "number": 56,
+      "kind": {
+        "Part": {
+          "path": "EX-11.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          560.0,
+          170.0,
+          80.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        192,
+        196,
+        202
+      ]
+    },
+    {
+      "id": 57,
+      "name": "EX-12B",
+      "number": 57,
+      "kind": {
+        "Part": {
+          "path": "EX-12B.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 58,
+      "name": "PO-05",
+      "number": 58,
+      "kind": {
+        "Part": {
+          "path": "PO-05.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1100.0,
+          90.0,
+          60.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        245,
+        196,
+        0
+      ]
+    },
+    {
+      "id": 59,
+      "name": "PO-06",
+      "number": 59,
+      "kind": {
+        "Part": {
+          "path": "PO-06.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1100.0,
+          -90.0,
+          60.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        245,
+        196,
+        0
+      ]
+    },
+    {
+      "id": 60,
+      "name": "PO-07",
+      "number": 60,
+      "kind": {
+        "Part": {
+          "path": "PO-07.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          580.0,
+          90.0,
+          70.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 61,
+      "name": "PO-07:2",
+      "number": 61,
+      "kind": {
+        "Part": {
+          "path": "PO-07.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          580.0,
+          -90.0,
+          70.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        150,
+        154,
+        160
+      ]
+    },
+    {
+      "id": 62,
+      "name": "PO-01",
+      "number": 62,
+      "kind": {
+        "Part": {
+          "path": "PO-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          343.2,
+          0.0,
+          105.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        28,
+        28,
+        32
+      ]
+    },
+    {
+      "id": 63,
+      "name": "PO-02",
+      "number": 63,
+      "kind": {
+        "Part": {
+          "path": "PO-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          300.0,
+          190.0,
+          200.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 64,
+      "name": "PO-02:2",
+      "number": 64,
+      "kind": {
+        "Part": {
+          "path": "PO-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          300.0,
+          -190.0,
+          200.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 65,
+      "name": "PO-02:3",
+      "number": 65,
+      "kind": {
+        "Part": {
+          "path": "PO-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          520.0,
+          190.0,
+          200.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 66,
+      "name": "PO-02:4",
+      "number": 66,
+      "kind": {
+        "Part": {
+          "path": "PO-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          520.0,
+          -190.0,
+          200.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 67,
+      "name": "PO-03",
+      "number": 67,
+      "kind": {
+        "Part": {
+          "path": "PO-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 68,
+      "name": "PO-03:2",
+      "number": 68,
+      "kind": {
+        "Part": {
+          "path": "PO-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          600.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 69,
+      "name": "PO-04",
+      "number": 69,
+      "kind": {
+        "Part": {
+          "path": "PO-04.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          300.0,
+          0.0,
+          29.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        58,
+        60,
+        66
+      ]
+    },
+    {
+      "id": 70,
+      "name": "PO-08",
+      "number": 70,
+      "kind": {
+        "Part": {
+          "path": "PO-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          707.2,
+          0.0,
+          65.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        226,
+        224,
+        210
+      ]
+    },
+    {
+      "id": 71,
+      "name": "PR-02",
+      "number": 71,
+      "kind": {
+        "Part": {
+          "path": "PR-02.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 72,
+      "name": "PR-01",
+      "number": 72,
+      "kind": {
+        "Part": {
+          "path": "PR-01.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 73,
+      "name": "PR-03",
+      "number": 73,
+      "kind": {
+        "Part": {
+          "path": "PR-03.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 74,
+      "name": "PR-04",
+      "number": 74,
+      "kind": {
+        "Part": {
+          "path": "PR-04.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 75,
+      "name": "PR-04:2",
+      "number": 75,
+      "kind": {
+        "Part": {
+          "path": "PR-04.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          800.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 76,
+      "name": "PR-05",
+      "number": 76,
+      "kind": {
+        "Part": {
+          "path": "PR-05.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 77,
+      "name": "PR-05:2",
+      "number": 77,
+      "kind": {
+        "Part": {
+          "path": "PR-05.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          800.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 78,
+      "name": "PR-10",
+      "number": 78,
+      "kind": {
+        "Part": {
+          "path": "PR-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 79,
+      "name": "PR-10:2",
+      "number": 79,
+      "kind": {
+        "Part": {
+          "path": "PR-10.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 80,
+      "name": "PR-06",
+      "number": 80,
+      "kind": {
+        "Part": {
+          "path": "PR-06.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          1240.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        238,
+        238,
+        240
+      ]
+    },
+    {
+      "id": 81,
+      "name": "PR-07",
+      "number": 81,
+      "kind": {
+        "Part": {
+          "path": "PR-07.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          940.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        196,
+        18,
+        32
+      ]
+    },
+    {
+      "id": 82,
+      "name": "PR-08",
+      "number": 82,
+      "kind": {
+        "Part": {
+          "path": "PR-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          520.0,
+          530.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        238,
+        238,
+        240
+      ]
+    },
+    {
+      "id": 83,
+      "name": "PR-08:2",
+      "number": 83,
+      "kind": {
+        "Part": {
+          "path": "PR-08.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          520.0,
+          -530.0,
+          0.0
+        ],
+        "rot": [
+          [
+            -1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            -1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        238,
+        238,
+        240
+      ]
+    },
+    {
+      "id": 84,
+      "name": "PR-09",
+      "number": 84,
+      "kind": {
+        "Part": {
+          "path": "PR-09.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          -320.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": [
+        238,
+        238,
+        240
+      ]
+    }
+  ],
+  "mates": [],
+  "rigid": [],
+  "params": [],
+  "patterns": [],
+  "joints": [],
+  "couplings": [],
+  "display_states": [],
+  "animations": [],
+  "explosoes": [],
+  "pmi": [],
+  "items": [],
+  "pmi_captures": [],
+  "features": [],
+  "pilhas": [],
+  "conjuntos": [],
+  "regras_cor": [],
+  "interf": {
+    "ignorados": [],
+    "menores_que": 0.0
+  },
+  "relational": false,
+  "politicas_link": [],
+  "religacoes": [],
+  "geometria": null,
+  "esqueleto": null,
+  "contexto_livre": false,
+  "origem_oculta": false
+}

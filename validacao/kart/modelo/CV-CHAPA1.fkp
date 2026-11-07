@@ -1,0 +1,396 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.34",
+  "uid": "c8162959bb3f390f46f501d373167ebe",
+  "name": "CV-CHAPA1 Assoalho com estampo, veneziana e colar",
+  "props": {
+    "pn": "FK-CV-CHAPA1",
+    "description": "Assoalho com estampo, veneziana e colar",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 27,
+  "origin_visible": true,
+  "references": [
+    {
+      "id": 16,
+      "name": "Plano1",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "1.5"
+        }
+      },
+      "visible": true,
+      "folder": 17,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 17,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": {
+    "thickness": "1.5",
+    "radius": "2",
+    "k": "0.44",
+    "flat": false,
+    "material": "",
+    "method": 0,
+    "allowance": "",
+    "style": "",
+    "overrides": [],
+    "relief": "",
+    "relief_kind": 0,
+    "corner": ""
+  },
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 14,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 2,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 3,
+              "x": 300.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 4,
+              "x": 300.0,
+              "y": 200.0,
+              "fixed": false
+            },
+            {
+              "id": 5,
+              "x": 0.0,
+              "y": 200.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 6,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 2,
+                  "b": 3
+                }
+              }
+            },
+            {
+              "id": 7,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 3,
+                  "b": 4
+                }
+              }
+            },
+            {
+              "id": 8,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 4,
+                  "b": 5
+                }
+              }
+            },
+            {
+              "id": 9,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 5,
+                  "b": 2
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 10,
+              "kind": {
+                "Horizontal": 6
+              }
+            },
+            {
+              "id": 11,
+              "kind": {
+                "Horizontal": 8
+              }
+            },
+            {
+              "id": 12,
+              "kind": {
+                "Vertical": 7
+              }
+            },
+            {
+              "id": 13,
+              "kind": {
+                "Vertical": 9
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 15,
+      "name": "ParedeBase1",
+      "kind": {
+        "SmWall": {
+          "sketch": 14,
+          "reverse": false,
+          "offset": "",
+          "mid": false,
+          "surface": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 20,
+      "name": "Sketch2",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 16
+          },
+          "points": [
+            {
+              "id": 18,
+              "x": 70.0,
+              "y": 100.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 19,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 18,
+                  "r": 30.0
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 21,
+      "name": "Estampo1",
+      "kind": {
+        "SmStamp": {
+          "sketch": 20,
+          "depth": "3",
+          "flip": false,
+          "kind": 0,
+          "width": "",
+          "punch": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 22,
+      "name": "Veneziana1",
+      "kind": {
+        "SmLouver": {
+          "a": [
+            160.0,
+            50.0,
+            1.5
+          ],
+          "b": [
+            260.0,
+            50.0,
+            1.5
+          ],
+          "width": "20",
+          "height": "5",
+          "flip": false,
+          "down": false
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 25,
+      "name": "Sketch3",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 16
+          },
+          "points": [
+            {
+              "id": 23,
+              "x": 210.0,
+              "y": 140.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 24,
+              "construction": false,
+              "geom": {
+                "Point": {
+                  "p": 23
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 26,
+      "name": "FuroFlangeado1",
+      "kind": {
+        "SmFlangedHole": {
+          "sketch": 25,
+          "diameter": "20",
+          "height": "6",
+          "flip": false,
+          "points": [],
+          "standard": ""
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 7
+}

@@ -1,0 +1,355 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.34",
+  "uid": "5dbb4faa693dea6c28319e4ca8bf99e8",
+  "name": "CV-SOL2 Nervura, escala e dividir",
+  "props": {
+    "pn": "FK-CV-SOL2",
+    "description": "Nervura, escala e dividir",
+    "material": "Alumínio 6061",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 26,
+  "origin_visible": true,
+  "references": [
+    {
+      "id": 16,
+      "name": "Plano1",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XZ"
+          },
+          "offset": "0"
+        }
+      },
+      "visible": true,
+      "folder": 17,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 24,
+      "name": "Plano2",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "YZ"
+          },
+          "offset": "60"
+        }
+      },
+      "visible": true,
+      "folder": 17,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 17,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 14,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 2,
+              "x": -100.0,
+              "y": -60.0,
+              "fixed": false
+            },
+            {
+              "id": 3,
+              "x": 100.0,
+              "y": -60.0,
+              "fixed": false
+            },
+            {
+              "id": 4,
+              "x": 100.0,
+              "y": 60.0,
+              "fixed": false
+            },
+            {
+              "id": 5,
+              "x": -100.0,
+              "y": 60.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 6,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 2,
+                  "b": 3
+                }
+              }
+            },
+            {
+              "id": 7,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 3,
+                  "b": 4
+                }
+              }
+            },
+            {
+              "id": 8,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 4,
+                  "b": 5
+                }
+              }
+            },
+            {
+              "id": 9,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 5,
+                  "b": 2
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 10,
+              "kind": {
+                "Horizontal": 6
+              }
+            },
+            {
+              "id": 11,
+              "kind": {
+                "Horizontal": 8
+              }
+            },
+            {
+              "id": 12,
+              "kind": {
+                "Vertical": 7
+              }
+            },
+            {
+              "id": 13,
+              "kind": {
+                "Vertical": 9
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 15,
+      "name": "Extrusão1",
+      "kind": {
+        "Extrude": {
+          "sketch": 14,
+          "op": "Add",
+          "extent": {
+            "Blind": "10"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 21,
+      "name": "Sketch2",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 16
+          },
+          "points": [
+            {
+              "id": 18,
+              "x": -60.0,
+              "y": 10.0,
+              "fixed": false
+            },
+            {
+              "id": 19,
+              "x": 60.0,
+              "y": 10.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 20,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 18,
+                  "b": 19
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 22,
+      "name": "Reforço1",
+      "kind": {
+        "Stiffener": {
+          "sketch": 21,
+          "thickness": "6",
+          "depth": "30",
+          "reverse": false,
+          "to_body": false,
+          "side": 0
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 23,
+      "name": "Escala1",
+      "kind": {
+        "Scale": {
+          "center": "Origin",
+          "factor": "1.1"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 25,
+      "name": "Dividir1",
+      "kind": {
+        "SplitBody": {
+          "surface": {
+            "Plane": {
+              "Datum": 24
+            }
+          },
+          "flip": false
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 6
+}

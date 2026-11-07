@@ -1,0 +1,288 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "8f15065de81ae8c7f954f7ef8e4153f0",
+  "name": "CV-EST Placa, reforço e solda",
+  "props": {
+    "pn": "FK-CV-EST",
+    "description": "Placa, reforço e solda",
+    "material": "Aço AISI 4130",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 12,
+  "origin_visible": true,
+  "references": [
+    {
+      "id": 2,
+      "name": "A",
+      "kind": {
+        "PointCoords": {
+          "x": "0",
+          "y": "0",
+          "z": "0",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 4,
+      "name": "B",
+      "kind": {
+        "PointCoords": {
+          "x": "400",
+          "y": "0",
+          "z": "0",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 5,
+      "name": "C",
+      "kind": {
+        "PointCoords": {
+          "x": "400",
+          "y": "300",
+          "z": "0",
+          "frame": null
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 6,
+      "name": "Curva1",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 2
+            },
+            {
+              "Ref": 4
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 7,
+      "name": "Curva2",
+      "kind": {
+        "Polyline": {
+          "points": [
+            {
+              "Ref": 4
+            },
+            {
+              "Ref": 5
+            }
+          ],
+          "closed": false
+        }
+      },
+      "visible": true,
+      "folder": 3,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 3,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 8,
+      "name": "Canto em meia-esquadria",
+      "kind": {
+        "StructMember": {
+          "paths": [
+            {
+              "Ref": 6
+            },
+            {
+              "Ref": 7
+            }
+          ],
+          "family": "Tubo redondo",
+          "designation": "Ø30x2,4",
+          "kind": "TuboRedondo",
+          "dims": [
+            "30",
+            "2.4"
+          ],
+          "anchor": 0,
+          "angle": "0",
+          "off_x": "0",
+          "off_y": "0",
+          "ext1": "0",
+          "ext2": "0",
+          "corner": "MeiaEsquadria",
+          "gap": "0",
+          "joints": [],
+          "material": "",
+          "mirror": false
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 9,
+      "name": "Placa1",
+      "kind": {
+        "StructPlate": {
+          "at": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "thickness": "6",
+          "margin": "8",
+          "side": "Externo",
+          "recess": "",
+          "margin_mode": "Valor",
+          "holes": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 10,
+      "name": "Reforço1",
+      "kind": {
+        "StructGusset": {
+          "at": [
+            400.0,
+            0.0,
+            0.0
+          ],
+          "leg": "60",
+          "thickness": "4",
+          "chamfer": "10",
+          "leg2": "",
+          "swap": false,
+          "profile": "Chanfrado",
+          "poly": [],
+          "side": "DoisLados",
+          "position": "Meio",
+          "offset": "",
+          "repeat": "Nenhuma",
+          "count": "",
+          "spacing": ""
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 11,
+      "name": "Cordão de solda1",
+      "kind": {
+        "StructWeld": {
+          "faces": [
+            [
+              10.0,
+              15.0,
+              0.0
+            ],
+            [
+              0.0,
+              20.0,
+              0.0
+            ]
+          ],
+          "face_keys": [
+            null,
+            null
+          ],
+          "split": 1,
+          "picking_b": false,
+          "tangent": false,
+          "leg": "3",
+          "shape": "Plano",
+          "mode": "Cosmetico",
+          "pattern": "Continuo",
+          "seg_len": "",
+          "spacing": "",
+          "staggered": false,
+          "end_plane": null,
+          "end_keep_front": false,
+          "material": ""
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 4
+}

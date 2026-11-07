@@ -1,0 +1,586 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "e22b222201e00f968caeb5f663c890d9",
+  "name": "CH-02 Longarina direita",
+  "props": {
+    "pn": "FK-CH-02",
+    "description": "Longarina direita",
+    "material": "Aço AISI 4130",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      196,
+      18,
+      32
+    ],
+    "finish": "Brilhante",
+    "texture": null
+  },
+  "next_id": 28,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 9,
+      "name": "mestre_LONG_D_0",
+      "kind": {
+        "Linked": {
+          "ext": 8,
+          "class": "Curve"
+        }
+      },
+      "visible": false,
+      "folder": null,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 11,
+      "name": "mestre_LONG_D_1",
+      "kind": {
+        "Linked": {
+          "ext": 10,
+          "class": "Curve"
+        }
+      },
+      "visible": false,
+      "folder": null,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 13,
+      "name": "mestre_LONG_D_2",
+      "kind": {
+        "Linked": {
+          "ext": 12,
+          "class": "Curve"
+        }
+      },
+      "visible": false,
+      "folder": null,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 15,
+      "name": "mestre_LONG_D_3",
+      "kind": {
+        "Linked": {
+          "ext": 14,
+          "class": "Curve"
+        }
+      },
+      "visible": false,
+      "folder": null,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_D_TUBO",
+      "expr": "30",
+      "unit": "Comprimento",
+      "comment": "link: mestre.D_TUBO",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 5,
+      "name": "mestre_E_TUBO",
+      "expr": "2.4",
+      "unit": "Comprimento",
+      "comment": "link: mestre.E_TUBO",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 7,
+      "name": "mestre_R_DOBRA",
+      "expr": "90",
+      "unit": "Comprimento",
+      "comment": "link: mestre.R_DOBRA",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_D_TUBO",
+      "source": "mestre",
+      "publication": "D_TUBO",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 30.0
+      },
+      "target": 3,
+      "xform": null
+    },
+    {
+      "id": 4,
+      "name": "mestre_E_TUBO",
+      "source": "mestre",
+      "publication": "E_TUBO",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 2.4
+      },
+      "target": 5,
+      "xform": null
+    },
+    {
+      "id": 6,
+      "name": "mestre_R_DOBRA",
+      "source": "mestre",
+      "publication": "R_DOBRA",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 90.0
+      },
+      "target": 7,
+      "xform": null
+    },
+    {
+      "id": 8,
+      "name": "mestre_LONG_D_0",
+      "source": "mestre",
+      "publication": "LONG_D_0",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Curve": [
+          [
+            -100.0,
+            -350.0,
+            80.0
+          ],
+          [
+            120.0,
+            -350.0,
+            45.0
+          ]
+        ]
+      },
+      "target": 9,
+      "xform": null
+    },
+    {
+      "id": 10,
+      "name": "mestre_LONG_D_1",
+      "source": "mestre",
+      "publication": "LONG_D_1",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Curve": [
+          [
+            120.0,
+            -350.0,
+            45.0
+          ],
+          [
+            624.0,
+            -350.0,
+            45.0
+          ]
+        ]
+      },
+      "target": 11,
+      "xform": null
+    },
+    {
+      "id": 12,
+      "name": "mestre_LONG_D_2",
+      "source": "mestre",
+      "publication": "LONG_D_2",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Curve": [
+          [
+            624.0,
+            -350.0,
+            45.0
+          ],
+          [
+            870.0,
+            -280.0,
+            45.0
+          ]
+        ]
+      },
+      "target": 13,
+      "xform": null
+    },
+    {
+      "id": 14,
+      "name": "mestre_LONG_D_3",
+      "source": "mestre",
+      "publication": "LONG_D_3",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Curve": [
+          [
+            870.0,
+            -280.0,
+            45.0
+          ],
+          [
+            1100.0,
+            -280.0,
+            45.0
+          ]
+        ]
+      },
+      "target": 15,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 17,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 18,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 25,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          498.8216361999512,
+          -315.0,
+          62.40685272216797
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 1933.1963281197595,
+        "ortho": false
+      },
+      "shown": [
+        17,
+        18
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 26,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          498.8216361999512,
+          -315.0,
+          62.40685272216797
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 1933.1963281197595,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 27,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          498.8216361999512,
+          -315.0,
+          62.40685272216797
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 1933.1963281197595,
+        "ortho": false
+      },
+      "shown": [
+        17,
+        18
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 16,
+      "name": "Longarina",
+      "kind": {
+        "StructMember": {
+          "paths": [
+            {
+              "Ref": 9
+            },
+            {
+              "Ref": 11
+            },
+            {
+              "Ref": 13
+            },
+            {
+              "Ref": 15
+            }
+          ],
+          "family": "Tubo redondo",
+          "designation": "Ø30x2,4",
+          "kind": "TuboRedondo",
+          "dims": [
+            "mestre_D_TUBO",
+            "mestre_E_TUBO"
+          ],
+          "anchor": 0,
+          "angle": "0",
+          "off_x": "0",
+          "off_y": "0",
+          "ext1": "0",
+          "ext2": "0",
+          "corner": "Nenhum",
+          "gap": "0",
+          "joints": [
+            {
+              "mine": 1,
+              "other": 16,
+              "other_path": 0,
+              "mode": "Dobra",
+              "first": false,
+              "gap": null,
+              "bend": {
+                "mode": "Dobradeira",
+                "radius": "mestre_R_DOBRA",
+                "rule": "",
+                "k": "",
+                "springback": "",
+                "plane_dim": 0,
+                "cuts": "",
+                "root_gap": "",
+                "segments": ""
+              }
+            },
+            {
+              "mine": 2,
+              "other": 16,
+              "other_path": 1,
+              "mode": "Dobra",
+              "first": false,
+              "gap": null,
+              "bend": {
+                "mode": "Dobradeira",
+                "radius": "mestre_R_DOBRA",
+                "rule": "",
+                "k": "",
+                "springback": "",
+                "plane_dim": 0,
+                "cuts": "",
+                "root_gap": "",
+                "segments": ""
+              }
+            },
+            {
+              "mine": 3,
+              "other": 16,
+              "other_path": 2,
+              "mode": "Dobra",
+              "first": false,
+              "gap": null,
+              "bend": {
+                "mode": "Dobradeira",
+                "radius": "mestre_R_DOBRA",
+                "rule": "",
+                "k": "",
+                "springback": "",
+                "plane_dim": 0,
+                "cuts": "",
+                "root_gap": "",
+                "segments": ""
+              }
+            }
+          ],
+          "material": "",
+          "mirror": false
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 1
+}

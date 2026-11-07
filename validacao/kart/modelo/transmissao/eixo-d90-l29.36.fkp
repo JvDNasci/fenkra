@@ -1,0 +1,94 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "88e349e6ec97a25f68e0922b1d225de0",
+  "name": "Eixo Ø90",
+  "props": {
+    "pn": "",
+    "description": "Eixo Ø90",
+    "material": "Aço 1045",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 5,
+  "origin_visible": true,
+  "references": [],
+  "params": [
+    {
+      "id": 2,
+      "name": "d",
+      "expr": "90",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 3,
+      "name": "L",
+      "expr": "29.3625",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 4,
+      "name": "Eixo",
+      "kind": {
+        "Primitive": {
+          "kind": "Cilindro",
+          "plane": {
+            "Origin": "XY"
+          },
+          "a": "d/2",
+          "b": "L",
+          "c": "0",
+          "d": "0",
+          "op": "Add"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 1
+}

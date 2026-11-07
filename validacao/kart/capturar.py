@@ -11,6 +11,7 @@ MODELO = os.path.join(RAIZ, "modelo")
 EXE = "C:/cargo-target/kart14/release/fenkra.exe"
 DIARIO = sys.argv[1]
 FILTRO = sys.argv[2] if len(sys.argv) > 2 else ""
+SUFIXO = sys.argv[3] if len(sys.argv) > 3 else ""
 os.makedirs(DIARIO, exist_ok=True)
 JSONL = os.path.join(DIARIO, "diario.jsonl")
 
@@ -109,7 +110,7 @@ a("EX-12.fkp", "EX-12", "Superfícies", "falhou", "Linha de freio: a varredura d
 a("EX-12B.fkp", "EX-12", "Sólidos", "segunda_tentativa", "Linha de freio: varredura sólida na mesma spline")
 a("PO-05.fkp", "PO-05", "Chapa", "pronta", "Pedal de freio")
 a("PO-06.fkp", "PO-06", "Chapa", "pronta", "Pedal de acelerador")
-a("PO-01.fkp", "PO-01", "Forma livre", "pronta", "Banco em Forma livre convertido em sólido")
+a("PO-01.fkp", "PO-01", "Forma livre", "pronta", "Banco em Forma livre convertido em sólido", espera=30)
 a("PO-02.fkp", "PO-02", "Chapa", "pronta", "Chapa de reforço do banco")
 a("PO-03.fkp", "PO-03", "Estrutural", "pronta", "Escora do banco")
 a("PO-04.fkp", "PO-04", "Chapa", "parede", "Assoalho: parede base", rollback=2)
@@ -128,7 +129,7 @@ for s_, n in [("SC-QUADRO", "Subconjunto do quadro"), ("SC-EIXO", "Subconjunto d
 a("KART-PLANO.fka", "KART", "Montagem", "geral", "Montagem geral do kart", espera=60)
 a("KART-PLANO.fka", "KART", "Montagem", "lateral", "Kart de lado", espera=60, FENKRA_DEMO_CAMERA="0,5,0.9")
 a("KART.fka", "KART", "Montagem", "subconjuntos", "Montagem de topo com o mestre e os subconjuntos", espera=60)
-a("DW-KART.fkd", "DW-KART", "Desenho", "folha", "Folha de conjunto com lista de peças", espera=40)
+a("DW-KART.fkd", "DW-KART", "Desenho", "folha", "Folha de conjunto com lista de peças", espera=150)
 a("DW-QUADRO.fkd", "DW-QUADRO", "Desenho", "folha", "Quadro com lista de corte", espera=15)
 a("DW-EX01.fkd", "DW-EX01", "Desenho", "folha", "Eixo: vista e corte", espera=12)
 a("DW-EX08.fkd", "DW-EX08", "Desenho", "folha", "Disco com tabela de furos", espera=12)
@@ -142,5 +143,7 @@ for arq, peca, banc, etapa, res, leg, x in L:
     if not os.path.exists(os.path.join(MODELO, arq)):
         print("sem arquivo", arq, flush=True)
         continue
+    if SUFIXO:
+        etapa, leg = f"{etapa}_{SUFIXO}", f"{leg} ({SUFIXO})"
     captura(arq, peca, banc, etapa, res, leg, x)
 print("fim", flush=True)

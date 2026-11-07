@@ -1,0 +1,564 @@
+{
+  "format_version": 1,
+  "name": "TESTE-GERADOR",
+  "uid": "5162bb87acd68eb08e64be122e81cc5d",
+  "props": {
+    "pn": "",
+    "description": "",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "next_id": 11,
+  "nodes": [
+    {
+      "id": 1,
+      "name": "Transmissão",
+      "number": 0,
+      "kind": "Group",
+      "doc_uid": "",
+      "parent": null,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": null
+    },
+    {
+      "id": 2,
+      "name": "Eixo 1",
+      "number": 1,
+      "kind": {
+        "Part": {
+          "path": "transmissao/eixo-d15-l29.36.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": 1,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          -5.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": null
+    },
+    {
+      "id": 3,
+      "name": "Roda ISO 08B-1 z11",
+      "number": 2,
+      "kind": {
+        "Part": {
+          "path": "transmissao/roda-ISO08B-1-z11-f15.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": 1,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.38749999999999973
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": null
+    },
+    {
+      "id": 4,
+      "name": "Eixo 2",
+      "number": 3,
+      "kind": {
+        "Part": {
+          "path": "transmissao/eixo-d90-l29.36.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": 1,
+      "placement": {
+        "origin": [
+          334.32384095164855,
+          0.0,
+          -5.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": null
+    },
+    {
+      "id": 5,
+      "name": "Roda ISO 08B-1 z82",
+      "number": 4,
+      "kind": {
+        "Part": {
+          "path": "transmissao/roda-ISO08B-1-z82-f90.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": 1,
+      "placement": {
+        "origin": [
+          334.32384095164855,
+          0.0,
+          0.38749999999999973
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": false,
+      "visible": true,
+      "mode": "Editavel",
+      "color": null
+    },
+    {
+      "id": 6,
+      "name": "Corrente ISO 08B-1 (104 elos)",
+      "number": 5,
+      "kind": {
+        "Part": {
+          "path": "transmissao/corrente-ISO08B-1-z11-z82-e104.fkp"
+        }
+      },
+      "doc_uid": "",
+      "parent": 1,
+      "placement": {
+        "origin": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "rot": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0
+          ]
+        ]
+      },
+      "fixed": true,
+      "visible": true,
+      "mode": "Editavel",
+      "color": null
+    }
+  ],
+  "mates": [],
+  "rigid": [],
+  "params": [],
+  "patterns": [],
+  "joints": [
+    {
+      "id": 7,
+      "name": "Revolução",
+      "kind": "Revolute",
+      "a": {
+        "comp": 2,
+        "frame": {
+          "o": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "b": {
+        "comp": 3,
+        "frame": {
+          "o": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "angle0": 0.0,
+      "len0": 5.387499999999999,
+      "drive_angle": "t",
+      "drive_len": null,
+      "suppressed": false,
+      "limites": {
+        "angulo": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_x": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_y": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "inclinacao": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "trajeto": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        }
+      },
+      "zero": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fontes": [
+        null,
+        null
+      ]
+    },
+    {
+      "id": 8,
+      "name": "Revolução.2",
+      "kind": "Revolute",
+      "a": {
+        "comp": 4,
+        "frame": {
+          "o": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "b": {
+        "comp": 5,
+        "frame": {
+          "o": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "z": [
+            0.0,
+            0.0,
+            1.0
+          ],
+          "x": [
+            0.0,
+            -1.0,
+            0.0
+          ]
+        }
+      },
+      "angle0": 0.0,
+      "len0": 5.387499999999999,
+      "drive_angle": null,
+      "drive_len": null,
+      "suppressed": false,
+      "limites": {
+        "angulo": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_x": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "curso_y": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "inclinacao": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        },
+        "trajeto": {
+          "min": {
+            "ligado": false,
+            "valor": 0.0
+          },
+          "max": {
+            "ligado": false,
+            "valor": 0.0
+          }
+        }
+      },
+      "zero": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "fontes": [
+        null,
+        null
+      ]
+    }
+  ],
+  "couplings": [
+    {
+      "id": 9,
+      "name": "Engrenagem",
+      "kind": "Gear",
+      "a": 7,
+      "b": 8,
+      "ratio": "0.13414634146341464"
+    }
+  ],
+  "display_states": [],
+  "animations": [],
+  "explosoes": [],
+  "pmi": [],
+  "items": [],
+  "pmi_captures": [],
+  "features": [],
+  "pilhas": [],
+  "conjuntos": [],
+  "regras_cor": [],
+  "interf": {
+    "ignorados": [],
+    "menores_que": 0.0
+  },
+  "relational": false,
+  "politicas_link": [],
+  "religacoes": [],
+  "geometria": null,
+  "esqueleto": null,
+  "contexto_livre": false,
+  "origem_oculta": false,
+  "transmissoes": [
+    {
+      "id": 10,
+      "nome": "Corrente",
+      "elemento": {
+        "Corrente": {
+          "corrente": "ISO 08B-1",
+          "dentes1": 11,
+          "dentes2": 82,
+          "centros": 330.0,
+          "furo1": 15.0,
+          "furo2": 90.0
+        }
+      },
+      "rpm": 8000.0,
+      "torque": 20.0,
+      "comps": [
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "juntas": [
+        7,
+        8
+      ],
+      "acoplamentos": [
+        9
+      ],
+      "motora": 7
+    }
+  ]
+}

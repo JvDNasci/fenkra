@@ -1,0 +1,782 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "d3c9f34190af4df8a8b5e45047beabb3",
+  "name": "PO-08 Tanque",
+  "props": {
+    "pn": "FK-PO-08",
+    "description": "Tanque",
+    "material": "Polipropileno",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      226,
+      224,
+      210
+    ],
+    "finish": "Acetinado",
+    "texture": null
+  },
+  "next_id": 61,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 15,
+      "name": "Plano1",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "100"
+        }
+      },
+      "visible": false,
+      "folder": 16,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 30,
+      "name": "Plano2",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "190"
+        }
+      },
+      "visible": false,
+      "folder": 16,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 16,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 50,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 51,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 58,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          0.0,
+          0.0,
+          107.5
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 706.4385610838792,
+        "ortho": false
+      },
+      "shown": [
+        50,
+        51
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 59,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          0.0,
+          0.0,
+          107.5
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 706.4385610838792,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 60,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          0.0,
+          0.0,
+          107.5
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 706.4385610838792,
+        "ortho": false
+      },
+      "shown": [
+        50,
+        51
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 14,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 2,
+              "x": -110.0,
+              "y": -130.0,
+              "fixed": false
+            },
+            {
+              "id": 3,
+              "x": 110.0,
+              "y": -130.0,
+              "fixed": false
+            },
+            {
+              "id": 4,
+              "x": 110.0,
+              "y": 130.0,
+              "fixed": false
+            },
+            {
+              "id": 5,
+              "x": -110.0,
+              "y": 130.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 6,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 2,
+                  "b": 3
+                }
+              }
+            },
+            {
+              "id": 7,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 3,
+                  "b": 4
+                }
+              }
+            },
+            {
+              "id": 8,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 4,
+                  "b": 5
+                }
+              }
+            },
+            {
+              "id": 9,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 5,
+                  "b": 2
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 10,
+              "kind": {
+                "Horizontal": 6
+              }
+            },
+            {
+              "id": 11,
+              "kind": {
+                "Horizontal": 8
+              }
+            },
+            {
+              "id": 12,
+              "kind": {
+                "Vertical": 7
+              }
+            },
+            {
+              "id": 13,
+              "kind": {
+                "Vertical": 9
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 29,
+      "name": "Sketch2",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 15
+          },
+          "points": [
+            {
+              "id": 17,
+              "x": -125.0,
+              "y": -145.0,
+              "fixed": false
+            },
+            {
+              "id": 18,
+              "x": 125.0,
+              "y": -145.0,
+              "fixed": false
+            },
+            {
+              "id": 19,
+              "x": 125.0,
+              "y": 145.0,
+              "fixed": false
+            },
+            {
+              "id": 20,
+              "x": -125.0,
+              "y": 145.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 21,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 17,
+                  "b": 18
+                }
+              }
+            },
+            {
+              "id": 22,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 18,
+                  "b": 19
+                }
+              }
+            },
+            {
+              "id": 23,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 19,
+                  "b": 20
+                }
+              }
+            },
+            {
+              "id": 24,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 20,
+                  "b": 17
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 25,
+              "kind": {
+                "Horizontal": 21
+              }
+            },
+            {
+              "id": 26,
+              "kind": {
+                "Horizontal": 23
+              }
+            },
+            {
+              "id": 27,
+              "kind": {
+                "Vertical": 22
+              }
+            },
+            {
+              "id": 28,
+              "kind": {
+                "Vertical": 24
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 43,
+      "name": "Sketch3",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 30
+          },
+          "points": [
+            {
+              "id": 31,
+              "x": -90.0,
+              "y": -110.0,
+              "fixed": false
+            },
+            {
+              "id": 32,
+              "x": 90.0,
+              "y": -110.0,
+              "fixed": false
+            },
+            {
+              "id": 33,
+              "x": 90.0,
+              "y": 110.0,
+              "fixed": false
+            },
+            {
+              "id": 34,
+              "x": -90.0,
+              "y": 110.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 35,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 31,
+                  "b": 32
+                }
+              }
+            },
+            {
+              "id": 36,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 32,
+                  "b": 33
+                }
+              }
+            },
+            {
+              "id": 37,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 33,
+                  "b": 34
+                }
+              }
+            },
+            {
+              "id": 38,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 34,
+                  "b": 31
+                }
+              }
+            }
+          ],
+          "constraints": [
+            {
+              "id": 39,
+              "kind": {
+                "Horizontal": 35
+              }
+            },
+            {
+              "id": 40,
+              "kind": {
+                "Horizontal": 37
+              }
+            },
+            {
+              "id": 41,
+              "kind": {
+                "Vertical": 36
+              }
+            },
+            {
+              "id": 42,
+              "kind": {
+                "Vertical": 38
+              }
+            }
+          ],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 44,
+      "name": "MultiSeções1",
+      "kind": {
+        "Loft": {
+          "sections": [
+            14,
+            29,
+            43
+          ],
+          "ruled": false,
+          "closed": false,
+          "op": "Add"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 45,
+      "name": "Casca1",
+      "kind": {
+        "Shell": {
+          "espessuras": [],
+          "faces": [],
+          "thickness": "2.5",
+          "outward": false,
+          "face_keys": [],
+          "closed": true
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 48,
+      "name": "Sketch4",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 30
+          },
+          "points": [
+            {
+              "id": 46,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 47,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 46,
+                  "r": 22.0
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 49,
+      "name": "Extrusão1",
+      "kind": {
+        "Extrude": {
+          "sketch": 48,
+          "op": "Add",
+          "extent": {
+            "Blind": "25"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 7
+}

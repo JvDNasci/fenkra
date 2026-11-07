@@ -1,0 +1,561 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "6afa59c47603a0ab4d071168af1182dd",
+  "name": "Corrente ISO 08B-1 104 elos",
+  "props": {
+    "pn": "",
+    "description": "Corrente ISO 08B-1 104 elos",
+    "material": "Aço 1045",
+    "part_type": "Comprada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 260,
+  "origin_visible": true,
+  "references": [
+    {
+      "id": 213,
+      "name": "Plano_Placas_a",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "-tp"
+        }
+      },
+      "visible": false,
+      "folder": 214,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 237,
+      "name": "Plano_Placas_b",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "b1"
+        }
+      },
+      "visible": false,
+      "folder": 214,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 2,
+      "name": "p",
+      "expr": "12.7",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 3,
+      "name": "b1",
+      "expr": "7.75",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 4,
+      "name": "tp",
+      "expr": "1.5239999999999998",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 214,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 235,
+      "name": "Placas_a",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 213
+          },
+          "points": [
+            {
+              "id": 215,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 216,
+              "x": 334.32384095164855,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 217,
+              "x": -11.188586240481905,
+              "y": -23.594920961461806,
+              "fixed": false
+            },
+            {
+              "id": 218,
+              "x": 261.7598943850444,
+              "y": -153.02564122855787,
+              "fixed": false
+            },
+            {
+              "id": 219,
+              "x": 261.7598943850444,
+              "y": 153.02564122855787,
+              "fixed": false
+            },
+            {
+              "id": 220,
+              "x": -11.188586240481905,
+              "y": 23.594920961461806,
+              "fixed": false
+            },
+            {
+              "id": 225,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 226,
+              "x": 334.32384095164855,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 227,
+              "x": -8.125761124749355,
+              "y": -17.135917565392262,
+              "fixed": false
+            },
+            {
+              "id": 228,
+              "x": 264.82271950077694,
+              "y": -146.56663783248834,
+              "fixed": false
+            },
+            {
+              "id": 229,
+              "x": 264.82271950077694,
+              "y": 146.56663783248834,
+              "fixed": false
+            },
+            {
+              "id": 230,
+              "x": -8.125761124749355,
+              "y": 17.135917565392262,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 221,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 217,
+                  "b": 218
+                }
+              }
+            },
+            {
+              "id": 222,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 216,
+                  "s": 218,
+                  "e": 219
+                }
+              }
+            },
+            {
+              "id": 223,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 219,
+                  "b": 220
+                }
+              }
+            },
+            {
+              "id": 224,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 215,
+                  "s": 220,
+                  "e": 217
+                }
+              }
+            },
+            {
+              "id": 231,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 227,
+                  "b": 228
+                }
+              }
+            },
+            {
+              "id": 232,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 226,
+                  "s": 228,
+                  "e": 229
+                }
+              }
+            },
+            {
+              "id": 233,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 229,
+                  "b": 230
+                }
+              }
+            },
+            {
+              "id": 234,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 225,
+                  "s": 230,
+                  "e": 227
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 236,
+      "name": "Placas_a",
+      "kind": {
+        "Extrude": {
+          "sketch": 235,
+          "op": "Add",
+          "extent": {
+            "Blind": "tp"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 258,
+      "name": "Placas_b",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 237
+          },
+          "points": [
+            {
+              "id": 238,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 239,
+              "x": 334.32384095164855,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 240,
+              "x": -11.188586240481905,
+              "y": -23.594920961461806,
+              "fixed": false
+            },
+            {
+              "id": 241,
+              "x": 261.7598943850444,
+              "y": -153.02564122855787,
+              "fixed": false
+            },
+            {
+              "id": 242,
+              "x": 261.7598943850444,
+              "y": 153.02564122855787,
+              "fixed": false
+            },
+            {
+              "id": 243,
+              "x": -11.188586240481905,
+              "y": 23.594920961461806,
+              "fixed": false
+            },
+            {
+              "id": 248,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 249,
+              "x": 334.32384095164855,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 250,
+              "x": -8.125761124749355,
+              "y": -17.135917565392262,
+              "fixed": false
+            },
+            {
+              "id": 251,
+              "x": 264.82271950077694,
+              "y": -146.56663783248834,
+              "fixed": false
+            },
+            {
+              "id": 252,
+              "x": 264.82271950077694,
+              "y": 146.56663783248834,
+              "fixed": false
+            },
+            {
+              "id": 253,
+              "x": -8.125761124749355,
+              "y": 17.135917565392262,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 244,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 240,
+                  "b": 241
+                }
+              }
+            },
+            {
+              "id": 245,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 239,
+                  "s": 241,
+                  "e": 242
+                }
+              }
+            },
+            {
+              "id": 246,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 242,
+                  "b": 243
+                }
+              }
+            },
+            {
+              "id": 247,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 238,
+                  "s": 243,
+                  "e": 240
+                }
+              }
+            },
+            {
+              "id": 254,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 250,
+                  "b": 251
+                }
+              }
+            },
+            {
+              "id": 255,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 249,
+                  "s": 251,
+                  "e": 252
+                }
+              }
+            },
+            {
+              "id": 256,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 252,
+                  "b": 253
+                }
+              }
+            },
+            {
+              "id": 257,
+              "construction": false,
+              "geom": {
+                "Arc": {
+                  "c": 248,
+                  "s": 253,
+                  "e": 250
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 259,
+      "name": "Placas_b",
+      "kind": {
+        "Extrude": {
+          "sketch": 258,
+          "op": "Add",
+          "extent": {
+            "Blind": "tp"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 4
+}

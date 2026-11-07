@@ -1,0 +1,435 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "36d90540eed6fe78b5fc6625e208bb4a",
+  "name": "EX-12 Linha de freio",
+  "props": {
+    "pn": "FK-EX-12",
+    "description": "Linha de freio",
+    "material": "Aço 1045",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      150,
+      154,
+      160
+    ],
+    "finish": "MetalPolido",
+    "texture": null
+  },
+  "next_id": 24,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 4,
+      "name": "L0",
+      "kind": {
+        "PointCoords": {
+          "x": "600*mestre_EE/1040",
+          "y": "-120",
+          "z": "60",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 6,
+      "name": "L1",
+      "kind": {
+        "PointCoords": {
+          "x": "420*mestre_EE/1040",
+          "y": "-300",
+          "z": "60",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 7,
+      "name": "L2",
+      "kind": {
+        "PointCoords": {
+          "x": "260*mestre_EE/1040",
+          "y": "-330",
+          "z": "90",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 8,
+      "name": "L3",
+      "kind": {
+        "PointCoords": {
+          "x": "120*mestre_EE/1040",
+          "y": "-280",
+          "z": "120",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 9,
+      "name": "L4",
+      "kind": {
+        "PointCoords": {
+          "x": "60*mestre_EE/1040",
+          "y": "-160",
+          "z": "110",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 10,
+      "name": "Curva1",
+      "kind": {
+        "Spline": {
+          "points": [
+            {
+              "Ref": 4
+            },
+            {
+              "Ref": 6
+            },
+            {
+              "Ref": 7
+            },
+            {
+              "Ref": 8
+            },
+            {
+              "Ref": 9
+            }
+          ],
+          "closed": false,
+          "tangents": []
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 11,
+      "name": "Superficie1",
+      "kind": {
+        "SurfSweep": {
+          "profile": {
+            "Circle": "2.5"
+          },
+          "spine": {
+            "Ref": 10
+          },
+          "mode": "Corrigido"
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_EE",
+      "expr": "1040",
+      "unit": "Comprimento",
+      "comment": "link: mestre.EE",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 5,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_EE",
+      "source": "mestre",
+      "publication": "EE",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 1040.0
+      },
+      "target": 3,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 13,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 14,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 21,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 80.0,
+        "ortho": false
+      },
+      "shown": [
+        13,
+        14
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 22,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 80.0,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 23,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 80.0,
+        "ortho": false
+      },
+      "shown": [
+        13,
+        14
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 12,
+      "name": "Engrossar1",
+      "kind": {
+        "ThickSurface": {
+          "surface": {
+            "Ref": 11
+          },
+          "t1": "1",
+          "t2": "0",
+          "op": "Add"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 1
+}

@@ -1,0 +1,275 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.34",
+  "uid": "5e96ec522c11530436859b618e800812",
+  "name": "CV-CHAPA4 Canal convertido em chapa",
+  "props": {
+    "pn": "FK-CV-CHAPA4",
+    "description": "Canal convertido em chapa",
+    "material": "Aço 1020",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": null,
+  "next_id": 21,
+  "origin_visible": true,
+  "references": [],
+  "params": [],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": {
+    "thickness": "4",
+    "radius": "0.5",
+    "k": "0.44",
+    "flat": false,
+    "material": "",
+    "method": 0,
+    "allowance": "",
+    "style": "",
+    "overrides": [],
+    "relief": "",
+    "relief_kind": 0,
+    "corner": ""
+  },
+  "sheet_styles": [],
+  "pmi": [],
+  "pmi_captures": [],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 18,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Origin": "XY"
+          },
+          "points": [
+            {
+              "id": 2,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 3,
+              "x": 60.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 4,
+              "x": 60.0,
+              "y": 40.0,
+              "fixed": false
+            },
+            {
+              "id": 5,
+              "x": 56.0,
+              "y": 40.0,
+              "fixed": false
+            },
+            {
+              "id": 6,
+              "x": 56.0,
+              "y": 4.0,
+              "fixed": false
+            },
+            {
+              "id": 7,
+              "x": 4.0,
+              "y": 4.0,
+              "fixed": false
+            },
+            {
+              "id": 8,
+              "x": 4.0,
+              "y": 40.0,
+              "fixed": false
+            },
+            {
+              "id": 9,
+              "x": 0.0,
+              "y": 40.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 10,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 2,
+                  "b": 3
+                }
+              }
+            },
+            {
+              "id": 11,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 3,
+                  "b": 4
+                }
+              }
+            },
+            {
+              "id": 12,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 4,
+                  "b": 5
+                }
+              }
+            },
+            {
+              "id": 13,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 5,
+                  "b": 6
+                }
+              }
+            },
+            {
+              "id": 14,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 6,
+                  "b": 7
+                }
+              }
+            },
+            {
+              "id": 15,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 7,
+                  "b": 8
+                }
+              }
+            },
+            {
+              "id": 16,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 8,
+                  "b": 9
+                }
+              }
+            },
+            {
+              "id": 17,
+              "construction": false,
+              "geom": {
+                "Line": {
+                  "a": 9,
+                  "b": 2
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 19,
+      "name": "Extrusão1",
+      "kind": {
+        "Extrude": {
+          "sketch": 18,
+          "op": "Add",
+          "extent": {
+            "Blind": "150"
+          },
+          "reverse": false,
+          "taper": "0",
+          "thin": null,
+          "thin_side": 0,
+          "dir": null,
+          "ends": {
+            "start": "",
+            "offset": "",
+            "extent2": null,
+            "offset2": ""
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 20,
+      "name": "ConverterEmChapa1",
+      "kind": {
+        "SmConvert": {
+          "face": [
+            30.0,
+            0.0,
+            75.0
+          ],
+          "thickness": "4"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 3
+}

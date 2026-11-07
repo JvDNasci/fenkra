@@ -1,0 +1,508 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "6cd528a7672a6e068132bc6f2c92bec1",
+  "name": "FX-03 Parafuso M6",
+  "props": {
+    "pn": "FK-FX-03",
+    "description": "Parafuso M6",
+    "material": "Aço 1045",
+    "part_type": "Hardware",
+    "custom": [
+      [
+        "Norma",
+        "ISO 4762 (DIN 912):2004"
+      ],
+      [
+        "Classe",
+        "8.8"
+      ],
+      [
+        "Biblioteca: geração",
+        "2"
+      ],
+      [
+        "Biblioteca: família",
+        "iso4762@1"
+      ]
+    ],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      150,
+      154,
+      160
+    ],
+    "finish": "MetalPolido",
+    "texture": null
+  },
+  "next_id": 30,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 11,
+      "name": "Plano_corpo",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "-L"
+        }
+      },
+      "visible": false,
+      "folder": 12,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 14,
+      "name": "Plano_sextavado",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "k-prof"
+        }
+      },
+      "visible": false,
+      "folder": 12,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 16,
+      "name": "Eixo",
+      "kind": {
+        "LineDir": {
+          "point": "Origin",
+          "dir": {
+            "Origin": "Z"
+          },
+          "start": "-L",
+          "end": "k"
+        }
+      },
+      "visible": false,
+      "folder": 12,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 17,
+      "name": "Plano_apoio",
+      "kind": {
+        "OffsetPlane": {
+          "base": {
+            "Origin": "XY"
+          },
+          "offset": "0"
+        }
+      },
+      "visible": false,
+      "folder": 12,
+      "published": true,
+      "appearance": null
+    },
+    {
+      "id": 18,
+      "name": "Ponta",
+      "kind": {
+        "PointCoords": {
+          "x": "0",
+          "y": "0",
+          "z": "-L",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 12,
+      "published": true,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 2,
+      "name": "d",
+      "expr": "6",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 3,
+      "name": "L",
+      "expr": "30",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 4,
+      "name": "P",
+      "expr": "1",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 5,
+      "name": "dk",
+      "expr": "10",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 6,
+      "name": "k",
+      "expr": "6",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 7,
+      "name": "s",
+      "expr": "5",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 8,
+      "name": "b",
+      "expr": "24",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    },
+    {
+      "id": 9,
+      "name": "prof",
+      "expr": "k/2",
+      "unit": "Comprimento",
+      "comment": "",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 12,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 19,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 20,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 27,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          0.0,
+          0.0,
+          -12.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 80.0,
+        "ortho": false
+      },
+      "shown": [
+        19,
+        20
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 28,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          0.0,
+          0.0,
+          -12.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 80.0,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 29,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          0.0,
+          0.0,
+          -12.0
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 80.0,
+        "ortho": false
+      },
+      "shown": [
+        19,
+        20
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 10,
+      "name": "Cabeca",
+      "kind": {
+        "Primitive": {
+          "kind": "Cilindro",
+          "plane": {
+            "Origin": "XY"
+          },
+          "a": "dk/2",
+          "b": "k",
+          "c": "0",
+          "d": "0",
+          "op": "Add"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 13,
+      "name": "Corpo",
+      "kind": {
+        "Primitive": {
+          "kind": "Cilindro",
+          "plane": {
+            "Datum": 11
+          },
+          "a": "d/2",
+          "b": "L",
+          "c": "0",
+          "d": "0",
+          "op": "Add"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 15,
+      "name": "Sextavado_interno",
+      "kind": {
+        "Primitive": {
+          "kind": "Prisma",
+          "plane": {
+            "Datum": 14
+          },
+          "a": "6",
+          "b": "s/(2*cos(30))",
+          "c": "prof+1",
+          "d": "0",
+          "op": "Cut"
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 3
+}

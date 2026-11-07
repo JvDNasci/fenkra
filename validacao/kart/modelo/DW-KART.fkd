@@ -1,0 +1,382 @@
+{
+  "format_version": 1,
+  "uid": "0a64e2385ba94a5bf776ea4e74cfd43f",
+  "name": "Kart, conjunto",
+  "next_id": 7,
+  "sheets": [
+    {
+      "id": 1,
+      "name": "Folha 1",
+      "format": "A1",
+      "portrait": false,
+      "zones": true
+    }
+  ],
+  "views": [
+    {
+      "id": 2,
+      "sheet": 1,
+      "name": "Frente",
+      "source": {
+        "path": "KART-PLANO.fka",
+        "display_state": "",
+        "hidden": []
+      },
+      "kind": {
+        "Standard": "Frente"
+      },
+      "pos": [
+        190.0,
+        420.0
+      ],
+      "scale": 0.1,
+      "hidden_lines": false,
+      "tangent_edges": true,
+      "label": true,
+      "render": "Arestas",
+      "color": null,
+      "line_width": 0.0,
+      "ann": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "hatch": {
+        "pattern": null,
+        "angle": null,
+        "step": null,
+        "alternate": true
+      },
+      "corte": {
+        "pontos": [],
+        "profundidade": null,
+        "fatia": false,
+        "sem_corte": [],
+        "borda": "Lisa"
+      },
+      "detalhe": {
+        "contorno": []
+      }
+    },
+    {
+      "id": 3,
+      "sheet": 1,
+      "name": "Superior",
+      "source": {
+        "path": "KART-PLANO.fka",
+        "display_state": "",
+        "hidden": []
+      },
+      "kind": {
+        "Projected": {
+          "parent": 2,
+          "dir": "Topo"
+        }
+      },
+      "pos": [
+        190.0,
+        280.0
+      ],
+      "scale": 0.1,
+      "hidden_lines": false,
+      "tangent_edges": true,
+      "label": true,
+      "render": "Arestas",
+      "color": null,
+      "line_width": 0.0,
+      "ann": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "hatch": {
+        "pattern": null,
+        "angle": null,
+        "step": null,
+        "alternate": true
+      },
+      "corte": {
+        "pontos": [],
+        "profundidade": null,
+        "fatia": false,
+        "sem_corte": [],
+        "borda": "Lisa"
+      },
+      "detalhe": {
+        "contorno": []
+      }
+    },
+    {
+      "id": 4,
+      "sheet": 1,
+      "name": "Lateral esquerda",
+      "source": {
+        "path": "KART-PLANO.fka",
+        "display_state": "",
+        "hidden": []
+      },
+      "kind": {
+        "Projected": {
+          "parent": 2,
+          "dir": "Esquerda"
+        }
+      },
+      "pos": [
+        330.0,
+        420.0
+      ],
+      "scale": 0.1,
+      "hidden_lines": false,
+      "tangent_edges": true,
+      "label": true,
+      "render": "Arestas",
+      "color": null,
+      "line_width": 0.0,
+      "ann": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "hatch": {
+        "pattern": null,
+        "angle": null,
+        "step": null,
+        "alternate": true
+      },
+      "corte": {
+        "pontos": [],
+        "profundidade": null,
+        "fatia": false,
+        "sem_corte": [],
+        "borda": "Lisa"
+      },
+      "detalhe": {
+        "contorno": []
+      }
+    },
+    {
+      "id": 5,
+      "sheet": 1,
+      "name": "Isométrica",
+      "source": {
+        "path": "KART-PLANO.fka",
+        "display_state": "",
+        "hidden": []
+      },
+      "kind": {
+        "Standard": "Iso"
+      },
+      "pos": [
+        470.0,
+        420.0
+      ],
+      "scale": 0.1,
+      "hidden_lines": false,
+      "tangent_edges": true,
+      "label": true,
+      "render": "Arestas",
+      "color": null,
+      "line_width": 0.0,
+      "ann": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "hatch": {
+        "pattern": null,
+        "angle": null,
+        "step": null,
+        "alternate": true
+      },
+      "corte": {
+        "pontos": [],
+        "profundidade": null,
+        "fatia": false,
+        "sem_corte": [],
+        "borda": "Lisa"
+      },
+      "detalhe": {
+        "contorno": []
+      }
+    }
+  ],
+  "dims": [],
+  "notes": [],
+  "tables": [
+    {
+      "id": 6,
+      "sheet": 1,
+      "kind": "Bom",
+      "source": {
+        "path": "KART.fka",
+        "display_state": "",
+        "hidden": []
+      },
+      "pos": [
+        560.0,
+        570.0
+      ],
+      "level": "Estruturada",
+      "cfg": {
+        "colunas": [],
+        "ordenar": null,
+        "dividir": 0,
+        "em_folhas": false,
+        "renumerar": false,
+        "vista_origem": null,
+        "etiquetas": false
+      }
+    }
+  ],
+  "centers": [],
+  "centros_ocultos": [],
+  "title": {
+    "company": "Fenkra",
+    "title": "{descricao}",
+    "pn": "{codigo}",
+    "material": "{material}",
+    "drawn_by": "{autor}",
+    "date": "{data}",
+    "revision": "A",
+    "notes": "",
+    "style": "Iso7200",
+    "checked_by": "",
+    "approved_by": "",
+    "density": 7.85
+  },
+  "text_height": 3.5,
+  "decimals": 1,
+  "projection": "Primeiro"
+}

@@ -1,0 +1,117 @@
+{
+  "format_version": 1,
+  "uid": "b2a931194b943f256dff2cdea6947ea2",
+  "name": "CH-09",
+  "next_id": 3,
+  "sheets": [
+    {
+      "id": 1,
+      "name": "Folha 1",
+      "format": "A4",
+      "portrait": false,
+      "zones": true
+    }
+  ],
+  "views": [
+    {
+      "id": 2,
+      "sheet": 1,
+      "name": "Frente",
+      "source": {
+        "path": "CH-09.fkp",
+        "display_state": "",
+        "hidden": []
+      },
+      "kind": {
+        "Standard": "Frente"
+      },
+      "pos": [
+        100.0,
+        150.0
+      ],
+      "scale": 1.0,
+      "hidden_lines": false,
+      "tangent_edges": true,
+      "label": true,
+      "render": "Arestas",
+      "color": null,
+      "line_width": 0.0,
+      "ann": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "hatch": {
+        "pattern": null,
+        "angle": null,
+        "step": null,
+        "alternate": true
+      },
+      "corte": {
+        "pontos": [],
+        "profundidade": null,
+        "fatia": false,
+        "sem_corte": [],
+        "borda": "Lisa"
+      },
+      "detalhe": {
+        "contorno": []
+      }
+    }
+  ],
+  "dims": [],
+  "notes": [],
+  "tables": [],
+  "centers": [],
+  "centros_ocultos": [],
+  "title": {
+    "company": "Fenkra",
+    "title": "{descricao}",
+    "pn": "{codigo}",
+    "material": "{material}",
+    "drawn_by": "{autor}",
+    "date": "{data}",
+    "revision": "A",
+    "notes": "",
+    "style": "Iso7200",
+    "checked_by": "",
+    "approved_by": "",
+    "density": 7.85
+  },
+  "text_height": 3.5,
+  "decimals": 1,
+  "projection": "Primeiro"
+}

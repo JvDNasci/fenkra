@@ -1,0 +1,504 @@
+{
+  "format_version": 2,
+  "app_version": "0.1.0-alpha.35",
+  "uid": "f681171a58f7c7031102d1cd9d860261",
+  "name": "EX-12B Linha de freio, segunda tentativa",
+  "props": {
+    "pn": "FK-EX-12B",
+    "description": "Linha de freio, segunda tentativa",
+    "material": "Aço 1045",
+    "part_type": "Fabricada",
+    "custom": [],
+    "stock_length": ""
+  },
+  "appearance": {
+    "color": [
+      150,
+      154,
+      160
+    ],
+    "finish": "MetalPolido",
+    "texture": null
+  },
+  "next_id": 29,
+  "origin_visible": false,
+  "references": [
+    {
+      "id": 4,
+      "name": "L0",
+      "kind": {
+        "PointCoords": {
+          "x": "600*mestre_EE/1040",
+          "y": "-120",
+          "z": "60",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 6,
+      "name": "L1",
+      "kind": {
+        "PointCoords": {
+          "x": "420*mestre_EE/1040",
+          "y": "-300",
+          "z": "60",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 7,
+      "name": "L2",
+      "kind": {
+        "PointCoords": {
+          "x": "260*mestre_EE/1040",
+          "y": "-330",
+          "z": "90",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 8,
+      "name": "L3",
+      "kind": {
+        "PointCoords": {
+          "x": "120*mestre_EE/1040",
+          "y": "-280",
+          "z": "120",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 9,
+      "name": "L4",
+      "kind": {
+        "PointCoords": {
+          "x": "60*mestre_EE/1040",
+          "y": "-160",
+          "z": "110",
+          "frame": null
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 10,
+      "name": "Curva1",
+      "kind": {
+        "Spline": {
+          "points": [
+            {
+              "Ref": 4
+            },
+            {
+              "Ref": 6
+            },
+            {
+              "Ref": 7
+            },
+            {
+              "Ref": 8
+            },
+            {
+              "Ref": 9
+            }
+          ],
+          "closed": false,
+          "tangents": []
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    },
+    {
+      "id": 11,
+      "name": "Plano1",
+      "kind": {
+        "PlaneNormalCurve": {
+          "curve": {
+            "Ref": 10
+          },
+          "at": {
+            "Ratio": "0"
+          },
+          "reverse": false,
+          "point": null,
+          "project": false
+        }
+      },
+      "visible": false,
+      "folder": 5,
+      "published": false,
+      "appearance": null
+    }
+  ],
+  "params": [
+    {
+      "id": 3,
+      "name": "mestre_EE",
+      "expr": "1040",
+      "unit": "Comprimento",
+      "comment": "link: mestre.EE",
+      "published": false,
+      "tipo": "Numero",
+      "exibir": "Mm"
+    }
+  ],
+  "collectors": [
+    {
+      "id": 1,
+      "name": "Corpo principal",
+      "color": [
+        178,
+        180,
+        226
+      ],
+      "visible": true,
+      "finish": "Acetinado",
+      "texture": null,
+      "marker": null,
+      "published": false,
+      "material": ""
+    }
+  ],
+  "active_collector": 1,
+  "folders": [
+    {
+      "id": 5,
+      "name": "Geometria",
+      "kind": "Geometria",
+      "parent": null
+    }
+  ],
+  "external": [
+    {
+      "id": 2,
+      "name": "mestre_EE",
+      "source": "mestre",
+      "publication": "EE",
+      "state": "Ativo",
+      "path": "MESTRE.fkp",
+      "uid": "",
+      "snapshot": {
+        "Value": 1040.0
+      },
+      "target": 3,
+      "xform": null
+    }
+  ],
+  "apelidos_publicacao": [],
+  "views": [],
+  "textures": [],
+  "sheet": null,
+  "sheet_styles": [],
+  "pmi": [
+    {
+      "id": 18,
+      "name": "Legenda",
+      "kind": {
+        "TitleBlock": {
+          "template": "{codigo} {descricao} {material} {massa}"
+        }
+      },
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    },
+    {
+      "id": 19,
+      "name": "Nota",
+      "kind": "Note",
+      "anchors": [
+        [
+          0.0,
+          0.0,
+          0.0
+        ]
+      ],
+      "offset": [
+        20.0,
+        20.0,
+        20.0
+      ],
+      "text": "Tolerância geral ISO 2768-m",
+      "tol_plus": "",
+      "tol_minus": "",
+      "visible": true,
+      "plane": null,
+      "style": {
+        "size": 0.0,
+        "color": null,
+        "frame": "Padrao",
+        "prefix": "",
+        "suffix": "",
+        "font": "",
+        "text_color": null,
+        "line_width": 0.0,
+        "arrow": "Padrao",
+        "bg": "Padrao",
+        "frame_width": 0.0,
+        "frame_dash": 0,
+        "frame_color": null,
+        "frame_fixed": 0.0,
+        "bold": false,
+        "justify": 0,
+        "anchor": 4,
+        "line_spacing": 0.0,
+        "angle": 0.0,
+        "mirror": false,
+        "nudge": [
+          0.0,
+          0.0
+        ],
+        "apply_scale": false,
+        "hide_leader": false,
+        "leader_width": 0.0,
+        "leader_dash": 0,
+        "leader_color": null,
+        "leader_via": [],
+        "leader_side": [],
+        "leader_arrow": [],
+        "ext_over": 0.0,
+        "text_along": 0.0,
+        "decimals": null,
+        "arc_r": 0.0
+      },
+      "folder": "",
+      "targets": []
+    }
+  ],
+  "pmi_captures": [
+    {
+      "id": 26,
+      "name": "Todas as anotações",
+      "view": {
+        "name": "Todas as anotações",
+        "target": [
+          329.78077507019043,
+          -225.87197494506836,
+          88.73387145996094
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 942.4753020469507,
+        "ortho": false
+      },
+      "shown": [
+        18,
+        19
+      ],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 27,
+      "name": "Sem anotações",
+      "view": {
+        "name": "Sem anotações",
+        "target": [
+          329.78077507019043,
+          -225.87197494506836,
+          88.73387145996094
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 942.4753020469507,
+        "ortho": false
+      },
+      "shown": [],
+      "hidden": [],
+      "with_model": false
+    },
+    {
+      "id": 28,
+      "name": "Notas e legenda",
+      "view": {
+        "name": "Notas e legenda",
+        "target": [
+          329.78077507019043,
+          -225.87197494506836,
+          88.73387145996094
+        ],
+        "yaw": 0.6108652381980153,
+        "pitch": 0.4363323129985824,
+        "dist": 942.4753020469507,
+        "ortho": false
+      },
+      "shown": [
+        18,
+        19
+      ],
+      "hidden": [],
+      "with_model": false
+    }
+  ],
+  "line_styles": [],
+  "features": [
+    {
+      "id": 16,
+      "name": "Sketch1",
+      "kind": {
+        "Sketch": {
+          "plane": {
+            "Datum": 11
+          },
+          "points": [
+            {
+              "id": 12,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            },
+            {
+              "id": 14,
+              "x": 0.0,
+              "y": 0.0,
+              "fixed": false
+            }
+          ],
+          "curves": [
+            {
+              "id": 13,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 12,
+                  "r": 2.5
+                }
+              }
+            },
+            {
+              "id": 15,
+              "construction": false,
+              "geom": {
+                "Circle": {
+                  "c": 14,
+                  "r": 1.5
+                }
+              }
+            }
+          ],
+          "constraints": [],
+          "links": [],
+          "spline_tan": [],
+          "link_policy": "Associativo",
+          "pos": {
+            "origem": [
+              0.0,
+              0.0
+            ],
+            "trocar": false,
+            "inverter_h": false,
+            "inverter_v": false
+          }
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    },
+    {
+      "id": 17,
+      "name": "Nervura1",
+      "kind": {
+        "Sweep": {
+          "sketch": 16,
+          "spine": {
+            "Ref": 10
+          },
+          "mode": "Corrigido",
+          "op": "Add",
+          "thin": null
+        }
+      },
+      "suppressed": false,
+      "folder": null,
+      "target": 1,
+      "hidden": false,
+      "appearance": null,
+      "flat_space": false
+    }
+  ],
+  "rollback": 2
+}
