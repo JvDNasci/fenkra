@@ -11,7 +11,10 @@
 //!    existe a seção entre as formas, que devolve as linhas de contato: com a opção ligada, seção não
 //!    vazia sem volume vira um achado de volume zero;
 //! 4. o que a pessoa decidiu ignorar fica em [`RegrasInterf`], dentro da montagem. A análise sempre
-//!    acha tudo; [`separar`] só reparte a lista, e por isso ignorar não exige analisar de novo.
+//!    acha tudo; [`separar`] só reparte a lista, e por isso ignorar não exige analisar de novo;
+//! 5. prendedor por ponto ou vetor atravessa as peças de propósito: o furo será feito na hora.
+//!    [`separar_na_montagem`] tira da lista só o que cabe no corpo do parafuso. O que encosta fora dele
+//!    (a cabeça numa peça vizinha, por exemplo) segue sendo problema.
 
 use crate::load::{full_path, PartCache};
 use crate::view::{placed_shape, posicionado, shown};
@@ -299,6 +302,46 @@ pub fn separar(achados: &[Achado], r: &RegrasInterf) -> Reparticao {
             s.ativos.push(i);
         }
     }
+    s
+}
+
+/// Motivo que a lista mostra para o prendedor que atravessa de propósito.
+pub const MOTIVO_SEM_FURO: &str = "Prendedor por ponto ou vetor: o furo será feito na hora";
+
+/// Folga em volta do corpo do parafuso, em mm: a malha do comum encosta na superfície dele.
+const TOL_CORPO: f64 = 0.05;
+
+/// Corpo do parafuso de uma pilha sem furo: ponto da cabeça, sentido da ponta, comprimento e raio.
+fn corpos_sem_furo(a: &Assembly, lib: &fenkra_solidos::biblioteca::Biblioteca) -> Vec<(Id, V3, V3, f64, f64)> {
+    let mut v = vec![];
+    for p in a.pilhas.iter().filter(|p| p.manual) {
+        let Some(&parafuso) = p.pecas.first() else { continue };
+        let Some(n) = a.node(parafuso) else { continue };
+        let Some(d) = lib.familia(&p.familia).and_then(|f| f.tamanho(&p.tamanho)).and_then(|t| t.diametro_nominal()) else { continue };
+        v.push((parafuso, n.placement.origin, unit(n.placement.dir([0., 0., -1.])), p.comprimento, d / 2.));
+    }
+    v
+}
+
+/// Todo o comum cabe no corpo? Sem malha, a análise não tem como provar, e o achado fica.
+fn cabe_no_corpo(x: &Achado, cabeca: V3, u: V3, l: f64, raio: f64) -> bool {
+    let dentro = |q: V3| {
+        let d = sub(q, cabeca);
+        let k = dot(d, u);
+        let radial = norm([0, 1, 2].map(|i| d[i] - u[i] * k));
+        k >= -TOL_CORPO && k <= l + TOL_CORPO && radial <= raio + TOL_CORPO
+    };
+    !x.malha.positions.is_empty() && x.malha.positions.chunks(3).all(|c| dentro([c[0] as f64, c[1] as f64, c[2] as f64]))
+}
+
+/// Como [`separar`], sabendo da montagem: o corpo do prendedor sem furo não conta como problema.
+pub fn separar_na_montagem(a: &Assembly, achados: &[Achado], lib: &fenkra_solidos::biblioteca::Biblioteca) -> Reparticao {
+    let mut s = separar(achados, &a.interf);
+    let corpos = corpos_sem_furo(a, lib);
+    let de_proposito = |x: &Achado| corpos.iter().any(|(c, cabeca, u, l, r)| (x.a.comp == *c || x.b.comp == *c) && cabe_no_corpo(x, *cabeca, *u, *l, *r));
+    let (fica, sai): (Vec<usize>, Vec<usize>) = s.ativos.iter().copied().partition(|i| !de_proposito(&achados[*i]));
+    s.ativos = fica;
+    s.ignorados.extend(sai.into_iter().map(|i| (i, MOTIVO_SEM_FURO.to_string())));
     s
 }
 

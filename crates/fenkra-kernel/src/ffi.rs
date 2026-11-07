@@ -311,6 +311,7 @@ pub mod bridge {
             kind: u8, d2: f64, p2: f64, a3: f64, tip: f64, taper: f64,
         ) -> Result<UniquePtr<Shape>>;
         fn ray_hit(s: &Shape, px: f64, py: f64, pz: f64, dx: f64, dy: f64, dz: f64) -> Result<Vec<f64>>;
+        fn ray_hits(s: &Shape, px: f64, py: f64, pz: f64, dx: f64, dy: f64, dz: f64) -> Result<Vec<f64>>;
         fn same_face(s: &Shape, ax: f64, ay: f64, az: f64, bx: f64, by: f64, bz: f64) -> Result<bool>;
         fn full_round_t(s: &Shape, mx: f64, my: f64, mz: f64, width: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn face_face_fillet_t(

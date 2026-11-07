@@ -17,8 +17,13 @@
 //!
 //! Uma pilha **manual** nasce de um ponto clicado numa face, sem furo. O automático não toca nela: só
 //! mover o ponto ou editar a linha muda alguma coisa.
+//!
+//! Uma pilha pode pertencer a um conjunto ([`crate::conjuntos`], B375): é o conjunto que diz o parafuso
+//! e as pilhas item a item. Ponto e vetor de conjunto são pilhas manuais com `pega_auto`: a pega vem da
+//! reta que atravessa as peças, e o comprimento acompanha. O prendedor fica no 3D atravessando as peças
+//! de propósito, porque o furo será feito na hora.
 
-use crate::fixadores::{coletar_furos, colineares, inserir_pecas, medir, reconhecer, um_por_componente, Furo, Medida, OpcoesFixadores, Recusa, RelatorioFixadores, ENGAJAMENTO_PADRAO, GRUPO};
+use crate::fixadores::{coletar_furos, colineares, comprimento_da_serie, inserir_pecas, mais_proximo, medir, pilhas_pedidas, reconhecer, um_por_componente, Furo, Medida, OpcoesFixadores, Recusa, RelatorioFixadores, ENGAJAMENTO_PADRAO, GRUPO};
 use crate::load::PartCache;
 use crate::*;
 use fenkra_solidos::biblioteca::Biblioteca;
@@ -36,6 +41,22 @@ fn engajamento_padrao() -> f64 {
 fn rosca_alem_padrao() -> f64 {
     crate::fixadores::ROSCA_ALEM_PORCA_PADRAO
 }
+
+fn vao_padrao() -> f64 {
+    VAO_PADRAO
+}
+
+/// Um item de pilha: arruela ou porca de qualquer família.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct ItemPilha {
+    pub familia: String,
+    /// tamanho próprio; `None` acompanha o parafuso
+    #[serde(default)]
+    pub tamanho: Option<String>,
+}
+
+/// Vão de ar que ainda conta como a mesma pega, em mm: folga de montagem entre duas peças.
+pub const VAO_PADRAO: f64 = 1.;
 
 /// De onde a pilha sai, no sistema da peça da âncora.
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -96,6 +117,21 @@ pub struct Pilha {
     /// o que as peças de hoje representam: mudou, refaz
     #[serde(default)]
     pub assinatura: String,
+    /// conjunto que manda nesta pilha (B375)
+    #[serde(default)]
+    pub conjunto: Option<Id>,
+    /// pilhas item a item, da cabeça para a peça e da peça para a ponta. Com elas, `arruela` e `porca`
+    /// não valem
+    #[serde(default)]
+    pub superior: Option<Vec<ItemPilha>>,
+    #[serde(default)]
+    pub inferior: Option<Vec<ItemPilha>>,
+    /// ponto ou vetor: a pega sai da reta que cruza as peças, não de `pega_manual`
+    #[serde(default)]
+    pub pega_auto: bool,
+    /// maior vão de ar dentro da pega, em mm
+    #[serde(default = "vao_padrao")]
+    pub vao: f64,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -146,6 +182,8 @@ impl Pilha {
             tam_acessorios: self.tam_acessorios.clone(),
             engajamento: self.engajamento,
             rosca_alem_porca: self.rosca_alem_porca,
+            superior: self.superior.clone(),
+            inferior: self.inferior.clone(),
             ..Default::default()
         }
     }
@@ -164,7 +202,13 @@ fn assinatura(a: &Assembly, comp: Id, md: &Medida, p: &Pilha, tamanho: &str) -> 
     let pl = a.node(comp).map(|n| n.placement).unwrap_or_default();
     let (e, u) = (pl.to_local(md.entrada), unit(pl.inverse().dir(md.u)));
     let r = |x: f64| (x * 100.).round() / 100. + 0.;
-    format!("{}|{tamanho}|{}|{}|{:?}|{}|{:?}|{}|{}|{:?}|{:?}", p.familia, r(md.comprimento), md.com_porca, md.h1.map(r), p.arruela, p.tam_acessorios, p.familia_arruela, p.familia_porca, e.map(r), u.map(r))
+    let base = format!("{}|{tamanho}|{}|{}|{:?}|{}|{:?}|{}|{}|{:?}|{:?}", p.familia, r(md.comprimento), !md.inf.is_empty(), md.sup.first().map(|i| r(i.altura)), p.arruela, p.tam_acessorios, p.familia_arruela, p.familia_porca, e.map(r), u.map(r));
+    if p.superior.is_none() && p.inferior.is_none() {
+        return base;
+    }
+    let lista = |v: &[crate::fixadores::ItemMedido]| v.iter().map(|i| format!("{}:{}", i.familia, i.tamanho)).collect::<Vec<_>>().join(",");
+    let saida = pl.to_local(md.saida).map(r);
+    format!("{base}|{}|{}|{saida:?}|{}|{}", lista(&md.sup), lista(&md.inf), md.c_ent.0, md.c_sai.0)
 }
 
 /// Guarda a pilha que o preenchimento acabou de inserir.
@@ -196,6 +240,11 @@ pub(crate) fn registrar(a: &mut Assembly, furos: &[Furo], md: &Medida, tamanho: 
         rosca_alem_porca: op.rosca_alem_porca,
         pega_manual: 0.,
         assinatura: String::new(),
+        conjunto: None,
+        superior: op.superior.clone(),
+        inferior: op.inferior.clone(),
+        pega_auto: false,
+        vao: VAO_PADRAO,
     };
     p.assinatura = assinatura(a, f.comp, md, &p, tamanho);
     a.pilhas.push(p);
@@ -298,7 +347,7 @@ fn refazer(a: &mut Assembly, dir: &Path, lib: &Biblioteca, mut p: Pilha, md: &Me
     let pasta = pasta_dos_fixadores(a);
     let mut rel = RelatorioFixadores::default();
     let mut arquivos = HashMap::new();
-    let novas = inserir_pecas(a, dir, md, fam, t, desig, lib.familia(&p.familia_arruela), lib.familia(&p.familia_porca), op, pasta, &mut arquivos, &mut rel)?;
+    let novas = inserir_pecas(a, dir, lib, md, fam, t, op, pasta, &mut arquivos, &mut rel)?;
     // as restrições novas são as que tocam as peças novas, antes de qualquer troca de id
     p.restricoes = a.mates.iter().filter(|m| novas.contains(&m.a.comp) || novas.contains(&m.b.comp)).map(|m| m.id).collect();
     let tipo = |n: &Node| (n.id, n.kind.clone());
@@ -324,20 +373,111 @@ fn refazer(a: &mut Assembly, dir: &Path, lib: &Biblioteca, mut p: Pilha, md: &Me
     Ok(())
 }
 
-fn medida_manual(a: &Assembly, p: &Pilha, lib: &Biblioteca) -> Result<Medida, String> {
-    let pl = a.node(p.ancora.comp).ok_or("a peça do ponto saiu da montagem")?.placement;
-    let (e, u) = (pl.point(p.ancora.pos), unit(pl.dir(p.ancora.dir)));
-    let acess = p.tam_acessorios.as_deref().unwrap_or(&p.tamanho);
-    let h = |on: bool| on.then(|| lib.familia(&p.familia_arruela).and_then(|f| f.tamanho(acess)).and_then(|t| t.valor("h"))).flatten();
-    let altura_porca = lib.familia(&p.familia_porca).and_then(|f| f.tamanho(acess)).and_then(|t| t.valor("m")).filter(|_| p.porca);
-    let (h1, h2) = (h(p.arruela), h(p.arruela && altura_porca.is_some()));
-    let saida = [0, 1, 2].map(|i| e[i] + u[i] * p.pega_manual);
-    let mut falhas = vec![];
-    let precisa = p.pega_manual + h1.unwrap_or(0.) + h2.unwrap_or(0.) + altura_porca.unwrap_or(0.);
-    if altura_porca.is_some() && p.comprimento < precisa {
-        falhas.push(format!("L{} não alcança a porca (pega + arruelas + porca = {} mm)", crate::fixadores::num(p.comprimento), crate::fixadores::num((precisa * 10.).round() / 10.)));
+/// Onde a peça está; a origem da montagem é o próprio mundo.
+fn lugar_de(a: &Assembly, comp: Id) -> Result<Placement, String> {
+    if comp == ORIGEM {
+        return Ok(Placement::default());
     }
-    Ok(Medida { entrada: e, saida, u, c_ent: p.ancora.comp, c_sai: p.ancora.comp, roscada: false, com_porca: altura_porca.is_some(), h1, h2, w1: h1.unwrap_or(0.), comprimento: p.comprimento, falhas })
+    Ok(a.node(comp).ok_or("a peça do ponto saiu da montagem")?.placement)
+}
+
+/// Trecho de material que a reta cruza, em mm ao longo dela.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct Trecho {
+    pub comp: Id,
+    pub ini: f64,
+    pub fim: f64,
+}
+
+/// Junta os parâmetros de corte de uma forma em trechos: entrada e saída se alternam. Dois cortes
+/// quase iguais são o mesmo ponto (a reta passou numa aresta); um corte sem par fica de fora.
+fn trechos_da_forma(comp: Id, cortes: &[f64]) -> Vec<Trecho> {
+    let mut t: Vec<f64> = vec![];
+    for c in cortes {
+        if t.last().is_none_or(|u| c - u > 1e-6) {
+            t.push(*c);
+        }
+    }
+    t.chunks(2).filter(|p| p.len() == 2).map(|p| Trecho { comp, ini: p[0], fim: p[1] }).collect()
+}
+
+/// Material que a reta (`p`, `u`, no mundo) cruza, em ordem. Fixadores não contam: a pega é das peças.
+pub fn trechos_na_reta(a: &Assembly, dir: &Path, cache: &mut PartCache, p: V3, u: V3) -> Vec<Trecho> {
+    let hardware: Vec<Id> = a.pilhas.iter().flat_map(|q| q.pecas.iter().copied()).collect();
+    let mut v = vec![];
+    for n in a.nodes.iter().filter(|n| crate::view::shown(a, n.id) && !hardware.contains(&n.id)) {
+        let NodeKind::Part { path } = &n.kind else { continue };
+        let Ok(lp) = cache.get(&crate::load::full_path(Some(dir), path), true) else { continue };
+        if lp.doc.props.part_type == fenkra_core::PartType::Hardware {
+            continue;
+        }
+        let Some(forma) = lp.shape.as_ref() else { continue };
+        let (q, d) = (n.placement.to_local(p), unit(n.placement.dir_to_local(u)));
+        if let Ok(c) = forma.ray_hits(q, d) {
+            v.extend(trechos_da_forma(n.id, &c));
+        }
+    }
+    v.sort_by(|x, y| x.ini.total_cmp(&y.ini));
+    v
+}
+
+/// O bloco de material que a pilha prende: trechos seguidos com vão de no máximo `vao`. Vale o bloco
+/// que contém o ponto; senão o primeiro à frente dele, e só por último o que ficou para trás.
+pub fn bloco_da_pega(trechos: &[Trecho], vao: f64) -> Option<(Trecho, Trecho)> {
+    let mut blocos: Vec<(Trecho, Trecho)> = vec![];
+    for t in trechos {
+        match blocos.last_mut() {
+            Some(b) if t.ini - b.1.fim <= vao => {
+                if t.fim >= b.1.fim {
+                    b.1 = *t;
+                }
+            }
+            _ => blocos.push((*t, *t)),
+        }
+    }
+    let tol = 1e-6;
+    let contem = blocos.iter().find(|b| b.0.ini <= tol && b.1.fim >= -tol);
+    contem.or_else(|| blocos.iter().find(|b| b.0.ini > 0.)).or(blocos.last()).copied()
+}
+
+/// Medida de um ponto ou vetor. Com `cache` e `pega_auto` a pega vem da reta; sem eles, de
+/// `pega_manual`, contada do próprio ponto.
+fn medida_manual(a: &Assembly, p: &Pilha, lib: &Biblioteca, dir: &Path, cache: Option<&mut PartCache>, avisos: &mut Vec<String>) -> Result<Medida, String> {
+    let pl = lugar_de(a, p.ancora.comp)?;
+    let (ponto, u) = (pl.point(p.ancora.pos), unit(pl.dir(p.ancora.dir)));
+    let acess = p.tam_acessorios.as_deref().unwrap_or(&p.tamanho);
+    let (sup, inf) = pilhas_pedidas(lib, &p.opcoes(vec![]), acess, false, &p.nome, avisos);
+    let ao_longo = |k: f64| [0, 1, 2].map(|i| ponto[i] + u[i] * k);
+    let (mut entrada, mut saida, mut pega) = (ponto, ao_longo(p.pega_manual), p.pega_manual);
+    let (mut c_ent, mut c_sai) = (p.ancora.comp, p.ancora.comp);
+    if let (true, Some(cache)) = (p.pega_auto, cache) {
+        match bloco_da_pega(&trechos_na_reta(a, dir, cache, ponto, u), p.vao) {
+            Some((i, f)) => {
+                (entrada, saida, pega) = (ao_longo(i.ini), ao_longo(f.fim), f.fim - i.ini);
+                (c_ent, c_sai) = (i.comp, f.comp);
+            }
+            None => avisos.push("a reta não cruza nenhuma peça: a pega fica zero".to_string()),
+        }
+    }
+    let w1: f64 = sup.iter().map(|i| i.altura).sum();
+    let w2: f64 = inf.iter().map(|i| i.altura).sum();
+    let mut falhas = vec![];
+    let fam = lib.familia(&p.familia).ok_or("família desconhecida")?;
+    let t = fam.tamanho(&p.tamanho).ok_or_else(|| format!("{} não tem o tamanho {}", fam.norma, p.tamanho))?;
+    let serie = fam.comprimentos_de(t);
+    let precisa = pega + w1 + w2;
+    let comprimento = if p.atualizar_comprimento {
+        let folga = p.rosca_alem_porca.max(0.) * t.valor("P").unwrap_or(0.);
+        comprimento_da_serie(&serie, precisa + folga, &p.nome, &fam.norma, &p.tamanho, &mut falhas).unwrap_or(p.comprimento)
+    } else if p.conjunto.is_some() {
+        mais_proximo(&serie, p.comprimento).unwrap_or(p.comprimento)
+    } else {
+        p.comprimento
+    };
+    if !inf.is_empty() && comprimento < precisa {
+        falhas.push(format!("L{} não alcança a porca (pega + arruelas + porca = {} mm)", crate::fixadores::num(comprimento), crate::fixadores::num((precisa * 10.).round() / 10.)));
+    }
+    Ok(Medida { entrada, saida, u, c_ent, c_sai, roscada: false, sup, inf, w1, comprimento, falhas })
 }
 
 /// Cria uma pilha num ponto clicado, fora dos furos. `pos` e `dir_local` no sistema da peça, com
@@ -369,10 +509,15 @@ pub fn adicionar_manual(a: &mut Assembly, dir: &Path, lib: &Biblioteca, comp: Id
         rosca_alem_porca: op.rosca_alem_porca,
         pega_manual: pega,
         assinatura: String::new(),
+        conjunto: None,
+        superior: None,
+        inferior: None,
+        pega_auto: false,
+        vao: VAO_PADRAO,
     };
     p.nome = p.rotulo();
     a.pilhas.push(p.clone());
-    let md = medida_manual(a, &p, lib)?;
+    let md = medida_manual(a, &p, lib, dir, None, &mut vec![])?;
     let o = p.opcoes(vec![]);
     refazer(a, dir, lib, p, &md, tamanho, &o)?;
     Ok(id)
@@ -383,16 +528,56 @@ pub fn mover_ponto(a: &mut Assembly, dir: &Path, lib: &Biblioteca, id: Id, pos: 
     let Some(p) = a.pilhas.iter_mut().find(|p| p.id == id && p.manual) else { return Err("só o ponto manual se move à mão".into()) };
     p.ancora.pos = pos;
     let p = p.clone();
-    let md = medida_manual(a, &p, lib)?;
+    let md = medida_manual(a, &p, lib, dir, None, &mut vec![])?;
     let o = p.opcoes(vec![]);
     let t = p.tamanho.clone();
     refazer(a, dir, lib, p, &md, &t, &o)
 }
 
-/// Recalcula uma pilha manual depois de editar a linha dela. O recálculo geral não passa por aqui.
-fn refazer_manual(a: &mut Assembly, dir: &Path, lib: &Biblioteca, p: Pilha, r: &mut Recalculo) {
+/// Põe na montagem a pilha de um ponto ou vetor de conjunto. A pilha já vem preenchida, sem peças.
+pub(crate) fn criar_livre(a: &mut Assembly, dir: &Path, cache: &mut PartCache, lib: &Biblioteca, p: Pilha) -> Result<Id, String> {
     let (id, t) = (p.id, p.tamanho.clone());
-    let md = match medida_manual(a, &p, lib) {
+    a.pilhas.push(p.clone());
+    let feito = medida_manual(a, &p, lib, dir, Some(cache), &mut vec![]).and_then(|md| {
+        let o = p.opcoes(vec![]);
+        refazer(a, dir, lib, p, &md, &t, &o)
+    });
+    if feito.is_err() {
+        a.pilhas.retain(|x| x.id != id);
+    }
+    feito.map(|()| id)
+}
+
+/// Põe na montagem a pilha do furo (`comp`, `feature`, `indice`), como o preenchimento faria. Devolve o
+/// id dela. `op` traz o parafuso e as pilhas do conjunto.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn criar_no_furo(a: &mut Assembly, dir: &Path, cache: &mut PartCache, lib: &Biblioteca, op: &OpcoesFixadores, tamanho: &str, comp: Id, feature: Id, indice: usize) -> Result<Id, String> {
+    let fam = lib.familia(&op.familia_parafuso).ok_or_else(|| format!("família desconhecida: {}", op.familia_parafuso))?;
+    let t = fam.tamanho(tamanho).ok_or_else(|| format!("{} não tem o tamanho {tamanho}", fam.norma))?;
+    let hardware: Vec<Id> = a.pilhas.iter().flat_map(|p| p.pecas.iter().copied()).collect();
+    let comps: Vec<Id> = a.nodes.iter().filter(|n| matches!(n.kind, NodeKind::Part { .. }) && !hardware.contains(&n.id)).map(|n| n.id).collect();
+    let mut rel = RelatorioFixadores::default();
+    let furos = coletar_furos(a, dir, cache, &OpcoesFixadores { componentes: comps, ..op.clone() }, fam, &mut rel);
+    let f = furos.iter().find(|f| f.comp == comp && f.feature == feature && f.indice == indice).ok_or("o furo não existe mais")?;
+    let mut grupo: Vec<Furo> = furos.iter().filter(|x| colineares(f.boca, f.dir, x.boca, x.dir)).cloned().collect();
+    um_por_componente(a, &mut grupo);
+    let md = match medir(&grupo, lib, fam, t, tamanho, op, &mut rel.avisos) {
+        Ok(m) => m,
+        Err(Recusa::Mostrar(m)) => return Err(m),
+        Err(Recusa::Calar) => return Err(format!("{} sem série de comprimentos", fam.norma)),
+    };
+    let pasta = pasta_dos_fixadores(a);
+    let pecas = inserir_pecas(a, dir, lib, &md, fam, t, op, pasta, &mut HashMap::new(), &mut rel)?;
+    let rotulo = format!("{tamanho}x{}", crate::fixadores::num(md.comprimento));
+    registrar(a, &grupo, &md, tamanho, op, pecas, &rotulo);
+    a.pilhas.last().map(|p| p.id).ok_or_else(|| "pilha não registrada".to_string())
+}
+
+/// Recalcula uma pilha manual depois de editar a linha dela. O recálculo geral não passa por aqui.
+fn refazer_manual(a: &mut Assembly, dir: &Path, cache: &mut PartCache, lib: &Biblioteca, p: Pilha, r: &mut Recalculo) {
+    let (id, t) = (p.id, p.tamanho.clone());
+    let mut avisos = vec![];
+    let md = match medida_manual(a, &p, lib, dir, Some(cache), &mut avisos) {
         Ok(m) => m,
         Err(e) => return r.dizer(id, Nivel::Erro, e),
     };
@@ -403,9 +588,10 @@ fn refazer_manual(a: &mut Assembly, dir: &Path, lib: &Biblioteca, p: Pilha, r: &
             Err(e) => return r.dizer(id, Nivel::Erro, e),
         }
     }
-    match md.falhas.first() {
-        Some(f) => r.dizer(id, Nivel::Erro, f.clone()),
-        None => r.dizer(id, Nivel::Ok, String::new()),
+    match (md.falhas.first(), avisos.first()) {
+        (Some(f), _) => r.dizer(id, Nivel::Erro, f.clone()),
+        (None, Some(m)) => r.dizer(id, Nivel::Aviso, m.clone()),
+        (None, None) => r.dizer(id, Nivel::Ok, String::new()),
     }
 }
 
@@ -414,7 +600,7 @@ pub fn recalcular(a: &mut Assembly, dir: &Path, cache: &mut PartCache, lib: &Bib
     let mut r = Recalculo::default();
     // peça apagada na árvore: a pilha sai junto, e o resto das peças dela também
     for p in a.pilhas.clone() {
-        if p.pecas.iter().any(|c| a.node(*c).is_none()) || a.node(p.ancora.comp).is_none() {
+        if p.pecas.iter().any(|c| a.node(*c).is_none()) || (a.node(p.ancora.comp).is_none() && p.ancora.comp != ORIGEM) {
             apagar(a, p.id);
             r.removidas += 1;
         }
@@ -425,7 +611,7 @@ pub fn recalcular(a: &mut Assembly, dir: &Path, cache: &mut PartCache, lib: &Bib
     let mut lidos: HashMap<(String, u8), Vec<Furo>> = HashMap::new();
     for p in a.pilhas.clone() {
         if p.manual {
-            refazer_manual(a, dir, lib, p, &mut r);
+            refazer_manual(a, dir, cache, lib, p, &mut r);
             continue;
         }
         let id = p.id;
@@ -465,7 +651,7 @@ pub fn recalcular(a: &mut Assembly, dir: &Path, cache: &mut PartCache, lib: &Bib
         }
         let op = p.opcoes(comps.clone());
         let mut avisos = vec![];
-        let md = match medir(&grupo, fam, t, &desig, lib.familia(&p.familia_arruela), lib.familia(&p.familia_porca), &op, &mut avisos) {
+        let md = match medir(&grupo, lib, fam, t, &desig, &op, &mut avisos) {
             Ok(m) => m,
             Err(Recusa::Mostrar(m)) => {
                 r.dizer(id, Nivel::Erro, m);
@@ -504,6 +690,7 @@ pub fn recalcular(a: &mut Assembly, dir: &Path, cache: &mut PartCache, lib: &Bib
             r.dizer(id, Nivel::Ok, String::new());
         }
     }
+    crate::conjuntos::soltar_alvos_sem_pilha(a);
     r
 }
 

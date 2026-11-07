@@ -522,6 +522,8 @@ pub struct Settings {
     pub tree_hidden: Vec<String>,
     /// seleção em caixa: 0 com Ctrl + arrastar, 1 janela, 2 cruzada, 3 pela direção (arrastar sem Ctrl)
     pub box_mode: u8,
+    /// regras de diâmetro por cor que toda montagem nova recebe; vazio usa as de fábrica
+    pub regras_cor: Vec<fenkra_montagem::conjuntos::RegraCor>,
     /// roda do mouse nos campos numéricos: 0 só depois de clicar, 1 só com Ctrl, 2 sempre (B227)
     pub wheel_mode: u8,
     /// cores salvas pelo usuário (nome, cor)
@@ -652,6 +654,7 @@ impl Default for Settings {
             hole_mark: 0,
             tree_hidden: vec![],
             box_mode: 0,
+            regras_cor: vec![],
             wheel_mode: 0,
             user_colors: vec![],
             menu_theme: 4,

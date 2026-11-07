@@ -142,7 +142,7 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
     let Some(mut est) = st.interf.take() else { return };
     let cfg = Painel { nome: PAINEL.into(), titulo: tr("Interferências").to_string(), padrao: paineis::abaixo_do_cubo(area, 340.), largura: 340., redimensiona: true };
     let posicao = app.settings.painel(PAINEL, Encaixe::Direita);
-    let rep = interferencia::separar(&est.achados, &st.asm.interf);
+    let rep = interferencia::separar_na_montagem(&st.asm, &est.achados, fenkra_solidos::biblioteca::publica());
     let mut menores_que = st.asm.interf.menores_que;
     let mut acao = None;
     let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
@@ -193,11 +193,11 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
                 for (i, motivo) in &rep.ignorados {
                     let a = &est.achados[*i];
                     ui.horizontal(|ui| {
-                        let texto = if motivo.is_empty() { format!("{}  {}", titulo_do(a), volume_do(a)) } else { format!("{}  {} · {motivo}", titulo_do(a), volume_do(a)) };
+                        let texto = if motivo.is_empty() { format!("{}  {}", titulo_do(a), volume_do(a)) } else { format!("{}  {} · {}", titulo_do(a), volume_do(a), tr(motivo)) };
                         if ui.selectable_label(est.escolhido == Some(*i), RichText::new(texto).small().weak()).clicked() {
                             acao = Some(Acao::Escolher(*i));
                         }
-                        if ui.small_button(tr("Restaurar")).clicked() {
+                        if motivo != interferencia::MOTIVO_SEM_FURO && ui.small_button(tr("Restaurar")).clicked() {
                             acao = Some(Acao::Restaurar(*i));
                         }
                     });

@@ -284,7 +284,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     }
     let Some(st) = app.asm.as_mut() else { return };
     menu_tipos(st, ui, rect);
-    if !st.simbolos.ligado || st.cmd.is_some() || st.editing_part.is_some() {
+    if !st.simbolos.ligado || st.cmd.is_some() || st.conjunto.is_some() || st.editing_part.is_some() {
         st.simbolos.hover = None;
         return;
     }

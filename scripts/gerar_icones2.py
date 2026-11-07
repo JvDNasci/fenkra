@@ -544,6 +544,8 @@ def desenhos():
     ic("asm_grupo", B="M12 6H6v36h6M36 6h6v36h-6", R=CUBO(24, 8, 10, 5, 8) + CUBO(24, 26, 10, 5, 6))
     ic("asm_link", B=CUBO(14, 6, 9, 4.5, 9), R="M26 34h-4a6 6 0 0 1 0-12h10a6 6 0 0 1 6 6M30 30h4a6 6 0 0 1 0 12H24a6 6 0 0 1-6-6")
     ic("asm_fixadores", B="M6 22h10M32 22h10M6 34h10M32 34h10M16 22v12M32 22v12", R="M14 12h20v6H14zM20 18v24M28 18v24")
+    ic("asm_conjunto", B="M6 26h14M28 26h14M6 36h14M28 36h14", R="M18 8h12v5H18zM21 13v28M27 13v28M16 18h16M16 22h16")
+    ic("asm_regras_cor", B="M8 12h32M8 24h32M8 36h32", R="M14 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0M30 24m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0M20 36m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0")
     ic("asm_catalogo", B="M10 8h24a4 4 0 0 1 4 4v28H14a4 4 0 0 1-4-4zM10 36a4 4 0 0 1 4-4h24", R="M19 13h10v5H19zM22 18v10M26 18v10")
     ic("asm_engrenagens", B=ENGRENAGEM(16, 18, 11, 8, 8), R=ENGRENAGEM(33, 33, 11, 8, 8))
     ic("asm_chaveta", B="M6 30v12h36V30H34M14 30H6", R="M14 20h20a4 4 0 0 1 0 8H14a4 4 0 0 1 0-8z")
@@ -741,6 +743,7 @@ SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", 
 SO_INTERFACE |= {"filete_assimetrico"}
 SO_INTERFACE |= {"an_inclinacao", "an_isofotas", "an_dfm"}
 SO_INTERFACE |= {"asm_chaveta", "asm_calculo", "pmi_captura", "pmi_captura_modelo"}
+SO_INTERFACE |= {"asm_conjunto", "asm_regras_cor"}
 
 
 # ---------- saída ----------
