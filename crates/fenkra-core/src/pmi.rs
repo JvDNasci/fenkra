@@ -209,6 +209,23 @@ pub struct WeldExtra {
     /// cauda: processo (ISO 4063, ex.: 135), norma, posição
     #[serde(default)]
     pub process: String,
+    /// esconde a representação engrossada do cordão (só exibição, B369): o padrão mostra
+    #[serde(default)]
+    pub hide_bead: bool,
+}
+
+/// Perna do cordão em mm a partir da medida do símbolo: `z5` e `5` são a perna; `a4` é a garganta
+/// e a perna do filete a 90° vale `a·√2`. Vazio ou sem número = `None`. Só serve para exibir o
+/// cordão (B369): não entra em massa, volume nem lista de corte.
+pub fn weld_leg_mm(size: &str) -> Option<f64> {
+    let t = size.trim().to_lowercase().replace(',', ".");
+    let (garganta, num) = match t.strip_prefix('a') {
+        Some(r) => (true, r),
+        None => (false, t.strip_prefix('z').unwrap_or(&t)),
+    };
+    let fim = num.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(num.len());
+    let v: f64 = num[..fim].parse().ok()?;
+    (v.is_finite() && v > 0.).then(|| if garganta { v * std::f64::consts::SQRT_2 } else { v })
 }
 
 /// Primitiva do símbolo de solda num sistema local: a seta encontra a linha de referência em
@@ -1421,6 +1438,20 @@ impl Pmi {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn perna_do_cordao_vem_da_medida_do_simbolo() {
+        assert_eq!(weld_leg_mm("z5"), Some(5.));
+        assert_eq!(weld_leg_mm(" 6,5 "), Some(6.5));
+        assert!((weld_leg_mm("a4").unwrap() - 4. * std::f64::consts::SQRT_2).abs() < 1e-9, "garganta 4 = perna 5,66");
+        assert_eq!(weld_leg_mm("a3 (2x)"), Some(3. * std::f64::consts::SQRT_2));
+        assert_eq!(weld_leg_mm(""), None);
+        assert_eq!(weld_leg_mm("abc"), None);
+        assert_eq!(weld_leg_mm("0"), None);
+        // arquivo antigo: o cordão aparece (esconder é escolha nova)
+        let x: WeldExtra = serde_json::from_str("{}").unwrap();
+        assert!(!x.hide_bead);
+    }
 
     #[test]
     fn medidas_e_textos() {

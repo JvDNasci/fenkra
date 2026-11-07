@@ -1379,6 +1379,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         if (is_sel || is_ghost) && !matches!(pm.kind, PmiKind::TitleBlock { .. }) {
             highlight(&painter, r, cam, rect, &a);
         }
+        // cordão da solda: a aresta marcada engrossada até a perna da anotação (só exibição, B369)
+        if let Some((perna, segs)) = crate::pmi_cordao::cordao_de(r, pm, &a) {
+            crate::pmi_cordao::desenhar(&painter, cam, rect, perna, &segs, crate::theme::accent(ui.visuals()));
+        }
         // deitado num plano: referencial (normal, x, y) do plano; tudo é desenhado em 0,1 mm nele
         let plane = pm.plane.and_then(|(n, x)| {
             let n = v3(n).normalize_or_zero();
@@ -2348,6 +2352,11 @@ pub fn weld_ui(ui: &mut egui::Ui, salt: &str, kind: &mut WeldKind, size: &mut St
         ui.checkbox(all_around, tr("todo o contorno"));
         crate::editor::check(ui, &mut extra.field, "solda de campo");
     });
+    // cordão visível no 3D: linha engrossada do tamanho da perna; não muda sólido, massa nem lista de corte
+    let mut mostrar = !extra.hide_bead;
+    if ui.checkbox(&mut mostrar, tr("mostrar o cordão no 3D")).on_hover_text(tr("Engrossa a aresta marcada até a perna da medida (z5, a4…), como se fosse a solda. É só exibição: o sólido, a massa e a lista de corte não mudam.")).changed() {
+        extra.hide_bead = !mostrar;
+    }
     ui.horizontal(|ui| {
         ui.label(tr("Cauda (processo)"));
         ui.add(egui::TextEdit::singleline(&mut extra.process).desired_width(120.).hint_text("135 / ISO 5817-C"));

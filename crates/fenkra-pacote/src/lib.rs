@@ -301,6 +301,7 @@ fn json_pmi(lista: &[Pmi], no: Option<&str>, malha: Option<&fenkra_solidos::Reco
                 "alvos": p.targets.iter().map(|t| t.as_ref().map(tipos::alvo)).collect::<Vec<_>>(),
                 "no": no, "visivel": p.visible, "pasta": p.folder,
                 "setas": setas(p),
+                "cordao": cordao(p, malha),
             })
         })
         .collect()
@@ -329,6 +330,25 @@ fn campos_da_legenda(doc: &Document, massa_kg: f64, volume_mm3: f64) -> std::col
         f.insert(k.to_lowercase(), v.clone());
     }
     f
+}
+
+/// Cordão de solda para exibir (B369): a perna em mm e os segmentos da aresta marcada. É só
+/// exibição; não entra em massa, volume nem lista de corte. `visivel` segue a escolha do painel.
+fn cordao(p: &Pmi, r: Option<&fenkra_solidos::RecomputeResult>) -> Value {
+    use fenkra_core::pmi::PmiKind;
+    let (PmiKind::Weld { size, extra, .. }, Some(r)) = (&p.kind, r) else { return Value::Null };
+    let (Some(perna), Some(q)) = (fenkra_core::pmi::weld_leg_mm(size), p.anchors.first()) else { return Value::Null };
+    let perto = |v: &[f32]| (0..3).all(|i| (f64::from(v[i]) - q[i]).abs() < 1e-3);
+    for b in &r.bodies {
+        let m = &b.mesh;
+        if let Some(e) = m.edge_mids.chunks_exact(3).position(perto) {
+            let Some(&s0) = m.edge_ranges.get(e) else { continue };
+            let s1 = m.edge_ranges.get(e + 1).map_or(m.edges.len() / 6, |x| *x as usize);
+            let segs: Vec<Value> = m.edges.chunks_exact(6).take(s1).skip(s0 as usize).map(|s| json!([[r6(f64::from(s[0])), r6(f64::from(s[1])), r6(f64::from(s[2]))], [r6(f64::from(s[3])), r6(f64::from(s[4])), r6(f64::from(s[5]))]])).collect();
+            return json!({"perna_mm": r6(perna), "visivel": !extra.hide_bead, "segmentos": segs});
+        }
+    }
+    Value::Null
 }
 
 /// Uma seta por âncora, com o lado da nota de onde sai (0 automático, 1 esquerda, 2 direita, 3 topo,

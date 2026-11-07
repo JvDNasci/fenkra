@@ -57,6 +57,7 @@ mod pmi_smart;
 mod pmi_handles;
 mod pmi_minibar;
 mod pmi_setas;
+mod pmi_cordao;
 mod pmi_arvore;
 mod pmi_legivel;
 mod pmi_feat_asm;

@@ -38,5 +38,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Remover esta seta", "Remove this arrow"),
     ("＋ Adicionar setas…", "＋ Add arrows…"),
     ("Clique faces ou arestas no 3D; com Ctrl ou Shift você soma várias e conclui com Enter.", "Click faces or edges in 3D; with Ctrl or Shift you add several and finish with Enter."),
+    ("mostrar o cordão no 3D", "show the bead in 3D"),
+    ("Engrossa a aresta marcada até a perna da medida (z5, a4…), como se fosse a solda. É só exibição: o sólido, a massa e a lista de corte não mudam.", "Thickens the marked edge to the leg of the size (z5, a4…), as if it were the weld. Display only: the solid, the mass and the cut list do not change."),
     ("Adicionar setas: clique faces ou arestas; Ctrl ou Shift somam várias e Enter conclui", "Add arrows: click faces or edges; Ctrl or Shift add several and Enter finishes"),
 ];

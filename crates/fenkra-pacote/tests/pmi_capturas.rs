@@ -65,6 +65,21 @@ fn peca_com_pmi() -> Document {
     d
 }
 
+/// Ponto médio da aresta mais longa da parte de cima (onde uma solda faz sentido).
+fn aresta_longa_do_topo(r: &fenkra_solidos::RecomputeResult) -> [f64; 3] {
+    let m = &r.bodies[0].mesh;
+    let mut melhor = ([0.; 3], 0.);
+    for (e, mid) in m.edge_mids.chunks_exact(3).enumerate() {
+        let s0 = m.edge_ranges[e] as usize;
+        let s1 = m.edge_ranges.get(e + 1).map_or(m.edges.len() / 6, |x| *x as usize);
+        let l: f64 = m.edges.chunks_exact(6).take(s1).skip(s0).map(|s| f64::from(((s[3] - s[0]).powi(2) + (s[4] - s[1]).powi(2) + (s[5] - s[2]).powi(2)).sqrt())).sum();
+        if mid[2] > 7. && l > melhor.1 {
+            melhor = ([f64::from(mid[0]), f64::from(mid[1]), f64::from(mid[2])], l);
+        }
+    }
+    melhor.0
+}
+
 #[test]
 fn pmi_e_capturas_chegam_ao_fkv_e_a_pagina() {
     let d = peca_com_pmi();
@@ -140,3 +155,52 @@ fn arquivo_de_peca_gravado_em_disco_chega_ao_pacote() {
     assert_eq!(p.manifesto["pmi"][0]["setas"][1]["lado"], 2);
 }
 
+/// B369: solda com perna definida leva ao pacote a aresta marcada e a perna; esconder o cordão
+/// desliga `visivel`; massa e volume do pacote não mudam.
+#[test]
+fn solda_leva_o_cordao_ao_pacote_sem_mexer_no_modelo() {
+    use fenkra_core::pmi::{WeldExtra, WeldKind};
+    let mut d = fenkra_solidos::example_document();
+    let r = fenkra_solidos::recompute(&d);
+    let mid = aresta_longa_do_topo(&r);
+    let sem = de_peca(&d, &Opcoes::default()).unwrap();
+    let id = d.alloc();
+    d.pmi.push(Pmi {
+        id,
+        name: "Solda 1".into(),
+        kind: PmiKind::Weld { kind: WeldKind::Filete, size: "z5".into(), all_around: false, extra: WeldExtra::default() },
+        anchors: vec![mid],
+        offset: [10., 0., 10.],
+        text: String::new(),
+        tol_plus: String::new(),
+        tol_minus: String::new(),
+        visible: true,
+        plane: None,
+        style: Default::default(),
+        folder: String::new(),
+        targets: vec![],
+    });
+    let com = de_peca(&d, &Opcoes::default()).unwrap();
+    let c = &com.manifesto["pmi"][0]["cordao"];
+    assert_eq!(c["perna_mm"].as_f64(), Some(5.));
+    assert_eq!(c["visivel"], true);
+    assert!(!c["segmentos"].as_array().unwrap().is_empty());
+    // exibição: o modelo do pacote é o mesmo
+    assert_eq!(sem.manifesto["atributos"]["volume_mm3"], com.manifesto["atributos"]["volume_mm3"]);
+    assert_eq!(sem.manifesto["atributos"]["massa_kg"], com.manifesto["atributos"]["massa_kg"]);
+    assert_eq!(sem.manifesto["atributos"]["dimensoes_mm"], com.manifesto["atributos"]["dimensoes_mm"]);
+    // escondido no painel: segue no arquivo, mas não é para mostrar
+    if let PmiKind::Weld { extra, .. } = &mut d.pmi[0].kind {
+        extra.hide_bead = true;
+    }
+    let oculto = de_peca(&d, &Opcoes::default()).unwrap();
+    assert_eq!(oculto.manifesto["pmi"][0]["cordao"]["visivel"], false);
+    if let Ok(dir) = std::env::var("FENKRA_FKV_SAIDA") {
+        d.pmi.truncate(1);
+        if let PmiKind::Weld { extra, .. } = &mut d.pmi[0].kind {
+            extra.hide_bead = false;
+        }
+        let b = de_peca(&d, &Opcoes::default()).unwrap().bytes().unwrap();
+        std::fs::write(PathBuf::from(&dir).join("solda_cordao.html"), pagina_html(Some(&b))).unwrap();
+    }
+}

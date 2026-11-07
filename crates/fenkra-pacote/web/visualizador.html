@@ -163,11 +163,11 @@ const TX = {
   abrir_outro:"Abrir outro pacote para comparar", cmp_dica:"Abra outro .fkv do mesmo documento (outra versão) para ver o que mudou.", nova:"nova", antiga:"antiga", aberto:"Aberto",
   trocar_lado:"Trocar lados", cmp_igual:"Nenhuma diferença encontrada.", totais:"Totais", adicionados:"Adicionados", removidos:"Removidos", movidos:"Movidos", alterados:"Alterados",
   so_no_outro:"só no outro pacote", girou:"girou", visivel:"Visível", estado:"Estado", versao:"Versão",
-  capturas:"Capturas", etapa_de:"Captura {i} de {n}", anterior:"Anterior", proxima:"Próxima", sem_capturas:"Este pacote não tem capturas.", todas_etapas:"Mostrar todas as anotações" },
+  capturas:"Capturas", etapa_de:"Captura {i} de {n}", anterior:"Anterior", proxima:"Próxima", sem_capturas:"Este pacote não tem capturas.", todas_etapas:"Mostrar todas as anotações", cordoes:"Mostrar o cordão das soldas" },
  en:{ "3D":"3D", folhas:"Sheets", painel:"Panel", abrir:"Open", tema:"Theme",
   vazio_t:"Open a .fkv package", vazio_p:"Drop the .fkv file on this screen, or tap Open and choose it. Nothing leaves your device.", vazio_p2:"No .fkv yet? In Fenkra, use File, Export viewer package.", vazio_p3:"On a phone: if the file does not show up when you tap Open, send the .fkv to the device and look in Files or Downloads.",
   arvore:"Tree", dados:"Data", pmi:"PMI", vistas:"Views", estados:"States", lista:"List",
-  capturas:"Captures", etapa_de:"Capture {i} of {n}", anterior:"Previous", proxima:"Next", sem_capturas:"This package has no captures.", todas_etapas:"Show all annotations",
+  capturas:"Captures", etapa_de:"Capture {i} of {n}", anterior:"Previous", proxima:"Next", sem_capturas:"This package has no captures.", todas_etapas:"Show all annotations", cordoes:"Show the weld beads",
   buscar:"Search part, code or material", ajustar:"Fit", isolar:"Isolate", tudo:"All", cortar:"Section", medir:"Measure", orto:"Ortho", persp:"Persp.",
   sem_sel:"Tap a part to see its data.", nome:"Name", pn:"Part no.", descricao:"Description", material:"Material", tipo_de_peca:"Type",
   massa_kg:"Mass (kg)", volume_mm3:"Volume (mm³)", area_mm2:"Area (mm²)", dimensoes_mm:"Size (mm)", centro_de_massa_mm:"Center of mass (mm)",
@@ -545,6 +545,7 @@ const V3 = {
       const desl = new THREE.Vector3(...p.deslocamento);
       const linear = A.length>=2 && (p.dimensional || ["Linear","Gap","Diameter","Radius","Ordinate"].some(k=>p.tipo.startsWith(k)));
       p.alvos.forEach(a=>{ if (a) g.add(this.alvo(a, cor)); });
+      if (p.cordao && p.cordao.visivel && P.cordoes!==false) this.cordao(p.cordao, g);
       this.itens2d.push({p, A, desl, cor, ativa, linear});
     }
     this.precisa = true;
@@ -610,6 +611,17 @@ const V3 = {
           seta(st.ponta||"cheia", pts[pts.length-1], pts[pts.length-2]);
         });
       }
+    }
+  },
+  /* Cordão de solda (só exibição): a aresta marcada engrossada até a perna da medida. */
+  cordao(c, g){
+    const r = Math.max(0.2, c.perna_mm*0.4), mat = new THREE.MeshLambertMaterial({color:new THREE.Color(corCSS("--destaque"))});
+    const y = new THREE.Vector3(0,1,0);
+    for (const [a,b] of c.segmentos){
+      const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), d = B.clone().sub(A), l = d.length(); if (l<1e-6) continue;
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r,r,l,10,1), mat);
+      m.position.copy(A).add(B).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(y, d.normalize()); m.renderOrder=7; g.add(m);
+      const j = new THREE.Mesh(new THREE.SphereGeometry(r,10,8), mat); j.position.copy(B); g.add(j);
     }
   },
   alvo(a, cor){
@@ -744,6 +756,7 @@ function abaPmi(c){
   const m=P.m;
   if (!m.pmi.length){ c.append(el("div",{class:"nada"},T("sem_pmi"))); return; }
   c.append(el("button",{class:"item",onclick:()=>{P.pmiFiltro=null;P.capAtiva=null;V3.anotar();barraEtapas();mostrarAba("pmi");}},T("todas_pmi")));
+  if (m.pmi.some(p=>p.cordao)) c.append(el("button",{class:"item","aria-pressed":String(P.cordoes!==false),onclick:()=>{P.cordoes=(P.cordoes===false);V3.anotar();mostrarAba("pmi");}},T("cordoes")));
   const lista = P.pmiFiltro ? m.pmi.filter(p=>P.pmiFiltro.has(p.id)) : m.pmi;
   for (const p of lista){
     c.append(el("button",{class:"item","aria-pressed":String(P.pmiSel===p.id),onclick:()=>focarPmi(p)}, p.texto||p.nome, el("small",{},p.tipo+(p.alvos.some(Boolean)?" · "+T("alvo")+": "+p.alvos.filter(Boolean).map(a=>a.classe).join(", "):""))));
