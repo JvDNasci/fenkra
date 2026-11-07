@@ -159,6 +159,10 @@ impl App {
                         Ok(()) => self.toast(format!("{}: {}", tr("Aberto no navegador"), arquivo.display()), false),
                         Err(e) => self.toast(format!("{}: {e}", tr("Falha ao abrir a visualização")), true),
                     }
+                    let avisos = fenkra_pacote::Pacote::ler(&bytes).map(|p| p.avisos()).unwrap_or_default();
+                    if !avisos.is_empty() {
+                        self.toast(format!("{}: {}", tr("Faltou no pacote"), avisos.join("; ")), true);
+                    }
                 }
                 (Destino::Montagem { .. }, Err(e)) => self.toast(format!("{}: {e}", tr("Falha ao gerar a visualização")), true),
             }
