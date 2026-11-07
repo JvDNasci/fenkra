@@ -712,6 +712,10 @@ fn demo_bom_configuracoes(st: &mut AsmState) {
 
 /// `FENKRA_DEMO_ASM=cmd|junta|simbolos|manip|duzentas`: abre o comando ou os símbolos nas placas de exemplo.
 pub fn demo(st: &mut AsmState, nome: &str) {
+    if nome.starts_with("biblioteca") {
+        crate::biblioteca_ui::demo(st, nome);
+        return;
+    }
     if nome == "resolver" {
         crate::asm_resolver::demo(st);
     }

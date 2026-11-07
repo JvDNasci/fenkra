@@ -171,6 +171,106 @@ fn arquivo_copia(dir: &Path, fam: &Familia, t: &Tamanho, l: Option<f64>) -> Resu
     Ok((arq, nome))
 }
 
+/// Comprimento de um parafuso que não está num furo: o da série mais perto de quatro diâmetros.
+pub fn comprimento_livre(fam: &Familia, t: &Tamanho) -> Option<f64> {
+    mais_proximo(&fam.comprimentos_de(t), 4. * t.diametro_nominal().unwrap_or(0.))
+}
+
+/// Grava (ou reaproveita) a peça do item e devolve arquivo, nome e comprimento escolhido. Parafuso:
+/// o comprimento pedido vale o da série mais próximo; sem pedido, `sugerido`, e sem sugestão o da série
+/// mais perto de quatro diâmetros. Porca e arruela não têm comprimento.
+fn peca_do_item(dir: &Path, fam: &Familia, t: &Tamanho, pedido: Option<f64>, sugerido: Option<f64>, modo: ModoInsercao) -> Result<(String, String, Option<f64>), String> {
+    let comprimento = if fam.tipo.e_parafuso() {
+        let serie = fam.comprimentos_de(t);
+        let alvo = pedido.or(sugerido).or_else(|| comprimento_livre(fam, t)).ok_or("tamanho sem série de comprimentos")?;
+        Some(mais_proximo(&serie, alvo).ok_or("tamanho sem série de comprimentos")?)
+    } else {
+        None
+    };
+    let (arquivo, nome) = match modo {
+        ModoInsercao::Padrao => arquivo_fixador(dir, fam, t, comprimento, &mut HashMap::new(), &mut vec![])?,
+        ModoInsercao::Personalizado => arquivo_copia(dir, fam, t, comprimento)?,
+    };
+    Ok((arquivo, nome, comprimento))
+}
+
+/// Onde um item fora de furo entra (B374).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum PosicaoLivre {
+    /// num ponto da superfície de uma peça, com o eixo do item na normal (que aponta para fora do material)
+    Ponto { ponto: V3, normal: V3 },
+    /// solto no espaço, sem eixo escolhido: o item entra com os eixos do mundo
+    Solto { origem: V3 },
+}
+
+/// Primeiro ponto em que o raio (`origem`, `dir`, no mundo) toca as malhas, com a normal da face virada
+/// para quem olha. Cada malha vem no sistema local dela, com a posição que a leva ao mundo: as cópias
+/// de uma peça dividem a mesma malha e só mudam de posição (corpo já no mundo entra com a posição
+/// padrão). É onde o item cai quando a pessoa aponta uma superfície.
+pub fn ponto_na_cena<'a>(malhas: impl IntoIterator<Item = (&'a fenkra_kernel::Mesh, Placement)>, origem: V3, dir: V3) -> Option<(V3, V3)> {
+    let d = unit(dir);
+    let mut melhor: Option<(f64, V3)> = None;
+    for (m, pl) in malhas {
+        // o raio no sistema da malha: a posição é rígida, então a distância ao longo dele não muda
+        let (o, d) = (pl.to_local(origem), unit(pl.dir_to_local(d)));
+        let p = |i: u32| -> V3 { [0, 1, 2].map(|k| m.positions[3 * i as usize + k] as f64) };
+        for t in m.indices.chunks_exact(3) {
+            let (a, b, c) = (p(t[0]), p(t[1]), p(t[2]));
+            let (e1, e2) = (sub(b, a), sub(c, a));
+            let h = cross(d, e2);
+            let det = dot(e1, h);
+            if det.abs() < 1e-12 {
+                continue;
+            }
+            let s = sub(o, a);
+            let u = dot(s, h) / det;
+            if !(-1e-9..=1. + 1e-9).contains(&u) {
+                continue;
+            }
+            let q = cross(s, e1);
+            let v = dot(d, q) / det;
+            if v < -1e-9 || u + v > 1. + 1e-9 {
+                continue;
+            }
+            let dist = dot(e2, q) / det;
+            if dist > 1e-6 && melhor.is_none_or(|(m0, _)| dist < m0) {
+                melhor = Some((dist, pl.dir(cross(e1, e2))));
+            }
+        }
+    }
+    let (dist, n) = melhor?;
+    let mut n = unit(n);
+    if dot(n, d) > 0. {
+        n = n.map(|x| -x);
+    }
+    Some(([0, 1, 2].map(|i| origem[i] + d[i] * dist), n))
+}
+
+/// Põe o item na montagem como peça comum, sem restrição nenhuma: a pessoa o posiciona depois (6 graus
+/// de liberdade, a não ser que seja a primeira peça, que ancora o conjunto). `pai` é o grupo de
+/// destino; sem ele a peça entra na raiz. Erro com a frase do problema.
+#[allow(clippy::too_many_arguments)]
+pub fn inserir_livre(asm: &mut Assembly, dir: &Path, lib: &Biblioteca, familia: &str, tamanho: &str, comprimento: Option<f64>, modo: ModoInsercao, onde: PosicaoLivre, pai: Option<Id>) -> Result<Inserido, String> {
+    let fam = lib.familia(familia).ok_or_else(|| format!("família desconhecida: {familia}"))?;
+    let t = fam.tamanho(tamanho).ok_or_else(|| format!("{}: não existe o tamanho {tamanho}", fam.norma))?;
+    let (arquivo, nome, comprimento) = peca_do_item(dir, fam, t, comprimento, None, modo)?;
+    let primeira = crate::insercao::fixa_na_origem(asm);
+    let (pl, eixo) = match onde {
+        PosicaoLivre::Ponto { ponto, normal } => {
+            let u = unit(normal).map(|x| -x);
+            (posicao_do_item(fam.tipo.e_parafuso(), ponto, u), u)
+        }
+        PosicaoLivre::Solto { origem } => (Placement { origin: if primeira { [0.; 3] } else { origem }, ..Default::default() }, [0., 0., 1.]),
+    };
+    let comp = asm.add_component(&nome, NodeKind::Part { path: arquivo.clone() }, pl, pai);
+    if asm.relational {
+        if let Some(n) = asm.node_mut(comp) {
+            n.fixed = true;
+        }
+    }
+    Ok(Inserido { comp, arquivo, nome, entrada: pl.origin, eixo, comprimento, restricoes: vec![] })
+}
+
 /// Põe o item no furo, restrito. Erro com a frase do problema (tamanho que não serve, família
 /// desconhecida, furo cego invertido).
 pub fn inserir_avulso(asm: &mut Assembly, dir: &Path, lib: &Biblioteca, p: &ParamAvulso) -> Result<Inserido, String> {
@@ -183,19 +283,8 @@ pub fn inserir_avulso(asm: &mut Assembly, dir: &Path, lib: &Biblioteca, p: &Para
         return Err("a peça do furo não está mais na montagem".into());
     }
     let (entrada, u) = pose(&p.furo, p.inverter)?;
-    let comprimento = if fam.tipo.e_parafuso() {
-        let serie = fam.comprimentos_de(t);
-        Some(match p.comprimento {
-            Some(l) => mais_proximo(&serie, l).ok_or("tamanho sem série de comprimentos")?,
-            None => comprimento_sugerido(fam, t, &p.furo).ok_or("tamanho sem série de comprimentos")?,
-        })
-    } else {
-        None
-    };
-    let (arquivo, nome) = match p.modo {
-        ModoInsercao::Padrao => arquivo_fixador(dir, fam, t, comprimento, &mut HashMap::new(), &mut vec![])?,
-        ModoInsercao::Personalizado => arquivo_copia(dir, fam, t, comprimento)?,
-    };
+    let sugerido = comprimento_sugerido(fam, t, &p.furo);
+    let (arquivo, nome, comprimento) = peca_do_item(dir, fam, t, p.comprimento, sugerido, p.modo)?;
     let grupo = match asm.nodes.iter().find(|n| matches!(n.kind, NodeKind::Group) && n.name == GRUPO).map(|n| n.id) {
         Some(g) => g,
         None => asm.add_group(GRUPO, None),
@@ -356,5 +445,97 @@ mod tests {
         // modo que o corpo (de -h a 0 no eixo dela) fique acima da face
         assert!((pl.origin[2] - 10.).abs() < 0.01 && pl.origin[0].hypot(pl.origin[1]) < 0.01, "{:?}", pl.origin);
         assert!(norm(sub(pl.dir([0., 0., 1.]), [0., 0., -1.])) < 1e-6);
+    }
+
+    // ---------------------------------------------------------------- B374: em ponto e solto
+
+    #[test]
+    fn em_ponto_o_item_pousa_na_face_apontada_com_o_eixo_na_normal_e_sem_restricao() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("avulso_ponto");
+        let (mut a, c) = montagem(&dir, 10., 6.6);
+        let mut erros = vec![];
+        let (_, vista) = crate::view::compose(&a, Some(&dir), &mut PartCache::default(), &mut erros);
+        assert!(erros.is_empty(), "{erros:?}");
+        // raio de cima para baixo em (20, 10): acerta a face de cima da placa (z = 10), fora do furo
+        let (ponto, normal) = ponto_na_cena(vista.bodies.iter().map(|b| (&b.mesh, Placement::default())), [20., 10., 80.], [0., 0., -1.]).expect("o raio acerta a placa");
+        assert!((ponto[0] - 20.).abs() < 1e-6 && (ponto[1] - 10.).abs() < 1e-6 && (ponto[2] - 10.).abs() < 1e-6, "{ponto:?}");
+        assert!(normal[2] > 0.999, "a normal aponta para fora do material: {normal:?}");
+        // de baixo para cima a normal vira para quem olha (para baixo, na face z = 0)
+        let (pb, nb) = ponto_na_cena(vista.bodies.iter().map(|b| (&b.mesh, Placement::default())), [20., 10., -80.], [0., 0., 1.]).unwrap();
+        assert!(pb[2].abs() < 1e-6 && nb[2] < -0.999, "{pb:?} {nb:?}");
+        // raio que passa ao lado da placa não acerta nada
+        assert!(ponto_na_cena(vista.bodies.iter().map(|b| (&b.mesh, Placement::default())), [200., 0., 80.], [0., 0., -1.]).is_none());
+
+        // a mesma malha em outra posição (cópia): o raio acha a face no lugar da cópia, não no da malha
+        let longe = Placement { origin: [500., 0., 0.], ..Default::default() };
+        let (pc, nc) = ponto_na_cena(vista.bodies.iter().map(|b| (&b.mesh, longe)), [520., 10., 80.], [0., 0., -1.]).expect("a cópia a 500 mm");
+        assert!((pc[0] - 520.).abs() < 1e-6 && (pc[2] - 10.).abs() < 1e-6 && nc[2] > 0.999, "{pc:?} {nc:?}");
+        assert!(ponto_na_cena(vista.bodies.iter().map(|b| (&b.mesh, longe)), [20., 10., 80.], [0., 0., -1.]).is_none(), "onde a malha estaria sem a posição não há nada");
+        // cópia girada: o eixo local Z da peça vira o X do mundo, e a normal da face de cima vai junto
+        let girada = orientado([0., 0., 0.], [1., 0., 0.]);
+        let (pg, ng) = ponto_na_cena(vista.bodies.iter().map(|b| (&b.mesh, girada)), [80., 10., 5.], [-1., 0., 0.]).expect("a cópia girada");
+        assert!((pg[0] - 10.).abs() < 1e-6 && norm(sub(ng, [1., 0., 0.])) < 1e-6, "{pg:?} {ng:?}");
+
+        let antes = a.mates.len();
+        let r = inserir_livre(&mut a, &dir, biblioteca::publica(), "iso4762", "M6", Some(20.), ModoInsercao::Padrao, PosicaoLivre::Ponto { ponto, normal }, None).unwrap();
+        assert_eq!(a.mates.len(), antes, "em ponto não nasce restrição: a pessoa posiciona depois");
+        assert!(r.restricoes.is_empty() && r.comprimento == Some(20.));
+        assert!(dir.join(&r.arquivo).exists());
+        let pl = a.node(r.comp).unwrap().placement;
+        assert!(norm(sub(pl.origin, ponto)) < 1e-9, "origem no ponto apontado: {:?}", pl.origin);
+        assert!(norm(sub(pl.dir([0., 0., 1.]), [0., 0., 1.])) < 1e-9, "parafuso: Z local para fora da face (cabeça), corpo para dentro");
+        // sem restrição, o item é um corpo livre: 6 graus de liberdade
+        let rep = solve::solve(&mut a);
+        assert!(rep.converged, "{rep:?}");
+        assert_eq!(solve::dof_per_comp(&a).get(&r.comp).copied().unwrap_or(6), 6, "livre para posicionar depois");
+        assert!(a.node(c).unwrap().placement == Placement::default(), "a placa não se mexe");
+        // arruela no mesmo ponto: o corpo fica acima da face, como no furo
+        let ar = inserir_livre(&mut a, &dir, biblioteca::publica(), "iso7089", "M6", None, ModoInsercao::Padrao, PosicaoLivre::Ponto { ponto, normal }, None).unwrap();
+        assert_eq!(ar.comprimento, None);
+        assert!(norm(sub(a.node(ar.comp).unwrap().placement.dir([0., 0., 1.]), [0., 0., -1.])) < 1e-9);
+    }
+
+    #[test]
+    fn solto_no_espaco_entra_com_os_eixos_do_mundo_e_dentro_do_grupo_escolhido() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("avulso_solto");
+        let (mut a, _) = montagem(&dir, 10., 6.6);
+        let grupo = a.add_group("Ferragens", None);
+        let r = inserir_livre(&mut a, &dir, biblioteca::publica(), "iso4762", "M8", None, ModoInsercao::Padrao, PosicaoLivre::Solto { origem: [100., -40., 25.] }, Some(grupo)).unwrap();
+        let n = a.node(r.comp).unwrap();
+        assert_eq!(n.placement.origin, [100., -40., 25.]);
+        assert!(norm(sub(n.placement.dir([0., 0., 1.]), [0., 0., 1.])) < 1e-12, "sem eixo escolhido");
+        assert_eq!(n.parent, Some(grupo), "entra no grupo de destino");
+        assert!(a.mates.is_empty());
+        // sem comprimento pedido: o da série mais perto de 4 diâmetros (M8 → 32)
+        let fam = biblioteca::familia("iso4762").unwrap();
+        assert!(fam.comprimentos_de(fam.tamanho("M8").unwrap()).contains(&r.comprimento.unwrap()));
+        assert!((r.comprimento.unwrap() - 32.).abs() <= 4., "{:?}", r.comprimento);
+        // o modo personalizado grava cópia própria também fora do furo
+        let c = inserir_livre(&mut a, &dir, biblioteca::publica(), "iso4762", "M8", Some(30.), ModoInsercao::Personalizado, PosicaoLivre::Solto { origem: [0., 0., 50.] }, None).unwrap();
+        assert!(c.arquivo.contains("_copia1") && dir.join(&c.arquivo).exists(), "{}", c.arquivo);
+        // erros: família e tamanho inexistentes não mexem na montagem
+        let antes = a.clone();
+        assert!(inserir_livre(&mut a, &dir, biblioteca::publica(), "naoexiste", "M8", None, ModoInsercao::Padrao, PosicaoLivre::Solto { origem: [0.; 3] }, None).is_err());
+        assert!(inserir_livre(&mut a, &dir, biblioteca::publica(), "iso4762", "M99", None, ModoInsercao::Padrao, PosicaoLivre::Solto { origem: [0.; 3] }, None).is_err());
+        assert_eq!(a, antes);
+    }
+
+    #[test]
+    fn solto_na_montagem_vazia_ancora_o_conjunto_na_origem() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("avulso_vazia");
+        let mut a = Assembly::new("Vazia");
+        let r = inserir_livre(&mut a, &dir, biblioteca::publica(), "iso4762", "M6", Some(16.), ModoInsercao::Padrao, PosicaoLivre::Solto { origem: [50., 50., 50.] }, None).unwrap();
+        let n = a.node(r.comp).unwrap();
+        assert_eq!(n.placement.origin, [0.; 3], "a primeira peça ancora o conjunto na origem");
+        assert!(n.fixed, "e fica fixa");
     }
 }
