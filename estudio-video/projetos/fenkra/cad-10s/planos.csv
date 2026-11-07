@@ -1,0 +1,6 @@
+inicio,fim,texto,cor,midia,sfx
+0,2.034,DE UM ESBOÇO 2D...,#131820,,interface/pop_medio_1.wav
+2.034,4.068,...A UMA PEÇA 3D,#1B2A44,,impacto/hit_medio_1.wav
+4.068,6.102,MUDE 1 NÚMERO,#2F80FF,,interface/clique_medio_1.wav
+6.102,8.136,E TUDO SE ATUALIZA,#1B2A44,,acento/ding_medio_1.wav
+8.136,10,CAD PARAMÉTRICO | Siga para a parte 2,#131820,,impacto/boom_medio_1.wav

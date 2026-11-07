@@ -1,0 +1,5 @@
+inicio,fim,texto,cor,midia,sfx
+0,1.5,GANCHO AQUI,#101820,,impacto/hit_forte_1.wav
+1.5,4,Contexto em poucas palavras,,,transicao/whoosh_medio_1.wav
+4,8,Entrega 1,,,interface/pop_medio_1.wav
+8,10,Siga @perfil,#101820,,acento/ding_medio_1.wav

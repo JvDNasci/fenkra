@@ -13,7 +13,21 @@ description: Som para vídeo, abrangendo limpeza de voz, trilha, efeitos sonoros
 4. **Ducking** da trilha sob a fala.
 5. **Loudness** para a plataforma.
 
-## Voz com ffmpeg
+## Mandaram um áudio para tratar
+
+```bash
+ferramentas/video.sh tratar-voz entrada.(wav|mp3|m4a|mp4) saida.wav [leve|padrao|forte]
+```
+
+- `leve`: gravação boa, só acabamento (filtro de graves, compressão suave e volume).
+- `padrao`: celular ou sala comum (redução de ruído, de-esser, compressão e volume).
+- `forte`: ruído alto ou eco (redução agressiva, gate e equalização de presença). Pode deixar a voz
+  um pouco "abafada": compare.
+
+Sempre devolva antes e depois e diga o que foi feito. Problema que não se resolve sem regravar
+(clipping forte, eco de banheiro, vento): avise em vez de prometer.
+
+## Voz com ffmpeg (passo a passo manual)
 
 ```bash
 ffmpeg -i voz.wav -af "highpass=f=80,afftdn=nf=-25,acompressor=threshold=-18dB:ratio=3:attack=5:release=80,equalizer=f=3000:t=q:w=1:g=2" voz_limpa.wav

@@ -14,3 +14,8 @@ projetos/**/audio/
 node_modules/
 .remotion/
 __pycache__/
+
+# fontes e sons são baixados ou gerados pelos scripts
+biblioteca/fontes/**/*.ttf
+biblioteca/fontes/**/*.otf
+biblioteca/luts/*.cube

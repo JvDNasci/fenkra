@@ -8,7 +8,8 @@ description: Como montar e aplicar o guia de marca de um cliente em vídeo (pale
 ## Coleta
 
 Peça ao cliente ou levante: manual de marca, logo em vetor (SVG ou PDF), fontes, site, perfis e 3
-vídeos dos quais ele gosta e 3 dos quais não gosta. Extraia as cores do site e do logo em hex.
+vídeos dos quais ele gosta e 3 dos quais não gosta. Extraia as cores com `python ferramentas/paleta.py --imagem logo.png --saida graficos/marca`
+(ou `--cor` com o hex que o cliente já usa).
 
 ## O que o guia precisa decidir
 

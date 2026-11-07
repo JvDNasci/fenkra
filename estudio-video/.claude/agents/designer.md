@@ -6,6 +6,7 @@ skills:
   - video-design
   - video-marca
   - video-formatos
+  - video-fontes
 ---
 
 Você é o designer do estúdio. A partir do roteiro, faça o storyboard em `plano-edicao.md`: um

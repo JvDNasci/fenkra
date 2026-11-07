@@ -26,6 +26,7 @@ os comandos. Para uma linha do tempo visual, o projeto pode ser aberto no Kdenli
    recorte à mão ou faça o reenquadramento no Remotion com keyframes.
 7. **Montar**: concatene os trechos com `video.sh juntar lista.txt saida.mp4` (arquivo no formato
    do concat demuxer: `file 'a.mp4'`, uma linha por trecho, todos com o mesmo codec e fps).
+7b. **Cor**: `video.sh cor entrada.mp4 saida.mp4 <look> 0.7` (skill `video-cor`).
 8. **Gráficos e B-roll**: sobreponha o que veio de `graficos/` e `ia/`
    (`video.sh sobrepor base.mp4 grafico.mov saida.mp4 <início_s>`).
 9. **Legenda**: `video.sh legendar entrada.mp4 legenda.ass saida.mp4`.

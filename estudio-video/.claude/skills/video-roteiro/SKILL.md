@@ -1,6 +1,6 @@
 ---
 name: video-roteiro
-description: Técnicas de roteiro para vídeos curtos verticais e vídeos longos de YouTube, com ganchos, estruturas de retenção, texto na tela e chamada para ação. Use ao escrever, revisar ou variar um roteiro, ou ao montar a pauta de um canal.
+description: Técnicas de roteiro para vídeos curtos verticais e vídeos longos de YouTube, com ganchos, estruturas de retenção, arco de emoções, direção de voz por emoção (feliz, triste, empolgado, sério), introduções, chamadas para redes, texto na tela e roteiro com referências citadas ou pesquisadas. Use ao escrever, revisar ou variar um roteiro, ou ao montar a pauta de um canal.
 ---
 
 # Roteiro
@@ -52,9 +52,54 @@ final      síntese + chamada para o próximo vídeo (não "é isso, tchau")
 
 **Anúncio para cliente**: problema, agitação, solução (produto), prova, oferta, chamada para ação.
 
+## Arco de emoções
+
+Todo roteiro tem um mapa de emoção por bloco, que guia a voz, a trilha, a cor e o ritmo do corte.
+Um vertical bom costuma ter de 2 a 3 viradas; um longo, uma por ato.
+
+Exemplo: curiosidade → frustração (o problema) → alívio (a solução) → empolgação (o resultado) →
+confiança (a chamada para ação).
+
+## Direção de voz por emoção
+
+Marque cada fala com a emoção entre colchetes. Serve para quem grava, para locução ou para voz
+sintética.
+
+| Emoção | Ritmo | Altura e volume | Pausas | Dica de interpretação | Trilha, cor e corte |
+|---|---|---|---|---|---|
+| Feliz, empolgado | rápido | mais aguda, volume alto | curtas | falar sorrindo (o sorriso se ouve) | `energetico`/`charmoso`, `quente`, cortes rápidos |
+| Triste, sensível | lento | mais grave, volume baixo | longas, antes da palavra forte | soltar o ar, frases curtas | `emotivo`, `vintage` ou `frio`, planos longos |
+| Curioso, mistério | médio, com freios | média, cai no fim | antes da revelação | perguntar de verdade | `riser`, contraste alto |
+| Sério, autoridade | médio e constante | grave, firme | depois de cada dado | fim de frase descendo, sem "né?" | `calmo`/`epico`, `tech-limpo`, cortes secos |
+| Divertido | variado | exagerada | timing de piada (pausa e depois o "punch") | quebrar a expectativa | `pop`, `glitch`, zoom |
+| Urgência | rápido | alta | quase nenhuma | verbos no imperativo | `riser`, cortes na batida |
+| Acolhedor | lento | média, suave | naturais | falar com uma pessoa só | `calmo`, `pastel` ou `quente` |
+
+Marque também ênfases (palavra em **negrito**, que vira a palavra de destaque da legenda) e pausas
+(`/` curta, `//` longa).
+
+## Introdução e chamadas para redes
+
+- Vertical: o gancho é a introdução; o "siga @perfil" vem no final ou num selo aos 60-70%.
+- YouTube: gancho → promessa → abertura curta da marca (até 5 s) → conteúdo; a chamada para se
+  inscrever entra depois de entregar algo de valor, nunca no começo.
+- A chamada pede **uma** ação e dá o motivo ("Siga para a parte 2", "Salva para não esquecer").
+
+## Referências e pesquisa
+
+- Se a pessoa mandou referências, use-as e cite-as na seção **Fontes** do roteiro (autor, título e
+  link).
+- Se não mandou, peça ao `pesquisador` (ou pesquise você) de 3 a 5 fontes confiáveis sobre o tema:
+  documentação oficial, artigo técnico, livro ou aula aberta. Prefira fonte primária.
+- Todo número, data ou afirmação técnica tem fonte. Sem fonte, sai do roteiro ou vira opinião
+  declarada.
+- Escreva com as suas palavras; citação literal só curta, entre aspas e com autor.
+- Referência visual (o vídeo de outra pessoa) inspira o formato, não é copiada.
+
 ## Formato do roteiro
 
-Use `modelos/roteiro.md`: tabela com tempo, fala, texto na tela, imagem e som. Acrescente sugestões
+Use `modelos/roteiro.md`: tabela com tempo, emoção, fala (com direção de voz), texto na tela,
+imagem e som. Acrescente sugestões
 de título (YouTube: até 60 caracteres, palavra-chave no começo), legenda do post e capítulos.
 
 ## Revisão

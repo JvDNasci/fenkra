@@ -66,6 +66,15 @@ real removido: use a remoção de fundo do ArtCraft ou `rembg` quadro a quadro.
 **Abertura e encerramento**: abertura no vertical com no máximo 1 s (ou nenhuma: o gancho é a
 abertura). Tela final no YouTube com 5-20 s e espaço para os elementos finais da plataforma.
 
+## Casar com o som e com o nível de efeitos
+
+A tabela de casamento visual e sonoro, os níveis (pouco, médio e muito) e os perfis estão na skill
+`video-estilo`. Alinhe entradas de texto e impactos às batidas de `audio/*.batidas.txt`.
+
+**Chamadas para redes**: selo com o @ e um ícone simples desenhado por nós (círculo com glifo
+genérico de câmera, play ou nota musical), entrando com spring e um `pop`; não use logos oficiais de
+plataformas deformados ou recoloridos.
+
 ## Boas práticas
 
 - Movimento com curva (ease ou spring), nunca linear, exceto em barra de progresso.

@@ -1,0 +1,2 @@
+Efeitos sintetizados por ferramentas/gerar_sfx.py. Obra original do estúdio, sem amostras de
+terceiros. Uso livre em projetos próprios e de clientes.

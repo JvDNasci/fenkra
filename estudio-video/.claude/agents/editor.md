@@ -4,6 +4,7 @@ description: Editor de vídeo. Use para cortar brutos, montar a linha do tempo, 
 model: sonnet
 skills:
   - video-edicao
+  - video-estilo
   - video-formatos
 ---
 

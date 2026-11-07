@@ -1,0 +1,18 @@
+# tempo(s) arquivo(em biblioteca/sfx) ganho
+0.10 interface/pop_medio_1.wav 0.8
+0.95 interface/clique_medio_1.wav 0.7
+1.15 interface/clique_medio_2.wav 0.7
+1.58 transicao/whoosh_medio_1.wav 0.9
+2.034 impacto/hit_forte_1.wav 1.0
+4.068 impacto/hit_medio_1.wav 0.9
+4.576 interface/pop_medio_1.wav 0.8
+4.576 acento/glitch_suave_1.wav 0.6
+5.085 interface/pop_medio_2.wav 0.8
+5.085 acento/glitch_suave_2.wav 0.6
+5.593 interface/pop_medio_1.wav 0.8
+5.593 acento/glitch_suave_1.wav 0.6
+6.102 acento/ding_medio_1.wav 0.8
+6.55 tensao/riser_medio_1.wav 0.7
+8.136 impacto/boom_medio_1.wav 1.0
+8.79 interface/pop_medio_2.wav 0.8
+9.14 interface/pop_suave_1.wav 0.7

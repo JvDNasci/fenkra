@@ -17,8 +17,16 @@ Equipe de agentes do Claude Code para produzir vídeos de freelance e de canal p
 | `gerador-ia` | B-roll, cenários e personagens no ArtCraft | video-artcraft |
 | `sonoplasta` | voz, trilha, SFX, ducking, loudness | video-audio |
 | `revisor` | QA técnico, de marca, de direitos e de retenção | video-qa |
+| `marketing` | posicionamento, título, capa, post, hashtags, testes, métricas e venda do serviço | video-divulgacao, video-vendas |
+| `colorista` | paleta por marca ou canal, correção e looks de cor, contraste | video-cor |
+| `musico` | trilha original, domínio público, arranjos, biblioteca de SFX e licenças | video-musica |
 
-O fluxo completo, com os pontos de aprovação, está em `.claude/skills/video-fluxo/SKILL.md`.
+Skills transversais: `video-estilo` (perfis, nível de efeitos, casamento entre som e imagem, e o que
+todo vídeo atual tem, o que é diferencial e o que evitar) e `video-fontes` (biblioteca de fontes).
+
+O fluxo completo, com os pontos de aprovação, está em `.claude/skills/video-fluxo/SKILL.md`. Ele começa
+por uma **mini entrevista** (`modelos/entrevista.md`) e passa por uma **prévia** (animatic + quadro de
+estilo + teste de trilha) antes do render final.
 
 ## Onde cada coisa roda (decisão)
 
@@ -52,6 +60,14 @@ claude
 
 O `produtor` faz o briefing e pede sua aprovação, e daí a equipe segue o fluxo.
 
+## Bibliotecas (geradas por script, fora do git)
+
+```bash
+python ferramentas/baixar_fontes.py   # 26 fontes livres (OFL e Apache) por estilo, com licença
+python ferramentas/gerar_sfx.py       # 90 efeitos sonoros originais: 15 tipos × 3 intensidades × 2 variações
+python ferramentas/lut.py             # 9 looks de cor (.cube)
+```
+
 ## Ferramentas
 
 - `ferramentas/video.sh`: novo projeto, info, proxy, trecho, vertical (desfoque ou corte), juntar,
@@ -60,6 +76,20 @@ O `produtor` faz o briefing e pede sua aprovação, e daí a equipe segue o flux
 - `ferramentas/legendas.py`: transcrição (faster-whisper), depois `.srt` e `.ass` com destaque
   palavra a palavra, nas cores de `paleta.json`.
 - `ferramentas/cortar_silencios.py`: corte bruto que remove pausas.
+- `ferramentas/trilha.py`: trilha original por clima (tecnológico, energético, charmoso, calmo, emotivo,
+  épico), mais o mapa de batidas para cortar no ritmo.
+- `ferramentas/paleta.py`: paleta da marca ou do canal (por cor ou extraída do logo), com contraste.
+- `ferramentas/previa.py`: prévia (animatic) a partir de `planos.csv`.
+- `video.sh tratar-voz`: limpa um áudio enviado (leve, padrão ou forte); `video.sh cor` e
+  `comparar-cor`: looks de cor.
+- `ferramentas/legendas.py --estilo`: limpo, impacto, podcast, caixa, charme, manuscrito, divertido e
+  tech, com a palavra de ênfase em outra fonte.
+
+## Exemplo pronto
+
+`projetos/fenkra/cad-10s/`: vídeo vertical de 10 s sobre CAD paramétrico, feito de ponta a ponta com
+o kit (roteiro, prévia, render 3D por código, trilha e SFX originais, cor, QA e divulgação). Para
+refazer: `cd projetos/fenkra/cad-10s && ./produzir.sh`.
 
 ## Sugestão
 

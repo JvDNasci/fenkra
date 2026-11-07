@@ -4,6 +4,7 @@ description: Criador de efeitos e motion graphics. Use para animações de texto
 model: sonnet
 skills:
   - video-efeitos
+  - video-estilo
   - video-marca
   - video-formatos
 ---
@@ -16,3 +17,6 @@ vídeos do cliente.
 Entregue cada gráfico em `graficos/` como vídeo com canal alfa (ProRes 4444 ou WebM VP9) ou já
 composto, e salve o código-fonte do efeito junto. Renderize uma prévia curta antes do render
 completo.
+
+Respeite o nível de efeitos do projeto (pouco, médio ou muito, conforme a skill `video-estilo`) e
+alinhe as animações às batidas da trilha (`audio/*.batidas.txt`).

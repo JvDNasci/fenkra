@@ -22,9 +22,12 @@ video.sh <comando> [argumentos]
   juntar <lista.txt> <saida>                concatena (formato do concat demuxer)
   sobrepor <base> <grafico> <saida> [ini_s] sobrepõe gráfico com alfa a partir de ini_s
   legendar <entrada> <legenda.ass|srt> <saida>  queima a legenda
+  tratar-voz <entrada> <saida.wav> [leve|padrao|forte]  limpa e nivela uma voz ou áudio enviado
   medir <entrada>                           LUFS integrado e pico real
-  loudness <entrada> <saida> [alvo=-14]     normaliza em duas passagens
+  loudness <entrada> <saida> [alvo=-14]     normaliza em duas passagens (pico -1,5 para sobrar margem após AAC)
   exportar <entrada> <vertical|youtube|feed|web> <saida>  perfil por plataforma
+  cor <entrada> <saida> <look|arquivo.cube> [força 0-1=0.8]  gradação de cor (LUTs em biblioteca/luts)
+  comparar-cor <entrada> <pasta>            um quadro com todos os looks lado a lado
   quadros <entrada> <pasta> [intervalo_s=2] folha de contato para revisão
   grade <entrada> <pasta>                   quadros com a área segura do vertical
 EOF
@@ -45,9 +48,10 @@ novo() {
   precisa "${1:-}"; precisa "${2:-}"
   local p="$RAIZ/projetos/$1/$2"
   mkdir -p "$p"/{brutos,ia,audio,graficos,render,entregas}
-  for m in briefing roteiro plano-edicao qa; do
+  for m in briefing roteiro plano-edicao qa entrevista divulgacao; do
     [[ -f "$p/$m.md" ]] || cp "$RAIZ/modelos/$m.md" "$p/$m.md"
   done
+  [[ -f "$p/planos.csv" ]] || cp "$RAIZ/modelos/planos.csv" "$p/planos.csv"
   # marca é do cliente: compartilhada entre projetos
   [[ -f "$RAIZ/projetos/$1/marca.md" ]] || cp "$RAIZ/modelos/guia-marca.md" "$RAIZ/projetos/$1/marca.md"
   # sem link simbólico (Windows): aponta para o guia do cliente
@@ -108,7 +112,32 @@ legendar() {
   local leg; leg="$(realpath "$2")"
   leg="${leg//\\/\\\\}"; leg="${leg//:/\\:}"; leg="${leg//\'/\\\'}"
   local filtro="subtitles"; [[ "$2" == *.ass ]] && filtro="ass"
-  ffmpeg -hide_banner -y -i "$1" -vf "$filtro='$leg'" "${X264[@]}" -c:a copy "$3"
+  # libass não lê subpastas: reúne a biblioteca de fontes numa pasta plana temporária
+  local extra="" plana=""
+  if [[ -d "$RAIZ/biblioteca/fontes" ]]; then
+    plana="$(mktemp -d)"
+    find "$RAIZ/biblioteca/fontes" -type f \( -name '*.ttf' -o -name '*.otf' \) -exec cp {} "$plana/" \;
+    extra=":fontsdir='${plana//:/\\:}'"
+  fi
+  ffmpeg -hide_banner -y -i "$1" -vf "$filtro='$leg'$extra" "${X264[@]}" -c:a copy "$3"
+  [[ -n "$plana" ]] && rm -rf "$plana"
+  return 0
+}
+
+tratar-voz() {
+  precisa "${2:-}"
+  local nivel="${3:-padrao}" af
+  case "$nivel" in
+    leve)   af="highpass=f=70,acompressor=threshold=-20dB:ratio=2:attack=10:release=120:makeup=2" ;;
+    padrao) af="highpass=f=80,afftdn=nf=-25:tn=1,deesser=i=0.4,equalizer=f=250:t=q:w=1:g=-2,equalizer=f=3500:t=q:w=1.2:g=2,acompressor=threshold=-20dB:ratio=3:attack=5:release=90:makeup=3" ;;
+    forte)  af="highpass=f=100,afftdn=nf=-20:tn=1,afftdn=nf=-30,agate=threshold=0.02:ratio=3:release=150,deesser=i=0.5,equalizer=f=300:t=q:w=1:g=-3,equalizer=f=4000:t=q:w=1.2:g=3,acompressor=threshold=-22dB:ratio=4:attack=5:release=80:makeup=4" ;;
+    *) falha "nível deve ser leve, padrao ou forte" ;;
+  esac
+  local tmp; tmp="$(mktemp --suffix=.wav 2>/dev/null || mktemp)"
+  ffmpeg -hide_banner -loglevel error -y -i "$1" -vn -ac 1 -ar 48000 -af "$af" -c:a pcm_s16le -f wav "$tmp"
+  loudness "$tmp" "$2" -16 >/dev/null 2>&1 || cp "$tmp" "$2"
+  rm -f "$tmp"
+  echo "antes:"; medir "$1"; echo "depois:"; medir "$2"
 }
 
 medir() {
@@ -120,15 +149,17 @@ medir() {
 loudness() {
   precisa "${2:-}"
   local alvo="${3:-"-14"}" json
-  json="$(ffmpeg -hide_banner -nostats -i "$1" -af "loudnorm=I=$alvo:TP=-1:LRA=11:print_format=json" -f null - 2>&1 \
+  json="$(ffmpeg -hide_banner -nostats -i "$1" -af "loudnorm=I=$alvo:TP=-1.5:LRA=11:print_format=json" -f null - 2>&1 \
     | sed -n '/^{/,/^}/p')"
   local mi mtp mlra mth off
   read -r mi mtp mlra mth off < <(python3 -I -c '
 import json,sys; d=json.loads(sys.stdin.read())
 print(d["input_i"],d["input_tp"],d["input_lra"],d["input_thresh"],d["target_offset"])' <<<"$json")
+  local acodec=("${AAC[@]}")
+  [[ "$2" == *.wav ]] && acodec=(-c:a pcm_s16le -ar 48000)
   ffmpeg -hide_banner -y -i "$1" -af \
-    "loudnorm=I=$alvo:TP=-1:LRA=11:measured_I=$mi:measured_TP=$mtp:measured_LRA=$mlra:measured_thresh=$mth:offset=$off:linear=true,aresample=48000" \
-    -c:v copy "${AAC[@]}" "$2"
+    "loudnorm=I=$alvo:TP=-1.5:LRA=11:measured_I=$mi:measured_TP=$mtp:measured_LRA=$mlra:measured_thresh=$mth:offset=$off:linear=true,aresample=48000" \
+    -c:v copy "${acodec[@]}" "$2"
 }
 
 exportar() {
@@ -145,6 +176,39 @@ exportar() {
   ffmpeg -hide_banner -y -i "$1" -vf "$vf,setsar=1" -fps_mode cfr -c:v libx264 -profile:v high \
     -preset slow -crf 18 -maxrate "$br" -bufsize "$br" -pix_fmt yuv420p -movflags +faststart \
     "${AAC[@]}" "$3"
+}
+
+_lut() {
+  local l="$1"
+  [[ -f "$l" ]] || l="$RAIZ/biblioteca/luts/$1.cube"
+  [[ -f "$l" ]] || { python3 -I "$RAIZ/ferramentas/lut.py" >/dev/null; }
+  [[ -f "$l" ]] || falha "look não encontrado: $1"
+  echo "$l"
+}
+
+cor() {
+  precisa "${3:-}"
+  local l; l="$(_lut "$3")"; l="${l//:/\\:}"
+  local f="${4:-0.8}"
+  ffmpeg -hide_banner -y -i "$1" -filter_complex \
+    "[0:v]split[a][b];[b]lut3d=file='$l'[c];[a][c]blend=all_mode=normal:all_opacity=$f,format=yuv420p[v]" \
+    -map "[v]" -map 0:a? "${X264[@]}" -c:a copy "$2"
+}
+
+comparar-cor() {
+  precisa "${2:-}"
+  mkdir -p "$2"
+  python3 -I "$RAIZ/ferramentas/lut.py" >/dev/null
+  local looks=() i=0 entradas=() grafo=""
+  for l in "$RAIZ"/biblioteca/luts/*.cube; do looks+=("$l"); done
+  local meio; meio="$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$1" | awk '{print $1/2}')"
+  ffmpeg -v error -y -ss "$meio" -i "$1" -frames:v 1 -vf "scale=-2:480" "$2/original.png"
+  for l in "${looks[@]}"; do
+    local n; n="$(basename "$l" .cube)"
+    ffmpeg -v error -y -i "$2/original.png" -vf "lut3d=file='${l//:/\\:}',drawtext=text='$n':x=10:y=10:fontsize=22:fontcolor=white:box=1:boxcolor=black@0.6" "$2/look_$n.png"
+  done
+  ffmpeg -v error -y -pattern_type glob -i "$2/look_*.png" -vf "tile=5x2" -frames:v 1 -update 1 "$2/looks.png"
+  echo "comparação: $2/looks.png"
 }
 
 quadros() {
@@ -169,6 +233,6 @@ drawbox=x=0:y=220:w=60:h=1280:color=red@0.35:t=fill,scale=360:-2" "$2/grade_%03d
 cmd="${1:-ajuda}"; shift || true
 case "$cmd" in
   ajuda|-h|--help) ajuda ;;
-  novo|verificar|info|proxy|trecho|vertical|juntar|sobrepor|legendar|medir|loudness|exportar|quadros|grade) "$cmd" "$@" ;;
+  novo|verificar|info|proxy|trecho|vertical|juntar|sobrepor|legendar|medir|loudness|tratar-voz|exportar|cor|comparar-cor|quadros|grade) "$cmd" "$@" ;;
   *) ajuda; exit 1 ;;
 esac
