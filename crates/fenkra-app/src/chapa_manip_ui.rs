@@ -122,20 +122,7 @@ fn alca(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, nth:
     let tcol = ui.visuals().text_color();
     let g = painter.layout_no_wrap(txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), tcol);
     let lr = Rect::from_min_size(rot_pos, g.size() + egui::vec2(10., 6.));
-    // B411: dois rótulos nunca se cobrem; o que chega depois desce até achar lugar livre
-    let lr = {
-        // guarda só os rótulos desta passada de desenho: a lista recomeça quando o número da passada muda
-        let chave = egui::Id::new("chapa_rotulos");
-        let passada = ui.ctx().cumulative_pass_nr();
-        let (nr, mut usados): (u64, Vec<Rect>) = ui.ctx().data(|d| d.get_temp(chave)).unwrap_or_default();
-        if nr != passada {
-            usados.clear();
-        }
-        let livre = afasta_rotulo(lr, &usados, rect);
-        usados.push(livre);
-        ui.ctx().data_mut(|d| d.insert_temp(chave, (passada, usados)));
-        livre
-    };
+    let lr = reserva_rotulo(ui, lr, rect);
     painter.rect_filled(lr, 4., fundo);
     painter.rect_stroke(lr, 4., Stroke::new(1., normal), egui::StrokeKind::Inside);
     painter.galley(lr.min + egui::vec2(5., 3.), g, tcol);
@@ -178,6 +165,22 @@ fn alca(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, nth:
         }
     }
     let _ = ponta;
+}
+
+/// B411: dois rótulos de alça nunca se cobrem. O que chega depois desce até achar lugar livre; a lista
+/// guarda só os rótulos desta passada de desenho (recomeça quando o número da passada muda). Também
+/// é usada pelo rótulo das setas lineares (`handles.rs`), que desenha depois das alças da chapa.
+pub fn reserva_rotulo(ui: &egui::Ui, lr: Rect, viewport: Rect) -> Rect {
+    let chave = egui::Id::new("chapa_rotulos");
+    let passada = ui.ctx().cumulative_pass_nr();
+    let (nr, mut usados): (u64, Vec<Rect>) = ui.ctx().data(|d| d.get_temp(chave)).unwrap_or_default();
+    if nr != passada {
+        usados.clear();
+    }
+    let livre = afasta_rotulo(lr, &usados, viewport);
+    usados.push(livre);
+    ui.ctx().data_mut(|d| d.insert_temp(chave, (passada, usados)));
+    livre
 }
 
 /// B411: desce `lr` até que não cubra nenhum rótulo já posto (`usados`), sem sair da viewport. Quando a

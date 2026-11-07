@@ -731,7 +731,8 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     let txt = if numeric && crate::sup_loft::sem_unidade(h.label) { format!("{} {}", tr(h.label), fmt(val)) } else if numeric { format!("{} {} mm", tr(h.label), fmt(val)) } else { format!("🔒 {} = {}", h.expr.trim(), fmt(val)) };
     let lp = st + n * 22. + d * 10.;
     let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(estado.fonte())), Color32::WHITE);
-    let lr = Rect::from_min_size(lp, galley.size() + egui::vec2(10., 6.));
+    // B411: o rótulo não cobre os das alças da chapa, que já foram postos nesta passada
+    let lr = crate::chapa_manip_ui::reserva_rotulo(ui, Rect::from_min_size(lp, galley.size() + egui::vec2(10., 6.)), rect);
     painter.rect_filled(lr, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
     painter.rect_stroke(lr, 4., Stroke::new(1., c), egui::StrokeKind::Inside);
     painter.galley(lr.min + egui::vec2(5., 3.), galley, Color32::WHITE);
