@@ -770,7 +770,7 @@ c('B373', 2, 'P0', 'Furo e rosca: fluxo novo e rosca modelada de verdade', 'Reve
 c('B374', 2, 'P0', 'Biblioteca: painel sem sobreposição e inserir em furo, ponto ou solto', 'Fontes, licenças e inserir em furo não se encavalam ao rolar. O item entra num furo, num ponto ou solto no espaço, para posicionar depois, e também vai para a montagem como peça.',
   ['USR-TESTE'], [], 150, 'Auto + Visual', 'Biblioteca de normas', status='feito'),
 c('B375', 2, 'P1', 'Fixadores inteligentes: comando paramétrico com pilhas por ponto, vetor ou furo', 'Um comando editável na árvore controla o conjunto: parafuso, diâmetro e pilhas superior e inferior, com quantas arruelas e porcas forem precisas, de qualquer tipo, reordenando por arraste. Alvos por furo, ponto ou vetor, sem exigir furo nas peças, e adicionar mais alvos depois. Regras de diâmetro por cor, cadastráveis em polegada e métrico, com seleção por cor ou por cerca na viewport. O prendedor inserido segue como peça normal.',
-  ['USR-TESTE'], [], 500, 'Auto + Visual', 'Montagem'),
+  ['USR-TESTE'], [], 500, 'Auto + Visual', 'Montagem', status='em andamento'),
 c('B376', 3, 'P1', 'Tutoriais por peça, com aula dos comandos', 'Tutoriais com mais detalhe, organizados por objetivo: quero desenhar uma peça assim, com a peça pronta e o passo a passo dos comandos. Cada comando leva à sua aula, incluindo as regras de fixadores inteligentes.',
   ['USR-TESTE'], [], 400, 'Auto + Visual', 'Interface'),
 c('B377', 2, 'P1', 'Tooltip com animação do próprio programa, e opção de tooltip simples', 'Além da sequência de passos, o tooltip mostra uma animação curta do comando feita pelo próprio programa, sem vídeo. Uma opção troca para o tooltip simples, sem tutoriais avançados.',
