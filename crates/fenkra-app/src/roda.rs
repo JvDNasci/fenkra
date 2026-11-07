@@ -185,12 +185,16 @@ pub enum Selecao {
     Nada,
     Face,
     Aresta,
+    /// vértice ou ponto
+    Vertice,
+    /// superfície (face de corpo de superfície ou superfície de referência)
+    Superficie,
     Outra,
 }
 
 impl Contexto {
     /// Chave do conteúdo salvo, da mais específica à geral: `bancada:modo:selecao`.
-    pub fn chaves(&self) -> [String; 3] {
+    pub fn chaves(&self) -> [String; 4] {
         let b = match self.bancada {
             Bench::Solidos => "solidos",
             Bench::Superficies => "superficies",
@@ -210,9 +214,12 @@ impl Contexto {
             Selecao::Nada => "nada",
             Selecao::Face => "face",
             Selecao::Aresta => "aresta",
+            Selecao::Vertice => "vertice",
+            Selecao::Superficie => "superficie",
             Selecao::Outra => "outra",
         };
-        [format!("{b}:{m}:{s}"), format!("{b}:{m}:*"), format!("*:{m}:*")]
+        // da mais específica à geral; `*:modo:seleção` vale para qualquer bancada (montagem com uma face)
+        [format!("{b}:{m}:{s}"), format!("*:{m}:{s}"), format!("{b}:{m}:*"), format!("*:{m}:*")]
     }
 
     pub fn nome(&self) -> String {
@@ -220,14 +227,30 @@ impl Contexto {
     }
 }
 
-/// Contextos que o editor oferece, com o rótulo em português.
+/// Contextos que o editor oferece, com o rótulo em português. A roda de cada bancada e modo traz os
+/// comandos do fluxo daquela bancada; com algo selecionado, traz os de face, aresta, vértice ou
+/// superfície (B372). A pessoa continua podendo trocar qualquer um.
 pub const CONTEXTOS: &[(&str, &str)] = &[
     ("*:peca:*", "Peça (qualquer bancada)"),
     ("solidos:peca:face", "Sólidos com uma face selecionada"),
     ("solidos:peca:aresta", "Sólidos com uma aresta selecionada"),
+    ("solidos:peca:vertice", "Sólidos com um vértice selecionado"),
+    ("superficies:peca:*", "Superfícies"),
+    ("superficies:peca:superficie", "Superfícies com uma superfície selecionada"),
+    ("superficies:peca:aresta", "Superfícies com uma aresta selecionada"),
+    ("estrutural:peca:*", "Estrutural"),
+    ("estrutural:peca:aresta", "Estrutural com uma linha ou aresta selecionada"),
+    ("estrutural:peca:vertice", "Estrutural com um vértice selecionado"),
+    ("forma_livre:peca:*", "Forma livre"),
     ("*:sketch:*", "Sketch"),
     ("chapa:peca:*", "Chapa metálica"),
+    ("chapa:peca:face", "Chapa com uma face selecionada"),
+    ("chapa:peca:aresta", "Chapa com uma aresta selecionada"),
+    ("chapa:peca:vertice", "Chapa com um vértice selecionado"),
     ("*:montagem:*", "Montagem"),
+    ("*:montagem:face", "Montagem com uma face selecionada"),
+    ("*:montagem:aresta", "Montagem com uma aresta selecionada"),
+    ("*:montagem:vertice", "Montagem com um vértice selecionado"),
     ("*:desenho:*", "Desenho técnico"),
 ];
 
@@ -236,9 +259,23 @@ pub fn padrao(chave: &str) -> &'static [&'static str] {
     match chave {
         "solidos:peca:face" => &["sketch", "recorte", "furo_simples", "casca", "espessura", "saida", "padrao_linear", "espelho"],
         "solidos:peca:aresta" => &["arestas_selecionar", "chanfro", "sketch", "extrusao", "recorte", "furo_simples", "espelho", "ajustar"],
+        "solidos:peca:vertice" => &["sketch", "ponto_coord", "linha_pontos", "plano_3pontos", "plano_ponto_normal", "furo_simples", "extrair", "ajustar"],
+        "superficies:peca:*" => &["sup_extrudada", "sup_revolucao", "sup_varredura_av", "sup_conectar", "sup_preenchida", "sup_deslocada", "hib_costurar", "hib_engrossar"],
+        "superficies:peca:superficie" => &["sup_deslocada", "sup_filete", "hib_engrossar", "hib_costurar", "hib_dividir", "hib_fechar", "curva_extraida", "ajustar"],
+        "superficies:peca:aresta" => &["sup_filete_aresta", "sup_extrudada", "curva_extraida", "sup_preenchida", "sup_conectar", "hib_costurar", "linha_pontos", "ajustar"],
+        "estrutural:peca:*" => &["st_membro", "wf_repetir", "st_placa", "st_reforco", "st_solda", "st_canto_meia", "st_corte", "st_montagem"],
+        "estrutural:peca:aresta" => &["st_membro", "st_solda", "st_reforco", "st_canto_meia", "chanfro", "arestas_selecionar", "st_corte", "ajustar"],
+        "estrutural:peca:vertice" => &["st_placa", "st_reforco", "st_canto_meia", "st_membro", "ponto_coord", "linha_pontos", "st_solda", "ajustar"],
+        "forma_livre:peca:*" => &["forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "sketch", "ajustar"],
         "*:sketch:*" => &["sk_cota", "sk_offset", "sk_aparar", "sk_espelhar", "sk_filete", "sk_construcao", "sk_concluir", "sk_estender"],
         "chapa:peca:*" => &["sm_parede", "sm_aba", "sm_desdobrar", "sketch", "extrusao", "recorte", "furo_simples", "ajustar"],
+        "chapa:peca:face" => &["sm_aba", "sm_dobra_linha", "sm_recorte", "furo_simples", "sm_estampo", "sm_veneziana", "sm_desdobrar", "sketch"],
+        "chapa:peca:aresta" => &["sm_aba", "arestas_selecionar", "chanfro", "sm_alivio_canto", "sm_fecha_canto", "sm_dobra_linha", "sm_desdobrar", "ajustar"],
+        "chapa:peca:vertice" => &["sm_alivio_canto", "sm_fecha_canto", "ponto_coord", "sketch", "sm_desdobrar", "ajustar"],
         "*:montagem:*" => &["asm_inserir", "rest_coincidencia", "rest_fixar", "rest_paralelo", "rest_perpendicular", "rest_distancia", "rest_angulo", "ajustar"],
+        "*:montagem:face" => &["rest_coincidencia", "rest_contato", "rest_paralelo", "rest_perpendicular", "rest_distancia", "rest_angulo", "rest_fixar", "ajustar"],
+        "*:montagem:aresta" => &["rest_coincidencia", "rest_paralelo", "rest_distancia", "rest_angulo", "rest_alinhar", "rest_conjunta", "rest_fixar", "ajustar"],
+        "*:montagem:vertice" => &["rest_coincidencia", "rest_distancia", "rest_fixar", "rest_conjunta", "rest_alinhar", "asm_inserir", "ajustar"],
         "*:desenho:*" => &["des_folha", "des_pdf", "des_dxf", "sk_cota", "ajustar", "salvar"],
         _ => &["sketch", "extrusao", "recorte", "revolucao", "furo_simples", "arestas_selecionar", "chanfro", "casca"],
     }
@@ -516,7 +553,7 @@ mod testes {
         cfg.restaurar("*:sketch:*");
         assert_eq!(cfg.icones(&sk)[0], "sk_cota");
         // sem nada específico, qualquer peça cai no conjunto geral
-        let outra = Contexto { bancada: Bench::Estrutural, modo: Modo::Peca, selecao: Selecao::Nada };
+        let outra = Contexto { bancada: Bench::Solidos, modo: Modo::Peca, selecao: Selecao::Nada };
         assert_eq!(cfg.icones(&outra)[0], "sketch");
     }
 
@@ -538,6 +575,37 @@ mod testes {
         }
         for (_, rotulo) in CONTEXTOS {
             assert!(crate::i18n::tem_traducao(rotulo), "{rotulo}");
+        }
+    }
+
+    /// B372: cada bancada tem o conteúdo do próprio fluxo e a seleção troca o conteúdo.
+    #[test]
+    fn roda_segue_o_fluxo_da_bancada_e_a_selecao() {
+        let cfg = Config::default();
+        let ic = |b, m, s| cfg.icones(&Contexto { bancada: b, modo: m, selecao: s });
+        // cada bancada abre com os comandos dela
+        assert_eq!(ic(Bench::Superficies, Modo::Peca, Selecao::Nada)[0], "sup_extrudada");
+        assert_eq!(ic(Bench::Estrutural, Modo::Peca, Selecao::Nada)[0], "st_membro");
+        assert_eq!(ic(Bench::FormaLivre, Modo::Peca, Selecao::Nada)[0], "forma_caixa");
+        assert_eq!(ic(Bench::Chapa, Modo::Peca, Selecao::Nada)[0], "sm_parede");
+        // a seleção troca o conteúdo dentro da mesma bancada
+        for b in [Bench::Solidos, Bench::Chapa] {
+            let (f, a, v) = (ic(b, Modo::Peca, Selecao::Face), ic(b, Modo::Peca, Selecao::Aresta), ic(b, Modo::Peca, Selecao::Vertice));
+            assert!(f != a && a != v && f != v, "{b:?}: face, aresta e vértice devem ter conteúdos próprios");
+        }
+        assert_ne!(ic(Bench::Superficies, Modo::Peca, Selecao::Superficie), ic(Bench::Superficies, Modo::Peca, Selecao::Nada));
+        assert!(ic(Bench::Estrutural, Modo::Peca, Selecao::Vertice).contains(&"st_placa".to_string()));
+        // na montagem, face e aresta oferecem restrições diferentes
+        let (mf, ma) = (ic(Bench::Montagem, Modo::Montagem, Selecao::Face), ic(Bench::Montagem, Modo::Montagem, Selecao::Aresta));
+        assert!(mf.contains(&"rest_contato".to_string()) && !ma.contains(&"rest_contato".to_string()));
+        // sem conteúdo específico, a roda cai no geral, nunca vazia nem maior que uma página
+        for b in [Bench::Solidos, Bench::Superficies, Bench::Montagem, Bench::Chapa, Bench::Estrutural, Bench::Desenho, Bench::FormaLivre] {
+            for m in [Modo::Peca, Modo::Sketch, Modo::Montagem, Modo::Desenho] {
+                for s in [Selecao::Nada, Selecao::Face, Selecao::Aresta, Selecao::Vertice, Selecao::Superficie, Selecao::Outra] {
+                    let v = ic(b, m, s);
+                    assert!(!v.is_empty() && v.len() <= SETORES, "{b:?}/{m:?}/{s:?}: {v:?}");
+                }
+            }
         }
     }
 

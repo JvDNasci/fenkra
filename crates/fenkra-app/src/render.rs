@@ -80,6 +80,21 @@ fn shade_realistic(base_s: vec3<f32>, n: vec3<f32>, v: vec3<f32>, rough: f32, me
     return to_display(c);
 }
 
+// B425: cor de baixa luminância ganha luz de preenchimento e um contorno claro na silhueta; cor
+// parecida com o fundo (peça branca no fundo claro, preta no escuro) ganha contorno do lado oposto
+// do fundo. A regra de luminância é a de `contraste.rs`.
+fn lum(c: vec3<f32>) -> f32 { return dot(c, vec3<f32>(0.2126, 0.7152, 0.0722)); }
+fn realce_de_contraste(c: vec3<f32>, base: vec3<f32>, n: vec3<f32>, v: vec3<f32>) -> vec3<f32> {
+    let borda = pow(1.0 - abs(dot(n, v)), 2.5);
+    let lb = lum(base);
+    let lbg = lum(mix(u.bg_bottom.rgb, u.bg_top.rgb, select(0.0, 0.5, u.bg_bottom.w > 0.5)));
+    let escura = 1.0 - smoothstep(0.08, 0.30, lb);
+    var o = c + vec3<f32>(0.55, 0.60, 0.72) * escura * (0.06 + 0.22 * borda);
+    let perto = 1.0 - smoothstep(0.10, 0.35, abs(lb - lbg));
+    let oposto = select(vec3<f32>(0.93, 0.94, 0.97), vec3<f32>(0.06, 0.07, 0.09), lbg > 0.5);
+    return mix(o, oposto, perto * borda * 0.55);
+}
+
 // Escala do tema na posição `t`: a mesma de `sup_analise::rampa`, agora por pixel. Interpolar a cor
 // entre vértices, como antes, desenhava os triângulos na tela: a escala é logarítmica e tem paradas.
 fn rampa(t: f32) -> vec3<f32> {
@@ -211,6 +226,7 @@ struct MOut {
         let spec = pow(d, 48.0) * 0.22 * (1.0 - rough);
         c = base * (0.30 + 0.55 * d + fill) + vec3<f32>(spec);
     }
+    c = realce_de_contraste(c, base, n, v);
     if (mode > 3.5 && mode < 4.5) {
         // raio-X
         c = mix(c, vec3<f32>(0.75, 0.85, 1.0), 0.35);

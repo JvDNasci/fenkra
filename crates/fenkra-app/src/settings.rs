@@ -471,6 +471,8 @@ pub struct Settings {
     pub show_start: bool,
     pub icon_size: f32,
     pub show_labels: bool,
+    /// dica simples: só nome e frase, sem animação nem passo a passo (B377)
+    pub dica_simples: bool,
     // cotagem (usado pelo sketch e pelo desenho)
     pub dim_standard: String,
     pub dim_decimals: u8,
@@ -625,6 +627,7 @@ impl Default for Settings {
             show_start: true,
             icon_size: 30.,
             show_labels: true,
+            dica_simples: false,
             dim_standard: "ABNT NBR 10126".into(),
             dim_decimals: 2,
             dim_text_height: 3.5,

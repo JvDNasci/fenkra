@@ -961,7 +961,7 @@ fn title_fields(app: &App) -> std::collections::HashMap<String, String> {
         let vol: f64 = app.result.as_ref().map(|r| r.bodies.iter().map(|b| b.mass.volume).sum()).unwrap_or(0.);
         let massa: f64 = app.result.as_ref().map(|r| r.bodies.iter().map(|b| fenkra_core::materiais::massa_kg(doc, b.collector, b.mass.volume)).sum()).unwrap_or(0.);
         put("material", props.material.clone());
-        put("massa", format!("{:.3} kg", massa).replace('.', ","));
+        put("massa", crate::massa_fmt::texto_kg(1e6, massa, app.result.as_ref().is_some_and(|r| !r.bodies.is_empty())));
         put("volume", format!("{:.1} cm³", vol / 1000.).replace('.', ","));
     }
     for (k, v) in &props.custom {
