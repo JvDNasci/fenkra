@@ -744,7 +744,7 @@ c('B360', 2, 'P1', 'Painel de comando em hierarquia, em vez de abas e caixas', '
 c('B361', 2, 'P1', 'Realce de face por contorno externo', 'Clicar numa face realça só o contorno dela, sem brilhar a área inteira nem as arestas internas. Aresta e ponto continuam brilhando só eles.',
   ['USR-TESTE'], [], 150, 'Auto + Visual', 'Interface', status='feito'),
 c('B362', 2, 'P0', 'Abrir peça a partir da montagem sem travar', 'Abrir uma peça de dentro da montagem está dando problema. Reproduzir, corrigir e testar a ida e a volta, com alterações por salvar.',
-  ['USR-TESTE'], [], 120, 'Auto + Visual', 'Interface'),
+  ['USR-TESTE'], [], 120, 'Auto + Visual', 'Interface', status='feito'),
 c('B363', 2, 'P1', 'Documentos abertos: alternar rápido entre peças e abrir em janela nova', 'Barra e atalho para ver e trocar entre os documentos abertos, sem perder o estado de cada um, com opção de abrir em nova janela, refinando a lista de peças do rodapé.',
   ['USR-TESTE'], [], 300, 'Auto + Visual', 'Interface'),
 c('B364', 4, 'P1', 'PLM: árvore navegável do produto com miniatura, PN e estado', 'Além da lista em linhas, o projeto mostra uma árvore navegável do produto em forma de grafo: cada nó com miniatura simples da peça e PN. Ao passar o mouse o nó expande e mostra PN, nome e estado, com regra de cor por estado (liberado ou não). Dá para abrir conjunto grande e navegar nos níveis, com a pré-visualização vinda do pacote .fkv.',
