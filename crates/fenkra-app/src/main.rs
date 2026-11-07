@@ -16,6 +16,8 @@ mod entradas;
 mod previa;
 mod previa_leve_ui;
 mod rosca_ui;
+mod furo_painel;
+mod textos_furo_rosca;
 mod demo_rosca;
 mod sup3d;
 mod sup_analise;

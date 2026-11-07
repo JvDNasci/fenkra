@@ -151,6 +151,7 @@ pub static CAMPOS: &[(&str, &str, &str)] = &[
     ("Folga (offset)", "Folga mantida entre os dois corpos. Zero encosta; positivo afasta; típico 0,1 a 1.", "Gap kept between the two bodies. Zero touches; positive separates; typically 0.1 to 1."),
     ("Folga de solda", "Espaço deixado na junta para a solda entrar. Típico 1 a 3; zero deixa as peças encostadas.", "Space left in the joint for the weld to enter. Typically 1 to 3; zero leaves the pieces touching."),
     ("Folga interna", "Espaço livre dentro do encaixe. Zero é justo; positivo facilita a montagem.", "Free space inside the fit. Zero is tight; positive eases assembly."),
+    ("Ângulo de início", "Ângulo onde o sulco da rosca cruza a boca do furo, a partir da referência. 0 a 360; muda só a fase da hélice, não o volume.", "Angle where the thread groove crosses the hole mouth, from the reference. 0 to 360; it changes only the helix phase, not the volume."),
     ("Folga no fundo", "Espaço deixado no fundo do furo ou do rasgo. Zero encosta; típico 0,5 a 2.", "Space left at the bottom of the hole or slot. Zero touches; typically 0.5 to 2."),
     // padrões e distribuição
     ("Espaçamento", "Distância entre cópias vizinhas, de centro a centro. Maior que zero; menor que o tamanho da peça faz sobrepor.", "Distance between neighboring copies, center to center. Above zero; less than the part size makes them overlap."),

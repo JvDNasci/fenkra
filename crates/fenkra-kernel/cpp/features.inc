@@ -871,6 +871,11 @@ rust::Vec<double> cylinder_at(const Shape& s, double px, double py, double pz) {
 
 std::unique_ptr<Shape> thread_tool_ext(double ox, double oy, double oz, double dx, double dy, double dz,
                                        double major_d, double pitch, double length, double angle_deg) {
+    return thread_tool_ext_x(ox, oy, oz, dx, dy, dz, major_d, pitch, length, angle_deg, 0, 0, 0);
+}
+
+std::unique_ptr<Shape> thread_tool_ext_x(double ox, double oy, double oz, double dx, double dy, double dz,
+                                         double major_d, double pitch, double length, double angle_deg, double xx, double xy, double xz) {
     return guard("rosca externa", [&] {
         if (pitch <= 0 || length <= 0 || major_d <= 0) throw std::runtime_error("rosca: passo, comprimento e diâmetro devem ser positivos");
         const double depth = 0.6134 * pitch;
@@ -879,7 +884,8 @@ std::unique_ptr<Shape> thread_tool_ext(double ox, double oy, double oz, double d
         const double half = std::tan(angle_deg / 2 * M_PI / 180.0) * (depth + 0.1 * pitch);
         gp_Dir axis(dx, dy, dz);
         gp_Pnt o(ox, oy, oz);
-        gp_Ax3 ax(o, axis);
+        const bool com_x = std::abs(xx) + std::abs(xy) + std::abs(xz) > 1e-12;
+        gp_Ax3 ax = com_x ? gp_Ax3(o, axis, gp_Dir(xx, xy, xz)) : gp_Ax3(o, axis);
         Handle(Geom_CylindricalSurface) cyl = new Geom_CylindricalSurface(ax, r_maj);
         const double turns = length / pitch;
         gp_Lin2d l2(gp_Pnt2d(0, 0), gp_Dir2d(2 * M_PI, pitch));

@@ -3871,12 +3871,12 @@ impl Ctx<'_> {
     /// erro (varredura de hélice contra o cilindro do furo): cada tentativa é conferida pelo volume e,
     /// se não cortou, desfeita e refeita no degrau seguinte da [`rosca_furo::ESCADA`]. Devolve `false`
     /// quando nenhum degrau cortou (o corpo fica como estava, sem sulco).
-    fn corta_rosca(&mut self, target: Id, fid: Id, ferramenta: &dyn Fn(usize) -> Result<Shape, String>) -> bool {
+    fn corta_rosca(&mut self, target: Id, fid: Id, minimo: f64, ferramenta: &dyn Fn(usize) -> Result<Shape, String>) -> bool {
         for degrau in 0..rosca_furo::ESCADA.len() {
             let Ok(tool) = ferramenta(degrau) else { continue };
             let (corpo, ferr, passos) = (self.bodies.get(&target).cloned(), self.tools.get(&fid).cloned(), self.steps.get(&fid).cloned());
             let antes = corpo.as_ref().map_or(0., |b| b.0.mass().volume);
-            if self.apply(target, tool, BoolOp::Cut, fid).is_ok() && antes - self.body(target).map_or(0., |b| b.mass().volume) >= 1e-6 {
+            if self.apply(target, tool, BoolOp::Cut, fid).is_ok() && antes - self.body(target).map_or(0., |b| b.mass().volume) >= minimo.max(1e-6) && self.body(target).is_some_and(|b| b.is_valid()) {
                 return true;
             }
             // desfaz a tentativa: corpo, ferramenta guardada e passos voltam ao que eram
@@ -4277,6 +4277,25 @@ impl Ctx<'_> {
                 if rosca_prof.is_some_and(|p| p <= 0.) || rosca_folga < 0. {
                     return Err("a profundidade da rosca precisa ser positiva e a folga no fundo não pode ser negativa".into());
                 }
+                // B373: folgas em mm, passos ou porcentagem da profundidade útil, chanfro de entrada e ângulo de início
+                let un_fundo = h.extra.thread_relief_unit.unwrap_or(UnidadeMedida::Passos);
+                let topo_bruto = self.mm_opcional(&h.extra.thread_top_gap, "folga em cima da rosca")?;
+                let chanfro_bruto = self.mm_opcional(&h.extra.thread_chamfer, "chanfro de entrada da rosca")?;
+                let angulo_inicio = self.mm_opcional(&h.extra.thread_start_angle, "ângulo de início da rosca")?;
+                if topo_bruto < 0. || chanfro_bruto < 0. {
+                    return Err("a folga em cima e o chanfro de entrada da rosca não podem ser negativos".into());
+                }
+                let ref_escolhida = match &h.extra.thread_start_ref {
+                    Some(a) => Some(geo3d::unit(self.axis_d(a, 0)?.1).ok_or("referência do ângulo de início nula")?),
+                    None => None,
+                };
+                let em_mm = |valor: f64, un: UnidadeMedida, passo: f64, base: f64| match un {
+                    UnidadeMedida::Mm => valor,
+                    UnidadeMedida::Passos => valor * passo,
+                    UnidadeMedida::Porcento => base * valor / 100.,
+                };
+                // folga no fundo em passos de rosca, para a profundidade útil `base` do furo
+                let folga_passos = |base: f64, passo: f64| em_mm(rosca_folga, un_fundo, passo, base) / passo;
                 let cut = self.end_cutter(&h.depth, f.target)?;
                 let mut tool = Shape::empty();
                 let mut depths = vec![];
@@ -4302,7 +4321,7 @@ impl Ctx<'_> {
                                 HoleShape::Counterdrill { diameter, depth, angle } => (FormaFuro::Contrafuro, diameter, depth, angle),
                             };
                             let tolerancia = h.standard.as_deref().map(tolerancia_do_texto).unwrap_or_default();
-                            let prof_rosca = h.thread.as_deref().and_then(hardware::thread).map_or(0., |sp| furo_norma::comprimento_de_rosca(depth, rosca_prof, rosca_folga, sp.pitch).max(0.));
+                            let prof_rosca = h.thread.as_deref().and_then(hardware::thread).map_or(0., |sp| furo_norma::comprimento_de_rosca(depth, rosca_prof, folga_passos(depth, sp.pitch), sp.pitch).max(0.));
                             v.push(HoleRow { feature: f.id, prof_rosca, pos: *o, dir: *dir, diameter: d, depth, through: matches!(h.depth, Extent::ThroughAll | Extent::UpToLast), thread: h.thread.clone().unwrap_or_default(), forma, d_boca, prof_boca, angulo, tolerancia });
                         }
                     });
@@ -4358,7 +4377,15 @@ impl Ctx<'_> {
                     if sulco && rosca_prof.is_some_and(|p| p > lim + 1e-9) {
                         return Err(format!("a profundidade da rosca ({}) passa da profundidade do furo ({})", rosca_prof.unwrap_or(0.), lim));
                     }
-                    let plano = rosca_furo::plano(spec, cabeca, lim, ext, rosca_prof, rosca_folga, passante);
+                    // B373: chanfro de entrada na boca (só furo sem rebaixo ou escareado: nele a entrada já é a boca larga)
+                    let chanfro = em_mm(chanfro_bruto, h.extra.thread_chamfer_unit, spec.pitch, rosca_furo::profundidade_do_filete(spec.pitch));
+                    if chanfro > 1e-9 && cabeca <= 1e-9 {
+                        let cone = rosca_furo::chanfro_de_entrada(o, tdir, d, chanfro)?;
+                        self.apply(f.target, cone, BoolOp::Cut, f.id)?;
+                    }
+                    let topo = em_mm(topo_bruto, h.extra.thread_top_gap_unit, spec.pitch, lim);
+                    let folga = folga_passos(lim, spec.pitch);
+                    let plano = rosca_furo::plano_com_topo(spec, cabeca, lim, ext, rosca_prof, folga, passante, topo);
                     // cosmética: a parede cilíndrica inteira que a norma manda roscar, colada no escareado;
                     // modelada (e a prévia dela): o trecho onde o sulco de fato fica
                     let (inicio, visivel) = if h.thread_modeled {
@@ -4367,7 +4394,7 @@ impl Ctx<'_> {
                             None => (0., 0.),
                         }
                     } else {
-                        (cabeca, furo_norma::comprimento_de_rosca(lim, rosca_prof, rosca_folga, spec.pitch) - cabeca)
+                        (cabeca, furo_norma::comprimento_de_rosca(lim, rosca_prof, folga, spec.pitch) - cabeca)
                     };
                     if visivel < spec.pitch {
                         sem_espaco += 1;
@@ -4376,22 +4403,20 @@ impl Ctx<'_> {
                     let o = [0, 1, 2].map(|i| o[i] + tdir[i] * inicio);
                     self.roscas.push(RoscaViz { feature: f.id, origin: o, dir: tdir, radius: d / 2., len: visivel, pitch: spec.pitch, esquerda: h.left_hand, interna: true, modelada: sulco });
                     let Some(plano) = plano.filter(|_| sulco) else { continue };
-                    let o = [0, 1, 2].map(|i| o[i] + tdir[i] * (plano.inicio - inicio));
-                    let esquerda = h.left_hand;
+                    // `o` já é o início do sulco; a boca do furo fica `plano.inicio` acima dele
+                    let boca = [0, 1, 2].map(|i| o[i] - tdir[i] * plano.inicio);
+                    let fase = rosca_furo::Fase { referencia: rosca_furo::referencia(tdir, ref_escolhida), angulo: angulo_inicio, esquerda: h.left_hand };
                     let ferramenta = |degrau: usize| -> Result<Shape, String> {
-                        let mut tool = rosca_furo::ferramenta_no_degrau(o, tdir, spec, plano.comprimento, true, degrau)?;
-                        if esquerda {
-                            // espelhar por um plano que contém o eixo troca o sentido da hélice
-                            tool = tool.transformed(Xform::Mirror(o, geo3d::any_perp(tdir))).map_err(k)?;
-                        }
+                        let mut tool = rosca_furo::ferramenta_do_furo(boca, tdir, spec, &plano, degrau, fase)?;
                         if let Some((c, ext)) = &cut {
                             // a rosca para na mesma superfície do furo
-                            tool = tool.clip_until(c, o, *ext).map_err(k)?;
+                            tool = tool.clip_until(c, boca, *ext).map_err(k)?;
                         }
                         Ok(tool)
                     };
                     // a booleana pode falhar ou devolver o corpo sem o sulco, e sem erro: confere e tenta de novo
-                    if !self.corta_rosca(f.target, f.id, &ferramenta) {
+                    let minimo = 0.35 * rosca_furo::volume_estimado(spec, d / 2., visivel);
+                    if !self.corta_rosca(f.target, f.id, minimo, &ferramenta) {
                         sem_sulco += 1;
                     }
                 }
@@ -5764,7 +5789,7 @@ impl Ctx<'_> {
                         None => Ok(tool),
                     }
                 };
-                if !self.corta_rosca(f.target, f.id, &ferramenta) {
+                if !self.corta_rosca(f.target, f.id, 1e-6, &ferramenta) {
                     let aviso = format!("a rosca {} não removeu material: confira o diâmetro da face e o comprimento", spec.name);
                     return Ok(Some(match note {
                         Some(n) => format!("{n}; {aviso}"),
