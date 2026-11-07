@@ -255,6 +255,20 @@ impl Models {
         let mut pieces: Vec<Shape> = vec![];
         let mut piece_names: Vec<String> = vec![];
         for n in &shown_asm.nodes {
+            if let NodeKind::SubAssembly { path } = &n.kind {
+                // B381: subconjunto entra com as peças de dentro, no sistema de quem o contém
+                let fp = full_path(dir.as_deref(), path);
+                files.push((fp.clone(), stamp(&fp)));
+                if !shown(&shown_asm, n.id) {
+                    continue;
+                }
+                for (nome, s) in pecas_do_subconjunto(path, dir.as_deref(), &n.placement, &mut self.parts, &mut files, 0) {
+                    all = if all.is_null() { s.clone() } else { all.compound(&s) };
+                    pieces.push(s);
+                    piece_names.push(format!("{} / {nome}", n.name));
+                }
+                continue;
+            }
             let NodeKind::Part { path } = &n.kind else { continue };
             let fp = full_path(dir.as_deref(), path);
             files.push((fp.clone(), stamp(&fp)));
@@ -639,6 +653,43 @@ impl Models {
             Model::Asm(a) => Some((a.props.pn.clone(), if a.props.description.is_empty() { a.name.clone() } else { a.props.description.clone() }, String::new())),
         }
     }
+}
+
+/// Peças de um subconjunto (e dos subconjuntos dentro dele), já levadas ao sistema de quem o contém.
+/// Os arquivos lidos entram em `files` para a vista saber quando refazer.
+fn pecas_do_subconjunto(path: &str, dir: Option<&Path>, pl: &fenkra_montagem::Placement, cache: &mut PartCache, files: &mut Vec<(PathBuf, Option<SystemTime>)>, fundo: u32) -> Vec<(String, Shape)> {
+    if fundo > 16 {
+        return vec![];
+    }
+    let full = full_path(dir, path);
+    let Some(sub) = std::fs::read_to_string(&full).ok().and_then(|t| Assembly::from_json(&t).ok()) else { return vec![] };
+    let sub_dir = full.parent().map(|x| x.to_path_buf());
+    let mut out = vec![];
+    for n in &sub.nodes {
+        if !shown(&sub, n.id) {
+            continue;
+        }
+        match &n.kind {
+            NodeKind::Part { path } => {
+                let fp = full_path(sub_dir.as_deref(), path);
+                files.push((fp.clone(), stamp(&fp)));
+                if let Some(s) = placed_shape(&sub, n.id, sub_dir.as_deref(), cache).and_then(|s| fenkra_montagem::view::posicionado(s, pl)) {
+                    out.push((n.name.clone(), s));
+                }
+            }
+            NodeKind::SubAssembly { path } => {
+                let fp = full_path(sub_dir.as_deref(), path);
+                files.push((fp.clone(), stamp(&fp)));
+                for (nome, s) in pecas_do_subconjunto(path, sub_dir.as_deref(), &n.placement, cache, files, fundo + 1) {
+                    if let Some(s) = fenkra_montagem::view::posicionado(s, pl) {
+                        out.push((format!("{} / {nome}", n.name), s));
+                    }
+                }
+            }
+            NodeKind::Group => {}
+        }
+    }
+    out
 }
 
 /// Esquema cinemático: símbolo de cada junta, barras ligando as juntas de cada peça e terra nas
