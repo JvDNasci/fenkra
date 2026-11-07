@@ -19,6 +19,7 @@ mod cota_inteligente;
 mod corte_ui;
 mod cordao;
 mod ghost;
+mod importar_ui;
 mod options;
 mod setas_ui;
 mod simbolos;
@@ -733,6 +734,8 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             st.last_check = now;
             if st.auto_update && st.models.refresh() {
                 st.invalidate();
+                // B371: as anotações importadas do 3D acompanham o modelo
+                fenkra_desenho::importar::atualizar(&mut st.d, &mut st.models);
             }
             // sem atualização automática o arquivo pode ter mudado: o selo avisa
             st.states.clear();
@@ -1878,6 +1881,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         if centros_ui::painel(ui, st, id) {
             return;
         }
+        if st.d.views.iter().any(|v| v.id == id) {
+            importar_ui::secao(ui, st, id);
+        }
         if let Some(v) = st.d.views.iter_mut().find(|v| v.id == id) {
             ui.heading(tr("Vista"));
             let state = st.states.get(&id).copied().unwrap_or(ViewState::Atualizada);
@@ -2646,7 +2652,7 @@ mod tests {
 
     #[test]
     fn os_textos_do_bloqueio_tem_traducao() {
-        for t in ["A tabela está sobre a legenda da folha.", "A tabela sai da moldura da folha.", "Mover para a área livre", "Remover seta", "Adicionar seta", "Seta", "Setas", "Ancoragem na nota"] {
+        for t in ["Anotações do 3D", "Importar selecionadas", "Bloco de notas: não cabe na folha", "A folha já tem legenda", "Já importada nesta vista", "Cota", "Balão", "Rugosidade", "Referência", "Nenhuma anotação 3D nesta origem.", "A tabela está sobre a legenda da folha.", "A tabela sai da moldura da folha.", "Mover para a área livre", "Remover seta", "Adicionar seta", "Seta", "Setas", "Ancoragem na nota"] {
             assert!(crate::i18n::tem_traducao(t), "{t}");
         }
         for t in ["Selecione uma vista mãe: clique nela na folha", "Falta a origem: escolha uma peça ou montagem salva", "A folha não tem vistas para cotar", "Atualizada", "Desatualizada", "Erro"] {

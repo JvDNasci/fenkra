@@ -994,7 +994,19 @@ lado oposto");
             use fenkra_desenho::*;
             let dir = std::env::temp_dir().join("fenkra_demo_desenho");
             let _ = std::fs::create_dir_all(&dir);
-            let _ = std::fs::write(dir.join("placa.fkp"), fenkra_solidos::example_document().to_json());
+            let mut doc_demo = fenkra_solidos::example_document();
+            // B371: com FENKRA_DEMO_DWG=importar a placa já traz anotações 3D para importar
+            if std::env::var("FENKRA_DEMO_DWG").as_deref() == Ok("importar") {
+                use fenkra_core::pmi::{Pmi, PmiKind};
+                let mk = |id: u64, nome: &str, kind: PmiKind, a: Vec<[f64; 3]>, t: &str| Pmi { id: Id(id), name: nome.into(), kind, anchors: a, offset: [0.; 3], text: t.into(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: None, style: Default::default(), folder: String::new(), targets: vec![] };
+                doc_demo.pmi.push(mk(9001, "Comprimento", PmiKind::Linear, vec![[-60., 0., 0.], [60., 0., 0.]], ""));
+                doc_demo.pmi.push(mk(9002, "Profundidade", PmiKind::Linear, vec![[0., -36., 0.], [0., 36., 0.]], ""));
+                doc_demo.pmi.push(mk(9003, "Rebarbar", PmiKind::Note, vec![[30., 0., 0.]], "Rebarbar"));
+                doc_demo.pmi.push(mk(9004, "Notas gerais", PmiKind::Note, vec![[0., 0., 0.]], &"Nota geral
+".repeat(8)));
+                doc_demo.pmi.push(mk(9005, "Legenda 3D", PmiKind::TitleBlock { template: "{nome}".into() }, vec![[0.; 3]], ""));
+            }
+            let _ = std::fs::write(dir.join("placa.fkp"), doc_demo.to_json());
             let src = Source { path: "placa.fkp".into(), display_state: String::new(), hidden: vec![] };
             let mut d = Drawing::new("Placa de exemplo", Format::A3);
             let sh = d.sheets[0].id;
@@ -1034,6 +1046,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             match std::env::var("FENKRA_DEMO_DWG").as_deref() {
                 Ok("abnt") => d.title.style = TitleStyle::Abnt,
                 Ok("ansi") => d.title.style = TitleStyle::Ansi,
+                Ok("importar") => demo_sel = Some(ids[0]),
                 // B370: nota com três setas (lados e pontas diferentes), selecionada para editar
                 Ok("setas") => {
                     use fenkra_core::pmi::{PmiArrow, PmiFrame};
