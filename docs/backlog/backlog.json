@@ -5969,7 +5969,7 @@
    "onda": 3,
    "prio": "P0",
    "titulo": "Projeto-teste: produto completo modelado no Fenkra para validar as bancadas",
-   "oque": "Modelar um produto real de ponta a ponta usando quase todas as bancadas: esqueleto estrutural com tubos dobrados, chapa, sólidos, superfícies e forma livre, transmissão, fixadores, montagem, desenho, PMI e PLM. Bem paramétrico e editável: desenho mestre com parâmetros dirigindo os conjuntos e subconjuntos. Cada conjunto e subconjunto tem PMI, mesmo genérico, com número da peça, lista de peças e balões nas peças filhas; cada peça filha tem nota simples e bloco de título. Feito por comandos reproduzíveis, cada falha vira item do backlog. O conjunto fica como exemplo e teste de regressão.",
+   "oque": "Modelar um produto real de ponta a ponta usando quase todas as bancadas: esqueleto estrutural com tubos dobrados, chapa, sólidos, superfícies e forma livre, transmissão, fixadores, montagem, desenho, PMI e PLM. Bem paramétrico e editável: desenho mestre com parâmetros dirigindo os conjuntos e subconjuntos. Cada conjunto e subconjunto tem PMI, mesmo genérico, com número da peça, lista de peças e balões nas peças filhas; cada peça filha tem nota simples e bloco de título. Feito por comandos reproduzíveis, cada falha vira item do backlog. Ao final, pintar todas as peças com seus materiais (aço do quadro, alumínio, borracha dos pneus, plástico da carenagem e do banco) e dar à carenagem uma cor bonita de carro comum, para o kart ficar com cara de produto real. O conjunto fica como exemplo e teste de regressão.",
    "origem": [
     "USR-TESTE"
    ],
