@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Abrir uma peça: em qual bancada ela aparece e quando a câmera a enquadra (B423).
 
 use crate::settings::Bench;

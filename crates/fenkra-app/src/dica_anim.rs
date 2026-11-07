@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Animação curta do comando na dica, feita pelo próprio programa (B377).
 //!
 //! Sem vídeo e sem pacote de mídia: cada família de comando tem uma cena de poucas formas (um

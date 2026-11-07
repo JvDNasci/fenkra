@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Contraste entre a peça, as arestas dela e o fundo (B425).
 //!
 //! A cor das arestas vem do tema e é uma só para a cena: escura no tema claro, clara no escuro. Peça

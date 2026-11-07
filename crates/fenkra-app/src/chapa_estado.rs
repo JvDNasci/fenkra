@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Estado da chapa no 3D (B428): quando a chapa está planificada, um selo no alto da vista diz isso,
 //! com a cor de destaque do tema, e o botão Planificar da barra fica aceso. Antes a troca era só um
 //! aviso que sumia, e nenhuma captura mostrava a chapa plana.

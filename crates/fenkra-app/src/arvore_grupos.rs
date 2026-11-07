@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Agrupar a geometria na árvore (B429). Uma peça mestre com esqueleto chega a 60 itens de geometria
 //! e 89 publicações; em lista plana, com nomes curtos, ninguém acha nada. Passando do limiar, os
 //! itens se separam por classe (planos, pontos, curvas, superfícies), cada grupo recolhido e com a
