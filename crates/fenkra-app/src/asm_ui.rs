@@ -1530,16 +1530,20 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             ui.label(RichText::new(tr("relacional")).weak().small()).on_hover_text(tr("projeto relacional: peças novas fixas na origem, forma por links entre peças"));
         }
     });
-    // resumo: definidos × soltos
+    // resumo: fixados × restringidos × soltos
     if st.comp_dof.is_empty() && !st.asm.nodes.is_empty() {
         st.comp_dof = fenkra_montagem::solve::dof_per_comp(&st.asm);
     }
     {
-        let comps: Vec<&Node> = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).collect();
-        let full = comps.iter().filter(|n| n.fixed || st.comp_dof.get(&n.id) == Some(&0)).count();
-        let free = comps.iter().filter(|n| !n.fixed && st.comp_dof.get(&n.id) == Some(&6)).count();
-        let part = comps.len() - full - free;
-        ui.label(RichText::new(format!("■ {full} {}  ◐ {part} {}  ○ {free} {}", tr("definidos"), tr("parciais"), tr("soltos"))).small().weak());
+        let s = fenkra_montagem::solve::situacao(&st.asm, &st.comp_dof);
+        ui.label(RichText::new(format!("📌 {} {}  ■ {} {}  ◐ {} {}  ○ {} {}", s.fixados, tr("fixados"), s.restringidos, tr("restringidos"), s.parciais, tr("parciais"), s.soltos, tr("soltos"))).small().weak())
+            .on_hover_text(tr("Fixado: a posição foi gravada e não prova nada sobre a montagem. Restringido: a posição vem das restrições com as peças vizinhas."));
+        let inuteis = fenkra_montagem::solve::itens_sem_efeito(&st.asm);
+        if !inuteis.is_empty() {
+            let nomes: Vec<&str> = st.asm.mates.iter().filter(|m| inuteis.contains(&m.id)).map(|m| m.name.as_str()).chain(st.asm.joints.iter().filter(|j| inuteis.contains(&j.id)).map(|j| j.name.as_str())).collect();
+            let cor = ui.visuals().warn_fg_color;
+            ui.label(RichText::new(format!("⚠ {} {}", inuteis.len(), tr("sem efeito: os dois lados estão presos"))).small().color(cor)).on_hover_text(format!("{}\n{}", nomes.join(", "), tr("Solte um dos lados para a restrição valer.")));
+        }
     }
     // recursos das peças, subconjuntos e instâncias (para a árvore)
     let info = {

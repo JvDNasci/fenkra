@@ -907,6 +907,45 @@ pub fn dof_per_comp(a: &Assembly) -> HashMap<Id, usize> {
     out
 }
 
+/// Como cada componente chegou aonde está. "Sem grau de liberdade" sozinho não diz nada: fixar
+/// tudo com a posição gravada também dá zero, e só `restringidos` prova que a peça está montada.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub struct Situacao {
+    /// presos pela própria marca de fixo
+    pub fixados: usize,
+    /// sem liberdade por causa de restrições, juntas ou fixação conjunta com outra peça
+    pub restringidos: usize,
+    pub parciais: usize,
+    pub soltos: usize,
+}
+
+/// Conta os componentes. `dof` é o resultado de [`dof_per_comp`].
+pub fn situacao(a: &Assembly, dof: &HashMap<Id, usize>) -> Situacao {
+    let b = bodies(a);
+    let mut s = Situacao::default();
+    for n in a.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)) {
+        let preso_a_fixo = b.of.get(&n.id).copied().flatten().is_none();
+        match dof.get(&n.id) {
+            _ if n.fixed => s.fixados += 1,
+            _ if preso_a_fixo => s.restringidos += 1,
+            Some(0) => s.restringidos += 1,
+            Some(6) => s.soltos += 1,
+            _ => s.parciais += 1,
+        }
+    }
+    s
+}
+
+/// Restrições e juntas ativas cujos dois lados não têm como se mover um em relação ao outro: ambos
+/// fixos, ou no mesmo grupo rígido. Elas nunca falham, por isso passariam caladas.
+pub fn itens_sem_efeito(a: &Assembly) -> Vec<Id> {
+    let b = bodies(a);
+    let corpo = |c: Id| b.of.get(&c).copied().flatten();
+    let mates = a.mates.iter().filter(|m| !m.suppressed).filter(|m| corpo(m.a.comp) == corpo(m.b.comp)).map(|m| m.id);
+    let juntas = a.joints.iter().filter(|j| !j.suppressed).filter(|j| corpo(j.a.comp) == corpo(j.b.comp)).map(|j| j.id);
+    mates.chain(juntas).collect()
+}
+
 /// O que as restrições deixam um componente fazer ao longo de três eixos.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct Liberdade {
@@ -1113,6 +1152,65 @@ fn matrix_rank(j: &[f64], m: usize, n: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn eixo_em(c: Id) -> MateRef {
+        MateRef { comp: c, geom: Geom::Axis { p: [0.; 3], d: [0., 0., 1.] }, pick: None, viva: None }
+    }
+
+    /// Duas peças fixas, uma presa a uma fixa e uma solta.
+    fn quatro() -> (Assembly, [Id; 4]) {
+        let mut a = Assembly::new("A");
+        let ids = ["F1", "F2", "R", "S"].map(|n| a.add_component(n, NodeKind::Part { path: "p".into() }, Placement::default(), None));
+        a.node_mut(ids[0]).unwrap().fixed = true;
+        a.node_mut(ids[1]).unwrap().fixed = true;
+        (a, ids)
+    }
+
+    #[test]
+    fn situacao_separa_fixado_de_restringido() {
+        let (mut a, [f1, _, r, _]) = quatro();
+        let plano = Geom::Plane { p: [0.; 3], n: [0., 0., 1.] };
+        // eixo e plano deixam giro: parcial
+        a.add_mate(MateKind::Coincident { flip: false }, eixo_em(f1), eixo_em(r));
+        a.add_mate(MateKind::Coincident { flip: false }, MateRef { comp: f1, geom: plano, pick: None, viva: None }, MateRef { comp: r, geom: plano, pick: None, viva: None });
+        assert_eq!(situacao(&a, &dof_per_comp(&a)), Situacao { fixados: 2, restringidos: 0, parciais: 1, soltos: 1 });
+        // com a fixação conjunta a peça deixa de ter liberdade, e isso é restrição de verdade
+        a.mates.clear();
+        a.add_rigid(vec![f1, r]);
+        assert_eq!(situacao(&a, &dof_per_comp(&a)), Situacao { fixados: 2, restringidos: 1, parciais: 0, soltos: 1 });
+    }
+
+    #[test]
+    fn tudo_fixado_nao_conta_como_restringido() {
+        let (mut a, ids) = quatro();
+        for c in ids {
+            a.node_mut(c).unwrap().fixed = true;
+        }
+        let s = situacao(&a, &dof_per_comp(&a));
+        assert_eq!(s, Situacao { fixados: 4, ..Default::default() });
+        assert_eq!(dof(&a), 0, "zero grau de liberdade, e nada provado");
+    }
+
+    #[test]
+    fn restricao_entre_dois_fixos_nao_tem_efeito() {
+        use crate::kin::{JFrame, JRef, JointKind};
+        let (mut a, [f1, f2, r, s]) = quatro();
+        let inutil = a.add_mate(MateKind::Coincident { flip: false }, eixo_em(f1), eixo_em(f2));
+        let com_origem = a.add_mate(MateKind::Coincident { flip: false }, eixo_em(ORIGEM), eixo_em(f2));
+        a.add_mate(MateKind::Coincident { flip: false }, eixo_em(f1), eixo_em(r));
+        let f = JFrame::from_axis([0.; 3], [0., 0., 1.]);
+        let junta = a.add_joint(JointKind::Revolute, JRef { comp: f1, frame: f }, JRef { comp: f2, frame: f });
+        a.add_joint(JointKind::Revolute, JRef { comp: f1, frame: f }, JRef { comp: s, frame: f });
+        assert_eq!(itens_sem_efeito(&a), vec![inutil, com_origem, junta]);
+
+        // suprimida não incomoda, e dentro do mesmo grupo rígido também não faz nada
+        a.mates.iter_mut().find(|m| m.id == inutil).unwrap().suppressed = true;
+        assert_eq!(itens_sem_efeito(&a), vec![com_origem, junta]);
+        let (mut b, [_, _, r, s]) = quatro();
+        let dentro = b.add_mate(MateKind::Coincident { flip: false }, eixo_em(r), eixo_em(s));
+        b.add_rigid(vec![r, s]);
+        assert_eq!(itens_sem_efeito(&b), vec![dentro]);
+    }
 
     #[test]
     fn restricao_de_engrenagem_passa_de_meia_volta() {
