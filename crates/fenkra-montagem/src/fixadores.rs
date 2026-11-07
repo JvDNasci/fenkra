@@ -22,6 +22,10 @@
 //! para -Z. Com `u` o sentido de entrada do parafuso (da boca para a saída), o parafuso e as
 //! peças do lado da porca têm Z = -u e a arruela sob a cabeça tem Z = +u (o corpo dela fica do lado
 //! de fora da peça).
+//!
+//! Pilhas pedidas item a item (B375): `OpcoesFixadores::superior` e `inferior` trocam a arruela e a
+//! porca fixas por listas livres. Todo item segue a mesma conta: a face de apoio dele olha para a
+//! peça, e o corpo sobe para fora somando a altura dos que ficaram entre ele e a peça.
 
 use crate::load::{full_path, PartCache};
 use crate::*;
@@ -31,6 +35,7 @@ use fenkra_solidos::biblioteca::{self, Biblioteca, Familia, Tamanho};
 use fenkra_solidos::fixadores::{gerar, situacao_do_selo, SituacaoSelo};
 use fenkra_solidos::{prof_escareado, FormaFuro};
 use fenkra_solidos::hardware;
+use crate::pilhas::ItemPilha;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -77,11 +82,15 @@ pub struct OpcoesFixadores {
     pub engajamento: f64,
     /// rosca que deve sobrar além da porca, em passos da rosca (furo passante com porca)
     pub rosca_alem_porca: f64,
+    /// pilhas livres, item a item (B375). Com elas, `arruela` e `porca` não valem: `superior` vem da
+    /// cabeça para a peça e `inferior`, da peça para a ponta
+    pub superior: Option<Vec<ItemPilha>>,
+    pub inferior: Option<Vec<ItemPilha>>,
 }
 
 impl Default for OpcoesFixadores {
     fn default() -> Self {
-        OpcoesFixadores { familia_parafuso: "iso4762".into(), arruela: true, porca: true, familia_porca: "iso4032".into(), familia_arruela: "iso7089".into(), folga: 1, componentes: vec![], travar_giro: true, so_previa: false, comprimento: None, excluidas: vec![], tam_acessorios: None, engajamento: ENGAJAMENTO_PADRAO, rosca_alem_porca: ROSCA_ALEM_PORCA_PADRAO }
+        OpcoesFixadores { familia_parafuso: "iso4762".into(), arruela: true, porca: true, familia_porca: "iso4032".into(), familia_arruela: "iso7089".into(), folga: 1, componentes: vec![], travar_giro: true, so_previa: false, comprimento: None, excluidas: vec![], tam_acessorios: None, engajamento: ENGAJAMENTO_PADRAO, rosca_alem_porca: ROSCA_ALEM_PORCA_PADRAO, superior: None, inferior: None }
     }
 }
 
@@ -300,6 +309,86 @@ pub(crate) enum Recusa {
     Calar,
 }
 
+/// Um item da pilha já com as medidas que a conta usa.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ItemMedido {
+    pub(crate) familia: String,
+    pub(crate) tamanho: String,
+    /// quanto o item ocupa ao longo do eixo
+    pub(crate) altura: f64,
+    /// diâmetro da face de apoio: é o que decide se o item entra no rebaixo ou no cone
+    pub(crate) diametro: Option<f64>,
+}
+
+/// Medidas de um item. `Err` diz por que ele não serve.
+fn medir_item(lib: &Biblioteca, item: &ItemPilha, acess: &str) -> Result<ItemMedido, String> {
+    let fam = lib.familia(&item.familia).ok_or_else(|| format!("família desconhecida: {}", item.familia))?;
+    let tamanho = item.tamanho.clone().unwrap_or_else(|| acess.to_string());
+    let t = fam.tamanho(&tamanho).ok_or_else(|| format!("{} não tem o tamanho {tamanho}", fam.norma))?;
+    let sextavado = t.valor("s").map(|s| s / 30_f64.to_radians().cos());
+    let (altura, diametro) = match fam.tipo {
+        biblioteca::TipoFixador::Arruela => (t.valor("h"), t.valor("d2")),
+        biblioteca::TipoFixador::Porca => (t.valor("m"), sextavado),
+        _ => return Err(format!("{} não é arruela nem porca", fam.norma)),
+    };
+    let altura = altura.ok_or_else(|| format!("{} {tamanho} sem altura na tabela", fam.norma))?;
+    Ok(ItemMedido { familia: item.familia.clone(), tamanho, altura, diametro })
+}
+
+/// As duas pilhas que a opção pede, medidas: a de cima da cabeça para a peça e a de baixo da peça para
+/// a ponta. Em furo roscado a ponta termina na rosca, então não existe pilha de baixo.
+pub(crate) fn pilhas_pedidas(lib: &Biblioteca, op: &OpcoesFixadores, acess: &str, roscada: bool, nome: &str, avisos: &mut Vec<String>) -> (Vec<ItemMedido>, Vec<ItemMedido>) {
+    if op.superior.is_some() || op.inferior.is_some() {
+        let mut medir_lista = |lista: &Option<Vec<ItemPilha>>| -> Vec<ItemMedido> {
+            let mut v = vec![];
+            for item in lista.iter().flatten() {
+                match medir_item(lib, item, acess) {
+                    Ok(m) => v.push(m),
+                    Err(e) => avisos.push(format!("{nome}: {e}; a pilha segue sem esse item")),
+                }
+            }
+            v
+        };
+        let sup = medir_lista(&op.superior);
+        let inf = medir_lista(&op.inferior);
+        if roscada && !inf.is_empty() {
+            avisos.push(format!("{nome}: o furo é roscado, a pilha inferior fica de fora"));
+            return (sup, vec![]);
+        }
+        return (sup, inf);
+    }
+    let arruela = ItemPilha { familia: op.familia_arruela.clone(), tamanho: None };
+    let porca = ItemPilha { familia: op.familia_porca.clone(), tamanho: None };
+    let m_arruela = medir_item(lib, &arruela, acess).ok();
+    let m_porca = medir_item(lib, &porca, acess).ok();
+    let quer_porca = op.porca && !roscada;
+    if op.arruela && m_arruela.is_none() {
+        avisos.push(format!("arruela {acess} não existe na família {}: {nome} segue sem arruela", op.familia_arruela));
+    }
+    if quer_porca && m_porca.is_none() {
+        avisos.push(format!("porca {acess} não existe na família {}: {nome} segue sem porca", op.familia_porca));
+    }
+    let sup = m_arruela.clone().filter(|_| op.arruela).into_iter().collect();
+    let mut inf = vec![];
+    if let Some(p) = m_porca.filter(|_| quer_porca) {
+        inf.extend(m_arruela.filter(|_| op.arruela));
+        inf.push(p);
+    }
+    (sup, inf)
+}
+
+/// Primeiro comprimento da série que cobre `precisa`. Sem nenhum, o maior, com a falha escrita.
+pub(crate) fn comprimento_da_serie(serie: &[f64], precisa: f64, nome: &str, norma: &str, desig: &str, falhas: &mut Vec<String>) -> Option<f64> {
+    match serie.iter().copied().find(|l| *l >= precisa - 1e-9) {
+        Some(l) => Some(l),
+        None => {
+            let l = serie.last().copied()?;
+            falhas.push(format!("{nome}: a pega pede L ≥ {} mm, mas {norma} {desig} vai só até {} mm", num((precisa * 10.).round() / 10.), num(l)));
+            Some(l)
+        }
+    }
+}
+
 /// Geometria de uma pilha ao longo do eixo e o parafuso que ela pede.
 #[derive(Clone, Debug)]
 pub(crate) struct Medida {
@@ -309,10 +398,11 @@ pub(crate) struct Medida {
     pub(crate) c_ent: Id,
     pub(crate) c_sai: Id,
     pub(crate) roscada: bool,
-    pub(crate) com_porca: bool,
-    /// espessura das arruelas sob a cabeça e sob a porca, quando existem na família
-    pub(crate) h1: Option<f64>,
-    pub(crate) h2: Option<f64>,
+    /// da cabeça para a peça
+    pub(crate) sup: Vec<ItemMedido>,
+    /// da peça para a ponta
+    pub(crate) inf: Vec<ItemMedido>,
+    /// altura somada da pilha de cima: a cabeça fica isso para fora da face de entrada
     pub(crate) w1: f64,
     pub(crate) comprimento: f64,
     /// a pilha entra, mas o parafuso não serve direito: pega maior que a série, rosca curta
@@ -336,7 +426,7 @@ pub(crate) fn um_por_componente(asm: &Assembly, pilha: &mut Vec<Furo>) {
 /// é o primeiro da série acima da pega; em furo roscado, o último abaixo da profundidade útil, que
 /// precisa garantir o engajamento mínimo da rosca.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn medir(pilha: &[Furo], fam_p: &Familia, t_p: &Tamanho, desig: &str, fam_arr: Option<&Familia>, fam_porca: Option<&Familia>, op: &OpcoesFixadores, avisos: &mut Vec<String>) -> Result<Medida, Recusa> {
+pub(crate) fn medir(pilha: &[Furo], lib: &Biblioteca, fam_p: &Familia, t_p: &Tamanho, desig: &str, op: &OpcoesFixadores, avisos: &mut Vec<String>) -> Result<Medida, Recusa> {
     let (p0, u) = (pilha[0].boca, pilha[0].dir);
     let ancora = pilha.iter().find(|f| f.ancora).unwrap_or(&pilha[0]);
     let acess = op.tam_acessorios.as_deref().unwrap_or(desig);
@@ -360,29 +450,17 @@ pub(crate) fn medir(pilha: &[Furo], fam_p: &Familia, t_p: &Tamanho, desig: &str,
     let pega = fim.0 - ini.0;
     let (c_ent, c_sai) = (pilha[ini.1].comp, pilha[fim.1].comp);
     let roscada = pilha.iter().any(|f| f.roscado);
-    let com_porca = op.porca && !roscada;
-
-    let esp_arruela = |on: bool| -> Option<f64> { on.then(|| fam_arr.and_then(|f| f.tamanho(acess)).and_then(|t| t.valor("h"))).flatten() };
-    let h1 = esp_arruela(op.arruela);
-    let h2 = esp_arruela(op.arruela && com_porca);
-    let altura_porca = if com_porca { fam_porca.and_then(|f| f.tamanho(acess)).and_then(|t| t.valor("m")) } else { None };
-    if op.arruela && h1.is_none() {
-        avisos.push(format!("arruela {} não existe na família {}: {} segue sem arruela", desig, op.familia_arruela, ancora.nome));
-    }
-    if com_porca && altura_porca.is_none() {
-        avisos.push(format!("porca {} não existe na família {}: {} segue sem porca", desig, op.familia_porca, ancora.nome));
-    }
-    let com_porca = com_porca && altura_porca.is_some();
-    let (w1, w2, m) = (h1.unwrap_or(0.), if com_porca { h2.unwrap_or(0.) } else { 0. }, if com_porca { altura_porca.unwrap_or(0.) } else { 0. });
+    let (sup, inf) = pilhas_pedidas(lib, op, acess, roscada, &ancora.nome, avisos);
+    let w1: f64 = sup.iter().map(|i| i.altura).sum();
+    let w2: f64 = inf.iter().map(|i| i.altura).sum();
 
     // assento: a cabeça (ou a arruela sob ela) desce até o fundo do rebaixo ou do cone da boca de
     // entrada; o mesmo vale para a porca (ou a arruela dela) na boca de saída
     let cos30 = 30_f64.to_radians().cos();
     let d_cabeca = t_p.valor("dk").or_else(|| t_p.valor("s").map(|s| s / cos30)).unwrap_or(0.);
-    let d_arruela = fam_arr.and_then(|f| f.tamanho(acess)).and_then(|t| t.valor("d2"));
-    let d_porca = fam_porca.and_then(|f| f.tamanho(acess)).and_then(|t| t.valor("s")).map(|s| s / cos30);
-    let item_ent = if h1.is_some() { d_arruela.unwrap_or(d_cabeca) } else { d_cabeca };
-    let item_sai = if com_porca { if h2.is_some() { d_arruela.or(d_porca) } else { d_porca } } else { None };
+    // quem encosta na peça é o último item de cima e o primeiro de baixo
+    let item_ent = sup.last().and_then(|i| i.diametro).unwrap_or(d_cabeca);
+    let item_sai = inf.first().and_then(|i| i.diametro).or_else(|| inf.last().and_then(|i| i.diametro));
     let mut recuos = [0.; 2];
     for (k, (f, ponto, item)) in [(&pilha[ini.1], entrada, Some(item_ent)), (&pilha[fim.1], saida, item_sai)].into_iter().enumerate() {
         let Some(item) = item else { continue };
@@ -408,21 +486,14 @@ pub(crate) fn medir(pilha: &[Furo], fam_p: &Familia, t_p: &Tamanho, desig: &str,
             }
         }
     } else {
-        let precisa = pega + w1 + w2 + m + op.rosca_alem_porca.max(0.) * passo;
-        match serie.iter().copied().find(|l| *l >= precisa - 1e-9) {
-            Some(l) => l,
-            None => {
-                let Some(l) = serie.last().copied() else { return Err(Recusa::Calar) };
-                falhas.push(format!("{}: a pega pede L ≥ {} mm, mas {} {desig} vai só até {} mm", ancora.nome, num((precisa * 10.).round() / 10.), fam_p.norma, num(l)));
-                l
-            }
-        }
+        let precisa = pega + w1 + w2 + op.rosca_alem_porca.max(0.) * passo;
+        comprimento_da_serie(&serie, precisa, &ancora.nome, &fam_p.norma, desig, &mut falhas).ok_or(Recusa::Calar)?
     };
 
     let comprimento = match op.comprimento.and_then(|l| mais_proximo(&serie, l)) {
         Some(l) => {
-            if (l - comprimento).abs() > 1e-9 && !roscada && l < pega + w1 + w2 + m {
-                falhas.push(format!("{}: L{} não atravessa a pilha (pega + arruelas + porca = {} mm)", ancora.nome, num(l), num(((pega + w1 + w2 + m) * 10.).round() / 10.)));
+            if (l - comprimento).abs() > 1e-9 && !roscada && l < pega + w1 + w2 {
+                falhas.push(format!("{}: L{} não atravessa a pilha (pega + arruelas + porca = {} mm)", ancora.nome, num(l), num(((pega + w1 + w2) * 10.).round() / 10.)));
             }
             l
         }
@@ -437,7 +508,7 @@ pub(crate) fn medir(pilha: &[Furo], fam_p: &Familia, t_p: &Tamanho, desig: &str,
             falhas.push(format!("{}: {desig}x{} engaja {} mm de rosca; o mínimo é {} mm", ancora.nome, num(comprimento), num((engajado * 10.).round() / 10.), num((minimo * 10.).round() / 10.)));
         }
     }
-    Ok(Medida { entrada, saida, u, c_ent, c_sai, roscada, com_porca, h1, h2, w1, comprimento, falhas })
+    Ok(Medida { entrada, saida, u, c_ent, c_sai, roscada, sup, inf, w1, comprimento, falhas })
 }
 
 /// Preenche os furos da montagem com fixadores. `dir` é a pasta da montagem (onde nasce
@@ -450,8 +521,6 @@ pub fn preencher_furos(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartC
 pub fn preencher_com(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartCache, op: &OpcoesFixadores, lib: &Biblioteca) -> Result<RelatorioFixadores, String> {
     let dir = dir.ok_or("salve a montagem antes: as peças dos fixadores são gravadas na pasta dela")?;
     let fam_p = lib.familia(&op.familia_parafuso).filter(|f| f.tipo.e_parafuso()).ok_or_else(|| format!("família de parafuso desconhecida: {}", op.familia_parafuso))?;
-    let fam_arr = lib.familia(&op.familia_arruela);
-    let fam_porca = lib.familia(&op.familia_porca);
     let mut rel = RelatorioFixadores::default();
 
     // 1) furos candidatos de todos os componentes
@@ -509,7 +578,7 @@ pub fn preencher_com(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartCac
         };
 
         // 3) geometria da pilha
-        let md = match medir(&pilha, fam_p, t_p, &desig, fam_arr, fam_porca, op, &mut rel.avisos) {
+        let md = match medir(&pilha, lib, fam_p, t_p, &desig, op, &mut rel.avisos) {
             Ok(m) => m,
             Err(Recusa::Mostrar(m)) => {
                 recusa(&mut rel, &pilha, m);
@@ -518,7 +587,7 @@ pub fn preencher_com(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartCac
             Err(Recusa::Calar) => continue,
         };
         rel.avisos.extend(md.falhas.iter().cloned());
-        let Medida { entrada, roscada, comprimento, w1, .. } = md;
+        let (entrada, roscada, comprimento, w1) = (md.entrada, md.roscada, md.comprimento, md.w1);
         let serie = fam_p.comprimentos_de(t_p);
         // ponta do parafuso: a cabeça apoia w1 para fora da face de entrada e o corpo segue para dentro
         let ponta = [0, 1, 2].map(|i| entrada[i] + u[i] * (comprimento - w1));
@@ -543,7 +612,7 @@ pub fn preencher_com(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartCac
 
         // 4) peças e restrições
         let pasta = *grupo.get_or_insert_with(|| asm.add_group(GRUPO, None));
-        let pecas = inserir_pecas(asm, dir, &md, fam_p, t_p, &desig, fam_arr, fam_porca, op, pasta, &mut arquivos, &mut rel)?;
+        let pecas = inserir_pecas(asm, dir, lib, &md, fam_p, t_p, op, pasta, &mut arquivos, &mut rel)?;
         crate::pilhas::registrar(asm, &pilha, &md, &desig, op, pecas, &rotulo);
         rel.marcas.extend(pilha.iter().map(|f| f.marca(entra.clone())));
         rel.conta(rotulo);
@@ -551,73 +620,64 @@ pub fn preencher_com(asm: &mut Assembly, dir: Option<&Path>, cache: &mut PartCac
     Ok(rel)
 }
 
-/// Põe na montagem o parafuso, as arruelas e a porca de uma pilha medida, já com as restrições.
-/// Devolve os componentes, com o parafuso primeiro.
+/// Põe na montagem o parafuso e as duas pilhas de uma pilha medida, já com as restrições. Devolve os
+/// componentes na ordem do eixo: o parafuso, a pilha de cima e a de baixo.
 #[allow(clippy::too_many_arguments)]
-pub(crate) fn inserir_pecas(asm: &mut Assembly, dir: &Path, md: &Medida, fam_p: &Familia, t_p: &Tamanho, desig: &str, fam_arr: Option<&Familia>, fam_porca: Option<&Familia>, op: &OpcoesFixadores, pasta: Id, arquivos: &mut HashMap<String, (String, String)>, rel: &mut RelatorioFixadores) -> Result<Vec<Id>, String> {
-    let Medida { entrada, saida, u, c_ent, c_sai, com_porca, h1, h2, w1, comprimento, .. } = *md;
-    let acess = op.tam_acessorios.as_deref().unwrap_or(desig);
+pub(crate) fn inserir_pecas(asm: &mut Assembly, dir: &Path, lib: &Biblioteca, md: &Medida, fam_p: &Familia, t_p: &Tamanho, op: &OpcoesFixadores, pasta: Id, arquivos: &mut HashMap<String, (String, String)>, rel: &mut RelatorioFixadores) -> Result<Vec<Id>, String> {
+    let (entrada, saida, u, c_ent, c_sai, w1, comprimento) = (md.entrada, md.saida, md.u, md.c_ent, md.c_sai, md.w1, md.comprimento);
     let mut velhos: Vec<String> = vec![];
-    let mut peca = |fam: &Familia, t: &Tamanho, l: Option<f64>| -> Result<(String, String), String> { arquivo_fixador(dir, fam, t, l, arquivos, &mut velhos) };
-    let (arq_parafuso, nome_parafuso) = peca(fam_p, t_p, Some(comprimento))?;
+    let (arq_parafuso, nome_parafuso) = arquivo_fixador(dir, fam_p, t_p, Some(comprimento), arquivos, &mut velhos)?;
 
     let eixo_mundo = (entrada, [-u[0], -u[1], -u[2]]);
     let (cima, baixo) = (u, [-u[0], -u[1], -u[2]]);
     let ponto = |o: V3, d: V3, k: f64| [0, 1, 2].map(|i| o[i] + d[i] * k);
 
-    // parafuso: Z = -u, com a cabeça apoiada na arruela (ou na face da peça)
-    let origem_parafuso = ponto(entrada, baixo, w1);
-    let id_parafuso = asm.add_component(&nome_parafuso, NodeKind::Part { path: arq_parafuso }, orientado(origem_parafuso, baixo), Some(pasta));
-    let mut pecas = vec![id_parafuso];
-    // concêntrico ao furo de entrada
+    // parafuso: Z = -u, com a cabeça apoiada no último item (ou na face da peça)
+    let id_parafuso = asm.add_component(&nome_parafuso, NodeKind::Part { path: arq_parafuso }, orientado(ponto(entrada, baixo, w1), baixo), Some(pasta));
     concentrico(asm, c_ent, id_parafuso, eixo_mundo);
-    // quem gira junto com quem: o parafuso segue a peça; arruelas e porca seguem o parafuso
-    let trava = |asm: &mut Assembly, a: Id, b: Id| {
-        if op.travar_giro {
-            trava_de_giro(asm, a, b, eixo_mundo);
-        }
-    };
-    trava(asm, c_ent, id_parafuso);
-    let face_entrada = (entrada, baixo); // normal de fora da peça
-    let arruela_cabeca = fam_arr.zip(h1).and_then(|(f, _)| f.tamanho(acess).map(|t| (f, t)));
-    if let Some((fam_a, t_a)) = arruela_cabeca {
-        let (arq, nome) = peca(fam_a, t_a, None)?;
-        let id = asm.add_component(&nome, NodeKind::Part { path: arq }, orientado(entrada, cima), Some(pasta));
-        concentrico(asm, id_parafuso, id, eixo_mundo);
-        trava(asm, id_parafuso, id);
-        apoio(asm, c_ent, face_entrada, id, (entrada, cima));
-        // cabeça sobre a face de fora da arruela
-        let fora = ponto(entrada, baixo, w1);
-        apoio(asm, id, (fora, baixo), id_parafuso, (fora, cima));
-        rel.arruelas += 1;
-        pecas.push(id);
-    } else {
-        apoio(asm, c_ent, face_entrada, id_parafuso, (entrada, cima));
+    // quem gira junto com quem: o parafuso segue a peça; os itens seguem o parafuso
+    if op.travar_giro {
+        trava_de_giro(asm, c_ent, id_parafuso, eixo_mundo);
     }
-
-    if let (true, Some(fam_n)) = (com_porca, fam_porca) {
-        // (componente de apoio, sua face de fora, ponto da face): a peça ou a arruela da saída
-        let mut apoio_porca = (c_sai, (saida, cima), saida);
-        let arruela_saida = fam_arr.zip(h2).and_then(|(f, h)| f.tamanho(acess).map(|t| (f, t, h)));
-        if let Some((fam_a, t_a, h)) = arruela_saida {
-            let (arq, nome) = peca(fam_a, t_a, None)?;
-            let id = asm.add_component(&nome, NodeKind::Part { path: arq }, orientado(saida, baixo), Some(pasta));
-            concentrico(asm, id_parafuso, id, eixo_mundo);
-            trava(asm, id_parafuso, id);
-            apoio(asm, c_sai, (saida, cima), id, (saida, baixo));
-            let fora = ponto(saida, cima, h);
-            apoio_porca = (id, (fora, cima), fora);
-            rel.arruelas += 1;
-        pecas.push(id);
+    // um item: Z olhando para a peça, face de apoio em `base`, encostado em quem veio antes dele
+    let mut item = |asm: &mut Assembly, it: &ItemMedido, base: V3, para_peca: V3, antes: Id| -> Result<Option<Id>, String> {
+        let Some((fam, t)) = lib.familia(&it.familia).and_then(|f| f.tamanho(&it.tamanho).map(|t| (f, t))) else { return Ok(None) };
+        let (arq, nome) = arquivo_fixador(dir, fam, t, None, arquivos, &mut velhos)?;
+        let id = asm.add_component(&nome, NodeKind::Part { path: arq }, orientado(base, para_peca), Some(pasta));
+        concentrico(asm, id_parafuso, id, eixo_mundo);
+        if op.travar_giro {
+            trava_de_giro(asm, id_parafuso, id, eixo_mundo);
         }
-        if let Some(t_n) = fam_n.tamanho(acess) {
-            let (arq, nome) = peca(fam_n, t_n, None)?;
-            let id = asm.add_component(&nome, NodeKind::Part { path: arq }, orientado(apoio_porca.2, baixo), Some(pasta));
-            concentrico(asm, id_parafuso, id, eixo_mundo);
-            trava(asm, id_parafuso, id);
-            apoio(asm, apoio_porca.0, apoio_porca.1, id, (apoio_porca.2, baixo));
-            rel.porcas += 1;
-        pecas.push(id);
+        apoio(asm, antes, (base, para_peca.map(|x| -x)), id, (base, para_peca));
+        match fam.tipo {
+            biblioteca::TipoFixador::Porca => rel.porcas += 1,
+            _ => rel.arruelas += 1,
+        }
+        Ok(Some(id))
+    };
+
+    // de cima: monta da peça para a cabeça, que é a ordem do apoio
+    let mut de_cima = vec![];
+    let (mut antes, mut subiu) = (c_ent, 0.);
+    for it in md.sup.iter().rev() {
+        if let Some(id) = item(asm, it, ponto(entrada, baixo, subiu), cima, antes)? {
+            de_cima.push(id);
+            antes = id;
+            subiu += it.altura;
+        }
+    }
+    let fora = ponto(entrada, baixo, subiu);
+    apoio(asm, antes, (fora, baixo), id_parafuso, (fora, cima));
+
+    // de baixo: da peça para a ponta
+    let mut pecas = vec![id_parafuso];
+    pecas.extend(de_cima.into_iter().rev());
+    let (mut antes, mut desceu) = (c_sai, 0.);
+    for it in &md.inf {
+        if let Some(id) = item(asm, it, ponto(saida, cima, desceu), baixo, antes)? {
+            pecas.push(id);
+            antes = id;
+            desceu += it.altura;
         }
     }
     rel.avisos.extend(velhos);
@@ -877,7 +937,7 @@ pub(crate) mod tests {
     }
 
     /// Como `placa`, com a boca do furo escolhida (rebaixo, escareado).
-    fn placa_com_boca(esp: f64, diametro: f64, roscado: Option<f64>, kind: HoleKind) -> Document {
+    pub(crate) fn placa_com_boca(esp: f64, diametro: f64, roscado: Option<f64>, kind: HoleKind) -> Document {
         let mut d = Document::new("Placa");
         let mut n = 7_000_000u64;
         let mut al = || {

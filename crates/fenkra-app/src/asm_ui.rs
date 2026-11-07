@@ -293,6 +293,10 @@ pub struct AsmState {
     pub catalogo: Option<crate::biblioteca_ui::Estado>,
     /// assistente de prendedores aberto (B98)
     pub fixadores: Option<crate::asm_fixadores::Estado>,
+    /// caixa do conjunto de fixadores aberta
+    pub conjunto: Option<crate::asm_conjunto::Estado>,
+    /// cadastro das regras por cor aberto
+    pub regras_abertas: bool,
     /// comando Chaveta aberto (B292)
     pub chaveta: Option<crate::asm_chaveta::Estado>,
     /// calculadoras de projeto abertas (B110)
@@ -406,6 +410,8 @@ impl AsmState {
             inserir: None,
             repeticao: None,
             fixadores: None,
+            conjunto: None,
+            regras_abertas: false,
             chaveta: None,
             calculo: None,
             referencias: vec![],
@@ -753,7 +759,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
             let is_asm = matches!(
                 c,
                 Cmd::AsmInsert | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmSubAsm | Cmd::AsmPattern
-                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmCatalogo | Cmd::AsmGears | Cmd::AsmChaveta | Cmd::AsmCalculo
+                    | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmConjunto | Cmd::AsmRegrasCor | Cmd::AsmCatalogo | Cmd::AsmGears | Cmd::AsmChaveta | Cmd::AsmCalculo
             );
             let Some(st) = app.asm.as_mut() else {
                 // só os comandos de montagem avisam; os da peça seguem normalmente
@@ -851,6 +857,15 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                         st.fasteners_open = Some(FastenersUi::default());
                     }
                 }
+                Cmd::AsmConjunto => {
+                    if st.conjunto.is_none() {
+                        if let Err(m) = crate::asm_conjunto::abrir(st, None) {
+                            app.toast(tr(&m).to_string(), true);
+                            return true;
+                        }
+                    }
+                }
+                Cmd::AsmRegrasCor => st.regras_abertas = !st.regras_abertas,
                 Cmd::AsmCatalogo => {
                     // liga e desliga: o painel Biblioteca abre só enquanto a pessoa o usa
                     st.catalogo = if st.catalogo.is_some() { None } else { Some(crate::biblioteca_ui::Estado::default()) };
@@ -988,7 +1003,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
 /// clique numa peça a seleciona na árvore.
 pub fn after_viewport(app: &mut App, ctx: &egui::Context) {
     after_view_quick(app);
-    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_fixadores::apos_viewport(app) && !crate::asm_chaveta::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::transmissao_ui::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
+    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_fixadores::apos_viewport(app) && !crate::asm_conjunto::apos_viewport(app) && !crate::asm_chaveta::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::transmissao_ui::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
         selecao_do_clique(app, ctx.input(|i| i.modifiers.alt));
     }
     // duplo clique numa peça: abre para editar
@@ -1605,7 +1620,12 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         }
                     }
                 });
-                if fenkra_montagem::pilhas::da_peca(&st.asm, n.id).is_some() && ui.button(tr("Editar prendedor")).on_hover_text(tr("Abre o assistente na linha deste ponto.")).clicked() {
+                if fenkra_montagem::conjuntos::da_peca(&st.asm, n.id).is_some() {
+                    if ui.button(tr("Editar conjunto")).clicked() {
+                        *act = Some((n.id, 41));
+                        ui.close();
+                    }
+                } else if fenkra_montagem::pilhas::da_peca(&st.asm, n.id).is_some() && ui.button(tr("Editar prendedor")).on_hover_text(tr("Abre o assistente na linha deste ponto.")).clicked() {
                     *act = Some((n.id, 40));
                     ui.close();
                 }
@@ -1698,6 +1718,10 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 rows(ui, st, info, Some(n.id), depth + 1, new_sel, act, hover);
             }
         }
+    }
+    // o conjunto vem antes das peças: é por ele que se controlam os prendedores que estão lá embaixo
+    for c in &st.asm.conjuntos {
+        crate::asm_conjunto::linha_na_arvore(ui, st, c, &mut act, &mut new_sel);
     }
     crate::tree_ui::filhos(ui, |ui| rows(ui, st, &info, None, 0, &mut new_sel, &mut act, &mut hover));
     // 2 cliques num recurso da peça: abre a peça e o recurso
@@ -1981,7 +2005,18 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
         }
         _ => {}
     }
+    if k == 41 {
+        // a caixa guarda o próprio passo de desfazer ao concluir
+        let c = fenkra_montagem::conjuntos::da_peca(&st.asm, id).unwrap_or(id);
+        let _ = crate::asm_conjunto::abrir(st, Some(c));
+        return;
+    }
     st.push_undo();
+    if k == 42 {
+        fenkra_montagem::conjuntos::apagar(&mut st.asm, id);
+        st.solve();
+        return;
+    }
     if k == 40 {
         let p = fenkra_montagem::pilhas::da_peca(&st.asm, id);
         return crate::asm_fixadores::abrir(st, p);

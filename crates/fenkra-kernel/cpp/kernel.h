@@ -138,6 +138,7 @@ std::unique_ptr<Shape> from_brep(rust::Str text);
 std::unique_ptr<Shape> hole_tool_ext(double ox, double oy, double oz, double dx, double dy, double dz, double diameter, double depth,
                                      uint8_t kind, double d2, double p2, double a3, double tip, double taper);
 rust::Vec<double> ray_hit(const Shape& s, double px, double py, double pz, double dx, double dy, double dz);
+rust::Vec<double> ray_hits(const Shape& s, double px, double py, double pz, double dx, double dy, double dz);
 bool same_face(const Shape& s, double ax, double ay, double az, double bx, double by, double bz);
 std::unique_ptr<Shape> full_round_t(const Shape& s, double mx, double my, double mz, double width, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> face_face_fillet_t(const Shape& s, double ax, double ay, double az, double bx, double by, double bz, double r, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);

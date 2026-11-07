@@ -452,6 +452,11 @@ mod imp {
             Ok((v.len() == 4).then(|| ([v[0], v[1], v[2]], v[3])))
         }
 
+        /// Todos os parâmetros em que a reta (p, d) cruza a forma, em ordem crescente.
+        pub fn ray_hits(&self, p: [f64; 3], d: [f64; 3]) -> KResult<Vec<f64>> {
+            b::ray_hits(&self.0, p[0], p[1], p[2], d[0], d[1], d[2]).map_err(err)
+        }
+
         pub fn fillet_all(&self, r: f64) -> KResult<Shape> {
             b::fillet_all(&self.0, r).map(Shape).map_err(err)
         }
@@ -1106,6 +1111,9 @@ mod imp {
             no()
         }
         pub fn ray_hit(&self, _: [f64; 3], _: [f64; 3]) -> KResult<Option<([f64; 3], f64)>> {
+            no()
+        }
+        pub fn ray_hits(&self, _: [f64; 3], _: [f64; 3]) -> KResult<Vec<f64>> {
             no()
         }
         pub fn hole_tool(_: [f64; 3], _: [f64; 3], _: f64, _: f64, _: HoleShape) -> KResult<Shape> {

@@ -988,4 +988,20 @@ rust::Vec<double> ray_hit(const Shape& s, double px, double py, double pz, doubl
     });
 }
 
+/// Todos os parâmetros em que a reta cruza a forma, em ordem: entradas e saídas se alternam.
+rust::Vec<double> ray_hits(const Shape& s, double px, double py, double pz, double dx, double dy, double dz) {
+    return guard("projeção", [&] {
+        IntCurvesFace_ShapeIntersector it;
+        it.Load(s.s, 1e-6);
+        it.Perform(gp_Lin(gp_Pnt(px, py, pz), gp_Dir(dx, dy, dz)), -1e9, 1e9);
+        std::vector<double> t;
+        if (it.IsDone())
+            for (int i = 1; i <= it.NbPnt(); ++i) t.push_back(it.WParameter(i));
+        std::sort(t.begin(), t.end());
+        rust::Vec<double> out;
+        for (double x : t) out.push_back(x);
+        return out;
+    });
+}
+
 }  // namespace fenkra

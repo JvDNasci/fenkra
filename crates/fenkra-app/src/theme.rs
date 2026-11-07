@@ -528,6 +528,11 @@ pub fn papel_alvo() -> Color32 {
     c(cor_papel(Papel::Alvo, dark_now(), paleta_segura()))
 }
 
+/// Cor que vem de um dado da pessoa (uma regra, a aparência de um furo), não do tema.
+pub fn cor_do_dado(c: [u8; 3]) -> Color32 {
+    Color32::from_rgb(c[0], c[1], c[2])
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
