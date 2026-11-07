@@ -310,6 +310,9 @@ pub struct Mate {
     /// deslocamento em X, Y e Z nos eixos do elemento A, com fórmula (B99). Vazio conta como zero
     #[serde(default)]
     pub desloc: [String; 3],
+    /// engrenagem e cremalheira: giro acumulado de A em graus, com as voltas
+    #[serde(default)]
+    pub giro: f64,
 }
 
 impl Mate {
@@ -800,7 +803,7 @@ impl Assembly {
     pub fn add_mate(&mut self, kind: MateKind, a: MateRef, b: MateRef) -> Id {
         let id = self.alloc();
         let name = self.unique(kind.label());
-        self.mates.push(Mate { id, name, kind, a, b, suppressed: false, sentido: Sentido::Livre, lado_invertido: false, desloc: Default::default() });
+        self.mates.push(Mate { id, name, kind, a, b, suppressed: false, sentido: Sentido::Livre, lado_invertido: false, desloc: Default::default(), giro: 0. });
         id
     }
 

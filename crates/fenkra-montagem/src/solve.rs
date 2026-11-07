@@ -324,7 +324,7 @@ fn all_residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<Strin
             // engrenagem/polia: giro de B = razão × giro de A
             MateKind::Gear { ratio, refs, .. } => {
                 if refs[0] != [0.; 3] {
-                    let ga = turn(refs[0], refs[1], pa, axis_dir(wa));
+                    let ga = crate::kin::desenrolar(m.giro, turn(refs[0], refs[1], pa, axis_dir(wa)));
                     let gb = turn(refs[2], refs[3], pb, axis_dir(wb));
                     r.push(wrap180(gb - num(ratio) * ga) / 10.);
                 }
@@ -332,7 +332,7 @@ fn all_residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<Strin
             // cremalheira: avanço de B ao longo da direção dela = mm por volta × voltas de A
             MateKind::RackPinion { mm_per_rev, refs } => {
                 if refs[0] != [0.; 3] {
-                    let ga = turn(refs[0], refs[1], pa, axis_dir(wa));
+                    let ga = crate::kin::desenrolar(m.giro, turn(refs[0], refs[1], pa, axis_dir(wa)));
                     let o = match m.b.geom {
                         Geom::Axis { p, .. } | Geom::Plane { p, .. } | Geom::Point(p) => p,
                     };
@@ -507,10 +507,26 @@ fn solve_inner(a: &mut Assembly, extra: &HashMap<String, f64>, pull: Option<(Id,
         }
     }
     failed.extend(a.mates.iter().filter(|m| !m.suppressed && formula_invalida(m, &vars)).map(|m| m.id));
+    crate::kin::guardar_giros(a, &pl, &vars);
+    guardar_giros_mates(a, &pl, &vars);
     // as repetições acompanham os originais nas posições novas
     a.update_patterns();
     let no_limite = a.joints.iter().filter(|j| crate::kin::no_batente(j, &pl)).map(|j| j.id).collect();
     SolveReport { residual: f64::sqrt(custo), iterations: iteracoes, dof, failed: failed.clone(), converged: failed.is_empty(), no_limite, aglomerados: grupos.len(), incognitas }
+}
+
+/// Guarda as voltas de A em engrenagem e cremalheira. A restrição não tem comando que diga a volta,
+/// então a referência é a posição anterior: entre duas soluções o giro precisa ficar abaixo de 180°.
+fn guardar_giros_mates(a: &mut Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<String, f64>) {
+    for m in a.mates.iter_mut().filter(|m| !m.suppressed) {
+        let (MateKind::Gear { refs, .. } | MateKind::RackPinion { refs, .. }) = &m.kind else { continue };
+        let (r0, r1) = (refs[0], refs[1]);
+        let Some(pa) = pl.get(&m.a.comp) else { continue };
+        if r0 != [0.; 3] {
+            let eixo = axis_dir(world(&m.geom_a(vars), pa));
+            m.giro = crate::kin::desenrolar(m.giro, turn(r0, r1, pa, eixo));
+        }
+    }
 }
 
 /// Restrições, juntas e acoplamentos de um pedaço da montagem (posições nas listas dela).
@@ -1097,6 +1113,29 @@ fn matrix_rank(j: &[f64], m: usize, n: usize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn restricao_de_engrenagem_passa_de_meia_volta() {
+        use crate::kin::{measure, simulate, JFrame, JRef, JointKind};
+        let mut a = Assembly::new("par");
+        let base = a.add_component("Base", NodeKind::Part { path: "b".into() }, Placement::default(), None);
+        a.node_mut(base).unwrap().fixed = true;
+        let g1 = a.add_component("G1", NodeKind::Part { path: "g1".into() }, Placement::default(), None);
+        let g2 = a.add_component("G2", NodeKind::Part { path: "g2".into() }, Placement { origin: [30., 0., 0.], ..Default::default() }, None);
+        let f = JFrame::from_axis([0.; 3], [0., 0., 1.]);
+        let j1 = a.add_joint(JointKind::Revolute, JRef { comp: base, frame: f }, JRef { comp: g1, frame: f });
+        let j2 = a.add_joint(JointKind::Revolute, JRef { comp: base, frame: JFrame::from_axis([30., 0., 0.], [0., 0., 1.]) }, JRef { comp: g2, frame: f });
+        let eixo = Geom::Axis { p: [0.; 3], d: [0., 0., 1.] };
+        let gid = a.add_mate(MateKind::Gear { ratio: "-11/82".into(), belt: false, refs: [[0.; 3]; 4] }, MateRef { comp: g1, geom: eixo, pick: None, viva: None }, MateRef { comp: g2, geom: eixo, pick: None, viva: None });
+        a.init_motion(gid);
+        a.joints.iter_mut().find(|j| j.id == j1).unwrap().drive_angle = Some("t".into());
+        for q in &simulate(&mut a, 0., 360., 8) {
+            assert!(q.ok, "t = {}", q.t);
+            let (lido, _) = measure(a.joints.iter().find(|j| j.id == j2).unwrap(), &q.placements).unwrap();
+            let esperado = -11. / 82. * q.t;
+            assert!((lido - esperado).abs() < 1e-3, "t = {}: {lido}, esperado {esperado}", q.t);
+        }
+    }
 
     fn cubo(a: &mut Assembly, name: &str, at: V3) -> Id {
         a.add_component(name, NodeKind::Part { path: format!("{name}.fkp") }, Placement { origin: at, ..Default::default() }, None)
