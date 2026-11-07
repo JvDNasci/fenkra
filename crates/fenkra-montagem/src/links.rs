@@ -409,10 +409,12 @@ pub fn atualizar(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, gatilh
 /// aqui, a forma nova chegaria e as vizinhas ficariam onde estavam, até alguém abrir o `.fka`.
 fn resolver_subconjunto(s: &mut Sub, raiz: Option<&Path>, cache: &mut PartCache, rel: &mut RelatorioLinks) {
     let dir = s.dir.clone();
-    if !pecas(&s.a, dir.as_deref()).iter().any(|(_, _, f)| rel.pecas.contains(f)) {
+    let antes = s.a.to_json();
+    let parametros = crate::parametros::atualizar(&mut s.a, dir.as_deref(), cache);
+    rel.pendurados += parametros.pendurados.len();
+    if parametros.mudaram.is_empty() && !pecas(&s.a, dir.as_deref()).iter().any(|(_, _, f)| rel.pecas.contains(f)) {
         return;
     }
-    let antes = s.a.to_json();
     crate::load::refresh_refs(&mut s.a, cache, dir.as_deref());
     if !crate::solve::solve(&mut s.a).converged {
         rel.sem_solucao.push(s.arquivo.clone());

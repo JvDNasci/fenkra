@@ -21,4 +21,10 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Subconjunto não lido, as peças dele não foram atualizadas", "Subassembly not read, its parts were not updated"),
     ("As restrições do subconjunto não fecharam com a forma nova", "The subassembly constraints did not close with the new shape"),
     ("peça(s) atualizada(s) pelos links", "part(s) updated by links"),
+    ("O valor vem desta peça. Muda ao abrir a montagem e no botão Atualizar.", "The value comes from this part. It changes when the assembly opens and with the Update button."),
+    ("O parâmetro guarda o valor de agora e deixa de seguir a peça.", "The parameter keeps the current value and stops following the part."),
+    ("Soltar", "Release"),
+    ("+ parâmetro de peça", "+ part parameter"),
+    ("Nenhuma peça da montagem publica um valor.", "No part in the assembly publishes a value."),
+    ("Cria um parâmetro que copia o valor publicado por uma peça, como o mestre. Use o nome dele nas cotas das restrições.", "Creates a parameter that copies the value published by a part, such as the master. Use its name in constraint dimensions."),
 ];

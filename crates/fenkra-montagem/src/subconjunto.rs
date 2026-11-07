@@ -345,6 +345,7 @@ impl Assembly {
 
         // parâmetros, números de item e políticas de link das peças que foram
         sub.params = parametros_usados(self, &sub);
+        sub.params_ligados = self.params_ligados.iter().filter(|l| sub.params.iter().any(|p| p.name == l.nome)).cloned().collect();
         rel.parametros = sub.params.len();
         let caminhos: HashSet<String> = sub.nodes.iter().filter_map(|n| match &n.kind {
             NodeKind::Part { path } | NodeKind::SubAssembly { path } => Some(path.clone()),
@@ -621,6 +622,11 @@ impl Assembly {
         self.features.append(&mut sub.features);
 
         // parâmetros: vale o desta montagem, e o conflito é avisado
+        for l in sub.params_ligados.drain(..) {
+            if self.parametro_ligado(&l.nome).is_none() {
+                self.params_ligados.push(l);
+            }
+        }
         for q in sub.params.drain(..) {
             match self.params.iter().find(|x| x.name == q.name) {
                 Some(x) if x.expr != q.expr => rel.perdidas.push(format!("{}: parâmetro ficou com o valor desta montagem ({})", q.name, x.expr)),

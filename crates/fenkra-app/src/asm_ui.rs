@@ -647,19 +647,31 @@ impl AsmState {
     /// dela precisam ser reencontradas e resolvidas de novo.
     pub fn atualizar_links(&mut self, gatilho: Gatilho) -> links::RelatorioLinks {
         let dir = self.dir();
-        let rel = links::atualizar(&self.asm, dir.as_deref(), &mut self.cache, gatilho);
+        let mut rel = links::atualizar(&self.asm, dir.as_deref(), &mut self.cache, gatilho);
         self.apos_links(&rel);
+        // mover um componente não muda o mestre: isto fica para abrir e para o botão Atualizar
+        if gatilho != Gatilho::Posicao {
+            let p = fenkra_montagem::parametros::atualizar(&mut self.asm, dir.as_deref(), &mut self.cache);
+            rel.pendurados += p.pendurados.len();
+            if !p.mudaram.is_empty() {
+                self.resolver_de_novo();
+            }
+        }
         rel
     }
 
     fn apos_links(&mut self, rel: &links::RelatorioLinks) {
         if !rel.pecas.is_empty() {
-            let dir = self.dir();
-            fenkra_montagem::load::refresh_refs(&mut self.asm, &mut self.cache, dir.as_deref());
-            self.report = fenkra_montagem::solve::solve(&mut self.asm);
-            self.sub_rows.clear();
-            self.dirty = true;
+            self.resolver_de_novo();
         }
+    }
+
+    fn resolver_de_novo(&mut self) {
+        let dir = self.dir();
+        fenkra_montagem::load::refresh_refs(&mut self.asm, &mut self.cache, dir.as_deref());
+        self.report = fenkra_montagem::solve::solve(&mut self.asm);
+        self.sub_rows.clear();
+        self.dirty = true;
     }
 
     /// Caminho guardado para uma peça: relativo à pasta da montagem quando possível.
@@ -2983,23 +2995,57 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     crate::editor::check(ui, &mut st.view_only, "modo visualização (sem mover nem restringir)");
                     crate::editor::section(ui, "Parâmetros da montagem");
                     let mut del = None;
+                    let mut soltar = None;
+                    let ligados = st.asm.params_ligados.clone();
                     for (k, p) in st.asm.params.iter_mut().enumerate() {
+                        let ligado = ligados.iter().find(|l| l.nome == p.name);
                         ui.horizontal(|ui| {
-                            ui.add(egui::TextEdit::singleline(&mut p.name).desired_width(80.));
+                            // o vínculo é pelo nome, e o valor vem da peça
+                            ui.add_enabled(ligado.is_none(), egui::TextEdit::singleline(&mut p.name).desired_width(80.));
                             ui.label("=");
-                            ui.add(egui::TextEdit::singleline(&mut p.expr).desired_width(100.));
+                            ui.add_enabled(ligado.is_none(), egui::TextEdit::singleline(&mut p.expr).desired_width(100.));
                             if ui.small_button("✖").clicked() {
                                 del = Some(k);
                             }
                         });
+                        if let Some(l) = ligado {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(format!("← {} · {}", l.arquivo, l.publicacao)).small()).on_hover_text(tr("O valor vem desta peça. Muda ao abrir a montagem e no botão Atualizar."));
+                                if ui.small_button(tr("Soltar")).on_hover_text(tr("O parâmetro guarda o valor de agora e deixa de seguir a peça.")).clicked() {
+                                    soltar = Some(l.nome.clone());
+                                }
+                            });
+                        }
                     }
                     if let Some(k) = del {
-                        st.asm.params.remove(k);
+                        let nome = st.asm.params.remove(k).name;
+                        st.asm.soltar_parametro(&nome);
                     }
-                    if ui.button(tr("+ parâmetro")).clicked() {
-                        let n = st.asm.params.len() + 1;
-                        st.asm.params.push(AsmParam { name: format!("P{n}"), expr: "10".into() });
+                    if let Some(nome) = soltar {
+                        st.asm.soltar_parametro(&nome);
                     }
+                    ui.horizontal(|ui| {
+                        if ui.button(tr("+ parâmetro")).clicked() {
+                            let n = st.asm.params.len() + 1;
+                            st.asm.params.push(AsmParam { name: format!("P{n}"), expr: "10".into() });
+                        }
+                        ui.menu_button(tr("+ parâmetro de peça"), |ui| {
+                            let dir = st.dir();
+                            let lista = fenkra_montagem::parametros::disponiveis(&st.asm, dir.as_deref(), &mut st.cache);
+                            if lista.is_empty() {
+                                ui.label(tr("Nenhuma peça da montagem publica um valor."));
+                            }
+                            for (arquivo, publicacao, valor) in lista {
+                                if ui.button(format!("{arquivo} · {publicacao} = {valor}")).clicked() {
+                                    st.push_undo();
+                                    st.asm.importar_parametro(&arquivo, &publicacao, valor);
+                                    ui.close();
+                                }
+                            }
+                        })
+                        .response
+                        .on_hover_text(tr("Cria um parâmetro que copia o valor publicado por uma peça, como o mestre. Use o nome dele nas cotas das restrições."));
+                    });
                 }
             }
         }
