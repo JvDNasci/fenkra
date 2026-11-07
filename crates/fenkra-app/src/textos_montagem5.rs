@@ -17,4 +17,8 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("A montagem passa do limite de triângulos do perfil", "The assembly goes over the triangle limit of the profile"),
     ("triângulos", "triangles"),
     ("limite", "limit"),
+    ("Recalcula as posições e atualiza os links de todas as peças, também nos subconjuntos.", "Recomputes the positions and updates the links of every part, subassemblies included."),
+    ("Subconjunto não lido, as peças dele não foram atualizadas", "Subassembly not read, its parts were not updated"),
+    ("As restrições do subconjunto não fecharam com a forma nova", "The subassembly constraints did not close with the new shape"),
+    ("peça(s) atualizada(s) pelos links", "part(s) updated by links"),
 ];

@@ -657,6 +657,7 @@ impl AsmState {
             let dir = self.dir();
             fenkra_montagem::load::refresh_refs(&mut self.asm, &mut self.cache, dir.as_deref());
             self.report = fenkra_montagem::solve::solve(&mut self.asm);
+            self.sub_rows.clear();
             self.dirty = true;
         }
     }
@@ -776,6 +777,9 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     if rel.pendurados > 0 {
                         app.toast(format!("{} {}", rel.pendurados, tr("link(s) pendurado(s): a origem ou a publicação sumiu")), true);
                     }
+                    if let Some((msg, erro)) = resumo_links(&rel) {
+                        app.toast(msg, erro);
+                    }
                 }
                 Err(e) => app.toast(format!("Não foi possível abrir: {e}"), true),
             }
@@ -855,6 +859,11 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 Cmd::AsmSolve => {
                     st.push_undo();
                     st.solve();
+                    // o botão Atualizar também traz o que mudou no mestre, em qualquer nível
+                    let rel = st.atualizar_links(Gatilho::Manual);
+                    if let Some(aviso) = resumo_links(&rel) {
+                        st.aviso = Some(aviso);
+                    }
                 }
                 Cmd::AsmNumber => {
                     st.push_undo();
@@ -2218,6 +2227,19 @@ fn inserir_de_volta(st: &mut AsmState, id: Id) -> (String, bool) {
             (e, true)
         }
     }
+}
+
+/// Frase sobre uma atualização de links, com `true` se algo ficou para trás. Atualização sem efeito
+/// não diz nada: o botão Atualizar é usado o tempo todo.
+fn resumo_links(rel: &links::RelatorioLinks) -> Option<(String, bool)> {
+    let nomes = |l: &[PathBuf]| l.iter().filter_map(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()).collect::<Vec<_>>().join(", ");
+    if !rel.ilegiveis.is_empty() {
+        return Some((format!("{}: {}", tr("Subconjunto não lido, as peças dele não foram atualizadas"), nomes(&rel.ilegiveis)), true));
+    }
+    if !rel.sem_solucao.is_empty() {
+        return Some((format!("{}: {}", tr("As restrições do subconjunto não fecharam com a forma nova"), nomes(&rel.sem_solucao)), true));
+    }
+    (!rel.pecas.is_empty()).then(|| (format!("{} {}", rel.pecas.len(), tr("peça(s) atualizada(s) pelos links")), false))
 }
 
 /// Lista de links da peça, com o estado de cada um e as ações. Devolve o aviso a mostrar.
