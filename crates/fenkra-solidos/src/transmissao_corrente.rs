@@ -521,6 +521,15 @@ mod tests {
     }
 
     #[test]
+    fn corrente_428_gera_roda_e_219_aguarda_a_largura() {
+        let c = calculo_roda(&ParamRoda::nova("428", 11, 8.)).unwrap();
+        assert!((c.diametro_primitivo - 12.7 / (std::f64::consts::PI / 11.).sin()).abs() < 1e-6);
+        assert!((c.largura_dente - 0.9 * 7.75).abs() < 1e-9);
+        let e = calculo_roda(&ParamRoda::nova("219", 11, 8.)).unwrap_err();
+        assert!(!e.is_empty(), "219 recusada até a largura ter valor único");
+    }
+
+    #[test]
     fn perfil_da_roda_fecha_para_varios_dentes() {
         for n in [11, 15, 19, 25, 40, 60] {
             let c = crate::transmissao_dados::corrente("ISO 08B-1").unwrap();
