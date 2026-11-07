@@ -22,6 +22,25 @@ TopoDS_Face quad(const gp_Pnt& a, const gp_Pnt& b, const gp_Pnt& c, const gp_Pnt
     return BRepBuilderAPI_MakeFace(pg.Wire(), Standard_True).Face();
 }
 
+// B432: a varredura por um caminho em spline sai com arestas gêmeas: duas faces vizinhas (a da dobra
+// e a da parede) terminam na mesma posição, até 1e-15, mas cada uma com a sua aresta, e a casca fica
+// aberta (22 arestas livres no caso da nervura de asa). O volume e a malha saem certos, mas o
+// `BRepCheck` reprova e o sólido derruba as booleanas seguintes. Costurar as faces pela tolerância
+// do kernel junta as gêmeas; o `ShapeFix_Solid` arruma o sentido da casca.
+TopoDS_Shape costura_fechada(const TopoDS_Shape& s) {
+    BRepBuilderAPI_Sewing sw(1e-4);
+    for (TopExp_Explorer e(s, TopAbs_FACE); e.More(); e.Next()) sw.Add(e.Current());
+    sw.Perform();
+    TopExp_Explorer sh(sw.SewedShape(), TopAbs_SHELL);
+    if (!sh.More()) return s;
+    BRepBuilderAPI_MakeSolid ms(TopoDS::Shell(sh.Current()));
+    if (!ms.IsDone()) return s;
+    Handle(ShapeFix_Solid) fx = new ShapeFix_Solid(ms.Solid());
+    fx->Perform();
+    TopoDS_Shape r = fx->Solid();
+    return BRepCheck_Analyzer(r).IsValid() ? r : s;
+}
+
 }  // namespace
 
 // Aba na aresta reta mais próxima de p. A dobra vai para o lado da face grande que contém a
@@ -198,6 +217,7 @@ std::unique_ptr<Shape> sm_chain_sweep(const Shape& face, rust::Slice<const doubl
         ps.Build();
         if (!ps.IsDone() || !ps.MakeSolid()) throw std::runtime_error("não foi possível varrer a seção ao longo da cadeia");
         TopoDS_Shape s = ps.Shape();
+        if (!BRepCheck_Analyzer(s).IsValid()) s = costura_fechada(s);
         GProp_GProps props;
         BRepGProp::VolumeProperties(s, props);
         if (props.Mass() < 0) s.Reverse();

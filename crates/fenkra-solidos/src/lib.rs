@@ -6359,9 +6359,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 // B413: o status ok não vê sólido inválido; confere os corpos que o comando mexeu. Com um
                 // comando aberto para edição (prévia a cada tecla) a conferência espera: a conferência do
                 // OpenCASCADE custa mais que muitas booleanas, e o comando é conferido ao ser reaproveitado
-                // Peça de chapa fica de fora por ora: as dobras saem do kernel com costuras que o BRepCheck
-                // reprova mesmo com volume e planificação certos, e o aviso apareceria em toda aba
-                let st = if matches!(f.kind, FeatureKind::Sketch(_)) || matches!(st, Status::Error(_)) || doc.sheet.is_some() {
+                let st = if matches!(f.kind, FeatureKind::Sketch(_)) || matches!(st, Status::Error(_)) {
                     st
                 } else if cache.leve.is_some() {
                     cache.sem_validar.insert(f.id);

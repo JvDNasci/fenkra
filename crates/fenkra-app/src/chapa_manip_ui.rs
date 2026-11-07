@@ -122,6 +122,7 @@ fn alca(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, nth:
     let tcol = ui.visuals().text_color();
     let g = painter.layout_no_wrap(txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), tcol);
     let lr = Rect::from_min_size(rot_pos, g.size() + egui::vec2(10., 6.));
+    let lr = reserva_rotulo(ui, lr, rect);
     painter.rect_filled(lr, 4., fundo);
     painter.rect_stroke(lr, 4., Stroke::new(1., normal), egui::StrokeKind::Inside);
     painter.galley(lr.min + egui::vec2(5., 3.), g, tcol);
@@ -164,6 +165,46 @@ fn alca(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, nth:
         }
     }
     let _ = ponta;
+}
+
+/// B411: dois rótulos de alça nunca se cobrem. O que chega depois desce até achar lugar livre; a lista
+/// guarda só os rótulos desta passada de desenho (recomeça quando o número da passada muda). Também
+/// é usada pelo rótulo das setas lineares (`handles.rs`), que desenha depois das alças da chapa.
+pub fn reserva_rotulo(ui: &egui::Ui, lr: Rect, viewport: Rect) -> Rect {
+    let chave = egui::Id::new("chapa_rotulos");
+    let passada = ui.ctx().cumulative_pass_nr();
+    let (nr, mut usados): (u64, Vec<Rect>) = ui.ctx().data(|d| d.get_temp(chave)).unwrap_or_default();
+    if nr != passada {
+        usados.clear();
+    }
+    let livre = afasta_rotulo(lr, &usados, viewport);
+    usados.push(livre);
+    ui.ctx().data_mut(|d| d.insert_temp(chave, (passada, usados)));
+    livre
+}
+
+/// B411: desce `lr` até que não cubra nenhum rótulo já posto (`usados`), sem sair da viewport. Quando a
+/// coluna de baixo acaba, sobe a partir do original; o espaçamento é de 3 px.
+pub(crate) fn afasta_rotulo(lr: Rect, usados: &[Rect], viewport: Rect) -> Rect {
+    const FOLGA: f32 = 3.;
+    let cobre = |r: Rect| usados.iter().any(|u| u.expand(FOLGA / 2.).intersects(r));
+    let mut r = lr;
+    for _ in 0..usados.len() + 1 {
+        match usados.iter().find(|u| u.expand(FOLGA / 2.).intersects(r)) {
+            Some(u) => r = r.translate(egui::vec2(0., u.bottom() + FOLGA - r.top())),
+            None => break,
+        }
+    }
+    if r.bottom() > viewport.bottom() || cobre(r) {
+        r = lr;
+        for _ in 0..usados.len() + 1 {
+            match usados.iter().find(|u| u.expand(FOLGA / 2.).intersects(r)) {
+                Some(u) => r = r.translate(egui::vec2(0., u.top() - FOLGA - r.bottom())),
+                None => break,
+            }
+        }
+    }
+    r
 }
 
 /// Candidatos de encaixe da face: vértices e meios de aresta que caem no plano dela.
@@ -389,5 +430,36 @@ fn escreve_linha(doc: &mut Document, id: Id, a: V3, b: V3, flip: Option<bool>) {
             }
         }
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod testes_rotulos {
+    use super::*;
+
+    fn r(x: f32, y: f32) -> Rect {
+        Rect::from_min_size(Pos2::new(x, y), egui::vec2(120., 22.))
+    }
+
+    /// K-26: "Recuo do início" caía sobre "Comprimento da aba"; o segundo rótulo agora desce.
+    #[test]
+    fn rotulos_sobrepostos_ficam_separados() {
+        let vp = Rect::from_min_size(Pos2::ZERO, egui::vec2(800., 600.));
+        let a = r(100., 100.);
+        let b = afasta_rotulo(r(110., 105.), &[a], vp);
+        assert!(!a.intersects(b), "{a:?} {b:?}");
+        let c = afasta_rotulo(r(105., 100.), &[a, b], vp);
+        assert!(!a.intersects(c) && !b.intersects(c));
+        // longe um do outro nada muda
+        assert_eq!(afasta_rotulo(r(400., 300.), &[a], vp), r(400., 300.));
+    }
+
+    #[test]
+    fn rotulo_no_fim_da_viewport_sobe_em_vez_de_sair() {
+        let vp = Rect::from_min_size(Pos2::ZERO, egui::vec2(800., 600.));
+        let a = r(100., 570.);
+        let b = afasta_rotulo(r(100., 572.), &[a], vp);
+        assert!(!a.intersects(b));
+        assert!(b.bottom() <= vp.bottom());
     }
 }

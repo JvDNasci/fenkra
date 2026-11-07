@@ -19,7 +19,24 @@ pub fn invalido(corpo: Option<&Shape>) -> bool {
     if testes::FORCAR.with(|f| f.get()) && corpo.is_some() {
         return true;
     }
-    corpo.is_some_and(|s| !s.is_valid())
+    let ruim = corpo.is_some_and(|s| !s.is_valid());
+    if ruim && std::env::var_os("FENKRA_DEBUG_VALIDADE").is_some() {
+        if let Some(s) = corpo {
+            eprintln!("[validade] {}", diagnostico(s));
+        }
+    }
+    ruim
+}
+
+/// Resumo do que o kernel reprova no corpo: faces ruins, cascas abertas, arestas livres e onde ficam.
+/// Serve para depurar (`FENKRA_DEBUG_VALIDADE=1` imprime isto a cada corpo inválido).
+pub fn diagnostico(s: &Shape) -> String {
+    let info = match s.reparar(0, 1e-4) {
+        Ok((_, i)) => format!("faces {} ruins {} sólidos {} cascas abertas {} soltas {} arestas livres {} tol {:.2e}", i.faces_antes, i.faces_ruins_antes, i.solidos_antes, i.abertas_antes, i.soltas_antes, i.arestas_livres_antes, i.tolerancia_antes),
+        Err(e) => format!("sem análise: {}", e.0),
+    };
+    let onde = s.defeitos(6).map(|l| l.iter().map(|d| format!("{:?}#{} em {:?}", d.tipo, d.indice, d.segmentos.first().map(|g| g[0]))).collect::<Vec<_>>().join("; ")).unwrap_or_default();
+    format!("{info} | {onde}")
 }
 
 /// Junta o aviso de validade ao status do comando. Erro fica como está; aviso já existente é mantido.
