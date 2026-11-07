@@ -710,6 +710,13 @@ pub struct PmiStyle {
     /// ponta); vazio = chamada reta (B23, ver `pmi_leader`)
     #[serde(default)]
     pub leader_via: Vec<Vec<[f64; 3]>>,
+    /// de qual lado da caixa do texto sai a chamada de cada ponta: 0 automático (o lado voltado
+    /// para a ponta, como nos arquivos antigos), 1 esquerda, 2 direita, 3 topo, 4 base (B368)
+    #[serde(default)]
+    pub leader_side: Vec<u8>,
+    /// ponta própria de cada chamada; vazio ou `Padrao` = a ponta do estilo (B368)
+    #[serde(default)]
+    pub leader_arrow: Vec<PmiArrow>,
     // ---- cota (B269)
     /// quanto as linhas de apoio passam da linha de cota (mm no modelo); 0 = o padrão curto
     #[serde(default)]
@@ -767,6 +774,8 @@ impl PmiStyle {
             leader_dash: if self.leader_dash != 0 { self.leader_dash } else { base.leader_dash },
             leader_color: self.leader_color.or(base.leader_color),
             leader_via: self.leader_via.clone(),
+            leader_side: self.leader_side.clone(),
+            leader_arrow: self.leader_arrow.clone(),
             ext_over: self.ext_over,
             text_along: self.text_along,
             decimals: self.decimals.or(base.decimals),
@@ -805,6 +814,8 @@ impl Default for PmiStyle {
             leader_dash: 0,
             leader_color: None,
             leader_via: vec![],
+            leader_side: vec![],
+            leader_arrow: vec![],
             ext_over: 0.,
             text_along: 0.,
             decimals: None,

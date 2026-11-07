@@ -103,6 +103,12 @@ Saem da fórmula de cada aresta do B-rep, não da malha. Por isso a medida entre
 `direcao`, `raio`, `furo`), `no`, `visivel`, `pasta`. Quadros de tolerância, referências, rugosidade e
 solda levam o texto pronto em `texto`.
 
+Notas e chamadas de feature levam `setas`, uma por âncora: `ancora`, `lado` (0 automático, 1 esquerda,
+2 direita, 3 topo, 4 base da caixa do texto), `ponta` (`cheia`, `aberta`, `ponto`, `barra`, `nenhuma`) e
+`vias` (vértices intermediários). Soldas com medida levam `cordao`: `perna_mm`, `visivel` (escolha do
+autor) e `segmentos` (pares de pontos da aresta marcada). O cordão é só exibição: nada disso muda a
+massa, o volume ou a lista. Campos aditivos, formato ainda na versão 1 (ADR 0075).
+
 ### `analise` (montagem)
 
 Calculada pelo Fenkra na hora de gerar, porque o navegador não tem kernel. Campos: `calculada`
@@ -122,6 +128,8 @@ Só entram componentes de topo (id `n<id>`); um subconjunto conta como uma peça
   `alvo + distancia * (cos(pitch) cos(yaw), cos(pitch) sin(yaw), sin(pitch))`, com Z para cima.
 - Captura: `id`, `nome`, `camera`, `pmi` (ids visíveis), `ocultos` (IDs numéricos do documento, que o leitor
   casa com `n<id>` ou `c<id>`), `com_modelo`.
+  As capturas vêm na ordem de criação e o visualizador as mostra em sequência (Captura 1, 2, 3…), como
+  etapas do detalhamento, com anterior e próxima.
 - Estado: `nome`, `ocultos` (ids da árvore), `cores`, `deslocamentos` (explosão, mm no mundo), `camera`.
 
 ## Folhas (`folhas/f<N>.json`)

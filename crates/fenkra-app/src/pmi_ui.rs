@@ -287,6 +287,11 @@ pub fn command(app: &mut App, i: u8) {
         auto_balloons(app);
         return;
     }
+    if i == 21 || i == 22 {
+        // Criar captura fica na família do detalhamento 3D (B368)
+        crate::pmi_arvore::criar_captura(app, i == 22);
+        return;
+    }
     if i == 20 {
         if app.in_asm() {
             app.toast(tr("A solda dos cordões vem da peça: abra a peça com o cordão"), true);
@@ -511,19 +516,10 @@ pub fn after_viewport(app: &mut App) {
         }
     }
     if i == 16 {
-        // nova ponta numa nota que já existe
-        if let Some((a, t)) = anchors(app, &kind, &picks) {
-            let alvo = PONTA_PARA.lock().unwrap_or_else(|e| e.into_inner()).take();
-            if let (Some(id), Some(&p)) = (alvo, a.first()) {
-                if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
-                    fenkra_core::pmi_leader::add_tip(pm, p, t.first().copied().flatten());
-                }
-                if app.in_asm() {
-                    app.asm.as_mut().unwrap().modified = true;
-                }
-            }
-            app.picks.clear();
-            app.pmi_pending = None;
+        // nova(s) ponta(s) numa nota que já existe: clique simples põe uma; com Ctrl ou Shift
+        // as escolhas se somam e o Enter conclui (B368)
+        if !app.picks.is_empty() && !crate::pmi_setas::modificador() {
+            aplicar_pontas(app, None);
         }
         return;
     }
@@ -611,8 +607,70 @@ fn split_feature(app: &mut App, id: Id) {
 
 /// Conclui a cadeia ou a base: cada elemento escolhido vira um ponto e o conjunto gera uma cota
 /// por trecho, todas numa pasta da árvore (apagam e movem juntas).
+/// Pontos e alvos de cada elemento escolhido (vértice, aresta ou face), para virarem setas.
+fn pontas_das_escolhas(app: &App) -> Vec<([f64; 3], Option<PmiTarget>)> {
+    app.picks
+        .iter()
+        .filter_map(|p| {
+            let pos = match *p {
+                Pick::Vertex { pos, .. } => pos.map(|v| v as f64),
+                Pick::Edge { mid, .. } => mid.map(|v| v as f64),
+                Pick::Face { point, .. } => point.map(|v| v as f64),
+                _ => return None,
+            };
+            Some((pos, app.result.as_ref().and_then(|r| pick_target(r, p))))
+        })
+        .collect()
+}
+
+/// Todas as faces, arestas ou vértices escolhidos (Ctrl e Shift somam) viram setas da nota. Com
+/// `trocar`, a primeira escolha substitui a seta `k` e as outras entram como setas novas, com a
+/// mesma ancoragem e ponta (B368).
+fn aplicar_pontas(app: &mut App, trocar: Option<(Id, usize)>) {
+    let pts = pontas_das_escolhas(app);
+    if pts.is_empty() {
+        app.toast(tr("Escolha ao menos uma face, aresta ou vértice").to_string(), false);
+        return;
+    }
+    let alvo = match trocar {
+        Some((id, _)) => Some(id),
+        None => PONTA_PARA.lock().unwrap_or_else(|e| e.into_inner()).take(),
+    };
+    if let Some(id) = alvo {
+        if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
+            let mut resto = pts.as_slice();
+            if let Some((_, k)) = trocar {
+                if k < pm.anchors.len() {
+                    pm.targets.resize(pm.anchors.len(), None);
+                    pm.anchors[k] = pts[0].0;
+                    pm.targets[k] = pts[0].1;
+                    resto = &pts[1..];
+                }
+            }
+            let (lado, ponta) = trocar.map_or((0, PmiArrow::Padrao), |(_, k)| (fenkra_core::pmi_leader::side(pm, k), fenkra_core::pmi_leader::arrow(pm, k)));
+            for (p, t) in resto {
+                fenkra_core::pmi_leader::add_tip(pm, *p, *t);
+                let k = pm.anchors.len() - 1;
+                fenkra_core::pmi_leader::set_side(pm, k, lado);
+                fenkra_core::pmi_leader::set_arrow(pm, k, ponta);
+            }
+        }
+        if app.in_asm() {
+            app.asm.as_mut().unwrap().modified = true;
+        }
+    }
+    app.picks.clear();
+    if trocar.is_none() {
+        app.pmi_pending = None;
+    }
+}
+
 fn finish_multi(app: &mut App) {
     let Some(i) = app.pmi_pending else { return };
+    if i == 16 {
+        aplicar_pontas(app, None);
+        return;
+    }
     let kind = kind_now(i);
     let picks = app.picks.clone();
     let pts: Vec<([f64; 3], Option<PmiTarget>)> = picks
@@ -1007,11 +1065,12 @@ fn draw_kind(cv: &Cv, pen: &Pen, pm: &Pmi, st: Pos2, s0: Pos2, s1: Option<Pos2>,
             // uma chamada por ponta; cada uma pode passar por vértices intermediários (B23)
             let slots: Vec<usize> = (0..routes.len().max(1)).map(|_| Pen::reserve(cv)).collect();
             let lr = pen.text_block(cv, st, &txt, PmiFrame::Nenhuma, PmiBg::Nenhum);
+            // cada seta tem a sua ancoragem e a sua ponta (B368); sem escolha, o lado é automático
             if routes.is_empty() {
-                pen.leader(cv, slots[0], lr, s0);
+                pen.leader_route_ex(cv, slots[0], lr, &[s0], fenkra_core::pmi_leader::side(pm, 0), fenkra_core::pmi_leader::arrow(pm, 0));
             } else {
-                for (slot, rt) in slots.iter().zip(routes) {
-                    pen.leader_route(cv, *slot, lr, rt);
+                for (k, (slot, rt)) in slots.iter().zip(routes).enumerate() {
+                    pen.leader_route_ex(cv, *slot, lr, rt, fenkra_core::pmi_leader::side(pm, k), fenkra_core::pmi_leader::arrow(pm, k));
                 }
             }
             lr
@@ -1102,7 +1161,7 @@ fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &R
             let align_key = if has_var { Key::T } else { Key::Tab };
             (s.consume_key(Modifiers::NONE, Key::Space), s.consume_key(Modifiers::NONE, Key::F), s.consume_key(Modifiers::NONE, align_key), s.consume_key(Modifiers::NONE, Key::Escape), s.consume_key(Modifiers::NONE, Key::Backspace), s.consume_key(Modifiers::NONE, Key::Enter))
         });
-        finish = enter && (is_multi(i) || smart);
+        finish = enter && (is_multi(i) || smart || i == 16);
         if space {
             set_pref(|p| p.sel = (p.sel + 1) % (cands.len() + 1));
         }
@@ -1208,6 +1267,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let Some(r) = model(app) else { return };
     let editing = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
     let focus = app.pmi_focus;
+    let multi_sel: Vec<Id> = app.multi.borrow().clone();
+    let mut click_mods: Option<(Id, bool, bool)> = None;
+    let mut abrir_seta: Option<(Id, usize)> = None;
+    crate::pmi_setas::marcar_modificador(ui);
     let painter = ui.painter_at(rect);
     crate::pmi_baloes_ui::previa(app, ui, rect, cam);
     let mut edit_req: Option<Id> = None;
@@ -1286,7 +1349,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         }
         let Some(first) = a.first().copied() else { continue };
         let val = diag.as_ref().and_then(|d| pm.measure_targets(&d.resolved)).or_else(|| pm.measure(&a));
-        let is_sel = editing == Some(pm.id) || focus == Some(pm.id);
+        let is_sel = editing == Some(pm.id) || focus == Some(pm.id) || multi_sel.contains(&pm.id);
         let estilo_vivo = if enquadradas.contains(&pm.id) && pm.style.frame == PmiFrame::Padrao { PmiStyle { frame: PmiFrame::Caixa, ..pm.style.clone() } } else { pm.style.clone() };
         let mut pen = Pen::new(&estilo_vivo, &gstyle, is_sel);
         if pen.apply_scale {
@@ -1495,6 +1558,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 painter.text(rect_lbl.left_bottom() + egui::vec2(0., 3.), egui::Align2::LEFT_TOP, format!("⚠ {}", tr(av.mensagem())), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), crate::theme::st_warn());
             }
         }
+        // setas da nota: início visível e arrastável na borda da caixa, toque duplo na seta (B368)
+        if plane.is_none() && crate::pmi_setas::tem_setas(&pm.kind) {
+            crate::pmi_setas::interagir(ui, &painter, &pen, cam, rect, pm, &a, rect_lbl, is_sel && !bad, &mut hout, &mut abrir_seta);
+        }
         // rótulo girado na tela: a área de clique envolve o rótulo girado
         let rect_lbl = if plane.is_none() && !matches!(pm.kind, PmiKind::Datum { .. } | PmiKind::Balloon { .. } | PmiKind::Weld { .. } | PmiKind::Roughness { .. } | PmiKind::DatumTarget { .. }) { pen.outer(rect_lbl) } else { rect_lbl };
         // anotação realçada/em edição: as âncoras viram alças (arraste e solte numa face, aresta ou vértice)
@@ -1621,6 +1688,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             edit_req = Some(pm.id);
         } else if resp.clicked() || resp.secondary_clicked() {
             clicked = Some(pm.id);
+            if resp.clicked() {
+                click_mods = Some((pm.id, ui.input(|i| i.modifiers.command), ui.input(|i| i.modifiers.shift)));
+            }
         }
         // botão direito no rótulo: opções da anotação
         resp.context_menu(|ui| {
@@ -1772,6 +1842,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     // clique no vazio da vista: tira o realce
     if clicked.is_none() && edit_req.is_none() && action.is_none() && ui.input(|i| i.pointer.primary_clicked() && i.pointer.interact_pos().is_some_and(|q| rect.contains(q))) {
         app.pmi_focus = None;
+        app.multi.borrow_mut().retain(|i| !list(app).iter().any(|p| p.id == *i));
     }
     if let Some((id, k)) = action {
         match k {
@@ -1803,6 +1874,14 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     if let Some(id) = clicked {
         app.pmi_focus = Some(id);
     }
+    // Ctrl soma ou tira, Shift soma, simples escolhe só esta (as mesmas regras das peças)
+    if let Some((id, ctrl, shift)) = click_mods {
+        crate::selecao::aplicar(&mut app.multi.borrow_mut(), Some(id), crate::selecao::Modo::das_teclas(ctrl, shift));
+    }
+    if let Some((id, k)) = abrir_seta {
+        crate::pmi_setas::pedir_abrir(id, k);
+        edit_req = Some(id);
+    }
     if let Some(id) = edit_req {
         app.pmi_focus = Some(id);
         if app.in_asm() {
@@ -1810,8 +1889,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         } else {
             app.sel = Sel::Pmi(id);
         }
-        // clique duplo no 3D: a mini barra sobre a anotação (B270)
-        crate::pmi_minibar::open_for(app, id);
+        // clique duplo no 3D: a edição completa (a mesma da árvore), com o texto dentro dela (B368)
+        if crate::pmi_minibar::current() == Some(id) {
+            crate::pmi_minibar::drop_session();
+        }
     }
     crate::pmi_minibar::show(app, ui, rect, cam, sel_lbl);
 }
@@ -1832,6 +1913,14 @@ pub(crate) fn toggle_plane(app: &mut App, id: Id, cam: &Camera, rect: Rect) {
 }
 
 /// Capturas do nível atual (peça ou montagem).
+pub(crate) fn capturas_mut(app: &mut App) -> &mut Vec<PmiCapture> {
+    captures_mut(app)
+}
+
+pub(crate) fn oculto_agora(app: &App) -> Vec<Id> {
+    hidden_now(app)
+}
+
 fn captures(app: &App) -> &Vec<PmiCapture> {
     match app.asm.as_ref().filter(|_| app.in_asm()) {
         Some(st) => &st.asm.pmi_captures,
@@ -1861,11 +1950,24 @@ fn hidden_now(app: &App) -> Vec<Id> {
     }
 }
 
-/// Uma linha de anotação na árvore (com o menu de pastas).
+/// Uma linha de anotação na árvore (com o menu de pastas). Usa a linha de recurso do app
+/// (`row_label`: Ctrl/Shift, F2 e realce) e `drag_item` (arrastar e reordenar), como Geometria (B368).
 #[allow(clippy::too_many_arguments)]
-fn item_row(ui: &mut egui::Ui, p: &Pmi, sel: Option<Id>, folders: &[String], select: &mut Option<Id>, action: &mut Option<(Id, u8)>, move_to: &mut Option<(Id, String)>) {
+fn item_row(app: &App, ui: &mut egui::Ui, p: &Pmi, sel: Option<Id>, folders: &[String], select: &mut Option<Id>, action: &mut Option<(Id, u8)>, move_to: &mut Option<(Id, String)>, acts: &mut Vec<crate::app::TreeAction>, reorder: &mut Option<(Id, Id)>) {
     let txt = format!("{} {}", if p.visible { "📐" } else { "·" }, p.name);
-    let r = ui.selectable_label(sel == Some(p.id), if p.visible { RichText::new(txt) } else { RichText::new(txt).weak() }).on_hover_text(crate::i18n::tr("1 clique: realça o que a anotação marca · 2 cliques: edita"));
+    let rt = if p.visible { RichText::new(txt) } else { RichText::new(txt).weak() };
+    crate::tree_ui::marca(ui);
+    let r = app.row_label(ui, p.id, &p.name, sel == Some(p.id), rt, acts);
+    let r = crate::app::drag_item(ui, r, p.id, app.renaming() != Some(p.id));
+    let r = r.on_hover_text(crate::i18n::tr("1 clique: realça o que a anotação marca · 2 cliques: edita · arraste para reordenar · F2 renomeia"));
+    if let Some(d) = r.dnd_release_payload::<crate::app::DragItem>() {
+        if d.0 != p.id {
+            *reorder = Some((d.0, p.id));
+        }
+    }
+    if r.dnd_hover_payload::<crate::app::DragItem>().is_some_and(|d| d.0 != p.id) {
+        ui.painter().hline(r.rect.x_range(), r.rect.bottom(), egui::Stroke::new(2., crate::theme::accent(ui.visuals())));
+    }
     if r.double_clicked() {
         *select = Some(p.id);
     } else if r.clicked() {
@@ -1875,6 +1977,10 @@ fn item_row(ui: &mut egui::Ui, p: &Pmi, sel: Option<Id>, folders: &[String], sel
         ui.label(RichText::new(&p.name).strong());
         if ui.button(tr("✏ Editar")).clicked() {
             *select = Some(p.id);
+            ui.close();
+        }
+        if ui.button(tr("✎ Renomear   F2")).clicked() {
+            acts.push(crate::app::TreeAction::StartRename(p.id));
             ui.close();
         }
         if ui.button(if p.visible { tr("Ocultar") } else { tr("Mostrar") }).clicked() {
@@ -1914,6 +2020,19 @@ pub fn contagem(app: &App) -> (usize, usize) {
     (list(app).len(), captures(app).len())
 }
 
+/// F2 renomeia a anotação ou a captura escolhida (na peça o app já cuida dos recursos).
+fn tecla_f2_arvore(app: &mut App, ctx: &egui::Context) {
+    if ctx.egui_wants_keyboard_input() || !ctx.input(|i| i.key_pressed(egui::Key::F2)) {
+        return;
+    }
+    let pmi_ou_cap = |id: Id| list(app).iter().any(|p| p.id == id) || captures(app).iter().any(|c| c.id == id);
+    let unico = { let m = app.multi.borrow(); if m.len() == 1 { Some(m[0]) } else { None } };
+    let alvo = unico.filter(|i| pmi_ou_cap(*i)).or(app.pmi_focus.filter(|i| pmi_ou_cap(*i)));
+    if let Some(id) = alvo {
+        app.set_renaming(Some(id));
+    }
+}
+
 /// Seção "PMI" na árvore (peça ou montagem): anotações (com pastas) e, à parte, as capturas.
 pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_capturas: bool) {
     let n = list(app).len();
@@ -1924,6 +2043,9 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_captura
     let sel = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
     let sel = sel.or(app.pmi_focus);
     let mut create: Option<u8> = None;
+    let mut acts: Vec<crate::app::TreeAction> = vec![];
+    let mut reorder: Option<(Id, Id)> = None;
+    let mut reorder_cap: Option<(Id, Id)> = None;
     let mut folders: Vec<String> = list(app).iter().map(|p| p.folder.clone()).filter(|f| !f.is_empty()).collect();
     folders.sort();
     folders.dedup();
@@ -1932,7 +2054,7 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_captura
         for f in &folders {
             let r = crate::tree_ui::grupo(ui, ("pmi_pasta", f.as_str()), Some("pasta"), f.as_str(), true).corpo(ui, |ui| {
                 for p in list(app).iter().filter(|p| p.folder == *f) {
-                    item_row(ui, p, sel, &folders, &mut select, &mut action, &mut move_to);
+                    item_row(app, ui, p, sel, &folders, &mut select, &mut action, &mut move_to, &mut acts, &mut reorder);
                 }
             });
             r.context_menu(|ui| {
@@ -1951,7 +2073,7 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_captura
             });
         }
         for p in list(app).iter().filter(|p| p.folder.is_empty()) {
-            item_row(ui, p, sel, &folders, &mut select, &mut action, &mut move_to);
+            item_row(app, ui, p, sel, &folders, &mut select, &mut action, &mut move_to, &mut acts, &mut reorder);
         }
     });
     let h = h.on_hover_text(tr("Cotas, notas, rugosidade, solda e tolerâncias no modelo 3D (grupo Detalhamento 3D)."));
@@ -1984,16 +2106,32 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_captura
     }
     // capturas: vista (câmera e zoom) + anotações visíveis (+ visibilidade do modelo, se pedida)
     let mut cap_act: Option<(usize, u8)> = None;
-    let caps: Vec<(String, bool)> = captures(app).iter().map(|c| (c.name.clone(), c.with_model)).collect();
+    let caps: Vec<(Id, String, bool)> = captures(app).iter().map(|c| (c.id, c.name.clone(), c.with_model)).collect();
     if com_capturas {
     let hc = crate::tree_ui::grupo(ui, "arvore_capturas", Some("vista_iso"), format!("{} ({})", tr("Capturas"), caps.len()), !caps.is_empty()).corpo(ui, |ui| {
-        for (i, (n, wm)) in caps.iter().enumerate() {
+        for (i, (cid, n, wm)) in caps.iter().enumerate() {
             crate::tree_ui::marca(ui);
-            let r = ui.selectable_label(false, format!("📷 {n}{}", if *wm { " ◐" } else { "" })).on_hover_text(if *wm { tr("aplicar: câmera, anotações e visibilidade do modelo") } else { tr("aplicar: câmera e anotações desta captura") });
-            if r.clicked() {
+            let sel_cap = app.multi.borrow().contains(cid);
+            let r = app.row_label(ui, *cid, n, sel_cap, RichText::new(format!("📷 {n}{}", if *wm { " ◐" } else { "" })), &mut acts);
+            let r = crate::app::drag_item(ui, r, *cid, app.renaming() != Some(*cid));
+            let r = r.on_hover_text(if *wm { tr("aplicar: câmera, anotações e visibilidade do modelo") } else { tr("aplicar: câmera e anotações desta captura") });
+            if let Some(d) = r.dnd_release_payload::<crate::app::DragItem>() {
+                if d.0 != *cid {
+                    reorder_cap = Some((d.0, *cid));
+                }
+            }
+            if r.dnd_hover_payload::<crate::app::DragItem>().is_some_and(|d| d.0 != *cid) {
+                ui.painter().hline(r.rect.x_range(), r.rect.bottom(), egui::Stroke::new(2., crate::theme::accent(ui.visuals())));
+            }
+            // Ctrl/Shift só escolhem (como nos recursos); o clique simples também aplica a captura
+            if r.clicked() && !ui.input(|i| i.modifiers.command || i.modifiers.shift) {
                 cap_act = Some((i, 0));
             }
             r.context_menu(|ui| {
+                if ui.button(tr("✎ Renomear   F2")).clicked() {
+                    acts.push(crate::app::TreeAction::StartRename(*cid));
+                    ui.close();
+                }
                 if ui.button(tr("📷 Atualizar com a vista atual")).clicked() {
                     cap_act = Some((i, 1));
                     ui.close();
@@ -2020,6 +2158,45 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_captura
             ui.close();
         }
     });
+    }
+    tecla_f2_arvore(app, ui.ctx());
+    for a in acts {
+        match a {
+            crate::app::TreeAction::StartRename(id) => app.set_renaming(Some(id)),
+            crate::app::TreeAction::RenameCancel => app.set_renaming(None),
+            crate::app::TreeAction::Rename(id, n) => {
+                app.set_renaming(None);
+                let n = n.trim().to_string();
+                if !n.is_empty() {
+                    if let Some(p) = list_mut(app).iter_mut().find(|p| p.id == id) {
+                        p.name = n.clone();
+                    } else if let Some(c) = captures_mut(app).iter_mut().find(|c| c.id == id) {
+                        c.name = n;
+                    }
+                    if app.in_asm() {
+                        app.asm.as_mut().unwrap().modified = true;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    // arrastar e soltar sobre outra linha do mesmo tipo reordena; o grupo escolhido anda junto
+    for (par, cap) in [(reorder, false), (reorder_cap, true)] {
+        if let Some((de, sobre)) = par {
+            let grupo: Vec<Id> = {
+                let m = app.multi.borrow();
+                if m.len() > 1 && m.contains(&de) { m.clone() } else { vec![de] }
+            };
+            let feito = if cap {
+                crate::pmi_arvore::reordenar(captures_mut(app), &|c| c.id, &grupo, sobre)
+            } else {
+                crate::pmi_arvore::reordenar(list_mut(app), &|p| p.id, &grupo, sobre)
+            };
+            if feito && app.in_asm() {
+                app.asm.as_mut().unwrap().modified = true;
+            }
+        }
     }
     if let Some(f) = ui.ctx().data_mut(|d| d.remove_temp::<u64>(egui::Id::unique("pmi_foco_arvore"))) {
         app.pmi_focus = Some(Id(f));
@@ -2251,6 +2428,8 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
     crate::pmi_gdt_ui::atualizar_existentes(list(app));
     let outras = crate::pmi_gdt_ui::letras_de_outras(list(app), id);
     let todas = list(app).clone();
+    let alvos_txt = list(app).iter().find(|q| q.id == id).map(|q| crate::pmi_setas::rotulos(q, &target_label)).unwrap_or_default();
+    let n_escolhas = app.picks.len();
     let l = list_mut(app);
     let Some(p) = l.iter_mut().find(|p| p.id == id) else { return false };
     ui.heading(format!("📐 {}", p.name));
@@ -2344,6 +2523,8 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
             });
         }
     }
+    // setas da nota: alvos, ancoragem e ponta de cada uma (B368)
+    let ped_setas = crate::pmi_setas::tem_setas(&p.kind).then(|| crate::pmi_setas::secao(ui, p, &alvos_txt, n_escolhas));
     crate::editor::section(ui, "Aparência");
     crate::pmi_draw::style_ui(ui, &mut p.style, true);
     if ui.small_button(tr("🎨 Estilo geral das anotações…")).clicked() {
@@ -2407,6 +2588,26 @@ fn panel_inner(app: &mut App, ui: &mut egui::Ui, id: Id, style_req: &mut bool) -
                 p.anchors = seed_pts[..p.kind.anchors()].to_vec();
                 p.targets = vec![];
             }
+        }
+    }
+    if let Some(ped) = ped_setas {
+        if let Some(k) = ped.remover {
+            if let Some(pm) = list_mut(app).iter_mut().find(|x| x.id == id) {
+                fenkra_core::pmi_leader::remove_tip(pm, k);
+            }
+        }
+        if let Some(k) = ped.apontar {
+            aplicar_pontas(app, Some((id, k)));
+        }
+        if ped.adicionar {
+            *PONTA_PARA.lock().unwrap_or_else(|e| e.into_inner()) = Some(id);
+            set_variant(None);
+            app.picks.clear();
+            app.pmi_pending = Some(16);
+            app.toast(tr("Adicionar setas: clique faces ou arestas; Ctrl ou Shift somam várias e Enter conclui").to_string(), false);
+        }
+        if app.in_asm() {
+            app.asm.as_mut().unwrap().modified = true;
         }
     }
     true

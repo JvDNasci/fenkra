@@ -288,7 +288,7 @@ impl Pen {
         Rect::from_min_size(at + self.nudge - egui::vec2(sz.x * col / 2., sz.y * row / 2.), sz)
     }
 
-    fn turned(&self) -> bool {
+    pub fn turned(&self) -> bool {
         self.angle.abs() > 1e-4 || self.mirror
     }
     fn rot(d: egui::Vec2, a: f32) -> egui::Vec2 {
@@ -303,7 +303,7 @@ impl Pen {
         }
         c + Self::rot(d, -self.angle)
     }
-    fn xf_inv(&self, q: Pos2, c: Pos2) -> Pos2 {
+    pub fn xf_inv(&self, q: Pos2, c: Pos2) -> Pos2 {
         let mut d = Self::rot(q - c, self.angle);
         if self.mirror {
             d.x = -d.x;
@@ -367,6 +367,11 @@ impl Pen {
     }
 
     fn arrow_shapes(&self, tip: Pos2, from: Pos2, st: Stroke) -> Vec<egui::Shape> {
+        self.arrow_shapes_with(self.arrow, tip, from, st)
+    }
+
+    /// Como `arrow_shapes`, com a ponta escolhida (cada chamada da nota pode ter a sua, B368).
+    fn arrow_shapes_with(&self, arrow: PmiArrow, tip: Pos2, from: Pos2, st: Stroke) -> Vec<egui::Shape> {
         let d = (tip - from).normalized();
         if !d.x.is_finite() || (tip - from).length() < 2. {
             return vec![];
@@ -374,7 +379,7 @@ impl Pen {
         let n = egui::vec2(-d.y, d.x);
         let (s, w) = (self.size * 0.8, self.size * 0.27);
         let col = st.color;
-        match self.arrow {
+        match arrow {
             PmiArrow::Cheia | PmiArrow::Padrao => vec![egui::Shape::convex_polygon(vec![tip, tip - d * s + n * w, tip - d * s - n * w], col, Stroke::NONE)],
             PmiArrow::Aberta => vec![egui::Shape::line(vec![tip - d * s + n * w, tip, tip - d * s - n * w], st)],
             PmiArrow::Ponto => vec![egui::Shape::circle_filled(tip, self.size * 0.22, col)],
@@ -408,31 +413,55 @@ impl Pen {
     /// Chamada da caixa `r` até a última posição de `route`, passando pelos vértices intermediários
     /// (B23). Sai do lado da caixa voltado para o primeiro ponto do caminho e a seta fica na ponta.
     pub fn leader_route(&self, p: &Cv, slot: usize, r: Rect, route: &[Pos2]) {
+        self.leader_route_ex(p, slot, r, route, 0, PmiArrow::Padrao);
+    }
+
+    /// Ponto da caixa `r` de onde sai a chamada, o joelho do patamar e o lado usado. `side` 0 é
+    /// automático (o lado voltado para o primeiro ponto do caminho); 1 esquerda, 2 direita, 3 topo,
+    /// 4 base. Devolve já no sistema da tela (caixa girada ou espelhada incluída).
+    pub fn leader_start(&self, r: Rect, toward: Pos2, side: u8) -> (Pos2, Pos2, u8) {
+        let c = r.center();
+        let a = if self.turned() { self.xf_inv(toward, c) } else { toward };
+        let d = a - c;
+        let land = self.size * 0.9;
+        let side = if side == 0 {
+            if d.x.abs() * r.height() >= d.y.abs() * r.width() {
+                if d.x < 0. { 1 } else { 2 }
+            } else if d.y < 0. {
+                3
+            } else {
+                4
+            }
+        } else {
+            side
+        };
+        let (att, out) = match side {
+            1 => (egui::pos2(r.left(), c.y), egui::vec2(-land, 0.)),
+            2 => (egui::pos2(r.right(), c.y), egui::vec2(land, 0.)),
+            3 => (egui::pos2(c.x, r.top()), egui::vec2(0., -land * 0.7)),
+            _ => (egui::pos2(c.x, r.bottom()), egui::vec2(0., land * 0.7)),
+        };
+        if self.turned() { (self.xf(att, c), self.xf(att + out, c), side) } else { (att, att + out, side) }
+    }
+
+    /// Mesma chamada com a ancoragem (`side`) e a ponta próprias da seta (B368).
+    pub fn leader_route_ex(&self, p: &Cv, slot: usize, r: Rect, route: &[Pos2], side: u8, arrow: PmiArrow) {
         if !self.leader_on {
             return;
         }
         let (Some(&anchor), Some(&tip)) = (route.first(), route.last()) else { return };
         let c = r.center();
         let a = if self.turned() { self.xf_inv(anchor, c) } else { anchor };
-        let d = a - c;
-        if route.len() == 1 && r.expand(2.).contains(a) {
+        if route.len() == 1 && side == 0 && r.expand(2.).contains(a) {
             return;
         }
-        let land = self.size * 0.9;
-        // lado: compara a direção com a proporção da caixa
-        let (att, out) = if d.x.abs() * r.height() >= d.y.abs() * r.width() {
-            if d.x < 0. { (egui::pos2(r.left(), c.y), egui::vec2(-land, 0.)) } else { (egui::pos2(r.right(), c.y), egui::vec2(land, 0.)) }
-        } else if d.y < 0. {
-            (egui::pos2(c.x, r.top()), egui::vec2(0., -land * 0.7))
-        } else {
-            (egui::pos2(c.x, r.bottom()), egui::vec2(0., land * 0.7))
-        };
-        let (att, knee) = if self.turned() { (self.xf(att, c), self.xf(att + out, c)) } else { (att, att + out) };
+        let (att, knee, _) = self.leader_start(r, anchor, side);
         let st = self.leader_stroke();
         let mut pts = vec![att, knee];
         pts.extend_from_slice(route);
         let mut v = self.outline_shapes(&pts, false, st, self.leader_dash);
-        v.extend(self.arrow_shapes(tip, pts[pts.len() - 2], st));
+        let arrow = if arrow == PmiArrow::Padrao { self.arrow } else { arrow };
+        v.extend(self.arrow_shapes_with(arrow, tip, pts[pts.len() - 2], st));
         p.set(slot, egui::Shape::Vec(v));
     }
 

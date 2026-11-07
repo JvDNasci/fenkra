@@ -288,19 +288,71 @@ fn decimar(pos: &[f32], idx: &[u32], fracao: f64) -> (Vec<f32>, Vec<u32>) {
     (d.pos.iter().flat_map(|p| p.map(|v| v as f32)).collect(), d.tris.iter().flatten().copied().collect())
 }
 
-fn json_pmi(lista: &[Pmi], no: Option<&str>) -> Vec<Value> {
+fn json_pmi(lista: &[Pmi], no: Option<&str>, malha: Option<&fenkra_solidos::RecomputeResult>, campos: &std::collections::HashMap<String, String>) -> Vec<Value> {
     lista
         .iter()
         .map(|p| {
             let valor = p.measure(&p.anchors);
             json!({
                 "id": format!("p{}", p.id.0), "nome": p.name, "tipo": p.kind.label(), "dimensional": p.kind.is_dimension(),
-                "texto": p.display(valor), "valor": valor.map(r6),
+                "texto": texto_pmi(p, valor, campos), "valor": valor.map(r6),
                 "ancoras": p.anchors.iter().map(|a| a.map(r6)).collect::<Vec<_>>(),
                 "deslocamento": p.offset.map(r6),
                 "alvos": p.targets.iter().map(|t| t.as_ref().map(tipos::alvo)).collect::<Vec<_>>(),
                 "no": no, "visivel": p.visible, "pasta": p.folder,
+                "setas": setas(p),
             })
+        })
+        .collect()
+}
+
+/// Texto da anotação como aparece no aplicativo: a legenda 3D (carimbo) tem os campos `{nome}`,
+/// `{codigo}`, `{massa}`… trocados pelos dados da peça; sem isso o visualizador mostrava o modelo cru.
+fn texto_pmi(p: &Pmi, valor: Option<f64>, campos: &std::collections::HashMap<String, String>) -> String {
+    match &p.kind {
+        fenkra_core::pmi::PmiKind::TitleBlock { template } => fenkra_desenho::resolve(template, campos),
+        _ => p.display(valor),
+    }
+}
+
+/// Campos da legenda 3D de uma peça (os mesmos do aplicativo).
+fn campos_da_legenda(doc: &Document, massa_kg: f64, volume_mm3: f64) -> std::collections::HashMap<String, String> {
+    let mut f = std::collections::HashMap::new();
+    f.insert("data".to_string(), fenkra_desenho::today());
+    f.insert("nome".into(), doc.name.clone());
+    f.insert("codigo".into(), doc.props.pn.clone());
+    f.insert("descricao".into(), if doc.props.description.is_empty() { doc.name.clone() } else { doc.props.description.clone() });
+    f.insert("material".into(), doc.props.material.clone());
+    f.insert("massa".into(), format!("{massa_kg:.3} kg").replace('.', ","));
+    f.insert("volume".into(), format!("{:.1} cm³", volume_mm3 / 1000.).replace('.', ","));
+    for (k, v) in &doc.props.custom {
+        f.insert(k.to_lowercase(), v.clone());
+    }
+    f
+}
+
+/// Uma seta por âncora, com o lado da nota de onde sai (0 automático, 1 esquerda, 2 direita, 3 topo,
+/// 4 base), a ponta e os vértices intermediários. É o que o visualizador desenha na borda do texto.
+fn setas(p: &Pmi) -> Vec<Value> {
+    use fenkra_core::pmi::PmiArrow;
+    use fenkra_core::pmi_leader as pl;
+    let tem = matches!(p.kind, fenkra_core::pmi::PmiKind::Note | fenkra_core::pmi::PmiKind::FeatureNote { .. });
+    if !tem {
+        return vec![];
+    }
+    p.anchors
+        .iter()
+        .enumerate()
+        .map(|(k, a)| {
+            let ponta = match pl::arrow(p, k) {
+                PmiArrow::Padrao | PmiArrow::Cheia => "cheia",
+                PmiArrow::Aberta => "aberta",
+                PmiArrow::Ponto => "ponto",
+                PmiArrow::Barra => "barra",
+                PmiArrow::Nenhuma => "nenhuma",
+            };
+            let vias: Vec<Value> = p.style.leader_via.get(k).map(|v| v.iter().map(|q| json!(q.map(r6))).collect()).unwrap_or_default();
+            json!({"ancora": a.map(r6), "lado": pl::side(p, k), "ponta": ponta, "vias": vias})
         })
         .collect()
 }
@@ -337,7 +389,10 @@ pub fn de_peca(doc: &Document, opc: &Opcoes) -> Result<Pacote, String> {
     let raiz = g.instanciar("peca", &doc.name, None, &peca, None, None, true);
     let mut m = base("peca", &doc.name);
     m["atributos"] = Gerador::atributos(&peca, &doc.name);
-    m["pmi"] = json!(json_pmi(&doc.pmi, Some("peca")));
+    // o cordão de solda precisa da aresta marcada: só recalcula quando há solda com medida
+    let r = doc.pmi.iter().any(|p| matches!(p.kind, fenkra_core::pmi::PmiKind::Weld { .. })).then(|| fenkra_solidos::recompute(doc));
+    let campos = campos_da_legenda(doc, peca.massa_kg, peca.volume);
+    m["pmi"] = json!(json_pmi(&doc.pmi, Some("peca"), r.as_ref(), &campos));
     m["capturas"] = json!(json_capturas(&doc.pmi_captures));
     m["vistas"] = json!(doc.views.iter().map(|v| json!({"nome": v.name, "camera": tipos::camera(v)})).collect::<Vec<_>>());
     Ok(terminar(g, m, &[raiz], &doc.name))
@@ -353,7 +408,13 @@ pub fn de_montagem(asm: &Assembly, pasta: &Path, opc: &Opcoes) -> Result<Pacote,
     }
     let mut m = base("montagem", &asm.name);
     m["atributos"] = json!({"nome": asm.name, "pn": asm.props.pn, "descricao": asm.props.description, "massa_kg": r6(massa)});
-    m["pmi"] = json!(json_pmi(&asm.pmi, None));
+    let mut campos = std::collections::HashMap::new();
+    campos.insert("data".to_string(), fenkra_desenho::today());
+    campos.insert("nome".into(), asm.name.clone());
+    campos.insert("codigo".into(), asm.props.pn.clone());
+    campos.insert("descricao".into(), if asm.props.description.is_empty() { asm.name.clone() } else { asm.props.description.clone() });
+    campos.insert("massa".into(), format!("{massa:.3} kg").replace('.', ","));
+    m["pmi"] = json!(json_pmi(&asm.pmi, None, None, &campos));
     m["capturas"] = json!(json_capturas(&asm.pmi_captures));
     m["estados"] = json!(asm.display_states.iter().map(tipos::estado).collect::<Vec<_>>());
     if opc.analise {

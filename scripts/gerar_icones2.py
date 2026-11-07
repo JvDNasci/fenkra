@@ -634,6 +634,8 @@ def desenhos():
     ic("pmi_nota", B=CUBO(16, 18, 11, 5.5, 11), R=L((22, 22), (30, 12), (42, 12)) + "M30 6h12")
     ic("pmi_baloes", B=CUBO(16, 18, 11, 5.5, 11), R=C(35, 12, 7) + L((30, 17), (20, 26)))
     ic("pmi_legenda", B=CUBO(16, 6, 11, 5.5, 11), R=TABELA(6, 32, 36, 10, 1, 3))
+    ic("pmi_captura", B=CUBO(16, 6, 11, 5.5, 11), R=Q(20, 27, 24, 16) + C(32, 35, 4.5) + L((24, 27), (27, 22), (35, 22), (38, 27)))
+    ic("pmi_captura_modelo", B=CUBO(16, 6, 11, 5.5, 11), R=Q(20, 27, 24, 16) + C(32, 35, 4.5) + L((24, 27), (27, 22), (35, 22), (38, 27)), r=Q(17, 24, 30, 22))
     ic("pmi_referencia", B=CUBO(18, 4, 13, 6.5, 14), R=Z((10, 42), (24, 42), (17, 33)) + Q(30, 30, 12, 12))
     ic("pmi_rugosidade", B=CUBO(18, 16, 13, 6.5, 12), R=L((24, 14), (28, 22), (36, 6), (44, 6)))
     ic("pmi_solda", B=CUBO(16, 18, 11, 5.5, 11), R=L((22, 24), (30, 10), (44, 10)) + Z((34, 10), (42, 10), (34, 3)))
@@ -738,7 +740,7 @@ SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", 
 
 SO_INTERFACE |= {"filete_assimetrico"}
 SO_INTERFACE |= {"an_inclinacao", "an_isofotas", "an_dfm"}
-SO_INTERFACE |= {"asm_chaveta", "asm_calculo"}
+SO_INTERFACE |= {"asm_chaveta", "asm_calculo", "pmi_captura", "pmi_captura_modelo"}
 
 
 # ---------- saída ----------

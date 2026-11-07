@@ -29,6 +29,8 @@ pub enum Req {
     Text(Id, f64),
     /// novo raio do arco da cota angular ou de arco (mm)
     ArcR(Id, f64),
+    /// lado da caixa de onde sai a seta `k` (1 esquerda, 2 direita, 3 topo, 4 base) (B368)
+    Lado(Id, usize, u8),
 }
 
 /// Resultado de um quadro: pedidos e marcas do gesto.
@@ -108,6 +110,7 @@ pub fn apply(list: &mut [Pmi], reqs: &[Req]) -> bool {
             Req::Ext(id, e) => (id, Box::new(move |p| std::mem::replace(&mut p.style.ext_over, e) != e)),
             Req::Text(id, t) => (id, Box::new(move |p| std::mem::replace(&mut p.style.text_along, t) != t)),
             Req::ArcR(id, r) => (id, Box::new(move |p| std::mem::replace(&mut p.style.arc_r, r) != r)),
+            Req::Lado(id, k, l) => (id, Box::new(move |p| fenkra_core::pmi_leader::set_side(p, k, l))),
         };
         if let Some(p) = list.iter_mut().find(|p| p.id == id) {
             mudou |= f(p);
