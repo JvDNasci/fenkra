@@ -3267,7 +3267,7 @@ pub fn context_overlay(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: 
         trilha.push(st.asm.name_of(*id));
     }
     let mut volta = None;
-    let barra = egui::Area::new(egui::Id::unique("asm_contexto_barra")).order(egui::Order::Foreground).fixed_pos(rect.left_top() + egui::vec2(12., 12.)).show(ui.ctx(), |ui| {
+    let barra = egui::Area::new(egui::Id::unique("asm_contexto_barra")).order(egui::Order::Foreground).pivot(egui::Align2::CENTER_TOP).fixed_pos(rect.center_top() + egui::vec2(0., 34.)).show(ui.ctx(), |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(trilha.join(" › ")).strong()).on_hover_text(tr("Componente ativo: o resto do conjunto fica esmaecido e serve de referência."));

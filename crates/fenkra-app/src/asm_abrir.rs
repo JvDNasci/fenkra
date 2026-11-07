@@ -441,6 +441,68 @@ mod tests {
         assert!(b.st().asm.node(id).is_none() && !vazia.exists());
     }
 
+    /// Coloca a peça da mão e confere o componente novo na montagem composta.
+    fn colocar_e_conferir(b: &mut Bancada, est: &mut crate::asm_inserir::Estado, volume: f64) {
+        let st = b.app.asm.as_mut().unwrap();
+        assert!(crate::asm_inserir::colocar_copia(st, est, [0., 120., 0.]).is_some());
+        b.assentar();
+        assert!(b.st().errors.is_empty(), "{:?}", b.st().errors);
+        perto(b.volume(), volume);
+    }
+
+    #[test]
+    fn inserir_a_peca_aberta_com_alteracoes_por_salvar() {
+        let mut b = Bancada::nova("inserir_suja");
+        let antes = b.app.open.doc.clone();
+        engrossar(&mut b.app.open.doc);
+        b.app.push_undo_pub(antes);
+        b.assentar();
+        let mut est = crate::asm_inserir::Estado::novo(false, None);
+        crate::asm_inserir::pegar_aberta(&mut b.app, &mut est).unwrap();
+        assert!(!b.app.open.modified, "pegar salva");
+        assert_ne!(b.no_disco("fora.fkp"), bloco("Fora", 5.));
+        // o bloco de 5 com 15 de altura soma 375 aos 9000
+        colocar_e_conferir(&mut b, &mut est, 9375.);
+    }
+
+    #[test]
+    fn inserir_a_peca_aberta_que_nunca_foi_salva() {
+        let mut b = Bancada::nova("inserir_nova");
+        std::env::set_var("FENKRA_DEMO_PASTA", &b.dir);
+        b.app.load_doc_pub(bloco("Nunca salva", 5.), None);
+        let mut est = crate::asm_inserir::Estado::novo(false, None);
+        crate::asm_inserir::pegar_aberta(&mut b.app, &mut est).unwrap();
+        assert_eq!(b.app.open.file, Some(b.arquivo("Nunca salva.fkp")));
+        assert!(b.app.settings.recent_files.iter().any(|f| f.ends_with("Nunca salva.fkp")));
+        colocar_e_conferir(&mut b, &mut est, 9125.);
+    }
+
+    #[test]
+    fn inserir_a_peca_salva_e_ela_segue_aberta() {
+        let mut b = Bancada::nova("inserir_salva");
+        let mut est = crate::asm_inserir::Estado::novo(false, None);
+        crate::asm_inserir::pegar_aberta(&mut b.app, &mut est).unwrap();
+        colocar_e_conferir(&mut b, &mut est, 9125.);
+        assert_eq!(b.app.open.doc, bloco("Fora", 5.));
+    }
+
+    #[test]
+    fn documento_do_projeto_salvo_entra_nos_recentes_e_na_montagem() {
+        let mut b = Bancada::nova("inserir_projeto");
+        let mut p = fenkra_project::Project::create(&b.dir.join("proj"), "P").unwrap();
+        let id = p.add_document(bloco("Do projeto", 5.)).unwrap();
+        let doc = p.load(id).unwrap();
+        let arquivo = p.root.join(&p.entry(id).unwrap().file);
+        b.app.project = Some(p);
+        b.app.load_doc_pub(doc, None);
+        b.app.open.entry = Some(id);
+        b.app.open.modified = true;
+        let mut est = crate::asm_inserir::Estado::novo(false, None);
+        crate::asm_inserir::pegar_aberta(&mut b.app, &mut est).unwrap();
+        assert!(b.app.settings.recent_files.contains(&arquivo.to_string_lossy().to_string()));
+        colocar_e_conferir(&mut b, &mut est, 9125.);
+    }
+
     #[test]
     fn geometria_da_montagem_vai_e_volta() {
         let mut b = Bancada::nova("geometria");

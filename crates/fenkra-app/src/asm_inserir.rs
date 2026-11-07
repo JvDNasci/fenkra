@@ -69,11 +69,15 @@ pub struct Estado {
     pub simplificada: bool,
     /// motivo pelo qual o perfil de qualidade do projeto barra a peça da mão (B305); vazio = pode entrar
     pub bloqueada: Option<String>,
+    /// um clique na vista foi recusado pelo perfil: quem desenha avisa, para o clique não sumir mudo
+    pub recusada: bool,
+    /// documento aberto já pedido à fila de miniaturas (B362)
+    chave_aberta: String,
 }
 
 impl Estado {
     pub fn novo(sub: bool, pai: Option<Id>) -> Self {
-        Estado { sub, pai, filtro: String::new(), mao: None, fila: vec![], colocadas: 0, ultima: None, cursor_demo: None, perfil: None, simplificada: false, bloqueada: None }
+        Estado { sub, pai, filtro: String::new(), mao: None, fila: vec![], colocadas: 0, ultima: None, cursor_demo: None, perfil: None, simplificada: false, bloqueada: None, recusada: false, chave_aberta: String::new() }
     }
 }
 
@@ -155,6 +159,43 @@ fn triangulos_de<'a>(corpos: impl Iterator<Item = &'a fenkra_solidos::BodyResult
 fn previa_de(st: &crate::asm_ui::AsmState, perfil: &Perfil, mao: &NaMao) -> PreviaInsercao {
     let atuais = st.view.as_ref().map_or(0, |v| triangulos_de(v.bodies.iter()));
     qualidade_modelo::previa_insercao(perfil, atuais, &Medidas { triangulos: mao.triangulos, ..Default::default() }, 1)
+}
+
+/// Perfil fora de um projeto: mostra o que encontrou e não barra. Barrar pede uma exceção com nome e
+/// motivo, e sem projeto não há onde registrá-la: a peça ficava na mão, e o clique não fazia nada (B362).
+pub(crate) fn perfil_sem_projeto() -> Perfil {
+    let mut p = Perfil::padrao();
+    for l in &mut p.regras {
+        l.gravidade = qualidade_modelo::Gravidade::Avisa;
+    }
+    p
+}
+
+/// Arquivo da peça aberta: o dela ou, no projeto, o do documento.
+fn caminho_aberto(app: &App) -> Option<PathBuf> {
+    let do_projeto = || {
+        let (p, id) = (app.project.as_ref()?, app.open.entry?);
+        p.entry(id).ok().map(|e| p.root.join(&e.file))
+    };
+    app.open.file.clone().or_else(do_projeto)
+}
+
+/// A peça aberta ainda não está inteira no disco?
+fn aberta_por_salvar(app: &App) -> bool {
+    app.open.frozen.is_none() && (app.open.modified || caminho_aberto(app).is_none())
+}
+
+/// Põe a peça aberta na mão. A montagem guarda o caminho do arquivo, então quem está por salvar é
+/// salvo antes, como no Ctrl+S; quem desiste do diálogo fica sem nada na mão.
+pub(crate) fn pegar_aberta(app: &mut App, est: &mut Estado) -> Result<(), String> {
+    if aberta_por_salvar(app) {
+        app.save_pub();
+    }
+    let f = caminho_aberto(app).filter(|_| !aberta_por_salvar(app)).ok_or_else(|| tr("A peça precisa estar salva para entrar na montagem").to_string())?;
+    let st = app.asm.as_mut().ok_or("montagem fechada")?;
+    pegar(st, est, &f)?;
+    app.settings.add_recent_file(&f);
+    Ok(())
 }
 
 /// O checador de qualidade do PLM para a peça da mão, "ao inserir na montagem" (B305). Com a peça no
@@ -277,6 +318,15 @@ pub fn apos_viewport(app: &mut App) -> bool {
 
 /// Quadrinho de uma peça, com a miniatura girando devagar ao passar o mouse.
 fn azulejo(ui: &mut egui::Ui, app_prev: &crate::examples::PreviewCache, arquivo: &Path, escolhido: bool) -> egui::Response {
+    let previa = tem_extensao(arquivo, "fkp").then(|| {
+        let f = arquivo.to_path_buf();
+        app_prev.get(&format!("arq:{}", arquivo.display()), move || std::fs::read_to_string(&f).ok().and_then(|s| fenkra_core::Document::from_json(&s).ok()))
+    });
+    azulejo_com(ui, previa, nome_do(arquivo), &arquivo.to_string_lossy(), escolhido)
+}
+
+/// Desenha o quadrinho. `previa`: `None` não é peça; `Some(None)` a miniatura ainda não chegou.
+fn azulejo_com(ui: &mut egui::Ui, previa: Option<Option<Arc<crate::examples::Preview>>>, nome: String, dica: &str, escolhido: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(LADO, LADO + 20.), Sense::click());
     let v = ui.visuals().clone();
     let quadro = Rect::from_min_size(rect.min, egui::vec2(LADO, LADO));
@@ -286,9 +336,7 @@ fn azulejo(ui: &mut egui::Ui, app_prev: &crate::examples::PreviewCache, arquivo:
     if escolhido {
         painter.rect_stroke(quadro, 4., Stroke::new(1.5, crate::theme::accent(&v)), egui::StrokeKind::Inside);
     }
-    if tem_extensao(arquivo, "fkp") {
-        let f = arquivo.to_path_buf();
-        let pv = app_prev.get(&format!("arq:{}", arquivo.display()), move || std::fs::read_to_string(&f).ok().and_then(|s| fenkra_core::Document::from_json(&s).ok()));
+    if let Some(pv) = previa {
         match pv {
             Some(p) => {
                 let giro = if resp.hovered() {
@@ -307,14 +355,14 @@ fn azulejo(ui: &mut egui::Ui, app_prev: &crate::examples::PreviewCache, arquivo:
     } else {
         painter.text(quadro.center(), egui::Align2::CENTER_CENTER, ".fka", egui::FontId::proportional(15.), v.weak_text_color());
     }
-    let nome = nome_do(arquivo);
     let curto: String = if nome.chars().count() > 14 { nome.chars().take(13).chain(['…']).collect() } else { nome };
     painter.text(egui::pos2(rect.center().x, rect.bottom() - 3.), egui::Align2::CENTER_BOTTOM, curto, egui::FontId::proportional(11.), v.text_color());
-    resp.on_hover_text(arquivo.to_string_lossy().to_string())
+    resp.on_hover_text(dica.to_string())
 }
 
 enum Acao {
     Pegar(PathBuf),
+    PegarAberta,
     Procurar,
     Fechar,
 }
@@ -341,14 +389,29 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
     let titulo = if est.sub { tr("Inserir subconjunto") } else { tr("Inserir peça") };
     let cfg = Painel { nome: PAINEL.into(), titulo: titulo.to_string(), padrao: paineis::ao_lado_da_arvore(area), largura: 320., redimensiona: true };
     let posicao = app.settings.painel(PAINEL, Encaixe::Esquerda);
-    let (recentes, pasta) = listar(&app.settings.recent_files, st.dir().as_deref(), st.file.as_deref(), est.sub, &est.filtro);
+    let (mut recentes, mut pasta) = listar(&app.settings.recent_files, st.dir().as_deref(), st.file.as_deref(), est.sub, &est.filtro);
     let primeira = insercao::fixa_na_origem(&st.asm);
-    let perfil = est.perfil.get_or_insert_with(|| app.project.as_ref().map_or_else(Perfil::padrao, |p| p.perfil_qualidade())).clone();
+    let perfil = est.perfil.get_or_insert_with(|| app.project.as_ref().map_or_else(perfil_sem_projeto, |p| p.perfil_qualidade())).clone();
     let previa = est.mao.as_ref().map(|m| previa_de(st, &perfil, m));
     let qualidade = est.mao.as_ref().and_then(|m| relatorio_da_mao(app.project.as_ref(), &perfil, m));
     est.bloqueada = qualidade.as_ref().filter(|r| r.bloqueia()).map(|r| r.resumo_bloqueios());
     let mut acao = None;
     let previas = &app.previews;
+    // a peça aberta entra sem precisar estar nos recentes nem na pasta da montagem (B362)
+    let filtro = est.filtro.trim().to_lowercase();
+    let nome_aberta = app.open.doc.name.clone();
+    let tem_aberta = !est.sub && !app.open.doc.features.is_empty() && (filtro.is_empty() || nome_aberta.to_lowercase().contains(&filtro));
+    let arquivo_aberta = caminho_aberto(app);
+    let por_salvar = aberta_por_salvar(app);
+    if tem_aberta {
+        recentes.retain(|p| Some(p) != arquivo_aberta.as_ref());
+        pasta.retain(|p| Some(p) != arquivo_aberta.as_ref());
+    }
+    let chave_aberta = format!("aberta:{nome_aberta}:{}:{por_salvar}", app.open.doc.features.len());
+    let mut doc_aberta = (tem_aberta && est.chave_aberta != chave_aberta).then(|| app.open.doc.clone());
+    if tem_aberta {
+        est.chave_aberta = chave_aberta.clone();
+    }
     let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
         if crate::app::done_bar(ui) {
             acao = Some(Acao::Fechar);
@@ -398,7 +461,18 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
         }
         ui.separator();
         egui::ScrollArea::vertical().max_height(420.).auto_shrink([false, true]).show(ui, |ui| {
-            if recentes.is_empty() && pasta.is_empty() {
+            if tem_aberta {
+                ui.label(RichText::new(if por_salvar { tr("Peça aberta: salva ao pegar") } else { tr("Peça aberta") }).small().strong());
+                let doc = doc_aberta.take();
+                let previa = Some(previas.get(&chave_aberta, move || doc));
+                let dica = if por_salvar { tr("Salva a peça e a põe na mão.").to_string() } else { arquivo_aberta.as_ref().map(|f| f.display().to_string()).unwrap_or_default() };
+                let escolhido = nome_mao.as_deref().is_some_and(|n| arquivo_aberta.as_deref().is_some_and(|f| nome_do(f) == n));
+                if azulejo_com(ui, previa, nome_aberta.clone(), &dica, escolhido).clicked() {
+                    acao = Some(Acao::PegarAberta);
+                }
+                ui.add_space(6.);
+            }
+            if !tem_aberta && recentes.is_empty() && pasta.is_empty() {
                 ui.label(RichText::new(tr("Nenhuma peça recente nem nesta pasta: use Procurar no disco.")).weak());
             }
             if !recentes.is_empty() {
@@ -416,6 +490,10 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
         app.settings.guardar_painel(PAINEL, p);
     }
     let mut aviso = None;
+    if matches!(acao, Some(Acao::PegarAberta)) {
+        est.fila.clear();
+        aviso = pegar_aberta(app, &mut est).err();
+    }
     let st = app.asm.as_mut().expect("montagem aberta");
     match acao {
         Some(Acao::Fechar) => {
@@ -440,7 +518,7 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
                 }
             }
         }
-        None => {}
+        Some(Acao::PegarAberta) | None => {}
     }
     app.asm.as_mut().expect("montagem aberta").inserir = Some(est);
     if let Some(a) = aviso {
@@ -501,6 +579,7 @@ fn quadro(st: &mut crate::asm_ui::AsmState, est: &mut Estado, ui: &mut egui::Ui,
     }
     let clicou = ctx.input(|i| i.pointer.primary_clicked());
     if clicou && cursor.is_some() {
+        est.recusada = est.bloqueada.is_some();
         return colocar_copia(st, est, origem?);
     }
     None
@@ -515,7 +594,11 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let Some(mut est) = st.inserir.take() else { return };
     let vazia = insercao::fixa_na_origem(&st.asm);
     let novo = quadro(st, &mut est, ui, rect, cam);
+    let recusa = std::mem::take(&mut est.recusada).then(|| est.bloqueada.clone()).flatten();
     st.inserir = Some(est);
+    if let Some(motivo) = recusa {
+        app.toast(format!("{}: {motivo}", tr("Esta peça não entra na montagem")), true);
+    }
     if novo.is_some() && vazia {
         app.fit_now();
     }
@@ -523,6 +606,14 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     if novo.is_some() {
         ui.ctx().request_repaint();
     }
+}
+
+/// Peça que tem corpo e um comando em erro: o comando final cita um sketch que não existe.
+fn peca_com_erro() -> fenkra_core::Document {
+    use fenkra_core::{BoolOp, Extent, Extrude, FeatureKind};
+    let mut d = fenkra_solidos::example_document();
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: Id(999_999_999), op: BoolOp::Add, extent: Extent::Blind("5".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+    d
 }
 
 /// `FENKRA_DEMO_ASM=inserir|inserir_vazia|inserir_limite`: peça na mão, com o cursor parado para a
@@ -538,6 +629,12 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
         st.dirty = true;
     }
     abrir(st, false);
+    // `inserir_mouse`: só o painel; os cliques vêm de `FENKRA_DEMO_PAINEL`, pelo caminho do mouse de
+    // verdade, sem o cursor fixo que pula o filtro de camada
+    if nome == "inserir_mouse" {
+        let _ = std::fs::write(dir.join("barrada.fkp"), peca_com_erro().to_json());
+        return;
+    }
     let Some(mut est) = st.inserir.take() else { return };
     let _ = pegar(st, &mut est, &dir.join("placa.fkp"));
     est.cursor_demo = Some([0.72, 0.62]);
@@ -606,6 +703,37 @@ mod tests {
         // fora do projeto não há exceção: só o perfil decide
         let sem = relatorio_da_mao(None, &rig, est.mao.as_ref().unwrap()).unwrap();
         assert!(sem.bloqueia());
+    }
+
+    /// B362: sem projeto não há onde registrar exceção, então peça com comando em erro entra com aviso.
+    #[test]
+    fn peca_com_comando_em_erro_entra_fora_do_projeto_e_o_aviso_fica() {
+        let (mut st, d) = montagem("erro_sem_projeto");
+        std::fs::write(d.join("erro.fkp"), peca_com_erro().to_json()).unwrap();
+        let mut est = Estado::novo(false, None);
+        pegar(&mut st, &mut est, &d.join("erro.fkp")).unwrap();
+        let mao = est.mao.as_ref().unwrap();
+        // o padrão do projeto barra essa peça: é o que deixava o clique mudo sem projeto
+        assert!(relatorio_da_mao(None, &Perfil::padrao(), mao).unwrap().bloqueia());
+        let r = relatorio_da_mao(None, &perfil_sem_projeto(), mao).unwrap();
+        assert!(!r.bloqueia() && !r.violacoes.is_empty(), "avisa sem barrar");
+        assert!(colocar_copia(&mut st, &mut est, [0.; 3]).is_some());
+        assert_eq!(pecas(&st), 1);
+    }
+
+    /// Com projeto o perfil segue barrando, mas o clique recusado deixa rastro para o aviso.
+    #[test]
+    fn clique_barrado_pelo_perfil_nao_fica_mudo() {
+        let (mut st, d) = montagem("clique_barrado");
+        let mut est = Estado::novo(false, None);
+        pegar(&mut st, &mut est, &d.join("placa.fkp")).unwrap();
+        est.bloqueada = Some("Referências em erro".into());
+        st.inserir = Some(est);
+        let ctx = egui::Context::default();
+        clicar(&ctx, &mut st, pos2(500., 300.));
+        let est = st.inserir.as_ref().unwrap();
+        assert!(est.recusada, "quem desenha recebe o pedido de avisar");
+        assert_eq!(pecas(&st), 0);
     }
 
     fn montagem(nome: &str) -> (AsmState, PathBuf) {

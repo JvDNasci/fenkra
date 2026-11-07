@@ -1468,7 +1468,12 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 Ok(()) => {
                     self.open.modified = false;
                     let n = p.entry(id).map(|e| e.versions.len()).unwrap_or(0);
+                    // como o arquivo solto: a peça salva tem de aparecer ao inserir na montagem
+                    let arquivo = p.entry(id).ok().map(|e| p.root.join(&e.file));
                     self.toast(format!("Versão {n} salva no projeto"), false);
+                    if let Some(f) = arquivo {
+                        self.settings.add_recent_file(&f);
+                    }
                     self.visualizacao_ao_salvar(id);
                 }
                 Err(e) => self.toast(e.to_string(), true),
@@ -1477,10 +1482,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         }
         let path = match &self.open.file {
             Some(f) => Some(f.clone()),
-            None => rfd::FileDialog::new()
-                .add_filter("Peça Fenkra", &["fkp"])
-                .set_file_name(format!("{}.fkp", self.open.doc.name))
-                .save_file(),
+            // desenvolvimento: FENKRA_DEMO_PASTA=<pasta> grava sem perguntar
+            None => std::env::var_os("FENKRA_DEMO_PASTA").map(|d| PathBuf::from(d).join(format!("{}.fkp", self.open.doc.name))).or_else(|| {
+                rfd::FileDialog::new().add_filter("Peça Fenkra", &["fkp"]).set_file_name(format!("{}.fkp", self.open.doc.name)).save_file()
+            }),
         };
         if let Some(path) = path {
             match fenkra_project::seguro::gravar_atomico(&path, self.open.doc.to_json().as_bytes()) {
