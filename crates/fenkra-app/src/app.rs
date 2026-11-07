@@ -4765,6 +4765,14 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         self.about_open = open;
     }
 
+    pub(crate) fn renaming(&self) -> Option<Id> {
+        self.renaming
+    }
+
+    pub(crate) fn set_renaming(&mut self, id: Option<Id>) {
+        self.renaming = id;
+    }
+
     fn tree(&mut self, ui: &mut egui::Ui) {
         *self.stale_set.borrow_mut() = self.compute_stale();
         // ordem das linhas do quadro anterior (para o Shift+clique)
@@ -5123,7 +5131,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let ctx = if e.xform.is_some() { " ⚙" } else { "" };
                 let txt = format!("🔗 {st} {} ← {}.{}{ctx}", e.target.map(|t| doc.name_of(t)).unwrap_or_default(), e.source, tr(fenkra_montagem::links::rotulo_publicacao(&e.publication)));
                 crate::tree_ui::marca(ui);
-                let r = ui.selectable_label(e.target.is_some_and(|t| self.sel == Sel::Ref(t)), txt).on_hover_text(format!("caminho: {}", e.path));
+                let r = self.row_label(ui, e.id, &e.name, e.target.is_some_and(|t| self.sel == Sel::Ref(t)), RichText::new(txt), actions);
+                let r = drag_item(ui, r, e.id, self.renaming != Some(e.id)).on_hover_text(format!("caminho: {}", e.path));
                 if r.clicked() {
                     if let Some(t) = e.target {
                         *new_sel = Some(if doc.reference(t).is_some() { Sel::Ref(t) } else { Sel::Params });
@@ -5132,6 +5141,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let (ext, state, path) = (e.id, e.state, e.path.clone());
                 let alvo = e.target.and_then(|t| doc.reference(t));
                 r.context_menu(|ui| {
+                    if ui.button(tr("✎ Renomear   F2")).clicked() {
+                        actions.push(TreeAction::StartRename(ext));
+                        ui.close();
+                    }
                     if let Some(rf) = alvo {
                         if ui.button(if rf.visible { tr("Ocultar   H") } else { tr("Mostrar   H") }).clicked() {
                             actions.push(TreeAction::RefVisible(rf.id, !rf.visible));
@@ -5179,7 +5192,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
         let h = crate::tree_ui::grupo(ui, "arvore_pub", Some("asm_link"), format!("{} ({n_pub})", tr("Publicações")), false).corpo(ui, |ui| {
             for r in doc.references.iter().filter(|r| r.published) {
                 crate::tree_ui::marca(ui);
-                let resp = ui.selectable_label(self.sel == Sel::Ref(r.id), format!("📤 {}", r.name));
+                let resp = self.row_label(ui, r.id, &r.name, self.sel == Sel::Ref(r.id), RichText::new(format!("📤 {}", r.name)), actions);
+                let resp = drag_item(ui, resp, r.id, self.renaming != Some(r.id));
                 if resp.clicked() {
                     *new_sel = Some(Sel::Ref(r.id));
                 }
@@ -5196,11 +5210,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             for c in doc.collectors.iter().filter(|c| c.published) {
                 crate::tree_ui::marca(ui);
-                let resp = ui.selectable_label(self.sel == Sel::Collector(c.id), format!("📤 ▣ {}", c.name));
+                let resp = self.row_label(ui, c.id, &c.name, self.sel == Sel::Collector(c.id), RichText::new(format!("📤 ▣ {}", c.name)), actions);
+                let resp = drag_item(ui, resp, c.id, self.renaming != Some(c.id));
                 if resp.clicked() {
                     *new_sel = Some(Sel::Collector(c.id));
                 }
                 resp.context_menu(|ui| {
+                    if ui.button(tr("✎ Renomear   F2")).clicked() {
+                        actions.push(TreeAction::StartRename(c.id));
+                        ui.close();
+                    }
                     if ui.button(tr("Despublicar")).clicked() {
                         actions.push(TreeAction::CollectorPublish(c.id, false));
                         ui.close();
@@ -5209,11 +5228,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             }
             for p in doc.params.iter().filter(|p| p.published) {
                 crate::tree_ui::marca(ui);
-                let resp = ui.selectable_label(false, format!("📤 ƒ {}", p.name));
+                let resp = self.row_label(ui, p.id, &p.name, self.multi.borrow().contains(&p.id), RichText::new(format!("📤 ƒ {}", p.name)), actions);
+                let resp = drag_item(ui, resp, p.id, self.renaming != Some(p.id));
                 if resp.clicked() {
                     *new_sel = Some(Sel::Params);
                 }
                 resp.context_menu(|ui| {
+                    if ui.button(tr("✎ Renomear   F2")).clicked() {
+                        actions.push(TreeAction::StartRename(p.id));
+                        ui.close();
+                    }
                     if ui.button(tr("Despublicar")).clicked() {
                         actions.push(TreeAction::ParamPublish(p.id, false));
                         ui.close();
@@ -5240,7 +5264,8 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 let v = crate::param_ui::valor_texto(p, &vars).unwrap_or("⚠".into());
                 let aviso = crate::param_ui::avisos_do_param_texto(&avisos, p.id);
                 crate::tree_ui::marca(ui);
-                let mut r = pick(ui, Sel::Params, RichText::new(format!("{}{} = {v}{}", if p.published { "📤 " } else { "" }, p.name, if aviso.is_some() { " ⚠" } else { "" })));
+                let mut r = self.row_label(ui, p.id, &p.name, sel == Sel::Params && self.multi.borrow().contains(&p.id), RichText::new(format!("{}{} = {v}{}", if p.published { "📤 " } else { "" }, p.name, if aviso.is_some() { " ⚠" } else { "" })), actions);
+                r = drag_item(ui, r, p.id, self.renaming != Some(p.id));
                 if let Some(m) = aviso {
                     r = r.on_hover_text(m);
                 }
@@ -5249,6 +5274,10 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 }
                 r.context_menu(|ui| {
                     ui.label(RichText::new(&p.name).strong());
+                    if ui.button(tr("✎ Renomear   F2")).clicked() {
+                        actions.push(TreeAction::StartRename(p.id));
+                        ui.close();
+                    }
                     if ui.button(tr("✏ Editar na tabela")).clicked() {
                         *new_sel = Some(Sel::Params);
                         ui.close();
@@ -5409,7 +5438,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
     }
 
     /// Rótulo da linha da árvore, ou o campo de renomear (F2) quando este item está sendo renomeado.
-    fn row_label(&self, ui: &mut egui::Ui, id: Id, name: &str, selected: bool, text: RichText, actions: &mut Vec<TreeAction>) -> egui::Response {
+    pub(crate) fn row_label(&self, ui: &mut egui::Ui, id: Id, name: &str, selected: bool, text: RichText, actions: &mut Vec<TreeAction>) -> egui::Response {
         if self.renaming == Some(id) {
             let key = egui::Id::unique(("renomear", id.0));
             let mut buf: String = ui.ctx().data(|m| m.get_temp(key)).unwrap_or_else(|| name.to_string());
@@ -5960,7 +5989,18 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             TreeAction::RenameCancel => self.renaming = None,
             TreeAction::Rename(id, n) => {
                 self.renaming = None;
-                if let Err(e) = d.rename_item(id, &n) {
+                // parâmetros trocam o nome também nas expressões; links externos só o rótulo
+                let res = if d.params.iter().any(|p| p.id == id) {
+                    d.rename_param(id, n.trim())
+                } else if let Some(e) = d.external.iter_mut().find(|e| e.id == id) {
+                    if !n.trim().is_empty() {
+                        e.name = n.trim().to_string();
+                    }
+                    Ok(())
+                } else {
+                    d.rename_item(id, &n)
+                };
+                if let Err(e) = res {
                     self.toast(e.to_string(), true);
                 }
             }
@@ -8007,7 +8047,7 @@ fn eye(ui: &mut egui::Ui, hidden: bool) -> bool {
     ui.add(egui::Button::image(img).frame(false)).on_hover_text(if hidden { "mostrar" } else { "ocultar" }).clicked()
 }
 
-enum TreeAction {
+pub(crate) enum TreeAction {
     ObjetoTrabalho(Id),
     AtualizarAte(Id),
     NovoConteiner(OrdemConteiner),
@@ -8082,7 +8122,7 @@ enum TreeAction {
 
 /// Item da árvore de geometria sendo arrastado.
 #[derive(Clone, Copy)]
-struct DragItem(Id);
+pub(crate) struct DragItem(pub Id);
 
 /// Botão "Concluir" no topo das janelas de comando: devolve true quando clicado.
 /// Opções da extração.
@@ -8153,7 +8193,7 @@ fn geo_global_changed(d: &Document, rd: &Document) -> bool {
 
 /// Torna o próprio rótulo arrastável (clique, duplo clique e botão direito continuam nele — uma
 /// área de arraste por cima engolia o menu de contexto).
-fn drag_item(ui: &mut egui::Ui, resp: egui::Response, id: Id, enabled: bool) -> egui::Response {
+pub(crate) fn drag_item(ui: &mut egui::Ui, resp: egui::Response, id: Id, enabled: bool) -> egui::Response {
     if !enabled {
         return resp;
     }
@@ -8550,7 +8590,12 @@ impl eframe::App for App {
             }
             // F2 renomeia na árvore; F5 atualiza (no modo manual); Ctrl+F5 reconstrói tudo
             if ctx.input(|i| i.key_pressed(egui::Key::F2)) {
-                if let Sel::Feature(id) | Sel::Ref(id) | Sel::Folder(id) | Sel::Collector(id) = self.sel {
+                // o item escolhido por último na árvore (inclui parâmetros, links, publicações,
+                // anotações e capturas); sem ele, o recurso selecionado
+                let unico = { let m = self.multi.borrow(); if m.len() == 1 { Some(m[0]) } else { None } };
+                if let Some(id) = unico {
+                    self.renaming = Some(id);
+                } else if let Sel::Feature(id) | Sel::Ref(id) | Sel::Folder(id) | Sel::Collector(id) = self.sel {
                     self.renaming = Some(id);
                 }
             }

@@ -392,6 +392,10 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("pmi_referencia", "Referência", "Referência (datum)", "Letra de referência na face escolhida.", Cmd(C::Pmi(7))),
                 it("pmi_tolerancia", "Tolerância", "Tolerância geométrica", "Quadro ISO 1101: característica, tolerância (zona Ø, modificadores Ⓜ Ⓛ Ⓟ…), referências e quadro composto.", Cmd(C::Pmi(8))),
             ]),
+            Family("pmi_captura", vec![
+                it("pmi_captura", "Captura", "Criar captura", "Guarda a câmera e as anotações visíveis agora como uma captura numerada (Captura 1, 2, 3…). Vira uma etapa do detalhamento no visualizador web. F2 renomeia.", Cmd(C::Pmi(21))),
+                it("pmi_captura_modelo", "Captura + modelo", "Criar captura com a visibilidade do modelo", "Como a captura simples, e guarda também o que está oculto no modelo (recursos, coletores, referências ou componentes).", Cmd(C::Pmi(22))),
+            ]),
             Family("pmi_legenda", vec![
                 it("pmi_legenda", "Legenda 3D", "Legenda (carimbo) 3D", "Quadro com os dados da peça preenchidos sozinhos: nome, código, descrição, material, massa, data… (modelo editável).", Cmd(C::Pmi(9))),
                 it("pmi_baloes", "Balões", "Balões automáticos (montagem)", "Um balão 3D por componente com o número fixo da lista de peças; refaz os balões anteriores.", Cmd(C::Pmi(10))),

@@ -209,6 +209,23 @@ pub struct WeldExtra {
     /// cauda: processo (ISO 4063, ex.: 135), norma, posição
     #[serde(default)]
     pub process: String,
+    /// esconde a representação engrossada do cordão (só exibição, B369): o padrão mostra
+    #[serde(default)]
+    pub hide_bead: bool,
+}
+
+/// Perna do cordão em mm a partir da medida do símbolo: `z5` e `5` são a perna; `a4` é a garganta
+/// e a perna do filete a 90° vale `a·√2`. Vazio ou sem número = `None`. Só serve para exibir o
+/// cordão (B369): não entra em massa, volume nem lista de corte.
+pub fn weld_leg_mm(size: &str) -> Option<f64> {
+    let t = size.trim().to_lowercase().replace(',', ".");
+    let (garganta, num) = match t.strip_prefix('a') {
+        Some(r) => (true, r),
+        None => (false, t.strip_prefix('z').unwrap_or(&t)),
+    };
+    let fim = num.find(|c: char| !(c.is_ascii_digit() || c == '.')).unwrap_or(num.len());
+    let v: f64 = num[..fim].parse().ok()?;
+    (v.is_finite() && v > 0.).then(|| if garganta { v * std::f64::consts::SQRT_2 } else { v })
 }
 
 /// Primitiva do símbolo de solda num sistema local: a seta encontra a linha de referência em
@@ -710,6 +727,13 @@ pub struct PmiStyle {
     /// ponta); vazio = chamada reta (B23, ver `pmi_leader`)
     #[serde(default)]
     pub leader_via: Vec<Vec<[f64; 3]>>,
+    /// de qual lado da caixa do texto sai a chamada de cada ponta: 0 automático (o lado voltado
+    /// para a ponta, como nos arquivos antigos), 1 esquerda, 2 direita, 3 topo, 4 base (B368)
+    #[serde(default)]
+    pub leader_side: Vec<u8>,
+    /// ponta própria de cada chamada; vazio ou `Padrao` = a ponta do estilo (B368)
+    #[serde(default)]
+    pub leader_arrow: Vec<PmiArrow>,
     // ---- cota (B269)
     /// quanto as linhas de apoio passam da linha de cota (mm no modelo); 0 = o padrão curto
     #[serde(default)]
@@ -767,6 +791,8 @@ impl PmiStyle {
             leader_dash: if self.leader_dash != 0 { self.leader_dash } else { base.leader_dash },
             leader_color: self.leader_color.or(base.leader_color),
             leader_via: self.leader_via.clone(),
+            leader_side: self.leader_side.clone(),
+            leader_arrow: self.leader_arrow.clone(),
             ext_over: self.ext_over,
             text_along: self.text_along,
             decimals: self.decimals.or(base.decimals),
@@ -805,6 +831,8 @@ impl Default for PmiStyle {
             leader_dash: 0,
             leader_color: None,
             leader_via: vec![],
+            leader_side: vec![],
+            leader_arrow: vec![],
             ext_over: 0.,
             text_along: 0.,
             decimals: None,
@@ -1410,6 +1438,20 @@ impl Pmi {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn perna_do_cordao_vem_da_medida_do_simbolo() {
+        assert_eq!(weld_leg_mm("z5"), Some(5.));
+        assert_eq!(weld_leg_mm(" 6,5 "), Some(6.5));
+        assert!((weld_leg_mm("a4").unwrap() - 4. * std::f64::consts::SQRT_2).abs() < 1e-9, "garganta 4 = perna 5,66");
+        assert_eq!(weld_leg_mm("a3 (2x)"), Some(3. * std::f64::consts::SQRT_2));
+        assert_eq!(weld_leg_mm(""), None);
+        assert_eq!(weld_leg_mm("abc"), None);
+        assert_eq!(weld_leg_mm("0"), None);
+        // arquivo antigo: o cordão aparece (esconder é escolha nova)
+        let x: WeldExtra = serde_json::from_str("{}").unwrap();
+        assert!(!x.hide_bead);
+    }
 
     #[test]
     fn medidas_e_textos() {

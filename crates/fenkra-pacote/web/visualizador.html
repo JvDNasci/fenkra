@@ -55,6 +55,9 @@ main.com-painel #painel{display:flex}
 #corte{display:none;gap:6px;align-items:center;padding:6px;background:var(--janela);border:1px solid var(--linha);border-radius:10px;box-shadow:0 4px 16px var(--sombra);flex-wrap:wrap;max-width:100%;width:460px}
 #corte input[type=range]{flex:1 1 140px;min-width:100px;height:32px}
 #medida{max-width:100%;display:none;padding:6px 10px;background:var(--janela);border:1px solid var(--destaque);border-radius:var(--raio);box-shadow:0 2px 10px var(--sombra);font-variant-numeric:tabular-nums}
+#anot2d{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+#etapas{display:none;gap:6px;align-items:center;padding:4px 6px;background:var(--janela);border:1px solid var(--linha);border-radius:10px;box-shadow:0 4px 16px var(--sombra);max-width:100%}
+#etapas strong{font-size:13px;white-space:nowrap;padding:0 4px}
 #aviso{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;background:var(--fundo)}
 #aviso.on{display:flex}
 #aviso .caixa{max-width:420px}
@@ -121,7 +124,7 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--suav
       <div id="cena3d"></div>
       <div id="folha"></div>
       <div id="barra" role="toolbar"></div>
-      <div id="flutuantes"><div id="corte"></div><div id="medida" role="status" aria-live="polite"></div></div>
+      <div id="flutuantes"><div id="corte"></div><div id="medida" role="status" aria-live="polite"></div><div id="etapas" role="group" aria-label="Capturas"></div></div>
       <div id="aviso" class="on"><div class="caixa"><h2 data-t="vazio_t">Abra um pacote .fkv</h2><p data-t="vazio_p">Escolha o arquivo ou arraste-o para cá. Nada sai do seu aparelho.</p><button id="babrir2" data-t="abrir">Abrir</button><p class="dica" data-t="vazio_p2">Não tem um .fkv? No Fenkra, use Arquivo, Exportar visualização.</p><p class="dica" data-t="vazio_p3">No celular: se o arquivo não aparecer ao tocar em Abrir, mande o .fkv para o aparelho e procure em Arquivos ou Downloads.</p></div></div>
     </section>
   </main>
@@ -159,10 +162,12 @@ const TX = {
   folga_nota:"Menor distância entre peças que não interferem, até {n} mm (aproximada, pelos vértices).", onde_usado:"Onde é usado", raiz:"Raiz",
   abrir_outro:"Abrir outro pacote para comparar", cmp_dica:"Abra outro .fkv do mesmo documento (outra versão) para ver o que mudou.", nova:"nova", antiga:"antiga", aberto:"Aberto",
   trocar_lado:"Trocar lados", cmp_igual:"Nenhuma diferença encontrada.", totais:"Totais", adicionados:"Adicionados", removidos:"Removidos", movidos:"Movidos", alterados:"Alterados",
-  so_no_outro:"só no outro pacote", girou:"girou", visivel:"Visível", estado:"Estado", versao:"Versão" },
+  so_no_outro:"só no outro pacote", girou:"girou", visivel:"Visível", estado:"Estado", versao:"Versão",
+  capturas:"Capturas", etapa_de:"Captura {i} de {n}", anterior:"Anterior", proxima:"Próxima", sem_capturas:"Este pacote não tem capturas.", todas_etapas:"Mostrar todas as anotações", cordoes:"Mostrar o cordão das soldas" },
  en:{ "3D":"3D", folhas:"Sheets", painel:"Panel", abrir:"Open", tema:"Theme",
   vazio_t:"Open a .fkv package", vazio_p:"Drop the .fkv file on this screen, or tap Open and choose it. Nothing leaves your device.", vazio_p2:"No .fkv yet? In Fenkra, use File, Export viewer package.", vazio_p3:"On a phone: if the file does not show up when you tap Open, send the .fkv to the device and look in Files or Downloads.",
   arvore:"Tree", dados:"Data", pmi:"PMI", vistas:"Views", estados:"States", lista:"List",
+  capturas:"Captures", etapa_de:"Capture {i} of {n}", anterior:"Previous", proxima:"Next", sem_capturas:"This package has no captures.", todas_etapas:"Show all annotations", cordoes:"Show the weld beads",
   buscar:"Search part, code or material", ajustar:"Fit", isolar:"Isolate", tudo:"All", cortar:"Section", medir:"Measure", orto:"Ortho", persp:"Persp.",
   sem_sel:"Tap a part to see its data.", nome:"Name", pn:"Part no.", descricao:"Description", material:"Material", tipo_de_peca:"Type",
   massa_kg:"Mass (kg)", volume_mm3:"Volume (mm³)", area_mm2:"Area (mm²)", dimensoes_mm:"Size (mm)", centro_de_massa_mm:"Center of mass (mm)",
@@ -254,6 +259,7 @@ const V3 = {
     this.r.localClippingEnabled = true;
     this.r.setClearColor(0x000000,0);
     cont.append(this.r.domElement);
+    this.ov = document.createElement("canvas"); this.ov.id = "anot2d"; this.ov.setAttribute("aria-hidden","true"); cont.append(this.ov);
     this.s = new THREE.Scene();
     this.persp = new THREE.PerspectiveCamera(34.4,1,1,1000);
     this.ortoCam = new THREE.OrthographicCamera(-1,1,1,-1,0.1,1000);
@@ -274,7 +280,7 @@ const V3 = {
   },
   tamanho(){
     const cont=$("#cena3d"), w=Math.max(1,cont.clientWidth), h=Math.max(1,cont.clientHeight);
-    this.r.setSize(w,h,false); this.w=w; this.h=h; this.cameraAtualizar(); this.precisa=true;
+    this.r.setSize(w,h,false); this.w=w; this.h=h; if (this.ov){ const d=Math.min(devicePixelRatio||1,2); this.ov.width=Math.round(w*d); this.ov.height=Math.round(h*d); } this.cameraAtualizar(); this.precisa=true;
   },
   tema(){
     for (const e of P.entradas.values()) if (e.malhaObj) this.pintar(e);
@@ -529,32 +535,94 @@ const V3 = {
   /* anotações 3D */
   anotar(){
     const g = this.anot; g.clear();
-    const m = P.m; if (!m) return;
+    this.itens2d = [];
+    const m = P.m; if (!m) { this.precisa = true; return; }
     const mostrar = P.pmiFiltro ? m.pmi.filter(p=>P.pmiFiltro.has(p.id)) : m.pmi.filter(p=>p.visivel);
     const cd = corCSS("--destaque"), ct = corCSS("--texto");
     for (const p of mostrar){
       const ativa = P.pmiSel===p.id, cor = ativa ? cd : ct;
       const A = p.ancoras.map(a=>new THREE.Vector3(...a));
-      if (A.length>=2 && ["Linear","Gap","Diameter","Radius","Ordinate"].some(k=>p.tipo.startsWith(k)||p.dimensional)){
-        const l = new THREE.Line(new THREE.BufferGeometry().setFromPoints(A),new THREE.LineBasicMaterial({color:cor,depthTest:false})); l.renderOrder=8; g.add(l);
-      }
-      const base = A[0] ? A[0].clone().add(new THREE.Vector3(...p.deslocamento)) : null;
-      if (base){
-        if (A[0]){ const l=new THREE.Line(new THREE.BufferGeometry().setFromPoints([A[0],base]),new THREE.LineBasicMaterial({color:cor,depthTest:false,transparent:true,opacity:.6})); l.renderOrder=8; g.add(l); }
-        const sp = this.texto(p.texto||p.nome, cor); sp.position.copy(base); g.add(sp);
-      }
+      const desl = new THREE.Vector3(...p.deslocamento);
+      const linear = A.length>=2 && (p.dimensional || ["Linear","Gap","Diameter","Radius","Ordinate"].some(k=>p.tipo.startsWith(k)));
       p.alvos.forEach(a=>{ if (a) g.add(this.alvo(a, cor)); });
+      if (p.cordao && p.cordao.visivel && P.cordoes!==false) this.cordao(p.cordao, g);
+      this.itens2d.push({p, A, desl, cor, ativa, linear});
     }
     this.precisa = true;
   },
-  texto(t,cor){
-    const cv = document.createElement("canvas"), cx = cv.getContext("2d"), f = 28;
-    cx.font = `600 ${f}px system-ui,sans-serif`; const w = Math.ceil(cx.measureText(t).width)+20; cv.width=w; cv.height=f+16;
-    cx.font = `600 ${f}px system-ui,sans-serif`; cx.fillStyle = corCSS("--janela"); cx.globalAlpha=.9; cx.fillRect(0,0,w,f+16); cx.globalAlpha=1;
-    cx.strokeStyle = cor; cx.lineWidth=2; cx.strokeRect(1,1,w-2,f+14); cx.fillStyle=cor; cx.textBaseline="middle"; cx.fillText(t,10,(f+16)/2+1);
-    const tex = new THREE.CanvasTexture(cv);
-    const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:tex,depthTest:false,sizeAttenuation:false,transparent:true}));
-    sp.scale.set(0.045*w/(f+16)*1.0, 0.045, 1); sp.renderOrder=11; return sp;
+  /* Anotações: texto, linhas de cota e setas desenhados numa tela 2D sobre a cena. A seta sai da
+     borda da caixa no lado escolhido na nota (0 automático, 1 esquerda, 2 direita, 3 topo, 4 base). */
+  ponto(v){
+    const q = v.clone().project(this.c);
+    if (!(q.z>-1 && q.z<1)) return null;
+    return {x:(q.x+1)/2*this.w, y:(1-q.y)/2*this.h};
+  },
+  rotulos(){
+    const cv = this.ov; if (!cv) return;
+    const d = cv.width/Math.max(1,this.w), cx = cv.getContext("2d");
+    cx.setTransform(d,0,0,d,0,0); cx.clearRect(0,0,this.w,this.h);
+    if (!this.itens2d || !this.itens2d.length) return;
+    const fundo = corCSS("--janela"), f = 13, pad = 5;
+    cx.font = `600 ${f}px system-ui,sans-serif`; cx.textBaseline = "middle"; cx.lineJoin = "round";
+    const seta = (ponta, pa, de)=>{
+      const dx = pa.x-de.x, dy = pa.y-de.y, l = Math.hypot(dx,dy); if (l<2 || ponta==="nenhuma") return;
+      const ux = dx/l, uy = dy/l, nx = -uy, ny = ux;
+      if (ponta==="ponto"){ cx.beginPath(); cx.arc(pa.x,pa.y,3.5,0,6.2832); cx.fill(); }
+      else if (ponta==="barra"){ cx.beginPath(); cx.moveTo(pa.x-(ux+nx)*5,pa.y-(uy+ny)*5); cx.lineTo(pa.x+(ux+nx)*5,pa.y+(uy+ny)*5); cx.stroke(); }
+      else if (ponta==="aberta"){ cx.beginPath(); cx.moveTo(pa.x-ux*10+nx*4,pa.y-uy*10+ny*4); cx.lineTo(pa.x,pa.y); cx.lineTo(pa.x-ux*10-nx*4,pa.y-uy*10-ny*4); cx.stroke(); }
+      else { cx.beginPath(); cx.moveTo(pa.x,pa.y); cx.lineTo(pa.x-ux*11+nx*4,pa.y-uy*11+ny*4); cx.lineTo(pa.x-ux*11-nx*4,pa.y-uy*11-ny*4); cx.closePath(); cx.fill(); }
+    };
+    for (const it of this.itens2d){
+      const {p, A, desl, cor} = it; if (!A.length) continue;
+      cx.strokeStyle = cx.fillStyle = cor; cx.lineWidth = it.ativa ? 2.2 : 1.5;
+      const linhas = String(p.texto||p.nome).split("\n");
+      const w = Math.ceil(Math.max(...linhas.map(t=>cx.measureText(t).width)))+pad*2, h = linhas.length*(f+3)+pad*2-3;
+      let centro;
+      if (it.linear){
+        const q0 = A[0].clone().add(desl), q1 = A[1].clone().add(desl);
+        const s0 = this.ponto(A[0]), s1 = this.ponto(A[1]), t0 = this.ponto(q0), t1 = this.ponto(q1);
+        if (!(s0&&s1&&t0&&t1)) continue;
+        cx.globalAlpha = .6; cx.beginPath(); cx.moveTo(s0.x,s0.y); cx.lineTo(t0.x,t0.y); cx.moveTo(s1.x,s1.y); cx.lineTo(t1.x,t1.y); cx.stroke(); cx.globalAlpha = 1;
+        cx.beginPath(); cx.moveTo(t0.x,t0.y); cx.lineTo(t1.x,t1.y); cx.stroke();
+        seta("cheia",t0,t1); seta("cheia",t1,t0);
+        centro = {x:(t0.x+t1.x)/2, y:(t0.y+t1.y)/2};
+      } else {
+        const base = this.ponto(A[0].clone().add(desl)); if (!base) continue;
+        centro = base;
+      }
+      const bx = centro.x-w/2, by = centro.y-h/2;
+      cx.globalAlpha = .92; cx.fillStyle = fundo; cx.fillRect(bx,by,w,h); cx.globalAlpha = 1;
+      cx.strokeStyle = cor; cx.lineWidth = it.ativa ? 2 : 1; cx.strokeRect(bx+.5,by+.5,w-1,h-1);
+      cx.fillStyle = cor; linhas.forEach((t,i)=>cx.fillText(t,bx+pad,by+pad+(f+3)*i+f/2));
+      if (!it.linear){
+        const setas = p.setas && p.setas.length ? p.setas : A.map(a=>({lado:0,ponta:"cheia",vias:[]}));
+        cx.lineWidth = it.ativa ? 2.2 : 1.5;
+        setas.forEach((st,k)=>{
+          const rota = [...(st.vias||[]).map(v=>this.ponto(new THREE.Vector3(...v))), this.ponto(A[k]||A[0])].filter(Boolean);
+          if (!rota.length) return;
+          const dx = rota[0].x-centro.x, dy = rota[0].y-centro.y;
+          let lado = st.lado||0;
+          if (!lado) lado = Math.abs(dx)*h >= Math.abs(dy)*w ? (dx<0?1:2) : (dy<0?3:4);
+          const ini = lado===1?{x:bx,y:centro.y}:lado===2?{x:bx+w,y:centro.y}:lado===3?{x:centro.x,y:by}:{x:centro.x,y:by+h};
+          const jo = lado===1?{x:ini.x-12,y:ini.y}:lado===2?{x:ini.x+12,y:ini.y}:lado===3?{x:ini.x,y:ini.y-9}:{x:ini.x,y:ini.y+9};
+          const pts = [ini,jo,...rota];
+          cx.strokeStyle = cx.fillStyle = cor;
+          cx.beginPath(); pts.forEach((q,i)=>i?cx.lineTo(q.x,q.y):cx.moveTo(q.x,q.y)); cx.stroke();
+          seta(st.ponta||"cheia", pts[pts.length-1], pts[pts.length-2]);
+        });
+      }
+    }
+  },
+  /* Cordão de solda (só exibição): a aresta marcada engrossada até a perna da medida. */
+  cordao(c, g){
+    const r = Math.max(0.2, c.perna_mm*0.4), mat = new THREE.MeshLambertMaterial({color:new THREE.Color(corCSS("--destaque"))});
+    const y = new THREE.Vector3(0,1,0);
+    for (const [a,b] of c.segmentos){
+      const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), d = B.clone().sub(A), l = d.length(); if (l<1e-6) continue;
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r,r,l,10,1), mat);
+      m.position.copy(A).add(B).multiplyScalar(0.5); m.quaternion.setFromUnitVectors(y, d.normalize()); m.renderOrder=7; g.add(m);
+      const j = new THREE.Mesh(new THREE.SphereGeometry(r,10,8), mat); j.position.copy(B); g.add(j);
+    }
   },
   alvo(a, cor){
     const p = new THREE.Vector3(...a.ponto), d = new THREE.Vector3(...a.direcao);
@@ -571,7 +639,6 @@ const V3 = {
     }
     o.position.copy(p); o.renderOrder=8; return o;
   },
-  rotulos(){},
 };
 
 /* mapa de faces: início dos triângulos de cada face (em índices) */
@@ -631,10 +698,10 @@ function isolarSelecionado(){
 function mostrarTudo(){ P.isolado=null; for (const [k,v] of P.base) P.entradas.get(k).vis=true; aplicarVisibilidade(); V3.ajustar(); }
 
 /* ---------------- painéis ---------------- */
-const ABAS = ["arvore","dados","pmi","vistas","estados","lista","zonas","montagem","comparar"];
+const ABAS = ["arvore","dados","pmi","capturas","vistas","estados","lista","zonas","montagem","comparar"];
 function montarAbas(){
   const m = P.m, ab = $("#abas"); ab.replaceChildren();
-  const tem = { arvore:m.arvore.length>0, dados:true, pmi:true, vistas:true, estados:m.estados.length>0, lista:(m.lista&&m.lista.length>0)||(m.tabelas&&m.tabelas.length>0), zonas:!!m.cena&&m.arvore.length>0, montagem:m.tipo==="montagem", comparar:!!m.cena&&m.arvore.length>0 };
+  const tem = { arvore:m.arvore.length>0, dados:true, pmi:true, capturas:m.capturas.length>0, vistas:true, estados:m.estados.length>0, lista:(m.lista&&m.lista.length>0)||(m.tabelas&&m.tabelas.length>0), zonas:!!m.cena&&m.arvore.length>0, montagem:m.tipo==="montagem", comparar:!!m.cena&&m.arvore.length>0 };
   ABAS.filter(a=>tem[a] && !(a==="arvore"&&!m.arvore.length)).forEach(a=>ab.append(el("button",{role:"tab","data-aba":a,"aria-pressed":"false",onclick:()=>mostrarAba(a)},T(a))));
 }
 function mostrarAba(a, abrir){
@@ -643,7 +710,7 @@ function mostrarAba(a, abrir){
   P.aba = a;
   document.querySelectorAll("#abas button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.aba===a)));
   const c = $("#conteudo"); c.replaceChildren();
-  ({arvore:abaArvore,dados:abaDados,pmi:abaPmi,vistas:abaVistas,estados:abaEstados,lista:abaLista,zonas:abaZonas,montagem:abaMontagem,comparar:abaComparar}[a])(c);
+  ({arvore:abaArvore,dados:abaDados,pmi:abaPmi,capturas:abaCapturas,vistas:abaVistas,estados:abaEstados,lista:abaLista,zonas:abaZonas,montagem:abaMontagem,comparar:abaComparar}[a])(c);
   V3.pronto && V3.tamanho();
 }
 function abaArvore(c){
@@ -688,7 +755,8 @@ function corpoDoPonto(pt){
 function abaPmi(c){
   const m=P.m;
   if (!m.pmi.length){ c.append(el("div",{class:"nada"},T("sem_pmi"))); return; }
-  c.append(el("button",{class:"item",onclick:()=>{P.pmiFiltro=null;P.capAtiva=null;V3.anotar();mostrarAba("pmi");}},T("todas_pmi")));
+  c.append(el("button",{class:"item",onclick:()=>{P.pmiFiltro=null;P.capAtiva=null;V3.anotar();barraEtapas();mostrarAba("pmi");}},T("todas_pmi")));
+  if (m.pmi.some(p=>p.cordao)) c.append(el("button",{class:"item","aria-pressed":String(P.cordoes!==false),onclick:()=>{P.cordoes=(P.cordoes===false);V3.anotar();mostrarAba("pmi");}},T("cordoes")));
   const lista = P.pmiFiltro ? m.pmi.filter(p=>P.pmiFiltro.has(p.id)) : m.pmi;
   for (const p of lista){
     c.append(el("button",{class:"item","aria-pressed":String(P.pmiSel===p.id),onclick:()=>focarPmi(p)}, p.texto||p.nome, el("small",{},p.tipo+(p.alvos.some(Boolean)?" · "+T("alvo")+": "+p.alvos.filter(Boolean).map(a=>a.classe).join(", "):""))));
@@ -723,13 +791,39 @@ function restaurar(){
   for (const [k,v] of P.base) P.entradas.get(k).vis=v;
   P.isolado=null; P.capAtiva=null; P.estadoAtivo=null; P.pmiFiltro=null; P.pmiSel=null; P.offsets.clear(); P.cores.clear();
   for (const e of P.entradas.values()) if (e.obj && e.obj.userData.base) e.obj.matrix.copy(e.obj.userData.base);
-  V3.grupo.updateMatrixWorld(true); aplicarVisibilidade(); V3.anotar(); V3.tema(); mostrarAba(P.aba);
+  V3.grupo.updateMatrixWorld(true); aplicarVisibilidade(); V3.anotar(); V3.tema(); barraEtapas(); mostrarAba(P.aba);
+}
+/* Capturas em sequência: cada uma é uma etapa do detalhamento (câmera + só as anotações dela). */
+function indiceCaptura(){ return P.m.capturas.findIndex(k=>k.id===P.capAtiva); }
+function irCaptura(i){
+  const n = P.m.capturas.length; if (!n) return;
+  aplicarCaptura(P.m.capturas[((i%n)+n)%n]);
+}
+function barraEtapas(){
+  const b = $("#etapas"); if (!b) return;
+  const cs = P.m ? P.m.capturas : [];
+  b.style.display = cs.length ? "flex" : "none"; b.replaceChildren();
+  if (!cs.length) return;
+  const i = indiceCaptura();
+  b.append(el("button",{"aria-label":T("anterior"),title:T("anterior"),onclick:()=>irCaptura(i<0?cs.length-1:i-1)},"◀"),
+    el("strong",{}, i<0 ? T("capturas")+" ("+cs.length+")" : T("etapa_de").replace("{i}",i+1).replace("{n}",cs.length)+(cs[i].nome===("Captura "+(i+1))||cs[i].nome===("Capture "+(i+1))?"":" · "+cs[i].nome)),
+    el("button",{"aria-label":T("proxima"),title:T("proxima"),onclick:()=>irCaptura(i+1)},"▶"));
+}
+function abaCapturas(c){
+  const cs = P.m.capturas;
+  if (!cs.length){ c.append(el("div",{class:"nada"},T("sem_capturas"))); return; }
+  const i = indiceCaptura();
+  c.append(el("div",{class:"fila"},
+    el("button",{onclick:()=>irCaptura(i<0?cs.length-1:i-1)},"◀ "+T("anterior")),
+    el("button",{onclick:()=>irCaptura(i+1)},T("proxima")+" ▶")));
+  c.append(el("button",{class:"item",onclick:()=>{P.pmiFiltro=null;P.capAtiva=null;V3.anotar();barraEtapas();mostrarAba("capturas");}},T("todas_etapas")));
+  cs.forEach((k,j)=>c.append(el("button",{class:"item","aria-pressed":String(P.capAtiva===k.id),onclick:()=>aplicarCaptura(k)},(j+1)+". "+k.nome,el("small",{},k.pmi.length+" PMI"))));
 }
 function aplicarCaptura(k){
   for (const [id,v] of P.base) P.entradas.get(id).vis=v;
   P.capAtiva=k.id; P.pmiFiltro=new Set(k.pmi); P.pmiSel=null;
   if (k.com_modelo) for (const n of k.ocultos) idsDe(n).forEach(e=>e.vis=false);
-  aplicarVisibilidade(); V3.anotar(); aplicarCamera(k.camera); mostrarAba("vistas");
+  aplicarVisibilidade(); V3.anotar(); aplicarCamera(k.camera); barraEtapas(); mostrarAba(P.aba==="capturas"?"capturas":"vistas");
 }
 function abaEstados(c){
   c.append(el("button",{class:"item",onclick:restaurar},T("restaurar")));
@@ -1160,6 +1254,7 @@ async function carregar(fonte, opcoes){
     $("#modos").hidden = !(tem3d&&temFolha);
     if (tem3d){ V3.init(); P.glb = lerGLB(await zip.ler(m.cena)); V3.construir(); aplicarVisibilidade(); V3.ajustar(false); V3.anotar(); }
     else { V3.pronto && V3.grupo.clear(); }
+    barraEtapas();
     if (opcoes&&opcoes.outro){ try{ P.outro = await prepararOutro(opcoes.outro.buf); }catch(e){ console.error(e); } }
     montarPlm();
     montarAbas();

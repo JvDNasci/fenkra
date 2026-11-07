@@ -8,7 +8,7 @@ use fenkra_core::pmi::*;
 
 impl App {
     pub(super) fn demo_pmi_caso(&mut self, modo: &str) {
-        if !matches!(modo, "angulo" | "chamada" | "chamada_cruza" | "perfil" | "alcas") {
+        if !matches!(modo, "angulo" | "chamada" | "chamada_cruza" | "perfil" | "alcas" | "setas" | "setas_painel" | "cordao" | "capturas") {
             return;
         }
         let d = &mut self.open.doc;
@@ -44,6 +44,47 @@ impl App {
                 d.pmi.push(n);
                 id
             }
+            "setas" | "setas_painel" => {
+                // uma nota no meio com uma seta para a esquerda e outra para a direita (B368)
+                let mut n = Pmi { id: d.alloc(), name: "Nota 1".into(), kind: PmiKind::Note, anchors: vec![[-40., 0., 8.]], offset: [40., 0., 40.], text: "Furos passantes".into(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: None, style: Default::default(), folder: String::new(), targets: vec![] };
+                fenkra_core::pmi_leader::add_tip(&mut n, [40., 0., 8.], None);
+                fenkra_core::pmi_leader::set_side(&mut n, 0, 1);
+                fenkra_core::pmi_leader::set_side(&mut n, 1, 2);
+                let id = n.id;
+                d.pmi.push(n);
+                id
+            }
+            "cordao" => {
+                // solda z5 sobre a aresta mais longa do topo da placa (B369)
+                let r = fenkra_solidos::recompute(d);
+                let mut melhor: Option<([f64; 3], f64)> = None;
+                for b in &r.bodies {
+                    let m = &b.mesh;
+                    for (e, mid) in m.edge_mids.chunks_exact(3).enumerate() {
+                        let s0 = m.edge_ranges.get(e).copied().unwrap_or(0) as usize;
+                        let s1 = m.edge_ranges.get(e + 1).map_or(m.edges.len() / 6, |x| *x as usize);
+                        let l: f64 = m.edges.chunks_exact(6).take(s1).skip(s0).map(|s| ((s[3] - s[0]).powi(2) + (s[4] - s[1]).powi(2) + (s[5] - s[2]).powi(2)).sqrt() as f64).sum();
+                        let alto = mid[2] as f64 > 7.;
+                        if alto && melhor.is_none_or(|(_, ml)| l > ml) {
+                            melhor = Some(([mid[0] as f64, mid[1] as f64, mid[2] as f64], l));
+                        }
+                    }
+                }
+                let at = melhor.map_or([0., -36., 8.], |m| m.0);
+                let we = WeldExtra { length: "60".into(), ..Default::default() };
+                novo(d, PmiKind::Weld { kind: WeldKind::Filete, size: "z5".into(), all_around: false, extra: we }, vec![at], [10., -20., 25.], "", "Solda 1")
+            }
+            "capturas" => {
+                let a = novo(d, PmiKind::Note, vec![[-40., 0., 8.]], [20., 0., 30.], "Rebarbar", "Nota 1");
+                let b = novo(d, PmiKind::Note, vec![[40., 0., 8.]], [-20., 0., 30.], "Furo passante", "Nota 2");
+                novo(d, PmiKind::TitleBlock { template: TITLE_TEMPLATE.into() }, vec![[60., 35., 8.]], [50., -60., 0.], "", "Legenda 1");
+                for k in 1..=3u64 {
+                    let id = d.alloc();
+                    d.pmi_captures.push(PmiCapture { id, name: format!("Captura {k}"), view: fenkra_core::NamedView { name: String::new(), target: [0., 0., 5.], yaw: -0.5 * k as f64, pitch: 0.8, dist: 200., ortho: false }, shown: if k == 1 { vec![a] } else { vec![a, b] }, hidden: vec![], with_model: false });
+                }
+                *self.multi.borrow_mut() = vec![a, b];
+                a
+            }
             "perfil" => {
                 // texto deitado num plano de normal X: visto de frente (ao longo de Y) fica de perfil
                 let id = novo(d, PmiKind::Note, vec![[0., 0., 8.]], [0., 0., 30.], "Texto deitado", "Nota no plano");
@@ -59,6 +100,9 @@ impl App {
         };
         // só o realce (sem painel lateral): as alças e o aviso aparecem sobre a anotação
         self.pmi_focus = Some(sel);
+        if modo == "setas_painel" {
+            self.sel = Sel::Pmi(sel);
+        }
         self.started = true;
     }
 }

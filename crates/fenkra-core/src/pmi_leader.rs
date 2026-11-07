@@ -123,7 +123,58 @@ pub fn remove_tip(pmi: &mut Pmi, k: usize) -> bool {
         pmi.targets.remove(k);
     }
     pmi.style.leader_via.remove(k);
+    if k < pmi.style.leader_side.len() {
+        pmi.style.leader_side.remove(k);
+    }
+    if k < pmi.style.leader_arrow.len() {
+        pmi.style.leader_arrow.remove(k);
+    }
     true
+}
+
+/// Lado da caixa de onde sai a chamada da ponta `k`: 0 automático, 1 esquerda, 2 direita, 3 topo,
+/// 4 base. Arquivo antigo (lista vazia) = automático, o comportamento anterior (B368).
+pub fn side(pmi: &Pmi, k: usize) -> u8 {
+    pmi.style.leader_side.get(k).copied().unwrap_or(0).min(4)
+}
+
+/// Fixa o lado da caixa de onde sai a chamada da ponta `k`; cada ponta tem o seu.
+pub fn set_side(pmi: &mut Pmi, k: usize, lado: u8) -> bool {
+    if k >= pmi.anchors.len() {
+        return false;
+    }
+    let lado = lado.min(4);
+    if pmi.style.leader_side.len() <= k {
+        pmi.style.leader_side.resize(k + 1, 0);
+    }
+    let mudou = pmi.style.leader_side[k] != lado;
+    pmi.style.leader_side[k] = lado;
+    mudou
+}
+
+/// Ponta (seta) da chamada `k`; `Padrao` herda a do estilo.
+pub fn arrow(pmi: &Pmi, k: usize) -> crate::pmi::PmiArrow {
+    pmi.style.leader_arrow.get(k).copied().unwrap_or_default()
+}
+
+pub fn set_arrow(pmi: &mut Pmi, k: usize, a: crate::pmi::PmiArrow) -> bool {
+    if k >= pmi.anchors.len() {
+        return false;
+    }
+    if pmi.style.leader_arrow.len() <= k {
+        pmi.style.leader_arrow.resize(k + 1, crate::pmi::PmiArrow::Padrao);
+    }
+    let mudou = pmi.style.leader_arrow[k] != a;
+    pmi.style.leader_arrow[k] = a;
+    mudou
+}
+
+/// Lado mais próximo de `p` entre os quatro meios da caixa `[x0, y0, x1, y1]` (para a alça de
+/// arrastar o início da chamada).
+pub fn side_nearest(box_: [f64; 4], p: [f64; 2]) -> u8 {
+    let (cx, cy) = ((box_[0] + box_[2]) / 2., (box_[1] + box_[3]) / 2.);
+    let pts = [(1u8, box_[0], cy), (2, box_[2], cy), (3, cx, box_[1]), (4, cx, box_[3])];
+    pts.iter().min_by(|a, b| ((a.1 - p[0]).hypot(a.2 - p[1])).total_cmp(&((b.1 - p[0]).hypot(b.2 - p[1])))).map(|x| x.0).unwrap_or(0)
 }
 
 /// O caminho se cruza? Dois segmentos não vizinhos que passam a menos de `tol` um do outro, no
@@ -247,5 +298,40 @@ mod tests {
         let velho: Pmi = serde_json::from_value(v).unwrap();
         assert!(velho.style.leader_via.is_empty());
         assert_eq!(route(&velho, [0., 0., 20.], 0), vec![[0., 0., 20.], [0., 0., 0.]]);
+    }
+
+    #[test]
+    fn cada_seta_tem_a_sua_ancoragem_e_arquivo_antigo_continua_automatico() {
+        let mut n = nota(vec![[0., 0., 0.]]);
+        add_tip(&mut n, [20., 0., 0.], None);
+        add_tip(&mut n, [-20., 0., 0.], None);
+        assert_eq!((side(&n, 0), side(&n, 1), side(&n, 2)), (0, 0, 0), "sem escolha = automático");
+        assert!(set_side(&mut n, 1, 1));
+        assert!(set_side(&mut n, 2, 2));
+        assert_eq!((side(&n, 0), side(&n, 1), side(&n, 2)), (0, 1, 2), "uma esquerda e outra direita na mesma nota");
+        assert!(!set_side(&mut n, 1, 1), "repetir não muda");
+        assert!(!set_side(&mut n, 9, 1), "ponta que não existe");
+        // tirar a ponta do meio leva a ancoragem junto
+        assert!(remove_tip(&mut n, 1));
+        assert_eq!((side(&n, 0), side(&n, 1)), (0, 2));
+        // ida e volta no arquivo
+        let v = serde_json::to_value(&n).unwrap();
+        let de: Pmi = serde_json::from_value(v).unwrap();
+        assert_eq!(side(&de, 1), 2);
+        // arquivo sem o campo abre como hoje
+        let mut v = serde_json::to_value(&n).unwrap();
+        v["style"].as_object_mut().unwrap().remove("leader_side");
+        v["style"].as_object_mut().unwrap().remove("leader_arrow");
+        let velho: Pmi = serde_json::from_value(v).unwrap();
+        assert_eq!(side(&velho, 1), 0);
+    }
+
+    #[test]
+    fn alca_do_inicio_escolhe_o_lado_mais_proximo() {
+        let b = [0., 0., 100., 20.];
+        assert_eq!(side_nearest(b, [-30., 10.]), 1);
+        assert_eq!(side_nearest(b, [130., 10.]), 2);
+        assert_eq!(side_nearest(b, [50., -40.]), 3);
+        assert_eq!(side_nearest(b, [50., 60.]), 4);
     }
 }
