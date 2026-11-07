@@ -1,0 +1,16 @@
+# Mídia pesada fica fora do git: brutos, renders, áudio, cache
+projetos/**/brutos/
+projetos/**/render/
+projetos/**/entregas/
+projetos/**/ia/
+projetos/**/audio/
+*.mp4
+*.mov
+*.mkv
+*.wav
+*.mp3
+*.m4a
+*.prores
+node_modules/
+.remotion/
+__pycache__/
