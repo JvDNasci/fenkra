@@ -1,0 +1,20 @@
+# Projeto-teste B353: o kart modelado por código. Fora do workspace do produto de propósito.
+[package]
+name = "kart"
+version = "0.0.0"
+edition = "2021"
+license = "LGPL-2.1-or-later"
+publish = false
+
+[workspace]
+
+[dependencies]
+fenkra-core = { path = "../../crates/fenkra-core" }
+fenkra-kernel = { path = "../../crates/fenkra-kernel" }
+fenkra-solidos = { path = "../../crates/fenkra-solidos" }
+fenkra-montagem = { path = "../../crates/fenkra-montagem" }
+fenkra-desenho = { path = "../../crates/fenkra-desenho" }
+fenkra-project = { path = "../../crates/fenkra-project" }
+fenkra-pacote = { path = "../../crates/fenkra-pacote" }
+fenkra-conversor = { path = "../../crates/fenkra-conversor" }
+serde_json = { version = "1", features = ["float_roundtrip"] }
