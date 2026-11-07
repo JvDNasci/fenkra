@@ -2,7 +2,7 @@
 //! Painel à direita: edição no lugar do objeto selecionado (RF-UI-002, RF-NUC-020).
 //! Toda alteração modifica o objeto existente; o recompute é disparado automaticamente.
 
-use crate::app::{fmt, App, Sel, MATERIALS};
+use crate::app::{fmt, App, Sel};
 use crate::scene::{plane_name, plane_ref_name};
 use eframe::egui::{self, Color32, RichText};
 use fenkra_core::*;
@@ -705,8 +705,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("Material")));
                 egui::ComboBox::from_id_salt("mat").selected_text(p.material.clone()).show_ui(ui, |ui| {
-                    for (m, _) in MATERIALS {
-                        ui.selectable_value(&mut p.material, m.to_string(), m);
+                    for m in fenkra_core::materiais::MATERIAIS {
+                        ui.selectable_value(&mut p.material, m.nome.to_string(), m.nome);
                     }
                 });
             });
@@ -745,10 +745,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 p.custom.push((format!("Campo{}", p.custom.len() + 1), String::new()));
             }
             section(ui, "Propriedades de massa");
-            let dens = MATERIALS.iter().find(|(m, _)| *m == p.material).map(|(_, d)| *d).unwrap_or(7.85);
             for (cid, vol, area) in &bodies {
                 let name = doc.collectors.iter().find(|c| c.id == *cid).map(|c| c.name.clone()).unwrap_or_default();
-                ui.label(format!("{name}: {}", crate::app::loc(format!("{:.1} cm³ · {:.1} cm² · {:.3} kg", vol / 1000., area / 100., vol * dens / 1e6))));
+                ui.label(format!("{name}: {}", crate::app::loc(format!("{:.1} cm³ · {:.1} cm² · {:.3} kg", vol / 1000., area / 100., fenkra_core::materiais::massa_kg(doc, *cid, *vol)))));
             }
             if bodies.is_empty() {
                 ui.label(RichText::new(tr("sem corpos")).weak());

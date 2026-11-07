@@ -366,17 +366,6 @@ pub struct Session {
     pub ultima_valida: Vec<crate::render::MeshVertex>,
 }
 
-pub const MATERIALS: [(&str, f64); 8] = [
-    ("Aço 1020", 7.87),
-    ("Aço 1045", 7.85),
-    ("Aço inox 304", 8.0),
-    ("Alumínio 6061", 2.7),
-    ("Latão", 8.5),
-    ("Nylon", 1.14),
-    ("ABS", 1.05),
-    ("PLA", 1.24),
-];
-
 impl App {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         setup_fonts(&cc.egui_ctx);

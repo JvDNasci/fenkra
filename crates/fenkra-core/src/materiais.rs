@@ -69,9 +69,24 @@ pub fn material_do_corpo(doc: &Document, coletor: Id) -> String {
         .unwrap_or_else(|| doc.props.material.clone())
 }
 
+/// Massa em kg de um volume em mm³ do corpo `coletor` (B414): usa o material efetivo do corpo,
+/// o mesmo de `fenkra-solidos::massa`, para a interface não divergir do cálculo.
+pub fn massa_kg(doc: &Document, coletor: Id, volume_mm3: f64) -> f64 {
+    volume_mm3 * densidade(&material_do_corpo(doc, coletor)) * 1e-6
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn massa_kg_usa_a_tabela_inteira_e_nao_a_lista_antiga() {
+        let mut doc = Document::new("m");
+        doc.props.material = "Alumínio 7075".into();
+        // 1 dm³ de alumínio 7075 pesa 2,81 kg; a lista antiga de 8 itens cairia em 7,85
+        let m = massa_kg(&doc, crate::doc::Id(0), 1e6);
+        assert!((m - 2.81).abs() < 1e-9, "{m}");
+    }
 
     #[test]
     fn nomes_sao_unicos_e_densidades_plausiveis() {
