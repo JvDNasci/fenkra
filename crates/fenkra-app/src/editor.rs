@@ -893,10 +893,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             ui.label(RichText::new(f.kind.type_name()).weak());
             match &status {
                 Some(Status::Error(m)) => {
-                    ui.label(RichText::new(format!("✖ {m}")).color(crate::theme::st_err()));
+                    ui.label(RichText::new(format!("✖ {}", tr(m))).color(crate::theme::st_err()));
                 }
                 Some(Status::Warning(m)) => {
-                    ui.label(RichText::new(format!("⚠ {m}")).color(crate::theme::st_warn()));
+                    ui.label(RichText::new(format!("⚠ {}", tr(m))).color(crate::theme::st_warn()));
                 }
                 _ => {}
             }
@@ -951,10 +951,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     });
                     match &status {
                         Some(Status::Error(m)) => {
-                            ui.label(RichText::new(m).color(crate::theme::st_err()).small());
+                            ui.label(RichText::new(tr(m)).color(crate::theme::st_err()).small());
                         }
                         Some(Status::Warning(m)) => {
-                            ui.label(RichText::new(m).color(crate::theme::st_warn()).small());
+                            ui.label(RichText::new(tr(m)).color(crate::theme::st_warn()).small());
                         }
                         Some(Status::Inactive) => {
                             ui.label(RichText::new(tr("inativo (suprimido ou depois do marcador)")).weak().small());
