@@ -472,6 +472,7 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso4014.json", include_str!("../../../biblioteca/fixadores/iso4014.json")),
     ("iso4035.json", include_str!("../../../biblioteca/fixadores/iso4035.json")),
     ("iso7380_1.json", include_str!("../../../biblioteca/fixadores/iso7380_1.json")),
+    ("din985.json", include_str!("../../../biblioteca/fixadores/din985.json")),
 ];
 
 /// A biblioteca pública embutida. Os arquivos são validados nos testes; aqui um arquivo inválido
@@ -607,7 +608,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 9);
+        assert_eq!(b.familias.len(), 10);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -616,6 +617,17 @@ mod tests {
             assert!(f.licenca.starts_with("CC BY 4.0"));
         }
         assert_eq!(familias().iter().filter(|f| f.tipo.e_parafuso()).count(), 5);
+    }
+
+    #[test]
+    fn porca_autotravante_din985_traz_altura_total_e_chave() {
+        let f = familia("din985").unwrap();
+        assert_eq!(f.tipo, TipoFixador::Porca);
+        assert!(f.tamanhos.iter().all(|t| t.confirmado_por >= 2), "só dados em duas fontes");
+        let t = tamanho("din985", "M8").unwrap();
+        assert_eq!((t.valor("s"), t.valor("m")), (Some(13.), Some(8.)));
+        // mais alta que a porca baixa e que a comum não: altura total do anel de poliamida
+        assert!(tamanho("din985", "M8").unwrap().valor("m") > tamanho("iso4035", "M8").unwrap().valor("m"));
     }
 
     #[test]
@@ -761,7 +773,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 10);
+        assert_eq!(m.familias.len(), 11);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);
