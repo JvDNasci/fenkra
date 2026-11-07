@@ -10,7 +10,7 @@
 
 use super::*;
 use fenkra_core::{ExtensaoAba, SmFlangeLoop};
-use fenkra_kernel::EdgeFormula;
+use fenkra_kernel::{EdgeFormula, Seg2};
 
 /// Ordem canônica das pontas de uma aresta: a de menor (x, y, z), com folga de 1e-6. O kernel pode
 /// entregar a aresta em qualquer sentido; a medida "a partir do início" precisa de um começo que
@@ -230,13 +230,20 @@ impl Ctx<'_> {
                 let bx = match relief_kind {
                     // rasgo: corte fino
                     2 => Shape::box_tool(o, x, z, [wr.min(0.5), depth, p.t]).map_err(k)?,
-                    // redondo: retângulo com a ponta em meio círculo (oblongo)
+                    // redondo: retângulo com a ponta em meio círculo (oblongo), feito de um perfil só
+                    // (B432). Antes era uma caixa mais um cilindro de mesmo diâmetro, tangente às duas
+                    // laterais da caixa: o corte com ferramenta tangente deixava faces inválidas.
                     1 => {
-                        let far = if geo3d::dot(y, info.out) > 0. { o } else { geo3d::add(o, geo3d::mul(info.out, -depth)) };
-                        let rect = Shape::box_tool(o, x, z, [wr, depth, p.t]).map_err(k)?;
-                        let top = geo3d::add(geo3d::add(far, geo3d::mul(x, wr / 2.)), geo3d::mul(info.normal, 0.5));
-                        let cyl = Shape::hole_tool(top, z, wr, p.t + 1., HoleShape::Simple).map_err(k)?;
-                        rect.compound(&cyl)
+                        // lado do fundo do alívio (ponta redonda): v = 0 se a caixa começa no fundo
+                        let (ve, vd) = if geo3d::dot(y, info.out) > 0. { (depth, 0.) } else { (0., depth) };
+                        let s = if vd > ve { 1. } else { -1. };
+                        let perfil: fenkra_kernel::Loop2 = vec![
+                            Seg2::Line([0., ve], [wr, ve]),
+                            Seg2::Line([wr, ve], [wr, vd]),
+                            Seg2::Arc([wr, vd], [wr / 2., vd + s * wr / 2.], [0., vd]),
+                            Seg2::Line([0., vd], [0., ve]),
+                        ];
+                        Shape::face(&fenkra_kernel::Frame { origin: o, x, normal: z }, &[perfil]).and_then(|f| f.extrude(z, p.t, 0.)).map_err(k)?
                     }
                     _ => Shape::box_tool(o, x, z, [wr, depth, p.t]).map_err(k)?,
                 };
