@@ -170,10 +170,12 @@ impl NovoDesenho {
             if fw <= 0. || fhgt <= 0. {
                 return 1.;
             }
-            ESCALAS_AUTO.iter().copied().find(|s| {
-                let (w, h) = conjunto(*s);
+            // procura a maior escala padronizada em que largura E altura do conjunto cabem
+            let cabe = |s: f64| {
+                let (w, h) = conjunto(s);
                 w <= uw && h <= uh
-            }).unwrap_or(ESCALAS_AUTO[ESCALAS_AUTO.len() - 1])
+            };
+            ESCALAS_AUTO.iter().copied().find(|s| cabe(*s)).unwrap_or(ESCALAS_AUTO[ESCALAS_AUTO.len() - 1])
         });
         let (cw, ch) = conjunto(escala);
         // canto inferior esquerdo do conjunto, centrado na área útil

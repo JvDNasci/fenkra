@@ -14,6 +14,7 @@ pub mod cotas;
 pub mod export;
 pub mod layout;
 pub mod novo;
+pub mod ocupacao;
 pub mod opcoes;
 pub mod simbolos;
 pub mod solda_cordao;

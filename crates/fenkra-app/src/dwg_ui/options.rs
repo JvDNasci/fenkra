@@ -64,7 +64,11 @@ fn fit_scale(st: &mut DwgState, tool: u8) -> f64 {
         return v.scale;
     }
     let Some(src) = st.source.clone() else { return 1. };
+    // B415: a área que sobra dentro da moldura, descontada a legenda (largura e altura)
     let size = st.d.sheet(st.sheet).map(|s| s.size()).unwrap_or([420., 297.]);
+    let (m0, m1) = st.d.sheet(st.sheet).map(fenkra_desenho::ocupacao::area_moldura).unwrap_or(([20., 10.], [size[0] - 10., size[1] - 10.]));
+    let legenda = fenkra_desenho::ocupacao::legenda_caixa(st.d.title.style, size);
+    let livre = [m1[0] - m0[0], m1[1] - legenda.1[1]];
     let mut t = ghost::scratch(st, 2);
     let sheet = st.sheet;
     let nd = st.new_dir;
@@ -86,7 +90,7 @@ fn fit_scale(st: &mut DwgState, tool: u8) -> f64 {
     if w <= 0. || h <= 0. {
         return 1.;
     }
-    PRESETS.iter().copied().find(|s| w * s + margin <= size[0] * 0.8 && h * s + margin <= size[1] * 0.8).unwrap_or(PRESETS[PRESETS.len() - 1])
+    PRESETS.iter().copied().find(|s| w * s + margin <= livre[0] && h * s + margin <= livre[1]).unwrap_or(PRESETS[PRESETS.len() - 1])
 }
 
 /// Miniatura de uma direção: um cubo em perspectiva cavaleira com a(s) face(s) vista(s) pintadas.

@@ -542,6 +542,18 @@ pub fn cabecalho_em(pos: V2, title: &str, fin: &crate::tabela::TabelaFinal, cfg:
     None
 }
 
+/// Caixa (canto inferior esquerdo, canto superior direito) que a tabela ocupa na folha onde mora,
+/// com `pos` como canto superior esquerdo. `None` se a tabela está vazia ou não desenha nesta folha.
+pub fn tabela_caixa(m: &mut Models, d: &Drawing, t: &crate::Table, pos: V2) -> Option<(V2, V2)> {
+    let fin = crate::tabela::dados(m, t, d);
+    let total = crate::tabela::n_blocos(fin.data.rows.len(), t.cfg.dividir);
+    let faixa = crate::tabela::blocos_na_folha(d, t, t.sheet, total)?;
+    let mut o = Out::default();
+    o.reset(Some(t.id));
+    let [w, h] = tabela_cfg(&mut o, pos, t.kind.label(), &fin, &t.cfg, d.text_height * 0.8, faixa);
+    (w > 0. && h > 0.).then_some(([pos[0], pos[1] - h], [pos[0] + w, pos[1]]))
+}
+
 /// Primitivas de uma tabela avulsa (prévia/fantasma).
 pub fn table_items(pos: V2, title: &str, data: &crate::source::TableData, th: f64) -> Vec<Item> {
     let mut o = Out::default();
