@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 105060,
+ "tokens_total_k": 105260,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -12,25 +12,25 @@
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 11.1
+   "pct": 11.0
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
-   "tokens_k": 32150,
-   "pct": 30.6
+   "tokens_k": 32350,
+   "pct": 30.7
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 22650,
-   "pct": 21.6
+   "pct": 21.5
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
    "tokens_k": 31470,
-   "pct": 30.0
+   "pct": 29.9
   }
  },
  "itens": [
@@ -6265,7 +6265,7 @@
    "tokens_k": 350,
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.3
   },
   {
@@ -7227,6 +7227,22 @@
    "area": "Interface",
    "status": "a fazer",
    "pct": 0.1
+  },
+  {
+   "id": "B432",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Chapa: abas com sólido válido na checagem do kernel",
+   "oque": "As abas reprovam na validade do sólido mesmo com volume e planificação certos, por costura nas dobras. A peça de chapa ficou fora da conferência do B413: corrigir a costura e incluir a chapa na validade.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.2
   }
  ]
 }

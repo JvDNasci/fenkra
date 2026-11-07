@@ -762,7 +762,7 @@ c('B369', 2, 'P1', 'Solda no PMI com cordão visível', 'A linha realçada da so
 c('B370', 2, 'P1', 'Desenho: setas de notas iguais às do PMI', 'As notas e legendas da folha ganham o mesmo modelo de setas do PMI: ancoragem por seta, várias setas por nota, moldura que acompanha e edição das propriedades da seta.',
   ['USR-TESTE'], [], 150, 'Auto + Visual', 'Desenho técnico', status='em andamento'),
 c('B371', 2, 'P1', 'Importar anotações do 3D para o desenho', 'A vista recebe as anotações do 3D com reconhecimento do que vem e como vem: cotas, soldas e notas chegam ligadas ao modelo e atualizam com ele; o que não cabe na folha, como bloco de notas, fica de fora. A pessoa confere a lista antes de importar.',
-  ['USR-TESTE'], [], 350, 'Auto + Visual', 'Desenho técnico'),
+  ['USR-TESTE'], [], 350, 'Auto + Visual', 'Desenho técnico', status='em andamento'),
 c('B372', 2, 'P1', 'Roleta de comandos pensada no fluxo de cada bancada', 'Revisar os fluxos de modelagem de todas as bancadas e montar o conteúdo padrão da roleta: em cada bancada e modo, os comandos que fazem sentido, e conforme a seleção os de face, aresta, vértice ou superfície. A pessoa continua podendo personalizar.',
   ['USR-TESTE'], [], 250, 'Auto + Visual', 'Interface'),
 c('B373', 2, 'P0', 'Furo e rosca: fluxo novo e rosca modelada de verdade', 'Rever o painel de furo e rosca, com rosca cosmética e modelada num fluxo claro. A rosca modelada corta como a física, contínua e sem faces soltas, do início do furo em diante, e serve para impressão 3D. Entrada da rosca editável (chanfro e folga em cima e embaixo, em medida ou porcentagem) e ângulo de início em relação a uma referência. Ponta, rosca e folga no fundo não podem falhar com a mensagem de que a rosca não cabe quando o corte passa do sólido.',
@@ -883,6 +883,8 @@ c('B430', 2, 'P2', 'Polimento visual do kart', 'Balões e anotações sem sobrep
   ['USR-TESTE'], [], 150, 'Auto + Visual', 'Interface'),
 c('B431', 2, 'P2', 'Validação: diário e matriz medem o real', 'Captura confere que o painel abriu, matriz conta uso real de comandos e faltam capturas de Biblioteca, gerador, simulação e Sketch.',
   ['USR-TESTE'], [], 80, 'Auto + Visual', 'Interface'),
+c('B432', 2, 'P1', 'Chapa: abas com sólido válido na checagem do kernel', 'As abas reprovam na validade do sólido mesmo com volume e planificação certos, por costura nas dobras. A peça de chapa ficou fora da conferência do B413: corrigir a costura e incluir a chapa na validade.',
+  ['USR-TESTE'], [], 200, 'Auto + Visual', 'Chapa metálica'),
 ]
 def main():
     for x in B:
