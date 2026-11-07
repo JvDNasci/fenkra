@@ -5,6 +5,7 @@
 //! o corpo continua do estado anterior e o comando fica marcado com a mensagem do erro.
 
 pub mod erro;
+pub mod validade;
 pub mod forma_brep;
 pub mod forma_vinculo;
 pub mod polimento;
@@ -970,6 +971,9 @@ pub struct Cache {
     pub leve: Option<Id>,
     /// malha de tela: o que a vista pede e o que já foi feito (B346)
     pub polir: polimento::Estado,
+    /// B413: comandos calculados enquanto um comando estava aberto para edição (`leve`), sem conferir a
+    /// validade para não pesar a prévia. Quem for reaproveitado depois é conferido nesse momento.
+    sem_validar: std::collections::HashSet<Id>,
 }
 
 impl Cache {
@@ -3042,7 +3046,12 @@ impl Ctx<'_> {
                 None => {
                     // sem chave e sem aresta a 1 mm do ponto: erro com sugestão, nunca a mais próxima
                     let Some(e) = refs::edge_near(&v, *p, tol) else {
-                        let who = format!("a aresta que passava perto de ({:.2}, {:.2}, {:.2})", p[0], p[1], p[2]);
+                        let mut who = format!("a aresta que passava perto de ({:.2}, {:.2}, {:.2})", p[0], p[1], p[2]);
+                        // K-13: em aresta circular o ponto médio fica do lado oposto da costura; diz qual é
+                        if let Some((e, d)) = refs::edge_nearest(&v, *p) {
+                            let m = topo.edge_mids[e];
+                            who.push_str(&format!(" (a mais próxima está a {d:.2} mm, com ponto médio em ({:.4}, {:.4}, {:.4}); passe esse ponto ou escolha a aresta pela chave)", m[0], m[1], m[2]));
+                        }
                         return Err(self.lost(what, f, refs::Lost::None, who));
                     };
                     // o ponto exato da aresta achada vai para o kernel, não o antigo
@@ -4158,6 +4167,11 @@ impl Ctx<'_> {
                     // direção escolhida (linha/aresta/eixo): o recorte entra no sentido dela
                     Some(a) => {
                         let v = geo3d::unit(self.axis(a)?.1).ok_or("direção da extrusão nula")?;
+                        // K-10: direção dentro do plano do sketch varre o perfil sobre ele mesmo (sólido sem
+                        // espessura, inválido). O status ficava ok e os comandos seguintes herdavam o defeito
+                        if geo3d::dot(v, frame.normal).abs() < 1e-6 {
+                            return Err("a direção da extrusão está no plano do sketch: o perfil não ganharia espessura. Escolha uma direção que atravesse o plano ou desenhe o sketch em outro plano".into());
+                        }
                         if e.op == BoolOp::Cut { v.map(|x| -x) } else { v }
                     }
                     None => frame.normal,
@@ -6289,6 +6303,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 // nada que ele lê mudou: reaproveita o que ele produziu
                 cache.reused += 1;
                 corpo_malha::ao_reaproveitar(&mut cx.malhas, f);
+                let mut status_reusado = e.status.clone();
                 cx.status.insert(f.id, e.status);
                 if let Some(p) = e.promoted {
                     promoted.insert(f.id, p);
@@ -6298,6 +6313,15 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                         Some(v) => cx.bodies.insert(b, v),
                         None => cx.bodies.remove(&b),
                     };
+                }
+                // B413: calculado com a conferência adiada (comando aberto): confere agora, uma vez
+                if cache.leve.is_none() && cache.sem_validar.remove(&f.id) {
+                    let ruim = touched.iter().any(|b| validade::invalido(cx.body(*b)));
+                    status_reusado = validade::com_aviso(status_reusado, ruim);
+                    cx.status.insert(f.id, status_reusado.clone());
+                    if let Some(ent) = cache.feats.get_mut(&f.id) {
+                        ent.status = status_reusado;
+                    }
                 }
                 if let Some(sk) = e.sketch {
                     cx.sketches.insert(f.id, sk);
@@ -6331,6 +6355,21 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                     Ok(None) => Status::Ok,
                     Ok(Some(w)) => Status::Warning(w),
                     Err(e) => Status::Error(e),
+                };
+                // B413: o status ok não vê sólido inválido; confere os corpos que o comando mexeu. Com um
+                // comando aberto para edição (prévia a cada tecla) a conferência espera: a conferência do
+                // OpenCASCADE custa mais que muitas booleanas, e o comando é conferido ao ser reaproveitado
+                // Peça de chapa fica de fora por ora: as dobras saem do kernel com costuras que o BRepCheck
+                // reprova mesmo com volume e planificação certos, e o aviso apareceria em toda aba
+                let st = if matches!(f.kind, FeatureKind::Sketch(_)) || matches!(st, Status::Error(_)) || doc.sheet.is_some() {
+                    st
+                } else if cache.leve.is_some() {
+                    cache.sem_validar.insert(f.id);
+                    st
+                } else {
+                    cache.sem_validar.remove(&f.id);
+                    let ruim = touched.iter().any(|b| validade::invalido(cx.body(*b)));
+                    validade::com_aviso(st, ruim)
                 };
                 // cancelado no meio do kernel: o que veio é lixo (erro "cancelado" ou resultado parcial).
                 // Não vai para o cache, para o próximo cálculo refazer este comando do zero.

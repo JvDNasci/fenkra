@@ -192,6 +192,15 @@ pub fn promote_edge(v: &View, e: usize) -> Option<EdgeKey> {
     (find_edge(v, &key, None) == Ok(e)).then_some(key)
 }
 
+/// A aresta de ponto médio mais perto de `p` e a distância, sem limite. Só para sugerir no erro (K-13):
+/// quem escolhe a aresta é o ponto exato ou a chave, nunca a vizinha.
+pub fn edge_nearest(v: &View, p: [f64; 3]) -> Option<(usize, f64)> {
+    (0..v.topo.edge_mids.len().min(v.topo.edge_faces.len()))
+        .filter(|e| v.topo.edge_faces[*e] != [NO_FACE, NO_FACE])
+        .map(|e| (e, dist(v.topo.edge_mids[e], p)))
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+}
+
 /// Aresta com ponto médio mais perto de `p`, dentro de `tol` (a mesma escolha que o kernel faz).
 pub fn edge_near(v: &View, p: [f64; 3], tol: f64) -> Option<usize> {
     // costuras e arestas degeneradas vêm com ponto médio zerado e sem faces vizinhas: ficam de fora
