@@ -47,6 +47,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_chapa_fab::TEXTOS.iter())
             .chain(crate::textos_dobra_tubo::TEXTOS.iter())
             .chain(crate::textos_encaixe::TEXTOS.iter())
+            .chain(crate::textos_conjunto::TEXTOS.iter())
             .chain(crate::textos_montagem::TEXTOS.iter())
             .chain(crate::textos_montagem3::TEXTOS.iter())
             .chain(crate::textos_montagem4::TEXTOS.iter())

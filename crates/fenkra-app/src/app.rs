@@ -2787,7 +2787,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             // comandos de montagem são tratados em asm_ui::command
             Cmd::AsmNew | Cmd::AsmOpen | Cmd::AsmSave | Cmd::AsmInsert | Cmd::AsmSubAsm | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid
             | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom
-            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmCatalogo | Cmd::AsmGears | Cmd::AsmChaveta | Cmd::AsmCalculo => return,
+            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmConjunto | Cmd::AsmRegrasCor | Cmd::AsmCatalogo | Cmd::AsmGears | Cmd::AsmChaveta | Cmd::AsmCalculo => return,
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
                 let _ = d.add_param(&n, "10", Unit::Comprimento);
@@ -7230,7 +7230,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
             use crate::settings::NavStyle as N;
             // (girar, mover, zoom arrastando) conforme o estilo de navegação escolhido
             // Ctrl + arrastar com o esquerdo = seleção em caixa (fora do sketch)
-            if resp.drag_started_by(egui::PointerButton::Primary) && (ctrl || self.settings.box_mode > 0 || self.selecao_extra.laco_ligado) && !sketching {
+            if resp.drag_started_by(egui::PointerButton::Primary) && (ctrl || self.settings.box_mode > 0 || self.selecao_extra.laco_ligado || crate::asm_conjunto::cerca_ligada(&self.asm)) && !sketching {
                 self.box_start = ctx.input(|i| i.pointer.press_origin());
             }
             let boxing = self.box_start.is_some();
@@ -7636,7 +7636,7 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                     }
                 }
                 // seleção em caixa: janela (da esquerda p/ a direita) ou cruzada (da direita p/ a esquerda)
-                if let (Some(a0), Some(now)) = (self.box_start, ctx.input(|i| i.pointer.latest_pos())) {
+                if let (Some(a0), Some(now)) = (self.box_start.filter(|_| !crate::asm_conjunto::cerca_ligada(&self.asm)), ctx.input(|i| i.pointer.latest_pos())) {
                     let b = Rect::from_two_pos(a0, now);
                     let crossing = match self.settings.box_mode {
                         1 => false,
@@ -7752,6 +7752,16 @@ Tolerâncias gerais ISO 2768-m".into(), size: 3.5, weld: None, style: fenkra_cor
                 crate::asm_inserir::overlay(self, ui, rect, &cam);
                 crate::asm_repeticao::overlay(self, ui, rect, &cam);
                 crate::asm_fixadores::overlay(self, ui, rect, &cam);
+                crate::asm_conjunto::overlay(self, ui, rect, &cam);
+                crate::asm_conjunto::clique_nas_marcas(self, &ctx, ui.layer_id(), rect, &cam);
+                if let (true, Some(a0), Some(now)) = (crate::asm_conjunto::cerca_ligada(&self.asm), self.box_start, ctx.input(|i| i.pointer.latest_pos())) {
+                    let b = Rect::from_two_pos(a0, now);
+                    crate::asm_conjunto::desenhar_cerca(ui, b);
+                    if !ctx.input(|i| i.pointer.primary_down()) {
+                        self.box_start = None;
+                        crate::asm_conjunto::fechar_cerca(self, b, rect, &cam);
+                    }
+                }
                 crate::asm_encaixe::overlay(self, ui, rect, &cam);
                 crate::asm_chaveta::overlay(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
@@ -7944,6 +7954,8 @@ pub enum Cmd {
     AsmLink,
     /// preencher os furos da montagem com parafuso, arruela e porca da biblioteca (janela de opções)
     AsmFasteners,
+    AsmConjunto,
+    AsmRegrasCor,
     /// navegador do catálogo de normas (painel Biblioteca) e inserção de item avulso
     AsmCatalogo,
     /// gerar engrenagens (par engrenado ou peça avulsa) com cálculo ao vivo (janela)
@@ -8543,6 +8555,7 @@ impl eframe::App for App {
         } else if asm_mode {
             crate::asm_inserir::teclas(self, ctx);
             crate::asm_repeticao::teclas(self, ctx);
+            crate::asm_conjunto::teclas(self, ctx);
             crate::asm_encaixe::teclas(self, ctx);
             crate::asm_cmd::teclas(self, ctx);
             crate::asm_selecao::teclas(self, ctx);
@@ -8770,6 +8783,7 @@ impl eframe::App for App {
         crate::asm_repeticao::painel(self, ctx, area);
         crate::asm_exibicao::painel(self, ctx, area);
         crate::asm_fixadores::painel(self, ctx, area);
+        crate::asm_conjunto::painel(self, ctx, area);
         crate::asm_chaveta::painel(self, ctx, area);
         crate::calculo_ui::painel(self, ctx, area);
         if let Some(st) = self.asm.as_mut() {

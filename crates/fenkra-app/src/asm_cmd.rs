@@ -723,6 +723,10 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         crate::asm_fixadores::demo(st);
         return;
     }
+    if nome.starts_with("conjunto") {
+        crate::asm_conjunto::demo(st, nome);
+        return;
+    }
     if nome == "engrenagens" || nome == "transmissao" {
         // comando Gerar elemento de transmissão aberto (prévia 3D do par e cálculo ao vivo)
         let mut t = crate::transmissao_ui::TransUi::default();

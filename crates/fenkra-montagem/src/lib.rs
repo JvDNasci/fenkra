@@ -17,6 +17,7 @@ pub mod encaixe;
 pub mod releitura;
 pub mod engrenagens;
 pub mod estrutura;
+pub mod conjuntos;
 pub mod fixadores;
 pub mod furos;
 pub mod geometria;
@@ -531,6 +532,12 @@ pub struct Assembly {
     /// pilhas de fixadores: recalculáveis, ligadas aos furos (ver [`pilhas`])
     #[serde(default)]
     pub pilhas: Vec<pilhas::Pilha>,
+    /// conjuntos de fixadores: comandos que mandam em várias pilhas (ver [`conjuntos`])
+    #[serde(default)]
+    pub conjuntos: Vec<conjuntos::ConjuntoFixadores>,
+    /// regras de diâmetro por cor; vazio usa as de fábrica
+    #[serde(default)]
+    pub regras_cor: Vec<conjuntos::RegraCor>,
     /// interferências ignoradas e o limite "ignorar menores que"
     #[serde(default)]
     pub interf: interferencia::RegrasInterf,
@@ -685,7 +692,7 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), uid: fenkra_core::formato::UidDoc::novo(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![], transmissoes: vec![] }
+        Assembly { format_version: 1, name: name.into(), uid: fenkra_core::formato::UidDoc::novo(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], conjuntos: vec![], regras_cor: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![], transmissoes: vec![] }
     }
 
     /// Configuração escolhida para o componente (vazio = a ativa da própria peça).
