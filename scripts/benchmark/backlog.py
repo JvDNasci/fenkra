@@ -842,7 +842,7 @@ c('B409', 2, 'P0', 'Kart F-07: Não encontrei esse caminho pela API de parâmetr
 c('B410', 2, 'P0', 'Kart K-25: Na peça aberta a cor aparece; na montagem, tudo cinza. Contorno: repetir a cor em `N', 'KART, subconjuntos. Dar aparência à peça (`Document.appearance`) e abrir a montagem. Esperado: A montagem mostra a cor e o acabamento da peça. Obtido: Na peça aberta a cor aparece; na montagem, tudo cinza. Contorno: repetir a cor em `Node.color`, que não leva acabamento. Conferido em captura.',
   ['USR-TESTE'], [], 100, 'Auto + Visual', 'Montagem', status='feito'),
 c('B411', 2, 'P2', 'Kart K-26: "Recuo do início" fica coberto por "Comprimento da aba 40 mm"', 'CH-08. Comando Aba aberto. Esperado: Rótulos das alças legíveis. Obtido: "Recuo do início" fica coberto por "Comprimento da aba 40 mm".',
-  ['USR-TESTE'], [], 100, 'Auto + Visual', 'Chapa metálica'),
+  ['USR-TESTE'], [], 100, 'Auto + Visual', 'Chapa metálica', status='em andamento'),
 c('B412', 2, 'P1', 'Kart K-27: Com escala 1:5 e folga de 60 mm as vistas se sobrepõem por inteiro, sem aviso. A fol', 'DW-KART. Conjunto de 3 vistas numa peça grande (`add_standard_set`). Esperado: Vistas sem se cobrir. Obtido: Com escala 1:5 e folga de 60 mm as vistas se sobrepõem por inteiro, sem aviso. A folga não considera o tamanho da peça.',
   ['USR-TESTE'], [], 100, 'Auto + Visual', 'Desenho técnico', status='em andamento'),
 c('B413', 2, 'P0', 'Validade do sólido a cada comando, com aviso na árvore e na API', 'O status ok não vê sólido inválido. Conferir a validade no recálculo, mostrar aviso na árvore e devolver na API. Rodar antes em RD-02, porque o K-10 ainda é hipótese.',
@@ -884,7 +884,7 @@ c('B430', 2, 'P2', 'Polimento visual do kart', 'Balões e anotações sem sobrep
 c('B431', 2, 'P2', 'Validação: diário e matriz medem o real', 'Captura confere que o painel abriu, matriz conta uso real de comandos e faltam capturas de Biblioteca, gerador, simulação e Sketch.',
   ['USR-TESTE'], [], 80, 'Auto + Visual', 'Interface'),
 c('B432', 2, 'P1', 'Chapa: abas com sólido válido na checagem do kernel', 'As abas reprovam na validade do sólido mesmo com volume e planificação certos, por costura nas dobras. A peça de chapa ficou fora da conferência do B413: corrigir a costura e incluir a chapa na validade.',
-  ['USR-TESTE'], [], 200, 'Auto + Visual', 'Chapa metálica'),
+  ['USR-TESTE'], [], 200, 'Auto + Visual', 'Chapa metálica', status='feito'),
 ]
 def main():
     for x in B:

@@ -6905,7 +6905,7 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.1
   },
   {
@@ -7241,7 +7241,7 @@
    "tokens_k": 200,
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   }
  ]
