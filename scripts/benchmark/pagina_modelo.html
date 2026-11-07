@@ -89,6 +89,27 @@ tr.det td{background:var(--soft);font-size:14px}
 .det-grid a{color:var(--blue)}
 .note{font-size:13px;color:var(--muted);margin-top:14px;max-width:80ch}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.ctl{display:grid;gap:14px;background:var(--sheet);border:1px solid var(--line);padding:16px;margin-bottom:16px}
+.ctl h2{font:700 20px/1.2 var(--display);margin:0}
+.ctl h3{font:700 14px/1.2 var(--display);margin:0 0 6px}
+.ctl-num{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+.ctl-num div{min-width:0}
+.ctl-num b{display:block;font:700 26px/1.1 var(--display);font-variant-numeric:tabular-nums}
+.ctl-num span{font-size:13px;color:var(--muted)}
+.ctl-bar{display:flex;height:12px;background:var(--soft);overflow:hidden}
+.ctl-bar i{display:block;height:100%}
+.ctl-bar .f{background:var(--ok)}.ctl-bar .a{background:var(--part)}.ctl-bar .n{background:var(--no)}
+.ctl-leg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted)}
+.ctl-leg i{display:inline-block;width:10px;height:10px;margin-right:5px}
+.ctl-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
+.ctl-cols>div{min-width:0}
+.ctl-row{display:grid;grid-template-columns:minmax(0,1fr) 110px 74px;gap:8px;align-items:center;font-size:13px;padding:3px 0}
+.ctl-row .q{text-align:right;font:12px var(--mono);font-variant-numeric:tabular-nums;color:var(--muted)}
+.ctl-prox{display:grid;gap:2px;font-size:13px;margin:0;padding:0;list-style:none}
+.ctl-prox button{all:unset;cursor:pointer;display:block;overflow-wrap:anywhere}
+.ctl-prox button:hover{color:var(--accent)}
+.ctl-prox button:focus-visible{outline:2px solid var(--accent)}
+.ctl-prox b{font:12px var(--mono);margin-right:6px}
 </style>
 
 <div class="wrap">
@@ -103,6 +124,7 @@ tr.det td{background:var(--soft);font-size:14px}
   </nav>
 
   <section id="view-backlog" role="tabpanel" aria-labelledby="tab-backlog">
+    <div class="ctl" id="controle"></div>
     <div class="filters">
       <label for="f-area">Área</label><select id="f-area"></select>
       <label for="f-prio">Prioridade</label><select id="f-prio"><option value="">todas</option><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
@@ -153,6 +175,43 @@ const areas = [...new Set(BACKLOG.itens.map(b => b.area))].sort();
 $('#f-area').innerHTML = '<option value="">todas</option>' + areas.map(a => `<option>${esc(a)}</option>`).join('');
 const maxTok = Math.max(...BACKLOG.itens.map(b => b.tokens_k));
 function stateClass(s){ return s === 'feito' ? 'feito' : s === 'em andamento' ? 'andamento' : '' }
+function barraCtl(l){
+  const t = l.length || 1, n = s => l.filter(b => b.status === s).length;
+  return `<div class="ctl-bar" role="img" aria-label="${n('feito')} feitos, ${n('em andamento')} parciais, ${n('a fazer')} a fazer"><i class="f" style="width:${100 * n('feito') / t}%"></i><i class="a" style="width:${100 * n('em andamento') / t}%"></i><i class="n" style="width:${100 * n('a fazer') / t}%"></i></div>`;
+}
+function linhaCtl(nome, l){
+  const f = l.filter(b => b.status === 'feito').length;
+  return `<div class="ctl-row"><span>${esc(nome)}</span>${barraCtl(l)}<span class="q">${f}/${l.length}</span></div>`;
+}
+function renderControle(){
+  const it = BACKLOG.itens, abertos = it.filter(b => b.status !== 'feito');
+  const soma = l => l.reduce((a, b) => a + b.tokens_k, 0), fmt = k => (k / 1000).toFixed(1).replace('.', ',') + ' M';
+  const pct = Math.round(100 * (it.length - abertos.length) / it.length);
+  const p0 = abertos.filter(b => b.prio === 'P0').sort((a, b) => (a.status === 'em andamento' ? 0 : 1) - (b.status === 'em andamento' ? 0 : 1) || String(a.onda).localeCompare(String(b.onda)));
+  const porArea = [...new Set(it.map(b => b.area))].map(a => [a, it.filter(b => b.area === a)])
+    .sort((x, y) => y[1].filter(b => b.status !== 'feito').length - x[1].filter(b => b.status !== 'feito').length);
+  $('#controle').innerHTML = `<h2>O que falta para finalizar</h2>
+    <div class="ctl-num">
+      <div><b>${pct}%</b><span>dos itens feitos</span></div>
+      <div><b>${abertos.length}</b><span>itens abertos</span></div>
+      <div><b>${it.filter(b => b.status === 'em andamento').length}</b><span>parciais</span></div>
+      <div><b>${p0.length}</b><span>abertos P0</span></div>
+      <div><b>${fmt(soma(abertos))}</b><span>tokens estimados restantes</span></div>
+    </div>
+    ${barraCtl(it)}
+    <div class="ctl-leg"><span><i style="background:var(--ok)"></i>feito</span><span><i style="background:var(--part)"></i>parcial</span><span><i style="background:var(--no)"></i>a fazer</span></div>
+    <div class="ctl-cols">
+      <div><h3>Por onda</h3>${Object.entries(BACKLOG.ondas).map(([o]) => linhaCtl('Onda ' + o, it.filter(b => String(b.onda) === o))).join('')}</div>
+      <div><h3>Por bancada, mais abertos primeiro</h3>${porArea.slice(0, 10).map(([a, l]) => linhaCtl(a, l)).join('')}</div>
+      <div><h3>Próximos P0</h3><ul class="ctl-prox">${p0.slice(0, 10).map(b => `<li><button data-card="${b.id}"><b>${b.id}</b>${esc(b.titulo)}</button></li>`).join('') || '<li>Nenhum P0 aberto.</li>'}</ul></div>
+    </div>`;
+  $('#controle').querySelectorAll('[data-card]').forEach(x => x.onclick = () => {
+    ['#f-area', '#f-prio', '#f-teste', '#f-busca'].forEach(q => $(q).value = '');
+    renderBacklog();
+    const c = document.getElementById('card-' + x.dataset.card);
+    if (c) { c.scrollIntoView({block: 'center'}); c.focus(); }
+  });
+}
 function renderBacklog(){
   const area = $('#f-area').value, prio = $('#f-prio').value, teste = $('#f-teste').value, q = $('#f-busca').value.trim().toLowerCase();
   const ok = b => (!area || b.area === area) && (!prio || b.prio === prio) && (!teste || b.teste.includes(teste)) &&
@@ -248,6 +307,7 @@ function irParaCard(id){
   if (el) { el.scrollIntoView({block: 'center'}); el.focus(); }
 }
 
+renderControle();
 renderBacklog(); renderRows();
 const inicial = location.hash === '#comparador' ? 'comparador' : location.hash === '#backlog' ? 'backlog' : (() => { try { return localStorage.getItem('fenkra-aba') } catch (e) { return null } })();
 if (inicial === 'comparador') aba('comparador');
