@@ -1,4 +1,4 @@
-# ADR 0077: conjunto de fixadores como comando sobre as pilhas (B375)
+# ADR 0078: conjunto de fixadores como comando sobre as pilhas (B375)
 
 ## Contexto
 

@@ -99,6 +99,7 @@ pub const CLASSIFICACAO: &[(&str, Classe)] = &[
     ("hole_mark", Interface),
     ("tree_hidden", Interface),
     ("box_mode", Interface),
+    ("regras_cor", Interface),
     ("wheel_mode", Interface),
     ("roda", Interface),
     ("user_colors", Interface),

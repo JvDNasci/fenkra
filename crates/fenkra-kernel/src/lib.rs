@@ -609,6 +609,17 @@ mod imp {
             let v = b::cylinder_at(&self.0, p[0], p[1], p[2]).map_err(err)?;
             Ok(Cylinder { origin: [v[0], v[1], v[2]], dir: [v[3], v[4], v[5]], radius: v[6], h0: v[7], h1: v[8], internal: v[9] > 0.5 })
         }
+        /// Ferramenta de rosca com a hélice começando na direção `xdir` (perpendicular ao eixo); `interna` escolhe sulco de furo ou de eixo.
+        pub fn thread_tool_dir(origin: [f64; 3], dir: [f64; 3], xdir: [f64; 3], interna: bool, major_d: f64, pitch: f64, length: f64, angle_deg: f64) -> KResult<Shape> {
+            let [ox, oy, oz] = origin;
+            let [dx, dy, dz] = dir;
+            let [xx, xy, xz] = xdir;
+            if interna {
+                b::thread_tool_x(ox, oy, oz, dx, dy, dz, major_d, pitch, length, angle_deg, xx, xy, xz).map(Shape).map_err(err)
+            } else {
+                b::thread_tool_ext_x(ox, oy, oz, dx, dy, dz, major_d, pitch, length, angle_deg, xx, xy, xz).map(Shape).map_err(err)
+            }
+        }
         pub fn thread_tool_ext(origin: [f64; 3], dir: [f64; 3], major_d: f64, pitch: f64, length: f64, angle_deg: f64) -> KResult<Shape> {
             let [ox, oy, oz] = origin;
             let [dx, dy, dz] = dir;
@@ -1202,6 +1213,9 @@ mod imp {
             no()
         }
         pub fn cylinder_at(&self, _: [f64; 3]) -> KResult<Cylinder> {
+            no()
+        }
+        pub fn thread_tool_dir(_: [f64; 3], _: [f64; 3], _: [f64; 3], _: bool, _: f64, _: f64, _: f64, _: f64) -> KResult<Shape> {
             no()
         }
         pub fn thread_tool_ext(_: [f64; 3], _: [f64; 3], _: f64, _: f64, _: f64, _: f64) -> KResult<Shape> {

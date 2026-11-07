@@ -229,6 +229,11 @@ pub mod bridge {
         fn cylinder_at(s: &Shape, px: f64, py: f64, pz: f64) -> Result<Vec<f64>>;
         fn thread_tool_ext(ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, major_d: f64, pitch: f64, length: f64, angle_deg: f64)
             -> Result<UniquePtr<Shape>>;
+        /// Como as duas ferramentas de rosca, com a direção onde a hélice começa (ângulo 0); nula = padrão.
+        fn thread_tool_x(ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, major_d: f64, pitch: f64, length: f64, angle_deg: f64, xx: f64, xy: f64, xz: f64)
+            -> Result<UniquePtr<Shape>>;
+        fn thread_tool_ext_x(ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, major_d: f64, pitch: f64, length: f64, angle_deg: f64, xx: f64, xy: f64, xz: f64)
+            -> Result<UniquePtr<Shape>>;
         /// Cópia da face mais próxima do ponto.
         fn face_copy(s: &Shape, px: f64, py: f64, pz: f64) -> Result<UniquePtr<Shape>>;
         fn offset_surface(s: &Shape, d: f64) -> Result<UniquePtr<Shape>>;

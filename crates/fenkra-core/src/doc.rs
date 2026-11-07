@@ -3862,6 +3862,37 @@ pub struct HoleExtra {
     /// em V terminar dentro da profundidade pedida
     #[serde(default)]
     pub tip_offset: String,
+    /// B373: unidade da folga no fundo; `None` = passos de rosca (arquivos antigos)
+    #[serde(default)]
+    pub thread_relief_unit: Option<UnidadeMedida>,
+    /// B373: folga em cima, entre a boca (ou o fim do rebaixo) e o início da rosca; vazio = a rosca
+    /// começa na boca
+    #[serde(default)]
+    pub thread_top_gap: String,
+    #[serde(default)]
+    pub thread_top_gap_unit: UnidadeMedida,
+    /// B373: chanfro de entrada na boca do furo (45°); vazio = sem chanfro
+    #[serde(default)]
+    pub thread_chamfer: String,
+    #[serde(default)]
+    pub thread_chamfer_unit: UnidadeMedida,
+    /// B373: ângulo (graus) onde o sulco cruza a boca, a partir da referência; vazio = 0
+    #[serde(default)]
+    pub thread_start_angle: String,
+    /// B373: referência do ângulo de início (linha, aresta ou eixo); `None` = direção padrão
+    #[serde(default)]
+    pub thread_start_ref: Option<AxisRef>,
+}
+
+/// B373: como ler um valor de rosca (folga, chanfro): em milímetros, em passos da rosca ou em
+/// porcentagem de uma medida de referência (profundidade do filete no chanfro; profundidade útil do
+/// furo nas folgas).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum UnidadeMedida {
+    #[default]
+    Mm,
+    Passos,
+    Porcento,
 }
 
 /// Referência v2 a uma face (ADR 0010): dono + papel + assinatura geométrica. O ponto clicado

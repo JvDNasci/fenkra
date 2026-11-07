@@ -72,6 +72,23 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
             doc.add_feature(FeatureKind::Hole(Hole { thread: None, diameter: s("6.8"), ..furo(a, escareado(), Extent::Blind(s("20")), false, false) }));
             Some(DemoPrevia::Comando(FeatureKind::Thread(Thread { face: [3.4, 0., 18.], spec: s("M8x1.25"), length: s("14"), modeled: true, end: None, start: s("0") })))
         }
+        // B373: furo M16x2 cego, rosca modelada com chanfro de entrada e início a 120°; com
+        // `FENKRA_DEMO_CONCLUIR=1` o sulco real aparece e a câmera olha de perto a boca do furo
+        "rosca_m16" | "rosca_m16_aberto" => {
+            let topo = bloco(doc);
+            let a = pontos(doc, topo, &[0.]);
+            let mut h = Hole { diameter: s("14"), thread: Some(s("M16x2")), ..furo(a, HoleKind::Simples, Extent::Blind(s("20")), true, false) };
+            h.extra.thread_chamfer = s("1");
+            h.extra.thread_start_angle = s("120");
+            if nome == "rosca_m16" {
+                // a captura do sulco: o furo já concluído e o painel de outro comando
+                doc.add_feature(FeatureKind::Hole(h));
+                let b = pontos(doc, topo, &[30.]);
+                Some(DemoPrevia::Comando(FeatureKind::Hole(Hole { diameter: s("14"), thread: Some(s("M16x2")), ..furo(b, HoleKind::Simples, Extent::Blind(s("20")), true, false) })))
+            } else {
+                Some(DemoPrevia::Comando(FeatureKind::Hole(h)))
+            }
+        }
         _ => None,
     }
 }

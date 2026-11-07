@@ -774,6 +774,12 @@ std::unique_ptr<Shape> chamfer_sel_t(const Shape& s, double d, rust::Slice<const
 // Interna (furo roscado): o sulco vai do diâmetro menor (furo) até o maior, removendo material.
 std::unique_ptr<Shape> thread_tool(double ox, double oy, double oz, double dx, double dy, double dz,
                                    double major_d, double pitch, double length, double angle_deg) {
+    return thread_tool_x(ox, oy, oz, dx, dy, dz, major_d, pitch, length, angle_deg, 0, 0, 0);
+}
+
+// `xx,xy,xz`: direção onde a hélice começa (ângulo 0); precisa ser perpendicular ao eixo. Nula = a padrão do OpenCASCADE.
+std::unique_ptr<Shape> thread_tool_x(double ox, double oy, double oz, double dx, double dy, double dz,
+                                     double major_d, double pitch, double length, double angle_deg, double xx, double xy, double xz) {
     return guard("rosca", [&] {
         if (pitch <= 0 || length <= 0 || major_d <= 0) throw std::runtime_error("rosca: passo, comprimento e diâmetro devem ser positivos");
         const double depth = 0.6134 * pitch;              // profundidade da rosca (ISO)
@@ -782,7 +788,8 @@ std::unique_ptr<Shape> thread_tool(double ox, double oy, double oz, double dx, d
         const double half = std::tan(angle_deg / 2 * M_PI / 180.0) * (depth + 0.1 * pitch);
         gp_Dir axis(dx, dy, dz);
         gp_Pnt o(ox, oy, oz);
-        gp_Ax3 ax(o, axis);
+        const bool com_x = std::abs(xx) + std::abs(xy) + std::abs(xz) > 1e-12;
+        gp_Ax3 ax = com_x ? gp_Ax3(o, axis, gp_Dir(xx, xy, xz)) : gp_Ax3(o, axis);
         Handle(Geom_CylindricalSurface) cyl = new Geom_CylindricalSurface(ax, r_min);
         // hélice: linha no espaço (u = ângulo, v = altura) do cilindro
         const double turns = length / pitch;

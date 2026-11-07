@@ -21,6 +21,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
     M.get_or_init(|| {
         TABLE.iter()
             .chain(crate::textos_ajuda::TEXTOS.iter())
+            .chain(crate::textos_abrir::TEXTOS.iter())
             .chain(crate::textos_biblioteca::TEXTOS.iter())
             .chain(crate::textos_biblioteca3::TEXTOS.iter())
             .chain(crate::textos_chaveta::TEXTOS.iter())
@@ -64,6 +65,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::alca_estado::TEXTOS.iter())
             .chain(crate::textos_superficies::TEXTOS.iter())
             .chain(crate::textos_solidos::TEXTOS.iter())
+            .chain(crate::textos_furo_rosca::TEXTOS.iter())
             .chain(crate::textos_edicao_direta::TEXTOS.iter())
             .chain(crate::textos_dfm::TEXTOS.iter())
             .chain(crate::textos_paineis::TEXTOS.iter())

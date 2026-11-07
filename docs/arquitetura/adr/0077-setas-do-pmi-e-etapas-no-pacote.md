@@ -1,4 +1,4 @@
-# ADR 0076: setas do PMI com ancoragem própria, cordão de solda e etapas no pacote (B368, B369)
+# ADR 0077: setas do PMI com ancoragem própria, cordão de solda e etapas no pacote (B368, B369)
 
 ## Contexto
 

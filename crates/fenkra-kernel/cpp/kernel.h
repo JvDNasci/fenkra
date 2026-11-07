@@ -76,6 +76,8 @@ std::unique_ptr<Shape> thick_segments(rust::Slice<const double> segs, double nx,
 std::unique_ptr<Shape> edges_mode_t(const Shape& s, uint8_t mode, double v1, double v2, rust::Slice<const double> mids, rust::Slice<const uint8_t> flips, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 rust::Vec<double> cylinder_at(const Shape& s, double px, double py, double pz);
 std::unique_ptr<Shape> thread_tool_ext(double ox, double oy, double oz, double dx, double dy, double dz, double major_d, double pitch, double length, double angle_deg);
+std::unique_ptr<Shape> thread_tool_x(double ox, double oy, double oz, double dx, double dy, double dz, double major_d, double pitch, double length, double angle_deg, double xx, double xy, double xz);
+std::unique_ptr<Shape> thread_tool_ext_x(double ox, double oy, double oz, double dx, double dy, double dz, double major_d, double pitch, double length, double angle_deg, double xx, double xy, double xz);
 
 std::unique_ptr<Shape> face_copy(const Shape& s, double px, double py, double pz);
 std::unique_ptr<Shape> offset_surface(const Shape& s, double d);
