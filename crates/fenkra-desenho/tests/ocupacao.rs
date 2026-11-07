@@ -65,6 +65,25 @@ fn tabela_sobre_a_legenda_avisa_e_vai_para_area_livre() {
 }
 
 #[test]
+fn conjunto_padrao_com_peca_grande_nao_cobre_as_vistas() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let (mut d, mut m, _t, dir) = montar("fenkra_desenho_conjunto", [300., 270.]);
+    d.views.clear();
+    d.tables.clear();
+    let s = d.sheets[0].id;
+    let src = Source { path: "flange.fkp".into(), display_state: String::new(), hidden: vec![] };
+    // flange de 90 mm em escala 5 (450 mm por vista) com folga de 60 mm: o gap fixo as cobria
+    let (ids, gap) = fenkra_desenho::conjunto::criar_sem_sobrepor(&mut d, &mut m, s, src, [400., 400.], 5., 60.);
+    assert_eq!(ids.len(), 4);
+    assert!(gap >= 90. * 5. + 60. - 1e-6, "distancia entre centros {gap}");
+    let (f, l) = (d.view(ids[0]).unwrap().pos, d.view(ids[2]).unwrap().pos);
+    assert!(((f[0] - l[0]).abs() - gap).abs() < 1e-6, "lateral a `gap` da frente");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
 fn tabela_no_lugar_certo_nao_se_mexe() {
     if !fenkra_kernel::AVAILABLE {
         return;

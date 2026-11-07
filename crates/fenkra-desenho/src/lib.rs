@@ -9,6 +9,7 @@
 
 pub mod alcas;
 pub mod centros;
+pub mod conjunto;
 pub mod corte;
 pub mod cotas;
 pub mod export;
