@@ -112,7 +112,7 @@ fn com_cor_do_no(a: Appearance, cor: Option<[u8; 3]>) -> Appearance {
 }
 
 /// Protótipo de um componente (peça, ou subconjunto inteiro) no sistema dele, com a aparência e o volume.
-fn comp_prototipo(kind: &NodeKind, cfg: &str, dir: Option<&Path>, cache: &mut PartCache, with_shape: bool, depth: u32) -> Result<(ComponenteVisto, f64), String> {
+fn comp_prototipo(kind: &NodeKind, cfg: &str, flex: &[crate::flexivel::PosicaoFlex], dir: Option<&Path>, cache: &mut PartCache, with_shape: bool, depth: u32) -> Result<(ComponenteVisto, f64), String> {
     match kind {
         NodeKind::Group => Err("grupo".into()),
         NodeKind::Part { path } => {
@@ -126,14 +126,15 @@ fn comp_prototipo(kind: &NodeKind, cfg: &str, dir: Option<&Path>, cache: &mut Pa
             }
             let full = full_path(dir, path);
             let txt = std::fs::read_to_string(&full).map_err(|e| format!("{}: {e}", full.display()))?;
-            let sub = Assembly::from_json(&txt)?;
+            let mut sub = Assembly::from_json(&txt)?;
+            crate::flexivel::aplicar(&mut sub, flex);
             let sub_dir = full.parent().map(|x| x.to_path_buf());
             let mut filhos = vec![];
             let mut pedacos: Vec<(Arc<Prototipo>, Placement, Appearance)> = vec![];
             let mut vol = 0.;
             let mut assinatura = std::collections::hash_map::DefaultHasher::new();
             for n in sub.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group) && shown(&sub, n.id)) {
-                if let Ok((c, v)) = comp_prototipo(&n.kind, sub.config_de(n.id), sub_dir.as_deref(), cache, false, depth + 1) {
+                if let Ok((c, v)) = comp_prototipo(&n.kind, sub.config_de(n.id), &[], sub_dir.as_deref(), cache, false, depth + 1) {
                     c.prototipo.id.hash(&mut assinatura);
                     n.placement.origin.iter().chain(n.placement.rot.iter().flatten()).for_each(|x| x.to_bits().hash(&mut assinatura));
                     if c.partes.is_empty() || n.color.is_some() {
@@ -150,7 +151,8 @@ fn comp_prototipo(kind: &NodeKind, cfg: &str, dir: Option<&Path>, cache: &mut Pa
                 (a.color, a.finish as u8).hash(&mut assinatura);
             }
             let assinatura = assinatura.finish();
-            let chave = (full, cfg.to_string());
+            // cada posição do mecanismo tem a própria malha: duas instâncias não disputam o lugar
+            let chave = (full, if flex.is_empty() { cfg.to_string() } else { format!("{cfg}|{flex:?}") });
             if let Some((a, c)) = cache.subconjuntos.get(&chave) {
                 if *a == assinatura {
                     return Ok((c.clone(), vol));
@@ -248,7 +250,7 @@ pub fn compor(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: &
         if let Some(sh) = cut {
             // já no mundo: a malha da forma recortada não leva a posição de novo
             if let Ok(m) = fenkra_solidos::tesselar(&sh, &cache.qualidade()) {
-                let aparencia = com_cor_do_no(comp_prototipo(&n.kind, a.config_de(n.id), dir, cache, false, 0).map(|x| x.0.aparencia).unwrap_or(APARENCIA_VAZIO), n.color);
+                let aparencia = com_cor_do_no(comp_prototipo(&n.kind, a.config_de(n.id), &a.flex_de(n.id), dir, cache, false, 0).map(|x| x.0.aparencia).unwrap_or(APARENCIA_VAZIO), n.color);
                 let (color, finish) = (aparencia.color, aparencia.finish);
                 let label = if n.number > 0 { format!("{} · {}", n.number, n.name) } else { n.name.clone() };
                 doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish, texture: None, marker: None, published: false, material: String::new() });
@@ -259,7 +261,7 @@ pub fn compor(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: &
                 continue;
             }
         }
-        match comp_prototipo(&n.kind, a.config_de(n.id), dir, cache, with_shape, 0) {
+        match comp_prototipo(&n.kind, a.config_de(n.id), &a.flex_de(n.id), dir, cache, with_shape, 0) {
             Ok((c, vol)) => {
                 let aparencia = com_cor_do_no(c.aparencia, n.color);
                 let (color, finish) = (aparencia.color, aparencia.finish);

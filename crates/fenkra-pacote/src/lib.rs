@@ -276,7 +276,10 @@ impl<'a> Gerador<'a> {
                     }
                     let lido = std::fs::read_to_string(&cheio).map_err(|e| e.to_string()).and_then(|t| Assembly::from_json(&t));
                     let sub = match lido {
-                        Ok(s) => s,
+                        Ok(mut s) => {
+                            fenkra_montagem::flexivel::aplicar(&mut s, &asm.flex_de(n.id));
+                            s
+                        }
                         Err(e) => {
                             self.avisos.push(format!("'{}' ficou de fora: {}: {e}", n.name, cheio.display()));
                             continue;

@@ -341,6 +341,8 @@ pub struct AsmState {
     pub ctx_act: Option<AsmCtx>,
     /// subconjuntos lidos para a árvore (caminho → linhas)
     sub_rows: std::collections::HashMap<PathBuf, Vec<(usize, String, bool)>>,
+    /// juntas comandáveis de cada subconjunto, lidas uma vez por arquivo
+    sub_juntas: std::collections::HashMap<PathBuf, Vec<fenkra_montagem::flexivel::JuntaFlex>>,
     /// recursos e posições na última sincronização dos furos com as peças
     furos_chave: String,
     /// última sincronização e verificação da série em edição
@@ -447,6 +449,7 @@ impl AsmState {
             aviso: None,
             ctx_act: None,
             sub_rows: Default::default(),
+            sub_juntas: Default::default(),
         }
     }
 
@@ -639,6 +642,7 @@ impl AsmState {
         self.atualizar_links(Gatilho::Posicao);
         self.comp_dof = fenkra_montagem::solve::dof_per_comp(&self.asm);
         self.sub_rows.clear();
+        self.sub_juntas.clear();
         self.manip.esquecer();
         self.dirty = true;
     }
@@ -1511,6 +1515,11 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
         })
         .inner
         .on_hover_text(tr("clique: propriedades e parâmetros da montagem"));
+    // desenvolvimento: FENKRA_DEMO_FLEX=1 abre o painel do primeiro subconjunto
+    if st.sel.is_none() && !st.props && std::env::var_os("FENKRA_DEMO_FLEX").is_some() {
+        st.sel = st.asm.nodes.iter().find(|n| matches!(n.kind, NodeKind::SubAssembly { .. })).map(|n| n.id);
+        st.props = st.sel.is_some();
+    }
     if tr_resp.clicked() {
         st.sel = None;
         st.props = true;
@@ -1705,6 +1714,10 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                             ui.close();
                         }
                     });
+                    if ui.button(tr("Propriedades…")).on_hover_text(tr("Abre o painel do componente: aparência, posição, links e, no subconjunto, o mecanismo.")).clicked() {
+                        *act = Some((n.id, 42));
+                        ui.close();
+                    }
                     if ui.button(if n.fixed { tr("📌 Liberar") } else { tr("📌 Fixar (sem graus de liberdade)") }).clicked() {
                         *act = Some((n.id, 5));
                         ui.close();
@@ -2117,6 +2130,11 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
             st.renaming = Some(id);
             return;
         }
+        42 => {
+            st.sel = Some(id);
+            st.props = true;
+            return;
+        }
         10 => {
             st.sel = Some(id);
             st.isolate = !st.isolate;
@@ -2242,6 +2260,49 @@ fn inserir_de_volta(st: &mut AsmState, id: Id) -> (String, bool) {
             st.undo.pop();
             (e, true)
         }
+    }
+}
+
+/// Valor de cada junta do subconjunto nesta montagem (B422). O `.fka` dele não muda.
+fn flex_panel(st: &mut AsmState, ui: &mut egui::Ui, comp: Id) {
+    use fenkra_montagem::kin::Grau;
+    let Some(NodeKind::SubAssembly { path }) = st.asm.node(comp).map(|n| n.kind.clone()) else { return };
+    let dir = st.dir();
+    let full = fenkra_montagem::load::full_path(dir.as_deref(), &path);
+    let juntas = st
+        .sub_juntas
+        .entry(full.clone())
+        .or_insert_with(|| std::fs::read_to_string(&full).ok().and_then(|t| Assembly::from_json(&t).ok()).map_or_else(Vec::new, |s| fenkra_montagem::flexivel::juntas(&s)))
+        .clone();
+    if juntas.is_empty() {
+        return;
+    }
+    crate::editor::section(ui, "Mecanismo nesta montagem");
+    for j in juntas {
+        let giro = j.grau == Grau::Giro;
+        let atual = st.asm.valor_flex(comp, j.id, j.grau);
+        let mut v = atual.unwrap_or(0.);
+        ui.horizontal(|ui| {
+            ui.label(&j.nome);
+            let r = ui.add(crate::ui_ext::dv(&mut v).speed(if giro { 1. } else { 0.5 }).suffix(if giro { "°" } else { " mm" }).max_decimals(2));
+            crate::ui_ext::wheel(ui, &r, &mut v);
+            let r = r.on_hover_text(tr("Põe esta junta do subconjunto na posição pedida, só nesta montagem. O arquivo do subconjunto não muda."));
+            if r.drag_started() || r.gained_focus() {
+                st.push_undo();
+            }
+            if r.changed() {
+                st.asm.definir_flex(comp, j.id, j.grau, Some(v));
+                st.dirty = true;
+                if !fenkra_montagem::flexivel::alcanca(&st.asm, comp, &full) {
+                    st.aviso = Some((tr("O mecanismo não chega a esse valor: ele fica na última posição possível.").to_string(), true));
+                }
+            }
+            if atual.is_some() && ui.small_button("↺").on_hover_text(tr("Volta à posição gravada no subconjunto.")).clicked() {
+                st.push_undo();
+                st.asm.definir_flex(comp, j.id, j.grau, None);
+                st.dirty = true;
+            }
+        });
     }
 }
 
@@ -2750,6 +2811,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     return;
                 }
                 let id = st.asm.nodes[i].id;
+                flex_panel(st, ui, id);
                 if let Some(msg) = links_panel(st, ui, id) {
                     aviso_links = Some(msg);
                 }

@@ -131,6 +131,7 @@ preferências do usuário.
 | `FENKRA_DEMO_PROJETO=1` | abre um projeto de exemplo com o painel à vista; `comparar` já mostra a comparação com a revisão |
 | `FENKRA_DEMO_SECAO=1` | liga o corte de seção na prévia da casca |
 | `FENKRA_DEMO_ARQUIVO=<caminho>` | abre esse `.fkp`, `.fka` ou `.fkd` ao iniciar |
+| `FENKRA_DEMO_FLEX=1` | na montagem, abre o painel do primeiro subconjunto, com o mecanismo dele (B422) |
 | `FENKRA_ABRIR=<nome>`, `FENKRA_BANCADA=sup` | abre o comando ou a anotação com esse nome na peça aberta / a bancada de Superfícies |
 | `FENKRA_EN=1` | interface em inglês |
 

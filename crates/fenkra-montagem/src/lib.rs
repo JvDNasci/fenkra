@@ -30,6 +30,7 @@ pub mod lod;
 pub mod manipulador;
 pub mod pilhas;
 pub mod proposta;
+pub mod flexivel;
 pub mod parametros;
 pub mod publicacoes;
 pub mod repeticao;
@@ -554,6 +555,9 @@ pub struct Assembly {
     /// parâmetros que copiam um valor publicado por uma peça (B409)
     #[serde(default)]
     pub params_ligados: Vec<parametros::ParamLigado>,
+    /// posição dos mecanismos dos subconjuntos nesta montagem (B422)
+    #[serde(default)]
+    pub flex: Vec<flexivel::PosicaoFlex>,
     /// originais dos itens ligados ao nó de um subconjunto, para inserir de volta
     #[serde(default)]
     pub religacoes: Vec<Religacao>,
@@ -699,7 +703,7 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), uid: fenkra_core::formato::UidDoc::novo(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], conjuntos: vec![], regras_cor: vec![], interf: Default::default(), relational: false, politicas_link: vec![], params_ligados: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![], transmissoes: vec![] }
+        Assembly { format_version: 1, name: name.into(), uid: fenkra_core::formato::UidDoc::novo(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], conjuntos: vec![], regras_cor: vec![], interf: Default::default(), relational: false, politicas_link: vec![], params_ligados: vec![], flex: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![], transmissoes: vec![] }
     }
 
     /// Configuração escolhida para o componente (vazio = a ativa da própria peça).
