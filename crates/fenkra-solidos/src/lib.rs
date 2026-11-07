@@ -1342,6 +1342,12 @@ impl Ctx<'_> {
                         let p = points.get(index).ok_or("o vértice da curva não existe mais")?;
                         return self.point(p, depth + 1);
                     }
+                    // curva ligada ou isolada: a cópia guarda os vértices publicados, na ordem; sem este
+                    // ramo o vértice caía no início/fim/meio e o trecho saía com comprimento zero
+                    if let RefKind::Linked { .. } | RefKind::Isolated { .. } = &r.kind {
+                        let c = self.curve(&CurveRef::Ref(curve), depth + 1)?;
+                        return c.pts.get(index).copied().ok_or_else(|| format!("a curva '{}' tem {} vértices; o trecho pede o vértice {}", r.name, c.pts.len(), index + 1));
+                    }
                 }
                 let c = self.curve(&CurveRef::Ref(curve), depth + 1)?;
                 Ok(match index {
@@ -8334,6 +8340,53 @@ mod tests {
         let a = 40. * 40. - 34. * 34.;
         assert!((v - a * 180.).abs() < 1e-3 * a * 180., "dois trechos retos em meia-esquadria: {v} × {}", a * 180.);
         assert_eq!(cut_list(&d).iter().map(|r| r.count).sum::<usize>(), 2);
+    }
+
+    /// K-02 (B380): polilinha ligada (aqui, isolada: mesma cópia de vértices) com `CurveRef::Segment`
+    /// como caminho do membro. Antes o vértice 1 virava o fim da curva e o trecho saía de comprimento zero.
+    #[test]
+    fn trecho_de_polilinha_ligada_vira_membro() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        let mut d = Document::new("ligada");
+        let pl = d.add_geometry(RefKind::Isolated { geo: LinkedGeo::Curve(vec![[0., 0., 0.], [100., 0., 0.], [100., 0., 80.]]) });
+        let mk = |d: &mut Document, index: usize| {
+            d.add_feature(FeatureKind::StructMember(StructMember {
+                paths: vec![CurveRef::Segment { curve: pl, index }],
+                family: s("Tubo quadrado"),
+                designation: s("40x3"),
+                kind: SectionKind::TuboQuadrado,
+                dims: vec![s("40"), s("3")],
+                anchor: 0,
+                angle: s("0"),
+                off_x: s("0"),
+                off_y: s("0"),
+                ext1: s("0"),
+                ext2: s("0"),
+                corner: CornerMode::Nenhum,
+                gap: s("0"),
+                joints: vec![],
+                material: String::new(),
+                mirror: false,
+            }))
+        };
+        let (m0, m1, m2) = (mk(&mut d, 0), mk(&mut d, 1), mk(&mut d, 5));
+        let r = recompute(&d);
+        assert!(matches!(r.status[&m0], Status::Ok), "{:?}", r.status[&m0]);
+        assert!(matches!(r.status[&m1], Status::Ok), "{:?}", r.status[&m1]);
+        let a = 40. * 40. - 34. * 34.;
+        let v: f64 = r.bodies.iter().map(|b| b.mass.volume).sum();
+        assert!((v - a * 180.).abs() < 1e-3 * a * 180., "trechos de 100 e 80 mm: {v}");
+        let len: Vec<f64> = { let mut l: Vec<f64> = cut_list(&d).iter().map(|c| c.length).collect(); l.sort_by(|a, b| a.total_cmp(b)); l };
+        assert_eq!(len.len(), 2, "{len:?}");
+        assert!((len[0] - 80.).abs() < 1e-6 && (len[1] - 100.).abs() < 1e-6, "{len:?}");
+        // vértice que não existe: a mensagem diz qual
+        match &r.status[&m2] {
+            Status::Error(m) => assert!(m.contains("vértices"), "{m}"),
+            o => panic!("esperava erro, veio {o:?}"),
+        }
     }
 
     #[test]
