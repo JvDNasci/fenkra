@@ -43,3 +43,10 @@ Registre aqui erros que se repetiram.
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.
+
+## Lições do kart (B353)
+
+- Antes de capturar, enquadre a peça e esconda origem e rótulos de curva.
+- Teste toda cor nova também com preto e branco contra o fundo do tema.
+- Texto na árvore que não seja nome do usuário precisa de nome legível ou sair da tela.
+- Acabamento da peça não chega na montagem (K-25): confira a aparência na peça aberta.

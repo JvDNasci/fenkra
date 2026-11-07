@@ -43,3 +43,9 @@ Registre aqui erros que se repetiram.
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.
+
+## Lições do kart (B353)
+
+- Padrão de corte pode gerar sólido inválido com status ok: confira volume contra a peça-base ou rode a validade (K-10).
+- Chanfro e filete por ponto em aresta circular exigem o ponto médio exato; prefira escolher por ID (K-13).
+- Forma livre vira maciça: aplique Casca ou confira massa antes da montagem.

@@ -43,3 +43,9 @@ Registre aqui erros que se repetiram.
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.
+
+## Lições do kart (B353)
+
+- Teste caminho de membro com polilinha ligada por link, não só com curvas separadas.
+- Confira todas as pontas do quadro na lista de corte, não só uma por tipo (K-09).
+- Cordão de solda exige as duas faces se tocando.

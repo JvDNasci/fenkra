@@ -43,3 +43,8 @@ Registre aqui erros que se repetiram.
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.
+
+## Lições do kart (B353)
+
+- Para mostrar planificação, o 3D deve estar na chapa plana: tabela de dobras certa no desenho não vale como captura.
+- Depois de abrir o painel, confira que ele aparece na captura antes de dizer que foi visto.

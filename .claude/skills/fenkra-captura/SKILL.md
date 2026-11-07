@@ -26,3 +26,8 @@ Rode o binário com `FENKRA_DEMO_FOTO=<arquivo.png>`: ele grava a janela e fecha
 ## Relatório
 
 Diga o que viu, o que corrigiu e o que falta. Captura estática não prova animação nem arraste.
+
+## Lições do kart (B353)
+
+- Legenda só diz o que a imagem mostra: abra o arquivo antes de legendar.
+- Peça de cálculo longo precisa esperar o recálculo, senão sai a tela de abertura.

@@ -43,3 +43,10 @@ Registre aqui erros que se repetiram.
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.
+
+## Lições do kart (B353)
+
+- Tabela e anotação ficam na área útil, longe do carimbo, com aviso quando não couber.
+- Escala automática considera altura e largura contra a folha e cai em escala padronizada.
+- Desenho de montagem precisa percorrer subconjuntos; vista vazia sempre gera aviso.
+- Ok de desenho exige conferir cotas, furos na vista e tabela dentro da folha.

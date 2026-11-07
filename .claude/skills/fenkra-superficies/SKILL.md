@@ -43,3 +43,7 @@ Registre aqui erros que se repetiram.
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.
+
+## Lições do kart (B353)
+
+- Superfície de varredura com perfil circular em spline 3D falha: use varredura sólida como contorno até corrigir (K-08).

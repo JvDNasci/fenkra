@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 101950,
+ "tokens_total_k": 105060,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 7180,
-   "pct": 7.0
+   "pct": 6.8
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 11.4
+   "pct": 11.1
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
-   "tokens_k": 29040,
-   "pct": 28.5
+   "tokens_k": 32150,
+   "pct": 30.6
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 22650,
-   "pct": 22.2
+   "pct": 21.6
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
    "tokens_k": 31470,
-   "pct": 30.9
+   "pct": 30.0
   }
  },
  "itens": [
@@ -4393,7 +4393,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B255",
@@ -4457,7 +4457,7 @@
    "teste": "Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B259",
@@ -4873,7 +4873,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "feito",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B285",
@@ -5049,7 +5049,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "feito",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B296",
@@ -6921,6 +6921,310 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B413",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Validade do sólido a cada comando, com aviso na árvore e na API",
+   "oque": "O status ok não vê sólido inválido. Conferir a validade no recálculo, mostrar aviso na árvore e devolver na API. Rodar antes em RD-02, porque o K-10 ainda é hipótese.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B414",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Massa errada: legenda e propriedades usam a lista antiga de materiais",
+   "oque": "app::MATERIALS tem 8 itens e o Alumínio 7075 cai em 7,85. Usar fenkra_core::materiais em pmi_ui.rs e editor.rs. A coroa aparece 2,8 vezes mais pesada, sem aviso.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 50,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B415",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Desenho: tabela e escala automática respeitam a folha",
+   "oque": "Tabela sobre o carimbo ou fora da folha em 4 de 8 folhas: avisar e realocar. Escala automática considera altura e largura, em lista padronizada.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B416",
+   "onda": 2,
+   "prio": "P0",
+   "titulo": "Kart: segunda rodada, pela interface e com montagem real",
+   "oque": "Restrições reais, dentes abertos, corrente na posição, peças faltantes, coroa e pinhão no mesmo conjunto, eixo girando, cotas nas folhas. Exercitar comandos pela interface, para medir intuitividade de verdade.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B417",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Ferramenta ver: imagem da peça sem aplicativo aberto",
+   "oque": "Agente recebe vistas, corte e zoom pelo MCP e pelo CLI. A pesquisa aponta a visão como parte do ganho do ciclo gerar, medir e corrigir.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B418",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Ferramenta verificar: requisitos declarados na peça",
+   "oque": "Massa, folga, interferência, furos e propagação de parâmetro, com resultado por requisito. Útil também para quem não usa IA.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B419",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Erros acionáveis: item, campo, causa e sugestão",
+   "oque": "Erros com código e sugestão, na interface e na API. Inclui mensagem do cordão, cadeia de superfície e Assistente de reparo oferecendo a ação certa.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B420",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "MCP por ondas: revolução, padrão, montagem, chapa e estrutural",
+   "oque": "Gerar as ferramentas a partir do esquema dos comandos. Com as 18 ferramentas atuais o kart não sairia. Inclui descoberta de comandos, biblioteca e seleção semântica.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 500,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.5
+  },
+  {
+   "id": "B421",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Status da montagem separa fixado de definido por restrição",
+   "oque": "Hoje 84 definidos e 0 graus de liberdade não provam nada. Avisar restrição sem efeito entre corpos fixos.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B422",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Mecanismo de subconjunto na montagem de topo",
+   "oque": "A direção não vira no KART: subconjunto flexível precisa funcionar no conjunto de cima.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B423",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Abrir a peça na bancada do conteúdo e enquadrar ao abrir",
+   "oque": "Superfícies e Forma livre abrem em Modelagem Sólida. Peça, subconjunto e vista nomeada abrem enquadrados.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B424",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Painel de comando abre mostrando os campos",
+   "oque": "Conferir se a altura padrão corta os campos ou se foi só a captura.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 50,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B425",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Aparência escura e clara legível",
+   "oque": "Luz de preenchimento e contorno de silhueta em cores de baixa luminância, e contraste para peças brancas no fundo claro.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B426",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Forma livre: cache da conversão e progresso",
+   "oque": "Conversão de 3 a 12 s: guardar o resultado e mostrar progresso na peça.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Superfícies",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B427",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Progresso e cancelamento em desenho de conjunto e .fkv",
+   "oque": "Gerar levou 126 s e 1170 s sem progresso nem cancelamento.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B428",
+   "onda": 2,
+   "prio": "P1",
+   "titulo": "Chapa plana visível no 3D e botão Planificar na barra",
+   "oque": "Nenhuma captura mostra a chapa plana; o estado precisa ser fácil de ver.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B429",
+   "onda": 2,
+   "prio": "P2",
+   "titulo": "Árvore: agrupar mestre, esconder caminhos e nomes legíveis",
+   "oque": "Agrupar curvas e publicações do esqueleto; sem caminho do arquivo no Desenho; nome ao lado do código na montagem.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B430",
+   "onda": 2,
+   "prio": "P2",
+   "titulo": "Polimento visual do kart",
+   "oque": "Balões e anotações sem sobreposição, etiqueta Atualizada fora da área, origem oculta na apresentação, barra de histórico fora da montagem, massa sem corpo sem -0,000 kg, dica de status por contexto, conferir nome da vista lateral.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B431",
+   "onda": 2,
+   "prio": "P2",
+   "titulo": "Validação: diário e matriz medem o real",
+   "oque": "Captura confere que o painel abriu, matriz conta uso real de comandos e faltam capturas de Biblioteca, gerador, simulação e Sketch.",
+   "origem": [
+    "USR-TESTE"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto + Visual",
+   "area": "Interface",
    "status": "a fazer",
    "pct": 0.1
   }

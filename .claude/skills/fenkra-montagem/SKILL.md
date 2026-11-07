@@ -43,3 +43,11 @@ Registre aqui erros que se repetiram.
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.
+
+## Lições do kart (B353)
+
+- Só conta como montada a peça restrita à vizinha: fixar com posição gravada dá 0 graus de liberdade e não prova nada.
+- Peças ligadas por acoplamento ficam no mesmo .fka: junta é local ao arquivo.
+- Compare a lista de peças com a árvore do produto: ok não vê a peça que ficou de fora.
+- A origem de Caminho é a roda menor: posicione a corrente pelo pinhão.
+- Roda dentada só vale se o corte abrir na borda: confira o dente na imagem, não o volume.
