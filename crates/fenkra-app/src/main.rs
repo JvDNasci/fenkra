@@ -45,6 +45,8 @@ mod chapa_manip;
 mod chapa_manip_ui;
 mod gizmo;
 mod asm_ui;
+mod asm_abrir;
+mod textos_abrir;
 mod asm_cmd;
 mod asm_manip;
 mod demo_foto;

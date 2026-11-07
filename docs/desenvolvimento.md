@@ -71,7 +71,9 @@ preferências do usuário.
 | `FENKRA_DEMO_TEMA=<nome>` | usa o tema (Escuro, Claro, NeoTech Minimalista…) |
 | `FENKRA_DEMO_IMPORTAR=<arquivo>` | abre o painel de importação com o arquivo; `FENKRA_DEMO_IMPORTAR_OK=1` confirma sozinho |
 | `FENKRA_DEMO_DEFEITO=n` | com a confirmação automática, já realça o defeito n do relatório |
-| `FENKRA_DEMO_PASTA=<pasta>` | grava as peças de um conjunto importado nessa pasta, sem perguntar |
+| `FENKRA_DEMO_PASTA=<pasta>` | grava as peças de um conjunto importado nessa pasta, sem perguntar; a peça sem arquivo também salva nela, sem abrir o diálogo |
+| `FENKRA_DEMO_ABRIR=<caso>` | com `FENKRA_DEMO_ASM=1`, percorre a ida e a volta entre a montagem e a peça ativa, um passo a cada cálculo assentado: `ida` (peça ativa com o conjunto em volta), `volta`, `suja` (a pergunta ao voltar), `editada` (edita, salva e volta) e `ausente` (o arquivo da peça sumiu) |
+| `FENKRA_DEMO_ASM=inserir_mouse` | só o painel Inserir peça, sem cursor fixo, com uma peça `barrada` (comando em erro) na pasta; os cliques vêm de `FENKRA_DEMO_PAINEL`, pelo caminho do mouse de verdade |
 | `FENKRA_DEMO_EXPORTAR=iges` | abre o painel de exportação (`iges` ou outro valor para STEP) |
 | `FENKRA_DEMO_VISUALIZACAO=1` | abre o painel Exportar visualização (B365); `FENKRA_DEMO_VISUALIZACAO_ARQUIVO=<arquivo>` grava ao clicar em Exportar sem abrir o diálogo |
 | `FENKRA_DEMO_CHAPA`, `_EST`, `_SUP`, `_ASM`, `_PMI`, `_DWG` | abre o exemplo de cada bancada |

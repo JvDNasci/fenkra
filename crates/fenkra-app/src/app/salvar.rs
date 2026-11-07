@@ -26,6 +26,8 @@ pub enum Acao {
     AbrirDialogo,
     Importar,
     AbrirCaminho(PathBuf),
+    /// componente da montagem que vai ocupar o lugar da peça aberta (B362)
+    AtivarComponente(Id),
     Sair,
 }
 
@@ -122,6 +124,16 @@ impl App {
         }
     }
 
+    /// Ativa o componente; com a peça aberta por salvar, pergunta antes, pois ela sai de cena.
+    pub fn ativar_com_confirmacao(&mut self, id: Id) {
+        self.com_confirmacao(Acao::AtivarComponente(id));
+    }
+
+    /// Pergunta de gravação em aberto?
+    pub fn confirmando(&self) -> bool {
+        self.salvar.confirmar.is_some()
+    }
+
     fn rodar_acao(&mut self, acao: Acao) {
         match acao {
             Acao::NovaPeca => {
@@ -153,6 +165,7 @@ impl App {
                 self.started = true;
             }
             Acao::AbrirCaminho(p) => self.open_path(&p),
+            Acao::AtivarComponente(id) => crate::asm_ui::ativar_peca(self, id),
             Acao::Sair => self.salvar.pode_fechar = true,
         }
     }
