@@ -1580,6 +1580,180 @@ fn kind_tag(id: Id, doc: &Document) -> Option<bool> {
 
 /// Furo inteligente (RF-SOL-007/008): escolher norma e uso preenche os diâmetros.
 fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &Vars, target: &mut Id, seed: &crate::geo_ui::Seed) {
+    // estado atual: "norma|designação|folga" (formato antigo "M6 passagem normal" também é lido)
+    let st = h.standard.clone().unwrap_or_default();
+    let parts: Vec<&str> = st.split('|').collect();
+    let (mut norma, mut size, mut folga) = if parts.len() == 3 {
+        (parts[0].to_string(), parts[1].to_string(), parts[2].to_string())
+    } else {
+        let m = st.split_whitespace().next().unwrap_or("M6");
+        let name = hardware::THREADS.iter().find(|t| t.name.starts_with(&format!("{m}x"))).map(|t| t.name).unwrap_or("M6x1");
+        let f = if st.contains("fino") { "fino" } else if st.contains("folgado") { "folgado" } else { "normal" };
+        ("ISO métrica grossa".to_string(), name.to_string(), f.to_string())
+    };
+    let tapped = h.thread.is_some();
+    let head_idx = match &h.kind {
+        HoleKind::Rebaixado { .. } => 1,
+        HoleKind::Escareado { .. } => 2,
+        HoleKind::Contrafurado { .. } => 4,
+        _ => 0,
+    };
+    let before = (norma.clone(), size.clone(), folga.clone(), head_idx, tapped);
+
+    section(ui, "Tipo do furo");
+    let opts = [
+        ("furo_simples", "Simples", "Sem rebaixo", head_idx == 0),
+        ("furo_rebaixado", "Rebaixado", "Rebaixo para cabeça cilíndrica (Allen)", head_idx == 1),
+        ("furo_escareado", "Escareado", "Escareado para cabeça chata", head_idx == 2),
+        ("furo_contrafurado", "Contrafurado", "Rebaixo com fundo cônico (counterdrilled)", head_idx == 4),
+    ];
+    let new_head = match icon_choice(ui, &opts) {
+        Some(3) => 4,
+        Some(i) => i,
+        None => head_idx,
+    };
+    section(ui, "Medida");
+    ui.horizontal(|ui| {
+        ui.add_sized([60., 18.], egui::Label::new(tr("Norma")));
+        egui::ComboBox::from_id_salt("norma_rosca").selected_text(norma.clone()).width(190.).show_ui(ui, |ui| {
+            for s in hardware::STANDARDS {
+                if ui.selectable_label(norma == s, s).clicked() && norma != s {
+                    norma = s.to_string();
+                    size = hardware::threads_of(s).next().map(|t| t.name.to_string()).unwrap_or_default();
+                }
+            }
+        });
+    });
+    ui.horizontal(|ui| {
+        ui.add_sized([60., 18.], egui::Label::new(tr("Tamanho")));
+        egui::ComboBox::from_id_salt("tam_rosca").selected_text(size.clone()).width(190.).show_ui(ui, |ui| {
+            for t in hardware::threads_of(&norma) {
+                ui.selectable_value(&mut size, t.name.to_string(), t.name);
+            }
+        });
+    });
+    if !tapped {
+        ui.horizontal(|ui| {
+            ui.add_sized([60., 18.], egui::Label::new(tr("Folga")));
+            for f in ["fino", "normal", "folgado"] {
+                ui.radio_value(&mut folga, f.to_string(), f);
+            }
+        });
+    }
+
+    extent_ui(ui, "ext_furo", &mut h.depth, vars, &["Cego", "Passante", "Até o próximo", "Até o último", "Até plano", "Até a superfície"], doc, seed);
+
+
+    egui::CollapsingHeader::new(tr("Ajuste fino das dimensões")).default_open(false).show(ui, |ui| {
+        expr(ui, "Diâmetro", &mut h.diameter, vars, "mm");
+        match &mut h.kind {
+            HoleKind::Simples => {}
+            HoleKind::Rebaixado { diameter, depth } => {
+                expr(ui, "Ø rebaixo", diameter, vars, "mm");
+                expr(ui, "Prof. rebaixo", depth, vars, "mm");
+            }
+            HoleKind::Escareado { diameter, angle } => {
+                expr(ui, "Ø escareado", diameter, vars, "mm");
+                expr(ui, "Ângulo", angle, vars, "°");
+                // B48: ângulos usuais e por norma
+                ui.horizontal_wrapped(|ui| {
+                    for a in fenkra_solidos::hardware::ANGULOS_ESCAREADO {
+                        let atual = angle.trim().parse::<f64>().is_ok_and(|v| (v - a).abs() < 1e-9);
+                        if ui.selectable_label(atual, format!("{a}°")).clicked() {
+                            *angle = format!("{a}");
+                        }
+                    }
+                });
+                egui::ComboBox::from_id_salt("esc_norma").selected_text(tr("Ângulo por norma")).show_ui(ui, |ui| {
+                    for (nome, a) in fenkra_solidos::hardware::NORMAS_ESCAREADO {
+                        if ui.selectable_label(false, format!("{nome} ({a}°)")).clicked() {
+                            *angle = format!("{a}");
+                        }
+                    }
+                });
+            }
+            HoleKind::Contrafurado { diameter, depth, angle } => {
+                expr(ui, "Ø contrafuro", diameter, vars, "mm");
+                expr(ui, "Prof. contrafuro", depth, vars, "mm");
+                expr(ui, "Ângulo do fundo", angle, vars, "°");
+            }
+        }
+        if let Some(t) = &mut h.thread {
+            ui.horizontal(|ui| {
+                ui.add_sized([96., 18.], egui::Label::new(tr("Designação")));
+                ui.text_edit_singleline(t);
+            });
+        }
+    });
+    section(ui, "Rosca");
+    let opts = [
+        ("furo_simples", "Nenhuma", "Sem rosca: diâmetro de passagem pela folga", !tapped),
+        ("furo_roscado", "Cosmética", "Broca de rosca + indicação da rosca (leve; vale no desenho e na BOM)", tapped && !h.thread_modeled),
+        ("furo_roscado", "Modelada", "Broca de rosca + sulco helicoidal real (mais pesado)", tapped && h.thread_modeled),
+    ];
+    let mut new_tapped = tapped;
+    match icon_choice(ui, &opts) {
+        Some(0) => new_tapped = false,
+        Some(1) => {
+            new_tapped = true;
+            h.thread_modeled = false;
+        }
+        Some(2) => {
+            new_tapped = true;
+            h.thread_modeled = true;
+        }
+        _ => {}
+    }
+    if new_tapped {
+        crate::editor::check(ui, &mut h.left_hand, "rosca à esquerda");
+    }
+    if new_tapped && h.thread_modeled {
+        crate::furo_painel::entrada_e_fim(ui, doc, h, vars, seed, head_idx != 0);
+    }
+
+    // aplica a escolha (só quando algo mudou, para não sobrescrever ajustes finos)
+    if (norma.clone(), size.clone(), folga.clone(), new_head, new_tapped) != before {
+        let spec = hardware::thread(&size).copied();
+        let metric = spec.and_then(|t| hardware::METRIC.iter().find(|m| (t.major - m.name[1..].parse::<f64>().unwrap_or(0.)).abs() < 1e-6));
+        let fi = match folga.as_str() {
+            "fino" => 0,
+            "folgado" => 2,
+            _ => 1,
+        };
+        if let Some(t) = spec {
+            let clearance = metric.map(|m| m.clearance[fi]).unwrap_or(t.major * [1.05, 1.1, 1.2][fi]);
+            h.diameter = format!("{}", if new_tapped { t.tap_drill } else { (clearance * 100.).round() / 100. });
+            h.thread = new_tapped.then(|| t.name.to_string());
+            h.kind = match new_head {
+                1 => {
+                    let (d, p) = metric.map(|m| (m.cbore_diameter, m.cbore_depth)).unwrap_or((t.major * 1.8, t.major));
+                    HoleKind::Rebaixado { diameter: d.to_string(), depth: p.to_string() }
+                }
+                2 => HoleKind::Escareado { diameter: metric.map(|m| m.csink_diameter).unwrap_or(t.major * 2.).to_string(), angle: "90".into() },
+                4 => {
+                    let (d, p) = metric.map(|m| (m.cbore_diameter, m.cbore_depth)).unwrap_or((t.major * 1.8, t.major));
+                    HoleKind::Contrafurado { diameter: d.to_string(), depth: p.to_string(), angle: "90".into() }
+                }
+                _ => HoleKind::Simples,
+            };
+        }
+        h.standard = Some(format!("{norma}|{size}|{folga}"));
+    }
+
+    section(ui, "Fundo e corpo");
+    let mut v = h.tip.is_some();
+    if crate::editor::check(ui, &mut v, "fundo em V (ponta da broca)").changed() {
+        h.tip = v.then(|| "118".to_string());
+    }
+    if let Some(t) = &mut h.tip {
+        expr(ui, "Ângulo da ponta", t, vars, "°");
+    }
+    expr(ui, "Conicidade", &mut h.taper, vars, "°");
+    ui.label(RichText::new(tr("Conicidade ≠ 0 faz um furo cônico (meio-ângulo); 0 = cilíndrico.")).weak().small());
+    if h.tip.is_some() {
+        expr(ui, "Deslocamento da ponta", &mut h.extra.tip_offset, vars, "mm");
+        ui.label(RichText::new(tr("Soma à profundidade do cilindro; negativo faz a ponta em V caber na profundidade pedida.")).weak().small());
+    }
     section(ui, "Centros");
     let by_pts = !h.points.is_empty();
     let opts = [
@@ -1634,189 +1808,6 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
     }
     crate::editor::check(ui, &mut h.reverse, "inverter sentido");
 
-    // estado atual: "norma|designação|folga" (formato antigo "M6 passagem normal" também é lido)
-    let st = h.standard.clone().unwrap_or_default();
-    let parts: Vec<&str> = st.split('|').collect();
-    let (mut norma, mut size, mut folga) = if parts.len() == 3 {
-        (parts[0].to_string(), parts[1].to_string(), parts[2].to_string())
-    } else {
-        let m = st.split_whitespace().next().unwrap_or("M6");
-        let name = hardware::THREADS.iter().find(|t| t.name.starts_with(&format!("{m}x"))).map(|t| t.name).unwrap_or("M6x1");
-        let f = if st.contains("fino") { "fino" } else if st.contains("folgado") { "folgado" } else { "normal" };
-        ("ISO métrica grossa".to_string(), name.to_string(), f.to_string())
-    };
-    let tapped = h.thread.is_some();
-    let head_idx = match &h.kind {
-        HoleKind::Rebaixado { .. } => 1,
-        HoleKind::Escareado { .. } => 2,
-        HoleKind::Contrafurado { .. } => 4,
-        _ => 0,
-    };
-    let before = (norma.clone(), size.clone(), folga.clone(), head_idx, tapped);
-
-    section(ui, "Boca");
-    let opts = [
-        ("furo_simples", "Simples", "Sem rebaixo", head_idx == 0),
-        ("furo_rebaixado", "Rebaixado", "Rebaixo para cabeça cilíndrica (Allen)", head_idx == 1),
-        ("furo_escareado", "Escareado", "Escareado para cabeça chata", head_idx == 2),
-        ("furo_contrafurado", "Contrafurado", "Rebaixo com fundo cônico (counterdrilled)", head_idx == 4),
-    ];
-    let new_head = match icon_choice(ui, &opts) {
-        Some(3) => 4,
-        Some(i) => i,
-        None => head_idx,
-    };
-    section(ui, "Rosca");
-    let opts = [
-        ("furo_simples", "Passagem", "Sem rosca: diâmetro de passagem pela folga", !tapped),
-        ("furo_roscado", "Cosmética", "Broca de rosca + indicação da rosca (leve; vale no desenho e na BOM)", tapped && !h.thread_modeled),
-        ("furo_roscado", "Modelada", "Broca de rosca + sulco helicoidal real (mais pesado)", tapped && h.thread_modeled),
-    ];
-    let mut new_tapped = tapped;
-    match icon_choice(ui, &opts) {
-        Some(0) => new_tapped = false,
-        Some(1) => {
-            new_tapped = true;
-            h.thread_modeled = false;
-        }
-        Some(2) => {
-            new_tapped = true;
-            h.thread_modeled = true;
-        }
-        _ => {}
-    }
-    if new_tapped {
-        crate::editor::check(ui, &mut h.left_hand, "rosca à esquerda");
-    }
-
-    section(ui, "Rosca / fixador");
-    ui.horizontal(|ui| {
-        ui.add_sized([60., 18.], egui::Label::new(tr("Norma")));
-        egui::ComboBox::from_id_salt("norma_rosca").selected_text(norma.clone()).width(190.).show_ui(ui, |ui| {
-            for s in hardware::STANDARDS {
-                if ui.selectable_label(norma == s, s).clicked() && norma != s {
-                    norma = s.to_string();
-                    size = hardware::threads_of(s).next().map(|t| t.name.to_string()).unwrap_or_default();
-                }
-            }
-        });
-    });
-    ui.horizontal(|ui| {
-        ui.add_sized([60., 18.], egui::Label::new(tr("Tamanho")));
-        egui::ComboBox::from_id_salt("tam_rosca").selected_text(size.clone()).width(190.).show_ui(ui, |ui| {
-            for t in hardware::threads_of(&norma) {
-                ui.selectable_value(&mut size, t.name.to_string(), t.name);
-            }
-        });
-    });
-    if !new_tapped {
-        ui.horizontal(|ui| {
-            ui.add_sized([60., 18.], egui::Label::new(tr("Folga")));
-            for f in ["fino", "normal", "folgado"] {
-                ui.radio_value(&mut folga, f.to_string(), f);
-            }
-        });
-    }
-
-    // aplica a escolha (só quando algo mudou, para não sobrescrever ajustes finos)
-    if (norma.clone(), size.clone(), folga.clone(), new_head, new_tapped) != before {
-        let spec = hardware::thread(&size).copied();
-        let metric = spec.and_then(|t| hardware::METRIC.iter().find(|m| (t.major - m.name[1..].parse::<f64>().unwrap_or(0.)).abs() < 1e-6));
-        let fi = match folga.as_str() {
-            "fino" => 0,
-            "folgado" => 2,
-            _ => 1,
-        };
-        if let Some(t) = spec {
-            let clearance = metric.map(|m| m.clearance[fi]).unwrap_or(t.major * [1.05, 1.1, 1.2][fi]);
-            h.diameter = format!("{}", if new_tapped { t.tap_drill } else { (clearance * 100.).round() / 100. });
-            h.thread = new_tapped.then(|| t.name.to_string());
-            h.kind = match new_head {
-                1 => {
-                    let (d, p) = metric.map(|m| (m.cbore_diameter, m.cbore_depth)).unwrap_or((t.major * 1.8, t.major));
-                    HoleKind::Rebaixado { diameter: d.to_string(), depth: p.to_string() }
-                }
-                2 => HoleKind::Escareado { diameter: metric.map(|m| m.csink_diameter).unwrap_or(t.major * 2.).to_string(), angle: "90".into() },
-                4 => {
-                    let (d, p) = metric.map(|m| (m.cbore_diameter, m.cbore_depth)).unwrap_or((t.major * 1.8, t.major));
-                    HoleKind::Contrafurado { diameter: d.to_string(), depth: p.to_string(), angle: "90".into() }
-                }
-                _ => HoleKind::Simples,
-            };
-        }
-        h.standard = Some(format!("{norma}|{size}|{folga}"));
-    }
-
-    extent_ui(ui, "ext_furo", &mut h.depth, vars, &["Cego", "Passante", "Até o próximo", "Até o último", "Até plano", "Até a superfície"], doc, seed);
-
-
-    section(ui, "Fundo e corpo");
-    let mut v = h.tip.is_some();
-    if crate::editor::check(ui, &mut v, "fundo em V (ponta da broca)").changed() {
-        h.tip = v.then(|| "118".to_string());
-    }
-    if let Some(t) = &mut h.tip {
-        expr(ui, "Ângulo da ponta", t, vars, "°");
-    }
-    expr(ui, "Conicidade", &mut h.taper, vars, "°");
-    ui.label(RichText::new(tr("Conicidade ≠ 0 faz um furo cônico (meio-ângulo); 0 = cilíndrico.")).weak().small());
-    // B90: ponta, rosca e folga
-    egui::CollapsingHeader::new(tr("Ponta, rosca e folga")).default_open(false).show(ui, |ui| {
-        if h.tip.is_some() {
-            expr(ui, "Deslocamento da ponta", &mut h.extra.tip_offset, vars, "mm");
-            ui.label(RichText::new(tr("Soma à profundidade do cilindro; negativo faz a ponta em V caber na profundidade pedida.")).weak().small());
-        }
-        if h.thread.is_some() {
-            expr(ui, "Profundidade da rosca", &mut h.extra.thread_depth, vars, "mm");
-            expr(ui, "Folga no fundo", &mut h.extra.thread_relief, vars, "passos");
-            ui.label(RichText::new(tr("Vazio na profundidade da rosca = a do furo menos a folga em passos de rosca.")).weak().small());
-        }
-        if h.tip.is_none() && h.thread.is_none() {
-            ui.label(RichText::new(tr("Ative o fundo em V ou a rosca para ajustar a ponta e a folga.")).weak().small());
-        }
-    });
-
-    egui::CollapsingHeader::new(tr("Ajuste fino das dimensões")).default_open(false).show(ui, |ui| {
-        expr(ui, "Diâmetro", &mut h.diameter, vars, "mm");
-        match &mut h.kind {
-            HoleKind::Simples => {}
-            HoleKind::Rebaixado { diameter, depth } => {
-                expr(ui, "Ø rebaixo", diameter, vars, "mm");
-                expr(ui, "Prof. rebaixo", depth, vars, "mm");
-            }
-            HoleKind::Escareado { diameter, angle } => {
-                expr(ui, "Ø escareado", diameter, vars, "mm");
-                expr(ui, "Ângulo", angle, vars, "°");
-                // B48: ângulos usuais e por norma
-                ui.horizontal_wrapped(|ui| {
-                    for a in fenkra_solidos::hardware::ANGULOS_ESCAREADO {
-                        let atual = angle.trim().parse::<f64>().is_ok_and(|v| (v - a).abs() < 1e-9);
-                        if ui.selectable_label(atual, format!("{a}°")).clicked() {
-                            *angle = format!("{a}");
-                        }
-                    }
-                });
-                egui::ComboBox::from_id_salt("esc_norma").selected_text(tr("Ângulo por norma")).show_ui(ui, |ui| {
-                    for (nome, a) in fenkra_solidos::hardware::NORMAS_ESCAREADO {
-                        if ui.selectable_label(false, format!("{nome} ({a}°)")).clicked() {
-                            *angle = format!("{a}");
-                        }
-                    }
-                });
-            }
-            HoleKind::Contrafurado { diameter, depth, angle } => {
-                expr(ui, "Ø contrafuro", diameter, vars, "mm");
-                expr(ui, "Prof. contrafuro", depth, vars, "mm");
-                expr(ui, "Ângulo do fundo", angle, vars, "°");
-            }
-        }
-        if let Some(t) = &mut h.thread {
-            ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new(tr("Designação")));
-                ui.text_edit_singleline(t);
-            });
-        }
-    });
     target_combo(ui, doc, target);
 }
 
