@@ -773,6 +773,10 @@ c('B375', 2, 'P1', 'Fixadores inteligentes: comando paramétrico com pilhas por 
   ['USR-TESTE'], [], 500, 'Auto + Visual', 'Montagem'),
 c('B376', 3, 'P1', 'Tutoriais por peça, com aula dos comandos', 'Tutoriais com mais detalhe, organizados por objetivo: quero desenhar uma peça assim, com a peça pronta e o passo a passo dos comandos. Cada comando leva à sua aula, incluindo as regras de fixadores inteligentes.',
   ['USR-TESTE'], [], 400, 'Auto + Visual', 'Interface'),
+c('B377', 2, 'P1', 'Tooltip com animação do próprio programa, e opção de tooltip simples', 'Além da sequência de passos, o tooltip mostra uma animação curta do comando feita pelo próprio programa, sem vídeo. Uma opção troca para o tooltip simples, sem tutoriais avançados.',
+  ['USR-TESTE'], [], 400, 'Auto + Visual', 'Interface'),
+c('B378', 2, 'P1', 'Gerenciador único de salvamento e exportação', 'O menu Arquivo fica enxuto: salvar, salvar como e um gerenciador que reúne as exportações de todos os formatos, incluindo nesting, agrupadas.',
+  ['USR-TESTE'], [], 200, 'Auto + Visual', 'Interface'),
 ]
 def main():
     for x in B:

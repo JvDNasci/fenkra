@@ -4,15 +4,15 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 98.0 M tokens (≈ 326 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 98.5 M tokens (≈ 328 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
 | Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 7.3% |
-| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 11.9% |
-| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 100 | ≈ 25040 k | 25.6% |
-| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 83 | ≈ 22650 k | 23.1% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 99 | ≈ 31470 k | 32.1% |
+| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 11.8% |
+| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 102 | ≈ 25640 k | 26.0% |
+| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 83 | ≈ 22650 k | 23.0% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 99 | ≈ 31470 k | 31.9% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
@@ -214,6 +214,8 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 | B371 | P1 | **Importar anotações do 3D para o desenho** — A vista recebe as anotações do 3D com reconhecimento do que vem e como vem: cotas, soldas e notas chegam ligadas ao modelo e atualizam com ele; o que não cabe na folha, como bloco de notas, fica de fora. A pessoa confere a lista antes de importar. | USR-TESTE |  | 350 k | 0.4% | Auto + Visual | a fazer |
 | B372 | P1 | **Roleta de comandos pensada no fluxo de cada bancada** — Revisar os fluxos de modelagem de todas as bancadas e montar o conteúdo padrão da roleta: em cada bancada e modo, os comandos que fazem sentido, e conforme a seleção os de face, aresta, vértice ou superfície. A pessoa continua podendo personalizar. | USR-TESTE |  | 250 k | 0.3% | Auto + Visual | a fazer |
 | B375 | P1 | **Fixadores inteligentes: comando paramétrico com pilhas por ponto, vetor ou furo** — Um comando editável na árvore controla o conjunto: parafuso, diâmetro e pilhas superior e inferior, com quantas arruelas e porcas forem precisas, de qualquer tipo, reordenando por arraste. Alvos por furo, ponto ou vetor, sem exigir furo nas peças, e adicionar mais alvos depois. Regras de diâmetro por cor, cadastráveis em polegada e métrico, com seleção por cor ou por cerca na viewport. O prendedor inserido segue como peça normal. | USR-TESTE |  | 500 k | 0.5% | Auto + Visual | a fazer |
+| B377 | P1 | **Tooltip com animação do próprio programa, e opção de tooltip simples** — Além da sequência de passos, o tooltip mostra uma animação curta do comando feita pelo próprio programa, sem vídeo. Uma opção troca para o tooltip simples, sem tutoriais avançados. | USR-TESTE |  | 400 k | 0.4% | Auto + Visual | a fazer |
+| B378 | P1 | **Gerenciador único de salvamento e exportação** — O menu Arquivo fica enxuto: salvar, salvar como e um gerenciador que reúne as exportações de todos os formatos, incluindo nesting, agrupadas. | USR-TESTE |  | 200 k | 0.2% | Auto + Visual | a fazer |
 | B47 | P1 | **PNEngine: regras de part-number e ambientes** — Acrescentar ao aceite de interação: campo de PN com prévia ao vivo em cinza enquanto os campos são preenchidos, tooltip por máscara com exemplo e teste de falha (se a gravação falhar, a sequência não avança). | CTX-PN | PLM-06 | 120 k | 0.1% | Auto | feito |
 | B48 | P1 | **Furo: ângulo do escareado e casca com escareado** — Ângulo do escareado editável (82°, 90°, 100°, 120°) e por norma; casca deixa de falhar quando o corpo tem furo escareado. | DR-02, BM-SOL | SOL-06 | 80 k | 0.1% | Auto | feito |
 | B93 | P1 | **Salvar como com referências e Empacotar** — Salvar como em 4 modos (renomear/mover, cópia e continuar, cópia e abrir, novo documento) com tabela editável de referências, prefixo/sufixo e conflitos. Empacotar para pasta ou zip (plano/hierárquico, desenhos, linkados, derivados, pular bibliotecas) com manifesto, colisões renomeadas e listadas e verificação reabrindo o pacote. | PESQ-PLM, PESQ-MAC |  | 300 k | 0.3% | Auto | feito |
