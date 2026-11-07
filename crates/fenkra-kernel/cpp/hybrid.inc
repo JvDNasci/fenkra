@@ -113,20 +113,63 @@ std::unique_ptr<Shape> cylinder_surface(double ox, double oy, double oz, double 
     });
 }
 
-// Varredura aberta: perfil (curva) ao longo da guia, sem fechar em sólido.
+namespace {
+
+// Uma tentativa de varredura aberta. `discreto` troca o triedro pelo discreto (guia suave e longa, em
+// que o Frenet corrigido salta entre vizinhos). Falha de qualquer tipo só devolve false com o motivo.
+bool varre_superficie(const TopoDS_Wire& w, const TopoDS_Wire& p, uint8_t mode, bool discreto, TopoDS_Shape& out, const char*& motivo) {
+    bool ok = false;
+    try {
+        protegido("", [&] {
+            BRepOffsetAPI_MakePipeShell mk(w);
+            if (discreto && mode != 2) mk.SetDiscreteMode();
+            else if (mode == 1) mk.SetMode(gp_Dir(0, 0, 1));
+            else mk.SetMode(mode == 2 ? Standard_True : Standard_False);  // 2 = Frenet; 0 = Frenet corrigido
+            mk.Add(p, Standard_False, Standard_False);
+            mk.Build();
+            if (!mk.IsDone() || mk.Shape().IsNull()) {
+                motivo = "não foi possível varrer o perfil ao longo da guia";
+                return;
+            }
+            // `IsDone` não garante o resultado: a aproximação pode sair longe da varredura exata
+            if (mk.ErrorOnSurface() > kErroVarredura || !BRepCheck_Analyzer(mk.Shape()).IsValid()) {
+                motivo = "varredura de superfície: o resultado saiu inválido; simplifique a guia ou divida em trechos";
+                return;
+            }
+            out = mk.Shape();
+            ok = true;
+        });
+    } catch (const std::runtime_error&) {
+        if (!motivo) motivo = "não foi possível varrer o perfil ao longo da guia";
+    } catch (const Standard_Failure&) {
+        if (!motivo) motivo = "não foi possível varrer o perfil ao longo da guia";
+    }
+    return ok;
+}
+
+}  // namespace
+
+// Varredura aberta: perfil (curva) ao longo da guia, sem fechar em sólido. Mesma escada da varredura
+// sólida (K-08): o caminho de sempre primeiro; guia suave que não varre com o Frenet corrigido é refeita
+// com o triedro discreto, inteira e depois dividida em trechos de uma mesma B-spline (sem criar canto).
 std::unique_ptr<Shape> sweep_surface(rust::Slice<const double> profile, rust::Slice<const double> spine, uint8_t mode) {
     return guard("varredura de superfície", [&] {
         TopoDS_Wire p = spine_wire(profile), w = spine_wire(spine);
-        BRepOffsetAPI_MakePipeShell mk(w);
-        if (mode == 1) mk.SetMode(gp_Dir(0, 0, 1));
-        else mk.SetMode(mode == 2 ? Standard_True : Standard_False);  // 2 = Frenet; 0 = Frenet corrigido
-        mk.Add(p, Standard_False, Standard_False);
-        mk.Build();
-        if (!mk.IsDone()) throw std::runtime_error("não foi possível varrer o perfil ao longo da guia");
-        // `IsDone` não garante o resultado: a aproximação pode sair longe da varredura exata
-        if (mk.ErrorOnSurface() > kErroVarredura || !BRepCheck_Analyzer(mk.Shape()).IsValid())
-            throw std::runtime_error("varredura de superfície: o resultado saiu inválido; simplifique a guia ou divida em trechos");
-        return wrap(mk.Shape());
+        TopoDS_Shape out;
+        const char* motivo = nullptr;
+        if (varre_superficie(w, p, mode, false, out, motivo)) return wrap(out);
+        Handle(Geom_BSplineCurve) c = guia_suave(spine);
+        if (!c.IsNull()) {
+            if (varre_superficie(w, p, mode, true, out, motivo)) return wrap(out);
+            for (int k : {4, 8, 16}) {
+                falhar_se_cancelado();
+                if (varre_superficie(guia_dividida(c, k), p, mode, true, out, motivo)) return wrap(out);
+            }
+        }
+        // Frenet puro não tem direção onde a guia perde a curvatura (inflexão ou trecho reto): a escolha da
+        // pessoa fica respeitada, e o erro diz o que fazer
+        if (mode == 2) throw std::runtime_error("não foi possível varrer o perfil com o triedro de Frenet: a guia tem inflexão ou trecho quase reto, onde o Frenet gira sem controle; use o modo Corrigido");
+        throw std::runtime_error(motivo ? motivo : "não foi possível varrer o perfil ao longo da guia");
     });
 }
 
