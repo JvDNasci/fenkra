@@ -94,6 +94,23 @@ struct Corpo {
     malha_id: String,
 }
 
+/// Por que uma peça não vira malha. Na montagem, nenhum dos dois derruba o pacote.
+enum Falta {
+    /// sem corpo e sem erro: peça de referência, como o mestre. Fica de fora sem aviso
+    Esqueleto(String),
+    /// a peça devia ter corpo: comando em erro, arquivo sumido ou ilegível
+    Erro(String),
+}
+
+impl Falta {
+    fn texto(self) -> String {
+        match self {
+            Falta::Esqueleto(nome) => format!("'{nome}' não tem corpo visível para mostrar"),
+            Falta::Erro(e) => e,
+        }
+    }
+}
+
 struct Gerador<'a> {
     opc: &'a Opcoes,
     glb: glb::Construtor,
@@ -113,7 +130,7 @@ impl<'a> Gerador<'a> {
     }
 
     /// Calcula a peça e põe as malhas dos corpos no GLB, uma vez por chave.
-    fn peca(&mut self, chave: &Path, doc: Document) -> Result<Rc<Peca>, String> {
+    fn peca(&mut self, chave: &Path, doc: Document) -> Result<Rc<Peca>, Falta> {
         if let Some(p) = self.pecas.get(chave) {
             return Ok(p.clone());
         }
@@ -168,7 +185,8 @@ impl<'a> Gerador<'a> {
             corpos.push(Corpo { id: b.collector.0, nome, cor: b.color, malha_glb: g, malha_id: id_malha });
         }
         if corpos.is_empty() {
-            return Err(format!("'{}' não tem corpo visível para mostrar", doc.name));
+            let erro = r.status.values().find_map(|s| if let fenkra_solidos::Status::Error(m) = s { Some(m.clone()) } else { None });
+            return Err(erro.map_or_else(|| Falta::Esqueleto(doc.name.clone()), |m| Falta::Erro(format!("comando em erro: {m}"))));
         }
         let p = Rc::new(Peca {
             centro: massa.total.as_ref().map(|t| t.centro),
@@ -230,9 +248,15 @@ impl<'a> Gerador<'a> {
             let (no, m) = match &n.kind {
                 NodeKind::Part { path } => {
                     let cheio = pasta.join(path);
-                    let txt = std::fs::read_to_string(&cheio).map_err(|e| format!("{}: {e}", cheio.display()))?;
-                    let doc = Document::from_json(&txt).map_err(|e| format!("{}: {e}", cheio.display()))?;
-                    let peca = self.peca(&cheio, doc)?;
+                    let lida = std::fs::read_to_string(&cheio).map_err(|e| e.to_string()).and_then(|t| Document::from_json(&t).map_err(|e| e.to_string()));
+                    let peca = match lida.map_err(|e| Falta::Erro(format!("{}: {e}", cheio.display()))).and_then(|doc| self.peca(&cheio, doc)) {
+                        Ok(p) => p,
+                        Err(Falta::Esqueleto(_)) => continue,
+                        Err(Falta::Erro(motivo)) => {
+                            self.avisos.push(format!("'{}' ficou de fora: {motivo}", n.name));
+                            continue;
+                        }
+                    };
                     massa += peca.massa_kg;
                     let no = self.instanciar(&id, &n.name, id_pai, &peca, Some(matriz(&lugar)), n.color, n.visible);
                     (no, peca.massa_kg)
@@ -250,8 +274,17 @@ impl<'a> Gerador<'a> {
                     if pilha.contains(&cheio) {
                         return Err(format!("subconjunto '{}' contém a si mesmo", cheio.display()));
                     }
-                    let txt = std::fs::read_to_string(&cheio).map_err(|e| format!("{}: {e}", cheio.display()))?;
-                    let sub = Assembly::from_json(&txt)?;
+                    let lido = std::fs::read_to_string(&cheio).map_err(|e| e.to_string()).and_then(|t| Assembly::from_json(&t));
+                    let sub = match lido {
+                        Ok(mut s) => {
+                            fenkra_montagem::flexivel::aplicar(&mut s, &asm.flex_de(n.id));
+                            s
+                        }
+                        Err(e) => {
+                            self.avisos.push(format!("'{}' ficou de fora: {}: {e}", n.name, cheio.display()));
+                            continue;
+                        }
+                    };
                     let no = self.glb.no(&n.name, &id, None, &[]);
                     let pos = self.arvore.len();
                     self.arvore.push(json!({"id": id, "pai": id_pai, "nome": n.name, "tipo": "montagem", "no": no, "malha": null, "visivel": n.visible}));
@@ -405,7 +438,7 @@ fn base(tipo: &str, nome: &str) -> Value {
 /// Pacote de uma peça.
 pub fn de_peca(doc: &Document, opc: &Opcoes) -> Result<Pacote, String> {
     let mut g = Gerador::novo(opc);
-    let peca = g.peca(Path::new("<peça>"), doc.clone())?;
+    let peca = g.peca(Path::new("<peça>"), doc.clone()).map_err(Falta::texto)?;
     let raiz = g.instanciar("peca", &doc.name, None, &peca, None, None, true);
     let mut m = base("peca", &doc.name);
     m["atributos"] = Gerador::atributos(&peca, &doc.name);
@@ -483,6 +516,11 @@ pub fn de_arquivo(caminho: &Path, opc: &Opcoes) -> Result<Pacote, String> {
 }
 
 impl Pacote {
+    /// O que ficou de fora do pacote, uma frase por item.
+    pub fn avisos(&self) -> Vec<String> {
+        self.manifesto["avisos"].as_array().map_or_else(Vec::new, |l| l.iter().filter_map(|a| a.as_str().map(String::from)).collect())
+    }
+
     /// O ZIP do `.fkv`: o manifesto primeiro, depois cena e folhas, sempre na mesma ordem.
     pub fn bytes(&self) -> Result<Vec<u8>, String> {
         let mj = serde_json::to_vec(&self.manifesto).map_err(|e| e.to_string())?;

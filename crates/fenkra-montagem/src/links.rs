@@ -134,6 +134,12 @@ pub struct RelatorioLinks {
     pub travados: usize,
     /// peças regravadas
     pub pecas: Vec<PathBuf>,
+    /// subconjuntos regravados: peça que mudou lá dentro move as vizinhas presas a ela
+    pub subconjuntos: Vec<PathBuf>,
+    /// subconjuntos que a atualização não alcançou: sem isto, "0 peças" pareceria sucesso
+    pub ilegiveis: Vec<PathBuf>,
+    /// subconjuntos cujas restrições não fecharam com a forma nova; o arquivo fica como estava
+    pub sem_solucao: Vec<PathBuf>,
 }
 
 impl Assembly {
@@ -331,24 +337,124 @@ fn xf_igual(a: &LinkXf, b: &LinkXf) -> bool {
     a.iter().zip(b).all(|(u, v)| norm(sub(*u, *v)) < 1e-9)
 }
 
-/// Atualiza os links da montagem.
+/// Montagem em que uma peça é atualizada. `dir` acha os componentes dela e `raiz`, a pasta da
+/// montagem aberta, é o segundo lugar onde procurar a origem de um link relativo.
+#[derive(Clone, Copy)]
+struct Contexto<'a> {
+    a: &'a Assembly,
+    dir: Option<&'a Path>,
+    raiz: Option<&'a Path>,
+}
+
+/// Subconjunto lido do disco.
+struct Sub {
+    arquivo: PathBuf,
+    a: Assembly,
+    dir: Option<PathBuf>,
+}
+
+impl Sub {
+    fn contexto<'a>(&'a self, raiz: Option<&'a Path>) -> Contexto<'a> {
+        Contexto { a: &self.a, dir: self.dir.as_deref(), raiz }
+    }
+}
+
+/// Subconjuntos em qualquer nível, cada um antes dos que ele contém. Arquivo já visto não é lido de
+/// novo: é o que segura um ciclo e o subconjunto usado duas vezes.
+fn subconjuntos(a: &Assembly, dir: Option<&Path>, vistos: &mut HashSet<PathBuf>, rel: &mut RelatorioLinks) -> Vec<Sub> {
+    let mut lista = vec![];
+    for n in &a.nodes {
+        let NodeKind::SubAssembly { path } = &n.kind else { continue };
+        let arquivo = full_path(dir, path);
+        if !vistos.insert(canonico(&arquivo)) {
+            continue;
+        }
+        let lido = std::fs::read_to_string(&arquivo).map_err(|e| e.to_string()).and_then(|t| Assembly::from_json(&t));
+        let Ok(sub) = lido else {
+            rel.ilegiveis.push(arquivo);
+            continue;
+        };
+        let pasta = arquivo.parent().map(Path::to_path_buf);
+        let dentro = subconjuntos(&sub, pasta.as_deref(), vistos, rel);
+        lista.push(Sub { arquivo, a: sub, dir: pasta });
+        lista.extend(dentro);
+    }
+    lista
+}
+
+/// Atualiza os links da montagem. Abrir e o botão Atualizar descem pelos subconjuntos: a peça de um
+/// subconjunto recebe a mudança do mestre sem ninguém abrir o `.fka` dela. O gatilho `Posicao` fica
+/// neste nível, porque mover um componente aqui não muda nada dentro de um subconjunto, e ele roda
+/// a cada solução.
 pub fn atualizar(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, gatilho: Gatilho) -> RelatorioLinks {
-    passadas(a, dir, cache, gatilho, None)
+    let mut rel = RelatorioLinks::default();
+    let topo = Contexto { a, dir, raiz: dir };
+    if gatilho == Gatilho::Posicao {
+        passadas(&[topo], cache, gatilho, None, &mut rel);
+        return rel;
+    }
+    let mut vistos = HashSet::new();
+    let mut subs = subconjuntos(a, dir, &mut vistos, &mut rel);
+    let mut todos = vec![topo];
+    todos.extend(subs.iter().map(|s| s.contexto(dir)));
+    passadas(&todos, cache, gatilho, None, &mut rel);
+    // de dentro para fora: a lista traz cada subconjunto antes dos que ele contém
+    for s in subs.iter_mut().rev() {
+        resolver_subconjunto(s, dir, cache, &mut rel);
+    }
+    rel
+}
+
+/// Peça que mudou dentro de um subconjunto carrega as restrições presas às faces dela. Sem resolver
+/// aqui, a forma nova chegaria e as vizinhas ficariam onde estavam, até alguém abrir o `.fka`.
+fn resolver_subconjunto(s: &mut Sub, raiz: Option<&Path>, cache: &mut PartCache, rel: &mut RelatorioLinks) {
+    let dir = s.dir.clone();
+    let antes = s.a.to_json();
+    let parametros = crate::parametros::atualizar(&mut s.a, dir.as_deref(), cache);
+    rel.pendurados += parametros.pendurados.len();
+    if parametros.mudaram.is_empty() && !pecas(&s.a, dir.as_deref()).iter().any(|(_, _, f)| rel.pecas.contains(f)) {
+        return;
+    }
+    crate::load::refresh_refs(&mut s.a, cache, dir.as_deref());
+    if !crate::solve::solve(&mut s.a).converged {
+        rel.sem_solucao.push(s.arquivo.clone());
+        return;
+    }
+    // a solução pode ter movido a origem de um link em contexto
+    passadas(&[s.contexto(raiz)], cache, Gatilho::Posicao, None, rel);
+    let agora = s.a.to_json();
+    if agora != antes && gravar_montagem(&s.arquivo, &agora).is_ok() {
+        rel.subconjuntos.push(s.arquivo.clone());
+    }
+}
+
+/// Grava num arquivo ao lado e troca: uma falha no meio não pode estragar o subconjunto.
+fn gravar_montagem(arquivo: &Path, json: &str) -> std::io::Result<()> {
+    let temp = arquivo.with_extension("fka.tmp");
+    std::fs::write(&temp, json)?;
+    std::fs::rename(&temp, arquivo)
 }
 
 /// Atualiza só um link (botão da lista).
 pub fn atualizar_um(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, comp: Id, ext: Id) -> RelatorioLinks {
-    passadas(a, dir, cache, Gatilho::Manual, Some((comp, ext)))
+    let mut rel = RelatorioLinks::default();
+    passadas(&[Contexto { a, dir, raiz: dir }], cache, Gatilho::Manual, Some((comp, ext)), &mut rel);
+    rel
 }
 
 /// Repete enquanto alguma peça mudar: A → B → C pede duas passadas se C vier antes de B na árvore.
-/// Com o grafo acíclico, o número de peças é teto de sobra.
-fn passadas(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, gatilho: Gatilho, so: Option<(Id, Ext)>) -> RelatorioLinks {
-    let mut rel = RelatorioLinks::default();
-    let alvos = pecas(a, dir);
+/// Com o grafo acíclico, o número de peças é teto de sobra. Peça usada em mais de uma montagem é
+/// atualizada só na primeira: duas posições relativas fariam a cópia alternar sem parar.
+fn passadas(contextos: &[Contexto], cache: &mut PartCache, gatilho: Gatilho, so: Option<(Id, Ext)>, rel: &mut RelatorioLinks) {
+    let mut vistos: HashSet<PathBuf> = HashSet::new();
+    let alvos: Vec<(Contexto, Id, String, PathBuf)> = contextos
+        .iter()
+        .flat_map(|c| pecas(c.a, c.dir).into_iter().map(move |(id, rotulo, full)| (*c, id, rotulo, full)))
+        .filter(|(_, _, _, f)| vistos.insert(f.clone()))
+        .collect();
     for k in 0..=alvos.len() {
         let mut mudou = false;
-        for (comp, rotulo, full) in &alvos {
+        for (ctx, comp, rotulo, full) in &alvos {
             if so.is_some_and(|(c, _)| c != *comp) {
                 continue;
             }
@@ -356,7 +462,7 @@ fn passadas(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, gatilho: Ga
             let Some(mut doc) = cache.documento(full).ok().filter(|d| !d.external.is_empty()).cloned() else { continue };
             let antes = (doc.external.clone(), doc.params.clone());
             for e in antes.0.iter().filter(|e| so.is_none_or(|(_, x)| x == e.id)) {
-                atualizar_link(a, dir, cache, gatilho, *comp, rotulo, full, &mut doc, e, &mut rel, k == 0);
+                atualizar_link(*ctx, cache, gatilho, *comp, rotulo, full, &mut doc, e, rel, k == 0);
             }
             if doc.external != antes.0 || doc.params != antes.1 {
                 if gravar(full, &doc, cache).is_ok() && !rel.pecas.contains(full) {
@@ -369,13 +475,13 @@ fn passadas(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, gatilho: Ga
             break;
         }
     }
-    rel
 }
 
 type Ext = Id;
 
 #[allow(clippy::too_many_arguments)]
-fn atualizar_link(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, gatilho: Gatilho, comp: Id, rotulo: &str, full: &Path, doc: &mut Document, e: &ExternalRef, rel: &mut RelatorioLinks, conta: bool) {
+fn atualizar_link(ctx: Contexto, cache: &mut PartCache, gatilho: Gatilho, comp: Id, rotulo: &str, full: &Path, doc: &mut Document, e: &ExternalRef, rel: &mut RelatorioLinks, conta: bool) {
+    let Contexto { a, dir, raiz } = ctx;
     if e.path.is_empty() || e.state == LinkState::Desativado || crate::furos::e_recurso(e) {
         return;
     }
@@ -392,7 +498,7 @@ fn atualizar_link(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, gatil
         rel.adiados += usize::from(conta);
         return;
     }
-    let src = resolver(full, &e.path, dir);
+    let src = resolver(full, &e.path, raiz);
     // a transformação nasce das posições de agora, se os dois estão nesta montagem
     let novo_xf = e.xform.and_then(|_| {
         let (ns, nt) = (no_da_origem(a, dir, &src, &e.source)?, a.node(comp)?);
@@ -695,6 +801,151 @@ mod tests {
         assert_eq!(rel.pecas.len(), 2, "{rel:?}");
         let d = Document::from_json(&std::fs::read_to_string(dir.join("c.fkp")).unwrap()).unwrap();
         assert!((fenkra_solidos::final_shape(&d).unwrap().bbox().unwrap().0[2] - 30.).abs() < 1e-6);
+    }
+
+    /// Peça com um bloco de 10 × 10 × `ee`, altura vinda do mestre por um valor publicado.
+    fn peca_com_valor(dir: &Path, nome: &str, ee: f64) {
+        let mut d = Document::new(nome);
+        let alvo = d.add_link("Mestre", dir.join("mestre.fkp").to_str().unwrap(), "EE", LinkedGeo::Value(ee));
+        let param = d.params.iter().find(|p| p.id == alvo).unwrap().name.clone();
+        let mut n = 8_100_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let mut s = SketchData::default();
+        s.add_rect(&mut al, [-5., -5.], [5., 5.], false);
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: s }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(param), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+        std::fs::write(dir.join(format!("{nome}.fkp")), d.to_json()).unwrap();
+    }
+
+    fn mestre_ee(dir: &Path, ee: f64) {
+        let mut d = Document::new("Mestre");
+        let id = d.alloc();
+        d.params.push(fenkra_core::Parameter { published: true, ..fenkra_core::Parameter::novo(id, "EE", &ee.to_string(), fenkra_core::Unit::Comprimento) });
+        std::fs::write(dir.join("mestre.fkp"), d.to_json()).unwrap();
+    }
+
+    /// Altura e volume da peça do arquivo.
+    fn altura(arquivo: &Path) -> (f64, f64) {
+        let d = Document::from_json(&std::fs::read_to_string(arquivo).unwrap()).unwrap();
+        let r = fenkra_solidos::recompute(&d);
+        assert!(r.status.values().all(|s| matches!(s, fenkra_solidos::Status::Ok)), "{:?}", r.status);
+        let s = fenkra_solidos::final_shape(&d).expect("forma");
+        let (lo, hi) = s.bbox().unwrap();
+        (hi[2] - lo[2], s.mass().volume)
+    }
+
+    /// Topo com o mestre e um subconjunto, que tem uma peça e outro subconjunto com mais uma.
+    fn topo_com_subconjuntos(dir: &Path) -> Assembly {
+        mestre_ee(dir, 20.);
+        peca_com_valor(dir, "funda", 20.);
+        peca_com_valor(dir, "rasa", 20.);
+        let mut fundo = Assembly::new("Fundo");
+        fundo.add_component("Funda", NodeKind::Part { path: "funda.fkp".into() }, Placement::default(), None);
+        std::fs::write(dir.join("fundo.fka"), fundo.to_json()).unwrap();
+        let mut meio = Assembly::new("Meio");
+        meio.add_component("Rasa", NodeKind::Part { path: "rasa.fkp".into() }, Placement::default(), None);
+        meio.add_component("Fundo", NodeKind::SubAssembly { path: "fundo.fka".into() }, Placement::default(), None);
+        std::fs::write(dir.join("meio.fka"), meio.to_json()).unwrap();
+        let mut topo = Assembly::new("Topo");
+        topo.add_component("Mestre", NodeKind::Part { path: "mestre.fkp".into() }, Placement::default(), None);
+        topo.add_component("Meio", NodeKind::SubAssembly { path: "meio.fka".into() }, Placement::default(), None);
+        topo
+    }
+
+    #[test]
+    fn mudanca_do_mestre_desce_pelos_subconjuntos() {
+        if sem_kernel() {
+            return;
+        }
+        let dir = pasta("descer");
+        let topo = topo_com_subconjuntos(&dir);
+        let (h, v) = altura(&dir.join("funda.fkp"));
+        assert!((h - 20.).abs() < 1e-6 && (v - 2000.).abs() < 1e-6, "{h} {v}");
+
+        mestre_ee(&dir, 35.);
+        let rel = atualizar(&topo, Some(&dir), &mut PartCache::default(), Gatilho::Manual);
+        assert_eq!((rel.pecas.len(), rel.atualizados), (2, 2), "{rel:?}");
+        assert!(rel.ilegiveis.is_empty(), "{rel:?}");
+        for f in ["funda.fkp", "rasa.fkp"] {
+            let (h, v) = altura(&dir.join(f));
+            assert!((h - 35.).abs() < 1e-6 && (v - 3500.).abs() < 1e-6, "{f}: {h} {v}");
+        }
+    }
+
+    #[test]
+    fn mover_um_componente_nao_le_os_subconjuntos() {
+        if sem_kernel() {
+            return;
+        }
+        let dir = pasta("posicao_sub");
+        let topo = topo_com_subconjuntos(&dir);
+        // com o arquivo fora, qualquer leitura apareceria em `ilegiveis`
+        std::fs::remove_file(dir.join("meio.fka")).unwrap();
+        let rel = atualizar(&topo, Some(&dir), &mut PartCache::default(), Gatilho::Posicao);
+        assert_eq!(rel, RelatorioLinks::default());
+    }
+
+    #[test]
+    fn subconjunto_que_nao_abre_vira_aviso() {
+        if sem_kernel() {
+            return;
+        }
+        let dir = pasta("ilegivel");
+        let topo = topo_com_subconjuntos(&dir);
+        std::fs::remove_file(dir.join("meio.fka")).unwrap();
+        let rel = atualizar(&topo, Some(&dir), &mut PartCache::default(), Gatilho::Manual);
+        assert_eq!(rel.ilegiveis, vec![dir.join("meio.fka")], "{rel:?}");
+    }
+
+    #[test]
+    fn subconjunto_em_ciclo_nao_prende_a_atualizacao() {
+        let dir = pasta("ciclo_sub");
+        let mut a = Assembly::new("A");
+        a.add_component("B", NodeKind::SubAssembly { path: "b.fka".into() }, Placement::default(), None);
+        std::fs::write(dir.join("a.fka"), a.to_json()).unwrap();
+        let mut b = Assembly::new("B");
+        b.add_component("A", NodeKind::SubAssembly { path: "a.fka".into() }, Placement::default(), None);
+        std::fs::write(dir.join("b.fka"), b.to_json()).unwrap();
+        let rel = atualizar(&a, Some(&dir), &mut PartCache::default(), Gatilho::Manual);
+        assert_eq!(rel, RelatorioLinks::default());
+    }
+
+    #[test]
+    fn vizinha_presa_a_peca_do_subconjunto_acompanha_a_forma_nova() {
+        if sem_kernel() {
+            return;
+        }
+        // tampa apoiada no topo da peça: a altura vem do mestre, e a tampa tem de subir com ela.
+        // O ponto clicado segue mais perto do topo que das laterais, por isso 20 → 23
+        let dir = pasta("vizinha");
+        mestre_ee(&dir, 20.);
+        peca_com_valor(&dir, "base", 20.);
+        let mut tampa = Document::new("Tampa");
+        let plano = tampa.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "0");
+        bloco_sobre(&mut tampa, plano);
+        std::fs::write(dir.join("tampa.fkp"), tampa.to_json()).unwrap();
+        let mut sub = Assembly::new("Sub");
+        let b = sub.add_component("Base", NodeKind::Part { path: "base.fkp".into() }, Placement::default(), None);
+        sub.node_mut(b).unwrap().fixed = true;
+        let t = sub.add_component("Tampa", NodeKind::Part { path: "tampa.fkp".into() }, Placement { origin: [0., 0., 20.], ..Default::default() }, None);
+        let topo_base = MateRef { comp: b, geom: Geom::Plane { p: [0., 0., 20.], n: [0., 0., 1.] }, pick: Some([0., 0., 20.]), viva: None };
+        let fundo_tampa = MateRef { comp: t, geom: Geom::Plane { p: [0., 0., 0.], n: [0., 0., -1.] }, pick: None, viva: None };
+        sub.add_mate(MateKind::Contact, topo_base, fundo_tampa);
+        assert!(crate::solve::solve(&mut sub).converged);
+        std::fs::write(dir.join("sub.fka"), sub.to_json()).unwrap();
+        let mut topo = Assembly::new("Topo");
+        topo.add_component("Mestre", NodeKind::Part { path: "mestre.fkp".into() }, Placement::default(), None);
+        topo.add_component("Sub", NodeKind::SubAssembly { path: "sub.fka".into() }, Placement::default(), None);
+
+        mestre_ee(&dir, 23.);
+        let rel = atualizar(&topo, Some(&dir), &mut PartCache::default(), Gatilho::Manual);
+        assert_eq!(rel.subconjuntos, vec![dir.join("sub.fka")], "{rel:?}");
+        let lido = Assembly::from_json(&std::fs::read_to_string(dir.join("sub.fka")).unwrap()).unwrap();
+        let z = lido.node(t).unwrap().placement.origin[2];
+        assert!((z - 23.).abs() < 1e-6, "a tampa ficou em {z}");
     }
 
     #[test]

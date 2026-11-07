@@ -44,7 +44,7 @@ pub struct PartCache {
     /// documentos lidos sem calcular: a árvore precisa da lista de comandos, não do sólido
     documentos: HashMap<PathBuf, (Option<SystemTime>, Document)>,
     /// protótipo de cada subconjunto e a assinatura do que entrou nele
-    pub(crate) subconjuntos: HashMap<(PathBuf, String), (u64, Arc<Prototipo>)>,
+    pub(crate) subconjuntos: HashMap<(PathBuf, String), (u64, crate::view::ComponenteVisto)>,
 }
 
 /// Caminho completo de um componente (relativo à pasta da montagem ou absoluto).

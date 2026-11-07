@@ -125,6 +125,9 @@ pub struct Joint {
     /// de onde cada lado veio: quando a peça muda, o sistema da junta anda com o elemento (B99)
     #[serde(default)]
     pub fontes: [Option<MateRef>; 2],
+    /// giro acumulado em graus, com as voltas (ver [`giro_continuo`])
+    #[serde(default)]
+    pub giro: f64,
 }
 
 /// Um extremo da faixa. Desligar não apaga o valor: ligar de novo volta ao que estava.
@@ -347,6 +350,58 @@ fn angle_of(j: &Joint, pa: &Placement, pb: &Placement) -> f64 {
     dot(cross(xa, xb), za).atan2(dot(xa, xb)).to_degrees()
 }
 
+/// Põe `v`, medido em ±180°, na volta mais perto de `referencia`.
+pub(crate) fn desenrolar(referencia: f64, v: f64) -> f64 {
+    referencia + wrap180(v - referencia)
+}
+
+/// Até onde um acoplamento encadeado é seguido: um ciclo de acoplamentos não pode prender a conta.
+const ELOS_MAX: u32 = 16;
+
+/// De que volta partir para ler o giro da junta. Um comando diz a volta sozinho, e o movido por
+/// acoplamento herda a de quem o aciona. O giro guardado fica para quem anda à mão.
+fn referencia_giro(a: &Assembly, j: &Joint, pl: &HashMap<Id, Placement>, vars: &HashMap<String, f64>, drives: bool, elos: u32) -> f64 {
+    let num = |e: &String| expr::eval_str(e, vars).unwrap_or(0.);
+    if drives {
+        if let Some(e) = &j.drive_angle {
+            return j.limites.angulo.prender(num(e));
+        }
+        if let (JointKind::Screw { pitch }, Some(e)) = (&j.kind, &j.drive_len) {
+            let passo = num(pitch);
+            if passo != 0. {
+                return 360. * j.limites.curso.prender(num(e)) / passo;
+            }
+        }
+    }
+    if elos < ELOS_MAX {
+        let motora = a.couplings.iter().filter(|c| c.b == j.id && matches!(c.kind, CouplingKind::Gear)).find_map(|c| {
+            let ja = a.joints.iter().find(|x| x.id == c.a)?;
+            Some(num(&c.ratio) * giro_continuo(a, ja, pl, vars, drives, elos + 1)?)
+        });
+        if let Some(g) = motora {
+            return g;
+        }
+    }
+    j.giro
+}
+
+/// Ângulo da junta com as voltas, relativo à criação. A medida vem de um `atan2` e só existe em
+/// ±180°: isso basta para comparar direções, mas uma razão precisa do giro de verdade. Com 11:82, o
+/// pinhão em 225° é lido como −135°, e a coroa teria de pular de −24° para +18°.
+pub(crate) fn giro_continuo(a: &Assembly, j: &Joint, pl: &HashMap<Id, Placement>, vars: &HashMap<String, f64>, drives: bool, elos: u32) -> Option<f64> {
+    let (medido, _) = measure(j, pl)?;
+    Some(desenrolar(referencia_giro(a, j, pl, vars, drives, elos), medido))
+}
+
+/// Guarda as voltas de cada junta na posição resolvida: a próxima solução parte daqui, mesmo sem
+/// comando, e a volta vai junto no arquivo.
+pub(crate) fn guardar_giros(a: &mut Assembly, pl: &HashMap<Id, Placement>, vars: &HashMap<String, f64>) {
+    let novos: Vec<f64> = a.joints.iter().map(|j| giro_continuo(a, j, pl, vars, true, 0).unwrap_or(j.giro)).collect();
+    for (j, g) in a.joints.iter_mut().zip(novos) {
+        j.giro = g;
+    }
+}
+
 /// Curso de B em relação a A ao longo do eixo de A (mm).
 fn len_of(j: &Joint, pa: &Placement, pb: &Placement) -> f64 {
     let (oa, za, _) = j.a.frame.world(pa);
@@ -463,7 +518,7 @@ impl Assembly {
         let id = self.alloc();
         let name = self.unique_pub(kind.label());
         let pl = |c: Id| self.node(c).map(|n| n.placement).unwrap_or_default();
-        let mut j = Joint { id, name, kind, a, b, angle0: 0., len0: 0., drive_angle: None, drive_len: None, suppressed: false, limites: Limites::default(), zero: [0.; 3], fontes: [None, None] };
+        let mut j = Joint { id, name, kind, a, b, angle0: 0., len0: 0., drive_angle: None, drive_len: None, suppressed: false, limites: Limites::default(), zero: [0.; 3], fontes: [None, None], giro: 0. };
         j.angle0 = angle_of(&j, &pl(a.comp), &pl(b.comp));
         j.len0 = len_of(&j, &pl(a.comp), &pl(b.comp));
         j.zero = posicao_crua(&j, &pl(a.comp), &pl(b.comp));
@@ -601,8 +656,9 @@ pub(crate) fn residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMa
             JointKind::Screw { pitch } => {
                 r.extend(cross(za, zb));
                 r.extend(perp);
-                // avanço = passo × voltas (o ângulo é contínuo dentro de ±180°)
-                r.push(along - j.len0 - num(pitch) * ang() / 360.);
+                // avanço = passo × voltas: a rosca dá muitas voltas, e a medida só vê meia
+                let giro = giro_continuo(a, j, pl, vars, drives, 0).unwrap_or_else(ang);
+                r.push(along - j.len0 - num(pitch) * giro / 360.);
             }
             JointKind::Spherical => r.extend(d),
             JointKind::Planar => {
@@ -657,7 +713,8 @@ pub(crate) fn residuals(a: &Assembly, pl: &HashMap<Id, Placement>, vars: &HashMa
     }
     for c in escopo.acoplamentos.iter().map(|i| &a.couplings[*i]) {
         let (Some(ja), Some(jb)) = (a.joints.iter().find(|j| j.id == c.a), a.joints.iter().find(|j| j.id == c.b)) else { continue };
-        let (Some((aa, la)), Some((ab, lb))) = (measure(ja, pl), measure(jb, pl)) else { continue };
+        let (Some((_, la)), Some((ab, lb))) = (measure(ja, pl), measure(jb, pl)) else { continue };
+        let Some(aa) = giro_continuo(a, ja, pl, vars, drives, 0) else { continue };
         let k = num(&c.ratio);
         let s = r.len();
         r.push(match c.kind {
@@ -1020,6 +1077,116 @@ mod tests {
         let pl: HashMap<Id, Placement> = g.nodes.iter().map(|n| (n.id, n.placement)).collect();
         let (a2, _) = measure(g.joints.iter().find(|x| x.id == j2).unwrap(), &pl).unwrap();
         assert!((a2 + 30.).abs() < 1e-4, "{a2}");
+    }
+
+    /// Base, pinhão e coroa em duas revoluções ligadas por um acoplamento de engrenagem.
+    fn par(razao: &str) -> (Assembly, Id, Id) {
+        let mut g = Assembly::new("par");
+        let base = g.add_component("Base", NodeKind::Part { path: "b".into() }, Placement::default(), None);
+        g.node_mut(base).unwrap().fixed = true;
+        let e1 = g.add_component("Pinhão", NodeKind::Part { path: "e1".into() }, Placement::default(), None);
+        let e2 = g.add_component("Coroa", NodeKind::Part { path: "e2".into() }, Placement { origin: [30., 0., 0.], ..Default::default() }, None);
+        let f = JFrame::from_axis([0.; 3], [0., 0., 1.]);
+        let j1 = g.add_joint(JointKind::Revolute, JRef { comp: base, frame: f }, JRef { comp: e1, frame: f });
+        let j2 = g.add_joint(JointKind::Revolute, JRef { comp: base, frame: JFrame::from_axis([30., 0., 0.], [0., 0., 1.]) }, JRef { comp: e2, frame: f });
+        g.add_coupling(CouplingKind::Gear, j1, j2, razao);
+        (g, j1, j2)
+    }
+
+    fn junta(a: &mut Assembly, j: Id) -> &mut Joint {
+        a.joints.iter_mut().find(|x| x.id == j).unwrap()
+    }
+
+    /// Giro da junta no quadro, pela posição das peças.
+    fn giro_no_quadro(a: &Assembly, j: Id, q: &Frame) -> f64 {
+        measure(a.joints.iter().find(|x| x.id == j).unwrap(), &q.placements).unwrap().0
+    }
+
+    #[test]
+    fn engrenagem_11_82_acompanha_a_volta_inteira_do_pinhao() {
+        let (mut g, j1, j2) = par("-11/82");
+        junta(&mut g, j1).drive_angle = Some("t".into());
+        // duas voltas, de 45° em 45°: passa por 180° e por 360°
+        let quadros = simulate(&mut g, 0., 720., 16);
+        for q in &quadros {
+            assert!(q.ok, "t = {}", q.t);
+            let esperado = -11. / 82. * q.t;
+            let lido = giro_no_quadro(&g, j2, q);
+            assert!((lido - esperado).abs() < 1e-3, "t = {}: {lido}, esperado {esperado}", q.t);
+        }
+        let volta = quadros.iter().find(|q| q.t == 360.).unwrap();
+        assert!((giro_no_quadro(&g, j2, volta) + 48.293).abs() < 1e-2, "uma volta do pinhão");
+    }
+
+    #[test]
+    fn o_giro_guardado_segura_a_coroa_sem_comando() {
+        let (mut g, j1, j2) = par("-11/82");
+        levar_a(&mut g, j1, Grau::Giro, 225.);
+        assert!((junta(&mut g, j1).giro - 225.).abs() < 1e-6, "{}", junta(&mut g, j1).giro);
+        // comando desligado: a próxima solução e o arquivo sabem em que volta o pinhão está
+        let mut lida = Assembly::from_json(&g.to_json()).unwrap();
+        let rep = solve_with(&mut lida, &HashMap::new());
+        assert!(rep.converged, "{rep:?}");
+        let pl: HashMap<Id, Placement> = lida.nodes.iter().map(|n| (n.id, n.placement)).collect();
+        let (coroa, _) = measure(junta(&mut lida, j2), &pl).unwrap();
+        assert!((coroa + 225. * 11. / 82.).abs() < 1e-3, "{coroa}");
+    }
+
+    #[test]
+    fn engrenagens_em_cadeia_herdam_a_volta_da_motora() {
+        let (mut g, j1, j2) = par("-1");
+        let base = g.nodes[0].id;
+        let e3 = g.add_component("Terceira", NodeKind::Part { path: "e3".into() }, Placement { origin: [60., 0., 0.], ..Default::default() }, None);
+        let f = JFrame::from_axis([0.; 3], [0., 0., 1.]);
+        let j3 = g.add_joint(JointKind::Revolute, JRef { comp: base, frame: JFrame::from_axis([60., 0., 0.], [0., 0., 1.]) }, JRef { comp: e3, frame: f });
+        g.add_coupling(CouplingKind::Gear, j2, j3, "-0.25");
+        junta(&mut g, j1).drive_angle = Some("t".into());
+        for q in &simulate(&mut g, 0., 360., 8) {
+            assert!(q.ok, "t = {}", q.t);
+            let (lido, esperado) = (giro_no_quadro(&g, j3, q), 0.25 * q.t);
+            assert!((lido - esperado).abs() < 1e-3, "t = {}: {lido}, esperado {esperado}", q.t);
+        }
+    }
+
+    #[test]
+    fn cremalheira_anda_alem_de_meia_volta_do_pinhao() {
+        let mut g = Assembly::new("cremalheira");
+        let base = g.add_component("Base", NodeKind::Part { path: "b".into() }, Placement::default(), None);
+        g.node_mut(base).unwrap().fixed = true;
+        let pinhao = g.add_component("Pinhão", NodeKind::Part { path: "p".into() }, Placement::default(), None);
+        let barra = g.add_component("Barra", NodeKind::Part { path: "c".into() }, Placement::default(), None);
+        let fz = JFrame::from_axis([0.; 3], [0., 0., 1.]);
+        let fx = JFrame::from_axis([0.; 3], [1., 0., 0.]);
+        let jr = g.add_joint(JointKind::Revolute, JRef { comp: base, frame: fz }, JRef { comp: pinhao, frame: fz });
+        let jp = g.add_joint(JointKind::Prismatic, JRef { comp: base, frame: fx }, JRef { comp: barra, frame: fx });
+        g.add_coupling(CouplingKind::RackPinion, jr, jp, "100");
+        junta(&mut g, jr).drive_angle = Some("t".into());
+        for q in &simulate(&mut g, 0., 540., 12) {
+            assert!(q.ok, "t = {}", q.t);
+            let x = q.placements[&barra].origin[0];
+            assert!((x - 100. * q.t / 360.).abs() < 1e-3, "t = {}: {x}", q.t);
+        }
+    }
+
+    #[test]
+    fn rosca_avanca_por_varias_voltas() {
+        let mut a = Assembly::new("rosca");
+        let base = a.add_component("Base", NodeKind::Part { path: "b".into() }, Placement::default(), None);
+        a.node_mut(base).unwrap().fixed = true;
+        let porca = a.add_component("Porca", NodeKind::Part { path: "p".into() }, Placement::default(), None);
+        let f = JFrame::from_axis([0.; 3], [0., 0., 1.]);
+        let js = a.add_joint(JointKind::Screw { pitch: "2".into() }, JRef { comp: base, frame: f }, JRef { comp: porca, frame: f });
+        junta(&mut a, js).drive_angle = Some("t".into());
+        for q in &simulate(&mut a, 0., 1080., 24) {
+            assert!(q.ok, "t = {}", q.t);
+            let z = q.placements[&porca].origin[2];
+            assert!((z - 2. * q.t / 360.).abs() < 1e-4, "t = {}: {z}", q.t);
+        }
+        // pelo curso: a rosca é levada a 5 voltas de uma vez
+        junta(&mut a, js).drive_angle = None;
+        junta(&mut a, js).drive_len = Some("10".into());
+        assert!(solve_with(&mut a, &HashMap::new()).converged);
+        assert!((a.node(porca).unwrap().placement.origin[2] - 10.).abs() < 1e-4);
     }
 
     #[test]

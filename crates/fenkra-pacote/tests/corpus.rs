@@ -320,6 +320,84 @@ fn pagina_do_plm_embute_os_dois_pacotes_e_o_estado_sem_fechar_a_marca() {
     assert!(so.contains("id=\"fkv-dados-b\" type=\"application/octet-stream\"></script>"));
 }
 
+/// Montagem com uma peça boa e `outra`, gravada em `outra.fkp`.
+fn com_outra_peca(dir: &Path, outra: Option<&Document>) -> Assembly {
+    std::fs::write(dir.join("placa.fkp"), placa().to_json()).unwrap();
+    if let Some(d) = outra {
+        std::fs::write(dir.join("outra.fkp"), d.to_json()).unwrap();
+    }
+    let mut a = Assembly::new("Conjunto");
+    a.add_component("Placa", NodeKind::Part { path: "placa.fkp".into() }, Placement::default(), None);
+    a.add_component("Outra", NodeKind::Part { path: "outra.fkp".into() }, Placement::default(), None);
+    a
+}
+
+fn nomes_na_arvore(p: &Pacote) -> Vec<String> {
+    p.manifesto["arvore"].as_array().unwrap().iter().filter(|e| e["tipo"] == "peca").map(|e| e["nome"].as_str().unwrap().to_string()).collect()
+}
+
+#[test]
+fn esqueleto_fica_de_fora_sem_aviso() {
+    let dir = pasta("esqueleto");
+    let mut mestre = Document::new("MESTRE Desenho mestre");
+    mestre.add_param("EE", "1050", fenkra_core::Unit::Comprimento).unwrap();
+    let a = com_outra_peca(&dir, Some(&mestre));
+    let p = de_montagem(&a, &dir, &Opcoes::default()).unwrap();
+    p.validar().unwrap();
+    assert_eq!(nomes_na_arvore(&p), ["Placa"]);
+    assert!(p.avisos().is_empty(), "{:?}", p.avisos());
+}
+
+#[test]
+fn peca_com_comando_em_erro_vira_aviso_e_o_pacote_sai() {
+    let dir = pasta("comando_erro");
+    let mut ruim = Document::new("Ruim");
+    ruim.add_feature(fenkra_core::FeatureKind::Extrude(fenkra_core::Extrude {
+        sketch: Id(999_999),
+        op: fenkra_core::BoolOp::Add,
+        extent: fenkra_core::Extent::Blind("4".into()),
+        reverse: false,
+        taper: "0".into(),
+        thin: None,
+        dir: None,
+        thin_side: 0,
+        ends: Default::default(),
+    }));
+    let a = com_outra_peca(&dir, Some(&ruim));
+    let p = de_montagem(&a, &dir, &Opcoes::default()).unwrap();
+    p.validar().unwrap();
+    assert_eq!(nomes_na_arvore(&p), ["Placa"]);
+    let avisos = p.avisos();
+    assert_eq!(avisos.len(), 1, "{avisos:?}");
+    assert!(avisos[0].contains("'Outra' ficou de fora"), "{}", avisos[0]);
+}
+
+#[test]
+fn arquivo_sumido_vira_aviso_em_qualquer_nivel() {
+    let dir = pasta("sumido");
+    std::fs::write(dir.join("placa.fkp"), placa().to_json()).unwrap();
+    let mut sub = Assembly::new("Sub");
+    sub.add_component("Sumida", NodeKind::Part { path: "sumida.fkp".into() }, Placement::default(), None);
+    sub.add_component("Placa", NodeKind::Part { path: "placa.fkp".into() }, Placement::default(), None);
+    std::fs::write(dir.join("sub.fka"), sub.to_json()).unwrap();
+    let mut a = Assembly::new("Topo");
+    a.add_component("Sub", NodeKind::SubAssembly { path: "sub.fka".into() }, Placement::default(), None);
+    a.add_component("Fantasma", NodeKind::SubAssembly { path: "nao_existe.fka".into() }, Placement::default(), None);
+    let p = de_montagem(&a, &dir, &Opcoes::default()).unwrap();
+    p.validar().unwrap();
+    assert_eq!(nomes_na_arvore(&p), ["Placa"]);
+    assert_eq!(p.avisos().len(), 2, "{:?}", p.avisos());
+}
+
+#[test]
+fn montagem_so_de_esqueleto_continua_sendo_erro() {
+    let dir = pasta("so_esqueleto");
+    std::fs::write(dir.join("m.fkp"), Document::new("M").to_json()).unwrap();
+    let mut a = Assembly::new("Vazia");
+    a.add_component("M", NodeKind::Part { path: "m.fkp".into() }, Placement::default(), None);
+    assert!(de_montagem(&a, &dir, &Opcoes::default()).unwrap_err().contains("não tem peças com corpo visível"));
+}
+
 #[test]
 fn documento_sem_corpo_e_erro_claro() {
     let d = Document::new("Vazia");

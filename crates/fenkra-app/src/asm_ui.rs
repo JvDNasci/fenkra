@@ -341,6 +341,8 @@ pub struct AsmState {
     pub ctx_act: Option<AsmCtx>,
     /// subconjuntos lidos para a árvore (caminho → linhas)
     sub_rows: std::collections::HashMap<PathBuf, Vec<(usize, String, bool)>>,
+    /// juntas comandáveis de cada subconjunto, lidas uma vez por arquivo
+    sub_juntas: std::collections::HashMap<PathBuf, Vec<fenkra_montagem::flexivel::JuntaFlex>>,
     /// recursos e posições na última sincronização dos furos com as peças
     furos_chave: String,
     /// última sincronização e verificação da série em edição
@@ -447,6 +449,7 @@ impl AsmState {
             aviso: None,
             ctx_act: None,
             sub_rows: Default::default(),
+            sub_juntas: Default::default(),
         }
     }
 
@@ -639,6 +642,7 @@ impl AsmState {
         self.atualizar_links(Gatilho::Posicao);
         self.comp_dof = fenkra_montagem::solve::dof_per_comp(&self.asm);
         self.sub_rows.clear();
+        self.sub_juntas.clear();
         self.manip.esquecer();
         self.dirty = true;
     }
@@ -647,18 +651,31 @@ impl AsmState {
     /// dela precisam ser reencontradas e resolvidas de novo.
     pub fn atualizar_links(&mut self, gatilho: Gatilho) -> links::RelatorioLinks {
         let dir = self.dir();
-        let rel = links::atualizar(&self.asm, dir.as_deref(), &mut self.cache, gatilho);
+        let mut rel = links::atualizar(&self.asm, dir.as_deref(), &mut self.cache, gatilho);
         self.apos_links(&rel);
+        // mover um componente não muda o mestre: isto fica para abrir e para o botão Atualizar
+        if gatilho != Gatilho::Posicao {
+            let p = fenkra_montagem::parametros::atualizar(&mut self.asm, dir.as_deref(), &mut self.cache);
+            rel.pendurados += p.pendurados.len();
+            if !p.mudaram.is_empty() {
+                self.resolver_de_novo();
+            }
+        }
         rel
     }
 
     fn apos_links(&mut self, rel: &links::RelatorioLinks) {
         if !rel.pecas.is_empty() {
-            let dir = self.dir();
-            fenkra_montagem::load::refresh_refs(&mut self.asm, &mut self.cache, dir.as_deref());
-            self.report = fenkra_montagem::solve::solve(&mut self.asm);
-            self.dirty = true;
+            self.resolver_de_novo();
         }
+    }
+
+    fn resolver_de_novo(&mut self) {
+        let dir = self.dir();
+        fenkra_montagem::load::refresh_refs(&mut self.asm, &mut self.cache, dir.as_deref());
+        self.report = fenkra_montagem::solve::solve(&mut self.asm);
+        self.sub_rows.clear();
+        self.dirty = true;
     }
 
     /// Caminho guardado para uma peça: relativo à pasta da montagem quando possível.
@@ -776,6 +793,9 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     if rel.pendurados > 0 {
                         app.toast(format!("{} {}", rel.pendurados, tr("link(s) pendurado(s): a origem ou a publicação sumiu")), true);
                     }
+                    if let Some((msg, erro)) = resumo_links(&rel) {
+                        app.toast(msg, erro);
+                    }
                 }
                 Err(e) => app.toast(format!("Não foi possível abrir: {e}"), true),
             }
@@ -855,6 +875,11 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                 Cmd::AsmSolve => {
                     st.push_undo();
                     st.solve();
+                    // o botão Atualizar também traz o que mudou no mestre, em qualquer nível
+                    let rel = st.atualizar_links(Gatilho::Manual);
+                    if let Some(aviso) = resumo_links(&rel) {
+                        st.aviso = Some(aviso);
+                    }
                 }
                 Cmd::AsmNumber => {
                     st.push_undo();
@@ -1490,6 +1515,11 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
         })
         .inner
         .on_hover_text(tr("clique: propriedades e parâmetros da montagem"));
+    // desenvolvimento: FENKRA_DEMO_FLEX=1 abre o painel do primeiro subconjunto
+    if st.sel.is_none() && !st.props && std::env::var_os("FENKRA_DEMO_FLEX").is_some() {
+        st.sel = st.asm.nodes.iter().find(|n| matches!(n.kind, NodeKind::SubAssembly { .. })).map(|n| n.id);
+        st.props = st.sel.is_some();
+    }
     if tr_resp.clicked() {
         st.sel = None;
         st.props = true;
@@ -1509,16 +1539,20 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             ui.label(RichText::new(tr("relacional")).weak().small()).on_hover_text(tr("projeto relacional: peças novas fixas na origem, forma por links entre peças"));
         }
     });
-    // resumo: definidos × soltos
+    // resumo: fixados × restringidos × soltos
     if st.comp_dof.is_empty() && !st.asm.nodes.is_empty() {
         st.comp_dof = fenkra_montagem::solve::dof_per_comp(&st.asm);
     }
     {
-        let comps: Vec<&Node> = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).collect();
-        let full = comps.iter().filter(|n| n.fixed || st.comp_dof.get(&n.id) == Some(&0)).count();
-        let free = comps.iter().filter(|n| !n.fixed && st.comp_dof.get(&n.id) == Some(&6)).count();
-        let part = comps.len() - full - free;
-        ui.label(RichText::new(format!("■ {full} {}  ◐ {part} {}  ○ {free} {}", tr("definidos"), tr("parciais"), tr("soltos"))).small().weak());
+        let s = fenkra_montagem::solve::situacao(&st.asm, &st.comp_dof);
+        ui.label(RichText::new(format!("📌 {} {}  ■ {} {}  ◐ {} {}  ○ {} {}", s.fixados, tr("fixados"), s.restringidos, tr("restringidos"), s.parciais, tr("parciais"), s.soltos, tr("soltos"))).small().weak())
+            .on_hover_text(tr("Fixado: a posição foi gravada e não prova nada sobre a montagem. Restringido: a posição vem das restrições com as peças vizinhas."));
+        let inuteis = fenkra_montagem::solve::itens_sem_efeito(&st.asm);
+        if !inuteis.is_empty() {
+            let nomes: Vec<&str> = st.asm.mates.iter().filter(|m| inuteis.contains(&m.id)).map(|m| m.name.as_str()).chain(st.asm.joints.iter().filter(|j| inuteis.contains(&j.id)).map(|j| j.name.as_str())).collect();
+            let cor = ui.visuals().warn_fg_color;
+            ui.label(RichText::new(format!("⚠ {} {}", inuteis.len(), tr("sem efeito: os dois lados estão presos"))).small().color(cor)).on_hover_text(format!("{}\n{}", nomes.join(", "), tr("Solte um dos lados para a restrição valer.")));
+        }
     }
     // recursos das peças, subconjuntos e instâncias (para a árvore)
     let info = {
@@ -1680,6 +1714,10 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                             ui.close();
                         }
                     });
+                    if ui.button(tr("Propriedades…")).on_hover_text(tr("Abre o painel do componente: aparência, posição, links e, no subconjunto, o mecanismo.")).clicked() {
+                        *act = Some((n.id, 42));
+                        ui.close();
+                    }
                     if ui.button(if n.fixed { tr("📌 Liberar") } else { tr("📌 Fixar (sem graus de liberdade)") }).clicked() {
                         *act = Some((n.id, 5));
                         ui.close();
@@ -2092,6 +2130,11 @@ pub fn node_action(app: &mut App, id: Id, k: u8) {
             st.renaming = Some(id);
             return;
         }
+        42 => {
+            st.sel = Some(id);
+            st.props = true;
+            return;
+        }
         10 => {
             st.sel = Some(id);
             st.isolate = !st.isolate;
@@ -2218,6 +2261,62 @@ fn inserir_de_volta(st: &mut AsmState, id: Id) -> (String, bool) {
             (e, true)
         }
     }
+}
+
+/// Valor de cada junta do subconjunto nesta montagem (B422). O `.fka` dele não muda.
+fn flex_panel(st: &mut AsmState, ui: &mut egui::Ui, comp: Id) {
+    use fenkra_montagem::kin::Grau;
+    let Some(NodeKind::SubAssembly { path }) = st.asm.node(comp).map(|n| n.kind.clone()) else { return };
+    let dir = st.dir();
+    let full = fenkra_montagem::load::full_path(dir.as_deref(), &path);
+    let juntas = st
+        .sub_juntas
+        .entry(full.clone())
+        .or_insert_with(|| std::fs::read_to_string(&full).ok().and_then(|t| Assembly::from_json(&t).ok()).map_or_else(Vec::new, |s| fenkra_montagem::flexivel::juntas(&s)))
+        .clone();
+    if juntas.is_empty() {
+        return;
+    }
+    crate::editor::section(ui, "Mecanismo nesta montagem");
+    for j in juntas {
+        let giro = j.grau == Grau::Giro;
+        let atual = st.asm.valor_flex(comp, j.id, j.grau);
+        let mut v = atual.unwrap_or(0.);
+        ui.horizontal(|ui| {
+            ui.label(&j.nome);
+            let r = ui.add(crate::ui_ext::dv(&mut v).speed(if giro { 1. } else { 0.5 }).suffix(if giro { "°" } else { " mm" }).max_decimals(2));
+            crate::ui_ext::wheel(ui, &r, &mut v);
+            let r = r.on_hover_text(tr("Põe esta junta do subconjunto na posição pedida, só nesta montagem. O arquivo do subconjunto não muda."));
+            if r.drag_started() || r.gained_focus() {
+                st.push_undo();
+            }
+            if r.changed() {
+                st.asm.definir_flex(comp, j.id, j.grau, Some(v));
+                st.dirty = true;
+                if !fenkra_montagem::flexivel::alcanca(&st.asm, comp, &full) {
+                    st.aviso = Some((tr("O mecanismo não chega a esse valor: ele fica na última posição possível.").to_string(), true));
+                }
+            }
+            if atual.is_some() && ui.small_button("↺").on_hover_text(tr("Volta à posição gravada no subconjunto.")).clicked() {
+                st.push_undo();
+                st.asm.definir_flex(comp, j.id, j.grau, None);
+                st.dirty = true;
+            }
+        });
+    }
+}
+
+/// Frase sobre uma atualização de links, com `true` se algo ficou para trás. Atualização sem efeito
+/// não diz nada: o botão Atualizar é usado o tempo todo.
+fn resumo_links(rel: &links::RelatorioLinks) -> Option<(String, bool)> {
+    let nomes = |l: &[PathBuf]| l.iter().filter_map(|p| p.file_name()).map(|n| n.to_string_lossy().to_string()).collect::<Vec<_>>().join(", ");
+    if !rel.ilegiveis.is_empty() {
+        return Some((format!("{}: {}", tr("Subconjunto não lido, as peças dele não foram atualizadas"), nomes(&rel.ilegiveis)), true));
+    }
+    if !rel.sem_solucao.is_empty() {
+        return Some((format!("{}: {}", tr("As restrições do subconjunto não fecharam com a forma nova"), nomes(&rel.sem_solucao)), true));
+    }
+    (!rel.pecas.is_empty()).then(|| (format!("{} {}", rel.pecas.len(), tr("peça(s) atualizada(s) pelos links")), false))
 }
 
 /// Lista de links da peça, com o estado de cada um e as ações. Devolve o aviso a mostrar.
@@ -2712,6 +2811,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     return;
                 }
                 let id = st.asm.nodes[i].id;
+                flex_panel(st, ui, id);
                 if let Some(msg) = links_panel(st, ui, id) {
                     aviso_links = Some(msg);
                 }
@@ -2961,23 +3061,57 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     crate::editor::check(ui, &mut st.view_only, "modo visualização (sem mover nem restringir)");
                     crate::editor::section(ui, "Parâmetros da montagem");
                     let mut del = None;
+                    let mut soltar = None;
+                    let ligados = st.asm.params_ligados.clone();
                     for (k, p) in st.asm.params.iter_mut().enumerate() {
+                        let ligado = ligados.iter().find(|l| l.nome == p.name);
                         ui.horizontal(|ui| {
-                            ui.add(egui::TextEdit::singleline(&mut p.name).desired_width(80.));
+                            // o vínculo é pelo nome, e o valor vem da peça
+                            ui.add_enabled(ligado.is_none(), egui::TextEdit::singleline(&mut p.name).desired_width(80.));
                             ui.label("=");
-                            ui.add(egui::TextEdit::singleline(&mut p.expr).desired_width(100.));
+                            ui.add_enabled(ligado.is_none(), egui::TextEdit::singleline(&mut p.expr).desired_width(100.));
                             if ui.small_button("✖").clicked() {
                                 del = Some(k);
                             }
                         });
+                        if let Some(l) = ligado {
+                            ui.horizontal(|ui| {
+                                ui.label(RichText::new(format!("← {} · {}", l.arquivo, l.publicacao)).small()).on_hover_text(tr("O valor vem desta peça. Muda ao abrir a montagem e no botão Atualizar."));
+                                if ui.small_button(tr("Soltar")).on_hover_text(tr("O parâmetro guarda o valor de agora e deixa de seguir a peça.")).clicked() {
+                                    soltar = Some(l.nome.clone());
+                                }
+                            });
+                        }
                     }
                     if let Some(k) = del {
-                        st.asm.params.remove(k);
+                        let nome = st.asm.params.remove(k).name;
+                        st.asm.soltar_parametro(&nome);
                     }
-                    if ui.button(tr("+ parâmetro")).clicked() {
-                        let n = st.asm.params.len() + 1;
-                        st.asm.params.push(AsmParam { name: format!("P{n}"), expr: "10".into() });
+                    if let Some(nome) = soltar {
+                        st.asm.soltar_parametro(&nome);
                     }
+                    ui.horizontal(|ui| {
+                        if ui.button(tr("+ parâmetro")).clicked() {
+                            let n = st.asm.params.len() + 1;
+                            st.asm.params.push(AsmParam { name: format!("P{n}"), expr: "10".into() });
+                        }
+                        ui.menu_button(tr("+ parâmetro de peça"), |ui| {
+                            let dir = st.dir();
+                            let lista = fenkra_montagem::parametros::disponiveis(&st.asm, dir.as_deref(), &mut st.cache);
+                            if lista.is_empty() {
+                                ui.label(tr("Nenhuma peça da montagem publica um valor."));
+                            }
+                            for (arquivo, publicacao, valor) in lista {
+                                if ui.button(format!("{arquivo} · {publicacao} = {valor}")).clicked() {
+                                    st.push_undo();
+                                    st.asm.importar_parametro(&arquivo, &publicacao, valor);
+                                    ui.close();
+                                }
+                            }
+                        })
+                        .response
+                        .on_hover_text(tr("Cria um parâmetro que copia o valor publicado por uma peça, como o mestre. Use o nome dele nas cotas das restrições."));
+                    });
                 }
             }
         }

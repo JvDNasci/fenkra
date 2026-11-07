@@ -139,12 +139,13 @@ struct Unidade {
 }
 
 /// Formas das peças de um subconjunto, no sistema de quem o contém.
-fn formas_do_sub(path: &str, dir: Option<&Path>, cache: &mut PartCache, pl: Placement, prefixo: &str, fundo: u32) -> Vec<(String, String, Shape)> {
+fn formas_do_sub(path: &str, flex: &[crate::flexivel::PosicaoFlex], dir: Option<&Path>, cache: &mut PartCache, pl: Placement, prefixo: &str, fundo: u32) -> Vec<(String, String, Shape)> {
     if fundo > 16 {
         return vec![];
     }
     let full = full_path(dir, path);
-    let Some(sub) = std::fs::read_to_string(&full).ok().and_then(|t| Assembly::from_json(&t).ok()) else { return vec![] };
+    let Some(mut sub) = std::fs::read_to_string(&full).ok().and_then(|t| Assembly::from_json(&t).ok()) else { return vec![] };
+    crate::flexivel::aplicar(&mut sub, flex);
     let sub_dir = full.parent().map(|x| x.to_path_buf());
     let mut out = vec![];
     for n in sub.nodes.iter().filter(|n| shown(&sub, n.id) && n.mode == LoadMode::Editavel) {
@@ -156,7 +157,7 @@ fn formas_do_sub(path: &str, dir: Option<&Path>, cache: &mut PartCache, pl: Plac
                 }
             }
             NodeKind::SubAssembly { path } => {
-                for (c, nome, s) in formas_do_sub(path, sub_dir.as_deref(), cache, n.placement, &chave, fundo + 1) {
+                for (c, nome, s) in formas_do_sub(path, &[], sub_dir.as_deref(), cache, n.placement, &chave, fundo + 1) {
                     if let Some(s) = posicionado(s, &pl) {
                         out.push((c, format!("{} / {nome}", n.name), s));
                     }
@@ -181,7 +182,7 @@ fn unidades(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, sub_unico: 
             }
             NodeKind::SubAssembly { path } => {
                 let chave = n.id.0.to_string();
-                let pecas = formas_do_sub(path, dir, cache, n.placement, &chave, 0);
+                let pecas = formas_do_sub(path, &a.flex_de(n.id), dir, cache, n.placement, &chave, 0);
                 if sub_unico {
                     if !pecas.is_empty() {
                         v.push(Unidade { lado: lado(chave, n.name.clone()), formas: pecas.into_iter().map(|p| p.2).collect() });

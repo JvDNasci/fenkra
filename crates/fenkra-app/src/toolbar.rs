@@ -282,7 +282,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("rest_fixar", "Fixar", "Fixar componente", "Tira todos os graus de liberdade: vira a referência global.", Cmd(C::AsmFix))),
             One(it("rest_conjunta", "Fixação conjunta", "Fixação conjunta", "As peças selecionadas passam a se mover como um corpo rígido.", Cmd(C::AsmRigid))),
             One(it("rest_alinhar", "Alinhar", "Alinhamento instantâneo", "Posiciona pelos dois elementos escolhidos sem guardar restrição (sem histórico).", Cmd(C::AsmMate(crate::asm_ui::MateCmd::AlignOnce)))),
-            One(it("rest_atualizar", "Atualizar", "Resolver restrições", "Recalcula as posições de todos os componentes.", Cmd(C::AsmSolve))),
+            One(it("rest_atualizar", "Atualizar", "Resolver restrições", "Recalcula as posições e atualiza os links de todas as peças, também nos subconjuntos.", Cmd(C::AsmSolve))),
             One(it("rest_interferencia", "Interferências", "Verificar interferências", "Abre o painel de interferências: lista por volume, realce no 3D e pares ignorados, salvos na montagem.", Cmd(C::AsmInterf))),
         ],
         Group::Chapa => vec![

@@ -30,6 +30,8 @@ pub mod lod;
 pub mod manipulador;
 pub mod pilhas;
 pub mod proposta;
+pub mod flexivel;
+pub mod parametros;
 pub mod publicacoes;
 pub mod repeticao;
 pub mod simbolos;
@@ -310,6 +312,9 @@ pub struct Mate {
     /// deslocamento em X, Y e Z nos eixos do elemento A, com fórmula (B99). Vazio conta como zero
     #[serde(default)]
     pub desloc: [String; 3],
+    /// engrenagem e cremalheira: giro acumulado de A em graus, com as voltas
+    #[serde(default)]
+    pub giro: f64,
 }
 
 impl Mate {
@@ -547,6 +552,12 @@ pub struct Assembly {
     /// quando cada link das peças atualiza (só os que fogem do automático)
     #[serde(default)]
     pub politicas_link: Vec<links::PoliticaLink>,
+    /// parâmetros que copiam um valor publicado por uma peça (B409)
+    #[serde(default)]
+    pub params_ligados: Vec<parametros::ParamLigado>,
+    /// posição dos mecanismos dos subconjuntos nesta montagem (B422)
+    #[serde(default)]
+    pub flex: Vec<flexivel::PosicaoFlex>,
     /// originais dos itens ligados ao nó de um subconjunto, para inserir de volta
     #[serde(default)]
     pub religacoes: Vec<Religacao>,
@@ -692,7 +703,7 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), uid: fenkra_core::formato::UidDoc::novo(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], conjuntos: vec![], regras_cor: vec![], interf: Default::default(), relational: false, politicas_link: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![], transmissoes: vec![] }
+        Assembly { format_version: 1, name: name.into(), uid: fenkra_core::formato::UidDoc::novo(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], conjuntos: vec![], regras_cor: vec![], interf: Default::default(), relational: false, politicas_link: vec![], params_ligados: vec![], flex: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![], transmissoes: vec![] }
     }
 
     /// Configuração escolhida para o componente (vazio = a ativa da própria peça).
@@ -800,7 +811,7 @@ impl Assembly {
     pub fn add_mate(&mut self, kind: MateKind, a: MateRef, b: MateRef) -> Id {
         let id = self.alloc();
         let name = self.unique(kind.label());
-        self.mates.push(Mate { id, name, kind, a, b, suppressed: false, sentido: Sentido::Livre, lado_invertido: false, desloc: Default::default() });
+        self.mates.push(Mate { id, name, kind, a, b, suppressed: false, sentido: Sentido::Livre, lado_invertido: false, desloc: Default::default(), giro: 0. });
         id
     }
 

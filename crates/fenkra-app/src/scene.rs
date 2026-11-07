@@ -54,8 +54,8 @@ fn linhas_da_posicao(p: &fenkra_montagem::Placement) -> [[f32; 4]; 3] {
 }
 
 /// Cópia da cena para um corpo da montagem.
-pub(crate) fn copia_de(i: &fenkra_montagem::lod::Instancia, col: [f32; 3], mat: [f32; 4], aresta: [f32; 4]) -> (crate::instancias::Copia, (Vec3, Vec3)) {
-    let (lo, hi) = fenkra_montagem::lod::caixa_posta(&i.prototipo.caixa, &i.posicao);
+pub(crate) fn copia_de(i: &fenkra_montagem::lod::Instancia, prototipo: &fenkra_montagem::lod::Prototipo, col: [f32; 3], mat: [f32; 4], aresta: [f32; 4]) -> (crate::instancias::Copia, (Vec3, Vec3)) {
+    let (lo, hi) = fenkra_montagem::lod::caixa_posta(&prototipo.caixa, &i.posicao);
     let (lo, hi) = (Vec3::from(lo), Vec3::from(hi));
     let gpu = crate::instancias::InstanciaGpu { m: linhas_da_posicao(&i.posicao), col: [col[0], col[1], col[2], 1.], mat, aresta };
     (crate::instancias::Copia { gpu, centro: (lo + hi) / 2., raio: (hi - lo).length() / 2., simplificada: i.simplificada }, (lo, hi))
@@ -162,15 +162,20 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             let base = doc.appearance.unwrap_or(Appearance { color: col.color, finish: col.finish, texture: col.texture });
             if let Some(i) = copias.get(&collector) {
                 if shows(!col.visible, env) {
-                    let (rough, metal, alpha) = base.finish.params();
-                    let c = rgb(if base.color == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(base.color) } else { base.color });
-                    let textura = base.texture.filter(|t| (*t as u32) < crate::render::TEX_LAYERS).map(|t| t as f32 + 1.).unwrap_or(0.);
-                    let (copia, (lo, hi)) = copia_de(i, c, [rough, metal, alpha, textura], if body_sel { HILITE } else { edge_col });
-                    grow(&mut bounds, lo);
-                    grow(&mut bounds, hi);
-                    match s.lotes.iter_mut().find(|l| l.prototipo.id == i.prototipo.id) {
-                        Some(l) => l.copias.push(copia),
-                        None => s.lotes.push(crate::instancias::Lote { prototipo: i.prototipo.clone(), copias: vec![copia] }),
+                    // subconjunto de várias aparências: uma cópia por aparência
+                    let inteiro = [(&i.prototipo, base)];
+                    let partes: Vec<_> = i.partes.iter().map(|p| (&p.prototipo, p.aparencia)).collect();
+                    for (prototipo, app) in if partes.is_empty() { &inteiro[..] } else { &partes[..] } {
+                        let (rough, metal, alpha) = app.finish.params();
+                        let c = rgb(if app.color == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(app.color) } else { app.color });
+                        let textura = app.texture.filter(|t| (*t as u32) < crate::render::TEX_LAYERS).map(|t| t as f32 + 1.).unwrap_or(0.);
+                        let (copia, (lo, hi)) = copia_de(i, prototipo, c, [rough, metal, alpha, textura], if body_sel { HILITE } else { edge_col });
+                        grow(&mut bounds, lo);
+                        grow(&mut bounds, hi);
+                        match s.lotes.iter_mut().find(|l| l.prototipo.id == prototipo.id) {
+                            Some(l) => l.copias.push(copia),
+                            None => s.lotes.push(crate::instancias::Lote { prototipo: (*prototipo).clone(), copias: vec![copia] }),
+                        }
                     }
                 }
                 continue;

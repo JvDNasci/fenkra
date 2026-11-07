@@ -184,6 +184,10 @@ impl App {
             Ok(()) => {
                 let kb = std::fs::metadata(&caminho).map_or(bytes.len(), |m| m.len() as usize) / 1024;
                 self.toast(format!("{}: {} ({} KB)", tr("Exportado"), caminho.display(), kb), false);
+                let avisos = pacote.avisos();
+                if !avisos.is_empty() {
+                    self.toast(format!("{}: {}", tr("Faltou no pacote"), avisos.join("; ")), true);
+                }
                 d.gravado = Some(Gravado { caminho, kb });
             }
             Err(e) => self.toast(format!("{}: {e}", tr("Falha ao exportar")), true),

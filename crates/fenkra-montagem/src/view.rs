@@ -4,10 +4,10 @@
 //! mudanças. Também verifica interferências entre componentes.
 
 use crate::load::{full_path, PartCache};
-use crate::lod::{self, Caixa, Instancia, Prototipo};
+use crate::lod::{self, Caixa, Instancia, Parte, Prototipo};
 use crate::*;
 use fenkra_core::trabalho::Controle;
-use fenkra_core::{BodyCollector, Document, Finish, QualidadeMalha};
+use fenkra_core::{Appearance, BodyCollector, Document, Finish, QualidadeMalha};
 use fenkra_kernel::{Bool, Mesh, Shape, Xform};
 use fenkra_solidos::{BodyResult, RecomputeResult};
 use std::hash::{Hash, Hasher};
@@ -87,15 +87,38 @@ pub fn shown(a: &Assembly, id: Id) -> bool {
     true
 }
 
-/// Protótipo de um componente (peça, ou subconjunto inteiro) no sistema dele, com a cor e o volume.
-fn comp_prototipo(kind: &NodeKind, cfg: &str, dir: Option<&Path>, cache: &mut PartCache, with_shape: bool, depth: u32) -> Result<(Arc<Prototipo>, [u8; 3], f64), String> {
+/// Como um componente aparece: a malha no sistema dele e a aparência.
+#[derive(Clone)]
+pub(crate) struct ComponenteVisto {
+    prototipo: Arc<Prototipo>,
+    aparencia: Appearance,
+    /// vazio quando o componente inteiro tem uma aparência só
+    partes: Arc<Vec<Parte>>,
+}
+
+/// Aparência da peça, com a precedência da peça aberta: a da peça, senão a do coletor do corpo. A
+/// textura fica de fora porque o índice dela só vale dentro do documento da peça.
+fn aparencia_da_peca(doc: &Document, r: &RecomputeResult) -> Appearance {
+    let corpo = r.bodies.first();
+    let coletor = corpo.and_then(|b| doc.collectors.iter().find(|c| c.id == b.collector));
+    let cor = corpo.map(|b| b.color).unwrap_or([180, 190, 200]);
+    let a = doc.appearance.unwrap_or(Appearance { color: cor, finish: coletor.map(|c| c.finish).unwrap_or_default(), texture: None });
+    Appearance { texture: None, ..a }
+}
+
+/// A cor do nó vence a da peça; o acabamento continua o da peça.
+fn com_cor_do_no(a: Appearance, cor: Option<[u8; 3]>) -> Appearance {
+    Appearance { color: cor.unwrap_or(a.color), ..a }
+}
+
+/// Protótipo de um componente (peça, ou subconjunto inteiro) no sistema dele, com a aparência e o volume.
+fn comp_prototipo(kind: &NodeKind, cfg: &str, flex: &[crate::flexivel::PosicaoFlex], dir: Option<&Path>, cache: &mut PartCache, with_shape: bool, depth: u32) -> Result<(ComponenteVisto, f64), String> {
     match kind {
         NodeKind::Group => Err("grupo".into()),
         NodeKind::Part { path } => {
             let p = cache.get_config(&full_path(dir, path), with_shape, cfg)?;
             let vol = p.result.bodies.iter().map(|b| b.mass.volume).sum();
-            let color = p.result.bodies.first().map(|b| b.color).unwrap_or([180, 190, 200]);
-            Ok((p.prototipo.clone(), color, vol))
+            Ok((ComponenteVisto { prototipo: p.prototipo.clone(), aparencia: aparencia_da_peca(&p.doc, &p.result), partes: Default::default() }, vol))
         }
         NodeKind::SubAssembly { path } => {
             if depth > 16 {
@@ -103,31 +126,62 @@ fn comp_prototipo(kind: &NodeKind, cfg: &str, dir: Option<&Path>, cache: &mut Pa
             }
             let full = full_path(dir, path);
             let txt = std::fs::read_to_string(&full).map_err(|e| format!("{}: {e}", full.display()))?;
-            let sub = Assembly::from_json(&txt)?;
+            let mut sub = Assembly::from_json(&txt)?;
+            crate::flexivel::aplicar(&mut sub, flex);
             let sub_dir = full.parent().map(|x| x.to_path_buf());
             let mut filhos = vec![];
+            let mut pedacos: Vec<(Arc<Prototipo>, Placement, Appearance)> = vec![];
             let mut vol = 0.;
             let mut assinatura = std::collections::hash_map::DefaultHasher::new();
             for n in sub.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group) && shown(&sub, n.id)) {
-                if let Ok((p, _, v)) = comp_prototipo(&n.kind, sub.config_de(n.id), sub_dir.as_deref(), cache, false, depth + 1) {
-                    p.id.hash(&mut assinatura);
+                if let Ok((c, v)) = comp_prototipo(&n.kind, sub.config_de(n.id), &[], sub_dir.as_deref(), cache, false, depth + 1) {
+                    c.prototipo.id.hash(&mut assinatura);
                     n.placement.origin.iter().chain(n.placement.rot.iter().flatten()).for_each(|x| x.to_bits().hash(&mut assinatura));
-                    filhos.push((p, n.placement));
+                    if c.partes.is_empty() || n.color.is_some() {
+                        pedacos.push((c.prototipo.clone(), n.placement, com_cor_do_no(c.aparencia, n.color)));
+                    } else {
+                        pedacos.extend(c.partes.iter().map(|p| (p.prototipo.clone(), n.placement, p.aparencia)));
+                    }
+                    filhos.push((c.prototipo, n.placement));
                     vol += v;
                 }
             }
+            // a aparência não muda o protótipo da peça: sem isto, pintar um nó não refaria as partes
+            for (_, _, a) in &pedacos {
+                (a.color, a.finish as u8).hash(&mut assinatura);
+            }
             let assinatura = assinatura.finish();
-            let chave = (full, cfg.to_string());
-            if let Some((a, p)) = cache.subconjuntos.get(&chave) {
+            // cada posição do mecanismo tem a própria malha: duas instâncias não disputam o lugar
+            let chave = (full, if flex.is_empty() { cfg.to_string() } else { format!("{cfg}|{flex:?}") });
+            if let Some((a, c)) = cache.subconjuntos.get(&chave) {
                 if *a == assinatura {
-                    return Ok((p.clone(), [150, 170, 210], vol));
+                    return Ok((c.clone(), vol));
                 }
             }
-            let p = prototipo_do_conjunto(&filhos, cache.qualidade());
-            cache.subconjuntos.insert(chave, (assinatura, p.clone()));
-            Ok((p, [150, 170, 210], vol))
+            let q = cache.qualidade();
+            let c = ComponenteVisto { prototipo: prototipo_do_conjunto(&filhos, q), aparencia: pedacos.first().map(|p| p.2).unwrap_or(APARENCIA_VAZIO), partes: Arc::new(partes_por_aparencia(&pedacos, q)) };
+            cache.subconjuntos.insert(chave, (assinatura, c.clone()));
+            Ok((c, vol))
         }
     }
+}
+
+/// Subconjunto sem nenhuma peça para mostrar.
+const APARENCIA_VAZIO: Appearance = Appearance { color: [180, 190, 200], finish: Finish::Acetinado, texture: None };
+
+/// Agrupa os pedaços por aparência. Com uma só, o protótipo do conjunto já serve e não há partes.
+fn partes_por_aparencia(pedacos: &[(Arc<Prototipo>, Placement, Appearance)], q: QualidadeMalha) -> Vec<Parte> {
+    let mut grupos: Vec<(Appearance, Vec<(Arc<Prototipo>, Placement)>)> = vec![];
+    for (p, pos, a) in pedacos {
+        match grupos.iter_mut().find(|g| g.0 == *a) {
+            Some(g) => g.1.push((p.clone(), *pos)),
+            None => grupos.push((*a, vec![(p.clone(), *pos)])),
+        }
+    }
+    if grupos.len() < 2 {
+        return vec![];
+    }
+    grupos.iter().map(|(a, filhos)| Parte { prototipo: prototipo_do_conjunto(filhos, q), aparencia: *a }).collect()
 }
 
 /// Junta os filhos de um subconjunto, um nível por vez; filho sem aquele nível entra com o mais grosso.
@@ -196,9 +250,10 @@ pub fn compor(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: &
         if let Some(sh) = cut {
             // já no mundo: a malha da forma recortada não leva a posição de novo
             if let Ok(m) = fenkra_solidos::tesselar(&sh, &cache.qualidade()) {
-                let color = n.color.unwrap_or_else(|| comp_prototipo(&n.kind, a.config_de(n.id), dir, cache, false, 0).map(|x| x.1).unwrap_or([180, 190, 200]));
+                let aparencia = com_cor_do_no(comp_prototipo(&n.kind, a.config_de(n.id), &a.flex_de(n.id), dir, cache, false, 0).map(|x| x.0.aparencia).unwrap_or(APARENCIA_VAZIO), n.color);
+                let (color, finish) = (aparencia.color, aparencia.finish);
                 let label = if n.number > 0 { format!("{} · {}", n.number, n.name) } else { n.name.clone() };
-                doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish: Finish::default(), texture: None, marker: None, published: false, material: String::new() });
+                doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish, texture: None, marker: None, published: false, material: String::new() });
                 let nf = m.face_ranges.len();
                 let vol = sh.mass().volume;
                 caixas.push(lod::caixa_de(&m).unwrap_or_default());
@@ -206,14 +261,18 @@ pub fn compor(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, errors: &
                 continue;
             }
         }
-        match comp_prototipo(&n.kind, a.config_de(n.id), dir, cache, with_shape, 0) {
-            Ok((p, color, vol)) => {
-                let color = n.color.unwrap_or(color);
+        match comp_prototipo(&n.kind, a.config_de(n.id), &a.flex_de(n.id), dir, cache, with_shape, 0) {
+            Ok((c, vol)) => {
+                let aparencia = com_cor_do_no(c.aparencia, n.color);
+                let (color, finish) = (aparencia.color, aparencia.finish);
+                let p = c.prototipo;
                 let label = if n.number > 0 { format!("{} · {}", n.number, n.name) } else { n.name.clone() };
-                doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish: Finish::default(), texture: None, marker: None, published: false, material: String::new() });
+                doc.collectors.push(BodyCollector { id: n.id, name: label, color, visible, finish, texture: None, marker: None, published: false, material: String::new() });
                 let nf = p.fina().face_ranges.len();
                 caixas.push(lod::caixa_posta(&p.caixa, &n.placement));
-                instancias.push(Instancia { corpo: bodies.len(), prototipo: p.clone(), posicao: n.placement, simplificada: n.simplificada });
+                // a cor do nó pinta o subconjunto inteiro
+                let partes = if n.color.is_some() { Default::default() } else { c.partes };
+                instancias.push(Instancia { corpo: bodies.len(), prototipo: p.clone(), partes, posicao: n.placement, simplificada: n.simplificada });
                 bodies.push(BodyResult {
                     collector: n.id,
                     color,
