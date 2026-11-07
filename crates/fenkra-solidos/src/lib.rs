@@ -37,6 +37,7 @@ pub mod hardware;
 pub mod biblioteca;
 pub mod catalogo;
 pub mod fixadores;
+pub mod rolamentos;
 pub mod engrenagens;
 pub mod engrenagens_dim;
 pub mod transmissao_calc;
@@ -1341,6 +1342,12 @@ impl Ctx<'_> {
                     if let RefKind::Polyline { points, .. } | RefKind::Spline { points, .. } | RefKind::SplineControl { points, .. } = &r.kind {
                         let p = points.get(index).ok_or("o vértice da curva não existe mais")?;
                         return self.point(p, depth + 1);
+                    }
+                    // curva ligada ou isolada: a cópia guarda os vértices publicados, na ordem; sem este
+                    // ramo o vértice caía no início/fim/meio e o trecho saía com comprimento zero
+                    if let RefKind::Linked { .. } | RefKind::Isolated { .. } = &r.kind {
+                        let c = self.curve(&CurveRef::Ref(curve), depth + 1)?;
+                        return c.pts.get(index).copied().ok_or_else(|| format!("a curva '{}' tem {} vértices; o trecho pede o vértice {}", r.name, c.pts.len(), index + 1));
                     }
                 }
                 let c = self.curve(&CurveRef::Ref(curve), depth + 1)?;
@@ -5387,8 +5394,17 @@ impl Ctx<'_> {
                         if *oid == f.id && *oi == i {
                             continue;
                         }
-                        let Some((p, di, dj)) = shared_end(&gi, og) else { continue };
+                        // K-09: ponta que cai no meio de outra linha (T) também é canto; só Aparar e Encaixe
+                        // valem, e é a ponta que chega que para no hospedeiro
+                        let (p, di, dj, em_t) = match shared_end(&gi, og) {
+                            Some((p, di, dj)) => (p, di, dj, false),
+                            None => match t_junction(&gi, og) {
+                                Some((p, di, dj)) => (p, di, dj, true),
+                                None => continue,
+                            },
+                        };
                         let (mode, first, gap) = self.joint_rule((f.id, i, my_k), (*oid, *oi, *ok))?;
+                        let (mode, first) = if em_t { (if matches!(mode, CornerMode::Aparar | CornerMode::Encaixe) { mode } else { CornerMode::Nenhum }, false) } else { (mode, first) };
                         // dobra de tubo: a dobradeira recua as pernas e põe um arco (nada a cortar); os
                         // demais modos cortam em esquadria (os rasgos em V são os itens B328 e B333)
                         let mode = if mode == CornerMode::Dobra {
@@ -5466,7 +5482,7 @@ impl Ctx<'_> {
                                 let hi = g.w.max(g.h) / 2.;
                                 if geo3d::dist(*p, o2.start) < 1e-4 {
                                     o2.ext.0 = o2.ext.0.max(hi);
-                                } else {
+                                } else if geo3d::dist(*p, o2.end) < 1e-4 {
                                     o2.ext.1 = o2.ext.1.max(hi);
                                 }
                                 let prim = self.member_shape(&o2)?;
@@ -6709,6 +6725,23 @@ struct MemberGeom {
     straight: bool,
 }
 
+/// Ponta de `a` que cai no meio do eixo de `b` (junta em T): (ponto, direção para dentro de `a`,
+/// direção de `b`). Fica de fora a ponta que já coincide com uma ponta de `b` (é `shared_end`) e a que
+/// está fora da linha. A tolerância é de 0,05 mm do eixo.
+fn t_junction(a: &MemberGeom, b: &MemberGeom) -> Option<(V3, V3, V3)> {
+    let eixo = geo3d::sub(b.end, b.start);
+    let comp = geo3d::norm(eixo);
+    let u = geo3d::unit(eixo)?;
+    for (pa, da) in [(a.start, a.z), (a.end, geo3d::mul(a.z, -1.))] {
+        let t = geo3d::dot(geo3d::sub(pa, b.start), u);
+        let perto = geo3d::norm(geo3d::sub(geo3d::sub(pa, b.start), geo3d::mul(u, t)));
+        if perto < 0.05 && t > 1e-4 && t < comp - 1e-4 && geo3d::dot(da, u).abs() < 1. - 1e-6 {
+            return Some((pa, da, b.z));
+        }
+    }
+    None
+}
+
 /// Ponta comum de dois membros: (ponto, direção para dentro do primeiro, do segundo).
 fn shared_end(a: &MemberGeom, b: &MemberGeom) -> Option<(V3, V3, V3)> {
     let close = |p: V3, q: V3| geo3d::dist(p, q) < 1e-4;
@@ -7863,6 +7896,54 @@ mod tests {
         assert!(near(v2 - v1, 0.5 * 60. * 60. * 6., 1e-3), "reforço {}", v2 - v1);
     }
 
+    /// K-09 (B387): travessa com canto Encaixe cuja ponta cai no MEIO do hospedeiro (junta em T) também
+    /// é recortada; antes só a ponta coincidente com uma ponta do hospedeiro era tratada.
+    #[test]
+    fn encaixe_em_t_no_meio_da_longarina_recorta_a_ponta() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        let mk = |d: &mut Document, a: V3, b: V3, corner: CornerMode| {
+            let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") });
+            d.add_feature(FeatureKind::StructMember(StructMember {
+                paths: vec![CurveRef::Ref(l)],
+                family: s("Tubo quadrado"),
+                designation: s("40x3"),
+                kind: SectionKind::TuboQuadrado,
+                dims: vec![s("40"), s("3")],
+                anchor: 0,
+                angle: s("0"),
+                off_x: s("0"),
+                off_y: s("0"),
+                ext1: s("0"),
+                ext2: s("0"),
+                corner,
+                gap: s("0"),
+                joints: vec![],
+                material: String::new(),
+                mirror: false,
+            }));
+        };
+        let pr = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b.abs().max(1.);
+        let total = |c: CornerMode| {
+            let mut d = Document::new("t");
+            mk(&mut d, [0., 0., 0.], [1000., 0., 0.], CornerMode::MeiaEsquadria);
+            mk(&mut d, [500., 0., 0.], [500., 300., 0.], c);
+            let r = recompute(&d);
+            r.bodies.iter().map(|b| b.mass.volume).sum::<f64>()
+        };
+        let a = 40. * 40. - 34. * 34.;
+        let sem = total(CornerMode::Nenhum);
+        assert!(pr(sem, a * 1300., 1e-3), "sem tratamento a barra entra no hospedeiro: {sem}");
+        for c in [CornerMode::Encaixe, CornerMode::Aparar] {
+            let com = total(c);
+            assert!(sem - com > a * 15., "{c:?}: a ponta devia parar na face do hospedeiro ({com} contra {sem})");
+        }
+        // meia-esquadria não vale em T: continua como estava
+        assert!(pr(total(CornerMode::MeiaEsquadria), sem, 1e-6));
+    }
+
     #[test]
     fn estrutura_agrupa_pecas_iguais() {
         if !fenkra_kernel::AVAILABLE {
@@ -8334,6 +8415,53 @@ mod tests {
         let a = 40. * 40. - 34. * 34.;
         assert!((v - a * 180.).abs() < 1e-3 * a * 180., "dois trechos retos em meia-esquadria: {v} × {}", a * 180.);
         assert_eq!(cut_list(&d).iter().map(|r| r.count).sum::<usize>(), 2);
+    }
+
+    /// K-02 (B380): polilinha ligada (aqui, isolada: mesma cópia de vértices) com `CurveRef::Segment`
+    /// como caminho do membro. Antes o vértice 1 virava o fim da curva e o trecho saía de comprimento zero.
+    #[test]
+    fn trecho_de_polilinha_ligada_vira_membro() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let s = |x: &str| x.to_string();
+        let mut d = Document::new("ligada");
+        let pl = d.add_geometry(RefKind::Isolated { geo: LinkedGeo::Curve(vec![[0., 0., 0.], [100., 0., 0.], [100., 0., 80.]]) });
+        let mk = |d: &mut Document, index: usize| {
+            d.add_feature(FeatureKind::StructMember(StructMember {
+                paths: vec![CurveRef::Segment { curve: pl, index }],
+                family: s("Tubo quadrado"),
+                designation: s("40x3"),
+                kind: SectionKind::TuboQuadrado,
+                dims: vec![s("40"), s("3")],
+                anchor: 0,
+                angle: s("0"),
+                off_x: s("0"),
+                off_y: s("0"),
+                ext1: s("0"),
+                ext2: s("0"),
+                corner: CornerMode::Nenhum,
+                gap: s("0"),
+                joints: vec![],
+                material: String::new(),
+                mirror: false,
+            }))
+        };
+        let (m0, m1, m2) = (mk(&mut d, 0), mk(&mut d, 1), mk(&mut d, 5));
+        let r = recompute(&d);
+        assert!(matches!(r.status[&m0], Status::Ok), "{:?}", r.status[&m0]);
+        assert!(matches!(r.status[&m1], Status::Ok), "{:?}", r.status[&m1]);
+        let a = 40. * 40. - 34. * 34.;
+        let v: f64 = r.bodies.iter().map(|b| b.mass.volume).sum();
+        assert!((v - a * 180.).abs() < 1e-3 * a * 180., "trechos de 100 e 80 mm: {v}");
+        let len: Vec<f64> = { let mut l: Vec<f64> = cut_list(&d).iter().map(|c| c.length).collect(); l.sort_by(|a, b| a.total_cmp(b)); l };
+        assert_eq!(len.len(), 2, "{len:?}");
+        assert!((len[0] - 80.).abs() < 1e-6 && (len[1] - 100.).abs() < 1e-6, "{len:?}");
+        // vértice que não existe: a mensagem diz qual
+        match &r.status[&m2] {
+            Status::Error(m) => assert!(m.contains("vértices"), "{m}"),
+            o => panic!("esperava erro, veio {o:?}"),
+        }
     }
 
     #[test]

@@ -1,0 +1,67 @@
+{
+ "id": "din985",
+ "nome": "Porca autotravante com anel de poliamida (sextavada, baixa)",
+ "norma": "DIN 985",
+ "revisao": "1987",
+ "versao": 1,
+ "gerador": "porca",
+ "tipo": "porca",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Frank's Fasteners — porcas de travamento sextavadas DIN 985",
+   "url": "https://www.franksfasteners.co.uk/pages/hexagon-nylon-locking-nuts-din-985"
+  },
+  {
+   "rotulo": "McMaster-Carr — porcas DIN 985",
+   "url": "https://www.mcmaster.com/products/din-985-nuts/"
+  },
+  {
+   "rotulo": "PGB Europe — nota sobre a substituição pela ISO 10511 (M10 e M12 mudam de chave)",
+   "url": "https://www.pgb-europe.com/en-gb/74174/hexagon-locknut-8-din-985-m6-zp-80pc"
+  }
+ ],
+ "campos": [
+  "s",
+  "m"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "M6",
+   "valores": {
+    "s": 10,
+    "m": 6
+   },
+   "confirmado_por": 2,
+   "nota": "s e altura total h: duas fontes concordam (revendedores); o anel de poliamida não é modelado, a peça é a porca sextavada na altura total h. A edição atual (ISO 10511) tem chave 16 e 18 mm em M10 e M12 e alturas diferentes; esta família segue a DIN 985, ainda a mais vendida"
+  },
+  {
+   "designacao": "M8",
+   "valores": {
+    "s": 13,
+    "m": 8
+   },
+   "confirmado_por": 2,
+   "nota": "s e altura total h: duas fontes concordam (revendedores); o anel de poliamida não é modelado, a peça é a porca sextavada na altura total h. A edição atual (ISO 10511) tem chave 16 e 18 mm em M10 e M12 e alturas diferentes; esta família segue a DIN 985, ainda a mais vendida"
+  },
+  {
+   "designacao": "M10",
+   "valores": {
+    "s": 17,
+    "m": 10
+   },
+   "confirmado_por": 2,
+   "nota": "s e altura total h: duas fontes concordam (revendedores); o anel de poliamida não é modelado, a peça é a porca sextavada na altura total h. A edição atual (ISO 10511) tem chave 16 e 18 mm em M10 e M12 e alturas diferentes; esta família segue a DIN 985, ainda a mais vendida"
+  },
+  {
+   "designacao": "M12",
+   "valores": {
+    "s": 19,
+    "m": 12
+   },
+   "confirmado_por": 2,
+   "nota": "s e altura total h: duas fontes concordam (revendedores); o anel de poliamida não é modelado, a peça é a porca sextavada na altura total h. A edição atual (ISO 10511) tem chave 16 e 18 mm em M10 e M12 e alturas diferentes; esta família segue a DIN 985, ainda a mais vendida"
+  }
+ ]
+}

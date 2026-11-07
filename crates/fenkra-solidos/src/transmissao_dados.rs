@@ -14,7 +14,8 @@
 //! - F3: listagens de distribuidor (RS) e tabela do fabricante China Transmissions para a série ISO 606 (B);
 //! - F4: Wikipedia, "V-belt" (seções clássicas);
 //! - F5: folha de dados DIN 2215 do distribuidor Maedler e tabela de seções da Texas Belting;
-//! - F6: zzr-parts (tabela de passos de correias dentadas).
+//! - F6: zzr-parts (tabela de passos de correias dentadas);
+//! - F7: tabela de correntes de kart de revendedor (gokartsusa), ficha da corrente 219 do fabricante CZ (speedwear), tabela de tamanhos de corrente de moto (cyclechaos) e especificações de revendedor de peças (monsterscooterparts).
 
 use std::f64::consts::PI;
 
@@ -74,6 +75,8 @@ pub const CORRENTES: &[Corrente] = &[
     Corrente { designacao: "ISO 06B-1", norma: "ISO 606", passo: 9.525, rolo: 6.35, largura: 5.72, conferencia: Conflito, fontes: "F3", nota: "o rolo aparece como 6,35 e como 5 mm conforme a fonte" },
     Corrente { designacao: "ISO 08B-1", norma: "ISO 606", passo: 12.7, rolo: 8.51, largura: 7.75, conferencia: DuasFontes, fontes: "F3 (distribuidor RS e fabricante)", nota: "" },
     Corrente { designacao: "ISO 10B-1", norma: "ISO 606", passo: 15.875, rolo: 10.16, largura: 9.65, conferencia: UmaFonte, fontes: "F3 (fabricante)", nota: "só uma tabela traz as três medidas" },
+    Corrente { designacao: "428", norma: "corrente de moto e kart", passo: 12.7, rolo: 8.51, largura: 7.75, conferencia: DuasFontes, fontes: "F7 (tabela de kart e listagem de peças)", nota: "passo e rolo concordam em tabelas de kart e de moto; largura 7,75 em duas fontes, uma terceira dá 0,313 pol (7,95 mm)" },
+    Corrente { designacao: "219", norma: "corrente de kart", passo: 7.774, rolo: 4.59, largura: 0., conferencia: Conflito, fontes: "F7 (tabela de kart e ficha de fabricante)", nota: "passo e rolo concordam; largura interna 4,6 mm numa fonte e 5,00 mm noutra, sem valor único" },
 ];
 
 pub fn corrente(designacao: &str) -> Option<&'static Corrente> {
@@ -199,7 +202,11 @@ mod tests {
     #[test]
     fn so_linhas_conferidas_em_duas_fontes_geram() {
         let lib: Vec<_> = CORRENTES.iter().filter(|c| c.liberada()).map(|c| c.designacao).collect();
-        assert_eq!(lib, ["ANSI 50", "ANSI 60", "ANSI 80", "ISO 08B-1"]);
+        assert_eq!(lib, ["ANSI 50", "ANSI 60", "ANSI 80", "ISO 08B-1", "428"]);
+        // B354: a 219 tem passo e rolo conferidos, mas a largura interna diverge (4,6 x 5,00 mm)
+        let c219 = corrente("219").unwrap();
+        assert_eq!((c219.passo, c219.rolo, c219.largura), (7.774, 4.59, 0.));
+        assert!(!c219.liberada() && c219.conferencia == Conferencia::Conflito);
         // linhas com uma fonte ou conflito ficam na lista, rotuladas, mas não liberadas
         assert!(!corrente("ANSI 40").unwrap().liberada());
         assert!(!corrente("ISO 06B-1").unwrap().liberada());

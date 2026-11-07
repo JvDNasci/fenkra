@@ -411,7 +411,7 @@ mod testes {
 
     #[test]
     fn busca_ignora_acento_caixa_e_acha_pela_norma_e_pela_classe() {
-        assert_eq!(achar("PORCA").len(), 3);
+        assert_eq!(achar("PORCA").len(), 4);
         assert_eq!(achar("iso 4762").len(), 1);
         assert!(achar("8.8").iter().any(|(i, _)| i == "iso4762"));
         assert!(achar("inoxidavel").is_empty(), "nenhuma família é inox hoje");
@@ -425,7 +425,7 @@ mod testes {
         assert_eq!(f(Filtro { sistema: Some(Sistema::Polegada), ..Default::default() }), 0);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Allen), ..Default::default() }), 2);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Sextavada), ..Default::default() }), 3);
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 4);
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 5);
         assert_eq!(f(Filtro { material: Some("Aço".into()), ..Default::default() }), familias().len());
         assert_eq!(f(Filtro { material: Some("Aço inoxidável".into()), ..Default::default() }), 0);
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 1);

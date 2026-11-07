@@ -448,6 +448,18 @@ mod tests {
     }
 
     #[test]
+    fn porca_autotravante_din985_gera_na_altura_total() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // M8: chave 13 e altura total 8; volume do sextavado menos o furo de Ø8 (a rosca não entra)
+        let (v, lo, hi) = medir(&fixador_documento("din985", "M8", None).unwrap());
+        assert!((hi[2] - lo[2] - 8.).abs() < 1e-3 && (hi[1] - lo[1] - 13.).abs() < 1e-3, "{lo:?} {hi:?}");
+        let esperado = (3_f64.sqrt() / 2. * 169. - PI / 4. * 64.) * 8.;
+        assert!((v - esperado).abs() / esperado < 0.03, "volume {v} vs {esperado}");
+    }
+
+    #[test]
     fn todos_os_tamanhos_de_todas_as_familias_geram() {
         if !fenkra_kernel::AVAILABLE {
             return;
