@@ -53,6 +53,22 @@ pub struct DwgRough {
 }
 
 impl DwgRough {
+    /// Campos do símbolo de rugosidade do 3D levados para a nota da folha (B371).
+    pub fn de_pmi(x: &fenkra_core::pmi_acabamento::RugExtra, processo: &str) -> Self {
+        use fenkra_core::pmi_acabamento::Remocao;
+        DwgRough {
+            tipo: match x.remocao {
+                Remocao::Qualquer => RugTipo::Qualquer,
+                Remocao::Obrigatoria => RugTipo::ComRemocao,
+                Remocao::Proibida => RugTipo::SemRemocao,
+            },
+            metodo: processo.to_string(),
+            sobremedida: x.sobremetal.clone(),
+            direcao: x.lay.simbolo().to_string(),
+            amostragem: x.amostragem.clone(),
+        }
+    }
+
     /// Nenhum campo extra: o símbolo é o de sempre.
     pub fn basico(&self) -> bool {
         *self == DwgRough::default()
