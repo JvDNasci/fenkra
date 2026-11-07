@@ -71,9 +71,6 @@ pub fn sc_quadro(u: &[(String, LinkedGeo)]) -> Assembly {
     for y in [lq / 2., 0., -lq / 2.] {
         peca(&mut a, "CH-08", pl([0., y, zq + 30.]));
     }
-    for s in [1., -1.] {
-        peca(&mut a, "CH-09", pl([ee - 40., s * valor(u, "PM") / 2., valor(u, "Z_EIXO_D")]));
-    }
     for x in [0., 1., 2., 3.] {
         peca(&mut a, "CH-10", pl([x * 40. - 60., 0., 0.]));
     }
@@ -130,8 +127,12 @@ pub fn sc_direcao(u: &[(String, LinkedGeo)]) -> Result<Direcao, String> {
     let (ee, pm, bd, zd) = (valor(u, "EE"), valor(u, "PM"), valor(u, "BD"), valor(u, "Z_EIXO_D"));
     let caster = valor(u, "CASTER");
     let mut a = Assembly::new("SC-DIRECAO");
-    let base = peca(&mut a, "QUADRO", pl([0.; 3]));
+    let base = peca(&mut a, "CH-09", pl([0.; 3]));
     fixa(&mut a, base);
+    peca(&mut a, "CH-09", pl([ee - 28., -pm / 2., zd]));
+    a.node_mut(base).unwrap().placement = pl([ee - 28., pm / 2., zd]);
+    let bo = a.lugar(base).unwrap().origin;
+    let loc = |p: V3| -> V3 { [p[0] - bo[0], p[1] - bo[1], p[2] - bo[2]] };
     let pino_e: V3 = [ee, pm / 2., zd];
     let pino_d: V3 = [ee, -pm / 2., zd];
     let eixo_pino: V3 = [-caster.to_radians().sin(), 0., caster.to_radians().cos()];
@@ -164,10 +165,10 @@ pub fn sc_direcao(u: &[(String, LinkedGeo)]) -> Result<Direcao, String> {
     let vol = peca(&mut a, "DI-01", Placement { origin: topo, rot });
     let cubo = peca(&mut a, "DI-02", Placement { origin: [topo[0] - ucol[0] * 14., topo[1], topo[2] - ucol[2] * 14.], rot });
     a.add_rigid(vec![coluna, placa, vol, cubo]);
-    let junta = a.add_joint(JointKind::Revolute, eixo(base, b, ucol), eixo(coluna, [0.; 3], [0., 0., 1.]));
+    let junta = a.add_joint(JointKind::Revolute, eixo(base, loc(b), ucol), eixo(coluna, [0.; 3], [0., 0., 1.]));
     a.joints.iter_mut().find(|j| j.id == junta).unwrap().drive_angle = Some("t".into());
-    a.add_joint(JointKind::Revolute, eixo(base, pino_e, eixo_pino), eixo(manga_e, [0.; 3], [0., 0., 1.]));
-    a.add_joint(JointKind::Revolute, eixo(base, pino_d, eixo_pino), eixo(manga_d, [0.; 3], [0., 0., 1.]));
+    a.add_joint(JointKind::Revolute, eixo(base, loc(pino_e), eixo_pino), eixo(manga_e, [0.; 3], [0., 0., 1.]));
+    a.add_joint(JointKind::Revolute, eixo(base, loc(pino_d), eixo_pino), eixo(manga_d, [0.; 3], [0., 0., 1.]));
     // tirantes: bola nas duas pontas
     for (s, ponta, manga, local) in [(1., ponta_e, manga_e, [-90., -35., 0.]), (-1., ponta_d, manga_d, [-90., 35., 0.])] {
         let f = a.lugar(placa).unwrap().point([s * 45., -45., 5.]);
@@ -258,7 +259,7 @@ pub fn sc_freio(u: &[(String, LinkedGeo)]) -> Assembly {
     peca(&mut a, "EX-10", pl([0., 182., zt]));
     peca(&mut a, "EX-10", pl([0., 200., zt]));
     peca(&mut a, "EX-11", pl([560., 170., 80.]));
-    peca(&mut a, "EX-12", pl([0.; 3]));
+    peca(&mut a, "EX-12B", pl([0.; 3]));
     let ee = valor(u, "EE");
     peca(&mut a, "PO-05", pl([ee + 60., 90., 60.]));
     peca(&mut a, "PO-06", pl([ee + 60., -90., 60.]));
@@ -350,9 +351,7 @@ pub fn kart(u: &[(String, LinkedGeo)], r: &mut Reg) {
         let a = Assembly::from_json(&std::fs::read_to_string(dir.join(format!("{s}.fka"))).unwrap()).unwrap();
         for n in a.nodes.iter() {
             if let NodeKind::Part { path } = &n.kind {
-                if s == "SC-DIRECAO" && path == "QUADRO.fkp" {
-                    continue;
-                }
+                let _ = path;
                 let id = plano.add_component(&n.name, n.kind.clone(), n.placement, None);
                 plano.node_mut(id).unwrap().fixed = true;
             }
@@ -366,8 +365,23 @@ pub fn kart(u: &[(String, LinkedGeo)], r: &mut Reg) {
     let mut cache = PartCache::default();
     let ach = analisar(&k, Some(&dir), &mut cache, &OpcoesInterf { sub_unico: false, ..Default::default() });
     println!("interferência: {} achados em {:.1}s", ach.len(), t.elapsed().as_secs_f64());
-    for x in ach.iter().take(30) {
+    teste_invertido();
+    for x in ach.iter().take(8) {
         println!("  {} x {}: {:.0} mm³", x.a.nome, x.b.nome, x.volume);
+    }
+}
+
+/// Interferência falsa: chaveta solta no furo da peça, sem encostar.
+pub fn teste_invertido() {
+    let dir = modelo();
+    for cod in ["RD-02", "RD-01", "EX-05", "EX-02", "RD-04"] {
+        let mut a = Assembly::new("T");
+        let c = peca(&mut a, cod, pl([0.; 3]));
+        fixa(&mut a, c);
+        peca(&mut a, "EX-04", pl([0., if cod == "EX-05" { 36. } else { 0. }, 0.]));
+        let mut cache = PartCache::default();
+        let ach = analisar(&a, Some(&dir), &mut cache, &OpcoesInterf::default());
+        println!("invertido {cod}: {:?}", ach.iter().map(|x| x.volume.round()).collect::<Vec<_>>());
     }
 }
 

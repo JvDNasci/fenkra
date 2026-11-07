@@ -145,6 +145,48 @@ pub fn pmi(r: &mut Reg) {
     }
 }
 
+/// Toda peça ganha nota simples e legenda; todo conjunto ganha número de item e balões.
+pub fn pmi_geral(r: &mut Reg) {
+    let dir = modelo();
+    let (mut pecas, mut baloes) = (0, 0);
+    for e in std::fs::read_dir(&dir).unwrap().flatten() {
+        let p = e.path();
+        let nome = p.file_stem().unwrap().to_string_lossy().to_string();
+        match p.extension().and_then(|x| x.to_str()) {
+            Some("fkp") if nome != "MESTRE" && !nome.starts_with("CV-") => {
+                let mut d = Document::from_json(&std::fs::read_to_string(&p).unwrap()).unwrap();
+                if !d.pmi.iter().any(|x| matches!(x.kind, PmiKind::TitleBlock { .. })) {
+                    anota(&mut d, "Legenda", PmiKind::TitleBlock { template: "{codigo} {descricao} {material} {massa}".into() }, vec![[0.; 3]], "", None);
+                    anota(&mut d, "Nota", PmiKind::Note, vec![[0.; 3]], "Tolerância geral ISO 2768-m", None);
+                    let _ = std::fs::write(&p, d.to_json());
+                }
+                pecas += 1;
+            }
+            Some("fka") if nome.starts_with("SC-") => {
+                let mut a = Assembly::from_json(&std::fs::read_to_string(&p).unwrap()).unwrap();
+                a.assign_items(Some(&dir));
+                let rows = fenkra_montagem::bom::bom(&a, Some(&dir), BomLevel::Topo);
+                a.pmi.clear();
+                let nos: Vec<(String, [f64; 3])> = a.nodes.iter().map(|n| (n.name.split(':').next().unwrap_or("").to_string(), n.placement.origin)).collect();
+                let mut vistos = std::collections::HashSet::new();
+                for (n, o) in nos {
+                    if !vistos.insert(n.clone()) {
+                        continue;
+                    }
+                    let Some(row) = rows.iter().find(|x| x.key.contains(&n) || x.name.starts_with(&n)) else { continue };
+                    let id = a.alloc();
+                    a.pmi.push(Pmi { id, name: format!("Balão {n}"), kind: PmiKind::Balloon { item: row.item.clone(), manual: false }, anchors: vec![o], offset: [60., 60., 80.], text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: None, style: Default::default(), folder: String::new(), targets: vec![] });
+                    baloes += 1;
+                }
+                let _ = std::fs::write(&p, a.to_json());
+            }
+            _ => {}
+        }
+    }
+    r.usa("PMI", &["Balão", "Legenda 3D", "Nota"]);
+    r.registra(Linha { cod: "PMI-GERAL".into(), nome: "Legendas e balões".into(), bancada: "PMI".into(), ok: pecas > 0 && baloes > 0, volume: 0., caixa: [0.; 3], corpos: baloes, nota: format!("{pecas} peças com legenda e nota, {baloes} balões nos subconjuntos") });
+}
+
 fn medidas(p: &Path) -> (f64, [f64; 3]) {
     let d = Document::from_json(&std::fs::read_to_string(p).unwrap()).unwrap();
     let r = recompute(&d);

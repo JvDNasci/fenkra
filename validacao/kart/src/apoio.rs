@@ -58,6 +58,21 @@ impl Reg {
         }
     }
 
+    /// Tabelas geradas: resultados por item e matriz de comandos.
+    pub fn grava_tabelas(&self) {
+        let mut t = String::from("# Resultados gerados\n\nGerado por `kart.exe`: não edite à mão. Volume em mm³, caixa em mm.\n\n| Item | Nome | Bancada | Estado | Volume | Caixa | Corpos/itens | Observação |\n|---|---|---|---|---|---|---|---|\n");
+        for l in self.linhas.values() {
+            t += &format!("| {} | {} | {} | {} | {:.0} | {:.1} × {:.1} × {:.1} | {} | {} |\n", l.cod, l.nome, l.bancada, if l.ok { "ok" } else { "FALHA" }, l.volume, l.caixa[0], l.caixa[1], l.caixa[2], l.corpos, l.nota.trim().replace('|', "/"));
+        }
+        t += "\n## Matriz de comandos exercitados\n\n| Bancada | Comando | Vezes |\n|---|---|---|\n";
+        for (b, m) in &self.cmds {
+            for (c, n) in m {
+                t += &format!("| {b} | {c} | {n} |\n");
+            }
+        }
+        let _ = std::fs::write(modelo().parent().unwrap().join("resultados.md"), t);
+    }
+
     pub fn registra(&mut self, l: Linha) {
         println!("{} {} [{}] {} vol={:.0} caixa={:.1}x{:.1}x{:.1} corpos={} {}", if l.ok { "OK   " } else { "FALHA" }, l.cod, l.bancada, l.nome, l.volume, l.caixa[0], l.caixa[1], l.caixa[2], l.corpos, l.nota);
         self.linhas.insert(l.cod.clone(), l);

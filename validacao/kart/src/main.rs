@@ -2,6 +2,7 @@
 //! Projeto-teste B353: o kart inteiro, por código, sobre as APIs do Fenkra.
 //! `kart` roda as peças; `kart CH` só as de código que começa com CH.
 mod apoio;
+mod cobertura;
 mod conjunto;
 mod formas;
 mod mestre;
@@ -105,11 +106,26 @@ fn main() {
     pc!("DI-11", "Rolamento dianteiro", "Biblioteca", "", p::rolamento(25., 47., 12.));
     pc!("FX-01", "Parafuso M8", "Biblioteca", "", fenkra_solidos::fixadores::fixador_documento("iso4762", "M8", Some(40.)));
     pc!("FX-03", "Parafuso M6", "Biblioteca", "", fenkra_solidos::fixadores::fixador_documento("iso4762", "M6", Some(30.)));
+    pc!("FX-02", "Porca autotravante M8 (contorno: porca comum)", "Biblioteca", "", fenkra_solidos::fixadores::fixador_documento("iso4032", "M8", None));
+    pc!("FX-04", "Porca autotravante M6 (contorno: porca comum)", "Biblioteca", "", fenkra_solidos::fixadores::fixador_documento("iso4032", "M6", None));
+    pc!("DI-07", "Terminal rotular (contorno: revolução)", "Biblioteca", "", p::rolamento(8., 22., 12.));
+    pc!("CV-CHAPA1", "Assoalho com estampo, veneziana e colar", "Chapa", ACO_C, cobertura::assoalho_estampado());
+    pc!("CV-CHAPA2", "Protetor com bainha e desvio", "Chapa", ACO_C, cobertura::protetor_bainha());
+    pc!("CV-CHAPA3", "Caixa com alívio de canto", "Chapa", ACO_C, cobertura::caixa_alivio());
+    pc!("CV-CHAPA4", "Canal convertido em chapa", "Chapa", ACO_C, cobertura::canal_convertido());
+    pc!("CV-SOL1", "Furos, rosca modelada e espessura", "Sólidos", AL, cobertura::furos_e_rosca());
+    pc!("CV-SOL2", "Nervura, escala e dividir", "Sólidos", AL, cobertura::nervura_escala());
+    pc!("CV-SOL3", "Padrão por pontos e chanfro geral", "Sólidos", AL, cobertura::padrao_pontos());
+    pc!("EX-12B", "Linha de freio, segunda tentativa", "Sólidos", ACO_C, cobertura::linha_varredura(u));
+    pc!("CV-EST", "Placa, reforço e solda", "Estrutural", ACO, cobertura::estrutural_extra());
+    pc!("CV-SUP1", "Extrusão e deslocada de superfície", "Superfícies", "", cobertura::superficies());
+    pc!("CV-SUP2", "Preenchimento de contorno", "Superfícies", "", cobertura::preencher());
     if filtro.is_empty() || filtro == "SC" {
         conjunto::kart(u, &mut r);
     }
     if filtro.is_empty() || filtro == "SAIDAS" {
         saidas::pmi(&mut r);
+        saidas::pmi_geral(&mut r);
         saidas::desenhos(&mut r);
         saidas::pacote(&mut r);
         if let Err(e) = saidas::plm(&mut r) {
@@ -118,4 +134,5 @@ fn main() {
     }
     let ok = r.linhas.values().filter(|l| l.ok).count();
     println!("=== {} peças, {} ok", r.linhas.len(), ok);
+    r.grava_tabelas();
 }
