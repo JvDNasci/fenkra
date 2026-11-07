@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Texto da massa na interface (B430): sem corpo não há massa, e nunca sai "-0,000 kg".
 //!
 //! O volume de um corpo vazio ou de uma soma com ruído numérico pode chegar como 0 negativo ou como

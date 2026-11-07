@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 //! Erros acionáveis (B419): item, campo, causa e sugestão, com um código que não muda.
 //!
 //! O kernel e os comandos devolvem a falha como texto. A pessoa precisa de mais: qual item quebrou,
