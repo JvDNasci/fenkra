@@ -811,7 +811,12 @@ pub(crate) fn reconhecer(fam: &Familia, diametro: f64, folga: u8) -> (Option<Str
     }
     match casa_folga(diametro, folga) {
         Some(t) => (Some(t.to_string()), true),
-        None => (casa_outra_folga(diametro).map(str::to_string), false),
+        None => match casa_outra_folga(diametro) {
+            Some(t) => (Some(t.to_string()), false),
+            // entre a folga fina e a folgada o furo é "comum" para o tamanho (Ø8,5 para M8): o
+            // parafuso passa, então o furo ancora a pilha mesmo sem bater com um dos três valores
+            None => (casa_faixa(diametro).map(str::to_string), true),
+        },
     }
 }
 
@@ -863,6 +868,12 @@ fn casa_folga(diametro: f64, folga: u8) -> Option<&'static str> {
 /// Tamanho cuja folga (qualquer uma das três) casa com o diâmetro do furo.
 fn casa_outra_folga(diametro: f64) -> Option<&'static str> {
     hardware::METRIC.iter().find(|m| m.clearance.iter().any(|c| (c - diametro).abs() <= TOL_DIAMETRO)).map(|m| m.name)
+}
+
+/// Tamanho cujo furo de passagem, da folga fina à folgada, contém o diâmetro. As faixas dos
+/// tamanhos da tabela não se sobrepõem, então só um tamanho serve.
+fn casa_faixa(diametro: f64) -> Option<&'static str> {
+    hardware::METRIC.iter().find(|m| diametro >= m.clearance[0] - TOL_DIAMETRO && diametro <= m.clearance[2] + TOL_DIAMETRO).map(|m| m.name)
 }
 
 /// Designação do tamanho da família para a rosca do furo: a própria designação livre ("1/4-28 UNF")
@@ -1210,6 +1221,21 @@ pub(crate) mod tests {
         assert!(preencher_furos(&mut a, None, &mut cache, &OpcoesFixadores::default()).is_err(), "sem pasta não grava");
     }
 
+    #[test]
+    fn furo_comum_8_5_recebe_m8_nas_tres_folgas() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        for folga in 0..3u8 {
+            let dir = pasta(&format!("m8_comum_{folga}"));
+            let (mut a, _, _) = pilha_de_placas(&dir, &placa(10., 8.5, None));
+            let rel = preencher_furos(&mut a, Some(&dir), &mut PartCache::default(), &OpcoesFixadores { folga, ..Default::default() }).unwrap();
+            assert_eq!(rel.fixadores, 1, "folga {folga}: {:?}", rel.avisos);
+            assert!(rel.por_tamanho.iter().all(|(t, _)| t.starts_with("M8x")), "{:?}", rel.por_tamanho);
+            assert!(rel.avisos.iter().all(|m| !m.contains("sem tamanho")), "{:?}", rel.avisos);
+        }
+    }
+
     /// Família de teste (dados inventados): parafuso com faixa de furo própria, sem folga de tabela.
     const AERO_TESTE: &str = r#"{
       "id": "teste_pol", "nome": "Parafuso de teste", "norma": "TESTE 1", "revisao": "2020",
@@ -1485,6 +1511,14 @@ pub(crate) mod tests {
         assert_eq!(casa_folga(6.64, 1), Some("M6"));
         assert_eq!(casa_outra_folga(7.0), Some("M6"));
         assert_eq!(casa_outra_folga(7.3), None);
+        // K-18: Ø8,5 está entre a folga fina (8,4) e a normal (9,0) do M8
+        assert_eq!(casa_outra_folga(8.5), None);
+        assert_eq!(casa_faixa(8.5), Some("M8"));
+        assert_eq!(casa_faixa(7.3), None, "entre M6 e M8 não há tamanho");
+        let iso = biblioteca::familia("iso4762").unwrap();
+        for folga in 0..3 {
+            assert_eq!(reconhecer(iso, 8.5, folga), (Some("M8".to_string()), true), "folga {folga}");
+        }
         let iso = biblioteca::familia("iso4762").unwrap();
         assert_eq!(tamanho_da_rosca(iso, "M8x1.25").as_deref(), Some("M8"));
         assert_eq!(tamanho_da_rosca(iso, "M6").as_deref(), Some("M6"));
