@@ -6441,7 +6441,7 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "Montagem",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -6537,7 +6537,7 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -6633,7 +6633,7 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "Montagem",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
