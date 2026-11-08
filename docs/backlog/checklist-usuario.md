@@ -20,6 +20,13 @@ Lista do que eu não consigo fechar sozinho. Marque quando resolver e me avise.
 - [ ] **Terminal rotular (B397):** espessura da carcaça e diâmetro da haste, de uma ficha confiável.
 - [ ] **Rosca M16x2 que dava "não cabe":** se ainda falhar, me mande o arquivo ou a configuração.
 
+## Itens da área Geral que esperam você (leva de 08/11)
+
+- [ ] **Servidor MCP (B287):** rodar com um modelo de linguagem de verdade num cliente MCP (o aceite foi feito com um agente de roteiro). Diga qual cliente e qual modelo usar.
+- [ ] **Formatos CAD (B211):** DWG só por biblioteca comercial (ODA) ou GPL como processo externo (LibreDWG); decidir qual caminho. 3DM (openNURBS) e PDF 3D seguem sem começar.
+- [ ] **Exportador por script (B298):** depende da decisão dos termos das APIs (B267, acima).
+- [ ] **Quadros ao abrir a montagem (B259):** medir de novo com a máquina parada e sem mexer o mouse sobre a janela; com quatro agentes compilando saíram quadros de 108, 179 e 1261 ms.
+
 ## Testes físicos
 
 - [ ] **Corte em V para dobrar tubo (B328, B333):** dobrar uma peça real.
