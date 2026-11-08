@@ -4021,6 +4021,28 @@ pub struct EdgeExtra {
     /// transição suave: o raio passa em curva (spline) pelos pontos; senão varia em retas
     #[serde(default)]
     pub smooth: bool,
+    /// B95: seleção por intenção gravada. Cada regra parte de uma aresta de `EdgeSel::Edges` (a
+    /// semente) e é refeita a cada recompute: a cadeia que cresceu no modelo entra no filete sozinha.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub regras: Vec<RegraAresta>,
+}
+
+/// Como uma seleção de arestas cresce a partir da semente (B95).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub enum RegraSelecao {
+    /// arestas ligadas ponta a ponta sem quina
+    Tangentes,
+    /// arestas ligadas ponta a ponta, até fechar ou bifurcar
+    Cadeia,
+    /// círculos em torno do mesmo eixo
+    Concentricas,
+}
+
+/// Regra gravada no filete ou chanfro: `semente` é o índice da aresta em `EdgeSel::Edges`.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct RegraAresta {
+    pub semente: usize,
+    pub regra: RegraSelecao,
 }
 
 /// Ponto de controle do filete variável (B49): posição em % da aresta e raio, ambos aceitam expressão.

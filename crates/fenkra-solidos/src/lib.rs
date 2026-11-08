@@ -56,6 +56,7 @@ pub mod transmissao_proposta;
 pub mod usinagens;
 pub mod eixos_recursos;
 pub mod eixos;
+pub mod selecao_regras;
 pub mod chaveta_rasgos;
 pub mod calculo_projeto;
 pub mod profile;
@@ -6097,6 +6098,11 @@ impl Ctx<'_> {
                         Some(mids)
                     }
                     _ => None,
+                };
+                // B95: regra de seleção gravada (tangentes, cadeia, concêntricas) refeita no corpo atual
+                let picked = match picked {
+                    Some(p) if !o.extra.regras.is_empty() => Some(selecao_regras::expandir_arestas(b, &p, &o.extra.regras)?),
+                    p => p,
                 };
                 let tol = b.bbox().map(|(a, c)| (0..3).map(|i| (c[i] - a[i]).powi(2)).sum::<f64>().sqrt() * 0.05).unwrap_or(1.).max(1.);
                 let (mode_code, v2) = match &o.mode {

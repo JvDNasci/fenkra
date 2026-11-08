@@ -99,7 +99,11 @@ impl Ctx<'_> {
                 viz.chanfro = matches!(f.kind, FeatureKind::Chamfer(_));
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
                 match &o.edges {
-                    EdgeSel::Edges(m) => viz.arestas = self.resolve_edges(if viz.chanfro { "chanfro" } else { "filete" }, f, b, owners, roles, m, &o.keys)?,
+                    EdgeSel::Edges(m) => {
+                        let escolhidas = self.resolve_edges(if viz.chanfro { "chanfro" } else { "filete" }, f, b, owners, roles, m, &o.keys)?;
+                        // B95: a regra gravada também vale na prévia leve
+                        viz.arestas = crate::selecao_regras::expandir_arestas(b, &escolhidas, &o.extra.regras)?;
+                    }
                     _ => viz.todas = true,
                 }
             }

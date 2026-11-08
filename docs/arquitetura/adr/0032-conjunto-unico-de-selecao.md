@@ -33,3 +33,12 @@ momento da seleção e o comando guarda as faces e arestas resultantes, cada uma
 
 - Mudança de comportamento: clicar no único item selecionado do 3D não o desmarca mais.
 - O realce no 3D passa a mostrar a seleção da árvore, não só o item sob o mouse.
+
+## Atualização (08/11/2026): regra gravada no filete e no chanfro
+
+A regra passa a ficar gravada quando o filete ou o chanfro nasce de uma seleção feita por regra: o
+comando guarda só a aresta semente (com a chave v2 dela) e a regra em `EdgeExtra::regras`. O
+recompute refaz a regra sobre a malha do corpo daquele momento (`fenkra_solidos::selecao_regras`,
+para onde as funções da malha saíram do app) e soma as arestas alcançadas às escolhidas. Arestas que
+uma mudança do modelo cria ou move entram sozinhas; a lista explícita, ao contrário, perde a
+referência. Faces escolhidas por regra ainda ficam como lista fixa.

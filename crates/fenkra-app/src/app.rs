@@ -2960,11 +2960,20 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if !all && edges.is_empty() {
                     self.toast("Clique nas arestas na viewport para pô-las no comando (clique de novo tira)", false);
                 }
-                let keys = if all { vec![] } else { edge_keys.clone() };
+                let mut keys = if all { vec![] } else { edge_keys.clone() };
+                // B95: seleção feita por regra (tangentes, cadeia, concêntricas): grava só a semente e a
+                // regra, que o recompute refaz no modelo de cada momento
+                let mut sel = sel;
+                let mut extra = EdgeExtra::default();
+                if let Some(g) = crate::selecao_regras::regra_da_selecao(&self.picks).and_then(|r| r.gravada()).filter(|_| !all && !edges.is_empty()) {
+                    sel = EdgeSel::Edges(vec![edges[0]]);
+                    keys.truncate(1);
+                    extra.regras = vec![fenkra_core::RegraAresta { semente: 0, regra: g }];
+                }
                 // B289: o comando novo começa com o último valor usado (raio ou distância)
                 let fillet = matches!(c, Cmd::Fillet | Cmd::FilletAll | Cmd::FilletVar);
                 let ultimo = crate::arestas_ui::ultimo_valor_aresta(&self.open.doc, fillet);
-                let op = EdgeOp { value: ultimo, edges: sel, mode, prop: Default::default(), keys, extra: Default::default() };
+                let op = EdgeOp { value: ultimo, edges: sel, mode, prop: Default::default(), keys, extra };
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(if matches!(c, Cmd::Fillet | Cmd::FilletAll | Cmd::FilletVar) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }))
             }
@@ -3242,6 +3251,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let Some(r) = self.result.as_ref() else { return };
         let novos = crate::selecao_regras::por_regra(r, &p, regra);
         let n = novos.len();
+        crate::selecao_regras::lembrar(&novos, regra);
         self.picks = novos;
         self.toasts.push((format!("{n} {}", tr("elemento(s) na seleção")), 0., false));
     }
