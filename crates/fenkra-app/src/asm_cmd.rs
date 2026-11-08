@@ -723,9 +723,17 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         crate::asm_fixadores::demo(st);
         return;
     }
-    if nome == "preencher" {
-        // B248: janela Preencher furos aberta, com o fantasma de cada pilha candidata na viewport
-        st.fasteners_open = Some(crate::asm_ui::FastenersUi::default());
+    if nome == "preencher" || nome == "preencher_polegada" || nome == "preencher_sem_tamanho" {
+        // B248: janela Preencher furos aberta, com o fantasma de cada pilha candidata na viewport.
+        // `_polegada` usa o Allen ASME B18.3; `_sem_tamanho` usa o parafuso de ombro ISO 7379, que pede furo
+        // do diâmetro do ombro: os furos de folga ficam sem tamanho, em âmbar e com o motivo
+        let mut f = crate::asm_ui::FastenersUi::default();
+        if nome == "preencher_polegada" {
+            f.op.familia_parafuso = "asme_b18_3".into();
+        } else if nome == "preencher_sem_tamanho" {
+            f.op.familia_parafuso = "iso7379".into();
+        }
+        st.fasteners_open = Some(f);
         return;
     }
     if nome.starts_with("conjunto") {
