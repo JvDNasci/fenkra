@@ -19,6 +19,7 @@ pub mod novo;
 pub mod ocupacao;
 pub mod opcoes;
 pub mod fundo;
+pub mod hlr_processos;
 pub mod setas_nota;
 pub mod simbolos;
 pub mod solda_cordao;

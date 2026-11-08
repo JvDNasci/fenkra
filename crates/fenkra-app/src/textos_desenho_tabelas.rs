@@ -61,6 +61,8 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Cálculo cancelado: há vistas sem projeção.", "Computation cancelled: some views have no projection."),
     ("Calcular de novo", "Compute again"),
     ("Pede de novo a projeção das vistas canceladas.", "Requests the projection of the cancelled views again."),
+    // B393: prévia por malha, depois a projeção exata
+    ("Refinando vistas: a prévia por malha já está na folha", "Refining views: the mesh preview is already on the sheet"),
     // B400: análise opcional no pacote
     ("Incluir análise de interferências e folgas", "Include interference and clearance analysis"),
     ("Calcula as interferências e as folgas entre as peças e as grava no pacote. Numa montagem grande leva mais de um minuto; a versão simplificada sai sem ela, a menos que você marque.", "Computes the interferences and clearances between parts and stores them in the package. On a large assembly it takes over a minute; the simplified version leaves it out unless you check it."),

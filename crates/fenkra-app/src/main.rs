@@ -271,6 +271,13 @@ fn opcoes(modo: partida::Modo) -> eframe::NativeOptions {
 /// vai para o `partida.log`; se nenhuma funcionar, uma caixa de mensagem explica o que aconteceu.
 fn main() -> eframe::Result {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    // B393: o desenho projeta cada vista de montagem num processo deste mesmo executável
+    if let Some(codigo) = fenkra_desenho::hlr_processos::principal(&args) {
+        std::process::exit(codigo);
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        fenkra_desenho::hlr_processos::definir_executavel(exe);
+    }
     // duplo clique num .fkv (B365): abre o pacote no navegador e sai, sem subir a janela
     if assoc_fkv::tratar_argumentos(&args) {
         return Ok(());

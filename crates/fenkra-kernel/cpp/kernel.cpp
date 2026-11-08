@@ -29,6 +29,8 @@
 #include <HLRBRep_Algo.hxx>
 #include <HLRBRep_HLRToShape.hxx>
 #include <HLRAlgo_Projector.hxx>
+#include <HLRBRep_PolyAlgo.hxx>
+#include <HLRBRep_PolyHLRToShape.hxx>
 #include <BRepBuilderAPI_GTransform.hxx>
 #include <gp_GTrsf.hxx>
 #include <gp_Mat.hxx>
@@ -79,6 +81,7 @@
 #include <BRepPrimAPI_MakeTorus.hxx>
 #include <BRepPrimAPI_MakeWedge.hxx>
 #include <BRepTools.hxx>
+#include <BinTools.hxx>
 #include <GeomAPI_PointsToBSpline.hxx>
 #include <GeomAPI_Interpolate.hxx>
 #include <GeomAPI_IntCS.hxx>

@@ -368,6 +368,10 @@ fn view_into(o: &mut Out, d: &Drawing, v: &View, p: &Proj, th: f64) {
     if p.calculando {
         o.text(v.pos, "Calculando…".to_string(), th, 0., Align::Center);
     }
+    // B393: linhas da malha por enquanto; a projeção exata ainda vai substituí-las
+    if p.previa {
+        o.text([lo[0], lo[1] - th * 0.9], "prévia".to_string(), th * 0.6, 0., Align::Left);
+    }
     if v.label {
         let lbl = match &v.kind {
             ViewKind::Section { label, .. } => format!("CORTE {label}-{label} ({})", scale_text(v.scale)),

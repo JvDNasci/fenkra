@@ -87,6 +87,8 @@ pub struct Proj {
     pub error: Option<String>,
     /// B427: a projeção está sendo calculada em segundo plano; isto é só o lugar dela
     pub calculando: bool,
+    /// B393: linhas tiradas da malha (prévia rápida); a projeção exata ainda vai substituí-las
+    pub previa: bool,
 }
 
 impl Proj {
@@ -129,6 +131,8 @@ pub struct Models {
     fundo: Option<crate::fundo::Fundo>,
     /// só na thread de projeção: progresso e cancelamento do pedido em andamento
     controle: Option<fenkra_core::trabalho::Controle>,
+    /// só na thread de projeção: volume de cada fonte já medida (medir o kart leva segundos)
+    volumes: HashMap<crate::fundo::Fonte, f64>,
 }
 
 /// Vista de montagem: a que mais demora e a que vai para a thread de projeção.
@@ -358,8 +362,9 @@ impl Models {
     /// Projeção da vista (calcula só quando a vista, a mãe ou o arquivo mudam).
     pub fn proj(&mut self, d: &Drawing, id: Id) -> Proj {
         let Some(v) = d.view(id) else { return Proj::default() };
+        // B393: a projetada só usa a direção, não a projeção da mãe: não espera por ela
         let parent = match &v.kind {
-            ViewKind::Projected { parent, .. } | ViewKind::Section { parent, .. } | ViewKind::Detail { parent, .. } => Some(*parent),
+            ViewKind::Section { parent, .. } | ViewKind::Detail { parent, .. } => Some(*parent),
             _ => None,
         };
         let parent_proj = parent.map(|p| self.proj(d, p));
@@ -388,11 +393,18 @@ impl Models {
         let key = h.finish();
         if let Some((k, p)) = self.proj.get(&id) {
             if *k == key {
-                return p.clone();
+                let p = p.clone();
+                // prévia guardada sem a exata a caminho (o fundo foi cancelado e retomado): pede a exata.
+                // A chave guardada conta os arquivos lidos e difere da do pedido: compara só a vista.
+                let livre = self.fundo.as_ref().is_some_and(|f| !f.tem(v.id) && !f.cancelados.contains_key(&v.id));
+                if p.previa && no_fundo && livre {
+                    let _ = self.pedir_em_fundo(v, parent_proj, key, true);
+                }
+                return p;
             }
         }
         if no_fundo {
-            return self.pedir_em_fundo(v, parent_proj, key);
+            return self.pedir_em_fundo(v, parent_proj, key, false);
         }
         let p = self.compute(v, parent_proj.as_ref());
         self.proj.insert(id, (key, p.clone()));
@@ -411,13 +423,20 @@ impl Models {
         }
     }
 
+    /// Liga ou desliga a prévia por malha da projeção em segundo plano (ligada por padrão).
+    pub fn previa_do_fundo(&mut self, ligada: bool) {
+        if let Some(f) = self.fundo.as_mut() {
+            f.com_previa = ligada;
+        }
+    }
+
     pub fn fundo_ativo(&self) -> bool {
         self.fundo.is_some()
     }
 
     /// Pede a projeção em segundo plano e devolve o lugar dela: vazia, marcada `calculando`, ou com
     /// o aviso de que foi cancelada.
-    fn pedir_em_fundo(&mut self, v: &View, mae: Option<Proj>, chave: u64) -> Proj {
+    fn pedir_em_fundo(&mut self, v: &View, mae: Option<Proj>, chave: u64, sem_previa: bool) -> Proj {
         let dir = self.dir.clone();
         let Some(f) = self.fundo.as_mut() else { return Proj::default() };
         if f.cancelados.get(&v.id) == Some(&chave) {
@@ -425,7 +444,7 @@ impl Models {
         }
         f.cancelados.remove(&v.id);
         if !f.pedida(v.id, chave) {
-            f.pedir(crate::fundo::Pedido { id: v.id, vista: v.clone(), mae, dir }, chave);
+            f.pedir(crate::fundo::Pedido { id: v.id, vista: v.clone(), mae, dir, sem_previa }, chave);
         }
         Proj { calculando: true, ..Default::default() }
     }
@@ -434,7 +453,7 @@ impl Models {
     pub fn sondar(&mut self) -> bool {
         let Some(mut f) = self.fundo.take() else { return false };
         let mut chegou = false;
-        while let Some((r, ped, _)) = f.receber() {
+        for (r, ped, _, _) in f.receber() {
             let fonte = r.fonte.clone();
             f.arquivos.insert(r.fonte, r.arquivos);
             f.extras.insert(fonte.clone(), (r.volume, r.nomes));
@@ -450,6 +469,8 @@ impl Models {
             self.proj.insert(ped.id, (h.finish(), r.proj));
             chegou = true;
         }
+        // as vistas pedidas desde o último quadro vão juntas à thread
+        f.seguir();
         self.fundo = Some(f);
         chegou
     }
@@ -478,32 +499,19 @@ impl Models {
         }
     }
 
-    /// Trabalho da thread de projeção: carrega a montagem (com progresso), projeta e devolve.
-    pub(crate) fn calcular_em_fundo(&mut self, p: crate::fundo::Pedido, ctl: &fenkra_core::trabalho::Controle) -> Option<crate::fundo::Resposta> {
-        self.dir = p.dir.clone();
-        // arquivo salvo desde a última vez: esquece a peça velha antes de calcular
-        self.refresh();
-        self.controle = Some(ctl.clone());
-        self.parts.cancelar = Some(ctl.bandeira());
-        let proj = self.compute(&p.vista, p.mae.as_ref());
-        self.controle = None;
-        self.parts.cancelar = None;
-        if ctl.cancelado() {
-            // nada pela metade: a carga cancelada não fica no cache
-            self.loaded.clear();
-            self.proj.clear();
-            return None;
+    fn compute(&mut self, v: &View, parent: Option<&Proj>) -> Proj {
+        match self.preparar(v, parent) {
+            Etapa::Pronta(p) => p,
+            Etapa::Hlr(h) => {
+                let r = h.alvo.hlr(h.axes.toward, h.axes.x, h.hidden);
+                concluir(*h, r)
+            }
         }
-        ctl.avancar();
-        let fonte = self.fonte_de(&p.vista.source);
-        let (arquivos, volume, nomes) = {
-            let l = self.load(&p.vista.source);
-            (l.files.clone(), l.shape.as_ref().map_or(0., |s| s.mass().volume), l.piece_names.clone())
-        };
-        Some(crate::fundo::Resposta { id: p.id, proj, fonte, arquivos, volume, nomes })
     }
 
-    fn compute(&mut self, v: &View, parent: Option<&Proj>) -> Proj {
+    /// Tudo da projeção antes das linhas ocultas: carga, eixos, corte, sombreado. A vista que não
+    /// precisa de linhas ocultas (detalhe, esquema, planificada de tubo) já sai pronta.
+    fn preparar(&mut self, v: &View, parent: Option<&Proj>) -> Etapa {
         let tangent = v.tangent_edges;
         let hidden = v.hidden_lines;
         let l = self.load(&v.source);
@@ -511,7 +519,7 @@ impl Models {
         let mut out = Proj { error: l.error.clone(), ..Default::default() };
         // detalhe: recorte circular da vista mãe
         if let ViewKind::Detail { center, radius, .. } = &v.kind {
-            let Some(pp) = parent else { return out };
+            let Some(pp) = parent else { return Etapa::Pronta(out) };
             out.axes = pp.axes;
             out.center = *center;
             // contorno livre (perfil) quando existe; senão o círculo
@@ -533,11 +541,11 @@ impl Models {
                 out.lines.push((fecha, 4));
                 out.center = perfil.iter().fold([0., 0.], |a, p| [a[0] + p[0] / perfil.len() as f64, a[1] + p[1] / perfil.len() as f64]);
                 out.bounds();
-                return out;
+                return Etapa::Pronta(out);
             }
             out.lines.push((circle(*center, *radius), 4));
             out.bounds();
-            return out;
+            return Etapa::Pronta(out);
         }
         if let ViewKind::Schematic(d) = &v.kind {
             // o esquema só precisa das juntas e posições (as peças podem nem estar no disco)
@@ -548,7 +556,7 @@ impl Models {
             }
             out.bounds();
             out.center = [(out.lo[0] + out.hi[0]) / 2., (out.lo[1] + out.hi[1]) / 2.];
-            return out;
+            return Etapa::Pronta(out);
         }
         let mut bends: Vec<fenkra_solidos::BendLine> = vec![];
         let shape = match (&v.kind, &l.model) {
@@ -566,7 +574,7 @@ impl Models {
                         let tubos = fenkra_solidos::tubos_dobrados(doc);
                         let Some(tubo) = tubos.iter().find(|t| !t.dobras.is_empty()) else {
                             out.error = Some("a peça não é de chapa nem tem tubo dobrado: não há planificação".into());
-                            return out;
+                            return Etapa::Pronta(out);
                         };
                         match fenkra_solidos::st_dobra_vista::vista_reta(tubo) {
                             Ok(dv) => {
@@ -592,15 +600,15 @@ impl Models {
                             }
                             Err(e) => out.error = Some(e),
                         }
-                        return out;
+                        return Etapa::Pronta(out);
                     }
                 }
             }
             _ => l.shape.clone(),
         };
         let pieces: Vec<Shape> = if matches!(v.kind, ViewKind::Section { .. }) { l.pieces.clone() } else { vec![] };
-        let Some(shape) = shape else { return out };
-        let Some((lo, hi)) = shape.bbox() else { return out };
+        let Some(shape) = shape else { return Etapa::Pronta(out) };
+        let Some((lo, hi)) = shape.bbox() else { return Etapa::Pronta(out) };
         let c3 = [0, 1, 2].map(|k| (lo[k] + hi[k]) / 2.);
         let big = (0..3).map(|k| hi[k] - lo[k]).fold(0., f64::max) * 2. + 10.;
         let axes = match &v.kind {
@@ -608,7 +616,7 @@ impl Models {
             ViewKind::Camera { toward, x } => {
                 let (Some(t), Some(x)) = (unit(*toward), unit(*x)) else {
                     out.error = Some("direção da câmera inválida".into());
-                    return out;
+                    return Etapa::Pronta(out);
                 };
                 // x perpendicular à direção
                 let x = unit(sub(x, scale3(t, dot(x, t)))).unwrap_or([1., 0., 0.]);
@@ -626,11 +634,11 @@ impl Models {
                 }
             }
             ViewKind::Section { a, b, .. } => {
-                let Some(pa) = parent.and_then(|p| p.axes) else { return out };
+                let Some(pa) = parent.and_then(|p| p.axes) else { return Etapa::Pronta(out) };
                 let (a3, b3) = (pa.unproject(*a), pa.unproject(*b));
                 let Some(u) = unit(sub(b3, a3)) else {
                     out.error = Some("linha de corte sem comprimento".into());
-                    return out;
+                    return Etapa::Pronta(out);
                 };
                 let n = cross(pa.toward, u);
                 Axes::new(n, u)
@@ -653,7 +661,7 @@ impl Models {
                         // fatia: só a face cortada, sem o que está atrás
                         out.lines = out.hatch.iter().map(|lp| (lp.iter().copied().chain(lp.first().copied()).collect(), 0u8)).collect();
                         out.bounds();
-                        return out;
+                        return Etapa::Pronta(out);
                     }
                     c.alvo
                 }
@@ -691,26 +699,70 @@ impl Models {
                 out.shade = tris.into_iter().map(|(_, t, g)| (t, g)).collect();
             }
         }
-        match target.hlr(axes.toward, axes.x, hidden) {
-            Ok(lines) => out.lines = lines.into_iter().filter(|(_, k)| tangent || *k != 1).collect(),
-            Err(e) => out.error = Some(e.0),
-        }
-        // planificada: linhas de dobra (5 = centro, 6 = limites do arco) e o rótulo de cada uma
-        for b in &bends {
-            let pr = |q: [V3; 2]| vec![axes.project(q[0]), axes.project(q[1])];
-            if b.curva.len() > 2 {
-                out.lines.push((b.curva.iter().map(|q| axes.project(*q)).collect(), 5));
-            } else {
-                out.lines.push((pr(b.center), 5));
+        Etapa::Hlr(Box::new(Hlr { out, alvo: target, axes, hidden, tangent, bends, explosao: linhas_explosao, tamanho: big }))
+    }
+
+    /// Lote de vistas da thread de projeção (B393): carrega a montagem uma vez e roda as linhas
+    /// ocultas de todas ao mesmo tempo, uma thread por vista. `previa` projeta a malha.
+    pub(crate) fn calcular_lote(&mut self, l: crate::fundo::Lote, ctl: &fenkra_core::trabalho::Controle) -> Option<Vec<crate::fundo::Resposta>> {
+        let Some(p0) = l.pedidos.first() else { return Some(vec![]) };
+        self.dir = p0.dir.clone();
+        // arquivo salvo desde a última vez: esquece a peça velha antes de calcular
+        self.refresh();
+        self.controle = Some(ctl.clone());
+        self.parts.cancelar = Some(ctl.bandeira());
+        // a carga feita antes ainda vale? (`refresh` esquece o que mudou no disco)
+        self.volumes.retain(|k, _| self.loaded.contains_key(k));
+        let medir = std::env::var_os("FENKRA_MEDIR_DESENHO").is_some();
+        let t0 = std::time::Instant::now();
+        let mut etapas = vec![];
+        for p in &l.pedidos {
+            etapas.push(self.preparar(&p.vista, p.mae.as_ref()));
+            if ctl.cancelado() {
+                break;
             }
-            out.lines.push((pr(b.start), 6));
-            out.lines.push((pr(b.end), 6));
-            let m = [(b.center[0][0] + b.center[1][0]) / 2., (b.center[0][1] + b.center[1][1]) / 2., (b.center[0][2] + b.center[1][2]) / 2.];
-            out.labels.push((axes.project(m), b.label()));
         }
-        out.lines.extend(linhas_explosao.iter().map(|l| (l.iter().map(|p| axes.project(*p)).collect(), 7u8)));
-        out.bounds();
-        out
+        self.controle = None;
+        self.parts.cancelar = None;
+        if ctl.cancelado() {
+            // nada pela metade: a carga cancelada não fica no cache
+            self.loaded.clear();
+            self.proj.clear();
+            return None;
+        }
+        // as linhas ocultas contam como um passo a mais na barra
+        ctl.somar_total(1);
+        let t_hlr = std::time::Instant::now();
+        let hlrs: Vec<&Hlr> = etapas.iter().filter_map(|e| if let Etapa::Hlr(h) = e { Some(&**h) } else { None }).collect();
+        let vistas: Vec<_> = hlrs.iter().map(|h| fenkra_kernel::VistaHlr { forma: &h.alvo, para: h.axes.toward, x: h.axes.x, ocultas: h.hidden, prioridade_baixa: true }).collect();
+        // desvio da malha da prévia: fino o bastante para os furos da folha saírem redondos
+        let desvio = l.previa.then(|| hlrs.iter().map(|h| h.tamanho).fold(0., f64::max) * DESVIO_DA_PREVIA);
+        // a exata vai um processo por vista; sem o executável, uma depois da outra aqui
+        let cancelar = ctl.bandeira();
+        let processos = if desvio.is_none() { crate::hlr_processos::exatas(&vistas, Some(&*cancelar)) } else { None };
+        let mut linhas = processos.unwrap_or_else(|| fenkra_kernel::hlr_varias(&vistas, desvio)).into_iter();
+        drop(vistas);
+        if medir {
+            eprintln!("[desenho] lote de {} ({}): preparar+carga {:?}, linhas {:?}", l.pedidos.len(), if l.previa { "prévia" } else { "exata" }, t_hlr - t0, t_hlr.elapsed());
+        }
+        ctl.avancar();
+        let mut out = vec![];
+        for (p, e) in l.pedidos.iter().zip(etapas) {
+            let mut proj = match e {
+                Etapa::Pronta(p) => p,
+                Etapa::Hlr(h) => concluir(*h, linhas.next().unwrap_or_else(|| Err(fenkra_kernel::KernelError("sem resultado".into())))),
+            };
+            proj.previa = l.previa && proj.error.is_none();
+            let fonte = self.fonte_de(&p.vista.source);
+            let guardado = self.volumes.get(&fonte).copied();
+            let (arquivos, volume, nomes) = {
+                let ld = self.load(&p.vista.source);
+                (ld.files.clone(), guardado.unwrap_or_else(|| ld.shape.as_ref().map_or(0., |s| s.mass().volume)), ld.piece_names.clone())
+            };
+            self.volumes.insert(fonte.clone(), volume);
+            out.push(crate::fundo::Resposta { id: p.id, proj, fonte, arquivos, volume, nomes });
+        }
+        Some(out)
     }
 
     /// Dados de uma tabela.
@@ -1051,5 +1103,51 @@ pub fn clip_circle(pl: &[V2], c: V2, r: f64) -> Vec<Vec<V2>> {
     if cur.len() >= 2 {
         out.push(cur);
     }
+    out
+}
+
+/// Desvio da malha da prévia, como fração do tamanho da vista (o dobro da maior medida).
+const DESVIO_DA_PREVIA: f64 = 0.0004;
+
+/// Uma vista preparada: pronta ou esperando as linhas ocultas.
+enum Etapa {
+    Pronta(Proj),
+    Hlr(Box<Hlr>),
+}
+
+/// O que falta para terminar a vista depois das linhas ocultas.
+struct Hlr {
+    out: Proj,
+    alvo: Shape,
+    axes: Axes,
+    hidden: bool,
+    tangent: bool,
+    bends: Vec<fenkra_solidos::BendLine>,
+    explosao: Vec<Vec<V3>>,
+    tamanho: f64,
+}
+
+/// Termina a vista com as linhas ocultas: tangentes, linhas de dobra e de explosão, limites.
+fn concluir(h: Hlr, linhas: fenkra_kernel::KResult<Vec<(Vec<V2>, u8)>>) -> Proj {
+    let Hlr { mut out, axes, tangent, bends, explosao, .. } = h;
+    match linhas {
+        Ok(lines) => out.lines = lines.into_iter().filter(|(_, k)| tangent || *k != 1).collect(),
+        Err(e) => out.error = Some(e.0),
+    }
+    // planificada: linhas de dobra (5 = centro, 6 = limites do arco) e o rótulo de cada uma
+    for b in &bends {
+        let pr = |q: [V3; 2]| vec![axes.project(q[0]), axes.project(q[1])];
+        if b.curva.len() > 2 {
+            out.lines.push((b.curva.iter().map(|q| axes.project(*q)).collect(), 5));
+        } else {
+            out.lines.push((pr(b.center), 5));
+        }
+        out.lines.push((pr(b.start), 6));
+        out.lines.push((pr(b.end), 6));
+        let m = [(b.center[0][0] + b.center[1][0]) / 2., (b.center[0][1] + b.center[1][1]) / 2., (b.center[0][2] + b.center[1][2]) / 2.];
+        out.labels.push((axes.project(m), b.label()));
+    }
+    out.lines.extend(explosao.iter().map(|l| (l.iter().map(|p| axes.project(*p)).collect(), 7u8)));
+    out.bounds();
     out
 }

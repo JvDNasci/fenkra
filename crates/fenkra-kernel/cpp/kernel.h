@@ -30,6 +30,13 @@ struct XdeDoc {
     std::shared_ptr<Impl> p;
 };
 
+// Uma vista de linhas ocultas para rodar numa thread própria (cpp/drawing.inc, B393). Guarda a
+// própria forma (cópia quando outra vista usa a mesma) e o resultado; não compartilha nada.
+struct HlrTrabalho {
+    struct Impl;
+    std::shared_ptr<Impl> p;
+};
+
 std::unique_ptr<Shape> shape_clone(const Shape& s);
 bool shape_is_null(const Shape& s);
 std::unique_ptr<Shape> shape_empty();
@@ -129,6 +136,13 @@ std::unique_ptr<Shape> affinity(const Shape& s, double ox, double oy, double oz,
 rust::String to_brep(const Shape& s);
 rust::Vec<double> hlr_project(const Shape& s, double dx, double dy, double dz, double xx, double xy, double xz, bool hidden,
                               rust::Vec<uint32_t>& ends, rust::Vec<uint8_t>& kinds);
+std::unique_ptr<HlrTrabalho> hlr_trabalho_novo(const Shape& s, double dx, double dy, double dz, double xx, double xy, double xz,
+                                               bool hidden, bool copiar, double poligonal);
+void hlr_trabalho_rodar(HlrTrabalho& t);
+rust::Vec<double> hlr_trabalho_resultado(const HlrTrabalho& t, rust::Vec<uint32_t>& ends, rust::Vec<uint8_t>& kinds);
+rust::Vec<uint8_t> forma_para_bin(const Shape& s);
+std::unique_ptr<Shape> forma_de_bin(rust::Slice<const uint8_t> dados);
+bool forma_mesma(const Shape& a, const Shape& b);
 rust::Vec<double> section_loops(const Shape& s, double ox, double oy, double oz, double nx, double ny, double nz, double half, rust::Vec<uint32_t>& ends);
 std::unique_ptr<Shape> offset_face(const Shape& face, double d);
 std::unique_ptr<Shape> box_tool(double ox, double oy, double oz, double xx, double xy, double xz, double zx, double zy, double zz, double lx, double ly, double lz);

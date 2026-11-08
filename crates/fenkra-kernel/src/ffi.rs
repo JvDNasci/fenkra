@@ -294,6 +294,15 @@ pub mod bridge {
         fn hlr_project(
             s: &Shape, dx: f64, dy: f64, dz: f64, xx: f64, xy: f64, xz: f64, hidden: bool, ends: &mut Vec<u32>, kinds: &mut Vec<u8>,
         ) -> Result<Vec<f64>>;
+        fn forma_para_bin(s: &Shape) -> Result<Vec<u8>>;
+        fn forma_de_bin(dados: &[u8]) -> Result<UniquePtr<Shape>>;
+        fn forma_mesma(a: &Shape, b: &Shape) -> bool;
+        type HlrTrabalho;
+        fn hlr_trabalho_novo(
+            s: &Shape, dx: f64, dy: f64, dz: f64, xx: f64, xy: f64, xz: f64, hidden: bool, copiar: bool, poligonal: f64,
+        ) -> Result<UniquePtr<HlrTrabalho>>;
+        fn hlr_trabalho_rodar(t: Pin<&mut HlrTrabalho>);
+        fn hlr_trabalho_resultado(t: &HlrTrabalho, ends: &mut Vec<u32>, kinds: &mut Vec<u8>) -> Result<Vec<f64>>;
         fn section_loops(s: &Shape, ox: f64, oy: f64, oz: f64, nx: f64, ny: f64, nz: f64, half: f64, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
         fn offset_face(face: &Shape, d: f64) -> Result<UniquePtr<Shape>>;
         fn box_tool(
