@@ -51,6 +51,25 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Não aparece nesta vista", "Does not show in this view"),
     ("Oculta no modelo", "Hidden in the model"),
     ("Já importada nesta vista", "Already imported in this view"),
+    ("De que lado da nota sai esta seta. Cada seta tem a sua; também se arrasta o quadrado no início da seta, na folha.", "Which side of the note this arrow leaves from. Each arrow has its own; you can also drag the square at the start of the arrow on the sheet."),
+    // B427: projeção em segundo plano
+    ("Calculando vistas", "Computing views"),
+    ("Calculando vistas…", "Computing views…"),
+    ("na fila", "queued"),
+    ("A projeção das vistas de montagem roda em segundo plano; a folha continua utilizável.", "Assembly view projection runs in the background; the sheet stays usable."),
+    ("Para o cálculo e deixa as vistas pendentes vazias. A chamada de linhas ocultas já iniciada termina por conta própria, sem travar a folha.", "Stops the computation and leaves pending views empty. A hidden-line call already started finishes on its own without blocking the sheet."),
+    ("Cálculo cancelado: há vistas sem projeção.", "Computation cancelled: some views have no projection."),
+    ("Calcular de novo", "Compute again"),
+    ("Pede de novo a projeção das vistas canceladas.", "Requests the projection of the cancelled views again."),
+    // B400: análise opcional no pacote
+    ("Incluir análise de interferências e folgas", "Include interference and clearance analysis"),
+    ("Calcula as interferências e as folgas entre as peças e as grava no pacote. Numa montagem grande leva mais de um minuto; a versão simplificada sai sem ela, a menos que você marque.", "Computes the interferences and clearances between parts and stores them in the package. On a large assembly it takes over a minute; the simplified version leaves it out unless you check it."),
+    // B427: exportar visualização em segundo plano
+    ("Gerando", "Generating"),
+    ("Preparando…", "Preparing…"),
+    ("Montagem grande leva minutos. A janela continua respondendo; dá para cancelar.", "A large assembly takes minutes. The window keeps responding; you can cancel."),
+    ("Para a geração no próximo componente e não grava nada.", "Stops generation at the next component and writes nothing."),
+    ("Exportação cancelada: nada foi gravado.", "Export cancelled: nothing was written."),
     // B295: tabelas
     ("Colunas", "Columns"),
     ("tirar a coluna: a tabela reflui", "remove the column: the table reflows"),

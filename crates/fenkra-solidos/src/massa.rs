@@ -199,9 +199,19 @@ pub fn relatorio_massa(doc: &Document) -> RelatorioMassa {
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
     }
+    relatorio_dos_corpos(doc, |id| cx.body(id))
+}
+
+/// Como `relatorio_massa`, mas com os corpos já calculados (do cache de um `recompute_cached`
+/// recém-feito): não refaz nenhum comando. `doc` é o efetivo.
+pub fn relatorio_massa_de_corpos(doc: &Document, corpos: &HashMap<Id, Shape>) -> RelatorioMassa {
+    relatorio_dos_corpos(doc, |id| corpos.get(&id).filter(|s| !s.is_null()))
+}
+
+fn relatorio_dos_corpos<'a>(doc: &Document, corpo: impl Fn(Id) -> Option<&'a Shape>) -> RelatorioMassa {
     let mut corpos = vec![];
     for c in doc.collectors.iter().filter(|c| c.visible) {
-        let Some(b) = cx.body(c.id) else { continue };
+        let Some(b) = corpo(c.id) else { continue };
         let mat = materiais::material_do_corpo(doc, c.id);
         if let Some(mut m) = massa_do_shape(b, materiais::densidade(&mat)) {
             m.coletor = c.id;

@@ -8,7 +8,7 @@ use fenkra_core::pmi::*;
 
 impl App {
     pub(super) fn demo_pmi_caso(&mut self, modo: &str) {
-        if !matches!(modo, "angulo" | "chamada" | "chamada_cruza" | "perfil" | "alcas" | "setas" | "setas_painel" | "cordao" | "capturas") {
+        if !matches!(modo, "angulo" | "chamada" | "chamada_cruza" | "perfil" | "alcas" | "setas" | "setas_painel" | "cordao" | "capturas" | "sobrepostas") {
             return;
         }
         let d = &mut self.open.doc;
@@ -83,6 +83,13 @@ impl App {
                     d.pmi_captures.push(PmiCapture { id, name: format!("Captura {k}"), view: fenkra_core::NamedView { name: String::new(), target: [0., 0., 5.], yaw: -0.5 * k as f64, pitch: 0.8, dist: 200., ortho: false }, shown: if k == 1 { vec![a] } else { vec![a, b] }, hidden: vec![], with_model: false });
                 }
                 *self.multi.borrow_mut() = vec![a, b];
+                a
+            }
+            "sobrepostas" => {
+                // B405: a legenda e uma nota na mesma âncora, com o mesmo deslocamento: antes caíam uma sobre a outra
+                let a = novo(d, PmiKind::Note, vec![[0., 0., 8.]], [30., 0., 30.], "Rebarbar todos os cantos", "Nota 1");
+                novo(d, PmiKind::TitleBlock { template: TITLE_TEMPLATE.into() }, vec![[0., 0., 8.]], [30., 0., 30.], "", "Legenda 1");
+                novo(d, PmiKind::Note, vec![[0., 0., 8.]], [30., 0., 30.], "Furos passantes", "Nota 2");
                 a
             }
             "perfil" => {

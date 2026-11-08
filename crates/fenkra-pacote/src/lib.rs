@@ -45,11 +45,28 @@ pub struct Opcoes {
     pub capturas: bool,
     /// calcula interferências e folgas da montagem e as grava no manifesto (B339); a página só lista
     pub analise: bool,
+    /// progresso e cancelamento (B427): quando a geração roda numa thread, a interface lê os passos
+    /// feitos e pode pedir para parar; cancelado, devolve `Err("cancelado")` sem pacote pela metade
+    pub controle: Option<fenkra_core::trabalho::Controle>,
 }
+
+impl Opcoes {
+    fn cancelado(&self) -> bool {
+        self.controle.as_ref().is_some_and(|c| c.cancelado())
+    }
+    fn avancar(&self) {
+        if let Some(c) = &self.controle {
+            c.avancar();
+        }
+    }
+}
+
+/// Texto do erro de quem foi cancelado: a interface o reconhece e não mostra como falha.
+pub const CANCELADO: &str = "cancelado";
 
 impl Default for Opcoes {
     fn default() -> Self {
-        Opcoes { decimar: None, capturas: true, analise: true }
+        Opcoes { decimar: None, capturas: true, analise: true, controle: None }
     }
 }
 
@@ -144,8 +161,14 @@ impl<'a> Gerador<'a> {
             self.pecas.insert(chave.to_path_buf(), p.clone());
             return Ok(p.clone());
         }
-        let r = fenkra_solidos::recompute(&doc);
-        let massa = fenkra_solidos::massa::relatorio_massa(&doc);
+        // um cálculo só: a massa sai dos corpos do cache deste mesmo recompute (antes eram dois)
+        let mut cache = fenkra_solidos::Cache::default();
+        let r = fenkra_solidos::recompute_cached(&doc, &mut cache);
+        let massa = doc
+            .efetivo()
+            .ok()
+            .and_then(|ef| fenkra_solidos::forma_cache::corpos_do_cache(&ef, &cache).map(|c| fenkra_solidos::massa::relatorio_massa_de_corpos(&ef, &c)))
+            .unwrap_or_else(|| fenkra_solidos::massa::relatorio_massa(&doc));
         let (mut corpos, mut lo, mut hi) = (vec![], [f64::MAX; 3], [f64::MIN; 3]);
         let (mut volume, mut area) = (0., 0.);
         let base = self.malhas.len();
@@ -243,6 +266,10 @@ impl<'a> Gerador<'a> {
         let mut massa = 0.;
         let filhos: Vec<_> = asm.nodes.iter().filter(|n| n.parent == pai).cloned().collect();
         for n in filhos {
+            if self.opc.cancelado() {
+                return Err(CANCELADO.into());
+            }
+            self.opc.avancar();
             let id = format!("{prefixo}n{}", n.id.0);
             let lugar = mundo.then(&n.placement);
             let (no, m) = match &n.kind {
@@ -285,6 +312,9 @@ impl<'a> Gerador<'a> {
                             continue;
                         }
                     };
+                    if let Some(c) = &self.opc.controle {
+                        c.somar_total(sub.nodes.len() as u32);
+                    }
                     let no = self.glb.no(&n.name, &id, None, &[]);
                     let pos = self.arvore.len();
                     self.arvore.push(json!({"id": id, "pai": id_pai, "nome": n.name, "tipo": "montagem", "no": no, "malha": null, "visivel": n.visible}));
@@ -454,6 +484,10 @@ pub fn de_peca(doc: &Document, opc: &Opcoes) -> Result<Pacote, String> {
 /// Pacote de uma montagem. `pasta` é a pasta do `.fka`: os caminhos dos componentes são relativos a ela.
 pub fn de_montagem(asm: &Assembly, pasta: &Path, opc: &Opcoes) -> Result<Pacote, String> {
     let mut g = Gerador::novo(opc);
+    if let Some(c) = &opc.controle {
+        // um passo por componente (os subconjuntos somam os seus ao abrir) e dois para análise e fecho
+        c.definir_total(asm.nodes.len() as u32 + 2);
+    }
     let mut topo = vec![];
     let massa = g.descer(asm, pasta, None, None, None, &Placement::default(), "", &mut vec![], &mut topo)?;
     if g.instancias == 0 {
@@ -470,8 +504,15 @@ pub fn de_montagem(asm: &Assembly, pasta: &Path, opc: &Opcoes) -> Result<Pacote,
     m["pmi"] = json!(json_pmi(&asm.pmi, None, None, &campos));
     m["capturas"] = json!(json_capturas(&asm.pmi_captures));
     m["estados"] = json!(asm.display_states.iter().map(tipos::estado).collect::<Vec<_>>());
+    if opc.cancelado() {
+        return Err(CANCELADO.into());
+    }
     if opc.analise {
         m["analise"] = analise::analisar_montagem(asm, pasta);
+    }
+    opc.avancar();
+    if opc.cancelado() {
+        return Err(CANCELADO.into());
     }
     m["lista"] = json!(fenkra_montagem::bom::bom(asm, Some(pasta), fenkra_montagem::bom::BomLevel::Pecas)
         .iter()

@@ -80,6 +80,10 @@ fn conjunto_padrao_com_peca_grande_nao_cobre_as_vistas() {
     assert!(gap >= 90. * 5. + 60. - 1e-6, "distancia entre centros {gap}");
     let (f, l) = (d.view(ids[0]).unwrap().pos, d.view(ids[2]).unwrap().pos);
     assert!(((f[0] - l[0]).abs() - gap).abs() < 1e-6, "lateral a `gap` da frente");
+    // a conta da interface (distancia) concorda com a do conjunto real
+    let mut rascunho = d.clone();
+    let g2 = fenkra_desenho::conjunto::distancia(&mut rascunho, &mut m, s, &d.view(ids[0]).unwrap().source.clone(), 5., 60.);
+    assert!((g2 - gap).abs() < 1e-9);
     let _ = std::fs::remove_dir_all(dir);
 }
 

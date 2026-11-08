@@ -7,6 +7,7 @@
 pub mod erro;
 pub mod validade;
 pub mod forma_brep;
+pub mod forma_cache;
 pub mod forma_vinculo;
 pub mod polimento;
 pub mod geo3d;

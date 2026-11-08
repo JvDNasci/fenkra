@@ -18,6 +18,7 @@ mod centros_ui;
 mod cota_inteligente;
 mod corte_ui;
 mod cordao;
+mod fundo_ui;
 mod ghost;
 mod importar_ui;
 mod options;
@@ -103,8 +104,10 @@ pub struct DwgState {
     pub focus: Option<Id>,
     /// item do menu do botão direito
     ctx_item: Option<Id>,
-    /// o que o arraste move: 0 o item, 1 o texto da cota, 2 a ponta da chamada
+    /// o que o arraste move: 0 o item, 1 o texto da cota, 2 a ponta da chamada, 3 o lado de saída da seta
     drag_kind: u8,
+    /// qual ponta da nota o arraste de `drag_kind` 2 move (0 = a primeira; B370)
+    drag_seta: usize,
     /// estilo copiado (colar em outra cota/nota/vista)
     style_clip: Option<fenkra_core::pmi::PmiStyle>,
     /// direção da câmera do 3D para a próxima vista (para o observador, eixo x)
@@ -199,6 +202,7 @@ impl DwgState {
             focus: None,
             ctx_item: None,
             drag_kind: 0,
+            drag_seta: 0,
             style_clip: None,
             cam: None,
             states: Default::default(),
@@ -729,6 +733,10 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
         let resp = ui.allocate_rect(rect, egui::Sense::click_and_drag());
         let st = app.dwg.as_mut().unwrap();
         let now = ui.ctx().input(|i| i.time);
+        // B427: vistas de montagem calculadas em segundo plano que ficaram prontas
+        if fundo_ui::sondar(st, ui.ctx()) {
+            st.invalidate();
+        }
         // o 3D mudou no disco? (de tempos em tempos)
         if now - st.last_check > 1.5 {
             st.last_check = now;
@@ -809,7 +817,34 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
         let is_dim = |id: Option<Id>| id.is_some_and(|i| st.d.dims.iter().any(|d| d.id == i));
         // alça do texto da cota em edição/realçada (centro do texto, mm) e ponta da chamada
         let mut text_handle: Option<(Id, V2, f64)> = None;
-        let tip_handle: Option<(Id, V2)> = active.and_then(|a| st.d.notes.iter().find(|n| n.id == a && n.anchor3.is_none()).and_then(|n| n.leader.map(|l| (n.id, l))));
+        // B370: uma alça por ponta; a primeira só solta (a presa ao modelo se refaz por `alcas`),
+        // as extras sempre, e soltá-las sobre uma aresta as prende ao modelo
+        let tip_handle: Vec<(Id, usize, V2)> = active
+            .and_then(|a| st.d.notes.iter().find(|n| n.id == a))
+            .map(|n| {
+                let ancorada = |k: usize| k == 0 && n.anchor3.is_some();
+                let pts = n.leader.into_iter().chain(n.leaders_extra.iter().copied());
+                let mut o: Vec<(Id, usize, V2)> = pts.enumerate().filter(|(k, _)| !ancorada(*k)).map(|(k, t)| (n.id, k, t)).collect();
+                // extras presas ao modelo: a alça fica onde a vista as põe hoje
+                if n.anchors_extra.iter().any(|a| a.is_some()) {
+                    let mut n2 = n.clone();
+                    fenkra_desenho::setas_nota::acompanhar_modelo(&st.d, &mut n2, &mut st.models);
+                    o = n2.leader.into_iter().chain(n2.leaders_extra.iter().copied()).enumerate().filter(|(k, _)| !ancorada(*k)).map(|(k, t)| (n.id, k, t)).collect();
+                }
+                o
+            })
+            .unwrap_or_default();
+        // B370: quadrado no início de cada seta (onde sai da caixa do texto); arrastar troca o lado
+        let saida_handle: Vec<(Id, usize, V2)> = active
+            .and_then(|a| st.d.notes.iter().find(|n| n.id == a && n.style.angle == 0. && !n.style.mirror).cloned())
+            .and_then(|n| {
+                let (lo, hi) = layout::caixa_da_nota(&st.d, &n, &mut st.models)?;
+                let mut n2 = n.clone();
+                fenkra_desenho::setas_nota::acompanhar_modelo(&st.d, &mut n2, &mut st.models);
+                let pts = fenkra_desenho::setas_nota::pontas(&n2);
+                Some(pts.iter().enumerate().map(|(k, t)| (n.id, k, fenkra_desenho::setas_nota::ponto_de_saida(lo, hi, *t, fenkra_desenho::setas_nota::lado(&n, k)))).collect())
+            })
+            .unwrap_or_default();
         let items = st.items.as_ref().unwrap();
         for it in items {
             let mine = it.owner.is_some();
@@ -904,8 +939,11 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             if let Some((_, c, _)) = text_handle {
                 painter.rect_stroke(Rect::from_center_size(to_scr(c), Vec2::splat(11.)), 2., Stroke::new(1.8, orange), egui::StrokeKind::Middle);
             }
-            if let Some((_, t)) = tip_handle {
-                painter.circle_stroke(to_scr(t), 5.5, Stroke::new(1.8, orange));
+            for (_, _, t) in &saida_handle {
+                painter.rect_stroke(Rect::from_center_size(to_scr(*t), Vec2::splat(8.)), 1., Stroke::new(1.8, orange), egui::StrokeKind::Middle);
+            }
+            for (_, _, t) in &tip_handle {
+                painter.circle_stroke(to_scr(*t), 5.5, Stroke::new(1.8, orange));
             }
         }
         // alças diretas da vista em foco (B250)
@@ -1039,9 +1077,21 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                         let _ = (c, s);
                         st.focus = Some(id);
                         st.drag_kind = 1;
-                    } else if let Some((id, _)) = tip_handle.filter(|(_, t)| near(o, *t, tol)) {
+                    } else if let Some((id, k, _)) = saida_handle.iter().copied().find(|(_, _, t)| near(o, *t, tol)) {
+                        st.focus = Some(id);
+                        st.drag_kind = 3;
+                        st.drag_seta = k;
+                    } else if let Some((id, k, t)) = tip_handle.iter().copied().find(|(_, _, t)| near(o, *t, tol)) {
                         st.focus = Some(id);
                         st.drag_kind = 2;
+                        st.drag_seta = k;
+                        // uma ponta extra presa ao modelo solta-se onde está para ser arrastada
+                        if let Some(n) = st.d.notes.iter_mut().find(|n| n.id == id) {
+                            if k >= 1 && fenkra_desenho::setas_nota::ancora(n, k).is_some() {
+                                fenkra_desenho::setas_nota::mover(n, k, t);
+                                fenkra_desenho::setas_nota::prender(n, k, None);
+                            }
+                        }
                     } else {
                         let id = pick(st, o);
                         if id != st.sel {
@@ -1063,8 +1113,23 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                             }
                         }
                         2 => {
-                            if let Some(l) = st.d.notes.iter_mut().find(|n| n.id == id).and_then(|n| n.leader.as_mut()) {
-                                *l = [l[0] + dm[0], l[1] + dm[1]];
+                            let k = st.drag_seta;
+                            if let Some(n) = st.d.notes.iter_mut().find(|n| n.id == id) {
+                                if let Some(l) = fenkra_desenho::setas_nota::pontas(n).get(k).copied() {
+                                    fenkra_desenho::setas_nota::mover(n, k, [l[0] + dm[0], l[1] + dm[1]]);
+                                }
+                            }
+                        }
+                        3 => {
+                            // a alça de saída escolhe o lado da caixa mais perto do cursor
+                            let k = st.drag_seta;
+                            if let (Some(p), Some(n)) = (mouse_mm, st.d.notes.iter().find(|n| n.id == id).cloned()) {
+                                if let Some((lo, hi)) = layout::caixa_da_nota(&st.d, &n, &mut st.models) {
+                                    let lado = fenkra_desenho::setas_nota::lado_pelo_ponto(lo, hi, p);
+                                    if let Some(n) = st.d.notes.iter_mut().find(|n| n.id == id) {
+                                        fenkra_desenho::setas_nota::definir_lado(n, k, lado);
+                                    }
+                                }
                             }
                         }
                         _ => move_item(st, id, dm),
@@ -1083,7 +1148,8 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             // ponta da chamada solta sobre uma aresta: fica presa à vista (associativa)
             if st.dragging && st.drag_kind == 2 {
                 if let Some(id) = st.focus {
-                    let tip = st.d.notes.iter().find(|n| n.id == id).and_then(|n| n.leader);
+                    let k = st.drag_seta;
+                    let tip = st.d.notes.iter().find(|n| n.id == id).and_then(|n| fenkra_desenho::setas_nota::pontas(n).get(k).copied());
                     if let Some(t) = tip {
                         let hit = snap(st, t, None);
                         let assoc = hit.and_then(|(vid, s, q)| {
@@ -1092,10 +1158,12 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                         });
                         if let Some(n) = st.d.notes.iter_mut().find(|n| n.id == id) {
                             if let Some((vid, s, a3)) = assoc {
-                                n.view = Some(vid);
-                                n.anchor3 = Some(a3);
-                                n.snapped = true;
-                                n.leader = Some(s);
+                                // as pontas de uma nota seguem todas a mesma vista
+                                if k == 0 || n.view == Some(vid) || n.view.is_none() {
+                                    n.view = Some(vid);
+                                    fenkra_desenho::setas_nota::prender(n, k, Some(a3));
+                                    fenkra_desenho::setas_nota::mover(n, k, s);
+                                }
                             }
                         }
                     }
@@ -1127,6 +1195,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             }
             x = r.left() - 4.;
         }
+        fundo_ui::barra(ui, st, rect);
         dim_edit_window(ui.ctx(), st);
         let (pedido, msg) = assistentes::janelas(ui.ctx(), st, cur_src.clone());
         st.toast = msg;
@@ -1381,6 +1450,11 @@ fn move_item(st: &mut DwgState, id: Id, dm: V2) {
             n.pos = [n.pos[0] + dm[0], n.pos[1] + dm[1]];
             if n.anchor3.is_none() {
                 if let Some(l) = n.leader.as_mut() {
+                    *l = [l[0] + dm[0], l[1] + dm[1]];
+                }
+            }
+            for (k, l) in n.leaders_extra.iter_mut().enumerate() {
+                if n.anchors_extra.get(k).copied().flatten().is_none() {
                     *l = [l[0] + dm[0], l[1] + dm[1]];
                 }
             }

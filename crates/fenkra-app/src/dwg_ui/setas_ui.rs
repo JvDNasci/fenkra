@@ -29,7 +29,7 @@ pub fn secao(ui: &mut egui::Ui, n: &mut Note) -> bool {
                 });
                 let mut lado = setas::lado(n, k);
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(tr("Ancoragem na nota")).on_hover_text(tr("De que lado da nota sai esta seta. Cada seta tem a sua; também se arrasta o quadrado no início da seta, no 3D."));
+                    ui.label(tr("Ancoragem na nota")).on_hover_text(tr("De que lado da nota sai esta seta. Cada seta tem a sua; também se arrasta o quadrado no início da seta, na folha."));
                     for (l, nome) in LADOS {
                         ui.selectable_value(&mut lado, l, tr(nome));
                     }

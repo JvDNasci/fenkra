@@ -18,6 +18,7 @@ pub mod layout;
 pub mod novo;
 pub mod ocupacao;
 pub mod opcoes;
+pub mod fundo;
 pub mod setas_nota;
 pub mod simbolos;
 pub mod solda_cordao;
@@ -572,6 +573,10 @@ pub struct Note {
     /// ficam em `style.leader_side` / `style.leader_arrow`, como no PMI
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub leaders_extra: Vec<V2>,
+    /// ponto do modelo onde cada ponta extra encosta (B370), na ordem de `leaders_extra`; `None`
+    /// = ponta solta na folha. Mais curto que `leaders_extra` = as que faltam estão soltas
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub anchors_extra: Vec<Option<V3>>,
     pub text: String,
     #[serde(default = "size35")]
     pub size: f64,
@@ -602,7 +607,7 @@ pub struct Note {
 
 impl Default for Note {
     fn default() -> Self {
-        Note { id: Id(0), sheet: Id(0), kind: NoteKind::Text, pos: [0., 0.], leader: None, leaders_extra: vec![], text: String::new(), size: 3.5, weld: None, rough: None, gdt: None, style: Default::default(), view: None, anchor3: None, snapped: false, pmi: None }
+        Note { id: Id(0), sheet: Id(0), kind: NoteKind::Text, pos: [0., 0.], leader: None, leaders_extra: vec![], anchors_extra: vec![], text: String::new(), size: 3.5, weld: None, rough: None, gdt: None, style: Default::default(), view: None, anchor3: None, snapped: false, pmi: None }
     }
 }
 
