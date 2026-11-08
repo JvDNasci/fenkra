@@ -1533,11 +1533,20 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                     }
                     None => {
                         let (Some(s0), Some(st)) = (cam.project(rect, anchor), cam.project(rect, lab)) else { continue };
+                        // balões e notas presos perto um do outro não caem no mesmo ponto da tela (B430)
+                        let st = match &pm.kind {
+                            PmiKind::Balloon { item, .. } => crate::rotulos_3d::reservar_balao(ui, st, pen.size + 3.5 * item.chars().count().saturating_sub(1) as f32, rect),
+                            PmiKind::Note | PmiKind::FeatureNote { .. } | PmiKind::TitleBlock { .. } => crate::rotulos_3d::origem_livre(ui, st),
+                            _ => st,
+                        };
                         let s1 = second.and_then(|q| cam.project(rect, q));
                         let routes_s: Vec<Vec<Pos2>> = routes3.iter().filter_map(|r| r.iter().map(|q| cam.project(rect, *q)).collect::<Option<Vec<_>>>()).collect();
                         let cv = Cv::new(&painter);
                         let r = draw_kind(&cv, &pen, pm, st, s0, s1, &routes_s, &main, stack.as_ref(), &fields);
                         cv.flush();
+                        if matches!(pm.kind, PmiKind::Note | PmiKind::FeatureNote { .. } | PmiKind::TitleBlock { .. }) {
+                            crate::rotulos_3d::registrar(ui, r);
+                        }
                         r
                     }
                 }
@@ -1712,7 +1721,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 action = Some((pm.id, 3));
                 ui.close();
             }
-            if matches!(pm.kind, PmiKind::Note | PmiKind::FeatureNote { .. }) {
+            if matches!(pm.kind, PmiKind::Note | PmiKind::FeatureNote { .. } | PmiKind::TitleBlock { .. }) {
                 if ui.button(tr("Adicionar ponta…")).on_hover_text(tr("Clique noutro elemento do modelo: a nota ganha mais uma chamada")).clicked() {
                     action = Some((pm.id, 5));
                     ui.close();

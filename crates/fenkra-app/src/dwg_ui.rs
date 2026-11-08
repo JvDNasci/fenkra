@@ -878,7 +878,9 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             }
         }
         // selo de estado no canto de cada vista (forma e texto, não só a cor)
-        for (id, state) in st.states.iter().filter(|(id, _)| st.d.view(**id).is_some_and(|v| v.sheet == st.sheet)) {
+        // vista atualizada é o normal: o selo sobre a folha só aparece quando há o que avisar (B430). O
+        // estado "Atualizada" fica no painel da vista, fora da área de desenho
+        for (id, state) in st.states.iter().filter(|(id, s)| crate::arvore_nomes::selo_na_folha(**s == ViewState::Atualizada) && st.d.view(**id).is_some_and(|v| v.sheet == st.sheet)) {
             let Some((_, _, hi)) = st.boxes.iter().find(|b| b.0 == *id) else { continue };
             seal(&painter, ui, to_scr(*hi), *state);
         }
@@ -1788,8 +1790,10 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             st.sel = None;
         }
     });
+    // só o nome do arquivo: o caminho inteiro (por vezes 150 caracteres) quebrava em três linhas e
+    // empurrava a árvore; ele continua na dica (B429)
     if let Some(p) = &st.path {
-        ui.label(RichText::new(p.display().to_string()).weak().small());
+        ui.label(RichText::new(crate::arvore_nomes::nome_do_arquivo(p)).weak().small()).on_hover_text(p.display().to_string());
     }
     ui.add_space(4.);
     let sheets: Vec<(Id, String, &'static str)> = st.d.sheets.iter().map(|s| (s.id, s.name.clone(), s.format.label())).collect();

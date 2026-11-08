@@ -1099,6 +1099,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
         }
         crate::demo_foto::aparencia(&mut app.open.doc);
+        crate::demo_foto::apresentacao(&mut app.open.doc);
         app.demo_previa = crate::previa::demo_preparar(&mut app.open.doc);
         if let Some(id) = crate::sketch_demo::preparar(&mut app.open.doc) {
             app.begin_sketch_pending = Some(id);
@@ -1115,6 +1116,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     /// Bancada de montagem ativa (com montagem aberta)?
+    /// Montagem ou desenho na frente: não há linha do tempo de peça para a barra de estado mostrar (B430).
+    pub fn sem_peca_em_edicao(&self) -> bool {
+        self.in_asm() || (self.settings.bench == crate::settings::Bench::Desenho && self.dwg.is_some())
+    }
+
     pub fn in_asm(&self) -> bool {
         self.settings.bench == crate::settings::Bench::Montagem && self.asm.is_some()
     }
@@ -7128,7 +7134,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if ui.small_button(tr("⟳ Atualizar")).on_hover_text(tr("recalcula o que mudou (F5)")).clicked() {
                     self.send_recompute(false);
                 }
-                if let Some(nome) = self.open.doc.objeto_em_trabalho().map(|id| self.open.doc.name_of(id)) {
+                if let Some(nome) = self.open.doc.objeto_em_trabalho().map(|id| self.open.doc.name_of(id)).filter(|_| crate::barra_estado::mostra_historico(self.sem_peca_em_edicao())) {
                     ui.separator();
                     ui.label(RichText::new(format!("{}: {nome}", tr("Em trabalho"))).small());
                 }
@@ -7138,23 +7144,26 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if ui.small_button(tr("⟲ Reconstruir")).on_hover_text(tr("reconstrói tudo do zero, sem cache (Ctrl+F5)")).clicked() {
                     self.send_recompute(true);
                 }
-                // passo a passo: move o marcador do corpo ativo comando a comando
+                // passo a passo: move o marcador do corpo ativo comando a comando. Na montagem não há
+                // linha do tempo de peça para andar, então a barra sai (B430)
                 let act = self.open.doc.active_collector;
                 let total = self.open.doc.features.iter().filter(|f| f.target == act && !self.open.doc.is_free(f)).count();
                 let cur = self.open.doc.collectors.iter().find(|c| c.id == act).and_then(|c| c.marker).unwrap_or(total).min(total);
                 let mut set: Option<Option<usize>> = None;
-                if ui.small_button("⏮").on_hover_text(tr("voltar ao início (reconstruir passo a passo)")).clicked() {
-                    set = Some(Some(0));
-                }
-                if ui.small_button("◀").on_hover_text(tr("um comando para trás")).clicked() {
-                    set = Some(Some(cur.saturating_sub(1)));
-                }
-                ui.label(RichText::new(format!("{cur}/{total}")).small().weak());
-                if ui.small_button("▶").on_hover_text(tr("reconstruir o próximo comando")).clicked() {
-                    set = Some(if cur + 1 >= total { None } else { Some(cur + 1) });
-                }
-                if ui.small_button("⏭").on_hover_text(tr("até o fim")).clicked() {
-                    set = Some(None);
+                if crate::barra_estado::mostra_historico(self.sem_peca_em_edicao()) {
+                    if ui.small_button("⏮").on_hover_text(tr("voltar ao início (reconstruir passo a passo)")).clicked() {
+                        set = Some(Some(0));
+                    }
+                    if ui.small_button("◀").on_hover_text(tr("um comando para trás")).clicked() {
+                        set = Some(Some(cur.saturating_sub(1)));
+                    }
+                    ui.label(RichText::new(format!("{cur}/{total}")).small().weak());
+                    if ui.small_button("▶").on_hover_text(tr("reconstruir o próximo comando")).clicked() {
+                        set = Some(if cur + 1 >= total { None } else { Some(cur + 1) });
+                    }
+                    if ui.small_button("⏭").on_hover_text(tr("até o fim")).clicked() {
+                        set = Some(None);
+                    }
                 }
                 if let Some(m) = set {
                     if let Some(c) = self.open.doc.collectors.iter_mut().find(|c| c.id == act) {
@@ -8464,7 +8473,7 @@ impl eframe::App for App {
         crate::desempenho::aplicar_vsync(frame, self.settings.vsync);
         crate::desempenho::contar_quadro(root.ctx(), self.settings.contador_fps);
         crate::desempenho::fechar_se_acabou(root.ctx());
-        crate::demo_foto::quadro(root.ctx());
+        crate::demo_foto::quadro(root.ctx(), || self.estado_demo());
         crate::partida::contar_quadro();
         crate::medir_quadros::quadro(frame.info().cpu_usage);
         let ctx = &root.ctx().clone();

@@ -3,12 +3,16 @@
 Uso: python capturar.py <pasta_do_diario> [filtro]
 Cada linha de LISTA: arquivo, peça, bancada, etapa, resultado, legenda, extras.
 `rollback=n` no extra abre a peça parada no comando n: as etapas intermediárias.
+`painel=<nome>` no extra diz que comando deve estar aberto na captura (B431): o programa grava
+`<captura>.png.estado.json` com o que a tela mostra, e a captura só vale se bater. Sem isso, a legenda
+prometia um painel que a imagem não mostrava (tela inicial, painel fechado).
+`FENKRA_EXE` troca o executável.
 """
 import json, os, shutil, subprocess, sys, tempfile, time, uuid
 
 RAIZ = os.path.dirname(os.path.abspath(__file__))
 MODELO = os.path.join(RAIZ, "modelo")
-EXE = "C:/cargo-target/kart14/release/fenkra.exe"
+EXE = os.environ.get("FENKRA_EXE", "C:/cargo-target/kart14/release/fenkra.exe")
 DIARIO = sys.argv[1]
 FILTRO = sys.argv[2] if len(sys.argv) > 2 else ""
 SUFIXO = sys.argv[3] if len(sys.argv) > 3 else ""
@@ -20,8 +24,29 @@ def proximo():
     return 1 + len([f for f in os.listdir(DIARIO) if f.endswith(".png")])
 
 
+def confere_estado(png, esperado):
+    """O que a tela mostrava na hora da captura contra o que a legenda promete. Devolve (ok, motivo)."""
+    try:
+        e = json.load(open(png + ".estado.json", encoding="utf8"))
+    except (OSError, ValueError):
+        return False, "o programa não gravou o estado da tela (versão antiga do executável?)"
+    if e.get("tela_inicial"):
+        return False, "a tela inicial apareceu no lugar da peça"
+    # painéis que não são comando de peça: o estado diz se ficaram abertos
+    sinais = {"sketch": "sketch_em_edicao", "biblioteca": "biblioteca_aberta", "simulacao": "simulacao_aberta", "transmissao": "transmissao_aberta"}
+    if esperado in sinais:
+        return (True, "") if e.get(sinais[esperado]) else (False, f"o painel '{esperado}' não abriu (estado: {sinais[esperado]} = {e.get(sinais[esperado])})")
+    if esperado and e.get("comando_aberto") != esperado:
+        return False, f"o painel '{esperado}' não abriu (aberto: {e.get('comando_aberto')})"
+    return True, ""
+
+
 def captura(arq, peca, bancada, etapa, resultado, legenda, extra=None):
     extra = dict(extra or {})
+    painel = extra.pop("painel", None)
+    # demos que montam a própria peça ou montagem (FENKRA_DEMO_ASM, _SKETCH...): o arquivo aberto por
+    # FENKRA_DEMO_ARQUIVO passaria por cima e o painel não abriria
+    sem_arquivo = extra.pop("sem_arquivo", False)
     rollback = extra.pop("rollback", None)
     espera = int(extra.pop("espera", 7))
     fonte = os.path.join(MODELO, arq)
@@ -35,8 +60,11 @@ def captura(arq, peca, bancada, etapa, resultado, legenda, extra=None):
     slug = f"{peca}_{etapa}".lower().replace(" ", "_").replace("/", "_")
     nome = f"{n:04d}_{slug}.png"
     png = os.path.join(DIARIO, nome)
-    env = dict(os.environ, APPDATA=tmp, FENKRA_DEMO_FOTO=png, FENKRA_DEMO_FOTO_ESPERA=str(espera), FENKRA_DEMO_ARQUIVO=fonte)
+    env = dict(os.environ, APPDATA=tmp, FENKRA_DEMO_FOTO=png, FENKRA_DEMO_FOTO_ESPERA=str(espera))
+    if not sem_arquivo:
+        env["FENKRA_DEMO_ARQUIVO"] = fonte
     env.setdefault("FENKRA_DEMO_CAMERA", "35,25,1")
+    env.setdefault("FENKRA_DEMO_APRESENTACAO", "1")
     env.update({k: str(v) for k, v in extra.items()})
     p = subprocess.Popen([EXE], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     try:
@@ -45,9 +73,13 @@ def captura(arq, peca, bancada, etapa, resultado, legenda, extra=None):
         p.kill()
     shutil.rmtree(tmp, ignore_errors=True)
     if os.path.exists(png):
+        ok_estado, motivo = confere_estado(png, painel)
+        registro = {"arquivo": nome, "peca": peca, "bancada": bancada, "etapa": etapa, "resultado": resultado, "legenda": legenda, "conferida": ok_estado}
+        if not ok_estado:
+            registro["motivo"] = motivo
         with open(JSONL, "a", encoding="utf8") as f:
-            f.write(json.dumps({"arquivo": nome, "peca": peca, "bancada": bancada, "etapa": etapa, "resultado": resultado, "legenda": legenda}, ensure_ascii=False) + "\n")
-        print("ok", nome, flush=True)
+            f.write(json.dumps(registro, ensure_ascii=False) + "\n")
+        print("ok" if ok_estado else "NÃO CONFERE", nome, motivo, flush=True)
     else:
         print("sem imagem", nome, flush=True)
 
@@ -129,6 +161,11 @@ for s_, n in [("SC-QUADRO", "Subconjunto do quadro"), ("SC-EIXO", "Subconjunto d
 a("KART-PLANO.fka", "KART", "Montagem", "geral", "Montagem geral do kart", espera=60)
 a("KART-PLANO.fka", "KART", "Montagem", "lateral", "Kart de lado", espera=60, FENKRA_DEMO_CAMERA="0,5,0.9")
 a("KART.fka", "KART", "Montagem", "subconjuntos", "Montagem de topo com o mestre e os subconjuntos", espera=60)
+# estados que só o mouse abre, pelas variáveis FENKRA_DEMO (B431): Biblioteca, gerador, simulação e Sketch
+a("SC-QUADRO.fka", "BIBLIOTECA", "Montagem", "painel", "Biblioteca de normas com o M6 escolhido", espera=30, painel="biblioteca", sem_arquivo=True, FENKRA_DEMO_ASM="biblioteca")
+a("SC-QUADRO.fka", "GERADOR", "Montagem", "painel", "Gerador de transmissão (engrenagens e correntes)", espera=30, painel="transmissao", sem_arquivo=True, FENKRA_DEMO_ASM="transmissao")
+a("SC-QUADRO.fka", "SIMULACAO", "Montagem", "painel", "Janela de simulação de movimento da cadeia", espera=30, painel="simulacao", sem_arquivo=True, FENKRA_DEMO_ASM="cadeia")
+a("CV-SOL1.fkp", "SKETCH", "Sketch", "retangulo", "Sketch de retângulo em edição", espera=12, painel="sketch", FENKRA_DEMO_SKETCH="retangulo")
 a("DW-KART.fkd", "DW-KART", "Desenho", "folha", "Folha de conjunto com lista de peças", espera=150)
 a("DW-QUADRO.fkd", "DW-QUADRO", "Desenho", "folha", "Quadro com lista de corte", espera=15)
 a("DW-EX01.fkd", "DW-EX01", "Desenho", "folha", "Eixo: vista e corte", espera=12)
