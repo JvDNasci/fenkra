@@ -551,7 +551,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     expr(ui, "Afastamento do plano", &mut w.offset, vars, "mm");
                 }
             }
-            crate::editor::check(ui, &mut w.reverse, "espessura para o outro lado");
+            crate::chapa_unif_ui::inverter(ui, &mut w.reverse);
             crate::editor::check(ui, &mut w.mid, "espessura dividida pelos dois lados");
             ui.label(RichText::new(tr("A espessura vem dos parâmetros da chapa (▭ Parâmetros).")).weak().small());
         }
