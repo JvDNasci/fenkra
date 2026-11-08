@@ -8,13 +8,16 @@
     "DIN 6885-1 / ISO R773: origem não verificada (rótulo antigo: contexto do projeto). PENDENTE de fonte A ou B citável; ver docs/biblioteca/POLITICA-DE-DADOS.md",
     "J.W. Winco, DIN 6885 Parallel Keys Steel (faixas do eixo e b×h de 2×2 a 12×8): https://www.jwwinco.com/en-us/products/3.2-Mounting-Positioning-Leveling-with-Retaining-Cables-Screws-Clamping-and-Supporting-Elements/Positioning-elements-Clamping-pads/DIN-6885-Steel-Parallel-Keys",
     "Global Fastener, DIN 6885 (b×h de 8×7 a 22×14): https://www.globalfastener.com/standards/detail_20214.html",
-    "TU Dortmund, prova exemplo TZ WS10/11 (t1 de 6×6 e 10×8): https://lkp.mb.tu-dortmund.de/storages/me-mb/r/dokumente/Klausuren/Beispielklausuren/Klausur_bspl_TZ_WS1011.pdf"
+    "TU Dortmund, prova exemplo TZ WS10/11 (t1 de 6×6 e 10×8): https://lkp.mb.tu-dortmund.de/storages/me-mb/r/dokumente/Klausuren/Beispielklausuren/Klausur_bspl_TZ_WS1011.pdf",
+    "fasten.it, DIN 6885-1 (faixas do eixo, b×h, t1 e t2 de 2×2 a 22×14): https://fasten.it/norms/norm/din_6885-1",
+    "J.W. Winco, catálogo DIN 6885-1 em PDF (t1 e t2 por diâmetro de eixo, de 2×2 a 14×9): https://live-catalog.jwwinco.com/pdf/winco/us/6885-1.pdf"
   ],
   "confirmado_por": [
     "faixas e b×h de 2×2 a 12×8: duas fontes (contexto + J.W. Winco)",
     "b×h de 14×9 a 22×14: duas fontes (contexto + Global Fastener); faixas do eixo só na fonte 1",
     "t1 de 6×6 e 10×8: duas fontes (contexto + TU Dortmund); demais t1 só na fonte 1",
-    "t2: só na fonte 1 — PENDENTE de segunda fonte gratuita"
+    "t1 e t2 de 2×2 a 14×9: três fontes (contexto, fasten.it e o PDF da J.W. Winco)",
+    "t1 e t2 de 16×10 a 22×14 e as faixas do eixo de 44 a 85 mm: uma fonte gratuita (fasten.it), que repete o valor de contexto de origem não verificada; PENDENTE de segunda fonte independente"
   ],
   "faixas": [
     { "d_acima": 6, "d_ate": 8, "b": 2, "h": 2, "t1": 1.2, "t2": 1.0 },

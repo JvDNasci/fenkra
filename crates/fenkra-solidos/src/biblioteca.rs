@@ -635,6 +635,9 @@ mod tests {
         assert_eq!(t.faixas.len(), 13);
         assert_eq!(t.nivel, "C");
         assert!(!t.confirmado_por.is_empty() && t.licenca.starts_with("CC BY 4.0"));
+        // B52: t2 (rasgo do cubo) agora com segunda fonte gratuita; o que segue com uma só diz PENDENTE
+        assert!(t.confirmado_por.iter().any(|c| c.starts_with("t1 e t2 de 2×2 a 14×9") && c.contains("fasten.it") && c.contains("Winco")));
+        assert!(!t.confirmado_por.iter().any(|c| c.starts_with("t2: só na fonte 1")));
         let c = chaveta_para_eixo(20.).unwrap();
         assert_eq!((c.b, c.h, c.t1, c.t2), (6., 6., 3.5, 2.8));
         let c = chaveta_para_eixo(40.).unwrap();
