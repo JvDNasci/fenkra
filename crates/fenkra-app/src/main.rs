@@ -50,6 +50,7 @@ mod asm_ui;
 mod asm_abrir;
 mod textos_abrir;
 mod textos_validade;
+mod sentido_corte_ui;
 mod asm_cmd;
 mod asm_manip;
 mod demo_foto;

@@ -6,6 +6,7 @@
 
 pub mod erro;
 pub mod validade;
+pub mod sentido_corte;
 pub mod forma_brep;
 pub mod forma_vinculo;
 pub mod polimento;
@@ -4188,7 +4189,10 @@ impl Ctx<'_> {
                 if let Some(v0) = vol0 {
                     let v1 = self.body(f.target).map_or(0., |b| b.mass().volume);
                     if (v0 - v1).abs() <= 1e-9 * v0.abs().max(1.) {
-                        return Ok(Some("o corte não removeu material: a ferramenta não alcança o corpo — confira o sentido ('inverter') e a distância".into()));
+                        // B392: confere o outro lado para dizer com certeza se 'inverter' resolve
+                        let removeria = |t: &Shape| self.body(f.target).and_then(|b| b.boolean(t, Bool::Cut).ok()).is_some_and(|r| v0 - r.mass().volume > 1e-9 * v0.abs().max(1.));
+                        let outro_lado = self.tool_extrusao(e, &face, frame, dir.map(|x| -x), loops_size(&sk.loops), taper, f.target).is_ok_and(|(t, _)| removeria(&t));
+                        return Ok(Some(sentido_corte::aviso(outro_lado, e.reverse).into()));
                     }
                 }
                 Ok(warn_open)

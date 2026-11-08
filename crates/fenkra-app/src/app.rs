@@ -8595,6 +8595,11 @@ impl eframe::App for App {
                 if g == self.gen_sent && !promoted.is_empty() {
                     self.apply_promoted(&promoted);
                 }
+                // B392: recorte recém-criado que foi para o lado sem material vira o sentido, uma vez
+                if g == self.gen_sent && crate::sentido_corte_ui::ajusta(&mut self.open.doc, self.sent_doc.as_ref(), self.session.as_ref().filter(|s| s.is_new).map(|s| s.id), &r.status) {
+                    self.toast(tr(crate::sentido_corte_ui::VIRADO), false);
+                    self.request_recompute();
+                }
                 let editing = self.session.as_ref().map(|s| s.id);
                 let errs = r.status.iter().filter(|(id, s)| Some(**id) != editing && matches!(s, Status::Error(_))).count();
                 if errs > self.errors_prev && self.started {
