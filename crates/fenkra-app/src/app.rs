@@ -1110,6 +1110,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         }
         crate::demo_foto::aparencia(&mut app.open.doc);
         crate::demo_foto::apresentacao(&mut app.open.doc);
+        if let Some(st) = app.asm.as_mut() {
+            crate::demo_foto::apresentacao_montagem(&mut st.asm);
+        }
         app.demo_previa = crate::previa::demo_preparar(&mut app.open.doc);
         if let Some(id) = crate::sketch_demo::preparar(&mut app.open.doc) {
             app.begin_sketch_pending = Some(id);
