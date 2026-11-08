@@ -1,0 +1,283 @@
+{
+ "id": "iso15_63",
+ "nome": "Rolamento rígido de esferas, série 63",
+ "norma": "ISO 15",
+ "revisao": "2017",
+ "versao": 1,
+ "gerador": "rolamento",
+ "tipo": "rolamento",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Partmatch — série 6300 (medidas de contorno)",
+   "url": "https://partmatch.io/bearings/6300"
+  },
+  {
+   "rotulo": "TFL Bearing — tabela da série 6300 (medidas e capacidades do fabricante)",
+   "url": "https://tflbearing.com/?p=2577"
+  },
+  {
+   "rotulo": "NSK — 6300 (conferência de d, D e B)",
+   "url": "https://www.nsk.com/engineering/6300-dgbb-sr.html"
+  }
+ ],
+ "campos": [
+  "D",
+  "B"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "6300",
+   "d_nominal": 10,
+   "valores": {
+    "D": 35,
+    "B": 11
+   },
+   "confirmado_por": 2,
+   "furo_min": 34.9,
+   "furo_max": 35.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 8100 N, C0 = 3450 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6301",
+   "d_nominal": 12,
+   "valores": {
+    "D": 37,
+    "B": 12
+   },
+   "confirmado_por": 2,
+   "furo_min": 36.9,
+   "furo_max": 37.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 9700 N, C0 = 4200 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6302",
+   "d_nominal": 15,
+   "valores": {
+    "D": 42,
+    "B": 13
+   },
+   "confirmado_por": 2,
+   "furo_min": 41.9,
+   "furo_max": 42.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 11400 N, C0 = 5450 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6303",
+   "d_nominal": 17,
+   "valores": {
+    "D": 47,
+    "B": 14
+   },
+   "confirmado_por": 2,
+   "furo_min": 46.9,
+   "furo_max": 47.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 13600 N, C0 = 6650 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6304",
+   "d_nominal": 20,
+   "valores": {
+    "D": 52,
+    "B": 15
+   },
+   "confirmado_por": 2,
+   "furo_min": 51.9,
+   "furo_max": 52.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 15900 N, C0 = 7900 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6305",
+   "d_nominal": 25,
+   "valores": {
+    "D": 62,
+    "B": 17
+   },
+   "confirmado_por": 2,
+   "furo_min": 61.9,
+   "furo_max": 62.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 20600 N, C0 = 11200 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6306",
+   "d_nominal": 30,
+   "valores": {
+    "D": 72,
+    "B": 19
+   },
+   "confirmado_por": 2,
+   "furo_min": 71.9,
+   "furo_max": 72.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 26700 N, C0 = 15000 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6307",
+   "d_nominal": 35,
+   "valores": {
+    "D": 80,
+    "B": 21
+   },
+   "confirmado_por": 2,
+   "furo_min": 79.9,
+   "furo_max": 80.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 33500 N, C0 = 19200 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6308",
+   "d_nominal": 40,
+   "valores": {
+    "D": 90,
+    "B": 23
+   },
+   "confirmado_por": 2,
+   "furo_min": 89.9,
+   "furo_max": 90.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 40500 N, C0 = 24000 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6309",
+   "d_nominal": 45,
+   "valores": {
+    "D": 100,
+    "B": 25
+   },
+   "confirmado_por": 2,
+   "furo_min": 99.9,
+   "furo_max": 100.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 53000 N, C0 = 32000 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6310",
+   "d_nominal": 50,
+   "valores": {
+    "D": 110,
+    "B": 27
+   },
+   "confirmado_por": 2,
+   "furo_min": 109.9,
+   "furo_max": 110.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 62000 N, C0 = 38500 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6311",
+   "d_nominal": 55,
+   "valores": {
+    "D": 120,
+    "B": 29
+   },
+   "confirmado_por": 2,
+   "furo_min": 119.9,
+   "furo_max": 120.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 71500 N, C0 = 44500 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6312",
+   "d_nominal": 60,
+   "valores": {
+    "D": 130,
+    "B": 31
+   },
+   "confirmado_por": 2,
+   "furo_min": 129.9,
+   "furo_max": 130.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 82000 N, C0 = 52000 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6313",
+   "d_nominal": 65,
+   "valores": {
+    "D": 140,
+    "B": 33
+   },
+   "confirmado_por": 2,
+   "furo_min": 139.9,
+   "furo_max": 140.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 92500 N, C0 = 60000 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6314",
+   "d_nominal": 70,
+   "valores": {
+    "D": 150,
+    "B": 35
+   },
+   "confirmado_por": 2,
+   "furo_min": 149.9,
+   "furo_max": 150.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 104000 N, C0 = 68000 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6315",
+   "d_nominal": 75,
+   "valores": {
+    "D": 160,
+    "B": 37
+   },
+   "confirmado_por": 2,
+   "furo_min": 159.9,
+   "furo_max": 160.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 113000 N, C0 = 77000 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6316",
+   "d_nominal": 80,
+   "valores": {
+    "D": 170,
+    "B": 39
+   },
+   "confirmado_por": 2,
+   "furo_min": 169.9,
+   "furo_max": 170.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 123000 N, C0 = 86500 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6317",
+   "d_nominal": 85,
+   "valores": {
+    "D": 180,
+    "B": 41
+   },
+   "confirmado_por": 2,
+   "furo_min": 179.9,
+   "furo_max": 180.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 133000 N, C0 = 97000 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6318",
+   "d_nominal": 90,
+   "valores": {
+    "D": 190,
+    "B": 43
+   },
+   "confirmado_por": 2,
+   "furo_min": 189.9,
+   "furo_max": 190.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 143000 N, C0 = 107000 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6319",
+   "d_nominal": 95,
+   "valores": {
+    "D": 200,
+    "B": 45
+   },
+   "confirmado_por": 2,
+   "furo_min": 199.9,
+   "furo_max": 200.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 153000 N, C0 = 119000 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6320",
+   "d_nominal": 100,
+   "valores": {
+    "D": 215,
+    "B": 47
+   },
+   "confirmado_por": 2,
+   "furo_min": 214.9,
+   "furo_max": 215.1,
+   "nota": "d, D e B: Partmatch e TFL Bearing concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante TFL Bearing: C = 173000 N, C0 = 141000 N (vale para o rolamento daquele fabricante)."
+  }
+ ]
+}

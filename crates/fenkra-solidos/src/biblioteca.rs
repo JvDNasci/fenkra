@@ -515,6 +515,7 @@ const PUBLICA: &[(&str, &str)] = &[
     ("asme_b18_3.json", include_str!("../../../biblioteca/fixadores/asme_b18_3.json")),
     ("iso15_60.json", include_str!("../../../biblioteca/rolamentos/iso15_60.json")),
     ("iso15_62.json", include_str!("../../../biblioteca/rolamentos/iso15_62.json")),
+    ("iso15_63.json", include_str!("../../../biblioteca/rolamentos/iso15_63.json")),
 ];
 
 /// A biblioteca pública embutida. Os arquivos são validados nos testes; aqui um arquivo inválido
@@ -661,7 +662,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 22);
+        assert_eq!(b.familias.len(), 23);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -771,6 +772,39 @@ mod tests {
         assert_eq!(s62.tamanhos_para_furo(80., 0.05).iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["6208"]);
         // capacidade de carga só na nota, citando o fabricante
         assert!(tamanho("iso15_60", "6000").unwrap().nota.as_deref().is_some_and(|n| n.contains("NSK") && n.contains("C = 5050 N")));
+    }
+
+    #[test]
+    fn serie_63_e_capacidade_de_carga_em_todos_os_tamanhos() {
+        // B44: série 63 de 6300 a 6320 (Partmatch e TFL concordam em d, D e B)
+        let s63 = familia("iso15_63").unwrap();
+        assert_eq!(s63.tamanhos.len(), 21);
+        assert!(s63.tamanhos.iter().all(|t| t.confirmado_por >= 2));
+        for w in s63.tamanhos.windows(2) {
+            assert!(w[1].diametro_nominal() > w[0].diametro_nominal() && w[1].valor("D") > w[0].valor("D") && w[1].valor("B") > w[0].valor("B"));
+        }
+        let t = tamanho("iso15_63", "6305").unwrap();
+        assert_eq!((t.diametro_nominal(), t.valor("D"), t.valor("B")), (Some(25.), Some(62.), Some(17.)));
+        // no mesmo furo: 60 < 62 < 63
+        let d = |f: &str, n: &str| tamanho(f, n).unwrap().valor("D").unwrap();
+        assert!(d("iso15_60", "6005") < d("iso15_62", "6205") && d("iso15_62", "6205") < d("iso15_63", "6305"));
+        assert_eq!(s63.tamanhos_para_furo(62., 0.05).iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["6305"]);
+        // todo tamanho das três séries tem a capacidade citada com o nome do fabricante, e a
+        // capacidade cresce da série leve para a pesada no mesmo furo
+        let c = |f: &str, n: &str| -> f64 {
+            let nota = tamanho(f, n).unwrap().nota.clone().unwrap();
+            let i = nota.find("C = ").unwrap() + 4;
+            nota[i..].split(' ').next().unwrap().parse().unwrap()
+        };
+        for f in ["iso15_60", "iso15_62", "iso15_63"] {
+            for t in &familia(f).unwrap().tamanhos {
+                let n = t.nota.as_deref().unwrap();
+                assert!(n.contains("Capacidade de carga citada do fabricante") && n.contains("C0 = "), "{f} {}", t.designacao);
+            }
+        }
+        assert!(c("iso15_60", "6010") < c("iso15_62", "6210") && c("iso15_62", "6210") < c("iso15_63", "6310"));
+        assert!(tamanho("iso15_62", "6210").unwrap().nota.as_deref().unwrap().contains("SRV Bearing: C = 35000 N, C0 = 23200 N"));
+        assert!(tamanho("iso15_63", "6310").unwrap().nota.as_deref().unwrap().contains("TFL Bearing: C = 62000 N, C0 = 38500 N"));
     }
 
     #[test]
@@ -890,7 +924,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 23);
+        assert_eq!(m.familias.len(), 24);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);
