@@ -51,9 +51,10 @@ pub fn controle(ui: &mut egui::Ui, flat: &mut bool, fixos: &[String], animando: 
     let mut play: bool = ctx.data(|m| m.get_temp(egui::Id::new(K_PLAY))).unwrap_or(false);
     ui.horizontal(|ui| {
         let r = ui
-            .add(egui::Slider::new(&mut pct, 0.0..=100.0).suffix(" %").fixed_decimals(0).text(tr("planificada")))
+            .add(crate::ui_ext::slider(&mut pct, 0.0..=100.0).suffix(" %").text(tr("planificada")))
             .on_hover_text(tr("Arraste para abrir as dobras aos poucos: 0% é a peça dobrada, 100% a planificada exata. No meio, cada dobra abre na mesma proporção."));
         if r.changed() {
+            pct = pct.round();
             play = false;
             pede(&ctx, pct, flat);
         }
