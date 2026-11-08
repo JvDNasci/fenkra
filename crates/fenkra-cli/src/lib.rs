@@ -18,6 +18,7 @@ pub mod saida;
 mod sessao;
 pub mod features;
 pub mod topologia;
+pub mod ver;
 pub mod visualizar;
 
 pub use registro::{ler_comandos, Registro};

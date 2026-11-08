@@ -61,6 +61,7 @@ Um comando que entra na árvore mas falha no cálculo não é erro da chamada: a
 | `recalcular` | | `status`, `itens`, `corpos`, `volume`, `area`, `faces`, `caixa`, `erro_de_parametro` |
 | `relatorio` | | o de `recalcular`, mais `comparacao` e `registro` |
 | `medir` | | `contagem`, `caixa`, `massa` |
+| `ver` | `vista` (`frente`, `tras`, `topo`, `base`, `esquerda`, `direita`, `iso`, `todas`), `corte` (`eixo`, `posicao` em mm, `lado` `menor` ou `maior`), `zoom`, `largura`, `altura` (64 a 2400), `arestas`, `fundo`, `saida` (`.png`), `sobrescrever` | `vista`, `largura`, `altura`, `caixa`, `corte`, `aviso` e `arquivo`; sem `saida`, `imagem_base64` e `tipo` (PNG) |
 | `topologia` | `arquivo` (ausente: a peça aberta), `secoes`, `limite` | ver abaixo |
 | `comparar` | `alvo`, `arquivo` (ausente: a peça aberta), `tolerancias` | ver abaixo |
 | `reproduzir` | `arquivo` (`.jsonl`) | `comandos` |
@@ -141,3 +142,11 @@ with Fenkra("projeto") as f:
 ```
 
 Falha vira `FenkraErro`, com `codigo` e `mensagem`. `f.chamar(comando, **args)` alcança qualquer comando da tabela.
+
+## Erros acionáveis
+
+Todo erro vem com `codigo`, `mensagem` e `sugestao` (o que fazer em seguida). O item que falha no
+cálculo (resposta de `extrudar`, `furar`, `filetar`, `chanfrar` e cada item de `recalcular`) traz também
+`codigo` (`E-REF-001`, `E-DEP-001`, `E-SOL-001`, `E-SUP-001`, `E-SKT-001`, `E-VAL-001` ou `E-GER-001`), `item`, `campo` (quando
+a mensagem cita um), `sugestao` e `acao` (`refazer_referencia`, `corrigir_antes`, `ajustar_valor` ou `refazer_contorno`);
+com `corrigir_antes`, vem `corrigir_primeiro`. São os mesmos códigos do Assistente de reparo da interface.

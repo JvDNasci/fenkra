@@ -1325,11 +1325,13 @@ dependencies = [
 name = "fenkra-cli"
 version = "0.1.0-alpha.36"
 dependencies = [
+ "base64",
  "fenkra-conversor",
  "fenkra-core",
  "fenkra-kernel",
  "fenkra-pacote",
  "fenkra-solidos",
+ "png 0.17.16",
  "serde_json",
 ]
 

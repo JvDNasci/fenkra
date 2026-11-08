@@ -207,6 +207,63 @@ fn comando_que_falha_no_calculo_avisa_e_desfazer_volta() {
     assert!((r["volume"].as_f64().unwrap() - 24000.).abs() < 1e-6);
 }
 
+/// Decodifica o PNG devolvido e conta pixels laranja (a cor do corte) e pixels diferentes do fundo.
+fn contar_pixels(png_bytes: &[u8]) -> (usize, usize, (u32, u32)) {
+    let dec = png::Decoder::new(png_bytes);
+    let mut leitor = dec.read_info().unwrap();
+    let mut buf = vec![0; leitor.output_buffer_size()];
+    let info = leitor.next_frame(&mut buf).unwrap();
+    let px = &buf[..info.buffer_size()];
+    let laranja = px.chunks_exact(3).filter(|c| i32::from(c[0]) > i32::from(c[2]) + 60).count();
+    let fundo = [242u8, 245, 247];
+    let peca = px.chunks_exact(3).filter(|c| c.iter().zip(fundo).any(|(a, b)| (i32::from(*a) - i32::from(b)).abs() > 8)).count();
+    (laranja, peca, (info.width, info.height))
+}
+
+#[test]
+fn ver_devolve_a_imagem_da_peca_por_vista_com_corte_e_grava_arquivo() {
+    use base64::Engine;
+    precisa_kernel!();
+    let d = pasta_limpa("ver");
+    let mut s = sessao(&d);
+    bloco(&mut s);
+    let pedir = |s: &mut Sessao, a: Value| {
+        let r = s.executar("ver", &a).unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD.decode(r["imagem_base64"].as_str().unwrap()).unwrap();
+        assert_eq!(&bytes[..8], b"\x89PNG\r\n\x1a\n", "{r}");
+        (r, bytes)
+    };
+    // inteira: a peça aparece e nada tem a cor de corte
+    let (r, b) = pedir(&mut s, json!({ "vista": "iso", "largura": 320, "altura": 240 }));
+    let (laranja, peca, tam) = contar_pixels(&b);
+    assert_eq!(tam, (320, 240));
+    assert_eq!(laranja, 0, "{r}");
+    assert!(peca > 5_000 && peca < 60_000, "{peca}");
+    assert_eq!(r["tipo"], "image/png");
+    // cortada pela metade de baixo vista de baixo: o miolo é a face de corte
+    let (c, b) = pedir(&mut s, json!({ "vista": "base", "largura": 320, "altura": 240, "corte": { "eixo": "z", "posicao": 10, "lado": "maior" } }));
+    assert!(contar_pixels(&b).0 > 3_000, "{c}");
+    assert_eq!(c["corte"]["eixo"], "z");
+    assert!(c.get("aviso").is_none(), "{c}");
+    // plano fora da peça: avisa, e a resposta diz onde a peça está
+    let (f, _) = pedir(&mut s, json!({ "corte": { "eixo": "z", "posicao": 500 } }));
+    assert!(f["aviso"].as_str().unwrap().contains("fora da peça"), "{f}");
+    // quatro vistas em uma imagem
+    let (_, b) = pedir(&mut s, json!({ "vista": "todas", "largura": 400, "altura": 300 }));
+    assert_eq!(contar_pixels(&b).2, (400, 300));
+    // grava o arquivo e não troca outro sem pedir
+    let g = s.executar("ver", &json!({ "saida": "peca.png", "largura": 200, "altura": 150 })).unwrap();
+    assert_eq!(g["arquivo"], "peca.png");
+    assert!(g.get("imagem_base64").is_none());
+    assert_eq!(&std::fs::read(d.join("peca.png")).unwrap()[..4], b"\x89PNG");
+    let e = s.executar("ver", &json!({ "saida": "peca.png" })).unwrap_err();
+    assert_eq!(e.codigo, "ja_existe", "{e}");
+    // pedidos errados
+    assert_eq!(s.executar("ver", &json!({ "vista": "diagonal" })).unwrap_err().codigo, "argumento");
+    assert_eq!(s.executar("ver", &json!({ "largura": 10 })).unwrap_err().codigo, "argumento");
+    assert_eq!(s.executar("ver", &json!({ "corte": { "eixo": "w", "posicao": 1 } })).unwrap_err().codigo, "argumento");
+}
+
 #[test]
 fn salvar_abrir_e_exportar_mantem_a_peca() {
     precisa_kernel!();
