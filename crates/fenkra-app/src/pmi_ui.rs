@@ -1375,6 +1375,12 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             pen.line = pen.line.gamma_multiply(0.6);
             pen.text = pen.text.gamma_multiply(0.7);
         }
+        // regra de contraste (B425) no rótulo 3D sem fundo: placa do tema e texto que se lê sobre ela;
+        // anotação com problema fica vermelha, sem trocar a cor
+        if !bad {
+            let v = ui.visuals();
+            pen.leitura = Some((v.panel_fill, v.strong_text_color()));
+        }
         let (stroke, thin) = (pen.stroke(), pen.thin());
         let wrap =|t: String| format!("{}{}{}", pm.style.prefix, t, pm.style.suffix);
         let (main, stack) = pm.display_parts(val);

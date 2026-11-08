@@ -158,6 +158,9 @@ pub struct Pen {
     pub leader_col: Color32,
     pub leader_width: f32,
     pub leader_dash: u8,
+    /// placa de leitura do rótulo 3D sem fundo (cor do painel do tema) e o texto forte do tema, para a
+    /// regra de contraste: nota azul-escura sobre peça escura ou no tema escuro deixava de ler
+    pub leitura: Option<(Color32, Color32)>,
 }
 
 /// Fontes disponíveis para as anotações (registradas na partida).
@@ -212,6 +215,7 @@ impl Pen {
             leader_col: col(l.leader_color, g.leader_color, line_rgb),
             leader_width: num(l.leader_width, g.leader_width, 0.),
             leader_dash: if l.leader_dash != 0 { l.leader_dash } else { g.leader_dash },
+            leitura: None,
         }
     }
     /// O mesmo estilo com o texto (e medidas de texto) vezes `ks` e as linhas vezes `kw`.
@@ -255,6 +259,20 @@ impl Pen {
         match fill {
             Some(f) if f.r() < 100 => Color32::WHITE,
             _ => self.text,
+        }
+    }
+    /// Fundo e cor do texto do bloco. Sem fundo escolhido (padrão sem placa) e com a placa de leitura
+    /// ligada, o rótulo ganha a placa translúcida do tema e o texto segue a regra de contraste.
+    fn fundo_e_texto(&self, kind_default: PmiBg) -> (Option<Color32>, Color32) {
+        let fill = self.fill(kind_default);
+        match (fill, self.leitura) {
+            (None, Some((placa, forte))) if self.bg == PmiBg::Padrao => {
+                let f = |c: Color32| [c.r() as f32 / 255., c.g() as f32 / 255., c.b() as f32 / 255.];
+                let t = crate::contraste::texto_sobre(f(self.text), f(placa), f(forte));
+                let texto = if t == f(self.text) { self.text } else { forte };
+                (Some(placa.gamma_multiply(crate::contraste::OPACIDADE_PLACA)), texto)
+            }
+            _ => (fill, self.text_col(fill)),
         }
     }
     fn frame_of(&self, kind_default: PmiFrame) -> PmiFrame {
@@ -469,8 +487,7 @@ impl Pen {
     /// moldura e fundo conforme o tipo.
     pub fn text_block(&self, p: &Cv, at: Pos2, txt: &str, frame_default: PmiFrame, bg_default: PmiBg) -> Rect {
         let start = p.len();
-        let fill = self.fill(bg_default);
-        let tc = self.text_col(fill);
+        let (fill, tc) = self.fundo_e_texto(bg_default);
         let g = self.layout(p, txt, 1., tc);
         let pad = egui::vec2(self.size * 0.45, self.size * 0.25);
         let r = self.place(at, g.size() + pad * 2.);

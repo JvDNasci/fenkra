@@ -26,6 +26,28 @@ pub fn aresta_para(aresta: [f32; 4], face: [f32; 3]) -> [f32; 4] {
     [alvo[0], alvo[1], alvo[2], aresta[3]]
 }
 
+/// Cor do texto sobre `fundo`: a pedida, quando já contrasta; senão, a `alternativa` (o texto forte do
+/// tema), se ela contrastar mais. Serve para o rótulo 3D sobre a placa de leitura: a nota em azul-escuro
+/// sumia sobre peça escura e no tema escuro.
+pub fn texto_sobre(texto: [f32; 3], fundo: [f32; 3], alternativa: [f32; 3]) -> [f32; 3] {
+    let lf = luminancia(fundo);
+    let d = |c: [f32; 3]| (luminancia(c) - lf).abs();
+    if d(texto) >= DIFERENCA_MIN || d(alternativa) <= d(texto) {
+        texto
+    } else {
+        alternativa
+    }
+}
+
+/// Opacidade da placa de leitura atrás do rótulo 3D sem fundo: alta o bastante para o texto ler sobre
+/// peça preta ou branca, baixa o bastante para a geometria atrás ainda aparecer.
+pub const OPACIDADE_PLACA: f32 = 0.82;
+
+/// Cor vista através da placa de opacidade `a` sobre `atras`.
+pub fn compor(placa: [f32; 3], a: f32, atras: [f32; 3]) -> [f32; 3] {
+    [0, 1, 2].map(|i| placa[i] * a + atras[i] * (1. - a))
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;
@@ -45,6 +67,30 @@ mod testes {
                 assert!(dif(a, face) >= DIFERENCA_MIN, "aresta {aresta:?} sobre {face:?} deu {a:?}");
             }
         }
+    }
+
+    #[test]
+    fn nota_sobre_peca_escura_le_em_todo_tema() {
+        // a nota de tolerância geral (texto azul-escuro do PMI, sem fundo) sobre peça preta: falhava
+        // antes, sem placa, com diferença de luminância perto de zero
+        let azul = [12. / 255., 14. / 255., 24. / 255.];
+        assert!((luminancia(azul) - luminancia(PRETO)).abs() < DIFERENCA_MIN);
+        for t in crate::theme::builtin() {
+            let c = |x: [u8; 3]| x.map(|k| k as f32 / 255.);
+            let placa = c(t.panel);
+            let texto = texto_sobre(azul, placa, c(t.text));
+            for atras in [PRETO, BRANCO] {
+                let fundo = compor(placa, OPACIDADE_PLACA, atras);
+                let d = (luminancia(texto) - luminancia(fundo)).abs();
+                assert!(d >= DIFERENCA_MIN * 0.8, "tema {} sobre {atras:?}: diferença {d}", t.name);
+            }
+        }
+    }
+
+    #[test]
+    fn texto_que_ja_contrasta_fica() {
+        assert_eq!(texto_sobre([0.05, 0.05, 0.1], [0.95, 0.95, 0.95], [1., 1., 1.]), [0.05, 0.05, 0.1]);
+        assert_eq!(texto_sobre([0.05, 0.05, 0.1], [0.1, 0.1, 0.12], [0.9, 0.9, 0.9]), [0.9, 0.9, 0.9]);
     }
 
     #[test]
