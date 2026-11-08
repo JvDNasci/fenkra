@@ -252,10 +252,15 @@ mod testes {
         let pubs = publications(&d);
         assert_eq!(pubs.len(), 3, "{:?}", pubs.iter().map(|p| &p.0).collect::<Vec<_>>());
         let nome = d.feature(sk).unwrap().name.clone();
-        let contorno = pubs.iter().find_map(|(n, g)| match g {
-            LinkedGeo::Curve(p) if p.len() > 4 || n == &format!("{nome}.1") || n == &format!("{nome}.2") => Some(p.clone()),
-            _ => None,
-        });
+        // a ordem das publicações não é fixa: o contorno é a curva com mais pontos, não a primeira achada
+        let contorno = pubs
+            .iter()
+            .filter(|(n, _)| n.starts_with(&format!("{nome}.")))
+            .filter_map(|(_, g)| match g {
+                LinkedGeo::Curve(p) => Some(p.clone()),
+                _ => None,
+            })
+            .max_by_key(|p| p.len());
         let contorno = contorno.expect("perfil publicado");
         let caixa = contorno.iter().fold(([f64::MAX; 3], [f64::MIN; 3]), |(mut lo, mut hi), p| {
             for i in 0..3 {
