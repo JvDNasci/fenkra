@@ -146,7 +146,7 @@ fn dente_virtual(p: &ParamConica) -> Dente {
     let delta = (p.dentes as f64 / p.dentes_par as f64).atan();
     let rv = m * p.dentes as f64 / 2. / delta.cos();
     let alfa = p.angulo_pressao.to_radians();
-    Dente { r: rv, rb: rv * alfa.cos(), ra: rv + m, rf: rv - 1.25 * m, sp: PI * m / 2. - p.folga_dentes, alfa, z: (p.dentes as f64 / delta.cos()).round() as u32 }
+    Dente { r: rv, rb: rv * alfa.cos(), ra: rv + m, rf: rv - 1.25 * m, sp: PI * m / 2. - p.folga_dentes, alfa, z: (p.dentes as f64 / delta.cos()).round() as u32, rho: 0. }
 }
 
 /// Diâmetro e comprimento do cubo: cabe sob a raiz do extremo menor.

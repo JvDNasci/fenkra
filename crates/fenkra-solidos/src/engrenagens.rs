@@ -11,7 +11,10 @@
 //! Geometria: um dente é amostrado pela evolvente `x = rb(cosθ + θ·senθ)`, `y = rb(senθ − θ·cosθ)`,
 //! espelhado para o outro flanco; cada flanco vira uma spline que passa pelos pontos, o topo e a raiz
 //! são arcos e, abaixo do círculo base, o flanco desce em linha radial até a raiz. A folga (backlash)
-//! sai da espessura do dente no círculo primitivo. Sem filete de raiz nem trocoide.
+//! sai da espessura do dente no círculo primitivo. Na reta e na helicoidal o pé do dente é o filete
+//! de raiz (trocoide) que a ponta arredondada da cremalheira-ferramenta deixa (B52, ver
+//! [`crate::engrenagens_trocoide`]); com rebaixo, a trocoide corta a evolvente e a fronteira segue o
+//! cruzamento. A interna e a cônica seguem com o flanco radial abaixo do círculo base.
 //!
 //! O perfil fica no sketch como coordenadas fixas (a cada `m`, `z`, `alpha`... diferentes gera-se outro
 //! documento); a largura `b` e o furo central são paramétricos no documento. A **helicoidal** é um
@@ -153,6 +156,12 @@ pub struct CalculoEngrenagem {
     pub altura_dente: f64,
     /// dentes da barra (só cremalheira)
     pub dentes_cremalheira: u32,
+    /// correção de perfil mínima que evita o rebaixo no pé do dente (só reta e helicoidal; B52)
+    pub correcao_minima: f64,
+    /// raio do filete de raiz que a ferramenta deixa (raio da ponta, em mm; 0 = sem filete)
+    pub raio_filete: f64,
+    /// a trocoide corta a evolvente: o pé do dente está rebaixado
+    pub rebaixado: bool,
     pub avisos: Vec<String>,
 }
 
@@ -168,6 +177,9 @@ pub(crate) struct Dente {
     /// ângulo de pressão transversal (rad)
     pub(crate) alfa: f64,
     pub(crate) z: u32,
+    /// raio da ponta da cremalheira-ferramenta que gera o filete de raiz; 0 = sem filete (flanco
+    /// radial abaixo do círculo base)
+    pub(crate) rho: f64,
 }
 
 /// Passo do contorno: o ponto final (a spline traz todos os pontos depois do início).
@@ -195,7 +207,7 @@ pub(crate) fn dente_externo(p: &ParamEngrenagem) -> Dente {
     let alfa = (alfa_n.tan() / cb).atan();
     let r = m / cb * p.dentes as f64 / 2.;
     let fi = p.folga_impressao;
-    Dente { r, rb: r * alfa.cos(), ra: r + m * (1. + x), rf: r - m * (1.25 - x) - fi, sp: (m * (PI / 2. + 2. * x * alfa_n.tan()) - p.folga_dentes - fi / 2.) / cb, alfa, z: p.dentes }
+    Dente { r, rb: r * alfa.cos(), ra: r + m * (1. + x), rf: r - m * (1.25 - x) - fi, sp: (m * (PI / 2. + 2. * x * alfa_n.tan()) - p.folga_dentes - fi / 2.) / cb, alfa, z: p.dentes, rho: crate::engrenagens_trocoide::RHO_REFERENCIA * m }
 }
 
 /// Vão da engrenagem interna: topo do vão na raiz da interna (r + 1,25m), fundo no topo dos dentes
@@ -203,7 +215,7 @@ pub(crate) fn dente_externo(p: &ParamEngrenagem) -> Dente {
 fn dente_interno(p: &ParamEngrenagem) -> Dente {
     let (m, alfa) = (p.modulo, p.angulo_pressao.to_radians());
     let r = m * p.dentes as f64 / 2.;
-    Dente { r, rb: r * alfa.cos(), ra: r + 1.25 * m, rf: r - m, sp: PI * m / 2. + p.folga_dentes, alfa, z: p.dentes }
+    Dente { r, rb: r * alfa.cos(), ra: r + 1.25 * m, rf: r - m, sp: PI * m / 2. + p.folga_dentes, alfa, z: p.dentes, rho: 0. }
 }
 
 /// Limites do flanco: (θ no pé, θ no topo, meio ângulo do dente no pé, meio ângulo no topo).
@@ -212,7 +224,16 @@ pub(crate) struct Limites {
     pub(crate) th1: f64,
     pub(crate) psi0: f64,
     pub(crate) psia: f64,
+    /// filete de raiz do fundo até a evolvente, como (raio, meio ângulo); vazio = sem filete
+    pub(crate) filete: Vec<[f64; 2]>,
+    /// a trocoide cortou a evolvente (rebaixo)
+    pub(crate) rebaixado: bool,
+    /// raio de ponta usado no filete (pode ser menor que o pedido)
+    pub(crate) rho: f64,
 }
+
+/// Trechos do filete de raiz.
+const PONTOS_FILETE: usize = 10;
 
 impl Dente {
     pub(crate) fn theta(&self, r: f64) -> f64 {
@@ -231,23 +252,37 @@ impl Dente {
         if self.rf <= 0. {
             return Err("o círculo de raiz é nulo — aumente o número de dentes ou reduza a correção".into());
         }
-        let th0 = if self.rf > self.rb { self.theta(self.rf) } else { 0. };
+        let mut th0 = if self.rf > self.rb { self.theta(self.rf) } else { 0. };
         let th1 = self.theta(self.ra);
-        let (psi0, psia) = (self.meio_angulo(th0), self.meio_angulo(th1));
+        let (mut psi0, psia) = (self.meio_angulo(th0), self.meio_angulo(th1));
+        let (mut filete, mut rebaixado, mut rho) = (vec![], false, 0.);
+        if let Some(f) = crate::engrenagens_trocoide::ferramenta(self.r, self.rf, self.alfa, self.sp, self.z, self.rho) {
+            let pts = crate::engrenagens_trocoide::filete(self.r, self.alfa, self.z, &f, PONTOS_FILETE);
+            let (pts, cortou) = crate::engrenagens_trocoide::juntar(pts, self);
+            let juncao = pts.last().map(|q| q[0]).unwrap_or(self.rf);
+            if juncao >= self.ra * 0.999 {
+                return Err("o pé do dente rebaixado chega ao topo — use correção x positiva ou mais dentes".into());
+            }
+            th0 = self.theta(juncao);
+            psi0 = pts[0][1];
+            (filete, rebaixado, rho) = (pts, cortou, f.rho);
+        }
         if psia <= 0.002 {
             return Err("dente pontiagudo: o flanco se cruza antes do topo — reduza a correção x ou aumente z".into());
         }
-        if 2. * PI / self.z as f64 - 2. * psi0 <= 0.002 {
+        // com filete, o fundo do vão tem a ponta reta da ferramenta (x_c > 0): os dentes não se tocam
+        if filete.is_empty() && 2. * PI / self.z as f64 - 2. * psi0 <= 0.002 {
             return Err("os dentes se tocam na raiz — reduza a correção x ou a folga negativa".into());
         }
-        Ok(Limites { th0, th1, psi0, psia })
+        Ok(Limites { th0, th1, psi0, psia, filete, rebaixado, rho })
     }
 
     /// Contorno completo com os `z` dentes, no sentido anti-horário: ponto inicial e passos (o último
     /// termina no inicial).
     fn contorno(&self, flanco: usize) -> Result<([f64; 2], Vec<Passo>), String> {
         let l = self.limites()?;
-        let abaixo = self.rf < self.rb;
+        let com_filete = !l.filete.is_empty();
+        let abaixo = self.rf < self.rb && !com_filete;
         let r_de = |th: f64| self.rb * (1. + th * th).sqrt();
         let ths: Vec<f64> = (0..=flanco).map(|i| l.th0 + (l.th1 - l.th0) * i as f64 / flanco as f64).collect();
         let passo_ang = 2. * PI / self.z as f64;
@@ -258,11 +293,18 @@ impl Dente {
             if abaixo {
                 passos.push(Passo::Linha(polar(self.rb, fi - l.psi0)));
             }
+            if com_filete {
+                passos.push(Passo::Spline(l.filete[1..].iter().map(|q| polar(q[0], fi - q[1])).collect()));
+            }
             passos.push(Passo::Spline(ths[1..].iter().map(|th| polar(r_de(*th), fi - self.meio_angulo(*th))).collect()));
             passos.push(Passo::Arco(polar(self.ra, fi + l.psia)));
             passos.push(Passo::Spline(ths[..flanco].iter().rev().map(|th| polar(r_de(*th), fi + self.meio_angulo(*th))).collect()));
             if abaixo {
                 passos.push(Passo::Linha(polar(self.rf, fi + l.psi0)));
+            }
+            if com_filete {
+                let n = l.filete.len();
+                passos.push(Passo::Spline(l.filete[..n - 1].iter().rev().map(|q| polar(q[0], fi + q[1])).collect()));
             }
             passos.push(Passo::Arco(polar(self.rf, fi + passo_ang - l.psi0)));
         }
@@ -380,14 +422,13 @@ pub fn calculo(p: &ParamEngrenagem) -> Result<CalculoEngrenagem, String> {
                 }
             }
             crate::usinagens::validar(&crate::usinagens::GeoBase { largura: p.largura, raio_raiz: c.diametro_raiz / 2., furo: p.furo, cubo_proprio: None }, &p.usinagens)?;
-            let z_min = 2. * (1. - p.coef_correcao) / g.alfa.sin().powi(2);
-            if (p.dentes as f64) < z_min.floor() {
-                c.avisos.push(format!(
-                    "z = {} < {}: risco de rebaixo (interferência) no pé do dente — use correção x ≥ {:.2}",
-                    p.dentes,
-                    z_min.floor(),
-                    (z_min.floor() - p.dentes as f64) / z_min.floor()
-                ));
+            // B52: o mínimo vem do ponto em que a ponta da ferramenta encontra o flanco reto (com o
+            // raio de ponta usado no filete), e a geometria gerada confirma se a trocoide cortou o dente
+            c.raio_filete = l.rho;
+            c.rebaixado = l.rebaixado;
+            c.correcao_minima = crate::engrenagens_trocoide::correcao_minima(m, g.r, g.alfa, 1.25 * m + p.folga_impressao, l.rho);
+            if l.rebaixado || p.coef_correcao < c.correcao_minima - 1e-9 {
+                c.avisos.push(format!("z = {} com x = {}: o pé do dente fica rebaixado (a ferramenta corta a evolvente) — use correção x ≥ {:.3}", p.dentes, p.coef_correcao, c.correcao_minima));
             }
             if 2. * g.ra * l.psia < 0.25 * m {
                 c.avisos.push(format!("dente fino no topo ({:.2} mm)", 2. * g.ra * l.psia));
@@ -451,7 +492,8 @@ pub fn contorno_pontos(p: &ParamEngrenagem, por_flanco: usize, por_arco: usize) 
     let l = g.limites()?;
     let (nf, na) = (por_flanco.max(2), por_arco.max(1));
     let passo = 2. * PI / g.z as f64;
-    let abaixo = g.rf < g.rb;
+    let com_filete = !l.filete.is_empty();
+    let abaixo = g.rf < g.rb && !com_filete;
     let r_de = |th: f64| g.rb * (1. + th * th).sqrt();
     let arco = |r: f64, a0: f64, a1: f64, n: usize, dst: &mut Vec<[f64; 2]>| {
         for i in 1..=n {
@@ -464,6 +506,9 @@ pub fn contorno_pontos(p: &ParamEngrenagem, por_flanco: usize, por_arco: usize) 
         if abaixo {
             pts.push(polar(g.rb, fi - l.psi0));
         }
+        if com_filete {
+            pts.extend(l.filete[1..].iter().map(|q| polar(q[0], fi - q[1])));
+        }
         for i in 1..=nf {
             let th = l.th0 + (l.th1 - l.th0) * i as f64 / nf as f64;
             pts.push(polar(r_de(th), fi - g.meio_angulo(th)));
@@ -475,6 +520,10 @@ pub fn contorno_pontos(p: &ParamEngrenagem, por_flanco: usize, por_arco: usize) 
         }
         if abaixo {
             pts.push(polar(g.rf, fi + l.psi0));
+        }
+        if com_filete {
+            let n = l.filete.len();
+            pts.extend(l.filete[..n - 1].iter().rev().map(|q| polar(q[0], fi + q[1])));
         }
         arco(g.rf, fi + l.psi0, fi + passo - l.psi0, na, &mut pts);
     }

@@ -93,7 +93,7 @@
    "confirmado_por": 2,
    "furo_min": 34.9,
    "furo_max": 35.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 6800 N, C0 = 3350 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6004",
@@ -105,7 +105,7 @@
    "confirmado_por": 2,
    "furo_min": 41.9,
    "furo_max": 42.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 9400 N, C0 = 5050 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6005",
@@ -117,7 +117,7 @@
    "confirmado_por": 2,
    "furo_min": 46.9,
    "furo_max": 47.1,
-   "nota": "d, D e B: NSK (6005N) e Timken (6005) concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante; capacidade de carga não entra. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: NSK (6005N) e Timken (6005) concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante; capacidade de carga não entra. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 10100 N, C0 = 5850 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6006",
@@ -129,7 +129,7 @@
    "confirmado_por": 2,
    "furo_min": 54.9,
    "furo_max": 55.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 13200 N, C0 = 8300 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6007",
@@ -153,7 +153,7 @@
    "confirmado_por": 2,
    "furo_min": 67.9,
    "furo_max": 68.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 16800 N, C0 = 11500 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6009",
@@ -165,7 +165,7 @@
    "confirmado_por": 2,
    "furo_min": 74.9,
    "furo_max": 75.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 21000 N, C0 = 15100 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6010",
@@ -177,7 +177,7 @@
    "confirmado_por": 2,
    "furo_min": 79.9,
    "furo_max": 80.1,
-   "nota": "d, D e B: NSK (6010) e Timken (6010) concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante; capacidade de carga não entra. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: NSK (6010) e Timken (6010) concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante; capacidade de carga não entra. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 21800 N, C0 = 16600 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6011",
@@ -189,7 +189,7 @@
    "confirmado_por": 2,
    "furo_min": 89.9,
    "furo_max": 90.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 28300 N, C0 = 21200 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6012",
@@ -201,7 +201,7 @@
    "confirmado_por": 2,
    "furo_min": 94.9,
    "furo_max": 95.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 29500 N, C0 = 23200 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6013",
@@ -213,7 +213,7 @@
    "confirmado_por": 2,
    "furo_min": 99.9,
    "furo_max": 100.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 30500 N, C0 = 25200 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6014",
@@ -225,7 +225,7 @@
    "confirmado_por": 2,
    "furo_min": 109.9,
    "furo_max": 110.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 38000 N, C0 = 31000 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6015",
@@ -237,7 +237,7 @@
    "confirmado_por": 2,
    "furo_min": 114.9,
    "furo_max": 115.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 39500 N, C0 = 33500 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6016",
@@ -249,7 +249,7 @@
    "confirmado_por": 2,
    "furo_min": 124.9,
    "furo_max": 125.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 47500 N, C0 = 40000 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6017",
@@ -261,7 +261,7 @@
    "confirmado_por": 2,
    "furo_min": 129.9,
    "furo_max": 130.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 49500 N, C0 = 43000 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6018",
@@ -273,7 +273,7 @@
    "confirmado_por": 2,
    "furo_min": 139.9,
    "furo_max": 140.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 58000 N, C0 = 49500 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6019",
@@ -285,7 +285,7 @@
    "confirmado_por": 2,
    "furo_min": 144.9,
    "furo_max": 145.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 60500 N, C0 = 54000 N (vale para o rolamento daquele fabricante)."
   },
   {
    "designacao": "6020",
@@ -297,7 +297,7 @@
    "confirmado_por": 2,
    "furo_min": 149.9,
    "furo_max": 150.1,
-   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante SRV Bearing: C = 60000 N, C0 = 54000 N (vale para o rolamento daquele fabricante)."
   }
  ]
 }

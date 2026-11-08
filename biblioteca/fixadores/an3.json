@@ -1,0 +1,132 @@
+{
+ "id": "an3",
+ "nome": "Parafuso aeronáutico de cabeça sextavada (AN3 a AN5)",
+ "norma": "AN (AN3 a AN20, domínio público, distribuição A)",
+ "revisao": "sem revisão conferida (tabela usual de pega)",
+ "versao": 1,
+ "gerador": "parafuso_sextavado",
+ "tipo": "parafuso_sextavado",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Glasair Owners — tabela de pega e comprimento AN3 a AN8 (SportAir)",
+   "url": "https://glasair-owners.com/download/an-bolt-dimensions-table/"
+  },
+  {
+   "rotulo": "Experimental Aircraft — comprimentos por dash number e desconto da pega, AN3 a AN10",
+   "url": "https://www.experimentalaircraft.info/articles/aircraft-building-2.php"
+  },
+  {
+   "rotulo": "Military Fasteners — fichas AN3-10, AN4-10 e AN5-10 (altura da cabeça, entre faces, comprimento roscado)",
+   "url": "https://military-fasteners.com/catalog/pdf/AN3-10"
+  },
+  {
+   "rotulo": "MW Components — AN3C4A, AN4C4A e AN5C5A (altura da cabeça)",
+   "url": "https://www.mwcomponents.com/shop/an3c4a"
+  },
+  {
+   "rotulo": "McFarlane Aviation — chave de boca dos parafusos AN",
+   "url": "https://mcfarlaneaviation.com/products/product/AN6-41A"
+  }
+ ],
+ "campos": [
+  "P",
+  "s",
+  "k",
+  "b"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "AN3",
+   "original": "10-32 UNF",
+   "d_nominal": 4.826,
+   "valores": {
+    "P": 0.7937,
+    "s": 9.423,
+    "k": 3.175,
+    "b": 10.319
+   },
+   "confirmado_por": 2,
+   "nota": "Rosca 10-32 UNF classe 3A. O número do traço (dash number) é o comprimento nominal: o último dígito conta oitavos de polegada e os anteriores, polegadas inteiras (AN3-12 ≈ 1 1/4\"); o sufixo A indica haste sem furo para contrapino. Comprimento L sob a cabeça por traço: -3: L 15/32\", -4: L 17/32\", -5: L 21/32\", -6: L 25/32\", -7: L 29/32\", -10: L 1-1/32\", -11: L 1-5/32\", -12: L 1-9/32\", -13: L 1-13/32\", -14: L 1-17/32\", -15: L 1-21/32\", -16: L 1-25/32\", -17: L 1-29/32\", -20: L 2-1/32\". L e pega: tabela da SportAir (via Glasair Owners) e Experimental Aircraft concordam; comprimento roscado b = L − pega = 13/32\" nas duas e na ficha do Military Fasteners (dados FLIS). Cabeça: s entre 0.365 e 0.377 pol (Military Fasteners) e chave de 3/8\" (McFarlane); k entre 0.109 e 0.141 pol (Military Fasteners e MW Components); o modelo usa o meio da faixa. Medidas em polegada convertidas para mm.",
+   "comprimentos": [
+    11.906,
+    13.494,
+    16.669,
+    19.844,
+    23.019,
+    26.194,
+    29.369,
+    32.544,
+    35.719,
+    38.894,
+    42.069,
+    45.244,
+    48.419,
+    51.594
+   ],
+   "furo_min": 4.826,
+   "furo_max": 5.55
+  },
+  {
+   "designacao": "AN4",
+   "original": "1/4-28 UNF",
+   "d_nominal": 6.35,
+   "valores": {
+    "P": 0.9071,
+    "s": 11.024,
+    "k": 3.962,
+    "b": 11.906
+   },
+   "confirmado_por": 2,
+   "nota": "Rosca 1/4-28 UNF classe 3A. O número do traço (dash number) é o comprimento nominal: o último dígito conta oitavos de polegada e os anteriores, polegadas inteiras (AN3-12 ≈ 1 1/4\"); o sufixo A indica haste sem furo para contrapino. Comprimento L sob a cabeça por traço: -4: L 17/32\", -5: L 21/32\", -6: L 25/32\", -7: L 29/32\", -10: L 1-1/32\", -11: L 1-5/32\", -12: L 1-9/32\", -13: L 1-13/32\", -14: L 1-17/32\", -15: L 1-21/32\", -16: L 1-25/32\", -17: L 1-29/32\", -20: L 2-1/32\". L e pega: tabela da SportAir (via Glasair Owners) e Experimental Aircraft concordam; comprimento roscado b = L − pega = 15/32\" nas duas e na ficha do Military Fasteners (dados FLIS). Cabeça: s entre 0.428 e 0.44 pol (Military Fasteners) e chave de 7/16\" (McFarlane); k entre 0.14 e 0.172 pol (Military Fasteners e MW Components); o modelo usa o meio da faixa. Medidas em polegada convertidas para mm.",
+   "comprimentos": [
+    13.494,
+    16.669,
+    19.844,
+    23.019,
+    26.194,
+    29.369,
+    32.544,
+    35.719,
+    38.894,
+    42.069,
+    45.244,
+    48.419,
+    51.594
+   ],
+   "furo_min": 6.35,
+   "furo_max": 7.302
+  },
+  {
+   "designacao": "AN5",
+   "original": "5/16-24 UNF",
+   "d_nominal": 7.938,
+   "valores": {
+    "P": 1.0583,
+    "s": 12.598,
+    "k": 4.775,
+    "b": 13.494
+   },
+   "confirmado_por": 2,
+   "nota": "Rosca 5/16-24 UNF classe 3A. O número do traço (dash number) é o comprimento nominal: o último dígito conta oitavos de polegada e os anteriores, polegadas inteiras (AN3-12 ≈ 1 1/4\"); o sufixo A indica haste sem furo para contrapino. Comprimento L sob a cabeça por traço: -4: L 19/32\", -5: L 23/32\", -6: L 27/32\", -7: L 31/32\", -10: L 1-3/32\", -11: L 1-7/32\", -12: L 1-11/32\", -13: L 1-15/32\", -14: L 1-19/32\", -15: L 1-23/32\", -16: L 1-27/32\", -17: L 1-31/32\", -20: L 2-3/32\". L e pega: tabela da SportAir (via Glasair Owners) e Experimental Aircraft concordam; comprimento roscado b = L − pega = 17/32\" nas duas e na ficha do Military Fasteners (dados FLIS). Cabeça: s entre 0.49 e 0.502 pol (Military Fasteners) e chave de 1/2\" (McFarlane); k entre 0.172 e 0.204 pol (Military Fasteners e MW Components); o modelo usa o meio da faixa. Medidas em polegada convertidas para mm.",
+   "comprimentos": [
+    15.081,
+    18.256,
+    21.431,
+    24.606,
+    27.781,
+    30.956,
+    34.131,
+    37.306,
+    40.481,
+    43.656,
+    46.831,
+    50.006,
+    53.181
+   ],
+   "furo_min": 7.938,
+   "furo_max": 9.129
+  }
+ ]
+}

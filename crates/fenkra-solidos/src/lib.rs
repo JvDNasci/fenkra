@@ -49,6 +49,8 @@ pub mod engrenagens_dim;
 pub mod transmissao_calc;
 pub mod transmissao_dados;
 pub mod engrenagens_conicas;
+pub mod engrenagens_trocoide;
+pub mod engrenagens_resistencia;
 pub mod transmissao_corrente;
 pub mod transmissao_proposta;
 pub mod usinagens;

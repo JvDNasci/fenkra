@@ -113,6 +113,7 @@ mod textos_ajuda;
 mod textos_biblioteca;
 mod alca_cota;
 mod engrenagens_ui;
+mod engrenagens_verificar_ui;
 mod transmissao_ui;
 mod textos_transmissao;
 mod eixo_ui;

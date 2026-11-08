@@ -799,9 +799,18 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         st.solve();
         return;
     }
-    if nome == "eixo" || nome == "engrenagens_classico" {
-        // janela de engrenagens aberta (prévia do par) ou com o eixo gráfico ligado
+    if nome == "eixo" || nome == "engrenagens_classico" || nome == "engrenagens_verificar" || nome == "engrenagens_rebaixo" {
+        // janela de engrenagens aberta (prévia do par) ou com o eixo gráfico ligado; B52: a aba
+        // Verificar do par 20×40, ou o pinhão de 10 dentes sem correção (mostra o x mínimo)
         let mut g = crate::asm_ui::GearsUi::default();
+        if nome == "engrenagens_verificar" {
+            g.verificar.aba = crate::engrenagens_verificar_ui::Aba::Verificar;
+            g.verificar.entrada.potencia_kw = 3.;
+            g.verificar.entrada.contato_admissivel = 1100.;
+        }
+        if nome == "engrenagens_rebaixo" {
+            g.p.dentes = 10;
+        }
         if nome == "eixo" {
             g.eixo_grafico = true;
             g.trecho_sel = Some(1);
