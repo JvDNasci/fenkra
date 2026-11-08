@@ -405,6 +405,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("pmi_referencia", "Referência", "Referência (datum)", "Letra de referência na face escolhida.", Cmd(C::Pmi(7))),
                 it("pmi_tolerancia", "Tolerância", "Tolerância geométrica", "Quadro ISO 1101: característica, tolerância (zona Ø, modificadores Ⓜ Ⓛ Ⓟ…), referências e quadro composto.", Cmd(C::Pmi(8))),
             ]),
+            One(it("pmi_empilhamento", "Empilhamento", "Empilhamento de tolerâncias", "Escolha as cotas da cadeia (Ctrl+clique) e abra: pior caso, RSS e Monte Carlo do resultado, com a contribuição de cada cota. Tolerâncias ± ou classe ISO 286; cotas de referência e teóricas ficam fora.", Cmd(C::Pmi(23)))),
             Family("pmi_captura", vec![
                 it("pmi_captura", "Captura", "Criar captura", "Guarda a câmera e as anotações visíveis agora como uma captura numerada (Captura 1, 2, 3…). Vira uma etapa do detalhamento no visualizador web. F2 renomeia.", Cmd(C::Pmi(21))),
                 it("pmi_captura_modelo", "Captura + modelo", "Criar captura com a visibilidade do modelo", "Como a captura simples, e guarda também o que está oculto no modelo (recursos, coletores, referências ou componentes).", Cmd(C::Pmi(22))),

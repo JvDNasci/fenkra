@@ -611,6 +611,7 @@ def desenhos():
     ic("des_inspecao_baloes", B="M6 42h22v-16h-22z", R=C(36, 12, 6) + C(38, 34, 6) + L((28, 26), (31, 16)) + L((28, 36), (32, 35)))
     ic("des_inspecao_csv", B=TABELA(6, 8, 26, 32, 4, 2), R=S(39, 10, 39, 34, 5) + "M33 41h12")
     ic("des_inspecao_xlsx", B=TABELA(6, 8, 26, 32, 4, 2), R="M33 12l10 12M43 12l-10 12" + S(38, 28, 38, 42, 4))
+    ic("pmi_empilhamento", B=Q(6, 30, 12, 10) + Q(18, 30, 10, 10) + Q(28, 30, 14, 10), R=S2(6, 20, 42, 20, 4) + "M6 16v8M42 16v8")
     ic("des_bom", B=TABELA(6, 8, 36, 32, 4, 2), R="M6 16V8h36v8z")
     ic("des_esquema", B=L((10, 36), (22, 14), (40, 30)), R=C(10, 36, 4) + C(22, 14, 4) + C(40, 30, 4) + "M4 42h12")
     ic("des_nota", B="M26 16h16M26 24h16M26 32h10", R=S(20, 18, 7, 38, 5))
@@ -755,6 +756,7 @@ SO_INTERFACE |= {"asm_chaveta", "asm_calculo", "pmi_captura", "pmi_captura_model
 SO_INTERFACE |= {"asm_conjunto", "asm_regras_cor"}
 SO_INTERFACE |= {"verificar"}
 SO_INTERFACE |= {"des_esboco"}
+SO_INTERFACE |= {"pmi_empilhamento"}
 SO_INTERFACE |= {"des_inspecao", "des_inspecao_baloes", "des_inspecao_csv", "des_inspecao_xlsx"}
 
 

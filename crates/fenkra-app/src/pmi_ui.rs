@@ -283,6 +283,11 @@ fn target_label(t: &PmiTarget) -> String {
 
 /// Cria a anotação com as seleções atuais; sem seleções suficientes, espera por elas.
 pub fn command(app: &mut App, i: u8) {
+    if i == 23 {
+        // B126: empilhamento de tolerâncias com as cotas escolhidas
+        crate::pmi_empilhamento::abrir(app);
+        return;
+    }
     if i == 10 {
         auto_balloons(app);
         return;

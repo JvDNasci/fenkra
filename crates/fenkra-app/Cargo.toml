@@ -18,6 +18,7 @@ path = "src/bin/fenkra_conv.rs"
 
 [dependencies]
 fenkra-core = { path = "../fenkra-core" }
+fenkra-tolerancias = { path = "../fenkra-tolerancias" }
 fenkra-kernel = { path = "../fenkra-kernel" }
 fenkra-conversor = { path = "../fenkra-conversor" }
 fenkra-malha = { path = "../fenkra-malha" }

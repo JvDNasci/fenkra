@@ -95,7 +95,7 @@ modelos!(
     "asm_chaveta", "asm_calculo", "asm_conjunto", "asm_regras_cor", "pmi_captura", "pmi_captura_modelo",
     "edit_mover_face", "edit_apagar_face", "edit_deslocar_face", "edit_raio_filete",
     "curso", "mapa_macro", "perfil_fluxo", "comparar", "estado_conflito", "estado_editado", "estado_leitura", "estado_liberada", "estado_sem_revisao",
-    "conversao_lote", "formatos_suportados", "exportar_arquivo", "liberar_revisao", "onde_usado", "des_cota_inteligente", "des_esboco", "des_inspecao", "des_inspecao_baloes", "des_inspecao_csv", "des_inspecao_xlsx",
+    "conversao_lote", "formatos_suportados", "exportar_arquivo", "liberar_revisao", "onde_usado", "des_cota_inteligente", "des_esboco", "des_inspecao", "des_inspecao_baloes", "des_inspecao_csv", "des_inspecao_xlsx", "pmi_empilhamento",
     "forma", "forma_caixa", "forma_esfera", "forma_cilindro", "forma_anel", "forma_plano", "forma_extrudar", "forma_laco", "forma_aresta", "forma_borda", "forma_tangencia", "forma_simetria", "forma_converter",
     "an_inclinacao", "an_isofotas", "an_dfm", "verificar",
     "abrir_projeto", "ajustar", "an_conexao", "an_curvatura", "an_desvio", "an_pente", "an_sombreado", "an_zebra", "aparencia", "arestas_comando",

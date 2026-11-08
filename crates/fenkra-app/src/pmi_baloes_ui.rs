@@ -69,6 +69,7 @@ fn nascimento(l: &Legenda) -> ([f64; 3], [f64; 3]) {
 pub fn janela(app: &mut App, ctx: &egui::Context, area: Rect) {
     janela_baloes(app, ctx, area);
     janela_legenda(app, ctx, area);
+    crate::pmi_empilhamento::janela(app, ctx, area);
 }
 
 enum Resposta {

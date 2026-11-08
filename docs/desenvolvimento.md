@@ -108,6 +108,7 @@ preferências do usuário.
 | `FENKRA_DEMO_QUALIDADE=<desvio>,<ângulo>` | força a malha de trabalho, por exemplo `0.02,45` (a mais grossa aceita); `FENKRA_EXIBIR` também aceita `sombreado` e `render` |
 | `FENKRA_DEMO_SEM_POLIMENTO=1` | não pede a malha de tela, para comparar; `FENKRA_DEMO_GIRO=<graus por quadro>` gira a câmera sem parar, para medir o quadro com `FENKRA_MEDIR_QUADROS` (a fase `placa` traz o tempo da placa de vídeo) |
 | `FENKRA_DEMO_PMI=setas\|setas_painel\|cordao\|capturas` | (B368, B369) nota com uma seta para cada lado e o início das setas visível; o mesmo com o painel da nota aberto (seção Setas); solda z5 com o cordão engrossado; duas notas escolhidas juntas na árvore e três capturas |
+| `FENKRA_DEMO_PMI=empilhamento` | (B126) quatro cotas em cadeia na placa (uma em H7) com o painel do empilhamento aberto: pior caso, RSS, Monte Carlo e contribuição |
 | `FENKRA_DEMO_PMI=consultor` | (B38) planeza com referência e Ⓜ e perpendicularidade sem referência: as etiquetas do consultor junto dos quadros, com o que fazer e o botão de correção |
 | `FENKRA_DEMO_PMI=sobrepostas` | (B405) duas notas e uma legenda na mesma âncora e no mesmo deslocamento: os rótulos descem até não se cobrirem |
 | `FENKRA_DEMO_PMI=angulo\|chamada\|alcas` | monta uma só anotação e a deixa selecionada: ângulo entre planos com a alça do arco, nota de três pontas e dois vértices (com `FENKRA_DEMO_CAMERA=yaw,pitch,fator` aparece o aviso de chamada que se cruza), raio e nota com a alça de posição |

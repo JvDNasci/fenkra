@@ -1312,6 +1312,7 @@ dependencies = [
  "fenkra-pacote",
  "fenkra-project",
  "fenkra-solidos",
+ "fenkra-tolerancias",
  "glam",
  "image",
  "rfd",

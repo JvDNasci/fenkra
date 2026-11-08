@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Traduções do consultor de tolerância: ações, correções e etiquetas no 3D (B38).
+//! Traduções do consultor de tolerância (B38) e do empilhamento de tolerâncias (B126). Uma tabela só:
+//! a corrente de `.chain` em `i18n.rs` já está no limite de recursão do compilador.
 
 pub static TEXTOS: &[(&str, &str)] = &[
     ("apague o símbolo do campo de modificadores e escolha um da lista", "delete the symbol from the modifiers field and pick one from the list"),
@@ -41,4 +42,32 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("corrige o quadro com um clique (Ctrl+Z desfaz)", "fixes the frame in one click (Ctrl+Z undoes)"),
     ("clique para enquadrar a anotação", "click to frame the annotation"),
     ("Corrigido", "Fixed"),
+    // B126: empilhamento de tolerâncias
+    ("Empilhamento", "Stack-up"),
+    ("Empilhamento de tolerâncias", "Tolerance stack-up"),
+    ("Escolha as cotas da cadeia (Ctrl+clique) e abra: pior caso, RSS e Monte Carlo do resultado, com a contribuição de cada cota. Tolerâncias ± ou classe ISO 286; cotas de referência e teóricas ficam fora.", "Pick the chain dimensions (Ctrl+click) and open: worst case, RSS and Monte Carlo of the result, with each dimension's contribution. ± tolerances or ISO 286 class; reference and basic dimensions are left out."),
+    ("Escolha ao menos duas cotas (Ctrl+clique na árvore ou no 3D) e chame o empilhamento", "Pick at least two dimensions (Ctrl+click in the tree or the 3D view) and run the stack-up"),
+    ("não é cota linear", "not a linear dimension"),
+    ("cota de referência", "reference dimension"),
+    ("cota teórica (valor no quadro)", "basic dimension (boxed value)"),
+    ("sem medida no modelo", "no measurement in the model"),
+    ("Cadeia", "Chain"),
+    ("troca o sentido: a cota soma ou subtrai na cadeia", "flips the direction: the dimension adds or subtracts in the chain"),
+    ("contribuição na variação do resultado (RSS)", "contribution to the result variation (RSS)"),
+    ("fica fora", "left out"),
+    ("Nominal do resultado", "Result nominal"),
+    ("Pior caso", "Worst case"),
+    ("soma dos extremos: vale para 100% das peças", "sum of the extremes: holds for 100% of the parts"),
+    ("RSS", "RSS"),
+    ("raiz da soma dos quadrados: cada cota com a meia-largura da zona como 3σ", "root sum square: each dimension with half the zone width as 3σ"),
+    ("Limites do resultado", "Result limits"),
+    ("mín.", "min."),
+    ("máx.", "max."),
+    ("o que o projeto aceita para o resultado: o Monte Carlo conta as peças fora", "what the design accepts for the result: Monte Carlo counts the parts outside"),
+    ("Amostras do Monte Carlo", "Monte Carlo samples"),
+    ("Monte Carlo", "Monte Carlo"),
+    ("fora dos limites", "outside the limits"),
+    ("O pior caso cabe nos limites", "The worst case fits the limits"),
+    ("O pior caso passa dos limites: aperte as cotas de maior contribuição", "The worst case exceeds the limits: tighten the dimensions with the largest contribution"),
+    ("Fechar", "Close"),
 ];
