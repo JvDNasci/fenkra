@@ -4394,7 +4394,8 @@ impl Ctx<'_> {
                     if h.thread_modeled {
                         return Err(format!("rosca '{t}' não encontrada na tabela de normas"));
                     }
-                    return Ok(Some(format!("rosca cosmética {t}{}", if h.left_hand { " (esquerda)" } else { "" })));
+                    // fora da tabela é aviso de verdade: nada confere o furo contra a rosca
+                    return Ok(Some(format!("rosca '{t}' fora da tabela de normas: fica só como anotação, sem conferir o furo")));
                 };
                 let sulco = h.thread_modeled && self.leve != Some(f.id);
                 let (lo, hi) = self.body(f.target).and_then(|b| b.bbox()).ok_or("corpo sem dimensões")?;
@@ -4472,9 +4473,8 @@ impl Ctx<'_> {
                 if sem_espaco > 0 {
                     avisos.push(format!("a rosca {} não cabe em {sem_espaco} furo(s): menos de um passo depois do escareado e da folga", spec.name));
                 }
-                if !sulco && self.leve != Some(f.id) {
-                    avisos.insert(0, format!("rosca cosmética {t}{}", if h.left_hand { " (esquerda)" } else { "" }));
-                }
+                // B404: rosca cosmética é o caso normal (só anotação, sem sulco): não é aviso. Aviso
+                // repetido em situação normal ensina a ignorar os avisos de verdade
                 Ok((!avisos.is_empty()).then(|| avisos.join("; ")))
             }
             FeatureKind::Sweep(w) => {
@@ -5823,8 +5823,9 @@ impl Ctx<'_> {
                 let o = [0, 1, 2].map(|i| cyl.origin[i] + cyl.dir[i] * (cyl.h0 + start));
                 let sulco = t.modeled && self.leve != Some(f.id);
                 self.roscas.push(RoscaViz { feature: f.id, origin: o, dir: cyl.dir, radius: cyl.radius, len, pitch: spec.pitch, esquerda: false, interna: cyl.internal, modelada: sulco });
+                // B404: cosmética sem problema de medida fica ok; só a medida errada avisa
                 if !t.modeled {
-                    return Ok(Some(note.unwrap_or_else(|| format!("rosca cosmética {}", spec.name))));
+                    return Ok(note);
                 }
                 // prévia da edição: só a posição (linhas); o sulco é construído ao concluir
                 if !sulco {

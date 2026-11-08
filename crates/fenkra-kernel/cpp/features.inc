@@ -860,7 +860,10 @@ rust::Vec<double> cylinder_at(const Shape& s, double px, double py, double pz) {
             lo = su.FirstVParameter();
             hi = su.LastVParameter();
         }
-        const bool internal = f.Orientation() == TopAbs_REVERSED;
+        // B404: a normal da superfície aponta para fora do eixo só se o sistema do cilindro é direto; a
+        // orientação da face vira essa normal. Olhar só a orientação dava "interna" em eixo maciço
+        // (extrusão de círculo) e a rosca comparava o Ø com a broca, avisando em situação normal
+        const bool internal = (f.Orientation() == TopAbs_REVERSED) == c.Position().Direct();
         rust::Vec<double> v;
         for (double x : {ax.Location().X(), ax.Location().Y(), ax.Location().Z(), ax.Direction().X(), ax.Direction().Y(), ax.Direction().Z(),
                          c.Radius(), lo, hi, internal ? 1.0 : 0.0})
