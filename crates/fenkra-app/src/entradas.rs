@@ -114,6 +114,10 @@ pub fn campo_ativo(k: &FeatureKind) -> Option<Espera> {
         FeatureKind::Thickness(x) if x.faces.is_empty() => Some(Espera::Face),
         FeatureKind::DirectEdit(x) if x.faces.is_empty() => Some(Espera::Face),
         FeatureKind::Thread(t) if t.face == z => Some(Espera::Face),
+        // B243: dobra por linha, joggle e veneziana sem linha ainda pedem a face fixa
+        FeatureKind::SmBend(x) if x.sketch.is_none() && x.a == x.b => Some(Espera::Face),
+        FeatureKind::SmJoggle(x) if x.plane.is_none() && x.a == x.b => Some(Espera::Face),
+        FeatureKind::SmLouver(x) if x.a == x.b => Some(Espera::Face),
         FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => match (&o.mode, &o.edges) {
             (EdgeMode::FaceFace(a, b), _) if *a == z || *b == z => Some(Espera::Face),
             (EdgeMode::FullRound { mid, a, b }, _) if [mid, a, b].iter().any(|p| **p == z) => Some(Espera::Face),
@@ -464,6 +468,17 @@ mod tests {
     }
 
     /// Filete entre faces: o primeiro clique preenche uma face e o campo continua ativo até a segunda.
+    /// B243: sem linha desenhada, a dobra por linha não diz "entradas completas": pede a face fixa.
+    #[test]
+    fn dobra_por_linha_sem_linha_pede_a_face_fixa() {
+        let mut b = SmBend { a: [0.; 3], b: [0.; 3], angle: s("90"), radius: None, flip: false, down: false, sketch: None, position: 0 };
+        assert_eq!(campo_ativo(&FeatureKind::SmBend(b.clone())), Some(Espera::Face));
+        b.b = [0., 50., 2.];
+        assert_eq!(campo_ativo(&FeatureKind::SmBend(b)), None);
+        let v = SmLouver { a: [1.; 3], b: [1.; 3], width: s("10"), height: s("4"), flip: false, down: false };
+        assert_eq!(campo_ativo(&FeatureKind::SmLouver(v)), Some(Espera::Face));
+    }
+
     #[test]
     fn filete_face_face_pede_duas_faces() {
         let op = EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode: EdgeMode::FaceFace([0.; 3], [0.; 3]), prop: Default::default(), keys: vec![], extra: Default::default() };
