@@ -67,6 +67,11 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
         TipoFixador::ParafusoSextavado => sextavado(&mut m, fam, t, comp.unwrap_or(0.))?,
         TipoFixador::Porca => porca(&mut m, fam, t)?,
         TipoFixador::Arruela => arruela(&mut m, fam, t)?,
+        TipoFixador::Rolamento => {
+            m.param("D", &medida(fam, t, "D")?.to_string())?;
+            m.param("B", &medida(fam, t, "B")?.to_string())?;
+            crate::rolamentos::corpo(&mut m)?;
+        }
     }
     propriedades(&mut m.doc, fam, t);
     publicacoes(&mut m, fam)?;
@@ -103,6 +108,7 @@ fn publicacoes(m: &mut Montador, fam: &Familia) -> Result<(), String> {
         TipoFixador::ParafusoAllen | TipoFixador::ParafusoSextavado => ("-L", "k"),
         TipoFixador::Porca => ("-m", "0"),
         TipoFixador::Arruela => ("-h", "0"),
+        TipoFixador::Rolamento => ("-B", "0"),
     };
     let ponto0 = PointRef::Origin;
     m.publicar("Eixo", RefKind::LineDir { point: ponto0, dir: AxisRef::Origin(OriginAxis::Z), start: inicio.into(), end: fim.into() });

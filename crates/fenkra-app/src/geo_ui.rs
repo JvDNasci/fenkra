@@ -292,7 +292,7 @@ impl GeoKind {
             R::LineAxis { .. } | R::AxisLine { .. } => LineAxis,
             R::CurveProject { .. } => CurveProject,
             R::SplineControl { .. } => SplineControl,
-            R::CurveCopy { .. } => CurveCopy,
+            R::CurveCopy { .. } | R::CurveExtract { .. } => CurveCopy,
             R::CurveJoin { .. } => CurveJoin,
             R::SurfExtract { .. } => SurfExtract,
             R::SurfOffset { .. } => SurfOffset,
@@ -581,7 +581,7 @@ pub fn inputs_of(k: &RefKind) -> Seed {
         }
         R::PointOffset { point, .. } => s.points.push(*point),
         R::SplineControl { points, .. } => s.points.extend(points.iter().copied()),
-        R::CurveCopy { curve } | R::SurfExtrude { curve, .. } | R::SurfRevolve { curve, .. } => s.curves.push(curve.clone()),
+        R::CurveCopy { curve } | R::CurveExtract { edge: curve, .. } | R::SurfExtrude { curve, .. } | R::SurfRevolve { curve, .. } => s.curves.push(curve.clone()),
         R::SurfFill { curves, .. } | R::CurveJoin { curves } => s.curves.extend(curves.iter().cloned()),
         R::SurfOffset { surface, .. } => s.surface = Some(*surface),
         R::SurfSphere { center, .. } => s.points.push(*center),
@@ -699,7 +699,7 @@ fn pick_button(ui: &mut egui::Ui, enabled: bool, what: &str) -> bool {
 }
 
 pub(crate) fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, p: &mut PointRef, seed: &Seed) {
-    row(ui, label, |ui| {
+    ui.scope(|ui| row(ui, label, |ui| {
         egui::ComboBox::from_id_salt(salt).selected_text(point_name(doc, p)).width(150.).show_ui(ui, |ui| {
             ui.selectable_value(p, PointRef::Origin, tr("Origem"));
             for (id, n) in candidates(doc, RefClass::Point, me) {
@@ -711,6 +711,18 @@ pub(crate) fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docum
         });
         if pick_button(ui, !seed.points.is_empty(), "um vértice ou ponto") {
             *p = *seed.points.last().unwrap();
+        }
+    }))
+    .response
+    .context_menu(|ui| {
+        // qualquer campo de ponto: o vértice, o centro ou o ponto de sketch vira um ponto extraído
+        if matches!(p, PointRef::Origin | PointRef::Ref(_)) {
+            ui.label(RichText::new(tr("Escolha um vértice ou ponto do modelo para extrair.")).weak());
+            return;
+        }
+        if ui.button(tr("Extrair")).clicked() {
+            ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique(EXTRACT_POINT_REQ), *p));
+            ui.close();
         }
     });
     if let PointRef::Fixed(q) = p {
@@ -745,9 +757,13 @@ pub(crate) fn curve_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docum
             ui.label(RichText::new(tr("Escolha uma aresta ou curva de sketch para extrair.")).weak());
             return;
         }
-        if ui.button(tr("Extrair")).clicked() {
-            ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique(EXTRACT_CURVE_REQ), c.clone()));
-            ui.close();
+        // aresta do modelo também pode levar as vizinhas tangentes; a propagação fica gravada
+        let aresta = matches!(c, CurveRef::Edge(_) | CurveRef::BodyEdge { .. });
+        for (t, prop) in [("Extrair", Propagation::Nenhuma), ("Extrair com tangência", Propagation::Tangente)] {
+            if (prop == Propagation::Nenhuma || aresta) && ui.button(tr(t)).clicked() {
+                ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique(EXTRACT_CURVE_REQ), (c.clone(), prop)));
+                ui.close();
+            }
         }
     });
 }
@@ -762,7 +778,7 @@ pub(crate) fn axis_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
         AxisRef::Edge { .. } => tr("Aresta do modelo").into(),
         AxisRef::Planes { .. } => tr("Interseção de planos").into(),
     };
-    row(ui, label, |ui| {
+    ui.scope(|ui| row(ui, label, |ui| {
         egui::ComboBox::from_id_salt(salt).selected_text(name).width(150.).show_ui(ui, |ui| {
             for x in [OriginAxis::X, OriginAxis::Y, OriginAxis::Z] {
                 ui.selectable_value(a, AxisRef::Origin(x), format!("Origem · eixo {x:?}"));
@@ -780,6 +796,18 @@ pub(crate) fn axis_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
         });
         if pick_button(ui, !seed.curves.is_empty(), "uma aresta ou linha") {
             *a = axis_of(seed.curves.last().unwrap());
+        }
+    }))
+    .response
+    .context_menu(|ui| {
+        // qualquer campo de eixo: a aresta ou o eixo da face viram um elemento, que ocupa o campo
+        if !matches!(a, AxisRef::Edge { .. } | AxisRef::Face { .. }) {
+            ui.label(RichText::new(tr("Escolha uma aresta ou face do modelo para extrair.")).weak());
+            return;
+        }
+        if ui.button(tr("Extrair")).clicked() {
+            ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique(EXTRACT_AXIS_REQ), *a));
+            ui.close();
         }
     });
 }
@@ -851,6 +879,10 @@ pub(crate) struct ExtractReq {
 pub(crate) const EXTRACT_REQ: &str = "extrair_do_campo";
 /// Mesmo pedido, de um campo de curva: leva a aresta que está no campo.
 pub(crate) const EXTRACT_CURVE_REQ: &str = "extrair_curva_do_campo";
+/// Mesmo pedido, de um campo de ponto.
+pub(crate) const EXTRACT_POINT_REQ: &str = "extrair_ponto_do_campo";
+/// Mesmo pedido, de um campo de eixo.
+pub(crate) const EXTRACT_AXIS_REQ: &str = "extrair_eixo_do_campo";
 
 /// Troca, em qualquer campo do elemento ou do comando, a referência `old` pela `new`.
 pub(crate) fn swap_ref<K: serde::Serialize + serde::de::DeserializeOwned, R: serde::Serialize>(k: &mut K, old: &R, new: &R) {
@@ -1548,7 +1580,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                     });
                 }
             }
-            if let Some(q) = seed.curves.iter().find_map(|c| if let CurveRef::Edge(e) = c { e.get(e.len() / 2).copied() } else { None }) {
+            if let Some(q) = seed.curves.iter().find_map(|c| if let CurveRef::Edge(e) | CurveRef::BodyEdge { pts: e, .. } = c { e.get(e.len() / 2).copied() } else { None }) {
                 if ui.button(tr("Usar a aresta selecionada")).clicked() {
                     *near = Some(q);
                     *expected = None;
@@ -1574,6 +1606,16 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             crate::sup_spline::painel(ui, me, &mut r.kind, note.map_or(&[], |n| n.pontos.as_slice()));
         }
         R::CurveCopy { curve } => curve_slot(ui, "g_c", "Aresta/curva", doc, me, curve, seed),
+        R::CurveExtract { edge, prop, expected, .. } => {
+            let antes = edge.clone();
+            curve_slot(ui, "g_c", "Aresta", doc, me, edge, seed);
+            if *edge != antes {
+                *expected = None;
+            }
+            prop_ui(ui, prop, expected);
+            ui.label(RichText::new(tr("Tangente: segue as vizinhas sem canto vivo. Ponto: tudo o que se liga pelas pontas, desde que não se ramifique.")).weak().small());
+            count_ui(ui, note, expected);
+        }
         R::CurveJoin { curves } => {
             curves_list(ui, "g_cj", "Curva", doc, me, curves, seed, 1);
             ui.label(RichText::new(tr("As curvas precisam se tocar nas pontas; a ordem não importa.")).weak().small());

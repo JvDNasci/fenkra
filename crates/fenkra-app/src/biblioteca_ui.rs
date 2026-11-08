@@ -654,6 +654,26 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
             notas.push((format!("m {}", fmt(m)), 1.));
             notas.push((format!("d {}", fmt(d)), 2.));
         }
+        TipoFixador::Rolamento => {
+            // corte pelo eixo: anel externo, faixa das esferas e anel interno, nas proporções do modelo
+            let (dd, b) = (valor("D").unwrap_or(d * 2.), valor("B").unwrap_or(d * 0.5));
+            let (d2, d1) = (dd - (dd - d) / 3., d + (dd - d) / 3.);
+            let esc = ((rect.width() * 0.6 - 10.) / dd as f32).min((rect.height() - 50.) / b as f32);
+            let cx = rect.left() + 62.;
+            let cy = rect.top() + 70.;
+            let hb = b as f32 * esc / 2.;
+            let x = |v: f64| v as f32 * esc / 2.;
+            for lado in [-1., 1.] {
+                let faixa = |r0: f64, r1: f64, meia: f32| Rect::from_two_pos(Pos2::new(cx + lado * x(r0), cy - meia), Pos2::new(cx + lado * x(r1), cy + meia));
+                p.rect_stroke(faixa(d2, dd, hb), 0., traco, egui::StrokeKind::Middle);
+                p.rect_stroke(faixa(d, d1, hb), 0., traco, egui::StrokeKind::Middle);
+                p.rect_stroke(faixa(d1, d2, hb / 2.), 0., fino, egui::StrokeKind::Middle);
+            }
+            p.line_segment([Pos2::new(cx, cy - hb - 10.), Pos2::new(cx, cy + hb + 10.)], fino);
+            notas.push((format!("d {}", fmt(d)), 0.));
+            notas.push((format!("D {}", fmt(dd)), 1.));
+            notas.push((format!("B {}", fmt(b)), 2.));
+        }
         TipoFixador::Arruela => {
             let (d1, d2, h) = (valor("d1").unwrap_or(d), valor("d2").unwrap_or(d * 2.), valor("h").unwrap_or(d * 0.2));
             let esc = ((rect.width() * 0.5 - 20.) / d2 as f32).min(40. / h as f32);
@@ -1078,6 +1098,18 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
                 }
                 // solto: no espaço, ao lado
                 let _ = avulso::inserir_livre(&mut st.asm, &dir, lib, "iso4762", "M8", Some(30.), est.modo, PosicaoLivre::Solto { origem: [90., -60., 40.] }, None);
+                st.solve();
+                st.dirty = true;
+            }
+        }
+        // B396: ficha do rolamento 6010 aberta e os dois do kart (50×80 e 25×47) soltos ao lado
+        "biblioteca_rolamento" => {
+            est.escolher("iso15_60", Some("6010"));
+            est.comprimento = None;
+            if let Some(dir) = st.dir() {
+                let lib = biblioteca::publica();
+                let _ = avulso::inserir_livre(&mut st.asm, &dir, lib, "iso15_60", "6010", None, est.modo, PosicaoLivre::Solto { origem: [110., -60., 40.] }, None);
+                let _ = avulso::inserir_livre(&mut st.asm, &dir, lib, "iso15_60", "6005", None, est.modo, PosicaoLivre::Solto { origem: [10., -150., 40.] }, None);
                 st.solve();
                 st.dirty = true;
             }

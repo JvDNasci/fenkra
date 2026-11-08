@@ -19,6 +19,12 @@ fn pl180(o: V3) -> Placement {
     Placement { origin: o, rot: [[-1., 0., 0.], [0., -1., 0.], [0., 0., 1.]] }
 }
 
+/// Eixo local Z da peça no Y do mundo: peças da biblioteca (rolamento, porca) nascem com o eixo
+/// em Z e a face de apoio em z = 0.
+fn eixo_y(o: V3) -> Placement {
+    Placement { origin: o, rot: [[1., 0., 0.], [0., 0., -1.], [0., 1., 0.]] }
+}
+
 fn roty(o: V3, graus: f64) -> Placement {
     let (s, c) = graus.to_radians().sin_cos();
     Placement { origin: o, rot: [[c, 0., -s], [0., 1., 0.], [s, 0., c]] }
@@ -90,7 +96,8 @@ pub fn sc_eixo(u: &[(String, LinkedGeo)]) -> Assembly {
     let mut mancais = vec![];
     for y in [300., 0., -300.] {
         mancais.push(peca(&mut a, "EX-02", pl([0., y, zt])));
-        peca(&mut a, "EX-03", pl([0., y, zt]));
+        // rolamento 6010 da biblioteca: largura 16 de y - 8 a y + 8
+        peca(&mut a, "EX-03", eixo_y([0., y + 8., zt]));
     }
     fixa(&mut a, mancais[0]);
     let mut grupo = vec![e];

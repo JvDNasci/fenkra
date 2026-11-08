@@ -723,6 +723,11 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         crate::asm_fixadores::demo(st);
         return;
     }
+    if nome == "preencher" {
+        // B248: janela Preencher furos aberta, com o fantasma de cada pilha candidata na viewport
+        st.fasteners_open = Some(crate::asm_ui::FastenersUi::default());
+        return;
+    }
     if nome.starts_with("conjunto") {
         crate::asm_conjunto::demo(st, nome);
         return;

@@ -103,13 +103,13 @@ fn main() {
     pc!("PR-09", "Proteção traseira", "Forma livre", "", formas::pr09(u));
     pc!("MO-03", "Escape", "Superfícies", ACO_C, p::mo03(u));
     // peças de biblioteca: ficam no fim da fila (B374, B375 em andamento)
-    pc!("EX-03", "Rolamento do eixo", "Biblioteca", "", p::rolamento(50., 80., 16.));
+    pc!("EX-03", "Rolamento do eixo 6010", "Biblioteca", "", fenkra_solidos::fixadores::fixador_documento("iso15_60", "6010", None));
     pc!("EX-04", "Chaveta", "Biblioteca", "", fenkra_solidos::eixos::chaveta_documento(50., 40.));
-    pc!("DI-11", "Rolamento dianteiro", "Biblioteca", "", p::rolamento(25., 47., 12.));
+    pc!("DI-11", "Rolamento dianteiro 6005", "Biblioteca", "", fenkra_solidos::fixadores::fixador_documento("iso15_60", "6005", None));
     pc!("FX-01", "Parafuso M8", "Biblioteca", "", fenkra_solidos::fixadores::fixador_documento("iso4762", "M8", Some(40.)));
     pc!("FX-03", "Parafuso M6", "Biblioteca", "", fenkra_solidos::fixadores::fixador_documento("iso4762", "M6", Some(30.)));
-    pc!("FX-02", "Porca autotravante M8 (contorno: porca comum)", "Biblioteca", "", fenkra_solidos::fixadores::fixador_documento("iso4032", "M8", None));
-    pc!("FX-04", "Porca autotravante M6 (contorno: porca comum)", "Biblioteca", "", fenkra_solidos::fixadores::fixador_documento("iso4032", "M6", None));
+    pc!("FX-02", "Porca autotravante M8 (DIN 985)", "Biblioteca", "", fenkra_solidos::fixadores::fixador_documento("din985", "M8", None));
+    pc!("FX-04", "Porca autotravante M6 (DIN 985)", "Biblioteca", "", fenkra_solidos::fixadores::fixador_documento("din985", "M6", None));
     pc!("DI-07", "Terminal rotular (contorno: revolução)", "Biblioteca", "", p::rolamento(8., 22., 12.));
     pc!("CV-CHAPA1", "Assoalho com estampo, veneziana e colar", "Chapa", ACO_C, cobertura::assoalho_estampado());
     pc!("CV-CHAPA2", "Protetor com bainha e desvio", "Chapa", ACO_C, cobertura::protetor_bainha());
