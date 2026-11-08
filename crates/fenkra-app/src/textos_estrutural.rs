@@ -193,4 +193,8 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("altura, largura e espelho precisam ser positivos", "height, width and rise must be positive"),
     ("profundidade do degrau precisa ser positiva", "step going must be positive"),
     ("Gera escada de degraus, descansos e guarda-corpo de plataforma por parâmetros e confere os itens do Anexo III da NR-12.", "Generates step stairs, landings and platform guardrails from parameters and checks the NR-12 Annex III items."),
+    // B176: NC1 e STEP para as máquinas
+    ("Exportar NC1 e STEP…", "Export NC1 and STEP…"),
+    ("Para as máquinas de perfil e de tubo: um arquivo DSTV NC1 (cabeçalho, cortes inclinados e furos) e um STEP do sólido já cortado por item da lista, numa pasta.", "For profile and tube machines: one DSTV NC1 file (header, skew cuts and holes) and one STEP of the cut solid per list item, in a folder."),
+    ("NC1 e STEP gravados", "NC1 and STEP written"),
 ];

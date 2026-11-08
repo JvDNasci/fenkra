@@ -442,6 +442,7 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     let mut open = true;
     let mut export = false;
     let mut export_ifc = false;
+    let mut export_nc = false;
     let mut gerar = false;
     let mut acao_maq: Option<crate::st_maquina_ui::Acao> = None;
     let mut hover_row: Option<usize> = None;
@@ -583,6 +584,9 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                 if ui.button(tr("Exportar IFC…")).on_hover_text(tr("Estrutura de aço em IFC4: membros, placas e soldas com o corpo já cortado, o perfil paramétrico, o material e o comprimento de corte.")).clicked() {
                     export_ifc = true;
                 }
+                if ui.button(tr("Exportar NC1 e STEP…")).on_hover_text(tr("Para as máquinas de perfil e de tubo: um arquivo DSTV NC1 (cabeçalho, cortes inclinados e furos) e um STEP do sólido já cortado por item da lista, numa pasta.")).clicked() {
+                    export_nc = true;
+                }
                 if ui.button(tr("Gerar montagem…")).on_hover_text(tr("Abre o resumo com peças, instâncias, pasta e nomes dos arquivos; nada é gravado antes de Confirmar.")).clicked() {
                     gerar = true;
                 }
@@ -605,6 +609,9 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     if export_ifc {
         exportar_ifc(app);
     }
+    if export_nc {
+        exportar_nc(app);
+    }
     if export {
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_corte.csv").save_file() {
             let mut t = String::from("perfil;material;comprimento_mm;angulo1_graus;angulo2_graus;quantidade;barras_materia_prima;dobras;modo_da_dobra;corte_encaixe_mm\n");
@@ -626,6 +633,15 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     }
     if !open {
         app.st_cut_open = false;
+    }
+}
+
+/// B176: grava, numa pasta escolhida, o NC1 e o STEP de cada item da lista de corte.
+fn exportar_nc(app: &mut App) {
+    let Some(pasta) = rfd::FileDialog::new().pick_folder() else { return };
+    match fenkra_solidos::st_dstv::gravar_saidas(app.doc(), &pasta) {
+        Ok(v) => app.toast(format!("{}: {} {}", tr("NC1 e STEP gravados"), v.len(), tr("arquivos")), false),
+        Err(e) => app.toast(format!("{}: {}", tr("Erro"), tr(&e)), true),
     }
 }
 
