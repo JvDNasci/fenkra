@@ -1480,6 +1480,19 @@ impl PartOutline {
     }
 }
 
+/// Contagem de cópias do mesmo arquivo na linha da árvore (B406). Só a primeira instância leva
+/// "×N": repetir em todas fazia três cópias parecerem nove peças.
+fn rotulo_copias(nodes: &[Node], inst: &std::collections::HashMap<String, usize>, n: &Node) -> String {
+    let (NodeKind::Part { path } | NodeKind::SubAssembly { path }) = &n.kind else { return String::new() };
+    let copias = inst.get(path).copied().unwrap_or(1);
+    let primeira = nodes.iter().find(|x| matches!(&x.kind, NodeKind::Part { path: p } | NodeKind::SubAssembly { path: p } if p == path)).is_some_and(|x| x.id == n.id);
+    if copias > 1 && primeira {
+        format!("  ×{copias}")
+    } else {
+        String::new()
+    }
+}
+
 struct TreeInfo {
     feats: std::collections::HashMap<Id, PartOutline>,
     subs: std::collections::HashMap<Id, Vec<(usize, String, bool)>>,
@@ -1621,11 +1634,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             let num = if n.number > 0 { format!("{} · ", n.number) } else { String::new() };
             let mode = if n.mode == LoadMode::Visualizacao { " 👓" } else { "" };
             // instâncias do mesmo arquivo
-            let copies = match &n.kind {
-                NodeKind::Part { path } | NodeKind::SubAssembly { path } => info.inst.get(path).copied().unwrap_or(1),
-                _ => 1,
-            };
-            let inst = if copies > 1 { format!("  ×{copies}") } else { String::new() };
+            let inst = rotulo_copias(&st.asm.nodes, &info.inst, n);
             let alterada = if st.pecas_alteradas.contains(&n.id) { " •" } else { "" };
             let txt = format!("{num}{}{alterada}{}{mode}{}{inst}", n.name, if n.fixed { " 📌" } else { "" }, if err.is_some() { " ✖" } else { "" });
             let open_key = egui::Id::unique(("asm_expandir", n.id.0));
@@ -4836,5 +4845,25 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
     }
     if let Some((p, dir)) = gravar {
         save_gear(app, &p, dir);
+    }
+}
+
+#[cfg(test)]
+mod testes_arvore {
+    use super::*;
+
+    #[test]
+    fn copias_contadas_uma_vez_so() {
+        let mut a = Assembly::new("A");
+        let ids: Vec<Id> = (0..3).map(|_| a.add_component("CH-08", NodeKind::Part { path: "ch08.fkp".into() }, Placement::default(), None)).collect();
+        let outra = a.add_component("Base", NodeKind::Part { path: "base.fkp".into() }, Placement::default(), None);
+        let mut inst = std::collections::HashMap::new();
+        inst.insert("ch08.fkp".to_string(), 3);
+        inst.insert("base.fkp".to_string(), 1);
+        let rot = |id: Id| rotulo_copias(&a.nodes, &inst, a.node(id).unwrap());
+        assert_eq!(rot(ids[0]), "  ×3");
+        assert_eq!(rot(ids[1]), "");
+        assert_eq!(rot(ids[2]), "");
+        assert_eq!(rot(outra), "");
     }
 }
