@@ -4912,7 +4912,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 !s.d.title.title.trim().is_empty() || !s.d.title.drawn_by.trim().is_empty(),
             )
         });
-        let usados = self.curso_ui.usados.clone();
+        // B297: os gestos da vista (girar, mover, zoom, cubo, selecionar) contam como os comandos usados
+        if !self.picks.is_empty() {
+            crate::curso::anotar("selecionar");
+        }
+        let mut usados = self.curso_ui.usados.clone();
+        usados.extend(crate::curso::anotados());
         let nomes = [self.asm.as_ref().map_or("", |s| s.asm.name.as_str()), self.dwg.as_ref().map_or("", |s| s.d.name.as_str())];
         let cx = crate::curso::Contexto { doc: &self.open.doc, componentes, restricoes, folhas, vistas, cotas, tabelas, notas, vistas_planas, tabelas_dobras, carimbo, nomes, usados: &usados };
         let a = crate::curso_ui::painel(ctx, area, &mut self.curso_ui, &mut self.settings, &cx);
@@ -7523,6 +7528,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             if ((pan || orbit || zoom_drag) && delta != egui::Vec2::ZERO) || (resp.hovered() && scroll != 0.) {
                 vp.navegou();
             }
+            if (pan || orbit || zoom_drag) && delta != egui::Vec2::ZERO {
+                crate::curso::anotar(if pan { "mover_vista" } else if orbit { "girar" } else { "zoom" });
+            }
             if pan {
                 let (r, u) = vp.camera.basis();
                 let k = vp.camera.dist * 0.0012;
@@ -7540,6 +7548,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 let inv = self.settings.invert_zoom != (self.settings.nav == N::MeioGira);
                 let sc = if inv { scroll } else { -scroll };
                 let nova = (vp.camera.dist * (sc * 0.0015).exp()).clamp(0.5, 1e6);
+                crate::curso::anotar("zoom");
                 match ponteiro_na_vista {
                     // pivô sob o cursor: o ponto apontado fica parado enquanto a vista aproxima
                     Some(p) if self.settings.zoom_no_cursor => vp.camera.zoom_em_ponto(rect, p, nova),
@@ -7746,6 +7755,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             // cubo de vistas no canto superior direito
             let cube_area = Rect::from_min_size(egui::pos2(rect.right() - 120., rect.top() + 8.), egui::vec2(112., 112.));
             let (dir, drag) = crate::viewcube::cube(ui, cube_area, &cam, "canto", false);
+            if dir.is_some() {
+                crate::curso::anotar("vista_cubo");
+            }
             if dir.is_some() {
                 self.view_choice = dir;
             }

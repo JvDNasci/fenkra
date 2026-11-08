@@ -548,6 +548,10 @@ fn aba_perfil(ui: &mut egui::Ui, st: &mut CursoUi, s: &mut Settings, out: &mut S
     ui.label(RichText::new(format!("{}: {}", tr("Atalhos"), p.preset.label())).small());
     ui.label(RichText::new(p.preset.nav().help()).small().weak());
     ui.add_space(6.);
+    if modal {
+        densidade(ui, s, out);
+        ui.add_space(6.);
+    }
     ui.horizontal_wrapped(|ui| {
         if ui.button(tr("Aplicar e começar o curso")).on_hover_text(tr("Ajusta atalhos e navegação e abre a trilha indicada para este perfil")).clicked() {
             compat::aplicar(s, p);
@@ -620,6 +624,29 @@ fn comparacao(ui: &mut egui::Ui, p: &Perfil, s: &Settings) {
         });
         ui.add_space(2.);
     }
+}
+
+/// Densidades da interface oferecidas na primeira abertura: (nome, dica, escala).
+pub const DENSIDADES: [(&str, &str, f32); 3] = [
+    ("Compacta", "Mais espaço para a peça; botões e fontes menores", 0.9),
+    ("Normal", "O tamanho padrão", 1.0),
+    ("Ampla", "Botões e fontes maiores, bons para tela grande ou toque", 1.2),
+];
+
+/// B297: escolha da densidade na primeira abertura. A escala vale na hora, então a própria janela
+/// é a prévia: a pessoa vê o tamanho antes de aplicar o perfil (e muda depois em Preferências).
+fn densidade(ui: &mut egui::Ui, s: &mut Settings, out: &mut Saida) {
+    ui.horizontal_wrapped(|ui| {
+        ui.label(RichText::new(tr("Densidade da interface")).strong());
+        for (nome, dica, escala) in DENSIDADES {
+            let r = ui.selectable_label((s.ui_scale - escala).abs() < 0.01, tr(nome)).on_hover_text(tr(dica));
+            if r.clicked() {
+                s.ui_scale = escala;
+                out.mudou = true;
+            }
+        }
+    });
+    ui.label(RichText::new(tr("A janela muda de tamanho na hora: é a prévia de como o programa vai ficar.")).small().weak());
 }
 
 /// Janela única da primeira abertura (e de Ajuda > "De onde você vem?"). Responder ou dispensar

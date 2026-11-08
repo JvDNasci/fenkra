@@ -757,6 +757,20 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     let n = egui::vec2(-d.y, d.x);
     painter.circle_filled(sb, 3.5, c);
     forma.pinta(&painter, st, d, c, esp);
+    // B297: a aula em andamento pede este comando: a alça principal pulsa, como o botão na barra
+    if nth == 0 {
+        let pedido = crate::curso_ui::destaque(ui.ctx()).filter(|x| app.open.doc.feature(id).is_some_and(|f| {
+            let ic = crate::tree_ui::icone_comando(&f.kind);
+            !ic.is_empty() && x.icone.starts_with(ic)
+        }));
+        if let Some(x) = pedido {
+            let pulso = if x.animar { 0.5 + 0.5 * (ui.input(|i| i.time) as f32 * 3.).sin() } else { 1. };
+            painter.circle_stroke(st, PEGA / 2. + 3. + 3. * pulso, Stroke::new(2.5, crate::theme::accent(ui.visuals()).gamma_multiply(0.45 + 0.55 * pulso)));
+            if x.animar {
+                ui.ctx().request_repaint_after(std::time::Duration::from_millis(60));
+            }
+        }
+    }
 
     // captura do B17: o salto real desta seta, com o zoom real desta vista
     if std::env::var_os("FENKRA_DEMO_PASSO").is_some() {

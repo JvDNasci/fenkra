@@ -69,8 +69,30 @@ pub enum Cond {
     /// o comando com este ícone foi acionado nesta sessão (passo cujo rastro não fica no modelo,
     /// como abrir a lista de peças ou exportar)
     Comando(&'static str),
+    /// gesto de câmera ou de seleção feito na vista nesta sessão (`anotar`): girar, mover, zoom,
+    /// cubo de vistas, selecionar
+    Gesto(&'static str),
     /// sem rastro no documento: a pessoa confirma
     Manual,
+}
+
+/// Gestos da vista que a aula de câmera reconhece (B297). Quem navega anota; o curso lê no quadro.
+pub const GESTOS: [&str; 5] = ["girar", "mover_vista", "zoom", "vista_cubo", "selecionar"];
+
+static ANOTADOS: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
+
+/// Anota um gesto da vista (uma vez por sessão; repetir não custa nada).
+pub fn anotar(g: &'static str) {
+    if let Ok(mut v) = ANOTADOS.lock() {
+        if !v.contains(&g) {
+            v.push(g);
+        }
+    }
+}
+
+/// Gestos anotados desde que o programa abriu.
+pub fn anotados() -> Vec<&'static str> {
+    ANOTADOS.lock().map(|v| v.clone()).unwrap_or_default()
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -120,6 +142,13 @@ const fn a(id: &'static str, titulo: &'static str, resumo: &'static str, bancada
 /// Todas as aulas. A ordem aqui é a ordem em que aparecem nas listas.
 pub const AULAS: &[Aula] = &[
     // ---- Sólidos
+    a("sol_camera", "Câmera e seleção", "Antes de modelar: girar, mover e aproximar a vista, olhar de frente e escolher uma face.", Solidos, Iniciante, Some("Flange"), None, &[
+        p("Gire a vista: arraste com o botão esquerdo no fundo (ou com o do meio).", "", Gesto("girar")),
+        p("Mova a vista: arraste com o botão direito, ou com Shift e o esquerdo.", "", Gesto("mover_vista")),
+        p("Aproxime com a roda: o ponto sob o cursor fica parado.", "", Gesto("zoom")),
+        p("Clique numa face do cubo de vistas, no canto, para olhar a peça de frente.", "", Gesto("vista_cubo")),
+        p("Clique numa face da peça para selecioná-la; ela acende na cor de destaque.", "", Gesto("selecionar")),
+    ]),
     a("sol_esboco", "Esboço do perfil", "Todo sólido começa num desenho 2D fechado sobre um plano.", Solidos, Iniciante, None, None, &[
         p("Crie um sketch no plano frontal e desenhe um retângulo fechado.", "sketch", Feature("sketch", 1)),
         p("Cote o retângulo: cada medida vira um parâmetro que você pode mudar depois.", "sk_cota", CotaSketch),
@@ -255,8 +284,8 @@ pub const AULAS: &[Aula] = &[
 ];
 
 pub const TRILHAS: &[Trilha] = &[
-    Trilha { id: "primeiros_passos", titulo: "Primeiros passos", resumo: "Do esboço ao sólido acabado, em quatro aulas curtas.", nivel: Iniciante, aulas: &["sol_esboco", "sol_volume", "sol_furo", "sol_acabamento"] },
-    Trilha { id: "solidos", titulo: "Modelagem sólida", resumo: "Tudo o que a bancada de sólidos faz, na ordem em que se usa.", nivel: Intermediario, aulas: &["sol_esboco", "sol_volume", "sol_furo", "sol_acabamento", "sol_repetir", "sol_casca"] },
+    Trilha { id: "primeiros_passos", titulo: "Primeiros passos", resumo: "Da câmera ao sólido acabado, em seis aulas curtas.", nivel: Iniciante, aulas: &["sol_camera", "sol_esboco", "sol_volume", "sol_furo", "sol_repetir", "sol_acabamento"] },
+    Trilha { id: "solidos", titulo: "Modelagem sólida", resumo: "Tudo o que a bancada de sólidos faz, na ordem em que se usa.", nivel: Intermediario, aulas: &["sol_camera", "sol_esboco", "sol_volume", "sol_furo", "sol_acabamento", "sol_repetir", "sol_casca"] },
     Trilha { id: "superficies", titulo: "Superfícies", resumo: "Curvas, superfícies, união e verificação de continuidade.", nivel: Avancado, aulas: &["sup_curvas", "sup_criar", "sup_juntar", "sup_verificar"] },
     Trilha { id: "forma_livre", titulo: "Forma livre", resumo: "Gaiola de nós, superfície lisa, vincos e conversão em sólido.", nivel: Intermediario, aulas: &["ff_primeira", "ff_moldar", "ff_vincos", "ff_converter"] },
     Trilha { id: "montagem", titulo: "Montagens", resumo: "Inserir, restringir, verificar e documentar.", nivel: Intermediario, aulas: &["mon_inserir", "mon_restringir", "mon_verificar", "mon_documentar"] },
@@ -408,6 +437,7 @@ impl Cond {
             TabelasDobras(n) => c.tabelas_dobras >= n,
             Carimbo => c.carimbo,
             Comando(icone) => c.usados.contains(&icone),
+            Gesto(g) => c.usados.contains(&g),
             Manual => false,
         }
     }
@@ -730,14 +760,17 @@ mod testes {
         assert!(!e.perfil_visto && !e.audio);
         let t = trilha("primeiros_passos").unwrap();
         let mut e = e;
+        assert_eq!(e.proxima_da_trilha(t).unwrap().id, "sol_camera");
+        e.pular_aula(aula("sol_camera").unwrap());
         assert_eq!(e.proxima_da_trilha(t).unwrap().id, "sol_esboco");
         e.pular_aula(aula("sol_esboco").unwrap());
         assert_eq!(e.proxima_da_trilha(t).unwrap().id, "sol_volume");
-        assert_eq!(e.andamento_trilha(t), (1, 4));
+        assert_eq!(e.andamento_trilha(t), (2, 6));
         // "próxima" segue a ordem a partir da aula atual e só volta ao começo no fim
         assert_eq!(e.proxima_depois(t, "sol_volume").unwrap().id, "sol_furo");
-        e.pular_aula(aula("sol_furo").unwrap());
-        e.pular_aula(aula("sol_acabamento").unwrap());
+        for x in ["sol_furo", "sol_repetir", "sol_acabamento"] {
+            e.pular_aula(aula(x).unwrap());
+        }
         assert!(e.proxima_depois(t, "sol_volume").is_none(), "nada mais pendente fora a própria aula");
     }
 
@@ -858,6 +891,81 @@ mod testes {
         assert!(aulas_da_trilha(t).iter().all(|a| a.bancada == Bench::FormaLivre));
         // a trilha de superfícies não carrega mais as aulas da forma livre
         assert!(aulas_da_trilha(trilha_da_bancada(Bench::Superficies)).iter().all(|a| a.bancada == Bench::Superficies));
+    }
+
+    /// B297, aceite: cada lição inicial conclui simulando os passos na ordem em que a pessoa faria:
+    /// os gestos anotados pela vista, o documento crescendo comando a comando e as contagens da
+    /// montagem. Nenhum passo é dado por "já fiz", fora os manuais que só a pessoa sabe.
+    #[test]
+    fn licoes_iniciais_concluem_simulando_os_passos() {
+        use fenkra_core::*;
+        let mut e = EstadoCurso::default();
+        // câmera e seleção: cada gesto anotado cumpre o seu passo, na ordem
+        let cam = aula("sol_camera").unwrap();
+        let vazio = Document::new("Flange");
+        let mut feitos: Vec<&'static str> = vec![];
+        for (i, g) in GESTOS.iter().enumerate() {
+            assert_eq!(e.proximo_passo(cam), Some(i));
+            feitos.push(g);
+            e.sincronizar(cam, &Contexto { usados: &feitos, ..Contexto::so_documento(&vazio) });
+        }
+        assert!(e.concluida(cam), "a aula de câmera conclui só com os gestos");
+        anotar("girar");
+        assert!(anotados().contains(&"girar"));
+
+        // primeiro sketch cotado, extrusão, furo e padrão: o documento cresce como na tela
+        let mut d = Document::new("Aula");
+        let mut dados = SketchData::default();
+        let mut al = || d.alloc();
+        let (_, lados) = dados.add_rect(&mut al, [0., 0.], [40., 20.], false);
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: dados.clone() }));
+        let esboco = aula("sol_esboco").unwrap();
+        e.sincronizar(esboco, &Contexto::so_documento(&d));
+        assert_eq!(e.proximo_passo(esboco), Some(1), "sem cota o esboço ainda não acabou");
+        let mut al = || d.alloc();
+        dados.add_constraint(&mut al, fenkra_core::sketch::Kind::Length(lados[0], "40".into()));
+        if let Some(Feature { kind: FeatureKind::Sketch(s), .. }) = d.feature_mut(sk) {
+            s.data = dados;
+        }
+        e.sincronizar(esboco, &Contexto::so_documento(&d));
+        assert!(e.concluida(esboco), "o sketch cotado conclui a aula");
+
+        let volume = aula("sol_volume").unwrap();
+        let ext = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+        e.sincronizar(volume, &Contexto::so_documento(&d));
+        e.confirmar(volume, 1);
+        assert!(e.concluida(volume));
+
+        let furo = aula("sol_furo").unwrap();
+        d.add_feature(FeatureKind::Hole(Hole { sketch: sk, kind: HoleKind::Simples, diameter: "5".into(), depth: Extent::ThroughAll, thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false, extra: Default::default() }));
+        e.sincronizar(furo, &Contexto::so_documento(&d));
+        assert_eq!(e.proximo_passo(furo), Some(1));
+        let mut dados = SketchData::default();
+        let mut al = || d.alloc();
+        dados.add_rect(&mut al, [25., 5.], [35., 15.], false);
+        let sk2 = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: dados }));
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk2, op: BoolOp::Cut, extent: Extent::Blind("4".into()), reverse: true, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+        e.sincronizar(furo, &Contexto::so_documento(&d));
+        assert!(e.concluida(furo));
+
+        let repetir = aula("sol_repetir").unwrap();
+        d.add_feature(FeatureKind::Pattern(Pattern { kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: "3".into(), spacing: "50".into(), dir2: None, count2: "1".into(), spacing2: "0".into(), total: false }, sources: vec![ext], skip: vec![] }));
+        e.sincronizar(repetir, &Contexto::so_documento(&d));
+        assert_eq!(e.proximo_passo(repetir), Some(1));
+        d.add_feature(FeatureKind::Mirror(Mirror { plane: PlaneRef::Origin(OriginPlane::YZ), sources: vec![ext] }));
+        e.sincronizar(repetir, &Contexto::so_documento(&d));
+        assert!(e.concluida(repetir));
+
+        // primeira montagem: inserir duas peças e restringir duas vezes
+        let m = Document::new("Conjunto de exemplo");
+        for (id, fim) in [("mon_inserir", (2, 0)), ("mon_restringir", (2, 2))] {
+            let a = aula(id).unwrap();
+            for passo in 0..=fim.0.max(fim.1) {
+                let c = Contexto { componentes: passo.min(fim.0), restricoes: passo.min(fim.1), ..Contexto::so_documento(&m) };
+                e.sincronizar(a, &c);
+            }
+            assert!(e.concluida(a), "{id} não concluiu");
+        }
     }
 
     #[test]

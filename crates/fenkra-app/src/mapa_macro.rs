@@ -36,6 +36,7 @@ pub const MAPAS: &[Mapa] = &[
         bancada: Bench::Solidos,
         resumo: "Do desenho 2D ao sólido acabado, sempre guiado por parâmetros.",
         etapas: &[
+            e("sol_camera", "Girar, mover e aproximar a vista, olhar de frente pelas vistas padrão e escolher faces.", &["vista_iso", "vista_frente", "vista_topo"]),
             e("sol_esboco", "Desenhar retângulos, círculos e arcos, ligar com restrições e cotar com parâmetros.", &["sketch", "sk_retangulo", "sk_cota"]),
             e("sol_volume", "Extrudar, revolucionar, varrer ou partir de um sólido básico como caixa e cilindro.", &["extrusao", "revolucao", "prim_caixa"]),
             e("sol_furo", "Furar com diâmetro e profundidade, ou tirar material com o perfil de um sketch.", &["furo_simples", "recorte", "furo_roscado"]),
