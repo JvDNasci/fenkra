@@ -336,7 +336,9 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
             avisos.extend(c.avisos);
         }
         Elemento::Corrente { corrente, dentes1, dentes2, centros, furo1, furo2 } => {
-            let c = dados::corrente(corrente).ok_or_else(|| format!("corrente '{corrente}' fora da biblioteca"))?;
+            // a largura pode ser provisória (219, B395): a peça leva o aviso e o painel também
+            let (c, aviso_largura) = dados::corrente_para_gerar(corrente)?;
+            avisos.extend(aviso_largura);
             let (n1, n2) = ((*dentes1).min(*dentes2), (*dentes1).max(*dentes2));
             let elos = dados::elos_da_corrente(c.passo, n1, n2, *centros);
             let cc = dados::distancia_corrigida_corrente(c.passo, n1, n2, elos).ok_or("a corrente é curta demais para as duas rodas")?;
@@ -438,7 +440,7 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
 /// A viewport desenha esses pontos por cima da corrente (a corrente em si é um corpo estático de placas).
 pub fn rolos_da_corrente(asm: &Assembly, reg: &RegistroTransmissao) -> Option<(Vec<V3>, f64)> {
     let Elemento::Corrente { corrente, dentes1, dentes2, .. } = &reg.elemento else { return None };
-    let c = dados::corrente(corrente)?;
+    let (c, _) = dados::corrente_para_gerar(corrente).ok()?;
     let (n1, n2) = ((*dentes1).min(*dentes2), (*dentes1).max(*dentes2));
     let (roda1, roda2) = (asm.node(*reg.comps.get(1)?)?.placement, asm.node(*reg.comps.get(3)?)?.placement);
     let centros = norm(sub(roda2.origin, roda1.origin));
