@@ -3976,7 +3976,7 @@
    "tokens_k": 420,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -4440,7 +4440,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -6089,7 +6089,7 @@
    "tokens_k": 450,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.4
   },
   {
@@ -6137,7 +6137,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.3
   },
   {
@@ -6185,7 +6185,7 @@
    "tokens_k": 350,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -6345,7 +6345,7 @@
    "tokens_k": 400,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.4
   },
   {
