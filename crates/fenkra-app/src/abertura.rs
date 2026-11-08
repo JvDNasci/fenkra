@@ -18,11 +18,15 @@ pub fn bancada_do_conteudo(d: &Document) -> Bench {
     if ativas().any(|k| matches!(k, K::StructMember(_) | K::StructPlate(_) | K::StructGusset(_) | K::StructWeld(_))) {
         return Bench::Estrutural;
     }
-    if ativas().any(|k| matches!(k, K::Forma(_))) {
-        return Bench::FormaLivre;
-    }
     let superficie = |k: &K| matches!(k, K::ThickSurface(_) | K::CloseSurface(_) | K::SewSurface(_) | K::BoundaryFill(_));
     let solido = |k: &K| matches!(k, K::Extrude(_) | K::Revolve(_) | K::Primitive(_) | K::Sweep(_) | K::Loft(_) | K::Hole(_) | K::Shell(_) | K::Combine(_));
+    // Forma livre só quando a malha de subdivisão é o último comando que faz corpo. Peça que nasce de
+    // uma forma e segue com extrusões (o volante DI-01: aro em forma, raios extrudados) continua na
+    // Modelagem Sólida, onde estão os comandos que a pessoa vai editar.
+    let ultimo_corpo = d.features.iter().filter(|f| !f.suppressed).map(|f| &f.kind).filter(|k| matches!(k, K::Forma(_)) || solido(k)).last();
+    if matches!(ultimo_corpo, Some(K::Forma(_))) {
+        return Bench::FormaLivre;
+    }
     let tem_superficie = ativas().any(superficie) || d.references.iter().any(|r| r.kind.class() == fenkra_core::RefClass::Surface);
     if tem_superficie && !ativas().any(solido) {
         return Bench::Superficies;
@@ -120,8 +124,17 @@ mod testes {
         // superfícies que viraram volume: a peça é um sólido
         let mut mista = sup.clone();
         let solido = crate::examples::all().into_iter().flat_map(|e| e.doc.features).find(|f| matches!(f.kind, fenkra_core::FeatureKind::Extrude(_))).unwrap();
-        mista.add_feature(solido.kind);
+        mista.add_feature(solido.kind.clone());
         assert_eq!(bancada_do_conteudo(&mista), Bench::Solidos);
+        // forma seguida de extrusão (volante do kart): abre em Sólidos; antes abria em Forma livre
+        let mut volante = forma.clone();
+        volante.add_feature(solido.kind.clone());
+        assert_eq!(bancada_do_conteudo(&volante), Bench::Solidos);
+        // a extrusão suprimida não conta: o último corpo volta a ser a forma
+        if let Some(f) = volante.features.last_mut() {
+            f.suppressed = true;
+        }
+        assert_eq!(bancada_do_conteudo(&volante), Bench::FormaLivre);
     }
 
     #[test]

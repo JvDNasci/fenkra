@@ -900,7 +900,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             // resumo limpo: o comando só abre para edição com duplo clique / Editar
             let Some(f) = doc.feature_mut(id) else { return };
             ui.heading(format!("{} {}", f.kind.icon(), f.name));
-            ui.label(RichText::new(f.kind.type_name()).weak());
+            ui.label(RichText::new(tr(crate::arvore_nomes::tipo_legivel(f.kind.type_name()))).weak());
             match &status {
                 Some(Status::Error(m)) => {
                     ui.label(RichText::new(format!("✖ {}", tr(m))).color(crate::theme::st_err()));
@@ -945,7 +945,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         ui.painter().rect_stroke(r, 9., egui::Stroke::new(1., acc.gamma_multiply(0.5)), egui::StrokeKind::Inside);
                         ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, f.kind.icon(), egui::FontId::proportional(22.), acc);
                         ui.vertical(|ui| {
-                            ui.label(RichText::new(tr(f.kind.type_name())).size(17.).strong());
+                            ui.label(RichText::new(tr(crate::arvore_nomes::tipo_legivel(f.kind.type_name()))).size(17.).strong());
                             let mut n = f.name.clone();
                             if ui.add(egui::TextEdit::singleline(&mut n).desired_width(150.)).changed() && !n.is_empty() && !names.contains(&n) {
                                 f.name = n;
@@ -1845,5 +1845,83 @@ mod testes_repouso {
             atraso = saida.viewport_output.values().map(|v| v.repaint_delay).min().unwrap_or(std::time::Duration::MAX);
         }
         assert!(atraso > std::time::Duration::from_secs(3600), "a barra ainda pede quadros: {atraso:?}");
+    }
+}
+
+/// B227: o mesmo comando abre idêntico com o painel encaixado à esquerda ou à direita. O painel de
+/// comando é um só; o lado só muda onde a janela fica. Este teste desenha o conteúdo de verdade de
+/// comandos (campos, abas, dicas) nos dois encaixes e compara texto por texto, na posição relativa ao
+/// painel, e o tamanho do painel.
+#[cfg(test)]
+mod testes_lados {
+    use super::*;
+    use crate::paineis::{self, Encaixe, Painel, Posicao};
+
+    /// Textos pintados (com a posição relativa ao painel) e o tamanho do painel.
+    fn desenhar(doc: &Document, idx: usize, encaixe: Encaixe) -> (Vec<(String, [i32; 2])>, [i32; 2]) {
+        let ctx = egui::Context::default();
+        let tela = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1400., 900.));
+        let cfg = Painel {
+            nome: "comando".into(),
+            titulo: "Comando".into(),
+            padrao: if encaixe == Encaixe::Direita { paineis::abaixo_do_cubo(tela, 300.) } else { paineis::ao_lado_da_arvore(tela) },
+            largura: 300.,
+            redimensiona: true,
+        };
+        let posicao = Posicao { encaixe, ..Default::default() };
+        let mut out = (vec![], [0, 0]);
+        for _ in 0..4 {
+            let mut live = doc.clone();
+            let mut kind = doc.features[idx].kind.clone();
+            let mut target = doc.features[idx].target;
+            let id = doc.features[idx].id;
+            let mut rect = None;
+            let raw = egui::RawInput { screen_rect: Some(tela), ..Default::default() };
+            let mut saida = ctx.run_ui(raw, |ui| {
+                let ctx = ui.ctx().clone();
+                let s = paineis::mostrar(&ctx, tela, &cfg, posicao, |ui| {
+                    egui::ScrollArea::vertical().show(ui, |ui| {
+                        tabs_begin(ui, ("comando", kind.type_name()));
+                        feature_ui(ui, doc, idx, id, &mut kind, &mut target, &HashMap::new(), &mut live, &[], &[], &crate::geo_ui::Seed::default());
+                        tabs_end(ui);
+                    });
+                });
+                rect = s.rect;
+            });
+            saida.textures_delta.clear();
+            let r = rect.expect("o painel foi desenhado");
+            let textos = saida
+                .shapes
+                .iter()
+                .filter_map(|s| match &s.shape {
+                    egui::epaint::Shape::Text(t) if r.contains(t.pos) => Some((t.galley.text().to_string(), [(t.pos.x - r.min.x).round() as i32, (t.pos.y - r.min.y).round() as i32])),
+                    _ => None,
+                })
+                .collect();
+            out = (textos, [r.width().round() as i32, r.height().round() as i32]);
+        }
+        out
+    }
+
+    #[test]
+    fn mesmo_comando_abre_identico_nos_paineis_esquerdo_e_direito() {
+        let mut vistos = 0;
+        for ex in crate::examples::all() {
+            for (idx, f) in ex.doc.features.iter().enumerate() {
+                if !matches!(f.kind, FeatureKind::Extrude(_) | FeatureKind::Revolve(_) | FeatureKind::Hole(_) | FeatureKind::Fillet(_) | FeatureKind::Pattern(_)) {
+                    continue;
+                }
+                let (esq, te) = desenhar(&ex.doc, idx, Encaixe::Esquerda);
+                let (dir, td) = desenhar(&ex.doc, idx, Encaixe::Direita);
+                assert!(esq.len() > 3, "{}: painel vazio", f.name);
+                assert_eq!(te, td, "{} ({}): tamanho do painel muda com o lado", f.name, ex.name);
+                assert_eq!(esq, dir, "{} ({}): conteúdo muda com o lado", f.name, ex.name);
+                vistos += 1;
+            }
+            if vistos >= 6 {
+                break;
+            }
+        }
+        assert!(vistos >= 3, "poucos comandos conferidos: {vistos}");
     }
 }

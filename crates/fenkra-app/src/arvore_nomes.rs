@@ -31,6 +31,39 @@ pub fn rotulo_componente(codigo: &str, nome: &str) -> String {
     }
 }
 
+/// Nome do tipo de comando para o cabeçalho do painel. O núcleo guarda o tipo como identificador
+/// colado ("AbaEntrePerfis"), que também é a base do nome padrão do comando ("AbaEntrePerfis1"); na
+/// interface o cabeçalho mostrava esse identificador cru, sem espaço e sem tradução. Aqui ele vira o
+/// nome legível que a barra de comandos usa e que tem versão em inglês. Tipo que já é texto
+/// ("Extrusão", "Dobra por linha") passa como está.
+pub fn tipo_legivel(t: &str) -> &str {
+    match t {
+        "MultiSeções" => "Multi-seções",
+        "MultiSeçõesRemovida" => "Multi-seções removida",
+        "PadrãoLinear" => "Padrão linear",
+        "PadrãoCircular" => "Padrão circular",
+        "PadrãoPontos" => "Padrão por pontos",
+        "PreencherFronteiras" => "Preencher fronteiras",
+        "CorpoLink" => "Corpo ligado",
+        "ParedeBase" => "Parede base",
+        "FuroFlangeado" => "Furo flangeado",
+        "RecorteChapa" => "Recorte na chapa",
+        "AbaPerfil" => "Aba por perfil",
+        "AbaCurva" => "Aba curva",
+        "AbaLaço" => "Aba por laço",
+        "AlívioCanto" => "Alívio de canto",
+        "FechaCanto" => "Fechamento de canto",
+        "AbaEntrePerfis" => "Aba entre perfis",
+        "RedobrarParcial" => "Redobrar parcial",
+        "DesdobrarParcial" => "Desdobrar parcial",
+        "ConverterEmChapa" => "Converter em chapa",
+        "RasgoCircular" => "Rasgo circular",
+        "AbaSuperfície" => "Aba por superfície",
+        "Intersecao" => "Interseção",
+        outro => outro,
+    }
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;
@@ -54,5 +87,17 @@ mod testes {
         assert_eq!(rotulo_componente("QUADRO", "Quadro soldado"), "QUADRO soldado");
         // só vale como código inteiro: "CH-1" não é o começo de "CH-10"
         assert_eq!(rotulo_componente("CH-1", "CH-10 Suporte"), "CH-1 CH-10 Suporte");
+    }
+    #[test]
+    fn tipo_do_comando_aparece_legivel_e_traduzido() {
+        // identificadores colados que o cabeçalho do painel de chapa mostrava crus
+        let colados = ["MultiSeções", "MultiSeçõesRemovida", "PadrãoLinear", "PadrãoCircular", "PadrãoPontos", "PreencherFronteiras", "CorpoLink", "ParedeBase", "FuroFlangeado", "RecorteChapa", "AbaPerfil", "AbaCurva", "AbaLaço", "AlívioCanto", "FechaCanto", "AbaEntrePerfis", "RedobrarParcial", "DesdobrarParcial", "ConverterEmChapa", "RasgoCircular", "AbaSuperfície", "Intersecao"];
+        for c in colados {
+            let l = tipo_legivel(c);
+            assert!(l.contains(' ') || l.contains('-') || l == "Interseção", "{c} continua colado: {l}");
+            assert!(crate::i18n::tem_traducao(l), "{l} sem tradução");
+        }
+        assert_eq!(tipo_legivel("AbaEntrePerfis"), "Aba entre perfis");
+        assert_eq!(tipo_legivel("Extrusão"), "Extrusão");
     }
 }

@@ -13,4 +13,6 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("As folhas em vetor, para editar ou publicar. Só na bancada Desenho.", "The sheets as vectors, to edit or publish. Drawing workbench only."),
     ("As vistas e cotas em camadas, para corte a laser ou outro programa de desenho. Só na bancada Desenho.", "Views and dimensions in layers, for laser cutting or another drafting program. Drawing workbench only."),
     ("Abre a lista de peças da montagem, com item, PN e quantidade, e grava em CSV. Só na montagem.", "Opens the assembly bill of materials, with item, PN and quantity, and saves it as CSV. Assembly only."),
+    ("Multi-seções removida", "Removed multi-section"),
+    ("Padrão por pontos", "Point pattern"),
 ];
