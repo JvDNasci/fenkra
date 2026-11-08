@@ -100,6 +100,7 @@ pub mod st_solda;
 pub mod st_ifc;
 pub mod st_acesso;
 pub mod st_dstv;
+pub mod st_tocha;
 pub use st_solda::{weld_beads, CaminhoCordao, CordaoCalculado, TrechoCordao};
 
 pub use engrenagens::{calculo as calculo_engrenagem, engrenagem_documento, CalculoEngrenagem, ParamEngrenagem, TipoEngrenagem};

@@ -230,6 +230,8 @@ pub struct CaminhoCordao {
     pub comprimento: f64,
     pub fechado: bool,
     pub trechos: Vec<TrechoCordao>,
+    /// B174: pernas do filete em cada segmento de `pts` (sobre a face do conjunto 1 e do 2)
+    pub pernas: Vec<(V3, V3)>,
 }
 
 /// O que o cordão de um comando calculou, para a interface (lista de caminhos com realce) e para o
@@ -385,7 +387,8 @@ impl Ctx<'_> {
                 BeadPattern::Continuo => vec![(0., total)],
                 _ => intervalos(total, seg, passo, desloc),
             };
-            let mut caminho = CaminhoCordao { pts: tr.pts.clone(), comprimento: total, fechado: tr.fechada, trechos: vec![] };
+            let pernas = tr.ua.iter().zip(&tr.ub).map(|(a, b)| (*a, *b)).collect();
+            let mut caminho = CaminhoCordao { pts: tr.pts.clone(), comprimento: total, fechado: tr.fechada, trechos: vec![], pernas };
             for (s0, s1_) in ivs {
                 // o cordão contínuo de um caminho fechado mantém a esquadria da quina de fechamento
                 let todo = w.pattern == BeadPattern::Continuo;

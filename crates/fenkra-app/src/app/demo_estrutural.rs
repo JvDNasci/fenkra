@@ -5,7 +5,8 @@
 //!   aberto quando `FENKRA_EDITAR=Membro`.
 //! * `FENKRA_DEMO_DWG_TUBO=<v|canto|dobradeira>`: desenho de um tubo dobrado com a vista do tubo reto, a tabela
 //!   de dobras e a lista de corte (B331).
-//! * `FENKRA_DEMO_SOLDA=<cosmetico|solido|intermitente>`: tubo contra placa com o cordão de filete
+//! * `FENKRA_DEMO_SOLDA=<cosmetico|solido|intermitente>`: tubo contra placa com o cordão de filete; com
+//!   `FENKRA_DEMO_TOCHA=1`, um tubo vizinho e o teste de acessibilidade da tocha ligado (B174)
 //!   (B285); com `FENKRA_EDITAR=Cordão` abre o painel do cordão.
 //! * `FENKRA_DEMO_REFORCO=<triangular|chanfrado|poligonal>`: L de tubo quadrado com placa de
 //!   extremidade interna recuada e reforço na aresta de encontro (B255), três reforços repetidos ao
@@ -133,6 +134,17 @@ impl App {
                 mirror: false,
             }));
             d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 80.], "8", "15")));
+            // B174: com FENKRA_DEMO_TOCHA, um tubo vizinho fecha o acesso da tocha ao lado +X do cordão
+            if std::env::var("FENKRA_DEMO_TOCHA").is_ok() {
+                let l = CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([75., 0., 0.]), b: PointRef::Fixed([75., 0., 70.]), start: s("0"), end: s("0") }));
+                if let Some(FeatureKind::StructMember(base)) = d.features.first().map(|f| f.kind.clone()) {
+                    let m = StructMember { paths: vec![l], family: s("Tubo retangular"), designation: s("200x40x3"), kind: SectionKind::TuboRetangular, dims: vec![s("200"), s("40"), s("3")], ..base };
+                    let id = d.add_feature(FeatureKind::StructMember(m));
+                    if let Some(f) = d.feature_mut(id) {
+                        f.name = s("Tubo vizinho");
+                    }
+                }
+            }
             let mut w = StructWeld::novo("5");
             for p in [[20., 0., 40.], [-20., 0., 40.], [0., 20., 40.], [0., -20., 40.]] {
                 w.adicionar(p, None);

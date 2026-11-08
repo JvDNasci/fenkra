@@ -72,7 +72,7 @@ mod tests {
             perna: 5.,
             comprimento_trecho: if padrao == BeadPattern::Continuo { 0. } else { 10. },
             vao: if padrao == BeadPattern::Continuo { 0. } else { 10. },
-            caminhos: vec![CaminhoCordao { pts: vec![[0., 0., 0.], [160., 0., 0.]], comprimento: 160., fechado: false, trechos: (0..trechos).map(t).collect() }],
+            caminhos: vec![CaminhoCordao { pts: vec![[0., 0., 0.], [160., 0., 0.]], comprimento: 160., fechado: false, trechos: (0..trechos).map(t).collect(), pernas: vec![] }],
             volume: 0.,
         }
     }
