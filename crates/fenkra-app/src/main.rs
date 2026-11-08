@@ -70,6 +70,7 @@ mod pmi_setas;
 mod pmi_cordao;
 mod pmi_consultor_3d;
 mod pmi_empilhamento;
+mod pmi_inspecao_3d;
 mod textos_pmi_consultor;
 mod pmi_arvore;
 mod pmi_legivel;
