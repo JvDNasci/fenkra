@@ -91,6 +91,7 @@ pub use chapa_flat::{passos_planificados, PassoPlanificado};
 pub mod st_frames;
 pub mod st_portico;
 pub mod st_caminho_tubo;
+pub mod st_verifica_aco;
 mod st_placas;
 pub mod st_solda;
 pub use st_solda::{weld_beads, CaminhoCordao, CordaoCalculado, TrechoCordao};
