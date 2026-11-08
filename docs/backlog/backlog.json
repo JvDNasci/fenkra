@@ -337,7 +337,7 @@
    "tokens_k": 80,
    "teste": "Auto + Visual",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -1914,7 +1914,7 @@
    "tokens_k": 250,
    "teste": "Auto",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -1932,7 +1932,7 @@
    "tokens_k": 200,
    "teste": "Auto",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -2000,7 +2000,7 @@
    "tokens_k": 400,
    "teste": "Auto",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -2339,7 +2339,7 @@
    "tokens_k": 250,
    "teste": "Auto",
    "area": "PMI 3D",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -2468,7 +2468,7 @@
    "tokens_k": 250,
    "teste": "Auto",
    "area": "Estrutural e soldas",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -2500,7 +2500,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "Estrutural e soldas",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -2612,7 +2612,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -2708,7 +2708,7 @@
    "tokens_k": 250,
    "teste": "Auto",
    "area": "Desenho técnico",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -3108,7 +3108,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -3140,7 +3140,7 @@
    "tokens_k": 200,
    "teste": "Auto",
    "area": "Estrutural e soldas",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.2
   },
   {
@@ -3380,7 +3380,7 @@
    "tokens_k": 420,
    "teste": "Auto",
    "area": "PMI 3D",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -4120,7 +4120,7 @@
    "tokens_k": 200,
    "teste": "Auto + Visual",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
