@@ -100,6 +100,8 @@ mod erro_acao;
 mod arvore_grupos;
 mod chapa_estado;
 mod textos_interface2;
+mod textos_verificar;
+mod verificar_ui;
 mod ajuda_cmd;
 mod roda;
 mod textos_campos;

@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 /// Todos os comandos que existem. Nada fora desta lista roda, e nenhum deles interpreta código.
-pub const COMANDOS: [&str; 28] = [
+pub const COMANDOS: [&str; 29] = [
     "versao",
     "comandos",
     "nova_peca",
@@ -44,6 +44,7 @@ pub const COMANDOS: [&str; 28] = [
     "adicionar",
     "selecionar",
     "biblioteca",
+    "verificar",
 ];
 
 /// Os que mudam o modelo: são estes que entram no registro e que `reproduzir` aceita.
@@ -237,6 +238,7 @@ impl Sessao {
             "adicionar" => self.adicionar_tipo(args),
             "selecionar" => self.selecionar(args),
             "biblioteca" => crate::biblioteca::consultar(args),
+            "verificar" => self.verificar(args),
             _ => Err(ErroApi::novo(
                 "comando_desconhecido",
                 format!("comando '{comando}' não existe; veja `comandos`"),
@@ -541,6 +543,28 @@ impl Sessao {
         }
         let nome = rotulo_do_tipo(&tipo);
         self.adicionar(&tipo, &tipo, &nome, &resto)
+    }
+
+    /// Requisitos da peça (B418): os declarados nela e os que vierem em `requisitos`, um resultado
+    /// por requisito. Não muda a peça.
+    fn verificar(&mut self, args: &Value) -> Result<Value, ErroApi> {
+        let extra: Vec<fenkra_core::requisitos::Requisito> = match &args["requisitos"] {
+            Value::Null => vec![],
+            v => serde_json::from_value(v.clone()).map_err(|e| ErroApi::argumento(format!("`requisitos`: {e}")))?,
+        };
+        let doc = self.calcular()?.doc.clone();
+        let mut lista = doc.requisitos.clone();
+        lista.extend(extra);
+        if lista.is_empty() {
+            return Err(ErroApi::argumento("a peça não declara requisitos; passe `requisitos` (massa, furos, folga, sem_interferencia, caixa, propagacao)"));
+        }
+        let res = fenkra_solidos::verificar::verificar(&doc, &lista);
+        let falhas = res.iter().filter(|r| !r.ok).count();
+        Ok(json!({
+            "ok": falhas == 0,
+            "falhas": falhas,
+            "resultados": res.iter().map(|r| json!({ "nome": r.nome, "tipo": r.tipo, "ok": r.ok, "medido": r.medido, "detalhe": r.detalhe })).collect::<Vec<_>>(),
+        }))
     }
 
     /// Faces ou arestas por lado, tipo e raio, devolvidas como pontos para filete, chanfro e casca.

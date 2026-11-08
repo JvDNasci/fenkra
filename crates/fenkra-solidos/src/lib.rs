@@ -7,6 +7,7 @@
 pub mod erro;
 pub mod erro_acionavel;
 pub mod validade;
+pub mod verificar;
 pub mod forma_brep;
 pub mod forma_cache;
 pub mod forma_vinculo;

@@ -345,6 +345,19 @@ fn e_topologia_sem_secoes() -> Value {
     sem_args()
 }
 
+fn e_verificar() -> Value {
+    objeto(
+        json!({
+            "requisitos": {
+                "type": "array",
+                "description": "somam-se aos que a peça declara. Cada um: {nome, tipo, ...}. massa (min, max em kg); furos (diametro, quantidade, tol); folga (min em mm entre corpos); sem_interferencia (tol em mm³); caixa (max [x, y, z] em mm); propagacao (parametro, valor, medida: volume, caixa_x, caixa_y, caixa_z ou massa; esperado e tol opcionais)",
+                "items": { "type": "object", "required": ["nome", "tipo"] }
+            }
+        }),
+        &[],
+    )
+}
+
 fn e_biblioteca() -> Value {
     objeto(
         json!({
@@ -357,7 +370,7 @@ fn e_biblioteca() -> Value {
     )
 }
 
-pub const FERRAMENTAS: [Ferramenta; 22] = [
+pub const FERRAMENTAS: [Ferramenta; 23] = [
     Ferramenta { nome: "consultar_step", titulo: "Consultar STEP", descricao: "Lista caixa envolvente, massa, faces, arestas, planos, cilindros e furos de um STEP do projeto. Os planos trazem a normal para fora, as arestas trazem a fórmula, e os furos já vêm agrupados. Exige o aceite --liberar-step.", comando: "topologia", le_step: true, somente_leitura: true, esquema: e_consultar, traduzir: t_consultar },
     edicao("nova_peca", "Nova peça", "Começa uma peça vazia.", "nova_peca", e_nova, igual),
     edicao("abrir_peca", "Abrir peça", "Abre uma peça .fkx ou .fkp do projeto.", "abrir", e_abrir, igual),
@@ -378,6 +391,7 @@ pub const FERRAMENTAS: [Ferramenta; 22] = [
     edicao("salvar_peca", "Salvar peça", "Grava a peça em .fkx ou .fkp. Nunca troca um arquivo que existe sem `sobrescrever`.", "salvar", e_salvar, igual),
     leitura("selecionar", "Selecionar faces ou arestas", "Seleção por sentido: as arestas da face de cima, os círculos de raio 4, as faces que olham para a frente. Devolve `pontos` prontos para `arestas` de filetar e chanfrar ou `faces` de criar_casca.", "selecionar", e_selecionar, igual),
     leitura("reconhecer_features", "Reconhecer features", "O que a geometria da peça em edição mostra: furos passantes e cegos (com rebaixo, escareado e ponta), filetes e chanfros, com medidas e centro. É inferência da forma, não histórico.", "features", e_topologia_sem_secoes, t_topologia),
+    leitura("verificar", "Verificar requisitos", "Confere os requisitos da peça, um resultado por requisito com o que foi medido: massa, furos, folga e interferência entre corpos, caixa máxima e se um parâmetro trocado chega na forma. Serve de critério quando não há STEP alvo. Não muda a peça.", "verificar", e_verificar, igual),
     leitura("consultar_biblioteca", "Consultar biblioteca de normas", "Famílias de fixadores normalizados, tamanhos, medidas e a faixa do furo de passagem. Use antes de furar para um parafuso.", "biblioteca", e_biblioteca, igual),
     edicao("exportar_step", "Exportar STEP", "Grava o sólido em STEP. Nunca troca um arquivo que existe sem `sobrescrever`.", "exportar", e_exportar, igual),
 ];

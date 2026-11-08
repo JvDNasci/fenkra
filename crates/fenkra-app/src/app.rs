@@ -2913,6 +2913,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
             Act::Customize => self.customize_open = true,
             Act::Macros => self.macro_open = true,
+            Act::Verificar => crate::verificar_ui::abrir(),
             Act::View(y, p) => {
                 if let Some(v) = self.viewport.as_mut() {
                     let before = v.camera;
@@ -8891,6 +8892,7 @@ impl eframe::App for App {
         crate::analise_janela::painel_listras(self, ctx, area);
         crate::sup_inclinacao::painel_inclinacao(self, ctx, area);
         crate::dfm_ui::painel(self, ctx, area);
+        crate::verificar_ui::painel(self, ctx, area);
         self.painel_importar(ctx, area);
         self.painel_features(ctx, area);
         self.painel_exportar(ctx, area);
