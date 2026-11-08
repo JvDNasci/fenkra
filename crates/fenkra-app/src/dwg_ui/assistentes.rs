@@ -265,11 +265,11 @@ fn janela_exportar(ctx: &egui::Context, st: &mut DwgState) -> Option<(String, bo
                 });
                 ui.horizontal(|ui| {
                     ui.label(tr("Multiplicador"));
-                    ui.add(egui::Slider::new(&mut ex.cfg.fator_espessura, 0.25..=4.).logarithmic(true)).on_hover_text(tr("Multiplica a espessura de todas as linhas"));
+                    ui.add(crate::ui_ext::slider(&mut ex.cfg.fator_espessura, 0.25..=4.).logarithmic(true)).on_hover_text(tr("Multiplica a espessura de todas as linhas"));
                 });
                 ui.horizontal(|ui| {
                     ui.label(tr("Mínima (mm)"));
-                    ui.add(egui::Slider::new(&mut ex.cfg.espessura_minima, 0.0..=1.0)).on_hover_text(tr("Nenhuma linha sai mais fina que isto (0 = sem mínimo)"));
+                    ui.add(crate::ui_ext::slider(&mut ex.cfg.espessura_minima, 0.0..=1.0)).on_hover_text(tr("Nenhuma linha sai mais fina que isto (0 = sem mínimo)"));
                 });
             });
             ui.vertical(|ui| {

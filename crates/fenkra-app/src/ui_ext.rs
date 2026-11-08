@@ -434,10 +434,23 @@ mod testes {
     /// Campo numérico só pelo componente: construir `DragValue`/`Slider` por fora perde a roda.
     #[test]
     fn nenhum_campo_numerico_fora_do_componente() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        // a pasta inteira, com as subpastas (dwg_ui/, app/, ...): só a raiz deixava passar os
+        // deslizantes do diálogo de exportação do desenho
+        let mut pilha = vec![std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src")];
+        let mut arquivos = vec![];
+        while let Some(d) = pilha.pop() {
+            for e in std::fs::read_dir(d).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    pilha.push(p);
+                } else {
+                    arquivos.push(p);
+                }
+            }
+        }
+        assert!(arquivos.iter().any(|p| p.ends_with("dwg_ui/assistentes.rs")), "a varredura não desceu às subpastas");
         let mut ruins = vec![];
-        for e in std::fs::read_dir(dir).unwrap().flatten() {
-            let p = e.path();
+        for p in arquivos {
             if p.extension().is_some_and(|x| x == "rs") && p.file_name().is_some_and(|n| n != "ui_ext.rs") {
                 let t = std::fs::read_to_string(&p).unwrap();
                 for (i, l) in t.lines().enumerate() {
