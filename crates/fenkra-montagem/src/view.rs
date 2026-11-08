@@ -436,7 +436,7 @@ pub fn collides_com(a: &Assembly, id: Id, dir: Option<&Path>, cache: &mut PartCa
 pub(crate) fn raw_shape(a: &Assembly, id: Id, dir: Option<&Path>, cache: &mut PartCache) -> Option<Shape> {
     let n = a.node(id)?;
     let NodeKind::Part { path } = &n.kind else { return None };
-    let sh = cache.get(&full_path(dir, path), true).ok()?.shape.clone()?;
+    let sh = cache.forma(&full_path(dir, path)).ok()??;
     posicionado(sh, &n.placement)
 }
 

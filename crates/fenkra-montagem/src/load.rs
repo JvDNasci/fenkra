@@ -37,6 +37,11 @@ pub struct PartCache {
     niveis: bool,
     /// bandeira do pedido em andamento: o cálculo da peça para e nada fica guardado pela metade
     pub cancelar: Option<Arc<AtomicBool>>,
+    /// só precisa da forma (o desenho técnico projeta o sólido; não mostra malha): `forma` calcula
+    /// os comandos sem tesselar nem montar os níveis de detalhe (B393)
+    pub so_forma: bool,
+    /// formas calculadas por `forma` no modo `so_forma`, com a data do arquivo de quando saíram
+    formas: HashMap<PathBuf, (Option<SystemTime>, Option<Shape>)>,
     /// peças esquecidas desde a última vez que alguém perguntou
     esquecidas: Vec<PathBuf>,
     /// peças calculadas desde a última vez que alguém perguntou
@@ -69,13 +74,18 @@ impl PartCache {
 
     /// Calcula a peça e monta o protótipo. A troca de qualidade só re-tessela: os comandos ficam no
     /// cache do cálculo, então os níveis grossos custam só a malha.
-    fn calcular(&self, doc: &Document) -> Result<(RecomputeResult, Arc<Prototipo>), String> {
+    ///
+    /// `com_forma`: devolve também a forma final, tirada do cache deste mesmo cálculo (B393). Antes
+    /// a forma vinha de `final_shape`, que refazia todos os comandos: cada peça era calculada duas
+    /// vezes. Sem a forma no cache (cálculo interrompido), cai em `final_shape`.
+    fn calcular(&self, doc: &Document, com_forma: bool) -> Result<(RecomputeResult, Arc<Prototipo>, Option<fenkra_kernel::Shape>), String> {
         let mut c = fenkra_solidos::Cache::com_qualidade(self.qualidade);
         c.cancelar = self.cancelar.clone();
         let result = fenkra_solidos::recompute_cached(doc, &mut c);
         if result.cancelado {
             return Err("cancelado".into());
         }
+        let forma = if com_forma { fenkra_solidos::forma_cache::forma_do_cache(doc, &c).or_else(|| fenkra_solidos::final_shape(doc)) } else { None };
         let mut malhas = vec![(crate::view::malha_unica(&result), self.qualidade)];
         if self.niveis {
             for q in lod::qualidades(self.qualidade).into_iter().skip(1) {
@@ -87,7 +97,7 @@ impl PartCache {
                 malhas.push((crate::view::malha_unica(&r), q));
             }
         }
-        Ok((result, Prototipo::novo(malhas)))
+        Ok((result, Prototipo::novo(malhas), forma))
     }
 
     /// Documento da peça, sem calcular nada: é o que a thread da interface pode pedir a cada quadro.
@@ -179,8 +189,7 @@ impl PartCache {
                     Document::from_json(&txt).map_err(|e| e.to_string())?
                 }
             };
-            let (result, prototipo) = self.calcular(&doc)?;
-            let shape = if with_shape { fenkra_solidos::final_shape(&doc) } else { None };
+            let (result, prototipo, shape) = self.calcular(&doc, with_shape)?;
             self.parts.insert(full.to_path_buf(), LoadedPart { doc, result, shape, prototipo, stamp });
             self.recem.push(full.to_path_buf());
         }
@@ -203,8 +212,7 @@ impl PartCache {
         if fresh {
             let base = self.get(full, false)?.doc.clone();
             let doc = base.com_configuracao(cfg).map_err(|e| e.to_string())?;
-            let (result, prototipo) = self.calcular(&doc)?;
-            let shape = if with_shape { fenkra_solidos::final_shape(&doc) } else { None };
+            let (result, prototipo, shape) = self.calcular(&doc, with_shape)?;
             self.configs.insert(chave.clone(), LoadedPart { doc, result, shape, prototipo, stamp });
         }
         Ok(self.configs.get(&chave).unwrap())
@@ -212,6 +220,7 @@ impl PartCache {
 
     /// Peça nova só na memória: o cache a entrega como se o arquivo existisse.
     pub fn definir_pendente(&mut self, full: &Path, doc: Document) {
+        self.formas.remove(full);
         self.pendentes.insert(full.to_path_buf(), doc);
         self.parts.remove(full);
     }
@@ -254,8 +263,37 @@ impl PartCache {
         Ok(feitos)
     }
 
+    /// Forma final da peça. No modo `so_forma` ela sai só dos comandos, sem a malha que o `get`
+    /// também calcula (num conjunto de 84 peças a tesselação era a maior parte da carga). Nos
+    /// demais modos é a forma que o `get` já guarda.
+    pub fn forma(&mut self, full: &Path) -> Result<Option<Shape>, String> {
+        if !self.so_forma {
+            return Ok(self.get(full, true)?.shape.clone());
+        }
+        let stamp = std::fs::metadata(full).and_then(|m| m.modified()).ok();
+        if let Some((s, sh)) = self.formas.get(full) {
+            if *s == stamp && !self.pendentes.contains_key(full) {
+                return Ok(sh.clone());
+            }
+        }
+        let doc = match self.pendentes.get(full) {
+            Some(d) => d.clone(),
+            None => {
+                let txt = std::fs::read_to_string(full).map_err(|e| format!("{}: {e}", full.display()))?;
+                Document::from_json(&txt).map_err(|e| e.to_string())?
+            }
+        };
+        if self.cancelar.as_ref().is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed)) {
+            return Err("cancelado".into());
+        }
+        let sh = fenkra_solidos::final_shape(&doc);
+        self.formas.insert(full.to_path_buf(), (stamp, sh.clone()));
+        Ok(sh)
+    }
+
     /// Esquece uma peça (para recarregar depois de editar).
     pub fn forget(&mut self, full: &Path) {
+        self.formas.remove(full);
         self.parts.remove(full);
         self.configs.retain(|(p, _), _| p != full);
         self.esquecidas.push(full.to_path_buf());
