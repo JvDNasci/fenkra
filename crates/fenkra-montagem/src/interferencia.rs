@@ -4,7 +4,10 @@
 //! Como funciona no kernel:
 //! 1. cada peça vira uma **unidade** com as formas já no mundo. Um subconjunto é uma unidade só (as
 //!    peças dele não se comparam entre si) ou se abre em uma unidade por peça, conforme a opção;
-//! 2. para cada par do escopo, as caixas envolventes filtram o que está longe e a operação booleana
+//! 2. para cada par do escopo, as caixas envolventes filtram o que está longe; depois as malhas das
+//!    peças (as mesmas da vista) descartam o par cujas caixas se cruzam mas as peças não chegam a
+//!    2 × desvio da malha uma da outra, nem uma está dentro da outra (B394: a booleana é o passo
+//!    caro, e num quadro a caixa de um tubo cobre meio conjunto). Só então a operação booleana
 //!    Comum devolve o sólido compartilhado. O volume dele é a medida da interferência, e a malha dele
 //!    é o que aparece em vermelho na vista;
 //! 3. duas faces encostadas têm volume comum zero, então o Comum não enxerga coincidência. Para isso
@@ -136,6 +139,126 @@ impl Achado {
 struct Unidade {
     lado: Lado,
     formas: Vec<Shape>,
+    /// caixa de cada forma, medida uma vez (B394): medir a cada par custava N² chamadas ao kernel
+    caixas: Vec<Option<(V3, V3)>>,
+    /// malha de cada forma, para o filtro antes da booleana
+    grossas: Vec<Option<Grossa>>,
+}
+
+impl Unidade {
+    fn medir(&mut self, q: &fenkra_core::QualidadeMalha) {
+        self.caixas = self.formas.iter().map(Shape::bbox).collect();
+        self.grossas = self.formas.iter().map(|s| grossa(s, q)).collect();
+    }
+
+    /// Caixa de tudo o que a unidade tem.
+    fn caixa(&self) -> Option<(V3, V3)> {
+        let mut c = None;
+        for b in self.caixas.iter().flatten() {
+            unir_caixa(&mut c, *b);
+        }
+        c
+    }
+}
+
+/// Malha de uma forma para descartar, sem a booleana, os pares que nem chegam perto (B394). A
+/// malha fica a no máximo `desvio` da superfície exata: se as malhas estão a mais que
+/// 2 × desvio uma da outra e nenhuma está dentro da outra, os sólidos não se tocam.
+struct Grossa {
+    tris: Vec<[V3; 3]>,
+    caixas: Vec<(V3, V3)>,
+    caixa: (V3, V3),
+    desvio: f64,
+}
+
+fn grossa(s: &Shape, q: &fenkra_core::QualidadeMalha) -> Option<Grossa> {
+    let (lo, hi) = s.bbox()?;
+    let desvio = q.desvio(norm(sub(hi, lo)));
+    // a mesma qualidade da vista: a forma já tem essa malha guardada, e nada é refeito
+    let m = fenkra_solidos::tesselar(s, q).ok()?;
+    let p = |i: u32| {
+        let k = i as usize * 3;
+        [m.positions[k] as f64, m.positions[k + 1] as f64, m.positions[k + 2] as f64]
+    };
+    let tris: Vec<[V3; 3]> = m.indices.chunks_exact(3).map(|t| [p(t[0]), p(t[1]), p(t[2])]).collect();
+    if tris.is_empty() {
+        return None;
+    }
+    let caixas = tris.iter().map(|t| ([0, 1, 2].map(|i| t[0][i].min(t[1][i]).min(t[2][i])), [0, 1, 2].map(|i| t[0][i].max(t[1][i]).max(t[2][i])))).collect();
+    Some(Grossa { tris, caixas, caixa: (lo, hi), desvio })
+}
+
+/// Alguma parte de `a` fica a menos de `m` de `b`? Conservador: compara as caixas dos triângulos,
+/// que nunca ficam mais longe que os próprios triângulos. Grade de células só com o que cai na
+/// região comum das duas peças.
+fn perto(a: &Grossa, b: &Grossa, m: f64) -> bool {
+    let toca = |x: &(V3, V3), y: &(V3, V3)| (0..3).all(|k| x.0[k] - m <= y.1[k] && y.0[k] - m <= x.1[k]);
+    let regiao = ([0, 1, 2].map(|k| a.caixa.0[k].max(b.caixa.0[k]) - m), [0, 1, 2].map(|k| a.caixa.1[k].min(b.caixa.1[k]) + m));
+    if (0..3).any(|k| regiao.0[k] > regiao.1[k]) {
+        return false;
+    }
+    let na: Vec<&(V3, V3)> = a.caixas.iter().filter(|c| toca(c, &regiao)).collect();
+    let nb: Vec<&(V3, V3)> = b.caixas.iter().filter(|c| toca(c, &regiao)).collect();
+    if na.is_empty() || nb.is_empty() {
+        return false;
+    }
+    // célula do tamanho do maior lado médio dos triângulos de `a`, nunca menor que a margem
+    let lado = na.iter().map(|c| (0..3).map(|k| c.1[k] - c.0[k]).fold(0., f64::max)).sum::<f64>() / na.len() as f64;
+    let cel = lado.max(2. * m).max(1e-3);
+    let idx = |x: f64, k: usize| ((x - regiao.0[k]) / cel).floor() as i64;
+    let mut grade: HashMap<(i64, i64, i64), Vec<usize>> = HashMap::new();
+    for (i, c) in na.iter().enumerate() {
+        let (l, h) = ([0, 1, 2].map(|k| idx(c.0[k] - m, k)), [0, 1, 2].map(|k| idx(c.1[k] + m, k)));
+        // triângulo enorme diante da célula: vai para todas as que cobre, até um teto
+        if (0..3).map(|k| (h[k] - l[k] + 1) as u64).product::<u64>() > 4096 {
+            return true;
+        }
+        for x in l[0]..=h[0] {
+            for y in l[1]..=h[1] {
+                for z in l[2]..=h[2] {
+                    grade.entry((x, y, z)).or_default().push(i);
+                }
+            }
+        }
+    }
+    nb.iter().any(|c| {
+        let (l, h) = ([0, 1, 2].map(|k| idx(c.0[k], k)), [0, 1, 2].map(|k| idx(c.1[k], k)));
+        if (0..3).map(|k| (h[k] - l[k] + 1) as u64).product::<u64>() > 4096 {
+            return true;
+        }
+        (l[0]..=h[0]).any(|x| (l[1]..=h[1]).any(|y| (l[2]..=h[2]).any(|z| grade.get(&(x, y, z)).is_some_and(|v| v.iter().any(|i| toca(na[*i], c))))))
+    })
+}
+
+/// `a` está inteira dentro de `b`? Só pode estar se a caixa couber; aí conta quantas vezes um raio
+/// saindo de um vértice de `a` atravessa `b` (ímpar = dentro).
+fn dentro(a: &Grossa, b: &Grossa) -> bool {
+    if (0..3).any(|k| a.caixa.0[k] < b.caixa.0[k] || a.caixa.1[k] > b.caixa.1[k]) {
+        return false;
+    }
+    let o = a.tris[0][0];
+    // direção torta, para não passar exatamente por arestas de peças alinhadas aos eixos
+    let d = unit([0.5773, 0.3137, 0.7539]);
+    let cruza = |t: &[V3; 3]| {
+        let (e1, e2) = (sub(t[1], t[0]), sub(t[2], t[0]));
+        let pv = cross(d, e2);
+        let det = dot(e1, pv);
+        if det.abs() < 1e-14 {
+            return false;
+        }
+        let tv = sub(o, t[0]);
+        let u = dot(tv, pv) / det;
+        let qv = cross(tv, e1);
+        let v = dot(d, qv) / det;
+        u >= 0. && v >= 0. && u + v <= 1. && dot(e2, qv) / det > 1e-9
+    };
+    b.tris.iter().filter(|t| cruza(t)).count() % 2 == 1
+}
+
+/// As caixas ficam separadas por mais que `folga` em algum eixo?
+fn longe(a: Option<(V3, V3)>, b: Option<(V3, V3)>, folga: f64) -> bool {
+    let (Some((la, ha)), Some((lb, hb))) = (a, b) else { return false };
+    (0..3).any(|k| ha[k] + folga < lb[k] || hb[k] + folga < la[k])
 }
 
 /// Formas das peças de um subconjunto, no sistema de quem o contém.
@@ -177,7 +300,7 @@ fn unidades(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, sub_unico: 
             NodeKind::Group => {}
             NodeKind::Part { .. } => {
                 if let Some(s) = placed_shape(a, n.id, dir, cache) {
-                    v.push(Unidade { lado: lado(n.id.0.to_string(), n.name.clone()), formas: vec![s] });
+                    v.push(Unidade { lado: lado(n.id.0.to_string(), n.name.clone()), formas: vec![s], caixas: vec![], grossas: vec![] });
                 }
             }
             NodeKind::SubAssembly { path } => {
@@ -185,11 +308,11 @@ fn unidades(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, sub_unico: 
                 let pecas = formas_do_sub(path, &a.flex_de(n.id), dir, cache, n.placement, &chave, 0);
                 if sub_unico {
                     if !pecas.is_empty() {
-                        v.push(Unidade { lado: lado(chave, n.name.clone()), formas: pecas.into_iter().map(|p| p.2).collect() });
+                        v.push(Unidade { lado: lado(chave, n.name.clone()), formas: pecas.into_iter().map(|p| p.2).collect(), caixas: vec![], grossas: vec![] });
                     }
                 } else {
                     for (c, nome, s) in pecas {
-                        v.push(Unidade { lado: lado(c, format!("{} / {nome}", n.name)), formas: vec![s] });
+                        v.push(Unidade { lado: lado(c, format!("{} / {nome}", n.name)), formas: vec![s], caixas: vec![], grossas: vec![] });
                     }
                 }
             }
@@ -225,10 +348,14 @@ fn unir_caixa(c: &mut Option<(V3, V3)>, n: (V3, V3)) {
 fn comparar(a: &Unidade, b: &Unidade, op: &OpcoesInterf, q: &fenkra_core::QualidadeMalha) -> Option<Achado> {
     let folga = if op.coincidencia { 1e-6 } else { 0. };
     let (mut volume, mut malha, mut contato, mut caixa) = (0., Mesh::default(), vec![], None);
-    for fa in &a.formas {
-        for fb in &b.formas {
-            if let (Some((la, ha)), Some((lb, hb))) = (fa.bbox(), fb.bbox()) {
-                if (0..3).any(|k| ha[k] + folga < lb[k] || hb[k] + folga < la[k]) {
+    for (ia, (fa, ca)) in a.formas.iter().zip(&a.caixas).enumerate() {
+        for (ib, (fb, cb)) in b.formas.iter().zip(&b.caixas).enumerate() {
+            if longe(*ca, *cb, folga) {
+                continue;
+            }
+            // a booleana é o passo caro: as malhas descartam antes o par que nem chega perto
+            if let (Some(Some(ga)), Some(Some(gb))) = (a.grossas.get(ia), b.grossas.get(ib)) {
+                if !perto(ga, gb, ga.desvio + gb.desvio + folga + 1e-3) && !dentro(ga, gb) && !dentro(gb, ga) {
                     continue;
                 }
             }
@@ -262,13 +389,16 @@ fn comparar(a: &Unidade, b: &Unidade, op: &OpcoesInterf, q: &fenkra_core::Qualid
 /// Todos os achados do escopo, do maior volume para o menor. Ignorados não saem daqui: ver [`separar`].
 pub fn analisar(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, op: &OpcoesInterf) -> Vec<Achado> {
     let q = cache.qualidade();
-    let us = unidades(a, dir, cache, op.sub_unico);
+    let mut us = unidades(a, dir, cache, op.sub_unico);
+    us.iter_mut().for_each(|u| u.medir(&q));
+    let caixas: Vec<_> = us.iter().map(Unidade::caixa).collect();
+    let folga = if op.coincidencia { 1e-6 } else { 0. };
     let mut out = vec![];
     for i in 0..us.len() {
         for j in i + 1..us.len() {
             let (ua, ub) = (&us[i], &us[j]);
             // dentro do mesmo subconjunto aberto em peças, compara normalmente; mesma chave nunca
-            if ua.lado.chave == ub.lado.chave || !no_escopo(op, ua.lado.comp, ub.lado.comp) {
+            if ua.lado.chave == ub.lado.chave || !no_escopo(op, ua.lado.comp, ub.lado.comp) || longe(caixas[i], caixas[j], folga) {
                 continue;
             }
             if let Some(c) = comparar(ua, ub, op, &q) {
@@ -398,6 +528,44 @@ mod tests {
         assert!(!achados[0].malha.indices.is_empty(), "o comum tem malha para o realce");
         let (lo, hi) = achados[1].caixa.expect("caixa");
         assert!((lo[0] - 9.).abs() < 1e-6 && (hi[0] - 10.).abs() < 1e-6, "a caixa é a do comum");
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn filtro_das_malhas_nao_perde_peca_dentro_e_descarta_a_vizinha_longe() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // B394: caixas que se cruzam sem as peças se tocarem são o caso comum que o filtro corta
+        let d = pasta("filtro");
+        std::fs::write(d.join("g.fkp"), bloco(30.).to_json()).unwrap();
+        let mut a = Assembly::new("t");
+        let grande = a.add_component("G", NodeKind::Part { path: "g.fkp".into() }, Placement::default(), None);
+        // inteira dentro da grande: nenhuma face se cruza, só o raio acha
+        let miolo = a.add_component("M", NodeKind::Part { path: "b.fkp".into() }, Placement { origin: [10., 10., 10.], ..Default::default() }, None);
+        let achados = analisar(&a, Some(&d), &mut PartCache::default(), &OpcoesInterf::default());
+        assert_eq!(achados.len(), 1, "{:?}", achados.iter().map(|x| (&x.a.nome, &x.b.nome, x.volume)).collect::<Vec<_>>());
+        assert_eq!((achados[0].a.comp, achados[0].b.comp), (grande, miolo));
+        assert!((achados[0].volume - 1000.).abs() < 1e-6);
+        // o filtro em si: perto quando se cruzam ou quando o vão cabe na margem
+        let q = fenkra_core::QualidadeMalha::NORMAL;
+        let cubo = |o: V3| {
+            let mut c = PartCache::default();
+            let mut b = Assembly::new("x");
+            let id = b.add_component("c", NodeKind::Part { path: "b.fkp".into() }, Placement { origin: o, ..Default::default() }, None);
+            grossa(&placed_shape(&b, id, Some(&d), &mut c).unwrap(), &q).unwrap()
+        };
+        let (c0, c5, c20) = (cubo([0.; 3]), cubo([5., 5., 5.]), cubo([20., 0., 0.]));
+        assert!(perto(&c0, &c5, 0.01), "cubos que se cruzam");
+        assert!(!perto(&c0, &c20, 1.), "10 mm de vão");
+        assert!(perto(&c0, &c20, 10.5), "o vão cabe na margem");
+        assert!(dentro(&cubo([0.; 3]), &grossa(&{
+            let mut c = PartCache::default();
+            let mut b = Assembly::new("x");
+            let id = b.add_component("g", NodeKind::Part { path: "g.fkp".into() }, Placement { origin: [-10.; 3], ..Default::default() }, None);
+            placed_shape(&b, id, Some(&d), &mut c).unwrap()
+        }, &q).unwrap()));
+        assert!(!dentro(&c0, &c20));
         let _ = std::fs::remove_dir_all(d);
     }
 
