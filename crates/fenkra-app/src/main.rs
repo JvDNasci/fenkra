@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Fenkra — CAD paramétrico open source.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// a tabela de traduções de `i18n.rs` encadeia uma fatia por bancada; com elas todas, o rustc passa do
+// limite padrão de profundidade ao calcular o tipo do iterador (a compilação release falhava)
+#![recursion_limit = "256"]
 
 mod app;
 mod examples;

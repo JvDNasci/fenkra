@@ -3,13 +3,14 @@
 //! prova e olha o que voltou. O modelo tem de tudo: duas instâncias da mesma peça, cor, camada e uma
 //! medida gravada em polegadas. Um teste compara a sonda com a declaração de cada formato.
 //!
-//! PMI fica de fora da prova: o documento ainda não recebe PMI do STEP, então nenhum formato leva. Para
-//! só gravar, a prova abre o arquivo e procura as marcas do formato.
+//! PMI: a prova leva uma anotação desenhada e uma vista salva, gravadas com o PMI ligado (só o STEP
+//! AP242 tem onde pô-las, B191); conta como levado o que volta na leitura. Para só gravar, a prova abre o
+//! arquivo e procura as marcas do formato.
 
 use crate::arvore::exportar_montagem;
 use crate::{Capacidades, ErroConv, Formato, ModeloNeutro, OpcoesExportar, OpcoesImportar, Registro, UnidadeSaida};
 use fenkra_core::Document;
-use fenkra_kernel::{InstanciaXde, ModeloXde, ProdutoXde, Shape, IDENTIDADE};
+use fenkra_kernel::{AnotacaoXde, ApresentacaoXde, DadoXde, InstanciaXde, ModeloXde, ProdutoXde, Shape, VistaXde, IDENTIDADE};
 use std::path::Path;
 
 /// Medida da peça de prova.
@@ -27,7 +28,10 @@ fn modelo_de_prova() -> Result<ModeloNeutro, ErroConv> {
     let sub = ProdutoXde { nome: "Sub".into(), filhos, ..Default::default() };
     let filhos = vec![InstanciaXde { produto: 1, nome: "S".into(), local: IDENTIDADE, cor: None }, InstanciaXde { produto: 0, nome: "C".into(), local: mais_longe, cor: None }];
     let topo = ProdutoXde { nome: "Conjunto".into(), filhos, ..Default::default() };
-    Ok(ModeloNeutro { formato: Formato::Step, xde: ModeloXde { produtos: vec![peca, sub, topo], raizes: vec![2], ..Default::default() } })
+    let desenho = ApresentacaoXde { nome: "SONDA".into(), segmentos: vec![[[0., 0., LADO], [LADO, 0., LADO + 5.]]], plano: None, texto_em: None };
+    let anotacoes = vec![AnotacaoXde { apresentacao: Some(desenho), produto: 0, nome: "Sonda".into(), faces: vec![], dado: DadoXde::Grafico }];
+    let vistas = vec![VistaXde { nome: "Sonda".into(), olho: [0., -100., 0.], direcao: [0., 1., 0.], cima: [0., 0., 1.], ortogonal: true, zoom: 100., largura: 80., altura: 60., anotacoes: vec![0] }];
+    Ok(ModeloNeutro { formato: Formato::Step, xde: ModeloXde { produtos: vec![peca, sub, topo], raizes: vec![2], anotacoes, vistas, ..Default::default() } })
 }
 
 fn com_forma(m: &ModeloNeutro) -> Vec<&Shape> {
@@ -48,7 +52,9 @@ fn medir(lido: &ModeloNeutro) -> Result<Capacidades, ErroConv> {
     // a peça foi gravada em polegadas: quem declara a unidade traz a medida de volta
     let medida = formas.first().and_then(|f| f.bbox()).map(|(a, b)| b[1] - a[1]).unwrap_or(0.);
     let unidade = !lido.xde.unidades.is_empty() && (medida - LADO).abs() < 1e-3;
-    Ok(Capacidades { exata: faces == 6, malha: faces > 6, cor, camadas, montagem, unidade, ..Default::default() })
+    // a anotação e a vista da prova voltaram
+    let pmi = !lido.xde.anotacoes.is_empty() && lido.xde.vistas.iter().any(|v| !v.anotacoes.is_empty());
+    Ok(Capacidades { exata: faces == 6, malha: faces > 6, cor, camadas, montagem, pmi, unidade, ..Default::default() })
 }
 
 /// O que foi gravado num formato que não se lê: procura as marcas no texto.
@@ -101,7 +107,8 @@ impl Registro {
             return crate::plano::sondar(self, formato, pasta);
         }
         let caminho = pasta.join(format!("sonda.{}", formato.extensoes()[0]));
-        let saida = OpcoesExportar { unidade: UnidadeSaida::Polegada, ..Default::default() };
+        // PMI ligado: quem não tem onde pô-lo (todos menos o STEP AP242) só o deixa de lado
+        let saida = OpcoesExportar { unidade: UnidadeSaida::Polegada, esquema: crate::EsquemaSaida::Ap242, pmi_grafico: true, ..Default::default() };
         // quem não tem árvore recebe a mesma prova: montagem é uma das coisas medidas
         let gravou = self.gravar(&modelo_de_prova()?, &caminho, &saida).is_ok() && caminho.is_file();
         let lido = self.provedor(formato)?.ler(formato, &caminho, &OpcoesImportar::default());

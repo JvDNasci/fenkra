@@ -204,10 +204,41 @@ pub struct AlvoXde {
 /// do produto (a mesma de `Shape::face_index`); vazio = o corpo inteiro.
 #[derive(Clone, Debug, PartialEq)]
 pub struct AnotacaoXde {
+    /// PMI gráfico: o desenho da anotação (linhas de chamada, quadro e texto em traços)
+    pub apresentacao: Option<ApresentacaoXde>,
     pub produto: usize,
     pub nome: String,
     pub faces: Vec<u32>,
     pub dado: DadoXde,
+}
+
+/// PMI gráfico (B191): a anotação desenhada em segmentos de reta, no espaço do modelo, em mm. O
+/// gravador a escreve como polilinhas (`tessellated_annotation_occurrence`) num `draughting_callout`
+/// com `nome`; o texto vai em traços, e o mesmo texto vai no nome, para quem lê só os nomes.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ApresentacaoXde {
+    pub nome: String,
+    pub segmentos: Vec<[[f64; 3]; 2]>,
+    /// plano da anotação: origem, normal e direção x
+    pub plano: Option<([f64; 3], [f64; 3], [f64; 3])>,
+    /// ponto de ancoragem do texto
+    pub texto_em: Option<[f64; 3]>,
+}
+
+/// Vista salva (B191): câmera e as anotações que aparecem nela (índices em `ModeloXde::anotacoes`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct VistaXde {
+    pub nome: String,
+    /// ponto de projeção (olho), direção de visada e direção para cima
+    pub olho: [f64; 3],
+    pub direcao: [f64; 3],
+    pub cima: [f64; 3],
+    pub ortogonal: bool,
+    /// distância do olho ao plano de vista e tamanho da janela, em mm
+    pub zoom: f64,
+    pub largura: f64,
+    pub altura: f64,
+    pub anotacoes: Vec<usize>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -238,6 +269,9 @@ pub enum DadoXde {
         posicao: u32,
         alvo: Option<AlvoXde>,
     },
+    /// só gráfico (rótulo comum sem faces): rugosidade, solda, nota, balão, legenda ou o que não tem
+    /// semântica no STEP; exige `apresentacao`
+    Grafico,
 }
 
 #[cfg(test)]

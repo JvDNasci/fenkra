@@ -10,11 +10,13 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 
 - **STEP AP242 semântico** (Exportar, "Anotações semânticas (PMI)") — cotas com tolerância (26 dos 31 tipos do
   OCCT), 15 tipos de tolerância geométrica, datums com precedência, alvos de datum, ligados às faces; a releitura
-  confere tipo, valor, faces e ordem. Mapa do que não atravessa em [ADR 0061](../arquitetura/adr/0061-pmi-semantico-no-step-ap242.md).
+  confere tipo, valor, faces e ordem. Mapa do que não atravessa em [ADR 0068](../arquitetura/adr/0068-pmi-semantico-no-step-ap242.md).
+- **STEP AP242 gráfico e vistas salvas** (Exportar, "PMI no arquivo": nenhum / gráfico / gráfico + semântico) —
+  cada anotação desenhada em polilinhas (chamada, linha de cota com setas, quadro e texto em traços), rugosidade,
+  solda, notas, balões e legenda como rótulo comum, e as capturas do PMI como vistas salvas com as anotações
+  de cada uma; valores em mm em qualquer unidade do arquivo. [ADR 0082](../arquitetura/adr/0082-pmi-grafico-e-vistas-no-step.md).
 
 ## 🟡 Parcial
-
-- **PMI gráfico no STEP** (B191) — rugosidade, solda, notas, balões e vistas salvas não vão no arquivo; o gravador do OCCT só leva apresentação com geometria própria por anotação. O diálogo tem "nenhum / semântico"; falta o modo "gráfico".
 
 - **Realce e chamadas inteligentes** (Seta) — Realce falha na montagem; uma seta só; seta atravessa a anotação (DR-31, DR-47, DR-48). `DR-48`
 

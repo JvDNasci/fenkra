@@ -10,8 +10,8 @@ use crate::Nota;
 use fenkra_core::gdt::{separar_datums, valor_num, Modif, Zona};
 use fenkra_core::pmi::{GdtChar, Pmi, PmiKind, PmiTarget, TargetClass};
 use fenkra_core::pmi_alvos::FormaAlvo;
-use fenkra_core::Document;
-use fenkra_kernel::{AlvoDatumXde, AlvoXde, AnotacaoXde, DadoXde, FaceInfo, MaterialXde, ModToleranciaXde, ModZonaXde, Shape, TipoDimensaoXde, TipoToleranciaXde, ZonaXde};
+use fenkra_core::{Document, Id};
+use fenkra_kernel::{AlvoDatumXde, AlvoXde, AnotacaoXde, DadoXde, VistaXde, FaceInfo, MaterialXde, ModToleranciaXde, ModZonaXde, Shape, TipoDimensaoXde, TipoToleranciaXde, ZonaXde};
 use std::collections::HashMap;
 
 pub const PMI_GRAFICO: &str = "PMI gráfico ({0}): rugosidade, solda, notas, balões e legenda ainda não vão no STEP; só cotas, tolerâncias, referências e alvos.";
@@ -25,14 +25,36 @@ pub const PMI_DATUM_SEM: &str = "O quadro {0} cita a referência {1}, que não e
 pub const PMI_ALVO: &str = "Alvo {0}: o tipo {1} não existe no STEP gravado.";
 pub const PMI_VALOR: &str = "A anotação {0} não tem um valor numérico e ficou fora do STEP.";
 
+
+pub const PMI_SO_GRAFICO: &str = "A anotação {0} vai só como desenho (PMI gráfico): não tem cota, quadro ou referência equivalente ligada à peça no STEP.";
+pub const PMI_SEM_DESENHO: &str = "A anotação {0} não tem ponto de ancoragem nem texto e ficou fora do PMI gráfico.";
+
 /// Todos os modelos de frase deste módulo, para a tradução da interface ser conferida.
-pub const NOTAS_PMI: &[&str] = &[PMI_GRAFICO, PMI_SEM_FACE, PMI_TIPO, PMI_MODIF, PMI_ZONA, PMI_COMPOSTO, PMI_DATUM_ORDEM, PMI_DATUM_SEM, PMI_ALVO, PMI_VALOR];
+pub const NOTAS_PMI: &[&str] = &[PMI_GRAFICO, PMI_SEM_FACE, PMI_TIPO, PMI_MODIF, PMI_ZONA, PMI_COMPOSTO, PMI_DATUM_ORDEM, PMI_DATUM_SEM, PMI_ALVO, PMI_VALOR, PMI_SO_GRAFICO, PMI_SEM_DESENHO];
+
+/// O que vai no STEP AP242: só a semântica (o que o B191 entregou primeiro), só o desenho, ou os dois.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ModoPmi {
+    #[default]
+    Semantico,
+    Grafico,
+    GraficoSemantico,
+}
 
 /// O que foi para o modelo de troca e o que ficou de fora.
 #[derive(Clone, Debug, Default)]
 pub struct SaidaPmi {
     pub anotacoes: Vec<AnotacaoXde>,
+    /// a anotação do documento de onde veio cada item de `anotacoes`
+    pub origem: Vec<Id>,
+    /// as capturas do PMI como vistas salvas (só nos modos com desenho)
+    pub vistas: Vec<VistaXde>,
     pub fora: Vec<Nota>,
+}
+
+fn por(s: &mut SaidaPmi, id: Id, a: AnotacaoXde) {
+    s.anotacoes.push(a);
+    s.origem.push(id);
 }
 
 fn nota(modelo: &'static str, args: &[&str]) -> Nota {
@@ -149,6 +171,67 @@ fn desvios(p: &Pmi) -> Option<(f64, f64)> {
 
 /// Converte o PMI do documento nas anotações semânticas do STEP, ligadas às faces de `forma`.
 pub fn anotacoes_do_documento(doc: &Document, forma: &Shape) -> SaidaPmi {
+    anotacoes_com_modo(doc, forma, ModoPmi::Semantico)
+}
+
+/// Tipos que têm semântica no STEP: os outros (nota, rugosidade, solda, balão, legenda) são desenho.
+fn tem_semantica(k: &PmiKind) -> bool {
+    matches!(k, PmiKind::Linear | PmiKind::Radius | PmiKind::Diameter | PmiKind::Angle | PmiKind::Ordinate { .. } | PmiKind::Gap { .. } | PmiKind::ArcLength | PmiKind::Gdt { .. } | PmiKind::Datum { .. } | PmiKind::DatumTarget { .. })
+}
+
+/// O PMI do documento no modo pedido. Com desenho: toda anotação leva a apresentação em polilinhas,
+/// a que não tem semântica no STEP vai só como desenho (rótulo comum) e as capturas viram vistas.
+pub fn anotacoes_com_modo(doc: &Document, forma: &Shape, modo: ModoPmi) -> SaidaPmi {
+    let mut s = if modo == ModoPmi::Grafico { SaidaPmi::default() } else { semantica(doc, forma) };
+    if modo == ModoPmi::Semantico {
+        return s;
+    }
+    // plano de leitura: o da primeira captura que mostra a anotação, senão a câmera isométrica padrão
+    let plano_de = |p: &Pmi| {
+        let v = doc.pmi_captures.iter().find(|c| c.shown.contains(&p.id)).map(|c| c.view.clone()).unwrap_or_else(crate::pmi_grafico::camera_padrao);
+        crate::pmi_grafico::plano_da_camera(&v)
+    };
+    let valor = |p: &Pmi| p.measure_targets(&p.targets).or_else(|| p.measure(&p.anchors));
+    let desenho = |p: &Pmi| crate::pmi_grafico::apresentacao(p, valor(p), plano_de(p));
+    for i in 0..s.anotacoes.len() {
+        if let Some(p) = doc.pmi.iter().find(|p| p.id == s.origem[i]) {
+            s.anotacoes[i].apresentacao = desenho(p);
+        }
+    }
+    let mut so_desenho: Vec<String> = vec![];
+    for p in &doc.pmi {
+        if s.origem.contains(&p.id) {
+            continue;
+        }
+        let nome = nome_de(p);
+        match desenho(p) {
+            Some(a) => {
+                por(&mut s, p.id, AnotacaoXde { apresentacao: Some(a), produto: 0, nome: nome.clone(), faces: vec![], dado: DadoXde::Grafico });
+                if modo == ModoPmi::GraficoSemantico && tem_semantica(&p.kind) {
+                    so_desenho.push(nome);
+                }
+            }
+            None => s.fora.push(nota(PMI_SEM_DESENHO, &[&nome])),
+        }
+    }
+    // o que a semântica deixou de fora por falta de face, tipo ou valor foi como desenho: a nota muda
+    s.fora.retain(|n| n.modelo != PMI_GRAFICO && !([PMI_SEM_FACE, PMI_TIPO, PMI_VALOR].contains(&n.modelo.as_str()) && n.args.first().is_some_and(|a| so_desenho.contains(a))));
+    for n in &so_desenho {
+        s.fora.push(nota(PMI_SO_GRAFICO, &[n]));
+    }
+    for c in &doc.pmi_captures {
+        let mostra: Vec<usize> = s.origem.iter().enumerate().filter(|(_, id)| c.shown.contains(id)).map(|(i, _)| i).collect();
+        let mut v = c.view.clone();
+        if v.name.is_empty() {
+            v.name = c.name.clone();
+        }
+        s.vistas.push(crate::pmi_grafico::vista_da_captura(&v, mostra));
+    }
+    s
+}
+
+/// A parte semântica: cotas, quadros, referências e alvos ligados às faces de `forma`.
+fn semantica(doc: &Document, forma: &Shape) -> SaidaPmi {
     let mut s = SaidaPmi::default();
     let Ok(topo) = forma.topology() else { return s };
     let face = |p: &Pmi, i: usize| p.targets.get(i).copied().flatten().and_then(|t| face_do_alvo(&t, &topo.faces));
@@ -185,7 +268,7 @@ pub fn anotacoes_do_documento(doc: &Document, forma: &Shape) -> SaidaPmi {
                     continue;
                 };
                 indice.insert(letter.clone(), s.anotacoes.len());
-                s.anotacoes.push(AnotacaoXde { produto: 0, nome: letter.clone(), faces: vec![f], dado: DadoXde::Datum { letra: letter.clone(), posicao: posicao.get(letter).copied().unwrap_or(0), alvo: None } });
+                por(&mut s, p.id, AnotacaoXde { apresentacao: None, produto: 0, nome: letter.clone(), faces: vec![f], dado: DadoXde::Datum { letra: letter.clone(), posicao: posicao.get(letter).copied().unwrap_or(0), alvo: None } });
             }
             _ => {}
         }
@@ -201,7 +284,7 @@ pub fn anotacoes_do_documento(doc: &Document, forma: &Shape) -> SaidaPmi {
                 continue;
             };
             let a = AlvoXde { tipo, numero: alvo.numero, comprimento: alvo.dim[0], largura: alvo.dim[1] };
-            s.anotacoes.push(AnotacaoXde { produto: 0, nome: alvo.letra.clone(), faces: vec![f], dado: DadoXde::Datum { letra: alvo.letra.clone(), posicao: posicao.get(&alvo.letra).copied().unwrap_or(0), alvo: Some(a) } });
+            por(&mut s, p.id, AnotacaoXde { apresentacao: None, produto: 0, nome: alvo.letra.clone(), faces: vec![f], dado: DadoXde::Datum { letra: alvo.letra.clone(), posicao: posicao.get(&alvo.letra).copied().unwrap_or(0), alvo: Some(a) } });
         }
     }
 
@@ -218,7 +301,7 @@ pub fn anotacoes_do_documento(doc: &Document, forma: &Shape) -> SaidaPmi {
                     s.fora.push(nota(PMI_VALOR, &[&nome]));
                     continue;
                 };
-                s.anotacoes.push(AnotacaoXde { produto: 0, nome, faces: vec![a], dado: DadoXde::Dimensao { tipo: TipoDimensaoXde::LocalDistanciaLinear, valor: v, tolerancia: desvios(p), faces2: vec![b] } });
+                por(&mut s, p.id, AnotacaoXde { apresentacao: None, produto: 0, nome, faces: vec![a], dado: DadoXde::Dimensao { tipo: TipoDimensaoXde::LocalDistanciaLinear, valor: v, tolerancia: desvios(p), faces2: vec![b] } });
             }
             PmiKind::Radius | PmiKind::Diameter => {
                 let Some(f) = face(p, 0) else {
@@ -231,7 +314,7 @@ pub fn anotacoes_do_documento(doc: &Document, forma: &Shape) -> SaidaPmi {
                     continue;
                 };
                 let tipo = if p.kind == PmiKind::Radius { TipoDimensaoXde::TamanhoRaio } else { TipoDimensaoXde::TamanhoDiametro };
-                s.anotacoes.push(AnotacaoXde { produto: 0, nome, faces: vec![f], dado: DadoXde::Dimensao { tipo, valor: v, tolerancia: desvios(p), faces2: vec![] } });
+                por(&mut s, p.id, AnotacaoXde { apresentacao: None, produto: 0, nome, faces: vec![f], dado: DadoXde::Dimensao { tipo, valor: v, tolerancia: desvios(p), faces2: vec![] } });
             }
             PmiKind::Angle | PmiKind::Ordinate { .. } | PmiKind::Gap { .. } | PmiKind::ArcLength => {
                 s.fora.push(nota(PMI_TIPO, &[&nome, p.kind.label()]));
@@ -287,7 +370,8 @@ pub fn anotacoes_do_documento(doc: &Document, forma: &Shape) -> SaidaPmi {
                     }
                 }
                 let valor_zona = valor_num(&extra.proj).unwrap_or(0.);
-                s.anotacoes.push(AnotacaoXde {
+                por(&mut s, p.id, AnotacaoXde {
+                    apresentacao: None,
                     produto: 0,
                     nome,
                     faces: vec![f],

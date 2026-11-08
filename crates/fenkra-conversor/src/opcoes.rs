@@ -200,15 +200,30 @@ pub struct OpcoesExportar {
     pub camadas: bool,
     /// liga a escrita de PMI do gravador; exige AP242 para ser semântico
     pub pmi: bool,
+    /// PMI gráfico (B191): o desenho de cada anotação em polilinhas e as capturas como vistas salvas;
+    /// com `pmi`, os dois juntos (gráfico + semântico). Só em AP242.
+    pub pmi_grafico: bool,
     pub iges: ModoIges,
     pub estrutura: Estrutura,
     /// desvio, ângulo e codificação dos formatos de malha
     pub malha: crate::OpcoesMalha,
 }
 
+impl OpcoesExportar {
+    /// O modo do PMI que as chaves pedem; `None` = sem PMI.
+    pub fn modo_pmi(&self) -> Option<crate::ModoPmi> {
+        match (self.pmi, self.pmi_grafico) {
+            (false, false) => None,
+            (true, false) => Some(crate::ModoPmi::Semantico),
+            (false, true) => Some(crate::ModoPmi::Grafico),
+            (true, true) => Some(crate::ModoPmi::GraficoSemantico),
+        }
+    }
+}
+
 impl Default for OpcoesExportar {
     fn default() -> Self {
-        OpcoesExportar { esquema: EsquemaSaida::default(), unidade: UnidadeSaida::default(), cores: true, nomes: true, camadas: true, pmi: false, iges: ModoIges::default(), estrutura: Estrutura::default(), malha: crate::OpcoesMalha::default() }
+        OpcoesExportar { esquema: EsquemaSaida::default(), unidade: UnidadeSaida::default(), cores: true, nomes: true, camadas: true, pmi: false, pmi_grafico: false, iges: ModoIges::default(), estrutura: Estrutura::default(), malha: crate::OpcoesMalha::default() }
     }
 }
 

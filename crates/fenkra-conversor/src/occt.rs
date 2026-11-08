@@ -25,7 +25,8 @@ impl Provedor for ProvedorOcct {
     fn capacidades(&self, formato: Formato) -> Capacidades {
         let base = Capacidades { ler: true, gravar: true, exata: true, ..Default::default() };
         match formato {
-            Formato::Step => Capacidades { cor: true, camadas: true, montagem: true, unidade: true, ..base },
+            // PMI: só em AP242 (semântico e gráfico, B191)
+            Formato::Step => Capacidades { cor: true, camadas: true, montagem: true, pmi: true, unidade: true, ..base },
             // o nível do IGES é um número: o nome da camada não volta
             Formato::Iges => Capacidades { cor: true, unidade: true, ..base },
             _ => base,
@@ -58,7 +59,7 @@ impl Provedor for ProvedorOcct {
         let falha = |e: fenkra_kernel::KernelError| ErroConv::Gravacao(e.0);
         match formato {
             Formato::Step => {
-                let opcoes = OpcoesGravarXde { esquema: o.esquema.into(), unidade: o.unidade.into(), cores: o.cores, nomes: o.nomes, camadas: o.camadas, pmi: o.pmi };
+                let opcoes = OpcoesGravarXde { esquema: o.esquema.into(), unidade: o.unidade.into(), cores: o.cores, nomes: o.nomes, camadas: o.camadas, pmi: o.pmi || o.pmi_grafico };
                 modelo.xde.gravar(texto_do_caminho(caminho)?, opcoes).map_err(falha)
             }
             Formato::Iges => {

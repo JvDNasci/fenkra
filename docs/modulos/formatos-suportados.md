@@ -5,7 +5,7 @@
 
 | Formato | Extensões | Ler | Gravar | Geometria exata | Malha | Cor | Camadas | Montagem | PMI | Parâmetros | Unidade | Provedor |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| STEP | step, stp | sim | sim | sim | – | sim | sim | sim | – | – | sim | OpenCASCADE |
+| STEP | step, stp | sim | sim | sim | – | sim | sim | sim | sim | – | sim | OpenCASCADE |
 | IGES | igs, iges | sim | sim | sim | – | sim | – | – | – | – | sim | OpenCASCADE |
 | BREP | brep | sim | sim | sim | – | – | – | – | – | – | – | OpenCASCADE |
 | DXF | dxf | sim | sim | sim | – | – | sim | – | – | – | sim | Fenkra |

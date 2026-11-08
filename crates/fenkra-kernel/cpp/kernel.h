@@ -19,6 +19,7 @@ struct XdeWriteOpts;
 struct XdeIgesOpts;
 struct XdeDefect;
 struct XdePmi;
+struct XdeView;
 
 struct Shape {
     TopoDS_Shape s;
@@ -194,6 +195,8 @@ void xde_add_component(XdeDoc& d, uint32_t assembly, const XdeInst& c);
 void xde_write(XdeDoc& d, rust::Str path, const XdeWriteOpts& o);
 void xde_pmi_add(XdeDoc& d, const XdePmi& m);
 rust::Vec<XdePmi> xde_pmi_read(const XdeDoc& d);
+void xde_view_add(XdeDoc& d, const XdeView& v);
+rust::Vec<XdeView> xde_views_read(const XdeDoc& d);
 void xde_write_iges(XdeDoc& d, rust::Str path, const XdeIgesOpts& o);
 std::unique_ptr<Shape> xde_moved(const Shape& s, rust::Slice<const double> m);
 uint32_t xde_solid_count(const Shape& s);

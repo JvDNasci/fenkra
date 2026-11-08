@@ -113,6 +113,8 @@ pub struct ModeloXde {
     pub pmi: [u32; 3],
     /// as anotações semânticas, lidas do arquivo ou a gravar (B191); datums antes das tolerâncias
     pub anotacoes: Vec<crate::pmi_xde::AnotacaoXde>,
+    /// vistas salvas com as anotações de cada uma (B191)
+    pub vistas: Vec<crate::pmi_xde::VistaXde>,
     /// tipo de cada entidade do arquivo que a leitura não traduziu (só IGES)
     pub ignoradas: Vec<String>,
 }
@@ -200,6 +202,7 @@ mod ponte {
 
         fn do_documento(doc: &cxx::UniquePtr<b::XdeDoc>, o_pmi: bool) -> KResult<ModeloXde> {
             let info = b::xde_info(doc);
+            let (anotacoes, vistas) = if o_pmi { Self::ler_anotacoes(doc)? } else { (vec![], vec![]) };
             let mut produtos = Vec::new();
             for (i, p) in b::xde_products(doc).map_err(err)?.into_iter().enumerate() {
                 let forma = if p.is_assembly { None } else { Some(Shape::da_ponte(b::xde_shape(doc, i as u32).map_err(err)?)) };
@@ -224,7 +227,8 @@ mod ponte {
                 esquema: info.schema,
                 unidades: info.units,
                 pmi: [info.dims, info.tols, info.datums],
-                anotacoes: if o_pmi { Self::ler_anotacoes(doc)? } else { vec![] },
+                anotacoes,
+                vistas,
                 ignoradas: info.skipped,
             })
         }
@@ -263,7 +267,22 @@ mod ponte {
         /// Entrega as anotações ao documento XCAF: datums primeiro, para as tolerâncias os referenciarem.
         fn gravar_anotacoes(&self, doc: &mut cxx::UniquePtr<b::XdeDoc>) -> KResult<()> {
             use crate::pmi_xde::DadoXde;
-            let em_branco = |a: &crate::pmi_xde::AnotacaoXde, kind: u8| b::XdePmi {
+            // nome da apresentação único por anotação: as vistas acham o desenho no arquivo por ele
+            let mut nomes = std::collections::HashSet::new();
+            let mut nome_unico = |n: &str| {
+                let mut s = n.to_string();
+                let mut k = 2;
+                while !nomes.insert(s.clone()) {
+                    s = format!("{n} ({k})");
+                    k += 1;
+                }
+                s
+            };
+            let mut em_branco = |a: &crate::pmi_xde::AnotacaoXde, kind: u8| b::XdePmi {
+                prs: a.apresentacao.as_ref().map(|p| p.segmentos.iter().flat_map(|s| s.iter().flatten().copied()).collect()).unwrap_or_default(),
+                prs_name: a.apresentacao.as_ref().map(|p| nome_unico(&p.nome)).unwrap_or_default(),
+                plane: a.apresentacao.as_ref().and_then(|p| p.plano).map(|(o, n, x)| [o, n, x].concat()).unwrap_or_default(),
+                text_at: a.apresentacao.as_ref().and_then(|p| p.texto_em).map(|t| t.to_vec()).unwrap_or_default(),
                 kind,
                 product: a.produto as u32,
                 name: a.nome.clone(),
@@ -288,8 +307,9 @@ mod ponte {
                 target_length: 0.,
                 target_width: 0.,
             };
-            // id do datum = ordem de entrada entre os datums
+            // id do datum = ordem de entrada entre os datums; `ordem`: anotação -> ordem de entrada geral
             let mut ids = std::collections::HashMap::new();
+            let mut ordem = std::collections::HashMap::new();
             for (i, a) in self.anotacoes.iter().enumerate() {
                 if let DadoXde::Datum { letra, posicao, alvo } = &a.dado {
                     let mut m = em_branco(a, 2);
@@ -305,9 +325,10 @@ mod ponte {
                     }
                     ids.insert(i, m.id);
                     b::xde_pmi_add(doc.pin_mut(), &m).map_err(err)?;
+                    ordem.insert(i, ordem.len() as u32);
                 }
             }
-            for a in &self.anotacoes {
+            for (i, a) in self.anotacoes.iter().enumerate() {
                 match &a.dado {
                     DadoXde::Dimensao { tipo, valor, tolerancia, faces2 } => {
                         if !tipo.atravessa() {
@@ -324,6 +345,7 @@ mod ponte {
                             m.upper = *sup;
                         }
                         b::xde_pmi_add(doc.pin_mut(), &m).map_err(err)?;
+                        ordem.insert(i, ordem.len() as u32);
                     }
                     DadoXde::Tolerancia { tipo, valor, zona, material, mod_zona, valor_zona, modificadores, datums } => {
                         let mut m = em_branco(a, 1);
@@ -338,35 +360,62 @@ mod ponte {
                             m.datums.push(*ids.get(d).ok_or_else(|| KernelError(format!("a anotação {d} não é um datum")))?);
                         }
                         b::xde_pmi_add(doc.pin_mut(), &m).map_err(err)?;
+                        ordem.insert(i, ordem.len() as u32);
+                    }
+                    DadoXde::Grafico => {
+                        let m = em_branco(a, 3);
+                        if m.prs.is_empty() {
+                            return Err(KernelError(format!("a anotação gráfica {} não tem desenho", a.nome)));
+                        }
+                        b::xde_pmi_add(doc.pin_mut(), &m).map_err(err)?;
+                        ordem.insert(i, ordem.len() as u32);
                     }
                     DadoXde::Datum { .. } => {}
                 }
+            }
+            for v in &self.vistas {
+                let shown = v.anotacoes.iter().filter_map(|i| ordem.get(i).copied()).collect();
+                let w = b::XdeView { name: v.nome.clone(), eye: v.olho, dir: v.direcao, up: v.cima, ortho: v.ortogonal, zoom: v.zoom, width: v.largura, height: v.altura, shown };
+                b::xde_view_add(doc.pin_mut(), &w).map_err(err)?;
             }
             Ok(())
         }
 
         /// Lê as anotações do documento: datums primeiro, como na gravação.
-        fn ler_anotacoes(doc: &cxx::UniquePtr<b::XdeDoc>) -> KResult<Vec<crate::pmi_xde::AnotacaoXde>> {
+        fn ler_anotacoes(doc: &cxx::UniquePtr<b::XdeDoc>) -> KResult<(Vec<crate::pmi_xde::AnotacaoXde>, Vec<crate::pmi_xde::VistaXde>)> {
             use crate::pmi_xde::*;
             let lidas = b::xde_pmi_read(doc).map_err(err)?;
+            // posição de cada item lido em `out` (as vistas citam pela ordem da leitura)
+            let mut mapa: Vec<Option<usize>> = vec![None; lidas.len()];
+            let apresentacao = |m: &b::XdePmi| {
+                (m.prs.len() >= 6).then(|| ApresentacaoXde {
+                    nome: m.prs_name.clone(),
+                    segmentos: m.prs.chunks_exact(6).map(|c| [[c[0], c[1], c[2]], [c[3], c[4], c[5]]]).collect(),
+                    plano: (m.plane.len() == 9).then(|| ([m.plane[0], m.plane[1], m.plane[2]], [m.plane[3], m.plane[4], m.plane[5]], [m.plane[6], m.plane[7], m.plane[8]])),
+                    texto_em: (m.text_at.len() == 3).then(|| [m.text_at[0], m.text_at[1], m.text_at[2]]),
+                })
+            };
             let mut datum_de = std::collections::HashMap::new();
             let mut out = Vec::new();
             // O leitor do OCCT cria um datum novo a cada tolerância que o referencia (e um por alvo): aqui
             // eles voltam a ser um só, pela letra, as faces e o alvo.
             let mut unicos: Vec<(String, usize, Vec<u32>, Option<(u32, u32)>)> = Vec::new();
-            for m in lidas.iter().filter(|m| m.kind == 2) {
+            for (j, m) in lidas.iter().enumerate().filter(|(_, m)| m.kind == 2) {
                 let chave = (m.name.clone(), m.product as usize, m.faces.clone(), m.target.then_some((m.target_type, m.target_number)));
                 let ja = unicos.iter().position(|c| *c == chave);
                 datum_de.insert(m.id, (ja.unwrap_or(out.len()), m.target));
+                mapa[j] = Some(ja.unwrap_or(out.len()));
                 if ja.is_some() {
                     continue;
                 }
                 unicos.push(chave);
                 let alvo = m.target.then(|| AlvoXde { tipo: AlvoDatumXde::de_numero(m.target_type).unwrap_or(AlvoDatumXde::Ponto), numero: m.target_number, comprimento: m.target_length, largura: m.target_width });
-                out.push(AnotacaoXde { produto: m.product as usize, nome: m.name.clone(), faces: m.faces.clone(), dado: DadoXde::Datum { letra: m.name.clone(), posicao: m.position, alvo } });
+                out.push(AnotacaoXde { apresentacao: apresentacao(m), produto: m.product as usize, nome: m.name.clone(), faces: m.faces.clone(), dado: DadoXde::Datum { letra: m.name.clone(), posicao: m.position, alvo } });
             }
-            for m in lidas.iter().filter(|m| m.kind != 2) {
-                let dado = if m.kind == 0 {
+            for (j, m) in lidas.iter().enumerate().filter(|(_, m)| m.kind != 2) {
+                let dado = if m.kind == 3 {
+                    DadoXde::Grafico
+                } else if m.kind == 0 {
                     let Some(tipo) = TipoDimensaoXde::de_numero(m.ty) else { continue };
                     DadoXde::Dimensao { tipo, valor: m.value, tolerancia: m.has_tol.then_some((m.lower, m.upper)), faces2: m.faces2.clone() }
                 } else {
@@ -404,9 +453,23 @@ mod ponte {
                         },
                     }
                 };
-                out.push(AnotacaoXde { produto: m.product as usize, nome: m.name.clone(), faces: m.faces.clone(), dado });
+                mapa[j] = Some(out.len());
+                out.push(AnotacaoXde { apresentacao: apresentacao(m), produto: m.product as usize, nome: m.name.clone(), faces: m.faces.clone(), dado });
             }
-            Ok(out)
+            let vistas = b::xde_views_read(doc)
+                .map_err(err)?
+                .into_iter()
+                .map(|v| {
+                    let mut anotacoes: Vec<usize> = vec![];
+                    for i in v.shown.iter().filter_map(|j| mapa.get(*j as usize).copied().flatten()) {
+                        if !anotacoes.contains(&i) {
+                            anotacoes.push(i);
+                        }
+                    }
+                    VistaXde { nome: v.name.clone(), olho: v.eye, direcao: v.dir, cima: v.up, ortogonal: v.ortho, zoom: v.zoom, largura: v.width, altura: v.height, anotacoes }
+                })
+                .collect();
+            Ok((out, vistas))
         }
 
         /// Grava o modelo num STEP.
