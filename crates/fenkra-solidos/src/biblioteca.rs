@@ -513,6 +513,7 @@ const PUBLICA: &[(&str, &str)] = &[
     ("din939.json", include_str!("../../../biblioteca/fixadores/din939.json")),
     ("iso7379.json", include_str!("../../../biblioteca/fixadores/iso7379.json")),
     ("asme_b18_3.json", include_str!("../../../biblioteca/fixadores/asme_b18_3.json")),
+    ("an3.json", include_str!("../../../biblioteca/fixadores/an3.json")),
     ("iso15_60.json", include_str!("../../../biblioteca/rolamentos/iso15_60.json")),
     ("iso15_62.json", include_str!("../../../biblioteca/rolamentos/iso15_62.json")),
     ("iso15_63.json", include_str!("../../../biblioteca/rolamentos/iso15_63.json")),
@@ -662,7 +663,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 23);
+        assert_eq!(b.familias.len(), 24);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -670,8 +671,8 @@ mod tests {
             assert_eq!(f.nivel, "C");
             assert!(f.licenca.starts_with("CC BY 4.0"));
         }
-        // 4762, 4017, 933, 4014, 7380-1, 10642, 7045, 938, 939, 7379, B18.3
-        assert_eq!(familias().iter().filter(|f| f.tipo.e_parafuso()).count(), 11);
+        // 4762, 4017, 933, 4014, 7380-1, 10642, 7045, 938, 939, 7379, B18.3 e AN
+        assert_eq!(familias().iter().filter(|f| f.tipo.e_parafuso()).count(), 12);
     }
 
     #[test]
@@ -772,6 +773,26 @@ mod tests {
         assert_eq!(s62.tamanhos_para_furo(80., 0.05).iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["6208"]);
         // capacidade de carga só na nota, citando o fabricante
         assert!(tamanho("iso15_60", "6000").unwrap().nota.as_deref().is_some_and(|n| n.contains("NSK") && n.contains("C = 5050 N")));
+    }
+
+    #[test]
+    fn parafusos_aeronauticos_an3_a_an5_pela_pega() {
+        // B43: AN3 a AN5, pega e comprimento conferidos em duas tabelas; b = L − pega é constante por tamanho
+        let f = familia("an3").unwrap();
+        assert_eq!(f.tamanhos.iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["AN3", "AN4", "AN5"]);
+        let pol = 25.4;
+        let an3 = tamanho("an3", "AN3").unwrap();
+        assert!((an3.valor("P").unwrap() - pol / 32.).abs() < 1e-3 && (an3.valor("b").unwrap() - 13. / 32. * pol).abs() < 1e-3);
+        assert!((an3.diametro_nominal().unwrap() - 0.19 * pol).abs() < 1e-3);
+        // AN3-10: L = 1 1/32" com pega de 5/8" (a ficha do fabricante diz 1,031 e 0,625)
+        assert!(an3.comprimentos.iter().any(|l| (l - 1.03125 * pol).abs() < 1e-2));
+        // achado pela rosca também
+        assert_eq!(tamanho("an3", "1/4-28 UNF").unwrap().designacao, "AN4");
+        for t in &f.tamanhos {
+            let (s, k, d) = (t.valor("s").unwrap(), t.valor("k").unwrap(), t.diametro_nominal().unwrap());
+            assert!(s > 1.4 * d && k > 0.3 * d && k < 0.8 * d, "{}", t.designacao);
+            assert!(t.comprimentos.iter().all(|l| *l > t.valor("b").unwrap()), "{}: pega positiva em todo traço", t.designacao);
+        }
     }
 
     #[test]
@@ -924,7 +945,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 24);
+        assert_eq!(m.familias.len(), 25);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

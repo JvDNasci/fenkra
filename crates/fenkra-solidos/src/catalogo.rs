@@ -463,12 +463,12 @@ mod testes {
     #[test]
     fn chips_filtram_por_sistema_cabeca_e_material() {
         let f = |c: Filtro| buscar(familias(), &c).len();
-        // só a ASME B18.3 é em polegada
-        assert_eq!(f(Filtro { sistema: Some(Sistema::Metrico), ..Default::default() }), familias().len() - 1);
-        assert_eq!(f(Filtro { sistema: Some(Sistema::Polegada), ..Default::default() }), 1);
+        // em polegada: ASME B18.3 e o parafuso aeronáutico AN
+        assert_eq!(f(Filtro { sistema: Some(Sistema::Metrico), ..Default::default() }), familias().len() - 2);
+        assert_eq!(f(Filtro { sistema: Some(Sistema::Polegada), ..Default::default() }), 2);
         // ISO 4762, ISO 7380-1, ISO 7379 e ASME B18.3
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Allen), ..Default::default() }), 4);
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Sextavada), ..Default::default() }), 3);
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Sextavada), ..Default::default() }), 4);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Escareada), ..Default::default() }), 1);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Panela), ..Default::default() }), 1);
         // 5 porcas, 4 arruelas, 2 prisioneiros e os rolamentos das séries 60, 62 e 63
@@ -486,7 +486,7 @@ mod testes {
         let a = arvore(&todas);
         let total: usize = a.iter().flat_map(|n| &n.tipos).map(|t| t.familias.len()).sum();
         assert_eq!(total, familias().len());
-        assert_eq!(a.iter().map(|n| n.entidade.as_str()).collect::<Vec<_>>(), ["ASME", "DIN", "ISO"]);
+        assert_eq!(a.iter().map(|n| n.entidade.as_str()).collect::<Vec<_>>(), ["AN", "ASME", "DIN", "ISO"]);
         let iso = a.iter().find(|n| n.entidade == "ISO").unwrap();
         assert_eq!(iso.tipos[0].tipo, TipoFixador::ParafusoAllen);
     }
