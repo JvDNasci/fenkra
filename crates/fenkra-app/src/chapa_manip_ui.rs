@@ -123,9 +123,7 @@ fn alca(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, nth:
     let g = painter.layout_no_wrap(txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), tcol);
     let lr = Rect::from_min_size(rot_pos, g.size() + egui::vec2(10., 6.));
     let lr = reserva_rotulo(ui, lr, rect);
-    painter.rect_filled(lr, 4., fundo);
-    painter.rect_stroke(lr, 4., Stroke::new(1., normal), egui::StrokeKind::Inside);
-    painter.galley(lr.min + egui::vec2(5., 3.), g, tcol);
+    pinta_rotulo(lr, fundo, Stroke::new(1., normal), g, tcol);
     let resp = ui.interact(lr, egui::Id::new(("chapa_rotulo", id.0, nth)), egui::Sense::click());
     let chave = egui::Id::new(("chapa_edita", id.0, nth));
     let mut editando: Option<String> = ui.ctx().data(|d| d.get_temp(chave));
@@ -181,6 +179,31 @@ pub fn reserva_rotulo(ui: &egui::Ui, lr: Rect, viewport: Rect) -> Rect {
     usados.push(livre);
     ui.ctx().data_mut(|d| d.insert_temp(chave, (passada, usados)));
     livre
+}
+
+thread_local! {
+    /// B411: rótulos das alças desta passada, pintados por cima de todas as setas e anéis no fim dela.
+    static ROTULOS: std::cell::RefCell<Vec<egui::Shape>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// B411: guarda o rótulo (fundo, borda e texto) para `descarrega_rotulos` pintar no fim da passada. Pintado
+/// na hora, a seta ou o anel de uma alça desenhada depois passava por cima do texto ("Recuo do fim" cortado
+/// pela seta de "Comprimento da aba").
+pub fn pinta_rotulo(lr: Rect, fundo: Color32, borda: Stroke, texto: std::sync::Arc<egui::Galley>, cor: Color32) {
+    ROTULOS.with(|r| {
+        let mut r = r.borrow_mut();
+        r.push(egui::Shape::rect_filled(lr, 4., fundo));
+        r.push(egui::Shape::rect_stroke(lr, 4., borda, egui::StrokeKind::Inside));
+        r.push(egui::Shape::galley(lr.min + egui::vec2(5., 3.), texto, cor));
+    });
+}
+
+/// B411: pinta os rótulos guardados nesta passada, depois de todas as alças, e esvazia a lista.
+pub fn descarrega_rotulos(ui: &egui::Ui, viewport: Rect) {
+    let formas = ROTULOS.with(|r| std::mem::take(&mut *r.borrow_mut()));
+    if !formas.is_empty() {
+        ui.painter_at(viewport).extend(formas);
+    }
 }
 
 /// B411: desce `lr` até que não cubra nenhum rótulo já posto (`usados`), sem sair da viewport. Quando a

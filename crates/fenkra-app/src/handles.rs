@@ -579,6 +579,12 @@ fn contour_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, i
 }
 
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
+    alcas(app, ui, rect, cam);
+    // B411: os rótulos de valor vão por cima de todas as setas e anéis, para nenhum ficar cortado
+    crate::chapa_manip_ui::descarrega_rotulos(ui, rect);
+}
+
+fn alcas(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     let Some(id) = app.session.as_ref().map(|s| s.id) else { return };
     crate::sup3d::overlay(app, ui, rect, &cam, id);
     if crate::gizmo::overlay(app, ui, rect, &cam, id) {
@@ -733,9 +739,7 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(estado.fonte())), Color32::WHITE);
     // B411: o rótulo não cobre os das alças da chapa, que já foram postos nesta passada
     let lr = crate::chapa_manip_ui::reserva_rotulo(ui, Rect::from_min_size(lp, galley.size() + egui::vec2(10., 6.)), rect);
-    painter.rect_filled(lr, 4., Color32::from_rgba_unmultiplied(20, 60, 110, 220));
-    painter.rect_stroke(lr, 4., Stroke::new(1., c), egui::StrokeKind::Inside);
-    painter.galley(lr.min + egui::vec2(5., 3.), galley, Color32::WHITE);
+    crate::chapa_manip_ui::pinta_rotulo(lr, Color32::from_rgba_unmultiplied(20, 60, 110, 220), Stroke::new(1., c), galley, Color32::WHITE);
     // B246: com o valor que deixa a geometria inválida, a causa aparece junto da seta que o arrasta,
     // e a prévia anterior continua na tela
     if nth == 0 {
