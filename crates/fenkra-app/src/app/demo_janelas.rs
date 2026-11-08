@@ -83,6 +83,8 @@ impl App {
                 self.sel = Sel::Ref(ids[1]);
             }
             "daltonico" => self.settings.acessibilidade.paleta_segura = true,
+            // B378: o gerenciador único de salvamento e exportação
+            "gerenciador" => self.abrir_gerenciador(),
             // B408: o painel da peça aberto pelo clique na raiz da árvore; `FENKRA_DEMO_MATERIAL=<nome>`
             // escolhe o material (um nome fora da tabela mostra o aviso)
             "peca" => {

@@ -25,6 +25,10 @@ pub(crate) enum Destino {
     VisualizacaoSimplificada,
     Impressao,
     Nesting,
+    DesenhoPdf,
+    DesenhoSvg,
+    DesenhoDxf,
+    ListaDePecas,
     Arvore,
     Lote,
     Formatos,
@@ -54,6 +58,10 @@ pub(crate) const ENTRADAS: &[Entrada] = &[
     Entrada { grupo: "Malha e visualização", rotulo: "Exportar visualização simplificada…", dica: "Igual à anterior, com a malha reduzida: protege a geometria e pesa menos.", destino: Destino::VisualizacaoSimplificada },
     Entrada { grupo: "Fabricação", rotulo: "Preparar impressão…", dica: "Põe os corpos na mesa, confere se imprimem e grava 3MF ou STL.", destino: Destino::Impressao },
     Entrada { grupo: "Fabricação", rotulo: "Nesting e dobra…", dica: "Encaixa as chapas planificadas em chapas comerciais e simula a sequência de dobra. Só para peças de chapa.", destino: Destino::Nesting },
+    Entrada { grupo: "Desenho e montagem", rotulo: "Desenho em PDF…", dica: "As folhas do desenho técnico, com a cor e as espessuras de linha. Só na bancada Desenho.", destino: Destino::DesenhoPdf },
+    Entrada { grupo: "Desenho e montagem", rotulo: "Desenho em SVG…", dica: "As folhas em vetor, para editar ou publicar. Só na bancada Desenho.", destino: Destino::DesenhoSvg },
+    Entrada { grupo: "Desenho e montagem", rotulo: "Desenho em DXF…", dica: "As vistas e cotas em camadas, para corte a laser ou outro programa de desenho. Só na bancada Desenho.", destino: Destino::DesenhoDxf },
+    Entrada { grupo: "Desenho e montagem", rotulo: "Lista de peças (CSV)…", dica: "Abre a lista de peças da montagem, com item, PN e quantidade, e grava em CSV. Só na montagem.", destino: Destino::ListaDePecas },
     Entrada { grupo: "Dados e lote", rotulo: "Exportar árvore paramétrica…", dica: "A receita da peça ou da montagem em JSON aberto, sem a geometria pronta.", destino: Destino::Arvore },
     Entrada { grupo: "Dados e lote", rotulo: "Conversão em lote…", dica: "Converte arquivos e pastas para vários formatos de uma vez, com simulação antes de gravar.", destino: Destino::Lote },
     Entrada { grupo: "Dados e lote", rotulo: "Formatos suportados…", dica: "O que o Fenkra lê e grava, e o que atravessa em cada formato.", destino: Destino::Formatos },
@@ -81,6 +89,8 @@ impl App {
     fn destino_ativo(&self, d: Destino) -> bool {
         match d {
             Destino::Nesting => self.open.doc.sheet.is_some(),
+            Destino::DesenhoPdf | Destino::DesenhoSvg | Destino::DesenhoDxf => self.settings.bench == crate::settings::Bench::Desenho && self.dwg.is_some(),
+            Destino::ListaDePecas => self.in_asm(),
             Destino::RelatorioImportacao => self.open.doc.origem.as_ref().is_some_and(|o| o.relatorio.is_some()),
             Destino::FeaturesEncontradas => self.features.is_none(),
             _ => true,
@@ -102,6 +112,14 @@ impl App {
             Destino::VisualizacaoSimplificada => self.exportar_visualizacao(true),
             Destino::Impressao => self.abrir_impressao(),
             Destino::Nesting => crate::chapa_fab_ui::abrir(ctx),
+            Destino::DesenhoPdf => crate::dwg_ui::command(self, crate::dwg_ui::c::PDF),
+            Destino::DesenhoSvg => crate::dwg_ui::command(self, crate::dwg_ui::c::SVG),
+            Destino::DesenhoDxf => crate::dwg_ui::command(self, crate::dwg_ui::c::DXF),
+            Destino::ListaDePecas => {
+                if let Some(st) = self.asm.as_mut() {
+                    st.bom_open = Some(st.bom_open.unwrap_or_default());
+                }
+            }
             Destino::Arvore => self.exportar_arvore(),
             Destino::Lote => self.abrir_painel_lote(),
             Destino::Formatos => self.abrir_formatos(),
@@ -186,6 +204,10 @@ mod testes {
             Destino::VisualizacaoSimplificada,
             Destino::Impressao,
             Destino::Nesting,
+            Destino::DesenhoPdf,
+            Destino::DesenhoSvg,
+            Destino::DesenhoDxf,
+            Destino::ListaDePecas,
             Destino::Arvore,
             Destino::Lote,
             Destino::Formatos,
@@ -203,7 +225,7 @@ mod testes {
         for (i, a) in ENTRADAS.iter().enumerate() {
             assert!(ENTRADAS.iter().skip(i + 1).all(|b| b.destino != a.destino), "{:?} repetido", a.destino);
         }
-        assert_eq!(grupos(), ["Salvar", "Troca com outros CADs", "Malha e visualização", "Fabricação", "Dados e lote"]);
+        assert_eq!(grupos(), ["Salvar", "Troca com outros CADs", "Malha e visualização", "Fabricação", "Desenho e montagem", "Dados e lote"]);
     }
 
     #[test]
