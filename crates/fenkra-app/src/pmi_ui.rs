@@ -1287,6 +1287,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let (ghost, cancel, pop, finish) = pending_preview(app, ui, rect, cam, r);
     let cands = if ghost.is_some() || list(app).iter().any(|p| p.targets.iter().any(Option::is_some)) { candidates(&ctx, r) } else { Default::default() };
     let all: Vec<&Pmi> = list(app).iter().filter(|p| p.visible).chain(ghost.iter()).collect();
+    // B405: rótulos que caem uns sobre os outros descem até se lerem (só na tela)
+    let mem_id = egui::Id::new("pmi_sobrepoe");
+    let mut mem: crate::pmi_sobrepoe::Memoria = ctx.data(|d| d.get_temp(mem_id)).unwrap_or_default();
+    let mut quadro: Vec<crate::pmi_sobrepoe::Rotulo> = vec![];
     for pm in all {
         let is_ghost = ghost.as_ref().is_some_and(|g| std::ptr::eq(g, pm));
         // chamada de feature: o texto é regerado dos parâmetros a cada quadro (muda o furo, muda a nota)
@@ -1397,6 +1401,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             draw(&cv, &ppen);
             cv.flush_mapped(|q| cam.project(rect, o + x * (q.x / 10.) - y * (q.y / 10.)))
         };
+        let mut deslocavel = false;
         let rect_lbl = match &pm.kind {
             k if k.is_linear_like() && a.len() >= 2 => {
                 // linhas de chamada e linha de cota afastadas pelo deslocamento
@@ -1533,6 +1538,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                     }
                     None => {
                         let (Some(s0), Some(st)) = (cam.project(rect, anchor), cam.project(rect, lab)) else { continue };
+                        let st = if is_ghost { st } else { st + mem.desloc.get(&pm.id.0).copied().unwrap_or_default() };
+                        deslocavel = true;
                         let s1 = second.and_then(|q| cam.project(rect, q));
                         let routes_s: Vec<Vec<Pos2>> = routes3.iter().filter_map(|r| r.iter().map(|q| cam.project(rect, *q)).collect::<Option<Vec<_>>>()).collect();
                         let cv = Cv::new(&painter);
@@ -1651,6 +1658,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
                 }
             }
         }
+        if !is_ghost {
+            quadro.push(crate::pmi_sobrepoe::Rotulo { id: pm.id.0, rect: rect_lbl, movel: deslocavel });
+        }
         let resp = ui.interact(rect_lbl, egui::Id::unique(("pmi_rotulo", pm.id.0)), egui::Sense::click_and_drag());
         if editing == Some(pm.id) {
             sel_lbl = Some((pm.id, rect_lbl));
@@ -1737,6 +1747,17 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         });
         resp.on_hover_text(&pm.name);
     }
+    // o que o afastamento não resolve (texto deitado no plano, cota) ganha um aviso junto ao rótulo
+    for (_, r) in crate::pmi_sobrepoe::ainda_cobertos(&quadro) {
+        painter.text(r.left_bottom() + egui::vec2(0., 3.), egui::Align2::LEFT_TOP, format!("⚠ {}", tr("texto sobre outro: afaste a âncora ou mude o deslocamento")), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), crate::theme::st_warn());
+    }
+    let antes = mem.desloc.clone();
+    crate::pmi_sobrepoe::atualizar(&mut mem, &quadro);
+    // o deslocamento novo só aparece no quadro seguinte
+    if mem.desloc != antes {
+        ctx.request_repaint();
+    }
+    ctx.data_mut(|d| d.insert_temp(mem_id, mem));
     // Esc cancela sem criar nada; Backspace retira o último elemento escolhido
     if cancel {
         app.pmi_pending = None;

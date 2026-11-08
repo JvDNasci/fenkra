@@ -66,6 +66,7 @@ mod pmi_setas;
 mod pmi_cordao;
 mod pmi_arvore;
 mod pmi_legivel;
+mod pmi_sobrepoe;
 mod pmi_feat_asm;
 mod pmi_baloes_ui;
 mod pmi_alvos_ui;

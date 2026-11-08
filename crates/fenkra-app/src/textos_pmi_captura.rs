@@ -30,6 +30,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Alvo", "Target"),
     ("ponto livre", "free point"),
     ("Ancoragem na nota", "Anchor on the note"),
+    ("texto sobre outro: afaste a âncora ou mude o deslocamento", "text over another: move the anchor or change the offset"),
     ("De que lado da nota sai esta seta. Cada seta tem a sua; também se arrasta o quadrado no início da seta, no 3D.", "Which side of the note this arrow leaves from. Each arrow has its own; you can also drag the square at the start of the arrow in 3D."),
     ("Ponta", "Arrowhead"),
     ("Formato da ponta desta seta; Padrão usa a do estilo da nota.", "Arrowhead shape for this arrow; Default uses the note style."),
