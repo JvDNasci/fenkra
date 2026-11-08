@@ -387,6 +387,15 @@ fn arquivo_sumido_vira_aviso_em_qualquer_nivel() {
     p.validar().unwrap();
     assert_eq!(nomes_na_arvore(&p), ["Placa"]);
     assert_eq!(p.avisos().len(), 2, "{:?}", p.avisos());
+    // a página mostra os avisos: selo no cabeçalho e a lista com o motivo na aba Dados
+    let html = fenkra_pacote::pagina_html(Some(&p.bytes().unwrap()));
+    for marca in ["id=\"faltas\"", "function montarFaltas", "montarFaltas();", "faltas_t", "m.avisos"] {
+        assert!(html.contains(marca), "falta {marca} na página");
+    }
+    // FENKRA_PAGINA_FALTAS=<arquivo.html> grava a página para conferir no navegador
+    if let Some(saida) = std::env::var_os("FENKRA_PAGINA_FALTAS") {
+        std::fs::write(saida, html).unwrap();
+    }
 }
 
 #[test]
