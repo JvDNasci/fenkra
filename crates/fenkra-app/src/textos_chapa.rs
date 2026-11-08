@@ -127,4 +127,11 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("válido de", "valid from"),
     ("até", "to"),
     ("válido a partir de", "valid from"),
+    // B304: dobrar e desdobrar animado e ordem de dobra
+    ("Dobrar e desdobrar", "Fold and unfold"),
+    ("Arraste para abrir as dobras aos poucos: 0% é a peça dobrada, 100% a planificada exata. No meio, cada dobra abre na mesma proporção.", "Drag to open the bends gradually: 0% is the folded part, 100% the exact flat pattern. In between, every bend opens by the same proportion."),
+    ("Anima a peça de dobrada até planificada (ou volta, se já estiver plana).", "Animates the part from folded to flat (or back, if already flat)."),
+    ("Só mudam no fim (sem ângulo no comando):", "Change only at the end (no angle in the command):"),
+    ("Ordem de dobra: arraste o número sobre cada linha de dobra, no 3D, para os lados. Número repetido vale (mesmo golpe).", "Bend order: drag the number on each bend line in 3D sideways. Repeated numbers are allowed (same stroke)."),
+    ("Ordem de dobra: arraste para a direita ou para a esquerda para mudar o número. Número repetido vale.", "Bend order: drag right or left to change the number. Repeated numbers are allowed."),
 ];

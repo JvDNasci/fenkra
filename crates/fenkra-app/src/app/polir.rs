@@ -86,7 +86,8 @@ impl App {
         }
         self.polir.feito = Some((alvo, self.gen_done));
         self.polir.alvo = alvo;
-        let Some(doc) = self.sent_doc.clone() else { return };
+        // B304: na animação de dobrar, a malha fina é a da peça parcial que está na tela
+        let Some(doc) = self.doc_enviado() else { return };
         self.worker.enviar((self.gen_sent, doc, false, self.qualidade_malha, Pedido { alvo, agora: true, leve: self.session.as_ref().map(|s| s.id) }));
     }
 }

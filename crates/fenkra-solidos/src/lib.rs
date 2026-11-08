@@ -67,6 +67,7 @@ pub mod padrao;
 pub mod furo_norma;
 pub mod rosca_furo;
 pub mod previa_leve;
+pub mod chapa_animacao;
 pub mod chapa_linha;
 mod chapa_dobra_curva;
 mod chapa_flat;
@@ -7642,7 +7643,9 @@ pub fn tabela_dobras(doc: &Document, linhas: &[BendLine]) -> Vec<BendRow> {
             let k = visto.entry(l.feature).or_default();
             *k += 1;
             let name = if total > 1 { format!("{nome} ({k}/{total})") } else { nome };
-            BendRow { feature: l.feature, name, angle: l.angle, radius: l.radius, allowance: l.allowance, deduction: l.deduction, ordem: i + 1, rotulo: l.label() }
+            // B304: a ordem escolhida nos glifos vale na tabela, na planificada e no DXF
+            let ordem = doc.sheet.as_ref().and_then(|s| s.ordem_de(l.feature, *k as u32 - 1)).map_or(i + 1, |o| o as usize);
+            BendRow { feature: l.feature, name, angle: l.angle, radius: l.radius, allowance: l.allowance, deduction: l.deduction, ordem, rotulo: l.label() }
         })
         .collect()
 }
