@@ -51,19 +51,25 @@ pub fn rolamento_documento(designacao: &str) -> Result<Document, String> {
     m.param("d", &r.d.to_string())?;
     m.param("D", &r.dext.to_string())?;
     m.param("B", &r.b.to_string())?;
+    corpo(&mut m)?;
+    m.doc.props.custom.push(("Norma".into(), "ISO 15 (medidas de contorno)".into()));
+    m.publicar("Eixo", RefKind::LineDir { point: PointRef::Origin, dir: AxisRef::Origin(OriginAxis::Z), start: "-B".into(), end: "0".into() });
+    Ok(m.doc)
+}
+
+/// Os três anéis do modelo, de `z = -B` a `z = 0` (a face de apoio fica em `z = 0`, como nos
+/// fixadores da biblioteca), a partir dos parâmetros `d`, `D` e `B` já criados.
+pub(crate) fn corpo(m: &mut Montador) -> Result<(), String> {
     m.param("D2", "D-(D-d)/3")?;
     m.param("d1", "d+(D-d)/3")?;
-    let base = m.plano("Plano_base", "-B/2")?;
-    let meio = m.plano("Plano_faixa", "-B/4")?;
-    let furo = m.plano("Plano_furo", "-B/2-1")?;
+    let base = m.plano("Plano_base", "-B")?;
+    let meio = m.plano("Plano_faixa", "-3*B/4")?;
+    let furo = m.plano("Plano_furo", "-B-1")?;
     m.prim("Pista externa", PrimKind::Cilindro, base, ["D/2", "B", "0", "0"], BoolOp::Add)?;
     m.prim("Vão interno", PrimKind::Cilindro, furo, ["D2/2", "B+2", "0", "0"], BoolOp::Cut)?;
     m.prim("Pista interna", PrimKind::Cilindro, base, ["d1/2", "B", "0", "0"], BoolOp::Add)?;
     m.prim("Esferas e gaiola", PrimKind::Cilindro, meio, ["D2/2", "B/2", "0", "0"], BoolOp::Add)?;
-    m.prim("Furo", PrimKind::Cilindro, furo, ["d/2", "B+2", "0", "0"], BoolOp::Cut)?;
-    m.doc.props.custom.push(("Norma".into(), "ISO 15 (medidas de contorno)".into()));
-    m.publicar("Eixo", RefKind::LineDir { point: PointRef::Origin, dir: AxisRef::Origin(OriginAxis::Z), start: "-B/2".into(), end: "B/2".into() });
-    Ok(m.doc)
+    m.prim("Furo", PrimKind::Cilindro, furo, ["d/2", "B+2", "0", "0"], BoolOp::Cut)
 }
 
 #[cfg(test)]
@@ -78,6 +84,28 @@ mod tests {
         assert_eq!(rolamento("6005").map(|r| (r.d, r.dext, r.b)), Some((25., 47., 12.)));
         assert_eq!(rolamento(" 6010 ").map(|r| (r.d, r.dext, r.b)), Some((50., 80., 16.)));
         assert!(rolamento_documento("9999").unwrap_err().contains("6005"));
+    }
+
+    /// B396: a mesma peça sai da biblioteca de normas (família `iso15_60`), apoiada em z = 0.
+    #[test]
+    fn rolamento_da_biblioteca_tem_as_medidas_e_apoio_em_zero() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        for r in ROLAMENTOS {
+            let doc = crate::fixadores::fixador_documento("iso15_60", r.designacao, None).unwrap();
+            assert_eq!(doc.props.description, format!("ISO 15 {}", r.designacao));
+            let rc = recompute(&doc);
+            assert!(doc.features.iter().all(|f| rc.status[&f.id] == Status::Ok), "{}", r.designacao);
+            assert_eq!(rc.bodies.len(), 1);
+            let z: Vec<f64> = rc.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2] as f64).collect();
+            let (lo, hi) = (z.iter().cloned().fold(f64::MAX, f64::min), z.iter().cloned().fold(f64::MIN, f64::max));
+            assert!((lo + r.b).abs() < 1e-3 && hi.abs() < 1e-3, "{}: z de {lo} a {hi}", r.designacao);
+            let (d2, d1) = (r.dext - (r.dext - r.d) / 3., r.d + (r.dext - r.d) / 3.);
+            let esperado = PI / 4. * ((r.dext * r.dext - d2 * d2) * r.b + (d1 * d1 - r.d * r.d) * r.b + (d2 * d2 - d1 * d1) * r.b / 2.);
+            let v = rc.bodies[0].mass.volume;
+            assert!((v - esperado).abs() / esperado < 0.01, "{}: volume {v} contra {esperado}", r.designacao);
+        }
     }
 
     #[test]

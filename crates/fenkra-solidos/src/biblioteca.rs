@@ -41,6 +41,8 @@ pub enum TipoFixador {
     ParafusoSextavado,
     Porca,
     Arruela,
+    /// rolamento de esferas pelas medidas de contorno (furo d, externo D, largura B)
+    Rolamento,
 }
 
 /// Geradores de geometria nomeados. Uma família escolhe o gerador pelo nome (`"gerador"` no JSON);
@@ -50,6 +52,7 @@ pub const GERADORES: &[(&str, TipoFixador)] = &[
     ("parafuso_sextavado", TipoFixador::ParafusoSextavado),
     ("porca", TipoFixador::Porca),
     ("arruela", TipoFixador::Arruela),
+    ("rolamento", TipoFixador::Rolamento),
 ];
 
 impl TipoFixador {
@@ -59,6 +62,7 @@ impl TipoFixador {
             TipoFixador::ParafusoSextavado => "Parafuso sextavado",
             TipoFixador::Porca => "Porca",
             TipoFixador::Arruela => "Arruela",
+            TipoFixador::Rolamento => "Rolamento",
         }
     }
 
@@ -79,6 +83,8 @@ impl TipoFixador {
             TipoFixador::ParafusoSextavado => &["P", "s", "k"],
             TipoFixador::Porca => &["s", "m"],
             TipoFixador::Arruela => &["d1", "d2", "h"],
+            // o furo d é o diâmetro nominal do tamanho
+            TipoFixador::Rolamento => &["D", "B"],
         }
     }
 }
@@ -473,6 +479,7 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso4035.json", include_str!("../../../biblioteca/fixadores/iso4035.json")),
     ("iso7380_1.json", include_str!("../../../biblioteca/fixadores/iso7380_1.json")),
     ("din985.json", include_str!("../../../biblioteca/fixadores/din985.json")),
+    ("iso15_60.json", include_str!("../../../biblioteca/rolamentos/iso15_60.json")),
 ];
 
 /// A biblioteca pública embutida. Os arquivos são validados nos testes; aqui um arquivo inválido
@@ -608,7 +615,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 10);
+        assert_eq!(b.familias.len(), 11);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -773,7 +780,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 11);
+        assert_eq!(m.familias.len(), 12);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

@@ -1,0 +1,59 @@
+{
+ "id": "iso15_60",
+ "nome": "Rolamento rígido de esferas, série 60",
+ "norma": "ISO 15",
+ "revisao": "2017",
+ "versao": 1,
+ "gerador": "rolamento",
+ "tipo": "rolamento",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "NSK — rolamento 6005N, medidas de contorno",
+   "url": "https://www.nsk.com/engineering/6005n-dgbb-sr-n.html"
+  },
+  {
+   "rotulo": "NSK — rolamento 6010, medidas de contorno",
+   "url": "https://www.nsk.com/engineering/6010-dgbb-sr.html"
+  },
+  {
+   "rotulo": "Timken — catálogo de rolamentos rígidos de esferas, item 6005",
+   "url": "https://cad.timken.com/item/deep-groove-ball-bearings/deep-groove-ball-bearings--6000--6200--6300--64/6005"
+  },
+  {
+   "rotulo": "Timken — catálogo de rolamentos rígidos de esferas, item 6010",
+   "url": "https://cad.timken.com/item/deep-groove-ball-bearings/deep-groove-ball-bearings--6000--6200--6300--64/6010"
+  }
+ ],
+ "campos": [
+  "D",
+  "B"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "6005",
+   "d_nominal": 25,
+   "valores": {
+    "D": 47,
+    "B": 12
+   },
+   "confirmado_por": 2,
+   "furo_min": 46.9,
+   "furo_max": 47.1,
+   "nota": "d, D e B: NSK (6005N) e Timken (6005) concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante; capacidade de carga não entra. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6010",
+   "d_nominal": 50,
+   "valores": {
+    "D": 80,
+    "B": 16
+   },
+   "confirmado_por": 2,
+   "furo_min": 79.9,
+   "furo_max": 80.1,
+   "nota": "d, D e B: NSK (6010) e Timken (6010) concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante; capacidade de carga não entra. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  }
+ ]
+}

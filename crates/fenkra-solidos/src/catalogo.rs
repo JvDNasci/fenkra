@@ -57,12 +57,16 @@ pub fn cabeca_de(f: &Familia) -> Cabeca {
     match f.tipo {
         TipoFixador::ParafusoAllen => Cabeca::Allen,
         TipoFixador::ParafusoSextavado => Cabeca::Sextavada,
-        TipoFixador::Porca | TipoFixador::Arruela => Cabeca::Nenhuma,
+        TipoFixador::Porca | TipoFixador::Arruela | TipoFixador::Rolamento => Cabeca::Nenhuma,
     }
 }
 
 /// Polegada quando a designação do tamanho não é métrica ("1/4-20 UNC", "#10-32", "-06").
 pub fn sistema_de(f: &Familia) -> Sistema {
+    // rolamento se designa pela série ("6005"), mas as medidas são em milímetros
+    if f.tipo == TipoFixador::Rolamento {
+        return Sistema::Metrico;
+    }
     if f.tamanhos.iter().all(|t| t.designacao.starts_with('M') && t.diametro_nominal().is_some()) {
         Sistema::Metrico
     } else {
@@ -219,6 +223,7 @@ fn ordem_do_tipo(t: TipoFixador) -> u8 {
         TipoFixador::ParafusoSextavado => 1,
         TipoFixador::Porca => 2,
         TipoFixador::Arruela => 3,
+        TipoFixador::Rolamento => 4,
     }
 }
 
@@ -244,6 +249,8 @@ pub fn nome_da_cota(tipo: TipoFixador, simbolo: &str) -> &'static str {
         (TipoFixador::Arruela, "d1") => "diâmetro interno",
         (TipoFixador::Arruela, "d2") => "diâmetro externo",
         (TipoFixador::Arruela, "h") => "espessura",
+        (TipoFixador::Rolamento, "D") => "diâmetro externo",
+        (TipoFixador::Rolamento, "B") => "largura",
         _ => "medida da norma",
     }
 }
@@ -392,6 +399,21 @@ mod testes {
         buscar(familias(), &Filtro { busca: busca.into(), ..Default::default() }).into_iter().map(|a| (a.familia.id.clone(), a.tamanho)).collect()
     }
 
+    /// B396: o rolamento entra no navegador como qualquer família, métrico, com ficha e o tamanho
+    /// achado pela designação da série.
+    #[test]
+    fn rolamento_6010_aparece_com_ficha_e_e_metrico() {
+        assert!(achar("rolamento 6010").contains(&("iso15_60".to_string(), Some("6010".to_string()))), "{:?}", achar("rolamento 6010"));
+        let f = crate::biblioteca::familia("iso15_60").unwrap();
+        assert_eq!(sistema_de(f), Sistema::Metrico);
+        let fi = ficha(f).unwrap();
+        assert_eq!(fi.cotas.iter().map(|c| c.nome.as_str()).collect::<Vec<_>>(), ["diâmetro externo", "largura"]);
+        let l = fi.linhas.iter().find(|l| l.designacao == "6005").unwrap();
+        assert_eq!((l.d_nominal, l.valores.clone()), (25., vec![47., 12.]));
+        // o furo do alojamento com o externo do rolamento leva ao tamanho certo
+        assert_eq!(f.tamanhos_para_furo(80., 0.05).iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["6010"]);
+    }
+
     #[test]
     fn m8_sextavado_aparece_com_o_tamanho_escolhido() {
         let r = achar("M8 sextavado");
@@ -425,10 +447,11 @@ mod testes {
         assert_eq!(f(Filtro { sistema: Some(Sistema::Polegada), ..Default::default() }), 0);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Allen), ..Default::default() }), 2);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Sextavada), ..Default::default() }), 3);
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 5);
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 6);
         assert_eq!(f(Filtro { material: Some("Aço".into()), ..Default::default() }), familias().len());
         assert_eq!(f(Filtro { material: Some("Aço inoxidável".into()), ..Default::default() }), 0);
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 1);
+        assert_eq!(f(Filtro { tipo: Some(TipoFixador::Rolamento), ..Default::default() }), 1);
     }
 
     #[test]
