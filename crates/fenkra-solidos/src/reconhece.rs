@@ -430,20 +430,29 @@ fn classifica_fim(g: &Grafo, gr: &GrupoFuro, s: f64) -> Fim {
     }
     let Some(v) = viz else { return Fim::Desconhecido };
     let info = g.m.face_info[v];
-    // círculos coaxiais da vizinha, fora o do próprio furo
-    let coaxiais: Vec<(V3, f64)> = g
+    // círculos coaxiais da vizinha, fora o do próprio furo, com a aresta de cada um
+    let coaxiais_e: Vec<(V3, f64, usize)> = g
         .circulos(v)
         .into_iter()
         .filter(|(c, _, n, _)| dist_reta(*c, gr.origem, gr.eixo) < tol && dot(*n, gr.eixo).abs() > 1. - 1e-6)
-        .map(|(c, r, _, _)| (c, r))
+        .map(|(c, r, _, e)| (c, r, e))
         .collect();
+    let coaxiais: Vec<(V3, f64)> = coaxiais_e.iter().map(|(c, r, _)| (*c, *r)).collect();
     match info.kind {
         0 => {
             let Some(n) = g.normal_plano(v) else { return Fim::Desconhecido };
             if dot(n, gr.eixo).abs() < 1. - 1e-6 {
                 return Fim::Desconhecido;
             }
-            let outros: Vec<f64> = coaxiais.iter().map(|c| c.1).filter(|r| (r - gr.raio).abs() > tol).collect();
+            // um círculo maior só é rebaixo quando a face do outro lado é por dentro do material (a
+            // parede do rebaixo); a borda de fora de uma peça redonda (flange, polia, engrenagem)
+            // também é coaxial ao furo do centro e não é rebaixo
+            let outros: Vec<f64> = coaxiais_e
+                .iter()
+                .filter(|(_, r, e)| *r <= gr.raio || g.outra(*e, v).and_then(|o| olha_para_o_eixo(g, o, gr.origem, gr.eixo)) != Some(false))
+                .map(|c| c.1)
+                .filter(|r| (r - gr.raio).abs() > tol)
+                .collect();
             if outros.iter().any(|r| *r < gr.raio) {
                 return Fim::Degrau { face: v };
             }

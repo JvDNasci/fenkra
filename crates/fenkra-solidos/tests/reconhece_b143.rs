@@ -187,3 +187,42 @@ fn chanfro_em_cadeia_tangente_fica_como_corpo() {
     }
     assert!(conv.relatorio.contains("não é o histórico original"));
 }
+
+/// Aceite do B143 no corpus (B53): cada peça vai e volta por STEP e o reconhecimento acha pelo menos
+/// 90% dos furos e dos filetes de raio constante que a peça tem de fato, sem inventar nenhum.
+#[test]
+fn corpus_por_step_reconhece_noventa_por_cento_dos_furos_e_filetes() {
+    if !kernel_disponivel() {
+        return;
+    }
+    // o que cada peça do corpus tem de verdade, na ordem de `pecas()`, pela forma como foi montada:
+    // (furos, filetes de raio constante)
+    let esperado = |i: usize| -> (usize, usize) {
+        match i {
+            5 => (15, 0), // placa com grade 5 x 3
+            7 => (0, 12), // caixa com as 12 arestas arredondadas
+            9 => (5, 0),  // flange: furo central e quatro no círculo
+            11 => (1, 0), // engrenagem: furo do eixo
+            13 => (1, 0), // porca M8
+            _ => (0, 0),
+        }
+    };
+    let (mut tem, mut achou) = (0usize, 0usize);
+    for (i, d) in common::corpus::pecas().iter().enumerate() {
+        let imp = via_step(d, &format!("corpus{i:02}"));
+        let rec = analisar(&final_shape(&imp).unwrap());
+        let furos = rec.contar(Tipo::FuroPassante) + rec.contar(Tipo::FuroCego);
+        let filetes = rec.contar(Tipo::Filete);
+        eprintln!("{i:02} {}: {furos} furos, {filetes} filetes; {}", d.name, rec.encontradas.iter().map(|e| e.descricao()).collect::<Vec<_>>().join(" | "));
+        let (ef, el) = esperado(i);
+        assert!(furos <= ef && filetes <= el, "{}: feature inventada ({furos} furos, {filetes} filetes)", d.name);
+        // furo no centro de peça redonda: a borda de fora é coaxial a ele e não é rebaixo
+        if i == 9 || i == 11 {
+            assert_eq!(furos, ef, "{}: o furo do centro tem de aparecer", d.name);
+        }
+        tem += ef + el;
+        achou += furos.min(ef) + filetes.min(el);
+    }
+    eprintln!("reconhecidos {achou} de {tem}");
+    assert!(tem > 0 && achou * 10 >= tem * 9, "reconhecidos {achou} de {tem}");
+}
