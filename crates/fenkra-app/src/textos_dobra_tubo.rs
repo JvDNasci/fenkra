@@ -3,6 +3,7 @@
 //! `i18n.rs` com outras bancadas.
 
 pub static TEXTOS: &[(&str, &str)] = &[
+    ("Raio da dobra", "Bend radius"),
     // modos
     ("Dobradeira", "Press brake"),
     ("V comum", "Plain V"),

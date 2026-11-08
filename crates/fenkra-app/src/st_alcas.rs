@@ -21,6 +21,8 @@ pub enum Campo {
     Ext1,
     Ext2,
     Angulo,
+    /// raio de um nó de dobra (B326): mora na junta, não no membro
+    RaioDobra,
 }
 
 impl Campo {
@@ -31,6 +33,7 @@ impl Campo {
             Campo::Ext1 => "Prolongar início",
             Campo::Ext2 => "Prolongar fim",
             Campo::Angulo => "Rotação",
+            Campo::RaioDobra => "Raio da dobra",
         }
     }
     fn unidade(self) -> &'static str {
@@ -50,6 +53,7 @@ pub fn expressao(m: &StructMember, c: Campo) -> &str {
         Campo::Ext1 => &m.ext1,
         Campo::Ext2 => &m.ext2,
         Campo::Angulo => &m.angle,
+        Campo::RaioDobra => "",
     }
 }
 
@@ -62,6 +66,7 @@ pub fn gravar(m: &mut StructMember, c: Campo, valor: f64) {
         Campo::Ext1 => m.ext1 = s,
         Campo::Ext2 => m.ext2 = s,
         Campo::Angulo => m.angle = s,
+        Campo::RaioDobra => {}
     }
 }
 
@@ -155,9 +160,16 @@ fn escrever(app: &mut App, id: Id, c: Campo, v: f64) {
 
 /// Rótulo com a leitura do valor, junto da alça.
 fn leitura(ui: &egui::Ui, rect: Rect, at: egui::Pos2, texto: String, cor: Color32) {
+    leitura_ancorada(ui, rect, at, egui::Vec2::ZERO, texto, cor);
+}
+
+/// Rótulo com o ponto `at` no lugar dado por `ancora` dentro do retângulo (0,0 = canto de cima à
+/// esquerda; 1,1 = canto de baixo à direita).
+fn leitura_ancorada(ui: &egui::Ui, rect: Rect, at: egui::Pos2, ancora: egui::Vec2, texto: String, cor: Color32) {
     let painter = ui.painter_at(rect);
     let g = painter.layout_no_wrap(texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), ui.visuals().strong_text_color());
-    let mut r = Rect::from_min_size(at, g.size() + egui::vec2(10., 6.));
+    let tam = g.size() + egui::vec2(10., 6.);
+    let mut r = Rect::from_min_size(at - tam * ancora, tam);
     // as leituras de deslocamento, rotação e prolongamento nascem juntas no mesmo ponto: cada uma desce até não cobrir outra
     thread_local! {
         static USADAS: std::cell::RefCell<(u64, Vec<Rect>)> = const { std::cell::RefCell::new((0, Vec::new())) };
@@ -209,7 +221,13 @@ fn alca_linear(ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, salt: u8, c:
     painter.line_segment([sb, st], Stroke::new(2.5, cor));
     painter.add(egui::Shape::convex_polygon(vec![st + d * 14., st + n * 7., st - n * 7.], cor, Stroke::NONE));
     painter.circle_stroke(st, PEGA / 2., Stroke::new(1.5, cor));
-    leitura(ui, rect, st + n * 22. + d * 10., texto_leitura(c, expr, valor, trava), cor);
+    if c == Campo::RaioDobra {
+        // o raio aponta para o centro da curva: o rótulo vai adiante da ponta, fora das pernas
+        let ancora = egui::vec2(if d.x < -0.3 { 1. } else if d.x > 0.3 { 0. } else { 0.5 }, if d.y < -0.3 { 1. } else if d.y > 0.3 { 0. } else { 0.5 });
+        leitura_ancorada(ui, rect, st + d * 24., ancora, texto_leitura(c, expr, valor, trava), cor);
+    } else {
+        leitura(ui, rect, st + n * 22. + d * 10., texto_leitura(c, expr, valor, trava), cor);
+    }
     if hr.dragged() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
         let m = ui.input(|i| i.pointer.interact_pos())?;
@@ -295,6 +313,49 @@ fn alcas_de_prolongar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera
     }
 }
 
+/// Geometria da alça do raio de um nó de dobra entre as linhas `a` e `b`: (nó, direção da bissetriz
+/// para dentro da curva dividida por cos(θ/2), centro da curva para o raio `r`). Arrastar ao longo
+/// dessa direção dá o raio direto: o centro fica a `R / cos(θ/2)` do nó. `None` se as linhas não
+/// dividem uma ponta ou são colineares.
+pub fn geometria_do_raio(a: &MemberFrame, b: &MemberFrame, r: f64) -> Option<(Vec3, Vec3, Vec3)> {
+    let perto = |p: [f64; 3], q: [f64; 3]| (v3(p) - v3(q)).length() < 1e-3;
+    let (p, da, db) = [(a.start, a.end), (a.end, a.start)].into_iter().find_map(|(pa, oa)| {
+        [(b.start, b.end), (b.end, b.start)].into_iter().find(|(pb, _)| perto(pa, *pb)).map(|(_, ob)| (v3(pa), (v3(oa) - v3(pa)).normalize_or_zero(), (v3(ob) - v3(pa)).normalize_or_zero()))
+    })?;
+    let bis = da + db;
+    if bis.length() < 1e-4 {
+        return None;
+    }
+    // ângulo entre as pernas α; o centro fica a R / sen(α/2) do nó, na bissetriz
+    let meio = (da.dot(db).clamp(-1., 1.).acos() * 0.5).sin();
+    if meio < 1e-3 {
+        return None;
+    }
+    let dir = bis.normalize() / meio;
+    Some((p, dir, p + dir * r as f32))
+}
+
+/// Alças do raio de cada nó de dobra do membro (B326): a ponta fica no centro da curva e arrastar
+/// muda o raio do nó, o mesmo campo do editor do nó.
+fn alcas_de_raio(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, m: &StructMember, frames: &[MemberFrame]) {
+    for (k, j) in m.joints.iter().enumerate() {
+        let Some(bend) = j.bend.as_ref().filter(|_| j.mode == CornerMode::Dobra && j.other == id) else { continue };
+        let (Some(a), Some(b)) = (frames.iter().find(|f| f.line == j.mine), frames.iter().find(|f| f.line == j.other_path)) else { continue };
+        let expr = bend.radius.clone();
+        let valor = app.open.doc.eval_params().ok().and_then(|v| fenkra_core::expr::eval_str(expr.trim(), &v).ok()).or_else(|| expr.trim().replace(',', ".").parse().ok()).unwrap_or(0.);
+        let Some((no, dir, centro)) = geometria_do_raio(a, b, valor) else { continue };
+        let salt = 16u8.wrapping_add(k as u8);
+        if let Some(v) = alca_linear(ui, rect, cam, id, salt, Campo::RaioDobra, no, dir, no, centro, &expr, valor, 0.) {
+            let v = v.max(0.5);
+            if let Some(FeatureKind::StructMember(mm)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
+                if let Some(b) = mm.joints.get_mut(k).and_then(|j| j.bend.as_mut()) {
+                    b.radius = fmt(v);
+                }
+            }
+        }
+    }
+}
+
 /// Botões de espelhar a seção e alinhar a uma aresta, junto do centro do membro.
 fn botoes(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id, m: &StructMember, fr: &MemberFrame) {
     let _ = (cam, fr);
@@ -332,6 +393,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
     };
     alca_de_rotacao(app, ui, rect, cam, id, &m, &fr);
     alcas_de_prolongar(app, ui, rect, cam, id, &m, &fr);
+    let frames = member_frames(&app.open.doc, id);
+    alcas_de_raio(app, ui, rect, cam, id, &m, &frames);
     botoes(app, ui, rect, cam, id, &m, &fr);
 }
 
@@ -369,6 +432,33 @@ mod tests {
             FeatureKind::StructMember(m) => m.clone(),
             _ => unreachable!(),
         }
+    }
+
+    /// B326: a alça do raio fica no centro da curva; arrastar ao longo da direção dela lê o raio direto.
+    #[test]
+    fn alca_do_raio_fica_no_centro_da_dobra() {
+        let s = |x: &str| x.to_string();
+        let (mut d, id) = membro_de_teste("0", "0");
+        let l2 = CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 300.]), b: PointRef::Fixed([300., 0., 300.]), start: s("0"), end: s("0") }));
+        if let Some(FeatureKind::StructMember(m)) = d.feature_mut(id).map(|f| &mut f.kind) {
+            m.paths.push(l2);
+        }
+        let fr = member_frames(&d, id);
+        assert_eq!(fr.len(), 2);
+        let (no, dir, centro) = geometria_do_raio(&fr[0], &fr[1], 100.).expect("nó entre as linhas");
+        assert!((no - Vec3::new(0., 0., 300.)).length() < 1e-3);
+        assert!((centro - Vec3::new(100., 0., 200.)).length() < 1e-2, "centro {centro:?}");
+        // o parâmetro na reta da alça é o raio
+        let t = param_no_eixo(Vec3::new(100., 50., 200.), Vec3::new(0., -1., 0.), no, dir).unwrap();
+        assert!((t - 100.).abs() < 1e-2, "{t}");
+        // linhas colineares não fazem dobra
+        let reta = |a: [f64; 3], b: [f64; 3]| {
+            let mut f = fr[0].clone();
+            f.start = a;
+            f.end = b;
+            f
+        };
+        assert!(geometria_do_raio(&reta([0., 0., 0.], [0., 0., 1.]), &reta([0., 0., 1.], [0., 0., 2.]), 10.).is_none());
     }
 
     #[test]
