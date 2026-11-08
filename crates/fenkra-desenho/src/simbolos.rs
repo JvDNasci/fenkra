@@ -50,6 +50,10 @@ pub struct DwgRough {
     /// comprimento de amostragem (mm), antes do valor: `0,8/Ra 1,6`
     #[serde(default)]
     pub amostragem: String,
+    /// outras exigências, uma por linha, empilhadas acima da primeira (B149: acabamento em várias linhas,
+    /// como "Rz 6,3" junto do "Ra 1,6")
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outras: Vec<String>,
 }
 
 impl DwgRough {
@@ -66,6 +70,7 @@ impl DwgRough {
             sobremedida: x.sobremetal.clone(),
             direcao: x.lay.simbolo().to_string(),
             amostragem: x.amostragem.clone(),
+            outras: vec![],
         }
     }
 
@@ -318,7 +323,7 @@ mod tests {
     #[test]
     fn rugosidade_completa_aparece_nos_tres_formatos() {
         let mut n = nota(NoteKind::Roughness, "Ra 0,8");
-        n.rough = Some(DwgRough { tipo: RugTipo::ComRemocao, metodo: "Retificado".into(), sobremedida: "0,3".into(), direcao: "=".into(), amostragem: "2,5".into() });
+        n.rough = Some(DwgRough { tipo: RugTipo::ComRemocao, metodo: "Retificado".into(), sobremedida: "0,3".into(), direcao: "=".into(), amostragem: "2,5".into(), outras: vec![] });
         let base = itens(&nota(NoteKind::Roughness, "Ra 0,8"));
         let it = itens(&n);
         assert!(it.len() > base.len(), "os campos extras viram primitivas");
@@ -338,6 +343,22 @@ mod tests {
         assert_ne!(vistos[0], vistos[1]);
         assert_ne!(vistos[1], vistos[2]);
     }
+
+    #[test]
+    fn rugosidade_em_varias_linhas_empilha_as_exigencias_acima_e_a_barra_cobre_todas() {
+        let mut n = nota(NoteKind::Roughness, "Ra 1,6");
+        n.rough = Some(DwgRough { outras: vec!["Rz 6,3".into(), "Rmax 10 (medição longa)".into()], ..Default::default() });
+        let it = itens(&n);
+        let texto = |t: &str| it.iter().find_map(|i| if let crate::layout::Prim::Text { pos, text, .. } = &i.prim { (text == t).then_some(*pos) } else { None });
+        let (a, b, c) = (texto("Ra 1,6").expect("primeira"), texto("Rz 6,3").expect("segunda"), texto("Rmax 10 (medição longa)").expect("terceira"));
+        assert!(b[1] > a[1] && c[1] > b[1], "empilhadas para cima: {a:?} {b:?} {c:?}");
+        // a barra vai até depois da linha mais longa
+        let fim_barra = it.iter().filter_map(|i| if let crate::layout::Prim::Line { pts, .. } = &i.prim { pts.iter().map(|p| p[0]).reduce(f64::max) } else { None }).fold(f64::MIN, f64::max);
+        assert!(fim_barra >= c[0] + crate::layout::text_width("Rmax 10 (medição longa)", n.size) - 0.01, "{fim_barra}");
+        let (svg, ..) = exportar(&it);
+        assert!(svg.contains("Rz 6,3"));
+    }
+
 
     #[test]
     fn solda_completa_pelo_construtor_aparece_nos_tres_formatos() {

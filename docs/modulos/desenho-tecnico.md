@@ -8,6 +8,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Cortes e seções** (Corte) — Teste vistas_corte_detalhe_cotas_tabelas_e_exportacao.
 - **Cotas associativas** (Cotas) — Cotas com estilo, setas e posição do texto.
 - **Balões e lista de peças** (Balões, BOM) — Balões automáticos ligados à BOM e à lista de corte por item, inclusive em vistas estruturais (B26). `DR-33`
+- **Recursos de balão e cota** (Balões automáticos, propriedades do balão) — B149: forma, texto de baixo (balão dividido), quantidade, largura fixa, nós de chamada (acrescentar, tirar, arrastar, nova chamada a partir do nó); automáticos com lado, distância, passo, janela e Shift+clique antes de confirmar; alinhar na horizontal ou vertical; Atualizar renumera pela lista. Meia cota, cota de comprimento de arco e rugosidade em várias linhas.
 - **Tabelas** (Tabelas) — TableKind (BOM, CutList, …).
 - **Exportação** (PDF, SVG, DXF) — export.rs; teste de exportação.
 

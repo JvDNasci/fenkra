@@ -14,6 +14,7 @@ use std::path::PathBuf;
 
 mod alcas;
 mod assistentes;
+mod baloes_ui;
 mod automatico_ui;
 mod centros_ui;
 mod cota_inteligente;
@@ -120,6 +121,8 @@ pub struct DwgState {
     drag_kind: u8,
     /// qual ponta da nota o arraste de `drag_kind` 2 move (0 = a primeira; B370)
     drag_seta: usize,
+    /// nó de chamada de balão sendo arrastado (B149)
+    drag_no: usize,
     /// estilo copiado (colar em outra cota/nota/vista)
     style_clip: Option<fenkra_core::pmi::PmiStyle>,
     /// direção da câmera do 3D para a próxima vista (para o observador, eixo x)
@@ -149,6 +152,8 @@ pub struct DwgState {
     novo: Option<assistentes::NovoUi>,
     export: Option<assistentes::ExportUi>,
     toast: Option<(String, bool)>,
+    /// comando Balões automáticos (B149)
+    pub baloes: baloes_ui::Auto,
     /// linha de corte (ou contorno do detalhe) concluída: o próximo clique posiciona a vista (B106)
     corte_pronto: bool,
     /// Ctrl pressionado: solta a vista em corte do alinhamento com a mãe
@@ -218,6 +223,7 @@ impl DwgState {
             ctx_item: None,
             drag_kind: 0,
             drag_seta: 0,
+            drag_no: 0,
             style_clip: None,
             cam: None,
             states: Default::default(),
@@ -235,6 +241,7 @@ impl DwgState {
             novo: None,
             export: None,
             toast: None,
+            baloes: Default::default(),
             corte_pronto: false,
             ctrl_livre: false,
             detalhe_perfil: false,
@@ -364,6 +371,7 @@ pub fn demo_ajustar(st: &mut DwgState) {
     esboco_ui::demo(st);
     inspecao_ui::demo(st);
     automatico_ui::demo(st);
+    baloes_ui::demo(st);
     match std::env::var("FENKRA_DEMO_DWG_SIMBOLO").unwrap_or_default().as_str() {
         kind @ ("rug" | "solda") => {
             let id = st.d.alloc();
@@ -380,7 +388,7 @@ pub fn demo_ajustar(st: &mut DwgState) {
         // B107: caixa de edição da primeira cota, com as opções de exibição ligadas
         "cota" => {
             if let Some(dm) = st.d.dims.first_mut() {
-                dm.opcoes = fenkra_desenho::cotas::DimOpcoes { como_diametro: true, parenteses: false, inspecao: true, precisao_tol: Some(3) };
+                dm.opcoes = fenkra_desenho::cotas::DimOpcoes { como_diametro: true, parenteses: false, inspecao: true, precisao_tol: Some(3), ..Default::default() };
                 dm.tol = "±0,1".into();
                 st.dim_edit = Some(dm.id);
             }
@@ -492,6 +500,7 @@ fn hint(tool: u8, n: usize) -> &'static str {
         (c::BALLOON | c::ROUGH | c::WELD, 0) => "Clique o ponto indicado (ponta da chamada)",
         (c::BALLOON | c::ROUGH | c::WELD, _) => "Clique onde o símbolo vai ficar",
         (c::NOTE, _) => "Clique onde a nota vai ficar",
+        (c::AUTO_BALLOONS, _) => "Clique dois cantos para a janela; Shift+clique tira um balão; Enter confirma",
         (c::CENTER, _) => "Clique na borda ou dentro de um furo da vista",
         (c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT | c::T_FAI, _) => "Clique o canto superior esquerdo da tabela",
         _ => "",
@@ -535,7 +544,13 @@ pub fn command(app: &mut App, i: u8) {
             let f = st.d.sheet(st.sheet).map(|s| s.format).unwrap_or(Format::A3);
             st.sheet = st.d.add_sheet(f);
         }
-        c::AUTO_BALLOONS => auto_balloons(app),
+        c::AUTO_BALLOONS => {
+            // B149: prévia com lado, distância e janela antes de confirmar
+            let st = app.dwg.as_mut().unwrap();
+            st.tool = Some(c::AUTO_BALLOONS);
+            st.clicks.clear();
+            st.baloes.cache = None;
+        }
         c::FAI_BALOES => inspecao_ui::alternar_baloes(app.dwg.as_mut().unwrap()),
         c::AUTO => {
             let (m, e) = automatico_ui::executar(app.dwg.as_mut().unwrap());
@@ -634,82 +649,6 @@ fn save(app: &mut App, ask: bool) {
             app.toast(tr("Desenho salvo"), false);
         }
         Err(e) => app.toast(e.to_string(), true),
-    }
-}
-
-/// Balões da peça estrutural: um por item da lista de corte, no centro do primeiro membro do item
-/// (mesmo número da tabela e da montagem gerada). Devolve false se a vista não tem itens.
-fn struct_balloons(st: &mut DwgState, v: &View) -> bool {
-    let centers = match &st.models.load(&v.source).model {
-        fenkra_desenho::source::Model::Part(doc) => fenkra_solidos::item_centers(doc),
-        _ => vec![],
-    };
-    if centers.is_empty() {
-        return false;
-    }
-    let p = st.models.proj(&st.d, v.id);
-    let Some(ax) = p.axes else { return false };
-    let (lo, hi) = layout::view_rect(v, &p);
-    for (k, (item, c3)) in centers.into_iter().enumerate() {
-        let tip = layout::to_sheet(v, &p, ax.project(c3));
-        // balões em volta da vista, do lado mais próximo
-        let right = tip[0] > (lo[0] + hi[0]) / 2.;
-        let pos = [if right { hi[0] + 12. } else { lo[0] - 12. }, (tip[1] + 6. * (k % 3) as f64).clamp(lo[1], hi[1] + 10.)];
-        let id = st.d.alloc();
-        st.d.notes.push(Note { id, sheet: st.sheet, kind: NoteKind::Balloon, pos, leader: Some(tip), text: item.to_string(), size: st.d.text_height, weld: None, view: Some(v.id), anchor3: Some(c3), ..Default::default() });
-    }
-    true
-}
-
-/// Balões numerados para cada item da lista de materiais, apontando para o centro da peça na
-/// primeira vista da montagem (ou, numa peça estrutural, para cada item da lista de corte).
-fn auto_balloons(app: &mut App) {
-    let st = app.dwg.as_mut().unwrap();
-    let Some(v) = st.d.views.iter().find(|v| v.sheet == st.sheet && v.source.path.to_lowercase().ends_with(".fka")).cloned() else {
-        let parts: Vec<View> = st.d.views.iter().filter(|v| v.sheet == st.sheet && v.source.path.to_lowercase().ends_with(".fkp")).cloned().collect();
-        if parts.iter().any(|v| struct_balloons(st, v)) {
-            return;
-        }
-        app.toast(tr("Coloque antes uma vista da montagem ou da peça estrutural na folha"), true);
-        return;
-    };
-    let full = st.models.full(&v.source.path);
-    let Ok(a) = std::fs::read_to_string(&full).map_err(|e| e.to_string()).and_then(|t| fenkra_montagem::Assembly::from_json(&t)) else {
-        app.toast(tr("Não consegui ler a montagem"), true);
-        return;
-    };
-    let p = st.models.proj(&st.d, v.id);
-    let Some(ax) = p.axes else { return };
-    let dir = full.parent().map(|p| p.to_path_buf());
-    let mut cache = fenkra_montagem::load::PartCache::default();
-    let mut paths: Vec<String> = vec![];
-    let (lo, hi) = layout::view_rect(&v, &p);
-    let mut k = 0;
-    let items = fenkra_montagem::bom::bom(&a, dir.as_deref(), fenkra_montagem::bom::BomLevel::Topo);
-    for n in &a.nodes {
-        let (fenkra_montagem::NodeKind::Part { path } | fenkra_montagem::NodeKind::SubAssembly { path }) = &n.kind else { continue };
-        // B102: a mesma peça em duas configurações é dois itens, com dois balões
-        let cfg = a.config_de(n.id).to_string();
-        let chave = if cfg.is_empty() { path.clone() } else { format!("{path}#{cfg}") };
-        if paths.contains(&chave) || !fenkra_montagem::view::shown(&a, n.id) {
-            continue;
-        }
-        paths.push(chave);
-        let fp = fenkra_montagem::load::full_path(dir.as_deref(), path);
-        let item = items.iter().find(|r| r.path == fp && r.config == cfg).map(|r| r.item.clone()).unwrap_or_else(|| paths.len().to_string());
-        let Some(sh) = fenkra_montagem::view::placed_shape(&a, n.id, dir.as_deref(), &mut cache) else { continue };
-        let Some((l, h)) = sh.bbox() else { continue };
-        let c3 = [0, 1, 2].map(|i| (l[i] + h[i]) / 2.);
-        let tip = layout::to_sheet(&v, &p, ax.project(c3));
-        // balões em volta da vista, do lado mais próximo
-        let right = tip[0] > (lo[0] + hi[0]) / 2.;
-        let pos = [if right { hi[0] + 12. } else { lo[0] - 12. }, (tip[1] + 6. * (k % 3) as f64).clamp(lo[1], hi[1] + 10.)];
-        let id = st.d.alloc();
-        st.d.notes.push(Note { id, sheet: st.sheet, kind: NoteKind::Balloon, pos, leader: Some(tip), text: item, size: st.d.text_height, weld: None, view: Some(v.id), anchor3: Some(c3), ..Default::default() });
-        k += 1;
-    }
-    if k == 0 {
-        app.toast(tr("A montagem não tem peças visíveis"), true);
     }
 }
 
@@ -879,6 +818,12 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                 o
             })
             .unwrap_or_default();
+        // B149: losango em cada nó das chamadas do balão; arrastar move o nó
+        let no_handle: Vec<(Id, usize, usize, V2)> = active
+            .and_then(|a| st.d.notes.iter().find(|n| n.id == a))
+            .and_then(|n| n.balao.as_ref().map(|b| (n.id, b.nos.clone())))
+            .map(|(id, nos)| nos.iter().enumerate().flat_map(|(k, v)| v.iter().enumerate().map(move |(i, p)| (id, k, i, *p))).collect())
+            .unwrap_or_default();
         // B370: quadrado no início de cada seta (onde sai da caixa do texto); arrastar troca o lado
         let saida_handle: Vec<(Id, usize, V2)> = active
             .and_then(|a| st.d.notes.iter().find(|n| n.id == a && n.style.angle == 0. && !n.style.mirror).cloned())
@@ -992,6 +937,10 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             for (_, _, t) in &tip_handle {
                 painter.circle_stroke(to_scr(*t), 5.5, Stroke::new(1.8, orange));
             }
+            for (_, _, _, p) in &no_handle {
+                let c = to_scr(*p);
+                painter.add(egui::Shape::closed_line(vec![c + Vec2::new(0., -5.), c + Vec2::new(5., 0.), c + Vec2::new(0., 5.), c + Vec2::new(-5., 0.)], Stroke::new(1.8, orange)));
+            }
         }
         // alças diretas da vista em foco (B250)
         if st.tool.is_none() && st.reassign.is_none() && st.esb.editando.is_none() {
@@ -1077,7 +1026,15 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             options::bar(ui.ctx(), st, rect, cur_src.clone());
             // Enter confirma na posição do cursor, como o clique
             let enter = !ui.ctx().egui_wants_keyboard_input() && ui.ctx().input(|i| i.key_pressed(egui::Key::Enter));
-            if enter && (corte_ui::terminar(st) || centros_ui::terminar(st)) {
+            st.baloes.shift = ui.ctx().input(|i| i.modifiers.shift);
+            if tool == c::AUTO_BALLOONS {
+                if let Some(aviso) = baloes_ui::barra(ui.ctx(), st, rect) {
+                    st.toast = Some(aviso);
+                }
+            }
+            if enter && tool == c::AUTO_BALLOONS {
+                st.toast = Some(baloes_ui::terminar(st));
+            } else if enter && (corte_ui::terminar(st) || centros_ui::terminar(st)) {
                 // Enter conclui a linha de corte (ou o contorno do detalhe): o clique seguinte posiciona
             } else if resp.clicked_by(egui::PointerButton::Primary) || (enter && resp.hovered()) {
                 if let Some(m) = mouse_mm {
@@ -1129,6 +1086,11 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                         let _ = (c, s);
                         st.focus = Some(id);
                         st.drag_kind = 1;
+                    } else if let Some((id, k, i, _)) = no_handle.iter().copied().find(|(_, _, _, p)| near(o, *p, tol)) {
+                        st.focus = Some(id);
+                        st.drag_kind = 4;
+                        st.drag_seta = k;
+                        st.drag_no = i;
                     } else if let Some((id, k, _)) = saida_handle.iter().copied().find(|(_, _, t)| near(o, *t, tol)) {
                         st.focus = Some(id);
                         st.drag_kind = 3;
@@ -1172,8 +1134,15 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                                 }
                             }
                         }
+                        4 => {
+                            let (k, i) = (st.drag_seta, st.drag_no);
+                            if let Some(p) = st.d.notes.iter_mut().find(|n| n.id == id).and_then(|n| n.balao.as_mut()).and_then(|b| b.nos.get_mut(k)).and_then(|v| v.get_mut(i)) {
+                                *p = [p[0] + dm[0], p[1] + dm[1]];
+                            }
+                        }
                         3 => {
                             // a alça de saída escolhe o lado da caixa mais perto do cursor
+
                             let k = st.drag_seta;
                             if let (Some(p), Some(n)) = (mouse_mm, st.d.notes.iter().find(|n| n.id == id).cloned()) {
                                 if let Some((lo, hi)) = layout::caixa_da_nota(&st.d, &n, &mut st.models) {
@@ -1366,6 +1335,11 @@ fn dim_edit_window(ctx: &egui::Context, st: &mut DwgState) {
         ui.horizontal_wrapped(|ui| {
             if matches!(dm.kind, DimKind::Horizontal | DimKind::Vertical | DimKind::Aligned) {
                 crate::editor::check(ui, &mut dm.opcoes.como_diametro, "Como diâmetro (Ø)");
+                // B149: peça simétrica cotada do eixo; o valor é o dobro do medido
+                crate::editor::check(ui, &mut dm.opcoes.meia, "Meia cota (a partir do eixo)").on_hover_text(tr("O primeiro ponto é o eixo: a cota fica só de um lado, sem a seta do eixo, e mostra o dobro da distância."));
+            }
+            if dm.kind == DimKind::Angle {
+                crate::editor::check(ui, &mut dm.opcoes.arco, "Comprimento do arco (⌒)").on_hover_text(tr("Mostra o comprimento do arco entre os dois pontos, raio vezes ângulo, no lugar do ângulo."));
             }
             crate::editor::check(ui, &mut dm.opcoes.parenteses, "Entre parênteses (referência)");
             crate::editor::check(ui, &mut dm.opcoes.inspecao, "Inspeção (oval)");
@@ -1568,6 +1542,7 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
             // linha de vários pontos, fantasma alinhado e criação: `corte_ui`
             corte_ui::clique(st, m);
         }
+        c::AUTO_BALLOONS => baloes_ui::clique(st, m),
         c::DIM_H | c::DIM_V | c::DIM_A | c::DIM_ANG => {
             let hit = snap(st, m, st.tool_view);
             // clique solto (sem vértice): a cota não tem âncora para conferir depois
@@ -2227,6 +2202,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 ui.label(tr("Altura do texto"));
                 { let __r = ui.add(crate::ui_ext::dv(&mut n.size).range(1.0..=20.).speed(0.1)); crate::ui_ext::wheel(ui, &__r, &mut n.size); __r };
             });
+            if n.kind == NoteKind::Balloon {
+                baloes_ui::propriedades(ui, n);
+            }
             let mut lead = n.leader.is_some();
             if crate::editor::check(ui, &mut lead, "Chamada (seta)").changed() {
                 n.leader = lead.then(|| [n.pos[0] - 15., n.pos[1] - 10.]);
