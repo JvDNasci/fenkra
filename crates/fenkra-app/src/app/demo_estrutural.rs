@@ -7,6 +7,9 @@
 //!   de dobras e a lista de corte (B331).
 //! * `FENKRA_DEMO_SOLDA=<cosmetico|solido|intermitente>`: tubo contra placa com o cordão de filete
 //!   (B285); com `FENKRA_EDITAR=Cordão` abre o painel do cordão.
+//! * `FENKRA_DEMO_REFORCO=<triangular|chanfrado|poligonal>`: L de tubo quadrado com placa de
+//!   extremidade interna recuada e reforço na aresta de encontro (B255), três reforços repetidos ao
+//!   longo da aresta; com `FENKRA_EDITAR=Reforço1` ou `Placa1` abre o painel.
 //! * `FENKRA_DEMO_QUADRO=1`: quadro de tubo redondo com longarinas dobradas e travessas com canto
 //!   Encaixe chegando no meio de um trecho e num nó de dobra (B387, K-09 do kart), com a lista de corte.
 
@@ -199,6 +202,47 @@ impl App {
             self.load_doc(d, None, None);
             self.settings.bench = crate::settings::Bench::Estrutural;
             self.st_cut_open = true;
+            self.started = true;
+        }
+        if let Ok(modo) = std::env::var("FENKRA_DEMO_REFORCO") {
+            let mut d = Document::new("Placa e reforço");
+            let tubo = |paths: Vec<CurveRef>| StructMember {
+                paths,
+                family: s("Tubo quadrado"),
+                designation: s("40x3"),
+                kind: SectionKind::TuboQuadrado,
+                dims: vec![s("40"), s("3")],
+                anchor: 0,
+                angle: s("0"),
+                off_x: s("0"),
+                off_y: s("0"),
+                ext1: s("0"),
+                ext2: s("0"),
+                corner: CornerMode::Nenhum,
+                gap: s("0"),
+                joints: vec![],
+                material: String::new(),
+                mirror: false,
+            };
+            for (a, b) in [([0., 0., 0.], [0., 0., 500.]), ([0., 0., 0.], [400., 0., 0.])] {
+                let l = CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
+                d.add_feature(FeatureKind::StructMember(tubo(vec![l])));
+            }
+            let mut pl = StructPlate::nova([0., 0., 500.], "8", "15");
+            pl.holes = None;
+            d.add_feature(FeatureKind::StructPlate(pl));
+            let mut g = StructGusset::novo([0., 0., 0.], "90", "6", if modo == "chanfrado" { "15" } else { "0" });
+            g.leg2 = s("120");
+            if modo == "poligonal" {
+                g.profile = GussetProfile::Poligonal;
+                g.poly = [["0", "0"], ["90", "0"], ["90", "20"], ["20", "120"], ["0", "120"]].iter().map(|q| [s(q[0]), s(q[1])]).collect();
+            }
+            d.add_feature(FeatureKind::StructGusset(g));
+            for r in &mut d.references {
+                r.visible = false;
+            }
+            self.load_doc(d, None, None);
+            self.settings.bench = crate::settings::Bench::Estrutural;
             self.started = true;
         }
     }
