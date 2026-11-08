@@ -378,6 +378,47 @@ mod imp {
             .collect()
     }
 
+    /// Forma lida por várias threads ao mesmo tempo, só para copiar ou como entrada da booleana não
+    /// destrutiva. Vale enquanto quem empresta não mexe nela, o que o empréstimo garante; a contagem
+    /// de referências do OCCT é atômica.
+    struct SoLeitura<'a>(&'a b::Shape);
+    unsafe impl Sync for SoLeitura<'_> {}
+
+    fn repartir_n(threads: usize, n: usize) -> usize {
+        if threads == 0 { std::thread::available_parallelism().map_or(4, |n| n.get()) } else { threads }.min(n).max(1)
+    }
+
+    /// `f(i)` para i em 0..n, em `threads` threads que pegam o próximo índice livre (os itens têm
+    /// custos muito diferentes). Devolve na ordem dos índices.
+    fn repartir<R: Send>(n: usize, threads: usize, f: impl Fn(usize) -> R + Sync) -> Vec<R> {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let t = repartir_n(threads, n);
+        if t == 1 {
+            return (0..n).map(f).collect();
+        }
+        let proximo = AtomicUsize::new(0);
+        let mut feitos: Vec<(usize, R)> = std::thread::scope(|sc| {
+            let ts: Vec<_> = (0..t)
+                .map(|_| {
+                    sc.spawn(|| {
+                        let mut v = vec![];
+                        loop {
+                            let i = proximo.fetch_add(1, Ordering::Relaxed);
+                            if i >= n {
+                                break;
+                            }
+                            v.push((i, f(i)));
+                        }
+                        v
+                    })
+                })
+                .collect();
+            ts.into_iter().flat_map(|t| t.join().unwrap_or_else(|e| std::panic::resume_unwind(e))).collect()
+        });
+        feitos.sort_by_key(|x| x.0);
+        feitos.into_iter().map(|x| x.1).collect()
+    }
+
     pub struct Shape(UniquePtr<b::Shape>);
 
     impl Shape {
@@ -492,6 +533,37 @@ mod imp {
 
         pub fn boolean(&self, other: &Shape, op: Bool) -> KResult<Shape> {
             b::boolean(&self.0, &other.0, op as u8).map(Shape).map_err(err)
+        }
+
+        /// Interseção para medir interferência (B394): sem unificar as faces (o volume e a malha não
+        /// mudam, e a unificação custava quase metade da análise) e sem mexer nas entradas.
+        pub fn comum_medida(&self, other: &Shape) -> KResult<Shape> {
+            b::comum_medida(&self.0, &other.0, false).map(Shape).map_err(err)
+        }
+
+        /// Várias [`Shape::comum_medida`] em `threads` threads (0 = uma por núcleo). `f` recebe o
+        /// índice do par e o resultado na própria thread, e devolve o que interessa (volume, malha):
+        /// o resultado nasce de cópias profundas das entradas e não divide nada com outra thread.
+        ///
+        /// Por que as cópias: a booleana em si não guarda estado global (ao contrário da projeção
+        /// exata de linhas ocultas), mas uma peça entra em vários pares, e o comum de uma peça
+        /// inteira dentro da outra devolve as próprias faces da entrada. Tesselar esse resultado
+        /// grava a malha nessas faces, e duas threads gravariam na mesma face.
+        pub fn comuns<R: Send>(pares: &[(&Shape, &Shape)], threads: usize, f: impl Fn(usize, KResult<Shape>) -> R + Sync) -> Vec<R> {
+            let ps: Vec<SoLeitura> = pares.iter().flat_map(|(x, y)| [SoLeitura(&x.0), SoLeitura(&y.0)]).collect();
+            let copiar = repartir_n(threads, pares.len()) > 1;
+            repartir(pares.len(), threads, |i| f(i, b::comum_medida(ps[2 * i].0, ps[2 * i + 1].0, copiar).map(Shape).map_err(err)))
+        }
+
+        /// Roda `f` sobre cada forma em `threads` threads (0 = uma por núcleo), cada uma com uma cópia
+        /// profunda própria da forma (geometria inclusive, sem a malha): tesselar, medir a caixa ou
+        /// fazer uma booleana na cópia não toca na original nem em outra thread (B394).
+        pub fn em_threads<R: Send>(formas: &[&Shape], threads: usize, f: impl Fn(usize, Shape) -> R + Sync) -> Vec<R> {
+            let fs: Vec<SoLeitura> = formas.iter().map(|x| SoLeitura(&x.0)).collect();
+            if repartir_n(threads, formas.len()) == 1 {
+                return formas.iter().enumerate().map(|(i, s)| f(i, (*s).clone())).collect();
+            }
+            repartir(formas.len(), threads, |i| f(i, Shape(b::copia_profunda(fs[i].0))))
         }
 
         pub fn hole_tool(origin: [f64; 3], dir: [f64; 3], diameter: f64, depth: f64, shape: HoleShape) -> KResult<Shape> {
@@ -1211,6 +1283,15 @@ mod imp {
         }
         pub fn boolean(&self, _: &Shape, _: Bool) -> KResult<Shape> {
             no()
+        }
+        pub fn comum_medida(&self, _: &Shape) -> KResult<Shape> {
+            no()
+        }
+        pub fn comuns<R: Send>(pares: &[(&Shape, &Shape)], _: usize, f: impl Fn(usize, KResult<Shape>) -> R + Sync) -> Vec<R> {
+            (0..pares.len()).map(|i| f(i, no())).collect()
+        }
+        pub fn em_threads<R: Send>(formas: &[&Shape], _: usize, f: impl Fn(usize, Shape) -> R + Sync) -> Vec<R> {
+            formas.iter().enumerate().map(|(i, s)| f(i, (*s).clone())).collect()
         }
         pub fn hole_tool_ext(_: [f64; 3], _: [f64; 3], _: f64, _: f64, _: HoleShape, _: f64, _: f64) -> KResult<Shape> {
             no()
@@ -2094,6 +2175,61 @@ mod tests {
             }
         }
         assert!(bordas.values().all(|n| *n == 2), "a casca da malha fecha: nenhuma aresta sobra");
+    }
+
+    #[test]
+    fn comuns_em_threads_dao_o_mesmo_volume_que_um_por_vez() {
+        // B394: a mesma placa entra em todos os pares, como o aro do kart; um bloco fica inteiro
+        // dentro dela (o comum devolve as faces da entrada) e cada resultado é tesselado na thread
+        let furos: Vec<Seg2> = (0..6).map(|i| Seg2::Circle([-40. + 16. * i as f64, 0.], 4.)).collect();
+        let mut lacos = vec![rect(120., 50.)];
+        lacos.extend(furos.into_iter().map(|c| vec![c]));
+        let placa = Shape::face(&XY, &lacos).unwrap().extrude([0., 0., 1.], 20., 0.).unwrap();
+        let mut outros = vec![];
+        for i in 0..12 {
+            let x = -55. + 10. * i as f64;
+            let cil = Shape::face(&Frame { origin: [x, 12., -5.], ..XY }, &[vec![Seg2::Circle([0., 0.], 3. + i as f64 * 0.4)]]).unwrap();
+            outros.push(cil.extrude([0., 0., 1.], 15. + i as f64, 0.).unwrap());
+            outros.push(Shape::box_tool([x, -30., 2. + i as f64], [1., 0.3, 0.], [0., 0., 1.], [7., 20., 5.]).unwrap());
+        }
+        outros.push(Shape::box_tool([10., 10., 5.], [1., 0., 0.], [0., 0., 1.], [3., 3., 3.]).unwrap());
+        let mut pares: Vec<(&Shape, &Shape)> = outros.iter().map(|o| (&placa, o)).collect();
+        pares.extend(outros.windows(2).map(|w| (&w[0], &w[1])));
+        let medir = |i: usize, r: KResult<Shape>| {
+            let c = r.unwrap();
+            let v = c.mass().volume;
+            // desvio diferente a cada par: a malha guardada nas faces muda de um par para o outro
+            let m = c.mesh_angle(0.05 + 0.01 * (i % 7) as f64, 0.3).unwrap();
+            (v, m.indices.is_empty())
+        };
+        let um = Shape::comuns(&pares, 1, medir);
+        let esperado: Vec<f64> = pares.iter().map(|(a, b)| a.boolean(b, Bool::Common).unwrap().mass().volume).collect();
+        assert!(esperado.iter().filter(|v| **v > 1e-6).count() > 20, "os pares se cruzam de verdade");
+        for (i, ((v, vazia), e)) in um.iter().zip(&esperado).enumerate() {
+            assert!((v - e).abs() <= 1e-6 * e.max(1.), "par {i}: {v} sem unificar, {e} com");
+            assert_eq!(*vazia, *v < 1e-9, "par {i}: malha do comum");
+        }
+        assert!((um[24].0 - 27.).abs() < 1e-6, "bloco inteiro dentro da placa: {}", um[24].0);
+        for _ in 0..4 {
+            let varios = Shape::comuns(&pares, 8, medir);
+            assert_eq!(varios.len(), pares.len());
+            for (i, (a, b)) in um.iter().zip(&varios).enumerate() {
+                assert!((a.0 - b.0).abs() <= 1e-9 * a.0.max(1.), "par {i}: {} em threads, {} um por vez", b.0, a.0);
+                assert_eq!(a.1, b.1, "par {i}");
+            }
+        }
+        // cada forma tesselada na sua thread, numa cópia: a mesma malha que a original daria
+        let refs: Vec<&Shape> = outros.iter().chain([&placa]).collect();
+        let malha = |_: usize, s: Shape| {
+            let m = s.mesh_angle(0.05, 0.3).unwrap();
+            (m.indices.len(), s.mass().volume)
+        };
+        let sozinho = Shape::em_threads(&refs, 1, malha);
+        for _ in 0..3 {
+            assert_eq!(Shape::em_threads(&refs, 8, malha), sozinho);
+        }
+        // as entradas saem como entraram
+        assert!((placa.mass().volume - (120. * 50. - 6. * std::f64::consts::PI * 16.) * 20.).abs() < 1e-3);
     }
 
     #[cfg(windows)]

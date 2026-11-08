@@ -46,6 +46,8 @@ std::unique_ptr<Shape> extrude(const Shape& face, double dx, double dy, double d
 std::unique_ptr<Shape> revolve(const Shape& face, double ox, double oy, double oz, double dx, double dy, double dz,
                                double angle_deg, double start_deg, rust::Vec<int32_t>& roles);
 std::unique_ptr<Shape> boolean(const Shape& a, const Shape& b, uint8_t op);
+std::unique_ptr<Shape> comum_medida(const Shape& a, const Shape& b, bool copiar);
+std::unique_ptr<Shape> copia_profunda(const Shape& s);
 std::unique_ptr<Shape> hole_tool(double ox, double oy, double oz, double dx, double dy, double dz,
                                  double diameter, double depth, uint8_t kind, double d2, double p2);
 std::unique_ptr<Shape> fillet_all(const Shape& s, double radius);

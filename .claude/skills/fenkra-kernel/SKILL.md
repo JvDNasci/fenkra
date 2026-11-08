@@ -40,6 +40,13 @@ Consulte todas as bancadas quando a mudança atravessar a fronteira da área.
 
 Registre aqui erros que se repetiram.
 
+- Booleana e malha em threads só sobre cópia profunda (`Shape::comuns`, `Shape::em_threads`, ADR 0081). A
+  booleana não tem estado global, mas a mesma forma entra em vários pares e o comum pode devolver as faces da
+  entrada: tesselar grava a malha nelas, e duas threads gravariam na mesma face. `Shape::clone` divide a topologia
+  e não serve de cópia (B394).
+- `posicionado` (montagem) copia a forma sem a malha: quem tessela a peça posicionada refaz a malha inteira a cada
+  vez. Use a malha da vista quando ela basta, ou tessele em threads (B394).
+
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.

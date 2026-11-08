@@ -1642,15 +1642,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
         if ext == "fka" {
             self.salvar.esquecer();
-            match std::fs::read_to_string(path).map_err(|e| e.to_string()).and_then(|s| fenkra_montagem::Assembly::from_json(&s)) {
-                Ok(a) => {
-                    self.asm = Some(crate::asm_ui::AsmState::new(a, Some(path.to_path_buf())));
-                    self.settings.bench = crate::settings::Bench::Montagem;
-                    self.settings.add_recent_file(path);
-                    self.started = true;
-                    self.fit_now();
-                }
-                Err(e) => self.toast(format!("Não foi possível abrir: {e}"), true),
+            // o mesmo caminho do menu: referências movidas e links atualizados ao abrir (B382)
+            crate::asm_ui::abrir_arquivo(self, path.to_path_buf());
+            if self.asm.is_some() {
+                self.settings.bench = crate::settings::Bench::Montagem;
+                self.started = true;
             }
             return;
         }

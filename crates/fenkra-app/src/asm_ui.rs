@@ -783,6 +783,39 @@ pub(crate) const DICA_LADO: &str = "Passa a cota para o outro lado da referênci
 
 // ============================================================== comandos
 
+/// Abre um `.fka`: confere as referências movidas e atualiza os links, inclusive os dos subconjuntos
+/// (B382). O menu, os recentes, a tela inicial e a linha de comando passam todos por aqui: antes, só o
+/// menu atualizava, e o kart aberto pelos recentes não recebia o entre-eixos novo do mestre.
+pub fn abrir_arquivo(app: &mut App, p: std::path::PathBuf) {
+    match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| Assembly::from_json(&s)) {
+        Ok(a) => {
+            app.settings.add_recent_file(&p);
+            let mut st = AsmState::new(a, Some(p));
+            let mut movidos = 0;
+            if let Some(dir) = st.dir() {
+                let (pendencias, m) = crate::asm_resolver::conferir(&mut st.asm, &dir, std::slice::from_ref(&dir));
+                st.referencias = pendencias;
+                movidos = m;
+            }
+            let rel = st.atualizar_links(Gatilho::Abrir);
+            app.asm = Some(st);
+            app.fit_now();
+            if movidos > 0 {
+                app.toast(format!("{movidos} {}", tr("componente(s) achado(s) em outro lugar pela identidade")), false);
+            }
+            if rel.pendurados > 0 {
+                app.toast(format!("{} {}", rel.pendurados, tr("link(s) pendurado(s): a origem ou a publicação sumiu")), true);
+            }
+            if let Some((msg, erro)) = resumo_links(&rel) {
+                // o resumo também no erro padrão (B382): a notícia some em segundos
+                eprintln!("links ao abrir: {msg}");
+                app.toast(msg, erro);
+            }
+        }
+        Err(e) => app.toast(format!("Não foi possível abrir: {e}"), true),
+    }
+}
+
 /// Trata os comandos da bancada de montagem. Devolve `true` se o comando era dela.
 pub fn command(app: &mut App, c: Cmd) -> bool {
     match c {
@@ -792,31 +825,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
         }
         Cmd::AsmOpen => {
             let Some(p) = rfd::FileDialog::new().add_filter("Montagem Fenkra", &["fka"]).pick_file() else { return true };
-            match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| Assembly::from_json(&s)) {
-                Ok(a) => {
-                    app.settings.add_recent_file(&p);
-                    let mut st = AsmState::new(a, Some(p));
-                    let mut movidos = 0;
-                    if let Some(dir) = st.dir() {
-                        let (pendencias, m) = crate::asm_resolver::conferir(&mut st.asm, &dir, std::slice::from_ref(&dir));
-                        st.referencias = pendencias;
-                        movidos = m;
-                    }
-                    let rel = st.atualizar_links(Gatilho::Abrir);
-                    app.asm = Some(st);
-                    app.fit_now();
-                    if movidos > 0 {
-                        app.toast(format!("{movidos} {}", tr("componente(s) achado(s) em outro lugar pela identidade")), false);
-                    }
-                    if rel.pendurados > 0 {
-                        app.toast(format!("{} {}", rel.pendurados, tr("link(s) pendurado(s): a origem ou a publicação sumiu")), true);
-                    }
-                    if let Some((msg, erro)) = resumo_links(&rel) {
-                        app.toast(msg, erro);
-                    }
-                }
-                Err(e) => app.toast(format!("Não foi possível abrir: {e}"), true),
-            }
+            abrir_arquivo(app, p);
         }
         Cmd::AsmSave => save(app),
         _ => {
@@ -3738,6 +3747,7 @@ fn publicacoes_panel(st: &mut AsmState, ui: &mut egui::Ui, comp: Id) -> Option<(
 /// Janelas do contexto: a escolha ao voltar e a peça nova.
 pub fn contexto_window(app: &mut App, ctx: &egui::Context) {
     crate::asm_abrir::demo_quadro(app);
+    crate::asm_interf::demo_quadro(app);
     let Some(st) = app.asm.as_mut() else { return };
     if let Some(v) = st.volta_adiada.take() {
         pedir_volta(app, v);
