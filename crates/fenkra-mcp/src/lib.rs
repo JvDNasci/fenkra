@@ -99,7 +99,7 @@ impl Servidor {
                 json!({ "content": [{ "type": "text", "text": v.to_string() }], "structuredContent": v, "isError": false })
             }
             Err(e) => {
-                let v = json!({ "codigo": e.codigo, "mensagem": e.mensagem });
+                let v = json!({ "codigo": e.codigo, "mensagem": e.mensagem, "sugestao": e.sugestao() });
                 json!({ "content": [{ "type": "text", "text": v.to_string() }], "structuredContent": v, "isError": true })
             }
         }
@@ -135,7 +135,7 @@ impl Servidor {
             "fenkra://comandos" => Ok(self.sessao.registro_json()),
             _ => return Err((-32002, format!("recurso desconhecido: {uri}"))),
         };
-        let v = conteudo.unwrap_or_else(|e| json!({ "codigo": e.codigo, "mensagem": e.mensagem }));
+        let v = conteudo.unwrap_or_else(|e| json!({ "codigo": e.codigo, "mensagem": e.mensagem, "sugestao": e.sugestao() }));
         Ok(
             json!({ "contents": [{ "uri": uri, "mimeType": "application/json", "text": v.to_string() }] }),
         )
@@ -288,6 +288,18 @@ mod testes {
             assert_eq!(r[0]["error"]["code"], -32600);
             assert_eq!(r[1]["id"], 1);
         }
+    }
+
+    #[test]
+    fn falha_de_ferramenta_leva_codigo_mensagem_e_sugestao() {
+        // STEP sem o aceite da pessoa: recusado, e a resposta diz o que fazer (B419)
+        let pedido = br#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"consultar_step","arguments":{"arquivo":"a.step"}}}"#;
+        let r = respostas(pedido);
+        let res = &r[0]["result"];
+        assert_eq!(res["isError"], true, "{res}");
+        let e = &res["structuredContent"];
+        assert_eq!(e["codigo"], "step_bloqueado");
+        assert!(e["sugestao"].as_str().is_some_and(|t| t.contains("--liberar-step")), "{e}");
     }
 
     #[test]

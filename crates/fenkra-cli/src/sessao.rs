@@ -124,6 +124,13 @@ fn expressao(args: &Value, chave: &str) -> Result<String, ErroApi> {
     }
 }
 
+/// Acrescenta os campos do diagnóstico acionável (B419) ao status do item.
+fn juntar(destino: &mut Value, diag: Value) {
+    if let (Some(d), Value::Object(o)) = (destino.as_object_mut(), diag) {
+        d.extend(o);
+    }
+}
+
 fn status_json(s: Option<&Status>) -> Value {
     match s {
         Some(Status::Ok) | None => json!({ "status": "ok" }),
@@ -494,7 +501,11 @@ impl Sessao {
         arvore::ler_peca(&nova).map_err(|e| ErroApi::novo("arvore", e.to_string()))?;
         self.trocar(Modelo::Arvore(nova));
         let c = self.calcular()?;
-        let mut saida = status_json(c.doc.features.last().and_then(|f| c.r.status.get(&f.id)));
+        let ultimo = c.doc.features.last();
+        let mut saida = status_json(ultimo.and_then(|f| c.r.status.get(&f.id)));
+        if let Some((f, Status::Error(m))) = ultimo.and_then(|f| c.r.status.get(&f.id).map(|s| (f, s))) {
+            juntar(&mut saida, fenkra_solidos::erro_acionavel::diagnosticar(c.r.tipos_de_erro(&c.doc).get(&f.id).copied(), &f.name, m).json());
+        }
         saida["id"] = json!(id);
         saida["volume"] = json!(r6(c.r.bodies.iter().map(|b| b.mass.volume).sum()));
         if tipo == "esboco" {
@@ -558,6 +569,7 @@ impl Sessao {
         let c = self.calcular()?;
         let mut erro = c.r.param_error.is_some();
         let vars = c.doc.eval_params().unwrap_or_default();
+        let tipos = c.r.tipos_de_erro(&c.doc);
         let itens: Vec<Value> = c
             .doc
             .features
@@ -567,6 +579,9 @@ impl Sessao {
                 let s = c.r.status.get(&f.id);
                 erro |= matches!(s, Some(Status::Error(_)));
                 let mut j = status_json(s);
+                if let Some(Status::Error(m)) = s {
+                    juntar(&mut j, fenkra_solidos::erro_acionavel::diagnosticar(tipos.get(&f.id).copied(), &f.name, m).json());
+                }
                 j["id"] = json!(ids.get(i).cloned().unwrap_or_else(|| f.id.0.to_string()));
                 j["nome"] = json!(f.name);
                 if let FeatureKind::Sketch(k) = &f.kind {

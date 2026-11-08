@@ -170,6 +170,17 @@ fn comando_recusado_nao_muda_a_arvore() {
 }
 
 #[test]
+fn erro_de_comando_leva_sugestao_no_envelope() {
+    let e = fenkra_cli::ErroApi::argumento("falta o campo 'raio'");
+    let v = fenkra_cli::envelope(Err(e));
+    assert_eq!(v["erro"]["codigo"], "argumento");
+    assert!(v["erro"]["sugestao"].as_str().is_some_and(|t| t.contains("campos")), "{v}");
+    for c in ["argumento", "parametro", "arvore", "kernel", "formato", "leitura", "gravacao", "caminho_fora", "queda", "tempo", "step_bloqueado", "sem_peca", "sem_solido"] {
+        assert!(!fenkra_cli::sugestao_do_codigo(c).starts_with("Releia"), "{c} sem sugestão própria");
+    }
+}
+
+#[test]
 fn comando_que_falha_no_calculo_avisa_e_desfazer_volta() {
     precisa_kernel!();
     let d = pasta_limpa("desfazer");
@@ -180,10 +191,15 @@ fn comando_que_falha_no_calculo_avisa_e_desfazer_volta() {
         .unwrap();
     assert_eq!(r["status"], "erro", "{r}");
     assert!(r["mensagem"].is_string(), "{r}");
-    assert_eq!(
-        s.executar("recalcular", &json!({})).unwrap()["status"],
-        "erro"
-    );
+    // B419: o item que falhou traz código, sugestão e a ação certa, na API e no relatório
+    assert!(r["codigo"].as_str().is_some_and(|c| c.starts_with("E-")), "{r}");
+    assert!(r["sugestao"].as_str().is_some_and(|t| !t.is_empty()), "{r}");
+    assert!(r["acao"].is_string(), "{r}");
+    let rel = s.executar("recalcular", &json!({})).unwrap();
+    assert_eq!(rel["status"], "erro");
+    let falho = rel["itens"].as_array().unwrap().iter().find(|i| i["status"] == "erro").unwrap();
+    assert_eq!(falho["codigo"], r["codigo"], "{rel}");
+    assert!(falho["item"].is_string() && falho["sugestao"].is_string(), "{falho}");
     s.executar("desfazer", &json!({})).unwrap();
     let r = s.executar("recalcular", &json!({})).unwrap();
     assert_eq!(r["status"], "ok", "{r}");
