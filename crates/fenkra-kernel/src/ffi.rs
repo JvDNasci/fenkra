@@ -320,6 +320,7 @@ pub mod bridge {
 
         /// Índice da face mais próxima do ponto (ordem de `face_ranges`); -1 se estiver além de `limit`.
         fn face_index(s: &Shape, px: f64, py: f64, pz: f64, limit: f64) -> Result<i32>;
+        fn edges_through(s: &Shape, px: f64, py: f64, pz: f64, limit: f64) -> Result<Vec<u32>>;
         /// Topologia sem malha: assinatura das faces (8 por face), ponto médio das arestas (3) e faces vizinhas (2).
         fn topology(s: &Shape, face_info: &mut Vec<f64>, edge_mids: &mut Vec<f64>, edge_faces: &mut Vec<u32>) -> Result<()>;
         /// `angle`: desvio angular máximo entre normais vizinhas, em radianos.

@@ -3050,8 +3050,24 @@ impl Ctx<'_> {
                     }
                 },
                 None => {
-                    // sem chave e sem aresta a 1 mm do ponto: erro com sugestão, nunca a mais próxima
-                    let Some(e) = refs::edge_near(&v, *p, tol) else {
+                    // sem chave: o ponto médio guardado no clique casa direto; senão vale qualquer ponto
+                    // SOBRE a aresta (B391: na circular o médio fica do lado oposto da costura e a API
+                    // não tinha como adivinhá-lo). Ponto no vértice entre arestas é ambíguo e não escolhe
+                    let sobre = || -> Result<Option<usize>, String> {
+                        let mut on = b.edges_through(*p, tol.min(0.1)).map_err(k)?;
+                        on.retain(|e| v.topo.edge_faces.get(*e).is_some_and(|x| *x != [fenkra_kernel::NO_FACE, fenkra_kernel::NO_FACE]));
+                        if on.len() > 1 {
+                            let who = format!("o vértice em ({:.2}, {:.2}, {:.2}) (passe um ponto no meio da aresta desejada)", p[0], p[1], p[2]);
+                            return Err(self.lost(what, f, refs::Lost::Ambiguous(on.len()), who));
+                        }
+                        Ok(on.first().copied())
+                    };
+                    let perto = match refs::edge_near(&v, *p, tol) {
+                        Some(e) => Some(e),
+                        None => sobre()?,
+                    };
+                    // sem aresta que passe pelo ponto: erro com sugestão, nunca a mais próxima
+                    let Some(e) = perto else {
                         let mut who = format!("a aresta que passava perto de ({:.2}, {:.2}, {:.2})", p[0], p[1], p[2]);
                         // K-13: em aresta circular o ponto médio fica do lado oposto da costura; diz qual é
                         if let Some((e, d)) = refs::edge_nearest(&v, *p) {

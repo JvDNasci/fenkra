@@ -146,6 +146,7 @@ std::unique_ptr<Shape> full_round_t(const Shape& s, double mx, double my, double
 std::unique_ptr<Shape> face_face_fillet_t(const Shape& s, double ax, double ay, double az, double bx, double by, double bz, double r, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 
 int32_t face_index(const Shape& s, double px, double py, double pz, double limit);
+rust::Vec<uint32_t> edges_through(const Shape& s, double px, double py, double pz, double limit);
 void topology(const Shape& s, rust::Vec<double>& face_info, rust::Vec<double>& edge_mids, rust::Vec<uint32_t>& edge_faces);
 MeshData tessellate(const Shape& s, double deflection, double angle);
 MeshData tessellate_view(const Shape& s, double deflection, double angle, double curv_tol, double k_ref);

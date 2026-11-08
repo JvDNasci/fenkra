@@ -951,6 +951,12 @@ mod imp {
             let i = b::face_index(&self.0, p[0], p[1], p[2], limit).map_err(err)?;
             Ok((i >= 0).then_some(i as usize))
         }
+        /// Arestas (índices de `topology`) que passam a até `limit` do ponto, medindo na curva exata.
+        /// Sem costuras nem arestas degeneradas (B391: um ponto qualquer da aresta a identifica).
+        pub fn edges_through(&self, p: [f64; 3], limit: f64) -> KResult<Vec<usize>> {
+            let v = b::edges_through(&self.0, p[0], p[1], p[2], limit).map_err(err)?;
+            Ok(v.into_iter().map(|i| i as usize).collect())
+        }
         /// Faces e arestas com assinatura geométrica e vizinhança, sem tesselar.
         pub fn topology(&self) -> KResult<Topology> {
             let (mut fi, mut em, mut ef) = (vec![], vec![], vec![]);
@@ -1113,6 +1119,9 @@ mod imp {
             no()
         }
         pub fn face_index(&self, _: [f64; 3], _: f64) -> KResult<Option<usize>> {
+            no()
+        }
+        pub fn edges_through(&self, _: [f64; 3], _: f64) -> KResult<Vec<usize>> {
             no()
         }
         pub fn boolean(&self, _: &Shape, _: Bool) -> KResult<Shape> {
