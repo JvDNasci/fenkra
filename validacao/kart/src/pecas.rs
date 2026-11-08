@@ -300,14 +300,12 @@ pub fn aro(l: f64) -> Result<Document, String> {
     d.add_feature(ext(sk, BoolOp::Add, sim("8")));
     let f = furos_xz(&mut d, "0", &[[42., 0.]], "8.5");
     circular(&mut d, "4", vec![f]);
-    // pinos de retenção do talão, do lado de fora do aro
-    let pl = d.add_offset_plane(oxy(), "0");
-    let p = sk_circ(&mut d, PlaneRef::Datum(pl), &[([63.1, -h + 12.], 1.5)]);
-    let mut e = ext(p, BoolOp::Add, sim("6"));
-    if let FeatureKind::Extrude(x) = &mut e {
-        x.dir = Some(AxisRef::Origin(OriginAxis::X));
-    }
-    let pino = d.add_feature(e);
+    // pinos de retenção do talão, do lado de fora do aro, radiais (direção X). O sketch fica num
+    // plano normal a X, na superfície do aro: no plano XY com direção X (como era) o perfil varria a
+    // si mesmo e o aro saía inválido, com interferência falsa na montagem (K-10, B388)
+    let pl = d.add_offset_plane(oyz(), "63.1");
+    let p = sk_circ(&mut d, PlaneRef::Datum(pl), &[([-h + 12., 0.], 1.5)]);
+    let pino = d.add_feature(ext(p, BoolOp::Add, sim("6")));
     nome(&mut d, pino, "Pino do talão");
     circular(&mut d, "3", vec![pino]);
     Ok(d)
