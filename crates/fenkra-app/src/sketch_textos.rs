@@ -3,6 +3,25 @@
 //! Ficam num arquivo próprio para não disputar linhas com a tabela geral de `i18n.rs`.
 
 pub static TEXTOS: &[(&str, &str)] = &[
+    // sketch como fonte de geometria: publicar e extrair (reporte do cofre)
+    ("📤 Publicar sketch para outras peças", "📤 Publish sketch to other parts"),
+    ("Cada perfil (curvas ligadas pelas pontas) e cada ponto solto vira uma publicação associativa: Sketch.1, Sketch.2, Sketch.p1…", "Each profile (curves joined at their ends) and each loose point becomes an associative publication: Sketch.1, Sketch.2, Sketch.p1…"),
+    ("◫ Extrair perfis e pontos do sketch", "◫ Extract profiles and points from the sketch"),
+    ("Cria na pasta de geometria um elemento associativo por perfil e por ponto solto, para usar em qualquer comando de curva ou ponto.", "Creates in the geometry folder one associative element per profile and per loose point, to use in any curve or point command."),
+    ("Este sketch não tem curvas nem pontos para publicar", "This sketch has no curves or points to publish"),
+    ("Este sketch não tem curvas nem pontos para extrair", "This sketch has no curves or points to extract"),
+    ("publicação(ões) do sketch", "sketch publication(s)"),
+    ("nova(s)", "new"),
+    ("Publicado como", "Published as"),
+    ("Escolha uma aresta ou curva de sketch para extrair.", "Pick an edge or sketch curve to extract."),
+    ("elemento(s) extraído(s) para a pasta de geometria", "element(s) extracted to the geometry folder"),
+    ("◫ Extrair (curva associativa)", "◫ Extract (associative curve)"),
+    ("📤 Publicar esta curva para outras peças", "📤 Publish this curve to other parts"),
+    ("📤 Publicar o sketch inteiro", "📤 Publish the whole sketch"),
+    ("◫ Extrair (ponto associativo)", "◫ Extract (associative point)"),
+    ("📤 Publicar este ponto para outras peças", "📤 Publish this point to other parts"),
+    ("item(ns) selecionado(s) — clique faces, arestas, vértices ou curvas e pontos de sketch no 3D (Shift soma); sem nada clicado, vale o sketch escolhido na árvore", "item(s) selected — click faces, edges, vertices or sketch curves and points in 3D (Shift adds); with nothing clicked, the sketch chosen in the tree is used"),
+    ("Selecione faces, arestas, vértices ou elementos de sketch na viewport e conclua a extração", "Select faces, edges, vertices or sketch elements in the viewport and finish the extraction"),
     // opções do snap (B96)
     ("Snap vira restrição", "Snap becomes a constraint"),
     ("Juntar pontos ao soltar", "Merge points on release"),

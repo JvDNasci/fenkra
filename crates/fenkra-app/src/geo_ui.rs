@@ -739,9 +739,10 @@ pub(crate) fn curve_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docum
     }))
     .response
     .context_menu(|ui| {
-        // qualquer campo de curva: a aresta vira um elemento Extrair, que passa a ocupar o campo
-        if !matches!(c, CurveRef::Edge(_) | CurveRef::BodyEdge { .. }) {
-            ui.label(RichText::new(tr("Escolha uma aresta para extrair.")).weak());
+        // qualquer campo de curva: a aresta (ou a curva de sketch) vira um elemento Extrair, que
+        // passa a ocupar o campo
+        if !matches!(c, CurveRef::Edge(_) | CurveRef::BodyEdge { .. } | CurveRef::SketchCurve { .. } | CurveRef::SketchLine { .. }) {
+            ui.label(RichText::new(tr("Escolha uma aresta ou curva de sketch para extrair.")).weak());
             return;
         }
         if ui.button(tr("Extrair")).clicked() {

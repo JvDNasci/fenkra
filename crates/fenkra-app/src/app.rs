@@ -2176,9 +2176,21 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             match self.sel {
                 Sel::Origin(o) => s.planes.push(PlaneRef::Origin(o)),
                 Sel::Ref(id) => add_ref(&mut s, id),
+                // sketch escolhido na árvore: vale o plano dele e as curvas de verdade (os perfis)
+                Sel::Feature(id) if crate::sketch_pub::plano(d, id).is_some() => {
+                    s.planes.extend(crate::sketch_pub::plano(d, id));
+                    if let Some(r) = &self.result {
+                        s.curves.extend(crate::sketch_pub::perfis(r, id).into_iter().flatten());
+                    }
+                }
                 _ => {}
             }
         }
+        // elemento de sketch clicado sem plano nenhum: o plano do sketch preenche os campos de plano
+        let plano_sk = self.picks.iter().find_map(|p| match p {
+            Pick::SkCurve { sketch, .. } | Pick::SkPoint { sketch, .. } => crate::sketch_pub::plano(d, *sketch),
+            _ => None,
+        });
         for p in &self.picks {
             match *p {
                 Pick::Vertex { pos, body } => s.points.push(self.vertex_ref(body, pos.map(|v| v as f64))),
@@ -2211,6 +2223,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 Pick::SkPoint { sketch, point, .. } => s.points.push(PointRef::SketchPoint { sketch, point }),
                 Pick::CurveVtx { curve, index, .. } => s.points.push(PointRef::CurveVertex { curve, index }),
             }
+        }
+        if s.planes.is_empty() {
+            s.planes.extend(plano_sk);
         }
         s
     }
@@ -5737,14 +5752,21 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 actions.push(TreeAction::ParentsChildren(f.id));
                 ui.close();
             }
+            // o sketch é fonte de geometria: publicar e extrair ficam à vista, não dentro de Exibição
+            if is_sketch {
+                if ui.button(tr("📤 Publicar sketch para outras peças")).on_hover_text(tr("Cada perfil (curvas ligadas pelas pontas) e cada ponto solto vira uma publicação associativa: Sketch.1, Sketch.2, Sketch.p1…")).clicked() {
+                    actions.push(TreeAction::SketchPublish(f.id));
+                    ui.close();
+                }
+                if ui.button(tr("◫ Extrair perfis e pontos do sketch")).on_hover_text(tr("Cria na pasta de geometria um elemento associativo por perfil e por ponto solto, para usar em qualquer comando de curva ou ponto.")).clicked() {
+                    actions.push(TreeAction::ExtrairSketch(f.id));
+                    ui.close();
+                }
+            }
             ui.menu_button(tr("👁 Exibição"), |ui| {
                 if is_sketch {
                     if ui.button(if f.hidden { tr("Mostrar   H") } else { tr("Ocultar   H") }).clicked() {
                         actions.push(TreeAction::Hide(f.id, !f.hidden));
-                        ui.close();
-                    }
-                    if ui.button(tr("Publicar sketch para outras peças")).clicked() {
-                        actions.push(TreeAction::SketchPublish(f.id));
                         ui.close();
                     }
                     if ui.button(tr("Alinhar vista ao sketch   N")).clicked() {
@@ -6092,9 +6114,41 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     c.published = on;
                 }
             }
+            // o sketch inteiro: um elemento publicado por perfil (contorno ligado) e por ponto solto
             TreeAction::SketchPublish(id) => {
-                let n = fenkra_montagem::publicacoes::publicar_sketch(d, id);
-                self.toast(format!("{n} {}", tr("curva(s) publicada(s)")), false);
+                let Some(r) = self.result.as_ref() else { return };
+                let (ids, novos) = crate::sketch_pub::extrair_sketch(&mut self.open.doc, r, id, true);
+                if ids.is_empty() {
+                    self.toast(tr("Este sketch não tem curvas nem pontos para publicar").to_string(), true);
+                } else {
+                    self.toast(format!("{} {} ({} {})", ids.len(), tr("publicação(ões) do sketch"), novos, tr("nova(s)")), false);
+                    self.scene_dirty = true;
+                }
+            }
+            TreeAction::ExtrairSketch(id) => {
+                let Some(r) = self.result.as_ref() else { return };
+                let (ids, novos) = crate::sketch_pub::extrair_sketch(&mut self.open.doc, r, id, false);
+                match ids.last() {
+                    None => self.toast(tr("Este sketch não tem curvas nem pontos para extrair").to_string(), true),
+                    Some(&ultimo) => {
+                        self.toast(format!("{novos} {}", tr("elemento(s) extraído(s) para a pasta de geometria")), false);
+                        self.sel = Sel::Ref(ultimo);
+                        self.scene_dirty = true;
+                    }
+                }
+            }
+            TreeAction::PublicarSk(p) => {
+                use crate::picking::Pick;
+                let k = match p {
+                    Pick::SkCurve { sketch, curve, .. } => RefKind::CurveCopy { curve: CurveRef::SketchCurve { sketch, curve } },
+                    Pick::SkPoint { sketch, point, .. } => crate::sketch_pub::kind_de_ponto(PointRef::SketchPoint { sketch, point }),
+                    _ => return,
+                };
+                let id = crate::sketch_pub::publicar_elemento(d, k);
+                let nome = d.name_of(id);
+                self.toast(format!("{} {nome}", tr("Publicado como")), false);
+                self.sel = Sel::Ref(id);
+                self.scene_dirty = true;
             }
             TreeAction::OpenPublications => self.pub_open = true,
             TreeAction::SelRegra(p, regra) => self.selecionar_por_regra(p, regra),
@@ -6261,7 +6315,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     item(ui, "∿ Superfície extrudada desta curva", TreeAction::WithPicks(vec![p], Cmd::Geo(crate::geo_ui::GeoKind::SurfExtrude)), acts);
                     item(ui, "▱ Plano normal a esta curva", TreeAction::WithPicks(vec![p], Cmd::Geo(crate::geo_ui::GeoKind::PlaneNormalCurve)), acts);
                     item(ui, "• Ponto nesta curva", TreeAction::WithPicks(vec![p], Cmd::Geo(crate::geo_ui::GeoKind::PtOnCurve)), acts);
+                    ui.separator();
+                    item(ui, "◫ Extrair (curva associativa)", TreeAction::WithPicks(vec![p], Cmd::Extract), acts);
+                    item(ui, "📤 Publicar esta curva para outras peças", TreeAction::PublicarSk(p), acts);
                 }
+                item(ui, "📤 Publicar o sketch inteiro", TreeAction::SketchPublish(sketch), acts);
             }
             Some(p @ (Pick::SkPoint { .. } | Pick::CurveVtx { .. })) => {
                 ui.label(RichText::new(p.label(doc)).strong());
@@ -6274,6 +6332,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 item(ui, "╱ Linha a partir deste ponto", TreeAction::WithPicks(vec![p], Cmd::Geo(crate::geo_ui::GeoKind::LineDir)), acts);
                 item(ui, "▱ Plano normal por este ponto", TreeAction::WithPicks(vec![p], Cmd::Geo(crate::geo_ui::GeoKind::PlanePointNormal)), acts);
                 item(ui, "⦿ Furo neste ponto", TreeAction::WithPicks(vec![p], Cmd::Hole), acts);
+                if let Pick::SkPoint { sketch, .. } = p {
+                    ui.separator();
+                    item(ui, "◫ Extrair (ponto associativo)", TreeAction::WithPicks(vec![p], Cmd::Extract), acts);
+                    item(ui, "📤 Publicar este ponto para outras peças", TreeAction::PublicarSk(p), acts);
+                    item(ui, "📤 Publicar o sketch inteiro", TreeAction::SketchPublish(sketch), acts);
+                }
             }
             Some(Pick::Plane(PlaneRef::Origin(o))) => {
                 ui.label(RichText::new(format!("Plano {}", crate::scene::plane_name(o))).strong());
@@ -6550,7 +6614,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let n = self.picks.len();
         egui::Window::new(tr("◫ Extrair")).open(&mut open).default_width(340.).resizable(false).show(ctx, |ui| {
             done = crate::app::done_bar(ui);
-            ui.label(RichText::new(format!("{} {}", n, tr("item(ns) selecionado(s) — clique faces, arestas ou vértices no 3D (Shift soma)"))).weak().small());
+            ui.label(RichText::new(format!("{} {}", n, tr("item(ns) selecionado(s) — clique faces, arestas, vértices ou curvas e pontos de sketch no 3D (Shift soma); sem nada clicado, vale o sketch escolhido na árvore"))).weak().small());
             ui.horizontal(|ui| {
                 ui.radio_value(&mut o.multi, false, tr("simples"))
                     .on_hover_text(tr("Cada item clicado vira um elemento (com o que a propagação juntar a ele)."));
@@ -6579,7 +6643,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     fn run_extract(&mut self, o: ExtractOpts) {
-        use crate::extract::{edge_pts, edge_set, face_point, face_set};
+        use crate::extract::{edge_pts, edge_set, face_point, face_set, Prop};
         let mut gravadas: Vec<([f64; 3], Id, Option<FaceKey>)> = vec![];
         use crate::picking::Pick;
         // o resultado sai emprestado durante a coleta e volta logo depois
@@ -6587,6 +6651,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let (mut edges, mut faces, mut made): (Vec<Vec<CurveRef>>, Vec<Vec<[f64; 3]>>, Vec<Id>) = (vec![], vec![], vec![]);
         let mut seen_e: Vec<(usize, usize)> = vec![];
         let mut seen_f: Vec<(usize, usize)> = vec![];
+        let mut seen_sk: Vec<CurveRef> = vec![];
         for p in self.picks.clone() {
             match p {
                 Pick::Face { body, face, point, owner, .. } => {
@@ -6638,9 +6703,31 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     let q = pos.map(|v| crate::app::fmt(v as f64));
                     made.push(self.open.doc.add_geometry(RefKind::PointCoords { x: q[0].clone(), y: q[1].clone(), z: q[2].clone(), frame: None }));
                 }
-                // curva de sketch: cópia associativa
-                Pick::SkCurve { sketch, curve, .. } => made.push(self.open.doc.add_geometry(RefKind::CurveCopy { curve: CurveRef::SketchCurve { sketch, curve } })),
+                // curva de sketch: cópia associativa, com a cadeia que a propagação alcança; na
+                // múltipla, entra no mesmo conjunto das arestas
+                Pick::SkCurve { sketch, curve, .. } => {
+                    use crate::sketch_pub::Juntar;
+                    let modo = match o.prop {
+                        Prop::Nenhuma => Juntar::Nada,
+                        Prop::Tangente | Prop::Curvatura => Juntar::Tangente,
+                        Prop::Ponto | Prop::Completo => Juntar::Ponto,
+                    };
+                    let set: Vec<CurveRef> = crate::sketch_pub::cadeia(&r, sketch, curve, modo).into_iter().filter(|c| !seen_sk.contains(c)).collect();
+                    seen_sk.extend(set.iter().cloned());
+                    if !set.is_empty() {
+                        edges.push(set);
+                    }
+                }
+                // ponto de sketch: cópia associativa (segue o ponto quando o sketch muda)
+                Pick::SkPoint { sketch, point, .. } => made.push(self.open.doc.add_geometry(crate::sketch_pub::kind_de_ponto(PointRef::SketchPoint { sketch, point }))),
                 _ => {}
+            }
+        }
+        // nada clicado e um sketch escolhido na árvore: o sketch inteiro (um elemento por perfil e
+        // por ponto solto)
+        if self.picks.is_empty() {
+            if let Sel::Feature(id) = self.sel {
+                made.extend(crate::sketch_pub::extrair_sketch(&mut self.open.doc, &r, id, false).0);
             }
         }
         self.result = Some(r);
@@ -6669,7 +6756,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             made.push(d.add_geometry(RefKind::SurfExtract { face, owner: Some(owner), prop: o.prop.gravada(), complement: false, expected: None, key }));
         }
         if made.is_empty() {
-            self.toast("Selecione faces, arestas ou vértices na viewport e conclua a extração", true);
+            self.toast("Selecione faces, arestas, vértices ou elementos de sketch na viewport e conclua a extração", true);
             return;
         }
         if o.publish {
@@ -8121,6 +8208,10 @@ pub(crate) enum TreeAction {
     AtualizarAte(Id),
     NovoConteiner(OrdemConteiner),
     SketchPublish(Id),
+    /// publica a curva ou o ponto de sketch clicado (cria o elemento associativo e marca)
+    PublicarSk(crate::picking::Pick),
+    /// extrai o sketch inteiro (perfis e pontos soltos) para a pasta de geometria
+    ExtrairSketch(Id),
     ParentsChildren(Id),
     ApplyView(usize),
     NewGeometryFolder,

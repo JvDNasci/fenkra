@@ -61,6 +61,13 @@ impl App {
             // balões automáticos e legenda 3D: o diálogo de confirmação, com `FENKRA_DEMO_ASM=1` (balões)
             "pmi_baloes" => crate::pmi_ui::command(self, 10),
             "pmi_legenda" => crate::pmi_ui::command(self, 9),
+            // reporte do sketch: retângulo, linha e ponto publicados pelo menu do sketch
+            "sketch_publicar" => {
+                let (d, ultimo) = crate::sketch_pub::documento_demo();
+                self.open.doc = d;
+                self.sent_doc = None;
+                self.sel = Sel::Ref(ultimo);
+            }
             "daltonico" => self.settings.acessibilidade.paleta_segura = true,
             "diagnostico" => self.demo_diagnostico(),
             // B361: a face de cima do primeiro corpo já escolhida (contorno externo, furos de fora)
