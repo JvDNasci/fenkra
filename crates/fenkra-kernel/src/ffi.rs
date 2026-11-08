@@ -171,6 +171,11 @@ pub mod bridge {
         ) -> Result<UniquePtr<Shape>>;
         /// op: 0 = unir, 1 = subtrair, 2 = interseção
         fn boolean(a: &Shape, b: &Shape, op: u8) -> Result<UniquePtr<Shape>>;
+        /// Interseção sem unificar as faces e sem mexer nas entradas; `copiar` trabalha numa cópia
+        /// profunda das duas, para rodar em threads (B394).
+        fn comum_medida(a: &Shape, b: &Shape, copiar: bool) -> Result<UniquePtr<Shape>>;
+        /// Cópia profunda (topologia e geometria, sem a malha): nada dela é dividido com a original.
+        fn copia_profunda(s: &Shape) -> UniquePtr<Shape>;
         /// Ferramenta de furo (sólido a subtrair) com eixo (o, d) entrando no material.
         fn hole_tool(
             ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64,

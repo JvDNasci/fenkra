@@ -548,6 +548,35 @@ std::unique_ptr<Shape> boolean(const Shape& a, const Shape& b, uint8_t op) {
     });
 }
 
+// Comum para medir interferência (B394). Duas diferenças para `boolean`:
+// - não unifica as faces: o volume e a malha do comum não mudam com isso, e a unificação era quase
+//   metade do tempo da análise do kart;
+// - não mexe nas entradas (modo não destrutivo): no modo padrão a booleana pode aumentar a tolerância
+//   de arestas e vértices das formas de entrada, que aqui são as formas guardadas das peças.
+// `copiar` faz a booleana numa cópia profunda das duas formas (geometria inclusive, sem a malha), para
+// rodar várias em threads ao mesmo tempo: duas threads lendo a mesma topologia dividem as faces, e a
+// malha que o OCCT grava nelas seria escrita por duas threads de uma vez.
+std::unique_ptr<Shape> copia_profunda(const Shape& s) {
+    if (s.s.IsNull()) return wrap(s.s);
+    return wrap(BRepBuilderAPI_Copy(s.s, Standard_True, Standard_False).Shape());
+}
+
+std::unique_ptr<Shape> comum_medida(const Shape& a, const Shape& b, bool copiar) {
+    return guard("booleana", [&] {
+        TopTools_ListOfShape args, tools;
+        args.Append(copiar ? BRepBuilderAPI_Copy(a.s, Standard_True, Standard_False).Shape() : a.s);
+        tools.Append(copiar ? BRepBuilderAPI_Copy(b.s, Standard_True, Standard_False).Shape() : b.s);
+        BRepAlgoAPI_Common m;
+        m.SetArguments(args);
+        m.SetTools(tools);
+        m.SetNonDestructive(Standard_True);
+        m.Build(faixa_cancelavel());
+        falhar_se_cancelado();
+        if (m.HasErrors() || m.Shape().IsNull()) throw std::runtime_error("a operação booleana falhou");
+        return wrap(m.Shape());
+    });
+}
+
 std::unique_ptr<Shape> hole_tool(double ox, double oy, double oz, double dx, double dy, double dz,
                                  double diameter, double depth, uint8_t kind, double d2, double p2) {
     return guard("furo", [&] {

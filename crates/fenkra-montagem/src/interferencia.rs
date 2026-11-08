@@ -9,7 +9,9 @@
 //!    2 × desvio da malha uma da outra, nem uma está dentro da outra (B394: a booleana é o passo
 //!    caro, e num quadro a caixa de um tubo cobre meio conjunto). Só então a operação booleana
 //!    Comum devolve o sólido compartilhado. O volume dele é a medida da interferência, e a malha dele
-//!    é o que aparece em vermelho na vista;
+//!    é o que aparece em vermelho na vista. Os pares que sobram vão todos de uma vez para
+//!    `Shape::comuns`, que faz as booleanas em várias threads, cada uma sobre cópias próprias das
+//!    formas, e sem unificar as faces do comum (o volume e a malha não precisam disso);
 //! 3. duas faces encostadas têm volume comum zero, então o Comum não enxerga coincidência. Para isso
 //!    existe a seção entre as formas, que devolve as linhas de contato: com a opção ligada, seção não
 //!    vazia sem volume vira um achado de volume zero;
@@ -22,7 +24,7 @@
 use crate::load::{full_path, PartCache};
 use crate::view::{placed_shape, posicionado, shown};
 use crate::*;
-use fenkra_kernel::{Bool, Mesh, Shape};
+use fenkra_kernel::{Mesh, Shape};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -146,11 +148,6 @@ struct Unidade {
 }
 
 impl Unidade {
-    fn medir(&mut self, q: &fenkra_core::QualidadeMalha) {
-        self.caixas = self.formas.iter().map(Shape::bbox).collect();
-        self.grossas = self.formas.iter().map(|s| grossa(s, q)).collect();
-    }
-
     /// Caixa de tudo o que a unidade tem.
     fn caixa(&self) -> Option<(V3, V3)> {
         let mut c = None;
@@ -158,6 +155,20 @@ impl Unidade {
             unir_caixa(&mut c, *b);
         }
         c
+    }
+}
+
+/// Caixa e malha de cada forma de todas as unidades, em threads (B394). As formas saem de
+/// `posicionado`, que copia a peça sem a malha: tesselar é o custo aqui, e cada thread tesselava uma
+/// cópia própria.
+fn medir(us: &mut [Unidade], q: &fenkra_core::QualidadeMalha, threads: usize) {
+    let medidas = {
+        let formas: Vec<&Shape> = us.iter().flat_map(|u| u.formas.iter()).collect();
+        Shape::em_threads(&formas, threads, |_, s| (s.bbox(), grossa(&s, q)))
+    };
+    let mut it = medidas.into_iter();
+    for u in us.iter_mut() {
+        (u.caixas, u.grossas) = it.by_ref().take(u.formas.len()).unzip();
     }
 }
 
@@ -174,7 +185,7 @@ struct Grossa {
 fn grossa(s: &Shape, q: &fenkra_core::QualidadeMalha) -> Option<Grossa> {
     let (lo, hi) = s.bbox()?;
     let desvio = q.desvio(norm(sub(hi, lo)));
-    // a mesma qualidade da vista: a forma já tem essa malha guardada, e nada é refeito
+    // a mesma qualidade da vista; o desvio fica na `Grossa` para a margem do filtro
     let m = fenkra_solidos::tesselar(s, q).ok()?;
     let p = |i: u32| {
         let k = i as usize * 3;
@@ -344,56 +355,56 @@ fn unir_caixa(c: &mut Option<(V3, V3)>, n: (V3, V3)) {
     });
 }
 
-/// Compara dois lados. `folga` deixa passar caixas que só se tocam, para a coincidência.
-fn comparar(a: &Unidade, b: &Unidade, op: &OpcoesInterf, q: &fenkra_core::QualidadeMalha) -> Option<Achado> {
-    let folga = if op.coincidencia { 1e-6 } else { 0. };
-    let (mut volume, mut malha, mut contato, mut caixa) = (0., Mesh::default(), vec![], None);
-    for (ia, (fa, ca)) in a.formas.iter().zip(&a.caixas).enumerate() {
-        for (ib, (fb, cb)) in b.formas.iter().zip(&b.caixas).enumerate() {
+/// Par de formas que passou pelos filtros e vai para a booleana: unidades `i` e `j`, formas `fa` e `fb`.
+struct Candidato {
+    i: usize,
+    j: usize,
+    fa: usize,
+    fb: usize,
+}
+
+/// Pares de formas de duas unidades que podem se tocar. `folga` deixa passar caixas que só se
+/// tocam, para a coincidência.
+fn candidatos(a: &Unidade, b: &Unidade, i: usize, j: usize, folga: f64, out: &mut Vec<Candidato>) {
+    for (fa, ca) in a.caixas.iter().enumerate() {
+        for (fb, cb) in b.caixas.iter().enumerate() {
             if longe(*ca, *cb, folga) {
                 continue;
             }
             // a booleana é o passo caro: as malhas descartam antes o par que nem chega perto
-            if let (Some(Some(ga)), Some(Some(gb))) = (a.grossas.get(ia), b.grossas.get(ib)) {
+            if let (Some(Some(ga)), Some(Some(gb))) = (a.grossas.get(fa), b.grossas.get(fb)) {
                 if !perto(ga, gb, ga.desvio + gb.desvio + folga + 1e-3) && !dentro(ga, gb) && !dentro(gb, ga) {
                     continue;
                 }
             }
-            let mut achou = false;
-            if let Ok(c) = fa.boolean(fb, Bool::Common) {
-                let v = c.mass().volume;
-                if v > op.tol {
-                    achou = true;
-                    volume += v;
-                    if let Ok(m) = fenkra_solidos::tesselar(&c, q) {
-                        acrescentar(&mut malha, &m);
-                    }
-                    if let Some(bb) = c.bbox() {
-                        unir_caixa(&mut caixa, bb);
-                    }
-                }
-            }
-            if !achou && op.coincidencia {
-                for linha in fa.section(fb).unwrap_or_default() {
-                    for p in &linha {
-                        unir_caixa(&mut caixa, (*p, *p));
-                    }
-                    contato.push(linha);
-                }
-            }
+            out.push(Candidato { i, j, fa, fb });
         }
     }
-    (volume > 0. || !contato.is_empty()).then(|| Achado { a: a.lado.clone(), b: b.lado.clone(), volume, malha, contato, caixa })
 }
 
+/// O que sai da booleana de um candidato: volume, malha e caixa do comum.
+type Comum = Option<(f64, Mesh, Option<(V3, V3)>)>;
+
 /// Todos os achados do escopo, do maior volume para o menor. Ignorados não saem daqui: ver [`separar`].
+///
+/// As booleanas rodam em várias threads ([`Shape::comuns`], B394), sem unificar as faces: só o volume e
+/// a malha do comum interessam. A ordem e a soma dos volumes são as de antes, par por par.
 pub fn analisar(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, op: &OpcoesInterf) -> Vec<Achado> {
+    analisar_em(a, dir, cache, op, 0)
+}
+
+/// [`analisar`] com o número de threads das booleanas (0 = uma por núcleo, 1 = tudo nesta thread).
+pub fn analisar_em(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, op: &OpcoesInterf, threads: usize) -> Vec<Achado> {
     let q = cache.qualidade();
+    // só a forma: a malha de vista que o `get` faria de cada peça não serve aqui (a análise tessela a
+    // forma posicionada), e no kart ela era boa parte da primeira análise
+    let so_forma = std::mem::replace(&mut cache.so_forma, true);
     let mut us = unidades(a, dir, cache, op.sub_unico);
-    us.iter_mut().for_each(|u| u.medir(&q));
+    cache.so_forma = so_forma;
+    medir(&mut us, &q, threads);
     let caixas: Vec<_> = us.iter().map(Unidade::caixa).collect();
     let folga = if op.coincidencia { 1e-6 } else { 0. };
-    let mut out = vec![];
+    let mut cands = vec![];
     for i in 0..us.len() {
         for j in i + 1..us.len() {
             let (ua, ub) = (&us[i], &us[j]);
@@ -401,13 +412,61 @@ pub fn analisar(a: &Assembly, dir: Option<&Path>, cache: &mut PartCache, op: &Op
             if ua.lado.chave == ub.lado.chave || !no_escopo(op, ua.lado.comp, ub.lado.comp) || longe(caixas[i], caixas[j], folga) {
                 continue;
             }
-            if let Some(c) = comparar(ua, ub, op, &q) {
-                out.push(c);
-            }
+            candidatos(ua, ub, i, j, folga, &mut cands);
         }
     }
+    // os pares mais caros primeiro: no kart, três pares levam 2 s cada, e se ficassem para o fim
+    // as outras threads esperariam paradas. O custo cresce com os triângulos das duas peças.
+    let custo = |c: &Candidato| [(c.i, c.fa), (c.j, c.fb)].iter().map(|(u, f)| us[*u].grossas[*f].as_ref().map_or(0, |g| g.tris.len())).sum::<usize>();
+    let mut ordem: Vec<usize> = (0..cands.len()).collect();
+    ordem.sort_by_key(|k| std::cmp::Reverse(custo(&cands[*k])));
+    let pares: Vec<(&Shape, &Shape)> = ordem.iter().map(|k| (&us[cands[*k].i].formas[cands[*k].fa], &us[cands[*k].j].formas[cands[*k].fb])).collect();
+    let tol = op.tol;
+    let feitos: Vec<Comum> = Shape::comuns(&pares, threads, |_, r| {
+        let c = r.ok()?;
+        let v = c.mass().volume;
+        (v > tol).then(|| (v, fenkra_solidos::tesselar(&c, &q).unwrap_or_default(), c.bbox()))
+    });
+    let mut comuns: Vec<Comum> = (0..cands.len()).map(|_| None).collect();
+    for (k, c) in ordem.into_iter().zip(feitos) {
+        comuns[k] = c;
+    }
+    let mut out: Vec<Achado> = vec![];
+    let mut par_atual = None;
+    for (c, comum) in cands.iter().zip(comuns) {
+        // os candidatos de um par de unidades vêm juntos: um achado por par
+        if par_atual != Some((c.i, c.j)) {
+            par_atual = Some((c.i, c.j));
+            out.push(Achado { a: us[c.i].lado.clone(), b: us[c.j].lado.clone(), volume: 0., malha: Mesh::default(), contato: vec![], caixa: None });
+        }
+        let x = out.last_mut().expect("achado do par");
+        match comum {
+            Some((v, m, bb)) => {
+                x.volume += v;
+                acrescentar(&mut x.malha, &m);
+                if let Some(bb) = bb {
+                    unir_caixa(&mut x.caixa, bb);
+                }
+            }
+            None if op.coincidencia => {
+                for linha in pares_secao(&us[c.i].formas[c.fa], &us[c.j].formas[c.fb]) {
+                    for p in &linha {
+                        unir_caixa(&mut x.caixa, (*p, *p));
+                    }
+                    x.contato.push(linha);
+                }
+            }
+            None => {}
+        }
+    }
+    out.retain(|x| x.volume > 0. || !x.contato.is_empty());
     out.sort_by(|x, y| y.volume.total_cmp(&x.volume));
     out
+}
+
+/// Linhas de contato de duas formas sem volume comum.
+fn pares_secao(a: &Shape, b: &Shape) -> Vec<Vec<V3>> {
+    a.section(b).unwrap_or_default()
 }
 
 /// Índices dos achados, repartidos pelas regras da montagem.
@@ -566,6 +625,32 @@ mod tests {
             placed_shape(&b, id, Some(&d), &mut c).unwrap()
         }, &q).unwrap()));
         assert!(!dentro(&c0, &c20));
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn threads_acham_o_mesmo_que_uma_so() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // B394: a ordem, os pares e os volumes não dependem de quantas threads fazem as booleanas
+        let d = pasta("threads");
+        let mut a = Assembly::new("t");
+        for k in 0..12 {
+            peca(&mut a, &format!("P{k}"), k as f64 * 4.5);
+        }
+        let mut c = PartCache::default();
+        let um = analisar_em(&a, Some(&d), &mut c, &OpcoesInterf::default(), 1);
+        let varios = analisar_em(&a, Some(&d), &mut c, &OpcoesInterf::default(), 6);
+        // cada peça cruza as duas seguintes: 5,5 mm com a vizinha e 1 mm com a outra
+        assert_eq!(um.len(), 11 + 10);
+        assert_eq!(um.len(), varios.len());
+        for (x, y) in um.iter().zip(&varios) {
+            assert_eq!((&x.a.chave, &x.b.chave), (&y.a.chave, &y.b.chave));
+            assert!((x.volume - y.volume).abs() < 1e-9, "{} x {}: {} e {}", x.a.nome, x.b.nome, x.volume, y.volume);
+            assert!(!y.malha.indices.is_empty());
+        }
+        assert!((um[0].volume - 550.).abs() < 1e-6 && (um[20].volume - 100.).abs() < 1e-6, "{} {}", um[0].volume, um[20].volume);
         let _ = std::fs::remove_dir_all(d);
     }
 

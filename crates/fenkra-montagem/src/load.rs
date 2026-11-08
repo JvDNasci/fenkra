@@ -276,6 +276,13 @@ impl PartCache {
                 return Ok(sh.clone());
             }
         }
+        // a peça que o `get` já calculou com a forma serve como está (B394: a interferência pede só a
+        // forma, e a peça aberta na vista não precisa ser refeita)
+        if let Some(p) = self.parts.get(full) {
+            if p.stamp == stamp && p.shape.is_some() && !self.pendentes.contains_key(full) {
+                return Ok(p.shape.clone());
+            }
+        }
         let doc = match self.pendentes.get(full) {
             Some(d) => d.clone(),
             None => {
