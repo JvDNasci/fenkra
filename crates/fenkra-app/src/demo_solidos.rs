@@ -153,6 +153,25 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
         // baixa, para a seta caber na vista de qualquer tamanho
         return Some(DemoPrevia::Comando(extrude(sk, BoolOp::Add, &(lado / 5.).to_string())));
     }
+    // B228: `plano_<lado em mm>`, cubo desse lado e o plano deslocado de 0,4 lado aberto (retângulo
+    // translúcido, seta, rótulo e botão de inverter); com `FENKRA_DEMO_INVERTER=1` o botão é apertado
+    if let Some(lado) = nome.strip_prefix("plano_").and_then(|t| t.parse::<f64>().ok()) {
+        *doc = Document::new("Plano");
+        let sk = sketch(doc, PlaneRef::Origin(OriginPlane::XY), &|data, al| {
+            data.add_rect(&mut &mut *al, [-lado / 2., -lado / 2.], [lado / 2., lado / 2.], false);
+        });
+        doc.add_feature(extrude(sk, BoolOp::Add, &(lado / 5.).to_string()));
+        return Some(DemoPrevia::Ref(RefKind::OffsetPlane { base: PlaneRef::Origin(OriginPlane::XY), offset: (lado * 0.4).to_string() }));
+    }
+    // B228: ponto por coordenadas aberto, para ver a esfera de posição entre as setas e os planos
+    if nome == "ponto_xyz" {
+        *doc = Document::new("Ponto");
+        let sk = sketch(doc, PlaneRef::Origin(OriginPlane::XY), &|data, al| {
+            data.add_rect(&mut &mut *al, [-20., -20.], [20., 20.], false);
+        });
+        doc.add_feature(extrude(sk, BoolOp::Add, "8"));
+        return Some(DemoPrevia::Ref(RefKind::PointCoords { x: "10".into(), y: "6".into(), z: "20".into(), frame: None }));
+    }
     Some(match nome {
         // B91: padrão linear com a terceira cópia pulada (ponto com X) e as setas de espaçamento
         "padrao_pontos" => {

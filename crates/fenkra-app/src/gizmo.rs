@@ -4,12 +4,15 @@
 //! coordenadas e às transformações de geometria (mover, girar, escalar).
 //! Arrastar muda o valor em passos de 1 mm / 1° (Shift: 0,1 mm / 5°); valores ligados a
 //! parâmetros ficam travados (🔒) para não quebrar o vínculo.
+//! B228: as alças seguem o vocabulário de `handles::vocab` (seta, anel, plano, esfera e losango), todas
+//! com a pega de 28 px.
 
 use crate::app::{fmt, App};
 use crate::render::Camera;
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
 use glam::Vec3;
 use fenkra_core::*;
+use crate::handles::vocab::Forma;
 
 pub(crate) const AXIS_COL: [Color32; 3] = [Color32::from_rgb(235, 80, 80), Color32::from_rgb(90, 200, 90), Color32::from_rgb(80, 140, 255)];
 const HOT: Color32 = Color32::from_rgb(255, 190, 40);
@@ -136,7 +139,7 @@ pub(crate) fn translate_alcas(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt:
         }
         let q = c0 + sa[i].1 * ARM * 0.3 + sa[j].1 * ARM * 0.3;
         let hid = egui::Id::unique(("gizmo_plano", salt, k));
-        let r = ui.interact(Rect::from_center_size(q, egui::vec2(16., 16.)), hid, egui::Sense::drag());
+        let r = ui.interact(Forma::Plano.pega(q), hid, egui::Sense::drag());
         let hot = r.hovered() || r.dragged();
         let col = if hot { HOT } else { AXIS_COL[3 - i - j].gamma_multiply(0.85) };
         let quad = [c0 + sa[i].1 * ARM * 0.2 + sa[j].1 * ARM * 0.2, c0 + sa[i].1 * ARM * 0.4 + sa[j].1 * ARM * 0.2, c0 + sa[i].1 * ARM * 0.4 + sa[j].1 * ARM * 0.4, c0 + sa[i].1 * ARM * 0.2 + sa[j].1 * ARM * 0.4];
@@ -163,10 +166,11 @@ pub(crate) fn translate_alcas(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt:
         let tip = c0 + sa[i].1 * ARM;
         let hid = egui::Id::unique(("gizmo_seta", salt, i));
         let sense = if locked[i] { egui::Sense::hover() } else { egui::Sense::drag() };
-        let r = ui.interact(Rect::from_center_size(tip, egui::vec2(crate::handles::PEGA, crate::handles::PEGA)), hid, sense);
+        let r = ui.interact(Forma::Seta.pega(tip), hid, sense);
         let hot = r.hovered() || r.dragged();
         let col = if locked[i] { Color32::GRAY } else if hot { HOT } else { AXIS_COL[i] };
-        arrow(&painter, c0, tip, col);
+        painter.line_segment([c0, tip], Stroke::new(2.5, col));
+        Forma::Seta.pinta(&painter, tip, sa[i].1, col, if hot { 2.25 } else { 1.5 });
         if let Some((st, m)) = drag_state(ui, hid, &r, &vals) {
             let t = (m - st.start).dot(sa[i].1) / sa[i].2;
             let mut v = [st.values[0], st.values[1], st.values[2]];
@@ -180,8 +184,42 @@ pub(crate) fn translate_alcas(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt:
             label(&painter, tip + egui::vec2(12., -8.), txt, col);
         }
     }
-    painter.circle_filled(c0, 4., Color32::WHITE);
+    // esfera de posição: com os três eixos livres e ortogonais, arrasta o ponto no plano da tela
+    let livre = mostrar == [true; 3] && locked == [false; 3] && (0..3).all(|i| (0..i).all(|j| axes[i].dot(axes[j]).abs() < 1e-3));
+    if livre {
+        let hid = egui::Id::unique(("gizmo_esfera", salt));
+        let r = ui.interact(Forma::Esfera.pega(c0), hid, egui::Sense::drag());
+        let hot = r.hovered() || r.dragged();
+        let col = if hot { HOT } else { crate::theme::accent(ui.visuals()) };
+        Forma::Esfera.pinta(&painter, c0, Vec2::X, col, 1.5);
+        let r = r.on_hover_text(crate::i18n::tr("arraste para mover o ponto no plano da tela"));
+        if let Some((st, m)) = drag_state(ui, hid, &r, &vals) {
+            // o ponto de partida no mundo: o centro de agora menos o que o arrasto já andou
+            let o0 = o - (0..3).map(|i| axes[i] * (vals[i] - st.values[i]) as f32).sum::<Vec3>();
+            let ppm = sa.iter().map(|x| x.2).fold(f32::MAX, f32::min);
+            if let Some(v) = esfera_arrastada(cam, rect, o0, st.start, m, axes, [st.values[0], st.values[1], st.values[2]], crate::ui_ext::passo_3d(ui, ppm)) {
+                out = Some(v);
+            }
+            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+        }
+    } else {
+        painter.circle_filled(c0, 4., Color32::WHITE);
+    }
     out
+}
+
+/// Novos valores da esfera de posição: o ponto corre no plano que passa por `o0` de frente para a
+/// câmera, do raio de `ini` ao raio de `agora`; cada eixo recebe a sua parte, no passo `passo`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn esfera_arrastada(cam: &Camera, rect: Rect, o0: Vec3, ini: Pos2, agora: Pos2, axes: [Vec3; 3], vals: [f64; 3], passo: f64) -> Option<[f64; 3]> {
+    let (_, normal) = cam.ray(rect, ini);
+    let no_plano = |p: Pos2| {
+        let (ro, rd) = cam.ray(rect, p);
+        let den = rd.dot(normal);
+        (den.abs() > 1e-6).then(|| ro + rd * ((o0 - ro).dot(normal) / den))
+    };
+    let d = no_plano(agora)? - no_plano(ini)?;
+    Some([0, 1, 2].map(|i| snap(vals[i] + d.dot(axes[i]) as f64, passo)))
 }
 
 /// Arco de rotação em volta de `axis` passando por `p`; devolve o novo ângulo (graus).
@@ -204,13 +242,13 @@ pub(crate) fn rotate_arc_col(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: 
     let ring: Vec<Pos2> = (0..=64).filter_map(|i| cam.project(rect, at(i as f64 * 360. / 64.))).collect();
     let tip = cam.project(rect, at(angle))?;
     let hid = egui::Id::unique(("gizmo_arco", salt));
-    let r = ui.interact(Rect::from_center_size(tip, egui::vec2(crate::handles::PEGA, crate::handles::PEGA)), hid, if locked { egui::Sense::hover() } else { egui::Sense::drag() });
+    let r = ui.interact(Forma::Anel.pega(tip), hid, if locked { egui::Sense::hover() } else { egui::Sense::drag() });
     let hot = r.hovered() || r.dragged();
     let col = if locked { Color32::GRAY } else if hot { HOT } else { base };
     painter.add(egui::Shape::line(ring, Stroke::new(if hot { 2.4 } else { 1.6 }, col.gamma_multiply(if hot { 0.9 } else { 0.65 }))));
     let sweep: Vec<Pos2> = (0..=32).filter_map(|i| cam.project(rect, at(angle * i as f64 / 32.))).collect();
     painter.add(egui::Shape::line(sweep, Stroke::new(3., col)));
-    painter.circle_filled(tip, 6., col);
+    Forma::Anel.pinta(&painter, tip, Vec2::X, col, if hot { 2.25 } else { 1.5 });
     let mut out = None;
     if let Some((_, m)) = drag_state(ui, hid, &r, &[angle]) {
         let mut best = (f32::MAX, angle);
@@ -238,11 +276,11 @@ fn scale_handle(ui: &mut egui::Ui, rect: Rect, cam: &Camera, salt: u64, center: 
     let q = c + egui::vec2(ARM * 0.75, -ARM * 0.75);
     let painter = ui.painter_at(rect);
     let hid = egui::Id::unique(("gizmo_escala", salt));
-    let r = ui.interact(Rect::from_center_size(q, egui::vec2(18., 18.)), hid, if locked { egui::Sense::hover() } else { egui::Sense::drag() });
+    let r = ui.interact(Forma::Losango.pega(q), hid, if locked { egui::Sense::hover() } else { egui::Sense::drag() });
     let hot = r.hovered() || r.dragged();
     let col = if locked { Color32::GRAY } else if hot { HOT } else { Color32::from_rgb(230, 160, 255) };
     painter.line_segment([c, q], Stroke::new(1.5, col));
-    painter.rect_filled(Rect::from_center_size(q, egui::vec2(12., 12.)), 2., col);
+    Forma::Losango.pinta(&painter, q, (q - c).normalized(), col, 1.5);
     painter.circle_stroke(c, 5., Stroke::new(1.5, col));
     let mut out = None;
     if let Some((st, m)) = drag_state(ui, hid, &r, &[factor]) {
@@ -292,7 +330,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
                     let painter = ui.painter_at(rect);
                     let hid = egui::Id::unique(("gizmo_mover", id.0));
                     let locked = num(dist).is_none();
-                    let resp = ui.interact(Rect::from_center_size(tip, egui::vec2(crate::handles::PEGA, crate::handles::PEGA)), hid, if locked { egui::Sense::hover() } else { egui::Sense::drag() });
+                    let resp = ui.interact(Forma::Seta.pega(tip), hid, if locked { egui::Sense::hover() } else { egui::Sense::drag() });
                     let hot = resp.hovered() || resp.dragged();
                     let col = if locked { Color32::GRAY } else if hot { HOT } else { AXIS_COL[0] };
                     painter.line_segment([sb, tip], Stroke::new(1., col.gamma_multiply(0.6)));

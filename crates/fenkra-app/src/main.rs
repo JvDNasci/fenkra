@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Fenkra — CAD paramétrico open source.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// a tabela de traduções é uma cadeia longa de `chain`; o tipo dela passa da profundidade padrão
+#![recursion_limit = "256"]
 
 mod app;
 mod examples;
@@ -105,6 +107,7 @@ mod arvore_grupos;
 mod chapa_estado;
 mod textos_interface2;
 mod textos_interface3;
+mod textos_interface4;
 mod textos_verificar;
 mod verificar_ui;
 mod forma_progresso;

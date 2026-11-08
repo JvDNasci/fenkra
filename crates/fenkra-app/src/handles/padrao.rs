@@ -170,6 +170,90 @@ pub(super) fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera
     }
     pontos(app, ui, rect, cam, id);
     arco(app, ui, rect, cam, id);
+    quantidade(app, ui, rect, cam, id);
+}
+
+/// Passo do losango na tela quando ele não acompanha as cópias (comprimento total, circular).
+const PX_POR_COPIA: f32 = 24.;
+
+/// Quantidade nova pelo arrasto do losango: `andou` px ao longo do padrão desde o começo do arrasto,
+/// `px_copia` px por cópia. Nunca menos de uma (só a original) nem mais de mil.
+pub(crate) fn quantidade_do_arrasto(n0: u32, andou: f32, px_copia: f32) -> u32 {
+    let passos = (andou / px_copia.max(1.)).round() as i64;
+    (n0 as i64 + passos).clamp(1, 1000) as u32
+}
+
+/// B228: losango de quantidade depois da última cópia da direção 1. Arrastar ao longo do padrão (ou a
+/// roda) põe ou tira cópias; no linear com espaçamento, o losango anda junto com a última cópia.
+fn quantidade(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id) {
+    let Some(Feature { kind: FeatureKind::Pattern(p), .. }) = app.open.doc.feature(id) else { return };
+    let (count, linear) = match &p.kind {
+        PatternKind::Linear { count, spacing, total, dir, .. } => (count.clone(), Some((spacing.clone(), *total, dir.clone()))),
+        PatternKind::Circular { count, .. } => (count.clone(), None),
+        // o padrão por pontos tem uma cópia por ponto: a quantidade não é um campo
+        _ => return,
+    };
+    let vars = app.vars();
+    let Ok(nv) = fenkra_core::expr::eval_str(&count, &vars) else { return };
+    let n = nv.round().max(1.) as u32;
+    let travada = count.trim().parse::<u32>().is_err();
+    let (lista, meia) = instancias(app, id);
+    let Some(ultima) = lista.iter().filter(|i| i.chave.1 == 0).max_by_key(|i| i.chave.0) else { return };
+    let alto = v3(ultima.centro) + Vec3::Z * (meia + 2.);
+    let Some(q0) = cam.project(rect, alto) else { return };
+    // sentido do padrão na tela e quantos px vale uma cópia
+    let (eixo, px_copia) = match &linear {
+        Some((esp, total, dir)) => {
+            let Some((_, d)) = app.result.as_ref().and_then(|r| axis_pos(r, &app.open.doc, dir)) else { return };
+            let Some(q1) = cam.project(rect, alto + d) else { return };
+            let ppm = (q1 - q0).length();
+            let e = fenkra_core::expr::eval_str(esp, &vars).unwrap_or(0.) as f32;
+            let px = if *total || e.abs() < 1e-6 { PX_POR_COPIA } else { (e.abs() * ppm).max(8.) };
+            (if ppm > 1e-3 { (q1 - q0) / ppm * e.signum().max(-1.) } else { egui::Vec2::X }, px)
+        }
+        None => (egui::Vec2::X, PX_POR_COPIA),
+    };
+    let eixo = if eixo.length() > 1e-3 { eixo.normalized() } else { egui::Vec2::X };
+    let q = q0 + eixo * 26.;
+    let hid = egui::Id::unique(("padrao_quantidade", id.0));
+    let resp = ui.interact(vocab::Forma::Losango.pega(q), hid, if travada { egui::Sense::hover() } else { egui::Sense::click_and_drag() });
+    let erro = matches!(app.result.as_ref().and_then(|r| r.status.get(&id)), Some(fenkra_solidos::Status::Error(_)));
+    let estado = crate::alca_estado::EstadoAlca::de(resp.hovered(), resp.dragged(), travada, erro);
+    let cor = estado.cor(ui.visuals());
+    let painter = ui.painter_at(rect);
+    painter.line_segment([q0, q], Stroke::new(1., cor.gamma_multiply(0.6)));
+    vocab::Forma::Losango.pinta(&painter, q, eixo, cor, estado.espessura());
+    let txt = if travada { format!("🔒 {} = {n}", count.trim()) } else { format!("×{n}") };
+    let _ = tag(ui, rect, q + eixo * 16. + egui::vec2(0., -22.), txt, cor, ("padrao_qtd_rotulo", id.0));
+    let resp = resp.on_hover_text(format!("{} · {}", tr("Losango de quantidade"), tr("arraste ao longo do padrão, ou gire a roda, para mudar a quantidade")));
+    if travada {
+        return;
+    }
+    let chave = hid.with("n0");
+    if resp.drag_started() {
+        ui.ctx().data_mut(|m| m.insert_temp(chave, (n, resp.interact_pointer_pos().unwrap_or(q))));
+    }
+    let mut novo = None;
+    if resp.dragged() {
+        if let (Some((n0, ini)), Some(m)) = (ui.ctx().data(|m| m.get_temp::<(u32, egui::Pos2)>(chave)), ui.input(|i| i.pointer.interact_pos())) {
+            novo = Some(quantidade_do_arrasto(n0, (m - ini).dot(eixo), px_copia));
+        }
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+    } else if resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+    }
+    let dentes = crate::ui_ext::dentes_3d(ui, &resp);
+    if dentes != 0. {
+        novo = Some(quantidade_do_arrasto(n, dentes as f32, 1.));
+    }
+    if let Some(v) = novo.filter(|v| *v != n) {
+        if let Some(Feature { kind: FeatureKind::Pattern(p), .. }) = app.open.doc.feature_mut(id) {
+            match &mut p.kind {
+                PatternKind::Linear { count, .. } | PatternKind::Circular { count, .. } => *count = v.to_string(),
+                _ => {}
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -218,6 +302,17 @@ mod tests {
         // o pino cobre x 8..18, y 0..10 e, fundido à base, só as faces laterais e o topo são dele: z 0..10
         assert!((c[0] - 13.).abs() < 1e-3 && (c[1] - 5.).abs() < 1e-3 && c[2] > 4. && c[2] < 6., "{c:?}");
         assert!(centro_das_fontes(&b.mesh, &b.face_owner, &[Id(999_999)]).is_none());
+    }
+
+    #[test]
+    fn losango_poe_e_tira_copias_pelo_arrasto() {
+        // 40 px por cópia: 85 px à frente são duas a mais; para trás não passa de uma
+        assert_eq!(quantidade_do_arrasto(4, 85., 40.), 6);
+        assert_eq!(quantidade_do_arrasto(4, -15., 40.), 4);
+        assert_eq!(quantidade_do_arrasto(4, -500., 40.), 1);
+        assert_eq!(quantidade_do_arrasto(4, 1e6, 1.), 1000);
+        // a roda: um dente, uma cópia
+        assert_eq!(quantidade_do_arrasto(3, -1., 1.), 2);
     }
 
     #[test]

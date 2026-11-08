@@ -16,6 +16,7 @@ mod furo;
 mod limites;
 mod padrao;
 pub(crate) mod solidos;
+pub(crate) mod vocab;
 
 /// O comando Furo espera o clique numa face para posicionar o furo (B90)?
 pub(crate) fn furo_espera_clique(h: &Hole) -> bool {
@@ -456,7 +457,7 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
     let Some(tip) = cam.project(rect, at(start + ang)) else { return };
     let painter = ui.painter_at(rect);
     let hid = egui::Id::unique(("alca_rev", id.0));
-    let hr = ui.interact(Rect::from_center_size(tip, egui::vec2(PEGA, PEGA)), hid, if numeric { egui::Sense::drag() } else { egui::Sense::hover() });
+    let hr = ui.interact(vocab::Forma::Anel.pega(tip), hid, if numeric { egui::Sense::drag() } else { egui::Sense::hover() });
     let erro = matches!(app.result.as_ref().and_then(|r| r.status.get(&id)), Some(fenkra_solidos::Status::Error(_)));
     let estado = crate::alca_estado::EstadoAlca::de(hr.hovered(), hr.dragged(), !numeric, erro);
     let col = estado.cor(ui.visuals());
@@ -464,8 +465,7 @@ fn arc_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: Id
         let _ = hr.clone().on_hover_text(d);
     }
     painter.add(egui::Shape::line(pts, Stroke::new(estado.espessura() + 1., col)));
-    painter.circle_stroke(tip, 9., Stroke::new(estado.espessura(), col));
-    painter.circle_filled(tip, 4., col);
+    vocab::Forma::Anel.pinta(&painter, tip, egui::Vec2::X, col, estado.espessura());
     if hr.dragged() {
         if let Some(m) = ui.input(|i| i.pointer.interact_pos()) {
             // ângulo cujo ponto projetado fica mais perto do mouse
@@ -644,6 +644,8 @@ fn alcas(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     for (i, (slot, h)) in list.into_iter().enumerate() {
         linear_handle(app, ui, rect, &cam, id, slot, i, h);
     }
+    // B228: o plano deslocado aberto tem o botão de inverter o lado junto da base da seta
+    inverter_plano(app, ui, rect, &cam, id);
     solidos::arcos(app, ui, rect, &cam, id);
     // B91: ponto clicável por instância do padrão e arco do ângulo do circular
     padrao::overlay(app, ui, rect, &cam, id);
@@ -658,6 +660,7 @@ fn alcas(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
         if let Some(h) = handle_for(app, rid) {
             linear_handle(app, ui, rect, &cam, rid, 0, 7, h);
         }
+        inverter_plano(app, ui, rect, &cam, rid);
     }
 }
 
@@ -668,6 +671,56 @@ fn plano_deslocavel(doc: &Document, cmd: Id) -> Option<Id> {
         PlaneRef::Datum(rid) if matches!(doc.reference(*rid).map(|r| &r.kind), Some(RefKind::OffsetPlane { .. })) => Some(*rid),
         _ => None,
     }
+}
+
+/// Onde fica o botão de inverter: ao lado da base da seta, do lado oposto ao rótulo, a 30 px.
+fn lugar_do_inverter(base: egui::Pos2, um_mm: egui::Pos2) -> egui::Pos2 {
+    let ax = if (um_mm - base).length() > 1e-3 { (um_mm - base).normalized() } else { egui::Vec2::Y };
+    base - egui::vec2(-ax.y, ax.x) * 30.
+}
+
+/// B228: botão redondo com duas pontas opostas junto da base da seta do plano deslocado. O clique troca
+/// o lado do plano (o deslocamento muda de sinal; uma expressão ganha `-( )` e continua ligada).
+fn inverter_plano(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, rid: Id) {
+    let Some(RefKind::OffsetPlane { offset, .. }) = app.open.doc.reference(rid).map(|r| r.kind.clone()) else { return };
+    let Some(h) = handle_for(app, rid) else { return };
+    let (Some(sb), Some(s1)) = (cam.project(rect, h.base), cam.project(rect, h.base + h.dir)) else { return };
+    let c = lugar_do_inverter(sb, s1);
+    let ax = if (s1 - sb).length() > 1e-3 { (s1 - sb).normalized() } else { egui::Vec2::Y };
+    let resp = ui.interact(Rect::from_center_size(c, egui::vec2(PEGA, PEGA)), egui::Id::unique(("plano_inverter", rid.0)), egui::Sense::click());
+    let v = ui.visuals();
+    let cor = if resp.hovered() { crate::theme::accent(v).lerp_to_gamma(v.strong_text_color(), 0.35) } else { crate::theme::accent(v) };
+    let p = ui.painter_at(rect);
+    p.circle_filled(c, 11., v.extreme_bg_color);
+    p.circle_stroke(c, 11., Stroke::new(if resp.hovered() { 2.25 } else { 1.5 }, cor));
+    let n = egui::vec2(-ax.y, ax.x);
+    for s in [1., -1.] {
+        let ponta = c + ax * 8. * s;
+        p.add(egui::Shape::convex_polygon(vec![ponta, ponta - ax * 5. * s + n * 4., ponta - ax * 5. * s - n * 4.], cor, Stroke::NONE));
+    }
+    p.line_segment([c - ax * 4., c + ax * 4.], Stroke::new(1.5, cor));
+    let resp = resp.on_hover_text(format!("{} · {}", tr("Inverter o lado"), tr("Troca o lado do plano: o deslocamento muda de sinal.")));
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    if resp.clicked() || demo_inverter(rid) {
+        write_value(app, rid, vocab::inverter_expr(&offset));
+    }
+}
+
+/// Captura sem mouse: `FENKRA_DEMO_INVERTER=1` aperta o botão uma vez, no primeiro quadro.
+fn demo_inverter(rid: Id) -> bool {
+    use std::sync::Mutex;
+    static FEITO: Mutex<Vec<u64>> = Mutex::new(Vec::new());
+    if std::env::var_os("FENKRA_DEMO_INVERTER").is_none() {
+        return false;
+    }
+    let Ok(mut f) = FEITO.lock() else { return false };
+    if f.contains(&rid.0) {
+        return false;
+    }
+    f.push(rid.0);
+    true
 }
 
 /// Uma alça linear: seta arrastável com a cota editável na ponta.
@@ -686,7 +739,9 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
 
     let painter = ui.painter_at(rect);
     let hid = egui::Id::unique(("alca_3d", id.0, nth));
-    let hr = ui.interact(Rect::from_center_size(st, egui::vec2(PEGA, PEGA)), hid, if numeric { egui::Sense::click_and_drag() } else { egui::Sense::hover() });
+    // B228: a forma diz o que o arrasto muda (distância ou raio)
+    let forma = vocab::Forma::do_rotulo(h.label);
+    let hr = ui.interact(forma.pega(st), hid, if numeric { egui::Sense::click_and_drag() } else { egui::Sense::hover() });
     // B20: cinco estados (repouso, pairando, ativa, travada, erro) com a cor do tema
     let erro = matches!(app.result.as_ref().and_then(|r| r.status.get(&id)), Some(fenkra_solidos::Status::Error(_)));
     let estado = crate::alca_estado::EstadoAlca::de(hr.hovered(), hr.dragged(), !numeric, erro);
@@ -700,9 +755,8 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     painter.line_segment([sb, st], Stroke::new(esp + 1., c));
     let d = if (st - sb).length() > 1. { (st - sb).normalized() } else { axis };
     let n = egui::vec2(-d.y, d.x);
-    painter.add(egui::Shape::convex_polygon(vec![st + d * 14., st + n * 7., st - n * 7.], c, Stroke::new(1., Color32::from_black_alpha(120))));
     painter.circle_filled(sb, 3.5, c);
-    painter.circle_stroke(st, PEGA / 2., Stroke::new(esp, c));
+    forma.pinta(&painter, st, d, c, esp);
 
     // captura do B17: o salto real desta seta, com o zoom real desta vista
     if std::env::var_os("FENKRA_DEMO_PASSO").is_some() {
@@ -734,7 +788,8 @@ fn linear_handle(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     // cota editável junto da ponta
     let key = egui::Id::unique(("alca_edit", id.0, nth));
     let mut editing: Option<String> = ui.ctx().data(|m| m.get_temp(key));
-    let txt = if numeric && crate::sup_loft::sem_unidade(h.label) { format!("{} {}", tr(h.label), fmt(val)) } else if numeric { format!("{} {} mm", tr(h.label), fmt(val)) } else { format!("🔒 {} = {}", h.expr.trim(), fmt(val)) };
+    // B228: a alça de raio escreve "R 3 mm", como a cota de raio do desenho
+    let txt = if numeric && crate::sup_loft::sem_unidade(h.label) { format!("{} {}", tr(h.label), fmt(val)) } else if numeric && forma == vocab::Forma::Raio && h.label.starts_with("Raio") { format!("R {} mm", fmt(val)) } else if numeric { format!("{} {} mm", tr(h.label), fmt(val)) } else { format!("🔒 {} = {}", h.expr.trim(), fmt(val)) };
     let lp = st + n * 22. + d * 10.;
     let galley = painter.layout_no_wrap(txt, egui::FontId::proportional(crate::acessibilidade::fonte_3d(estado.fonte())), Color32::WHITE);
     // B411: o rótulo não cobre os das alças da chapa, que já foram postos nesta passada
@@ -871,6 +926,57 @@ mod tests {
         confere(curva(), "5", false);
         confere(curva(), "-5", false);
         confere(curva(), "5", true);
+    }
+
+    /// B228, teste de escala: peça de 5 mm e de 5 m enquadradas na mesma janela. A seta de um quinto
+    /// do lado fica mais longa que a pega (a ponta não cobre a base), o salto do arrasto fica entre 3,2 e
+    /// 8 px na tela e é uma fração pequena do lado; o botão de inverter fica fora da pega da ponta.
+    #[test]
+    fn alcas_em_peca_de_5_mm_e_de_5_m() {
+        let rect = Rect::from_min_size(egui::pos2(0., 0.), egui::vec2(1200., 760.));
+        for lado in [5f32, 5000.] {
+            let mut cam = Camera::default();
+            cam.fit((Vec3::splat(-lado / 2.) * Vec3::new(1., 1., 0.), Vec3::new(lado / 2., lado / 2., lado / 5.)));
+            let base = Vec3::ZERO;
+            let (sb, st) = (cam.project(rect, base).unwrap(), cam.project(rect, base + Vec3::Z * lado / 5.).unwrap());
+            assert!((st - sb).length() > PEGA, "{lado} mm: seta de {} px", (st - sb).length());
+            let ppm = (cam.project(rect, base + Vec3::Z).unwrap() - sb).length();
+            let passo = crate::camera_nav::passo_125(ppm);
+            let px = passo * ppm as f64;
+            assert!((3.2 - 1e-6..=8. + 1e-6).contains(&px), "{lado} mm: salto de {px} px");
+            // o passo é uma fração pequena da peça (peça de 5 mm: décimo de mm; de 5 m: dezenas de mm)
+            assert!(passo / (lado as f64) < 0.025, "{lado} mm: passo {passo} grande demais");
+            let inv = lugar_do_inverter(sb, cam.project(rect, base + Vec3::Z).unwrap());
+            assert!(!vocab::Forma::Seta.pega(st).intersects(Rect::from_center_size(inv, egui::vec2(PEGA, PEGA))), "{lado} mm: inverter sobre a ponta");
+            // a esfera de posição: arrastar a tela anda no plano de frente para a câmera, na escala da peça
+            let o = Vec3::new(lado / 4., 0., 0.);
+            let so = cam.project(rect, o).unwrap();
+            let v = crate::gizmo::esfera_arrastada(&cam, rect, o, so, so + egui::vec2(40., 0.), [Vec3::X, Vec3::Y, Vec3::Z], [o.x as f64, 0., 0.], 1e-6).unwrap();
+            let p = Vec3::new(v[0] as f32, v[1] as f32, v[2] as f32);
+            let sp = cam.project(rect, p).unwrap();
+            assert!((sp - (so + egui::vec2(40., 0.))).length() < 0.5, "{lado} mm: a esfera não segue o mouse: {sp:?}");
+            let (_, olhar) = cam.ray(rect, so);
+            assert!((p - o).dot(olhar).abs() < lado * 1e-4, "{lado} mm: saiu do plano da tela");
+        }
+    }
+
+    /// B228: inverter o plano deslocado leva o plano para o outro lado da base, com expressão ou número.
+    #[test]
+    fn inverter_leva_o_plano_para_o_outro_lado() {
+        let mut d = Document::new("t");
+        d.add_param("h", "12", Unit::Comprimento).unwrap();
+        let a = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "15");
+        let b = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "h/2");
+        for id in [a, b] {
+            if let Some(RefKind::OffsetPlane { offset, .. }) = d.references.iter_mut().find(|r| r.id == id).map(|r| &mut r.kind) {
+                *offset = vocab::inverter_expr(offset);
+            }
+        }
+        let r = recompute(&d);
+        let z = |id: Id| r.planes.iter().find(|p| p.id == Some(id)).unwrap().frame.origin[2];
+        assert!((z(a) + 15.).abs() < 1e-9 && (z(b) + 6.).abs() < 1e-9, "{} {}", z(a), z(b));
+        let Some(RefKind::OffsetPlane { offset, .. }) = d.reference(b).map(|r| &r.kind) else { panic!() };
+        assert_eq!(offset, "-(h/2)", "a expressão continua ligada ao parâmetro");
     }
 
     #[test]
