@@ -464,6 +464,53 @@ fn dim_into(o: &mut Out, d: &Drawing, dm: &Dim, v: &View, p: &Proj, val: f64, pt
     }
 }
 
+/// Linhas e cotas de um esboço (B352), com `f` levando o plano do esboço à folha.
+fn esboco_into(o: &mut Out, d: &Drawing, e: &crate::esboco::EsbocoDesenho, f: &dyn Fn(V2) -> V2, th: f64) {
+    use crate::esboco::TipoLinha;
+    for (pts, t) in crate::esboco::tracos(e) {
+        let estilo = match t {
+            TipoLinha::Visivel => Style::Visible,
+            TipoLinha::Fina => Style::Thin,
+            TipoLinha::Oculta => Style::Hidden,
+            TipoLinha::Centro => Style::Center,
+        };
+        o.line(pts.into_iter().map(f).collect(), estilo);
+    }
+    if !e.cotas {
+        return;
+    }
+    for c in crate::esboco::cotas(e) {
+        let dm = Dim {
+            id: e.id,
+            view: e.id,
+            kind: c.tipo,
+            anchors: vec![],
+            offset: 8.,
+            text: String::new(),
+            tol: String::new(),
+            style: Default::default(),
+            text_pos: None,
+            arrows: 0,
+            loose: true,
+            precision: None,
+            tol_mode: Default::default(),
+            tol_a: 0.,
+            tol_b: 0.,
+            opcoes: Default::default(),
+            pmi: None,
+        };
+        let mut texto = match c.tipo {
+            DimKind::Radius => format!("R{}", d.num(c.valor)),
+            DimKind::Diameter => format!("Ø{}", d.num(c.valor)),
+            _ => d.num(c.valor),
+        };
+        if c.referencia {
+            texto = format!("({texto})");
+        }
+        dimension(o, &dm, &[f(c.pts[0]), f(c.pts[1])], &texto, th);
+    }
+}
+
 /// Primitivas de uma cota avulsa (prévia/fantasma): vazio se não der para medir.
 pub fn dim_items(d: &Drawing, dm: &Dim, m: &mut Models) -> Vec<Item> {
     let Some(v) = d.view(dm.view) else { return vec![] };
@@ -639,6 +686,15 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
         let p = m.proj(d, v.id);
         let Some((val, pts)) = dim_value(dm, v, &p) else { continue };
         dim_into(&mut o, d, dm, v, &p, val, &pts);
+    }
+    // esboços (B352): na vista seguem a posição e a escala dela; na folha, mm da folha
+    for e in &d.esbocos {
+        if crate::esboco::folha(d, e) != Some(sheet) {
+            continue;
+        }
+        let Some(f) = crate::esboco::na_folha(d, e, m) else { continue };
+        o.reset(Some(e.id));
+        esboco_into(&mut o, d, e, &*f, th);
     }
     // marcas de centro (B294): projetadas de novo na vista a cada desenho
     for mc in &d.centers {
