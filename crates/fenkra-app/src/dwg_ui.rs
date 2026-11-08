@@ -14,13 +14,16 @@ use std::path::PathBuf;
 
 mod alcas;
 mod assistentes;
+mod automatico_ui;
 mod centros_ui;
 mod cota_inteligente;
 mod corte_ui;
 mod cordao;
+mod esboco_ui;
 mod fundo_ui;
 mod ghost;
 mod importar_ui;
+mod inspecao_ui;
 mod options;
 mod setas_ui;
 mod simbolos;
@@ -62,10 +65,19 @@ pub mod c {
     pub const AUTO_BALLOONS: u8 = 35;
     pub const GDT: u8 = 36;
     pub const DATUM: u8 = 37;
+    /// esboço na vista ou na folha (B352)
+    pub const ESBOCO: u8 = 38;
     pub const T_BOM: u8 = 40;
     pub const T_HOLES: u8 = 41;
     pub const T_BENDS: u8 = 42;
     pub const T_CUT: u8 = 43;
+    /// plano de inspeção (B117): tabela de características, balões, CSV e XLSX
+    pub const T_FAI: u8 = 44;
+    pub const FAI_BALOES: u8 = 45;
+    pub const FAI_CSV: u8 = 6;
+    pub const FAI_XLSX: u8 = 7;
+    /// desenho automático por regras (B144)
+    pub const AUTO: u8 = 46;
     pub const SHEET: u8 = 50;
 }
 
@@ -147,11 +159,14 @@ pub struct DwgState {
     corte_novo: fenkra_desenho::corte::CorteOpcoes,
     /// cota inteligente (B107): seleção, tipo e chamada do furo
     ci: cota_inteligente::Estado,
+    /// esboço em edição na folha (B352)
+    pub esb: esboco_ui::Estado,
 }
 
 impl DwgState {
     /// Concluir: fecha a ferramenta em andamento e solta a seleção.
     pub fn conclude(&mut self) {
+        esboco_ui::concluir(self);
         self.tool = None;
         self.clicks.clear();
         self.tool_view = None;
@@ -167,7 +182,7 @@ impl DwgState {
 
     /// Algo aberto no painel (ferramenta, item selecionado ou propriedades)?
     pub fn active(&self) -> bool {
-        self.tool.is_some() || self.sel.is_some() || self.props_open
+        self.tool.is_some() || self.sel.is_some() || self.props_open || self.esb.editando.is_some()
     }
 
     pub fn new(d: Drawing, path: Option<PathBuf>) -> Self {
@@ -225,6 +240,7 @@ impl DwgState {
             detalhe_perfil: false,
             corte_novo: Default::default(),
             ci: Default::default(),
+            esb: Default::default(),
         }
     }
 
@@ -345,6 +361,9 @@ pub fn demo_ajustar(st: &mut DwgState) {
     }
     let sheet = st.sheet;
     demo_centros_tabela(st);
+    esboco_ui::demo(st);
+    inspecao_ui::demo(st);
+    automatico_ui::demo(st);
     match std::env::var("FENKRA_DEMO_DWG_SIMBOLO").unwrap_or_default().as_str() {
         kind @ ("rug" | "solda") => {
             let id = st.d.alloc();
@@ -474,7 +493,7 @@ fn hint(tool: u8, n: usize) -> &'static str {
         (c::BALLOON | c::ROUGH | c::WELD, _) => "Clique onde o símbolo vai ficar",
         (c::NOTE, _) => "Clique onde a nota vai ficar",
         (c::CENTER, _) => "Clique na borda ou dentro de um furo da vista",
-        (c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT, _) => "Clique o canto superior esquerdo da tabela",
+        (c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT | c::T_FAI, _) => "Clique o canto superior esquerdo da tabela",
         _ => "",
     }
 }
@@ -517,6 +536,28 @@ pub fn command(app: &mut App, i: u8) {
             st.sheet = st.d.add_sheet(f);
         }
         c::AUTO_BALLOONS => auto_balloons(app),
+        c::FAI_BALOES => inspecao_ui::alternar_baloes(app.dwg.as_mut().unwrap()),
+        c::AUTO => {
+            let (m, e) = automatico_ui::executar(app.dwg.as_mut().unwrap());
+            app.toast(m, e);
+        }
+        c::FAI_CSV | c::FAI_XLSX => {
+            let st = app.dwg.as_mut().unwrap();
+            if let Some((m, e)) = inspecao_ui::exportar(st, i == c::FAI_XLSX) {
+                app.toast(m, e);
+            }
+        }
+        c::ESBOCO => {
+            // com um esboço escolhido, o comando abre a edição dele; senão pede onde criar
+            let st = app.dwg.as_mut().unwrap();
+            if let Some(id) = st.cur().filter(|s| st.d.esbocos.iter().any(|e| e.id == *s)) {
+                esboco_ui::editar(st, id);
+            } else {
+                esboco_ui::concluir(st);
+                st.tool = Some(c::ESBOCO);
+                st.clicks.clear();
+            }
+        }
         _ => {
             // vista pela câmera: direção atual do 3D (peça ou montagem)
             let cam = app.viewport.as_ref().map(|v| {
@@ -694,7 +735,9 @@ pub fn keys(app: &mut App, ctx: &egui::Context, save_k: bool, undo: bool, redo: 
             st.invalidate();
         }
     }
-    if !typing && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+    if !typing && ctx.input(|i| i.key_pressed(egui::Key::Escape)) && esboco_ui::esc(st) {
+        // Esc dentro do esboço: passo, ferramenta e, por fim, a edição
+    } else if !typing && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         st.tool = None;
         st.corte_pronto = false;
         st.ci.limpar();
@@ -702,7 +745,9 @@ pub fn keys(app: &mut App, ctx: &egui::Context, save_k: bool, undo: bool, redo: 
         st.loose = false;
         st.reassign = None;
     }
-    if del && !typing {
+    if del && !typing && esboco_ui::apagar(st) {
+        // Delete dentro do esboço apaga a seleção dele, não o esboço
+    } else if del && !typing {
         if let Some(id) = st.sel.take().or(st.focus.take()) {
             st.d.delete(id);
         }
@@ -811,7 +856,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                 .min_by(|a, b| ((a.2[0] - a.1[0]) * (a.2[1] - a.1[1])).total_cmp(&((b.2[0] - b.1[0]) * (b.2[1] - b.1[1]))))
                 .map(|x| x.0)
         };
-        let hot = if st.tool.is_none() { mouse_mm.and_then(|p| pick(st, p)) } else { None };
+        let hot = if st.tool.is_none() && st.esb.editando.is_none() { mouse_mm.and_then(|p| pick(st, p)) } else { None };
         let bold_fam = if crate::pmi_draw::fonts().iter().any(|f| f == "Arial negrito") { egui::FontFamily::Name("Arial negrito".into()) } else { egui::FontFamily::Proportional };
         let active = st.cur();
         let is_dim = |id: Option<Id>| id.is_some_and(|i| st.d.dims.iter().any(|d| d.id == i));
@@ -949,7 +994,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             }
         }
         // alças diretas da vista em foco (B250)
-        if st.tool.is_none() && st.reassign.is_none() {
+        if st.tool.is_none() && st.reassign.is_none() && st.esb.editando.is_none() {
             // numa camada acima das janelas flutuantes (painel de comando): uma alça sob o painel
             // continua visível e clicável em vez de ficar escondida atrás dele
             let ctx = ui.ctx().clone();
@@ -992,6 +1037,10 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
         };
         if let Some(target) = st.reassign {
             reassign_pass(st, ui, &painter, rect, &resp, mouse_mm, &to_scr, target);
+        } else if st.esb.editando.is_some() {
+            esboco_ui::tratar(ui, &painter, st, &resp, mouse_mm, &to_scr, z, rect, &snap);
+        } else if st.tool == Some(c::ESBOCO) {
+            esboco_ui::colocar(ui, &painter, st, &resp, mouse_mm, &to_scr, &view_at, rect);
         } else if st.tool == Some(c::DIM_SMART) {
             let dica = block_reason(st);
             if let Some(r) = dica {
@@ -1050,6 +1099,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             let near = |a: V2, b: V2, r: f64| ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2)).sqrt() < r;
             if resp.double_clicked() {
                 match mouse_mm.and_then(|p| pick(st, p)) {
+                    Some(id) if st.d.esbocos.iter().any(|e| e.id == id) => esboco_ui::editar(st, id),
                     Some(id) => {
                         st.sel = Some(id);
                         st.focus = Some(id);
@@ -1173,7 +1223,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             }
             alcas::end_drag(st);
         }
-        if st.tool.is_none() {
+        if st.tool.is_none() && st.esb.editando.is_none() {
             let item = st.ctx_item;
             resp.context_menu(|ui| ctx_menu(ui, st, item));
         }
@@ -1435,6 +1485,9 @@ fn arc_center(pl: &[V2]) -> Option<(V2, f64)> {
 }
 
 fn move_item(st: &mut DwgState, id: Id, dm: V2) {
+    if esboco_ui::mover(st, id, dm) {
+        return;
+    }
     // corte alinhado com a mãe só desliza na direção das setas (Ctrl solta)
     let dm = fenkra_desenho::alcas::restringir_corte(&st.d, id, dm, st.ctrl_livre);
     if let Some(v) = st.d.views.iter_mut().find(|v| v.id == id) {
@@ -1594,15 +1647,16 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
             st.d.notes.push(Note { id, sheet, kind, pos: st.clicks[1], leader: Some(st.clicks[0]), text, size: th, weld: None, gdt, view, anchor3, snapped: !st.loose && anchor3.is_some(), ..Default::default() });
             done(st, id);
         }
-        c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT => {
+        c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT | c::T_FAI => {
             let kind = match tool {
                 c::T_BOM => TableKind::Bom,
                 c::T_HOLES => TableKind::Holes,
                 c::T_BENDS => TableKind::Bends,
+                c::T_FAI => TableKind::Caracteristicas,
                 _ => TableKind::CutList,
             };
             let id = st.d.alloc();
-            let source = st.source.clone().unwrap();
+            let source = if tool == c::T_FAI { inspecao_ui::origem_vazia() } else { st.source.clone().unwrap() };
             st.d.tables.push(Table { id, sheet, kind, source, pos: m, level: Default::default(), cfg: Default::default() });
             done(st, id);
         }
@@ -1907,6 +1961,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                 let mut items: Vec<(Id, String)> = st.d.dims.iter().filter(|d| d.view == id).map(|d| (d.id, format!("↔ {}{}", tr(d.kind.label()), if d.text.is_empty() { String::new() } else { format!(" — {}", d.text) }))).collect();
                 items.extend(st.d.notes.iter().filter(|n| owners.get(&n.id) == Some(&id)).map(|n| (n.id, format!("{} {}", note_icon(&n.kind), note_title(n)))));
                 items.extend(st.d.centers.iter().filter(|c| c.view == id).map(|c| (c.id, format!("✛ {} — {}", tr("Marca de centro"), tr(c.modo.label())))));
+                items.extend(st.d.esbocos.iter().filter(|e| e.dono == esboco::DonoEsboco::Vista(id)).map(|e| (e.id, format!("✎ {}", e.nome))));
                 for (cid, t) in items {
                     tree_row(ui, st, sid, cid, t, depth + 1);
                 }
@@ -1919,7 +1974,8 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             for (id, t) in notes {
                 tree_row(ui, st, sid, id, t, 0);
             }
-            let tables: Vec<(Id, String)> = st.d.tables.iter().filter(|t| t.sheet == sid).map(|t| (t.id, format!("▦ {}", tr(t.kind.label())))).collect();
+            let mut tables: Vec<(Id, String)> = st.d.tables.iter().filter(|t| t.sheet == sid).map(|t| (t.id, format!("▦ {}", tr(t.kind.label())))).collect();
+            tables.extend(st.d.esbocos.iter().filter(|e| e.dono == esboco::DonoEsboco::Folha(sid)).map(|e| (e.id, format!("✎ {}", e.nome))));
             for (id, t) in tables {
                 tree_row(ui, st, sid, id, t, 0);
             }
@@ -1955,6 +2011,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let st = app.dwg.as_mut().unwrap();
     let mut changed_src = false;
     let mut refresh_now = false;
+    if esboco_ui::painel(ui, st) {
+        return;
+    }
     if let Some(id) = st.sel {
         if centros_ui::painel(ui, st, id) {
             return;
@@ -2289,6 +2348,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         ui.label(tr("Casas decimais"));
         { let __r = ui.add(crate::ui_ext::dv(&mut st.d.decimals).range(0..=4)); crate::ui_ext::wheel(ui, &__r, &mut st.d.decimals); __r };
     });
+    inspecao_ui::props(ui, st);
     ui.separator();
     ui.label(RichText::new(tr("Origem das novas vistas e tabelas")).strong());
     match &st.source {

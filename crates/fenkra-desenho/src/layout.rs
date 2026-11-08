@@ -485,7 +485,7 @@ fn esboco_into(o: &mut Out, d: &Drawing, e: &crate::esboco::EsbocoDesenho, f: &d
             view: e.id,
             kind: c.tipo,
             anchors: vec![],
-            offset: 8.,
+            offset: 8. * c.lado,
             text: String::new(),
             tol: String::new(),
             style: Default::default(),
@@ -746,6 +746,38 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
                 o.text(e.pos, e.texto.clone(), th * 0.8, 0., Align::Left);
             }
             o.alert = false;
+        }
+    }
+    // B117: balão numerado junto de cada característica do plano de inspeção
+    if d.inspecao.baloes {
+        let caixas = owner_boxes(&o.items);
+        for c in crate::inspecao::caracteristicas(d, m).into_iter().filter(|c| c.folha == sheet) {
+            let r = th * 0.75;
+            // logo depois do texto da característica (na direção dele); sem texto, no canto da caixa
+            let texto = o.items.iter().filter(|it| it.owner == Some(c.dono)).find_map(|it| match &it.prim {
+                Prim::Text { pos, text, size, angle, align } => Some((*pos, text.chars().count() as f64 * size * 0.55, *size, *angle, *align)),
+                _ => None,
+            });
+            let texto = texto.filter(|_| c.tipo == crate::inspecao::TipoCarac::Dimensao);
+            let folga = if c.cem_por_cento { th * 0.6 } else { 0. };
+            let centro = match (texto, caixas.iter().find(|b| b.0 == c.dono)) {
+                (Some((pos, w, size, angle, align)), _) => {
+                    let (s, co) = angle.to_radians().sin_cos();
+                    let ini = match align {
+                        Align::Left => 0.,
+                        Align::Center => -w / 2.,
+                        Align::Right => -w,
+                    };
+                    let ao_longo = ini + w + folga + r * 1.4;
+                    [pos[0] + co * ao_longo - s * size * 0.4, pos[1] + s * ao_longo + co * size * 0.4]
+                }
+                (None, Some((_, _, hi))) => [hi[0] + r * 1.2, hi[1] + r * 0.6],
+                (None, None) => [c.pos[0] + r * 2., c.pos[1] + r * 2.],
+            };
+            o.reset(Some(c.dono));
+            let pts: Vec<V2> = (0..=32).map(|i| i as f64 / 32. * std::f64::consts::TAU).map(|a| [centro[0] + r * a.cos(), centro[1] + r * a.sin()]).collect();
+            o.line(pts, Style::Thin);
+            o.text([centro[0], centro[1] - th * 0.35], c.numero.to_string(), th * 0.7, 0., Align::Center);
         }
     }
     o.items
@@ -1138,9 +1170,10 @@ pub fn dim_anchors_ok(dm: &Dim, p: &Proj) -> Vec<bool> {
     let q: Vec<V2> = dm.anchors.iter().map(|a| ax.project(*a)).collect();
     if matches!(dm.kind, DimKind::Radius | DimKind::Diameter) && q.len() >= 2 {
         let arcs: Vec<(V2, f64)> = p.lines.iter().filter_map(|(pl, _)| arc_center(pl)).collect();
-        let center = arcs.iter().find(|(c, _)| near2(*c, q[0]));
-        let on = center.is_some_and(|(c, r)| (v2len(v2sub(q[1], *c)) - r).abs() <= ANCHOR_TOL.max(r * 0.01));
-        return vec![center.is_some(), on];
+        // furos com rebaixo têm dois círculos no mesmo centro: a borda vale em qualquer um deles
+        let mesmos: Vec<&(V2, f64)> = arcs.iter().filter(|(c, _)| near2(*c, q[0])).collect();
+        let on = mesmos.iter().any(|(c, r)| (v2len(v2sub(q[1], *c)) - r).abs() <= ANCHOR_TOL.max(r * 0.01));
+        return vec![!mesmos.is_empty(), on];
     }
     let cands = anchor_candidates(p);
     q.iter().map(|a| cands.iter().any(|c| near2(*c, *a))).collect()

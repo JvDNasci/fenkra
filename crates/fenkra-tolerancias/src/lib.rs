@@ -13,6 +13,7 @@
 
 pub mod ajustes;
 pub mod desvios;
+pub mod empilhamento;
 pub mod geral;
 pub mod it;
 

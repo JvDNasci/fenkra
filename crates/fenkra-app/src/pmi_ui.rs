@@ -283,6 +283,11 @@ fn target_label(t: &PmiTarget) -> String {
 
 /// Cria a anotação com as seleções atuais; sem seleções suficientes, espera por elas.
 pub fn command(app: &mut App, i: u8) {
+    if i == 23 {
+        // B126: empilhamento de tolerâncias com as cotas escolhidas
+        crate::pmi_empilhamento::abrir(app);
+        return;
+    }
     if i == 10 {
         auto_balloons(app);
         return;
@@ -1935,6 +1940,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             crate::pmi_minibar::drop_session();
         }
     }
+    // B38: etiquetas do consultor junto das anotações com problema
+    crate::pmi_consultor_3d::etiquetas(app, ui, rect, cam);
     crate::pmi_minibar::show(app, ui, rect, cam, sel_lbl);
 }
 

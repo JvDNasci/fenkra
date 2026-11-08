@@ -493,10 +493,108 @@ pub struct Aviso {
     pub gravidade: Gravidade,
     /// mensagem curta, em português; a interface traduz
     pub msg: String,
+    /// o que fazer (B38): toda regra diz a ação, não só o diagnóstico
+    pub acao: String,
+    /// correção de um clique, quando há uma só saída certa (B38)
+    pub correcao: Option<Correcao>,
+}
+
+/// Correção de um clique que o consultor oferece (B38).
+#[derive(Clone, PartialEq, Debug)]
+pub enum Correcao {
+    /// tira o modificador do valor
+    TirarModificador(Modif),
+    /// tira todas as referências do quadro (forma não usa referência)
+    TirarReferencias,
+    /// tira uma referência (repetida, inválida ou que não existe)
+    TirarReferencia(String),
+    /// zona de largura no lugar da Ø
+    ZonaLargura,
+    /// marca o elemento como eixo ou plano mediano (zona Ø)
+    MarcarMediano,
+    /// tira a segunda linha do quadro
+    TirarSegundaLinha,
+    /// tira o valor máximo da tolerância por unidade
+    TirarValorMaximo,
+}
+
+impl Correcao {
+    /// Rótulo do botão.
+    pub fn label(&self) -> String {
+        match self {
+            Correcao::TirarModificador(m) => format!("Tirar {}", m.texto()),
+            Correcao::TirarReferencias => "Tirar as referências".into(),
+            Correcao::TirarReferencia(l) => format!("Tirar a referência {l}"),
+            Correcao::ZonaLargura => "Usar zona de largura".into(),
+            Correcao::MarcarMediano => "Marcar eixo ou plano mediano".into(),
+            Correcao::TirarSegundaLinha => "Tirar a segunda linha".into(),
+            Correcao::TirarValorMaximo => "Tirar o valor máximo".into(),
+        }
+    }
+
+    /// Aplica a correção ao quadro. Devolve se mudou algo.
+    pub fn aplicar(&self, datums: &mut String, extra: &mut GdtExtra) -> bool {
+        let antes = (datums.clone(), extra.clone());
+        match self {
+            Correcao::TirarModificador(m) => {
+                extra.mods.retain(|x| x != m);
+                let simbolo = m.texto();
+                extra.modifier = extra.modifier.replace(simbolo.as_str(), "");
+                if *m == Modif::Projetada {
+                    extra.proj.clear();
+                }
+            }
+            Correcao::TirarReferencias => {
+                datums.clear();
+                extra.datum_mods.clear();
+            }
+            Correcao::TirarReferencia(l) => {
+                let ds = separar_datums(datums);
+                let mut vista = false;
+                let mut fica = vec![];
+                let mut mods = vec![];
+                for (i, d) in ds.iter().enumerate() {
+                    // a primeira ocorrência de uma letra repetida fica; as outras e as inválidas saem
+                    let sai = d == l && (vista || letra_valida(d).is_err() || ds.iter().filter(|x| *x == d).count() == 1);
+                    vista |= d == l;
+                    if !sai {
+                        fica.push(d.clone());
+                        mods.push(extra.datum_mods.get(i).cloned().unwrap_or_default());
+                    }
+                }
+                *datums = fica.join(" ");
+                extra.datum_mods = mods;
+            }
+            Correcao::ZonaLargura => {
+                extra.zona = Some(Zona::Largura);
+                extra.zone_dia = false;
+            }
+            Correcao::MarcarMediano => extra.elemento = Elemento::Mediano,
+            Correcao::TirarSegundaLinha => {
+                extra.second = None;
+                extra.second_ch = None;
+            }
+            Correcao::TirarValorMaximo => extra.max_valor.clear(),
+        }
+        (datums.clone(), extra.clone()) != antes
+    }
 }
 
 fn av(g: Gravidade, m: impl Into<String>) -> Aviso {
-    Aviso { gravidade: g, msg: m.into() }
+    Aviso { gravidade: g, msg: m.into(), acao: String::new(), correcao: None }
+}
+
+impl Aviso {
+    /// Texto de ação da regra.
+    fn faz(mut self, a: impl Into<String>) -> Aviso {
+        self.acao = a.into();
+        self
+    }
+    /// Correção de um clique.
+    fn corrige(mut self, c: Correcao) -> Aviso {
+        self.correcao = Some(c);
+        self
+    }
 }
 
 /// Letras de referência: nunca I, O nem Q (parecem 1, 0 e O/zero); depois de Z vêm AA, BB…
@@ -697,41 +795,41 @@ impl GdtExtra {
         let r = self.resolvido();
         let mut v: Vec<Aviso> = vec![];
         for i in &r.ignorados {
-            v.push(av(Gravidade::Aviso, format!("o modificador {i} não existe nas normas atuais e foi ignorado")));
+            v.push(av(Gravidade::Aviso, format!("o modificador {i} não existe nas normas atuais e foi ignorado")).faz("apague o símbolo do campo de modificadores e escolha um da lista"));
         }
         // valor
         match valor_num(tol) {
-            None => v.push(av(Gravidade::Erro, "informe o valor da tolerância como número")),
-            Some(x) if x <= 0. => v.push(av(Gravidade::Erro, "o valor da tolerância precisa ser maior que zero")),
+            None => v.push(av(Gravidade::Erro, "informe o valor da tolerância como número").faz("digite só o número da tolerância, por exemplo 0,05")),
+            Some(x) if x <= 0. => v.push(av(Gravidade::Erro, "o valor da tolerância precisa ser maior que zero").faz("troque o valor por um número maior que zero")),
             _ => {}
         }
         // características que a norma escolhida já não traz
         if n == Norma::Asme && matches!(ch, GdtChar::Concentricidade | GdtChar::Simetria) {
-            v.push(av(Gravidade::Erro, "concentricidade e simetria saíram da ASME 2018: use posição ou perfil"));
+            v.push(av(Gravidade::Erro, "concentricidade e simetria saíram da ASME 2018: use posição ou perfil").faz("troque a característica para posição ou perfil, ou mude a norma do quadro para ISO"));
         }
         // zona
         let med = self.elemento == Elemento::Mediano;
         match r.zona {
             Zona::Diametro | Zona::Esfera => {
                 if matches!(ch.classe(), ClasseGdt::Forma | ClasseGdt::Batimento | ClasseGdt::Perfil) && ch != GdtChar::Retitude {
-                    v.push(av(Gravidade::Erro, "zona Ø só vale em retitude, orientação e posição"));
+                    v.push(av(Gravidade::Erro, "zona Ø só vale em retitude, orientação e posição").faz("use a zona de largura").corrige(Correcao::ZonaLargura));
                 } else if !med && ch != GdtChar::Concentricidade {
-                    v.push(av(Gravidade::Erro, "zona Ø pede eixo ou ponto: marque 'eixo ou plano mediano'"));
+                    v.push(av(Gravidade::Erro, "zona Ø pede eixo ou ponto: marque 'eixo ou plano mediano'").faz("marque o elemento como eixo ou plano mediano").corrige(Correcao::MarcarMediano));
                 }
                 if r.zona == Zona::Esfera && ch != GdtChar::Posicao {
-                    v.push(av(Gravidade::Erro, "zona esférica SØ só vale em posição"));
+                    v.push(av(Gravidade::Erro, "zona esférica SØ só vale em posição").faz("troque a característica para posição ou use a zona de largura").corrige(Correcao::ZonaLargura));
                 }
             }
             Zona::NaoUniforme => {
                 if !matches!(ch.classe(), ClasseGdt::Perfil) {
-                    v.push(av(Gravidade::Erro, "zona não uniforme só vale em perfil"));
+                    v.push(av(Gravidade::Erro, "zona não uniforme só vale em perfil").faz("troque para perfil ou use a zona de largura").corrige(Correcao::ZonaLargura));
                 } else if valor_num(&self.uz).is_none() {
-                    v.push(av(Gravidade::Erro, "informe o deslocamento da zona não uniforme"));
+                    v.push(av(Gravidade::Erro, "informe o deslocamento da zona não uniforme").faz("digite o deslocamento da zona no campo UZ"));
                 }
             }
             Zona::Largura => {
                 if ch == GdtChar::Concentricidade && n == Norma::Iso {
-                    v.push(av(Gravidade::Aviso, "concentricidade usa zona Ø"));
+                    v.push(av(Gravidade::Aviso, "concentricidade usa zona Ø").faz("escolha a zona Ø no quadro"));
                 }
             }
         }
@@ -739,70 +837,70 @@ impl GdtExtra {
         let ds = separar_datums(datums);
         for (i, d) in ds.iter().enumerate() {
             if let Err(m) = letra_valida(d) {
-                v.push(av(Gravidade::Erro, format!("referência {d}: {m}")));
+                v.push(av(Gravidade::Erro, format!("referência {d}: {m}")).faz(format!("troque a letra {d} por uma válida ou tire-a")).corrige(Correcao::TirarReferencia(d.clone())));
             } else if ds[..i].contains(d) {
-                v.push(av(Gravidade::Erro, format!("a referência {d} aparece duas vezes")));
+                v.push(av(Gravidade::Erro, format!("a referência {d} aparece duas vezes")).faz(format!("tire a segunda {d} do quadro")).corrige(Correcao::TirarReferencia(d.clone())));
             } else if let Some(ex) = existentes {
                 if !ex.iter().any(|e| e == d) {
-                    v.push(av(Gravidade::Erro, format!("a referência {d} não existe no modelo: crie-a primeiro")));
+                    v.push(av(Gravidade::Erro, format!("a referência {d} não existe no modelo: crie-a primeiro")).faz(format!("crie a referência {d} numa face, ou tire-a do quadro")).corrige(Correcao::TirarReferencia(d.clone())));
                 }
             }
         }
         if ds.len() > 3 {
-            v.push(av(Gravidade::Erro, "o quadro aceita no máximo três referências"));
+            v.push(av(Gravidade::Erro, "o quadro aceita no máximo três referências").faz("deixe só a primária, a secundária e a terciária"));
         }
         match (ch.classe(), ds.len()) {
-            (ClasseGdt::Forma, k) if k > 0 => v.push(av(Gravidade::Erro, "tolerância de forma não usa referência")),
-            (ClasseGdt::Orientacao | ClasseGdt::Batimento, 0) => v.push(av(Gravidade::Erro, "esta característica precisa de ao menos uma referência")),
-            (ClasseGdt::Posicao, 0) if ch != GdtChar::Posicao => v.push(av(Gravidade::Erro, "esta característica precisa de ao menos uma referência")),
-            (ClasseGdt::Posicao, 0) => v.push(av(Gravidade::Aviso, "posição sem referência só localiza o grupo entre si")),
+            (ClasseGdt::Forma, k) if k > 0 => v.push(av(Gravidade::Erro, "tolerância de forma não usa referência").faz("tire as referências do quadro").corrige(Correcao::TirarReferencias)),
+            (ClasseGdt::Orientacao | ClasseGdt::Batimento, 0) => v.push(av(Gravidade::Erro, "esta característica precisa de ao menos uma referência").faz("acrescente a referência primária no quadro (crie-a numa face, se faltar)")),
+            (ClasseGdt::Posicao, 0) if ch != GdtChar::Posicao => v.push(av(Gravidade::Erro, "esta característica precisa de ao menos uma referência").faz("acrescente a referência primária no quadro (crie-a numa face, se faltar)")),
+            (ClasseGdt::Posicao, 0) => v.push(av(Gravidade::Aviso, "posição sem referência só localiza o grupo entre si").faz("se a posição é em relação à peça, acrescente as referências")),
             _ => {}
         }
         // modificadores do valor e da chamada
         let mut vistos: Vec<Modif> = vec![];
         for m in &r.mods {
             if vistos.contains(m) {
-                v.push(av(Gravidade::Erro, format!("modificador {} repetido", m.texto())));
+                v.push(av(Gravidade::Erro, format!("modificador {} repetido", m.texto())).faz(format!("tire o {} repetido", m.texto())).corrige(Correcao::TirarModificador(*m)));
                 continue;
             }
             vistos.push(*m);
             match compat(*m, ch, self.elemento, m.posicao(), n) {
-                Compat::Nao(msg) => v.push(av(Gravidade::Erro, format!("{} {}: {msg}", m.texto(), m.label()))),
-                Compat::Aviso(msg) => v.push(av(Gravidade::Aviso, format!("{} {}: {msg}", m.texto(), m.label()))),
+                Compat::Nao(msg) => v.push(av(Gravidade::Erro, format!("{} {}: {msg}", m.texto(), m.label())).faz(format!("tire o {}", m.texto())).corrige(Correcao::TirarModificador(*m))),
+                Compat::Aviso(msg) => v.push(av(Gravidade::Aviso, format!("{} {}: {msg}", m.texto(), m.label())).faz(format!("confira se o {} é mesmo o que o desenho pede", m.texto()))),
                 Compat::Ok => {}
             }
             if *m == Modif::Projetada && valor_num(&self.proj).is_none_or(|x| x <= 0.) {
-                v.push(av(Gravidade::Erro, "zona projetada precisa da altura (número maior que zero)"));
+                v.push(av(Gravidade::Erro, "zona projetada precisa da altura (número maior que zero)").faz("digite a altura da zona projetada, ou tire o Ⓟ").corrige(Correcao::TirarModificador(Modif::Projetada)));
             }
             if *m == Modif::Entre && (letra_valida(&self.entre.0).is_err() || letra_valida(&self.entre.1).is_err() || self.entre.0.trim() == self.entre.1.trim()) {
-                v.push(av(Gravidade::Erro, "'entre' precisa de duas letras de ponto diferentes"));
+                v.push(av(Gravidade::Erro, "'entre' precisa de duas letras de ponto diferentes").faz("digite as duas letras dos pontos, diferentes entre si"));
             }
         }
         if r.mods.contains(&Modif::Mmc) && r.mods.contains(&Modif::Lmc) {
-            v.push(av(Gravidade::Erro, "máximo e mínimo material não coexistem no mesmo valor"));
+            v.push(av(Gravidade::Erro, "máximo e mínimo material não coexistem no mesmo valor").faz("fique com um dos dois: tire o Ⓛ ou o Ⓜ").corrige(Correcao::TirarModificador(Modif::Lmc)));
         }
         for (i, ms) in self.datum_mods.iter().enumerate() {
             let Some(letra) = ds.get(i) else { continue };
             for m in ms {
                 if !matches!(m, Modif::Mmc | Modif::Lmc) {
-                    v.push(av(Gravidade::Erro, format!("referência {letra}: só máximo ou mínimo material")));
+                    v.push(av(Gravidade::Erro, format!("referência {letra}: só máximo ou mínimo material")).faz(format!("deixe só Ⓜ ou Ⓛ na referência {letra}")));
                 } else if let Compat::Nao(msg) = compat(*m, ch, self.elemento, PosMod::Datum, n) {
-                    v.push(av(Gravidade::Erro, format!("referência {letra}: {msg}")));
+                    v.push(av(Gravidade::Erro, format!("referência {letra}: {msg}")).faz(format!("tire o modificador da referência {letra}")));
                 }
             }
         }
         // por unidade e valor máximo
         if !self.por_unidade.trim().is_empty() && valor_num(&self.por_unidade).is_none_or(|x| x <= 0.) {
-            v.push(av(Gravidade::Erro, "o comprimento da tolerância por unidade precisa ser um número maior que zero"));
+            v.push(av(Gravidade::Erro, "o comprimento da tolerância por unidade precisa ser um número maior que zero").faz("digite o comprimento por unidade, por exemplo 25"));
         }
         if !self.max_valor.trim().is_empty() {
             match (valor_num(&self.max_valor), valor_num(tol)) {
-                (None, _) => v.push(av(Gravidade::Erro, "o valor máximo precisa ser um número")),
+                (None, _) => v.push(av(Gravidade::Erro, "o valor máximo precisa ser um número").faz("digite o valor máximo como número, ou apague-o").corrige(Correcao::TirarValorMaximo)),
                 (Some(mx), Some(t)) if self.por_unidade.trim().is_empty() || mx <= t => {
                     if self.por_unidade.trim().is_empty() {
-                        v.push(av(Gravidade::Aviso, "valor máximo só faz sentido com tolerância por unidade"));
+                        v.push(av(Gravidade::Aviso, "valor máximo só faz sentido com tolerância por unidade").faz("informe o comprimento por unidade, ou tire o valor máximo").corrige(Correcao::TirarValorMaximo));
                     } else {
-                        v.push(av(Gravidade::Erro, "o valor máximo precisa ser maior que o valor por unidade"));
+                        v.push(av(Gravidade::Erro, "o valor máximo precisa ser maior que o valor por unidade").faz("aumente o valor máximo acima do valor por unidade"));
                     }
                 }
                 _ => {}
@@ -811,23 +909,23 @@ impl GdtExtra {
         // quadro composto (linha de baixo refina) ou de segmento único (cada linha com o seu símbolo)
         if let Some((t2, d2)) = &self.second {
             match (valor_num(t2), valor_num(tol)) {
-                (None, _) => v.push(av(Gravidade::Erro, "a segunda linha precisa de um valor numérico")),
-                (Some(b), Some(a)) if b >= a && self.second_ch.is_none() => v.push(av(Gravidade::Erro, "no quadro composto a linha de baixo é mais rígida: valor menor que o de cima")),
+                (None, _) => v.push(av(Gravidade::Erro, "a segunda linha precisa de um valor numérico").faz("digite o valor da segunda linha, ou tire-a").corrige(Correcao::TirarSegundaLinha)),
+                (Some(b), Some(a)) if b >= a && self.second_ch.is_none() => v.push(av(Gravidade::Erro, "no quadro composto a linha de baixo é mais rígida: valor menor que o de cima").faz("diminua o valor da linha de baixo abaixo do de cima")),
                 _ => {}
             }
             if let Some(c2) = self.second_ch {
                 if c2 == ch {
-                    v.push(av(Gravidade::Info, "segmento único com a mesma característica: considere o quadro composto"));
+                    v.push(av(Gravidade::Info, "segmento único com a mesma característica: considere o quadro composto").faz("tire a característica própria da segunda linha para virar quadro composto"));
                 }
             } else if !matches!(ch, GdtChar::Posicao | GdtChar::PerfilSuperficie | GdtChar::PerfilLinha) {
-                v.push(av(Gravidade::Aviso, "quadro composto é usado em posição e perfil"));
+                v.push(av(Gravidade::Aviso, "quadro composto é usado em posição e perfil").faz("troque para posição ou perfil, ou tire a segunda linha").corrige(Correcao::TirarSegundaLinha));
             }
             let d2s = separar_datums(d2);
             if self.second_ch.is_none() {
                 // a linha de baixo só repete referências da de cima, na mesma ordem
                 let mut it = ds.iter();
                 if !d2s.iter().all(|d| it.any(|x| x == d)) {
-                    v.push(av(Gravidade::Erro, "no quadro composto a linha de baixo só repete referências da de cima, na mesma ordem"));
+                    v.push(av(Gravidade::Erro, "no quadro composto a linha de baixo só repete referências da de cima, na mesma ordem").faz("deixe na linha de baixo só referências da de cima, na mesma ordem"));
                 }
             }
         }
@@ -858,9 +956,9 @@ pub fn consultar(pmi: &[Pmi], norma: Norma) -> Vec<Achado> {
         match &p.kind {
             PmiKind::Datum { letter } => {
                 if let Err(m) = letra_valida(letter) {
-                    out.push(Achado { id: p.id, aviso: av(Gravidade::Erro, m) });
+                    out.push(Achado { id: p.id, aviso: av(Gravidade::Erro, m).faz("renomeie a referência com uma letra válida (sem I, O e Q)") });
                 } else if definidas.contains(&letter.trim()) {
-                    out.push(Achado { id: p.id, aviso: av(Gravidade::Erro, format!("a referência {} está definida mais de uma vez", letter.trim())) });
+                    out.push(Achado { id: p.id, aviso: av(Gravidade::Erro, format!("a referência {} está definida mais de uma vez", letter.trim())).faz("renomeie uma delas para a próxima letra livre") });
                 }
                 definidas.push(letter.trim());
             }
@@ -885,7 +983,7 @@ pub fn consultar(pmi: &[Pmi], norma: Norma) -> Vec<Achado> {
     for p in pmi {
         if let PmiKind::Datum { letter } = &p.kind {
             if !usadas.iter().any(|u| u == letter.trim()) {
-                out.push(Achado { id: p.id, aviso: av(Gravidade::Info, format!("a referência {} não é usada por nenhum quadro", letter.trim())) });
+                out.push(Achado { id: p.id, aviso: av(Gravidade::Info, format!("a referência {} não é usada por nenhum quadro", letter.trim())).faz("use-a num quadro ou apague-a") });
             }
         }
     }

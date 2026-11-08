@@ -8,7 +8,7 @@ use fenkra_core::pmi::*;
 
 impl App {
     pub(super) fn demo_pmi_caso(&mut self, modo: &str) {
-        if !matches!(modo, "angulo" | "chamada" | "chamada_cruza" | "perfil" | "alcas" | "setas" | "setas_painel" | "cordao" | "capturas" | "sobrepostas") {
+        if !matches!(modo, "angulo" | "chamada" | "chamada_cruza" | "perfil" | "alcas" | "setas" | "setas_painel" | "cordao" | "capturas" | "sobrepostas" | "consultor" | "empilhamento") {
             return;
         }
         let d = &mut self.open.doc;
@@ -91,6 +91,33 @@ impl App {
                 novo(d, PmiKind::TitleBlock { template: TITLE_TEMPLATE.into() }, vec![[0., 0., 8.]], [30., 0., 30.], "", "Legenda 1");
                 novo(d, PmiKind::Note, vec![[0., 0., 8.]], [30., 0., 30.], "Furos passantes", "Nota 2");
                 a
+            }
+            "consultor" => {
+                // B38: planeza com referência e Ⓜ (os dois proibidos na forma) e perpendicularidade sem
+                // referência: as etiquetas do consultor aparecem junto dos quadros
+                let gdt = |ch, datums: &str, mods| PmiKind::Gdt { ch, tol: "0,05".into(), datums: datums.into(), extra: GdtExtra { mods, ..Default::default() } };
+                novo(d, PmiKind::Datum { letter: "A".into() }, vec![[0., -35., 4.]], [0., -20., 10.], "", "Referência A");
+                novo(d, gdt(GdtChar::Perpendicularidade, "", vec![]), vec![[45., 0., 4.]], [20., 0., 25.], "", "Perpendicularidade");
+                novo(d, gdt(GdtChar::Planeza, "A", vec![fenkra_core::gdt::Modif::Mmc]), vec![[-30., 10., 8.]], [-20., 10., 30.], "", "Planeza")
+            }
+            "empilhamento" => {
+                // B126: largura total com H7 menos três trechos em cadeia, e uma teórica que fica fora
+                let mut c = |d: &mut Document, a: [f64; 3], b: [f64; 3], mais: &str, menos: &str, nome: &str| {
+                    let id = novo(d, PmiKind::Linear, vec![a, b], [0., -25., 0.], "", nome);
+                    if let Some(p) = d.pmi.last_mut() {
+                        p.tol_plus = mais.into();
+                        p.tol_minus = menos.into();
+                    }
+                    id
+                };
+                let ids = vec![
+                    c(d, [-60., -40., 8.], [60., -40., 8.], "H7", "", "Largura"),
+                    c(d, [60., -40., 8.], [20., -40., 8.], "0,1", "0,1", "Trecho 1"),
+                    c(d, [20., -40., 8.], [-20., -40., 8.], "0,05", "0,05", "Trecho 2"),
+                    c(d, [-20., -40., 8.], [-59.8, -40., 8.], "+0,02", "0,1", "Trecho 3"),
+                ];
+                crate::pmi_empilhamento::abrir_ids(ids.clone(), ("0", "0,5"));
+                ids[0]
             }
             "perfil" => {
                 // texto deitado num plano de normal X: visto de frente (ao longo de Y) fica de perfil

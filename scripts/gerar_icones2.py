@@ -603,9 +603,16 @@ def desenhos():
     ic("des_detalhe", B=L((4, 40), (4, 12), (22, 12)), R=C(13, 12, 8) + C(33, 32, 11) + L((19, 18), (25, 24)))
     ic("des_planificada", B=FOLHA(), R=Z((16, 12), (22, 12), (22, 17), (28, 17), (28, 23), (22, 23), (22, 28), (16, 28), (16, 23), (10, 23), (10, 17), (16, 17)))
     ic("des_vista_camera", B=FOLHA(), R=Q(11, 15, 13, 11) + L((24, 19), (30, 15), (30, 26), (24, 22)))
+    ic("des_esboco", B=FOLHA(), R="M11 31l6-10h8M24 33l11-13 4 3.5-11 13-5.5 1.5z", pr=[(11, 31), (17, 21)])
     ic("des_centro", B=C(24, 24, 15), R="M24 4v12M24 20v8M24 32v12M4 24h12M20 24h8M32 24h12")
     ic("des_balao", B="M6 40h20", R=C(32, 15, 10) + L((25, 22), (14, 40)))
     ic("des_baloes_auto", B="M6 42h22", R=C(14, 13, 7) + L((14, 20), (14, 42)) + C(30, 21, 6) + L((26, 26), (20, 42)) + FAISCA(38, 37, 7))
+    ic("des_inspecao", B=TABELA(6, 18, 28, 24, 3, 2), R=C(36, 12, 7) + "M34 9.5l2.5-1.5v8")
+    ic("des_inspecao_baloes", B="M6 42h22v-16h-22z", R=C(36, 12, 6) + C(38, 34, 6) + L((28, 26), (31, 16)) + L((28, 36), (32, 35)))
+    ic("des_inspecao_csv", B=TABELA(6, 8, 26, 32, 4, 2), R=S(39, 10, 39, 34, 5) + "M33 41h12")
+    ic("des_inspecao_xlsx", B=TABELA(6, 8, 26, 32, 4, 2), R="M33 12l10 12M43 12l-10 12" + S(38, 28, 38, 42, 4))
+    ic("pmi_empilhamento", B=Q(6, 30, 12, 10) + Q(18, 30, 10, 10) + Q(28, 30, 14, 10), R=S2(6, 20, 42, 20, 4) + "M6 16v8M42 16v8")
+    ic("des_automatico", B=FOLHA(), R=Q(10, 14, 12, 9) + "M10 28h12M10 26v4M22 26v4" + FAISCA(34, 20, 7))
     ic("des_bom", B=TABELA(6, 8, 36, 32, 4, 2), R="M6 16V8h36v8z")
     ic("des_esquema", B=L((10, 36), (22, 14), (40, 30)), R=C(10, 36, 4) + C(22, 14, 4) + C(40, 30, 4) + "M4 42h12")
     ic("des_nota", B="M26 16h16M26 24h16M26 32h10", R=S(20, 18, 7, 38, 5))
@@ -749,6 +756,10 @@ SO_INTERFACE |= {"an_inclinacao", "an_isofotas", "an_dfm"}
 SO_INTERFACE |= {"asm_chaveta", "asm_calculo", "pmi_captura", "pmi_captura_modelo"}
 SO_INTERFACE |= {"asm_conjunto", "asm_regras_cor"}
 SO_INTERFACE |= {"verificar"}
+SO_INTERFACE |= {"des_esboco"}
+SO_INTERFACE |= {"des_automatico"}
+SO_INTERFACE |= {"pmi_empilhamento"}
+SO_INTERFACE |= {"des_inspecao", "des_inspecao_baloes", "des_inspecao_csv", "des_inspecao_xlsx"}
 
 
 # ---------- saída ----------

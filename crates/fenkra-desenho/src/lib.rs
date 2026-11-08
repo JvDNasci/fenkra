@@ -8,13 +8,16 @@
 //! - [`export`]: PDF, SVG e DXF.
 
 pub mod alcas;
+pub mod automatico;
 pub mod centros;
 pub mod conjunto;
 pub mod corte;
 pub mod cotas;
 pub mod esboco;
+pub mod esboco_editar;
 pub mod export;
 pub mod importar;
+pub mod inspecao;
 pub mod layout;
 pub mod novo;
 pub mod ocupacao;
@@ -633,6 +636,8 @@ pub enum TableKind {
     Holes,
     Bends,
     CutList,
+    /// características do plano de inspeção (B117): vêm do próprio desenho
+    Caracteristicas,
 }
 
 impl TableKind {
@@ -642,6 +647,7 @@ impl TableKind {
             TableKind::Holes => "Tabela de furos",
             TableKind::Bends => "Tabela de dobras",
             TableKind::CutList => "Lista de corte",
+            TableKind::Caracteristicas => "Características de inspeção",
         }
     }
 }
@@ -744,6 +750,13 @@ pub struct Drawing {
     /// sketches na folha ou dentro das vistas (B352)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub esbocos: Vec<esboco::EsbocoDesenho>,
+    /// plano de inspeção (B117): balões numerados das características
+    #[serde(default, skip_serializing_if = "is_default_inspecao")]
+    pub inspecao: inspecao::OpcoesInspecao,
+}
+
+fn is_default_inspecao(o: &inspecao::OpcoesInspecao) -> bool {
+    *o == Default::default()
 }
 
 fn one() -> u8 {
@@ -769,6 +782,7 @@ impl Drawing {
             decimals: 1,
             projection: novo::Projecao::Primeiro,
             esbocos: vec![],
+            inspecao: Default::default(),
         };
         d.add_sheet(format);
         d

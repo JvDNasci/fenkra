@@ -345,6 +345,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("des_detalhe", "Detalhe", "Vista de detalhe", "Selecione a vista, clique o centro e o raio, e posicione a ampliação (2× a escala).", Cmd(C::Dwg(14)))),
             One(it("des_planificada", "Planificada", "Vista planificada", "Chapa desdobrada vista de cima (peça de chapa como origem).", Cmd(C::Dwg(15)))),
             One(it("des_esquema", "Esquema", "Esquema cinemático", "Montagem com juntas como origem: símbolos das juntas, barras entre elas e terra nas peças fixas (direção do painel).", Cmd(C::Dwg(17)))),
+            One(it("des_automatico", "Automático", "Desenho automático por regras", "Sem vistas, cria a frente, a superior e a lateral pela peça; depois cota o contorno (largura e altura na frente, profundidade nas projetadas), um diâmetro por tamanho de furo (n×), as marcas de centro e a tabela de furos num canto livre. O carimbo se preenche pela peça. Rodar de novo não duplica.", Cmd(C::Dwg(46)))),
             One(it("des_vista_camera", "Câmera", "Vista pela câmera do 3D", "Vista na direção em que a peça ou a montagem está no 3D agora (gire no 3D e clique na folha).", Cmd(C::Dwg(18)))),
         ],
         Group::DesCotas => vec![
@@ -367,6 +368,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("des_rugosidade", "Rugosidade", "Símbolo de rugosidade", "√ com o valor (ex.: Ra 1,6) e chamada para a superfície.", Cmd(C::Dwg(32)))),
             One(it("des_solda", "Solda", "Símbolo de solda", "Linha de referência com o filete e a medida (ex.: a4).", Cmd(C::Dwg(33)))),
             One(it("des_centro", "Centro", "Marca de centro", "Cruz com linhas de centro traço-ponto.", Cmd(C::Dwg(34)))),
+            One(it("des_esboco", "Esboço", "Esboço na vista ou na folha", "Clique numa vista para prender o esboço a ela (anda e escala com a vista; cotas na medida do modelo) ou fora das vistas para deixá-lo solto na folha. Desenha com as ferramentas do sketch: linhas, retângulos, círculos, arcos, cotas e restrições, com tipo de linha por curva. Entra na exportação.", Cmd(C::Dwg(38)))),
             One(it("des_gdt", "GD&T", "Tolerância geométrica", "Quadro de controle (ISO 1101) com chamada presa à aresta da vista: acompanha a peça e a vista.", Cmd(C::Dwg(36)))),
             One(it("des_datum", "Referência", "Símbolo de referência (datum)", "Triângulo na aresta e a letra no quadro; preso à vista.", Cmd(C::Dwg(37)))),
         ],
@@ -375,6 +377,12 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("des_tab_furos", "Furos", "Tabela de furos", "Cada furo da peça com posição, diâmetro, profundidade e rosca.", Cmd(C::Dwg(41)))),
             One(it("des_tab_dobras", "Dobras", "Tabela de dobras", "Ângulo, raio, comprimento desenvolvido e dedução de cada dobra.", Cmd(C::Dwg(42)))),
             One(it("des_tab_corte", "Corte", "Lista de corte", "Perfis estruturais com comprimento e quantidade.", Cmd(C::Dwg(43)))),
+            Family("des_inspecao", vec![
+                it("des_inspecao", "Inspeção", "Tabela de características (plano de inspeção)", "Cada cota (menos as de referência), tolerância geométrica e rugosidade vira uma linha numerada, na ordem de leitura da folha, com zona, requisito e limites: ±, classe ISO 286 ou a tolerância geral ISO 2768 citada nas notas. Clique onde a tabela vai ficar.", Cmd(C::Dwg(44))),
+                it("des_inspecao_baloes", "Balões", "Balões de inspeção", "Liga e desliga o número junto de cada característica, o mesmo da tabela e do relatório.", Cmd(C::Dwg(45))),
+                it("des_inspecao_csv", "CSV", "Plano de inspeção em CSV", "Formulário 3 da AS9102 (resultados das características) com nominal e limites, e as colunas de resultado em branco para quem mede.", Cmd(C::Dwg(6))),
+                it("des_inspecao_xlsx", "XLSX", "Plano de inspeção em planilha", "O mesmo formulário 3 numa planilha, com código, nome e revisão da peça no cabeçalho.", Cmd(C::Dwg(7))),
+            ]),
         ],
         Group::Pmi => vec![
             Family("pmi_cota", vec![
@@ -398,6 +406,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("pmi_referencia", "Referência", "Referência (datum)", "Letra de referência na face escolhida.", Cmd(C::Pmi(7))),
                 it("pmi_tolerancia", "Tolerância", "Tolerância geométrica", "Quadro ISO 1101: característica, tolerância (zona Ø, modificadores Ⓜ Ⓛ Ⓟ…), referências e quadro composto.", Cmd(C::Pmi(8))),
             ]),
+            One(it("pmi_empilhamento", "Empilhamento", "Empilhamento de tolerâncias", "Escolha as cotas da cadeia (Ctrl+clique) e abra: pior caso, RSS e Monte Carlo do resultado, com a contribuição de cada cota. Tolerâncias ± ou classe ISO 286; cotas de referência e teóricas ficam fora.", Cmd(C::Pmi(23)))),
             Family("pmi_captura", vec![
                 it("pmi_captura", "Captura", "Criar captura", "Guarda a câmera e as anotações visíveis agora como uma captura numerada (Captura 1, 2, 3…). Vira uma etapa do detalhamento no visualizador web. F2 renomeia.", Cmd(C::Pmi(21))),
                 it("pmi_captura_modelo", "Captura + modelo", "Criar captura com a visibilidade do modelo", "Como a captura simples, e guarda também o que está oculto no modelo (recursos, coletores, referências ou componentes).", Cmd(C::Pmi(22))),
