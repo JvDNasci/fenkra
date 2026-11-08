@@ -76,6 +76,40 @@ fn arquivo_e_sobrescrever(descricao: &str) -> Value {
     )
 }
 
+fn e_ver() -> Value {
+    objeto(
+        json!({
+            "vista": { "enum": ["frente", "tras", "topo", "base", "esquerda", "direita", "iso", "todas"], "description": "padrão iso; todas junta frente, topo, direita e iso" },
+            "corte": {
+                "type": "object",
+                "description": "tira a metade da peça de um lado do plano eixo = posição",
+                "properties": {
+                    "eixo": { "enum": ["x", "y", "z"] },
+                    "posicao": { "type": "number", "description": "mm" },
+                    "lado": { "enum": ["menor", "maior"], "description": "qual metade fica; padrão menor" }
+                },
+                "required": ["eixo", "posicao"]
+            },
+            "zoom": { "type": "number", "description": "1 enquadra a peça; de 0,1 a 50" },
+            "largura": { "type": "integer", "description": "pixels, de 64 a 2400; padrão 800" },
+            "altura": { "type": "integer", "description": "pixels, de 64 a 2400; padrão 600" },
+            "arestas": { "type": "boolean", "description": "desenha as arestas; padrão verdadeiro" },
+            "fundo": { "enum": ["claro", "escuro"] }
+        }),
+        &[],
+    )
+}
+
+/// `ver` nunca grava arquivo pelo MCP: a imagem volta na resposta.
+fn t_ver(a: &Value) -> Result<Value, ErroApi> {
+    let mut a = a.clone();
+    if let Some(o) = a.as_object_mut() {
+        o.remove("saida");
+        o.remove("sobrescrever");
+    }
+    Ok(a)
+}
+
 fn e_salvar() -> Value {
     arquivo_e_sobrescrever("caminho .fkx ou .fkp relativo à pasta do projeto")
 }
@@ -292,7 +326,7 @@ const fn edicao(
     }
 }
 
-pub const FERRAMENTAS: [Ferramenta; 18] = [
+pub const FERRAMENTAS: [Ferramenta; 19] = [
     Ferramenta { nome: "consultar_step", titulo: "Consultar STEP", descricao: "Lista caixa envolvente, massa, faces, arestas, planos, cilindros e furos de um STEP do projeto. Os planos trazem a normal para fora, as arestas trazem a fórmula, e os furos já vêm agrupados. Exige o aceite --liberar-step.", comando: "topologia", le_step: true, somente_leitura: true, esquema: e_consultar, traduzir: t_consultar },
     edicao("nova_peca", "Nova peça", "Começa uma peça vazia.", "nova_peca", e_nova, igual),
     edicao("abrir_peca", "Abrir peça", "Abre uma peça .fkx ou .fkp do projeto.", "abrir", e_abrir, igual),
@@ -307,6 +341,7 @@ pub const FERRAMENTAS: [Ferramenta; 18] = [
     edicao("desfazer", "Desfazer", "Volta o último comando que mudou a peça.", "desfazer", sem_args, igual),
     leitura("recalcular", "Recalcular", "Recalcula e devolve o status de cada item, volume, área e caixa.", "recalcular", sem_args, igual),
     leitura("medir", "Medir", "Volume, área, centroide, inércia e caixa da peça.", "medir", sem_args, igual),
+    leitura("ver", "Ver a peça", "Imagem da peça em edição, sem aplicativo aberto: vista (frente, tras, topo, base, esquerda, direita, iso ou todas, que junta quatro), corte por plano (eixo, posição em mm, lado que fica) e zoom. A imagem volta como imagem; use para conferir o que montou antes de comparar. O corte pinta a face interna de laranja.", "ver", e_ver, t_ver),
     leitura("topologia_modelo", "Topologia da peça", "Faces, arestas, planos, cilindros e furos da peça em edição. Use os meios das arestas para filetar.", "topologia", e_topologia, t_topologia),
     Ferramenta { nome: "comparar_alvo", titulo: "Comparar com o alvo", descricao: "Checador de similaridade: compara a peça com o STEP alvo por volume, área, centroide, caixa, inércia, furos por diâmetro e distância entre superfícies, e diz onde diverge. Exige o aceite --liberar-step.", comando: "comparar", le_step: true, somente_leitura: true, esquema: e_comparar, traduzir: t_comparar },
     edicao("salvar_peca", "Salvar peça", "Grava a peça em .fkx ou .fkp. Nunca troca um arquivo que existe sem `sobrescrever`.", "salvar", e_salvar, igual),

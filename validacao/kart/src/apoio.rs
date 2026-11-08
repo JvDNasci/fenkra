@@ -30,31 +30,34 @@ pub struct Linha {
 #[derive(Default)]
 pub struct Reg {
     pub linhas: BTreeMap<String, Linha>,
-    /// bancada → comando → vezes
+    /// bancada → comando → vezes que o comando entrou num documento e calculou sem erro (uso real)
     pub cmds: BTreeMap<String, BTreeMap<String, u32>>,
+    /// bancada → comando → vezes que entrou num documento e falhou ou ficou suprimido
+    pub sem_efeito: BTreeMap<String, BTreeMap<String, u32>>,
+    /// bancada → comando → vezes que o roteiro disse usar, sem prova no documento (B431)
+    pub declarados: BTreeMap<String, BTreeMap<String, u32>>,
 }
 
 impl Reg {
+    /// O roteiro declara que usou estes comandos (fluxos fora do documento: montagem, desenho, PMI,
+    /// PLM). Vai para a tabela de declarados: não vira uso real sem prova (B431).
     pub fn usa(&mut self, bancada: &str, cmds: &[&str]) {
-        let b = self.cmds.entry(bancada.into()).or_default();
+        let b = self.declarados.entry(bancada.into()).or_default();
         for c in cmds {
             *b.entry((*c).into()).or_default() += 1;
         }
     }
 
-    /// Conta os comandos do documento na matriz.
-    pub fn conta_doc(&mut self, bancada: &str, d: &Document) {
-        let nomes: Vec<String> = d
-            .features
-            .iter()
-            .map(|f| {
-                let t = format!("{:?}", f.kind);
-                t.split(|c: char| !c.is_alphanumeric()).next().unwrap_or("").to_string()
-            })
-            .collect();
-        let b = self.cmds.entry(bancada.into()).or_default();
-        for n in nomes {
-            *b.entry(n).or_default() += 1;
+    /// Conta os comandos do documento na matriz pelo que o cálculo mostrou: só entra como uso real o
+    /// comando que calculou sem erro e não está suprimido. Antes a matriz contava os comandos que o
+    /// documento tinha, mesmo os que falharam (B431).
+    pub fn conta_doc(&mut self, bancada: &str, d: &Document, r: &RecomputeResult) {
+        for f in &d.features {
+            let t = format!("{:?}", f.kind);
+            let nome = t.split(|c: char| !c.is_alphanumeric()).next().unwrap_or("").to_string();
+            let efetivo = !f.suppressed && !matches!(r.status.get(&f.id), Some(Status::Error(_)) | Some(Status::Inactive));
+            let alvo = if efetivo { &mut self.cmds } else { &mut self.sem_efeito };
+            *alvo.entry(bancada.into()).or_default().entry(nome).or_default() += 1;
         }
     }
 
@@ -64,10 +67,23 @@ impl Reg {
         for l in self.linhas.values() {
             t += &format!("| {} | {} | {} | {} | {:.0} | {:.1} × {:.1} × {:.1} | {} | {} |\n", l.cod, l.nome, l.bancada, if l.ok { "ok" } else { "FALHA" }, l.volume, l.caixa[0], l.caixa[1], l.caixa[2], l.corpos, l.nota.trim().replace('|', "/"));
         }
-        t += "\n## Matriz de comandos exercitados\n\n| Bancada | Comando | Vezes |\n|---|---|---|\n";
-        for (b, m) in &self.cmds {
-            for (c, n) in m {
-                t += &format!("| {b} | {c} | {n} |\n");
+        t += "\n## Matriz de comandos exercitados\n\nUso real: o comando entrou num documento e calculou sem erro.\n\n| Bancada | Comando | Uso real | Sem efeito (erro ou suprimido) |\n|---|---|---|---|\n";
+        let mut chaves: std::collections::BTreeSet<(&String, &String)> = std::collections::BTreeSet::new();
+        for m in [&self.cmds, &self.sem_efeito] {
+            for (b, c) in m {
+                for k in c.keys() {
+                    chaves.insert((b, k));
+                }
+            }
+        }
+        let n = |m: &BTreeMap<String, BTreeMap<String, u32>>, b: &String, c: &String| m.get(b).and_then(|x| x.get(c)).copied().unwrap_or(0);
+        for (b, c) in chaves {
+            t += &format!("| {b} | {c} | {} | {} |\n", n(&self.cmds, b, c), n(&self.sem_efeito, b, c));
+        }
+        t += "\n## Declarados pelo roteiro, sem prova no documento\n\nFluxos que não ficam num `.fkp` (montagem, desenho, PMI, PLM). Contam chamadas do roteiro, não uso conferido.\n\n| Bancada | Comando | Vezes |\n|---|---|---|\n";
+        for (b, m) in &self.declarados {
+            for (c, k) in m {
+                t += &format!("| {b} | {c} | {k} |\n");
             }
         }
         let _ = std::fs::write(modelo().parent().unwrap().join("resultados.md"), t);
@@ -107,7 +123,7 @@ impl Reg {
         let v: f64 = r.bodies.iter().map(|b| b.mass.volume).sum();
         nota = format!("{nota} [{:.1}s]", t.elapsed().as_secs_f64());
         let _ = std::fs::write(modelo().join(format!("{cod}.fkp")), d.to_json());
-        self.conta_doc(bancada, &d);
+        self.conta_doc(bancada, &d, &r);
         let semgeo = cod != "MESTRE" && r.bodies.is_empty();
         self.registra(Linha { cod: cod.into(), nome: nome.into(), bancada: bancada.into(), ok: ok && !semgeo, volume: v, caixa: tam, corpos: r.bodies.len(), nota });
         Some(d)
@@ -268,5 +284,31 @@ pub fn dobra_nos(d: &mut Document, f: Id, n: usize, raio: &str) {
         for i in 1..n {
             m.joints.push(StructJoint { mine: i, other: f, other_path: i - 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: BendMode::Dobradeira, radius: raio.into(), ..Default::default() }) });
         }
+    }
+}
+
+#[cfg(test)]
+mod testes {
+    use super::*;
+
+    #[test]
+    fn matriz_so_conta_como_uso_real_o_que_calculou() {
+        let mut d = Document::new("t");
+        let sk = sk_rect(&mut d, oxy(), [0., 0.], [10., 10.]);
+        d.add_feature(ext(sk, BoolOp::Add, blind("5")));
+        // extrusão que falha: o esboço citado não existe
+        d.add_feature(ext(Id(9999), BoolOp::Add, blind("5")));
+        let r = recompute(&d);
+        let mut reg = Reg::default();
+        reg.conta_doc("Sólidos", &d, &r);
+        reg.usa("PMI", &["Nota"]);
+        // o que o roteiro declara não vira uso real
+        assert!(reg.cmds.get("PMI").is_none());
+        assert_eq!(reg.declarados["PMI"]["Nota"], 1);
+        // a extrusão que calculou conta como uso real; a que falhou, como sem efeito
+        assert_eq!(reg.cmds["Sólidos"]["Extrude"], 1);
+        assert_eq!(reg.sem_efeito["Sólidos"]["Extrude"], 1);
+        let total: u32 = reg.cmds.values().chain(reg.sem_efeito.values()).flat_map(|m| m.values()).sum();
+        assert_eq!(total as usize, d.features.len());
     }
 }

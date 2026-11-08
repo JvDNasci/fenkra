@@ -19,6 +19,10 @@ uso: fenkra-cli [--pasta DIR] COMANDO [argumentos]
   features ARQ                  features inferidas (furos, filetes, chanfros)
   comparar ALVO ARQ             checador de similaridade
   reproduzir REGISTRO.jsonl --saida ARQ.fkx [--sobrescrever]
+  ver PECA [--vista V] [--corte EIXO=POS[:maior]] [--zoom Z] [--tamanho LxA] --saida X.png
+                                imagem da peça sem abrir o aplicativo; V: frente, tras, topo, base,
+                                esquerda, direita, iso ou todas (quatro vistas); corte z=10 tira o
+                                que passa de z = 10 mm, z=10:maior tira o que fica abaixo
   visualizar ARQ --saida X.fkv [--html X.html] [--decimar F]
                                 pacote de visualização para o navegador (.fkp, .fka ou .fkd)
   servir                        um pedido JSON por linha na entrada padrão
@@ -33,6 +37,10 @@ struct Linha {
     saida: Option<String>,
     html: Option<String>,
     decimar: Option<f64>,
+    vista: Option<String>,
+    corte: Option<String>,
+    zoom: Option<f64>,
+    tamanho: Option<String>,
     resto: Vec<String>,
 }
 
@@ -43,6 +51,10 @@ fn ler_argumentos() -> Result<Linha, String> {
         saida: None,
         html: None,
         decimar: None,
+        vista: None,
+        corte: None,
+        zoom: None,
+        tamanho: None,
         resto: vec![],
     };
     let mut a = std::env::args().skip(1);
@@ -55,12 +67,27 @@ fn ler_argumentos() -> Result<Linha, String> {
                 let v = a.next().ok_or("--decimar pede uma fração")?;
                 l.decimar = Some(v.replace(',', ".").parse().map_err(|_| "--decimar pede um número de 0,01 a 1")?);
             }
+            "--vista" => l.vista = Some(a.next().ok_or("--vista pede o nome da vista")?),
+            "--corte" => l.corte = Some(a.next().ok_or("--corte pede EIXO=POSICAO, por exemplo z=10")?),
+            "--tamanho" => l.tamanho = Some(a.next().ok_or("--tamanho pede LARGURAxALTURA")?),
+            "--zoom" => {
+                let v = a.next().ok_or("--zoom pede um número")?;
+                l.zoom = Some(v.replace(',', ".").parse().map_err(|_| "--zoom pede um número de 0,1 a 50")?);
+            }
             "--sobrescrever" => l.sobrescrever = true,
             _ if x.starts_with("--") => return Err(format!("opção desconhecida: {x}")),
             _ => l.resto.push(x),
         }
     }
     Ok(l)
+}
+
+/// `z=10` ou `x=-5:maior` vira o objeto de corte da API.
+fn corte_da_linha(c: &str) -> Result<Value, String> {
+    let (eixo, resto) = c.split_once('=').ok_or("o corte é EIXO=POSICAO, por exemplo z=10")?;
+    let (pos, lado) = resto.split_once(':').unwrap_or((resto, "menor"));
+    let posicao: f64 = pos.replace(',', ".").parse().map_err(|_| "a posição do corte é um número em mm")?;
+    Ok(json!({ "eixo": eixo.trim(), "posicao": posicao, "lado": lado.trim() }))
 }
 
 /// Uma linha de comando vira uma sequência de comandos da sessão; a resposta é a do último.
@@ -74,6 +101,24 @@ fn plano(l: &Linha) -> Result<Vec<(&'static str, Value)>, String> {
         ["comandos"] => vec![("comandos", json!({}))],
         ["recalcular", p] => vec![abrir(p), ("recalcular", json!({}))],
         ["medir", p] => vec![abrir(p), ("medir", json!({}))],
+        ["ver", p] => {
+            let mut a = json!({ "saida": saida()?, "sobrescrever": l.sobrescrever });
+            if let Some(v) = &l.vista {
+                a["vista"] = json!(v);
+            }
+            if let Some(z) = l.zoom {
+                a["zoom"] = json!(z);
+            }
+            if let Some(t) = &l.tamanho {
+                let (w, h) = t.split_once(['x', 'X']).ok_or("--tamanho é LARGURAxALTURA, por exemplo 800x600")?;
+                a["largura"] = json!(w.trim().parse::<u32>().map_err(|_| "largura inválida em --tamanho")?);
+                a["altura"] = json!(h.trim().parse::<u32>().map_err(|_| "altura inválida em --tamanho")?);
+            }
+            if let Some(c) = &l.corte {
+                a["corte"] = corte_da_linha(c)?;
+            }
+            vec![abrir(p), ("ver", a)]
+        }
         ["parametros", p] => vec![abrir(p), ("parametros", json!({}))],
         ["definir", p, nome, expr] => vec![
             abrir(p),

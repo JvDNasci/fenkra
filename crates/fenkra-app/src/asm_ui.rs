@@ -1440,6 +1440,8 @@ pub(crate) struct PartOutline {
     /// geometria (ícone, nome)
     geo: Vec<(&'static str, String)>,
     params: Vec<String>,
+    /// nome da peça (o código mais o que ela é), para a linha da montagem (B429)
+    nome: String,
 }
 
 impl PartOutline {
@@ -1455,7 +1457,7 @@ impl PartOutline {
         let mut geo: Vec<(&'static str, String)> = doc.references.iter().filter(|r| !matches!(r.kind, fenkra_core::RefKind::Linked { .. })).map(|r| ("◇", r.name.clone())).collect();
         geo.extend(doc.features.iter().filter(|f| doc.is_free(f)).map(|f| (f.kind.icon(), f.name.clone())));
         let params = doc.params.iter().map(|p| format!("{} = {}", p.name, p.expr)).collect();
-        PartOutline { bodies, geo, params }
+        PartOutline { bodies, geo, params, nome: doc.name.clone() }
     }
     fn is_empty(&self) -> bool {
         self.bodies.iter().all(|b| b.3.is_empty()) && self.geo.is_empty()
@@ -1609,7 +1611,12 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             };
             let inst = if copies > 1 { format!("  ×{copies}") } else { String::new() };
             let alterada = if st.pecas_alteradas.contains(&n.id) { " •" } else { "" };
-            let txt = format!("{num}{}{alterada}{}{mode}{}{inst}", n.name, if n.fixed { " 📌" } else { "" }, if err.is_some() { " ✖" } else { "" });
+            // o código sozinho não diz o que a peça é: o nome vem ao lado dele (B429)
+            let rotulo = match info.feats.get(&n.id) {
+                Some(o) => crate::arvore_nomes::rotulo_componente(&n.name, &o.nome),
+                None => n.name.clone(),
+            };
+            let txt = format!("{num}{rotulo}{alterada}{}{mode}{}{inst}", if n.fixed { " 📌" } else { "" }, if err.is_some() { " ✖" } else { "" });
             let open_key = egui::Id::unique(("asm_expandir", n.id.0));
             let has_kids = info.feats.get(&n.id).is_some_and(|v| !v.is_empty()) || info.subs.get(&n.id).is_some_and(|v| !v.is_empty()) || matches!(n.kind, NodeKind::Group);
             let mut open = ui.ctx().data(|m| m.get_temp::<bool>(open_key)).unwrap_or(false);

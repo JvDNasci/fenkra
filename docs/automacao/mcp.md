@@ -50,6 +50,7 @@ do cliente.
 | `extrudar`, `furar`, `filetar`, `chanfrar` | Os comandos de modelagem |
 | `desfazer` | Volta o último comando que mudou a peça |
 | `recalcular`, `medir`, `topologia_modelo` | Status, medidas e topologia da peça em edição |
+| `ver` | Imagem da peça sem aplicativo aberto, por vista (ou quatro de uma vez), com corte por plano e zoom; volta como imagem |
 | `comparar_alvo` | Checador de similaridade contra o STEP alvo. Pede aceite |
 | `salvar_peca`, `exportar_step` | Gravar na pasta. Nunca sobrescreve sem `sobrescrever` |
 

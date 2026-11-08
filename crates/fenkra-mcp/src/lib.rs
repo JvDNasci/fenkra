@@ -95,11 +95,18 @@ impl Servidor {
     /// Resposta de ferramenta. Falha do comando é resultado com `isError`: o modelo lê e corrige.
     fn resultado_ferramenta(r: Result<Value, ErroApi>) -> Value {
         match r {
-            Ok(v) => {
-                json!({ "content": [{ "type": "text", "text": v.to_string() }], "structuredContent": v, "isError": false })
+            Ok(mut v) => {
+                // imagem (ferramenta `ver`): vai como conteúdo de imagem, fora do texto, para o agente
+                // enxergar a peça sem um bloco de base64 no meio do JSON
+                let imagem = v.as_object_mut().and_then(|o| o.remove("imagem_base64")).and_then(|i| i.as_str().map(str::to_string));
+                let mut conteudo = vec![json!({ "type": "text", "text": v.to_string() })];
+                if let Some(dados) = imagem {
+                    conteudo.push(json!({ "type": "image", "data": dados, "mimeType": "image/png" }));
+                }
+                json!({ "content": conteudo, "structuredContent": v, "isError": false })
             }
             Err(e) => {
-                let v = json!({ "codigo": e.codigo, "mensagem": e.mensagem });
+                let v = json!({ "codigo": e.codigo, "mensagem": e.mensagem, "sugestao": e.sugestao() });
                 json!({ "content": [{ "type": "text", "text": v.to_string() }], "structuredContent": v, "isError": true })
             }
         }
@@ -135,7 +142,7 @@ impl Servidor {
             "fenkra://comandos" => Ok(self.sessao.registro_json()),
             _ => return Err((-32002, format!("recurso desconhecido: {uri}"))),
         };
-        let v = conteudo.unwrap_or_else(|e| json!({ "codigo": e.codigo, "mensagem": e.mensagem }));
+        let v = conteudo.unwrap_or_else(|e| json!({ "codigo": e.codigo, "mensagem": e.mensagem, "sugestao": e.sugestao() }));
         Ok(
             json!({ "contents": [{ "uri": uri, "mimeType": "application/json", "text": v.to_string() }] }),
         )
@@ -288,6 +295,35 @@ mod testes {
             assert_eq!(r[0]["error"]["code"], -32600);
             assert_eq!(r[1]["id"], 1);
         }
+    }
+
+    #[test]
+    fn falha_de_ferramenta_leva_codigo_mensagem_e_sugestao() {
+        // STEP sem o aceite da pessoa: recusado, e a resposta diz o que fazer (B419)
+        let pedido = br#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"consultar_step","arguments":{"arquivo":"a.step"}}}"#;
+        let r = respostas(pedido);
+        let res = &r[0]["result"];
+        assert_eq!(res["isError"], true, "{res}");
+        let e = &res["structuredContent"];
+        assert_eq!(e["codigo"], "step_bloqueado");
+        assert!(e["sugestao"].as_str().is_some_and(|t| t.contains("--liberar-step")), "{e}");
+    }
+
+    #[test]
+    fn imagem_da_ferramenta_ver_vai_como_conteudo_de_imagem_fora_do_texto() {
+        let r = Servidor::resultado_ferramenta(Ok(json!({ "vista": "iso", "imagem_base64": "QUJD", "tipo": "image/png" })));
+        let c = r["content"].as_array().unwrap();
+        assert_eq!(c.len(), 2, "{r}");
+        assert_eq!(c[0]["type"], "text");
+        assert!(!c[0]["text"].as_str().unwrap().contains("QUJD"), "o texto não carrega a imagem");
+        assert_eq!((c[1]["type"].as_str(), c[1]["data"].as_str(), c[1]["mimeType"].as_str()), (Some("image"), Some("QUJD"), Some("image/png")));
+        assert!(r["structuredContent"].get("imagem_base64").is_none());
+        // sem peça aberta, a ferramenta falha com código e sugestão
+        let pedido = br#"{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"ver","arguments":{"vista":"frente"}}}"#;
+        let e = &respostas(pedido)[0]["result"]["structuredContent"];
+        assert_eq!(e["codigo"], "sem_peca");
+        assert!(e["sugestao"].as_str().is_some_and(|t| t.contains("nova_peca")), "{e}");
+        assert!(FERRAMENTAS.iter().any(|f| f.nome == "ver"));
     }
 
     #[test]

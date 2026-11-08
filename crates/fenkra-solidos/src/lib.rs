@@ -5,6 +5,7 @@
 //! o corpo continua do estado anterior e o comando fica marcado com a mensagem do erro.
 
 pub mod erro;
+pub mod erro_acionavel;
 pub mod validade;
 pub mod forma_brep;
 pub mod forma_cache;

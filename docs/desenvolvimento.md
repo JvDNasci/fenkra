@@ -56,6 +56,13 @@ cargo test -p fenkra-cli -p fenkra-mcp
 
 O teste da API Python roda junto, se houver `python` no `PATH`.
 
+## Abrir um arquivo pela linha de comando
+
+`fenkra-app <arquivo>` abre um `.fkp` (peça), `.fka` (montagem) ou `.fkd` (desenho) ao iniciar, e é o
+que o sistema entrega no duplo clique quando a extensão está associada ao programa. A peça abre na
+bancada do conteúdo (chapa, estrutural, forma livre, superfícies ou sólidos). Opções como `--seguro`
+podem vir junto; o `.fkv` tem caminho próprio (`--abrir-fkv`).
+
 ## Variáveis de ambiente para testar o app
 
 Qualquer variável `FENKRA_DEMO*` (e `FENKRA_ABRIR`, `FENKRA_BANCADA`) faz o app **não gravar** as
@@ -133,8 +140,10 @@ preferências do usuário.
 | `FENKRA_DEMO_PROJETO=1` | abre um projeto de exemplo com o painel à vista; `comparar` já mostra a comparação com a revisão |
 | `FENKRA_DEMO_SECAO=1` | liga o corte de seção na prévia da casca |
 | `FENKRA_DEMO_ARQUIVO=<caminho>` | abre esse `.fkp`, `.fka` ou `.fkd` ao iniciar |
+| `FENKRA_DEMO_APARENCIA=preto\|branco\|<RRGGBB>` | pinta a peça aberta com essa cor (B425), para conferir o contraste dela com o fundo; combine com `FENKRA_DEMO_TEMA` |
+| `FENKRA_DEMO_APRESENTACAO=1` | esconde a origem (planos e eixos) da peça aberta, para a captura sair limpa (B430) |
 | `FENKRA_DEMO_FLEX=1` | na montagem, abre o painel do primeiro subconjunto, com o mecanismo dele (B422) |
-| `FENKRA_ABRIR=<nome>`, `FENKRA_BANCADA=sup` | abre o comando ou a anotação com esse nome na peça aberta / a bancada de Superfícies |
+| `FENKRA_ABRIR=<nome ou arquivo>`, `FENKRA_BANCADA=sup` | com um nome, abre o comando ou a anotação com esse nome na peça aberta; com o caminho de um `.fkp`, `.fka` ou `.fkd`, abre o arquivo (B390). `FENKRA_BANCADA=sup` abre a bancada de Superfícies |
 | `FENKRA_EN=1` | interface em inglês |
 
 ## Release

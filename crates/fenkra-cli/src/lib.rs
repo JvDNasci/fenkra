@@ -18,6 +18,7 @@ pub mod saida;
 mod sessao;
 pub mod features;
 pub mod topologia;
+pub mod ver;
 pub mod visualizar;
 
 pub use registro::{ler_comandos, Registro};
@@ -44,6 +45,35 @@ impl ErroApi {
     }
     pub fn argumento(mensagem: impl Into<String>) -> Self {
         Self::novo("argumento", mensagem)
+    }
+}
+
+/// O que fazer diante de cada código de falha da API (B419). O código não muda; a sugestão pode
+/// melhorar. Quem recebe a resposta lê a sugestão em vez de adivinhar o próximo passo.
+pub fn sugestao_do_codigo(codigo: &str) -> &'static str {
+    match codigo {
+        "argumento" => "Confira os campos do comando: nome, tipo e unidade (mm e graus) estão no esquema da ferramenta.",
+        "parametro" => "Um parâmetro usado pelo comando está inválido; corrija o valor ou a fórmula e recalcule.",
+        "arvore" => "O comando não monta na árvore. Confira os ids citados (esboço, curva, face) com o comando de árvore e refaça o pedido.",
+        "arvore_incompleta" => "Falta um item que este comando usa. Crie o esboço ou a peça antes e use o id devolvido.",
+        "sem_peca" => "Não há peça em edição. Crie uma com nova_peca ou abra um arquivo antes.",
+        "sem_solido" => "A peça ainda não tem corpo sólido. Extrude, revolucione ou crie uma primitiva antes de medir ou comparar.",
+        "sem_historico" => "Não há o que desfazer: nenhum comando foi aplicado nesta sessão.",
+        "kernel" => "O kernel recusou a operação com estes dados. Reduza o raio, a profundidade ou o recuo, ou mude a entrada, e recalcule.",
+        "formato" => "O arquivo não segue o formato esperado. Confira a extensão e se ele foi gravado por este programa ou por uma exportação suportada.",
+        "leitura" => "Não foi possível ler o arquivo. Confira o caminho (relativo à pasta do projeto), a extensão e se ele não está aberto em outro programa.",
+        "gravacao" => "Não foi possível gravar. Confira se a pasta existe e tem permissão e use sobrescrever só se quiser trocar um arquivo existente.",
+        "caminho_fora" => "O caminho precisa ficar dentro da pasta do projeto. Use um caminho relativo a ela.",
+        "queda" => "O leitor travou ao abrir o arquivo; ele foi isolado e a sessão segue. Tente um arquivo menor ou exporte de novo da origem.",
+        "tempo" => "A leitura passou do tempo limite. Tente um arquivo menor ou simplifique a peça de origem.",
+        "step_bloqueado" => "Ler STEP depende do aceite da pessoa: peça que ela inicie o servidor com --liberar-step. Não tente contornar.",
+        _ => "Releia a mensagem, confira os argumentos e a árvore da peça e tente de novo; se persistir, recalcule e leia o relatório.",
+    }
+}
+
+impl ErroApi {
+    pub fn sugestao(&self) -> &'static str {
+        sugestao_do_codigo(&self.codigo)
     }
 }
 
@@ -80,7 +110,7 @@ pub fn envelope(r: Result<Value, ErroApi>) -> Value {
     match r {
         Ok(resultado) => json!({ "api": API_VERSAO, "ok": true, "resultado": resultado }),
         Err(e) => {
-            json!({ "api": API_VERSAO, "ok": false, "erro": { "codigo": e.codigo, "mensagem": e.mensagem } })
+            json!({ "api": API_VERSAO, "ok": false, "erro": { "codigo": e.codigo, "mensagem": e.mensagem, "sugestao": e.sugestao() } })
         }
     }
 }

@@ -21,3 +21,5 @@ fenkra-conversor = { path = "../fenkra-conversor" }
 fenkra-solidos = { path = "../fenkra-solidos" }
 fenkra-pacote = { path = "../fenkra-pacote" }
 serde_json.workspace = true
+png = "0.17"
+base64 = "0.22"
