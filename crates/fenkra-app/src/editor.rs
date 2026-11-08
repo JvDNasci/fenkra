@@ -900,7 +900,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             // resumo limpo: o comando só abre para edição com duplo clique / Editar
             let Some(f) = doc.feature_mut(id) else { return };
             ui.heading(format!("{} {}", f.kind.icon(), f.name));
-            ui.label(RichText::new(f.kind.type_name()).weak());
+            ui.label(RichText::new(tr(crate::arvore_nomes::tipo_legivel(f.kind.type_name()))).weak());
             match &status {
                 Some(Status::Error(m)) => {
                     ui.label(RichText::new(format!("✖ {}", tr(m))).color(crate::theme::st_err()));
@@ -945,7 +945,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                         ui.painter().rect_stroke(r, 9., egui::Stroke::new(1., acc.gamma_multiply(0.5)), egui::StrokeKind::Inside);
                         ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, f.kind.icon(), egui::FontId::proportional(22.), acc);
                         ui.vertical(|ui| {
-                            ui.label(RichText::new(tr(f.kind.type_name())).size(17.).strong());
+                            ui.label(RichText::new(tr(crate::arvore_nomes::tipo_legivel(f.kind.type_name()))).size(17.).strong());
                             let mut n = f.name.clone();
                             if ui.add(egui::TextEdit::singleline(&mut n).desired_width(150.)).changed() && !n.is_empty() && !names.contains(&n) {
                                 f.name = n;
