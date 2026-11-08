@@ -817,7 +817,9 @@ fn quadro_da_insercao(st: &mut crate::asm_ui::AsmState, est: &mut Estado, ui: &m
     match (&melhor, &malha) {
         (Some((_, f, (entrada, u))), Some(m)) => {
             fantasma(&painter, rect, cam, m, avulso::posicao_do_item(parafuso, *entrada, *u), acento, 0.4);
-            let (rotulo, base) = (format!("{}{} → {} Ø{}", t.designacao, comp.map(|l| format!("x{}", fmt(l))).unwrap_or_default(), f.nome, fmt(f.diametro)), cam.project(rect, v3(*entrada)).unwrap_or(pos));
+            // ponto publicado não tem diâmetro: o rótulo só diz o nome do ponto
+            let diam = if f.diametro > 0. { format!(" Ø{}", fmt(f.diametro)) } else { String::new() };
+            let (rotulo, base) = (format!("{}{} → {}{diam}", t.designacao, comp.map(|l| format!("x{}", fmt(l))).unwrap_or_default(), f.nome), cam.project(rect, v3(*entrada)).unwrap_or(pos));
             painter.text(base + egui::vec2(16., -18.), egui::Align2::LEFT_BOTTOM, rotulo, egui::FontId::proportional(12.), acento);
             // alça de comprimento na ponta: só para na série do tamanho
             if let (true, Some(l), false) = (parafuso, comp, ins.arrastando) {

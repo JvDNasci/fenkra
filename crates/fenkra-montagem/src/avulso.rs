@@ -86,8 +86,30 @@ pub fn furos_do_mundo(asm: &Assembly, dir: Option<&Path>, cache: &mut PartCache,
             }
             v.push(FuroAlvo { comp: id, nome: nome.clone(), boca, dir, diametro, espessura, passante: true, rosca: String::new() });
         }
+        // ponto publicado: o item assenta nele, com o eixo na normal da face, e serve a qualquer
+        // tamanho (diâmetro 0). Fixadores já inseridos publicam a ponta; esses não viram alvo.
+        if lp.doc.props.part_type == fenkra_core::PartType::Hardware {
+            continue;
+        }
+        for (publicacao, g) in fenkra_solidos::publications(&lp.doc) {
+            let fenkra_core::LinkedGeo::Point(p) = g else { continue };
+            let Some(din) = normal_para_dentro(forma, p) else { continue };
+            let espessura = crate::fixadores::espessura_ao_longo(forma, p, din, 1.).unwrap_or(1.);
+            v.push(FuroAlvo { comp: id, nome: format!("{nome} · {publicacao}"), boca: pl.point(p), dir: unit(pl.dir(din)), diametro: 0., espessura, passante: false, rosca: String::new() });
+        }
     }
     v
+}
+
+/// Sentido para dentro do material num ponto da superfície da peça: o dos eixos da peça em que, um
+/// milímetro antes do ponto, o raio bate na face no próprio ponto. `None` se o ponto não está numa
+/// face plana alinhada a um eixo (o caso comum das publicações de montagem).
+fn normal_para_dentro(forma: &fenkra_kernel::Shape, p: V3) -> Option<V3> {
+    let eixos: [V3; 6] = [[0., 0., -1.], [0., 0., 1.], [-1., 0., 0.], [1., 0., 0.], [0., -1., 0.], [0., 1., 0.]];
+    eixos.into_iter().find(|d| {
+        let o: V3 = [0, 1, 2].map(|i| p[i] - d[i]);
+        matches!(forma.ray_hit(o, *d), Ok(Some((q, _))) if norm(sub(q, p)) < 0.05)
+    })
 }
 
 /// O furo `f` está no mesmo eixo de `boca`/`dir` e tem o mesmo diâmetro (as duas bocas de um passante,
@@ -142,6 +164,10 @@ pub fn furos_por_aresta(res: &fenkra_solidos::RecomputeResult, forma: &fenkra_ke
 /// O tamanho serve ao furo? Liso: o diâmetro cai na faixa do tamanho (fina a folgada, ou a faixa que a
 /// família declara). Roscado: a rosca do furo é a do tamanho.
 pub fn casa(fam: &Familia, t: &Tamanho, f: &FuroAlvo) -> bool {
+    // ponto publicado: não tem diâmetro, qualquer tamanho assenta nele
+    if f.diametro <= 0. {
+        return true;
+    }
     if !f.rosca.is_empty() {
         return tamanho_da_rosca(fam, &f.rosca).is_some_and(|d| d == t.designacao);
     }
@@ -435,6 +461,40 @@ mod tests {
         assert!(rep.converged && rep.dof == 0, "{rep:?}");
         let p = a.node(r.comp).unwrap().placement;
         assert!(p.origin[0].hypot(p.origin[1]) < 0.01, "no eixo do furo: {:?}", p.origin);
+    }
+
+    #[test]
+    fn ponto_publicado_vira_alvo_e_o_item_entra_restrito_nele() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::*;
+        // placa maciça 40 x 40 x 10 com um ponto publicado na face de cima, fora do centro
+        let mut d = Document::new("placa_ponto");
+        d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Caixa, plane: PlaneRef::Origin(OriginPlane::XY), a: "40".into(), b: "40".into(), c: "10".into(), d: "0".into(), op: BoolOp::Add }));
+        let pid = d.add_geometry(RefKind::PointCoords { x: "10".into(), y: "5".into(), z: "10".into(), frame: None });
+        if let Some(r) = d.references.iter_mut().find(|r| r.id == pid) {
+            r.name = "Pino".into();
+            r.published = true;
+        }
+        let dir = pasta("avulso_ponto_pub");
+        std::fs::write(dir.join("placa_ponto.fkp"), d.to_json()).unwrap();
+        let mut a = Assembly::new("Ponto");
+        a.add_component("Placa", NodeKind::Part { path: "placa_ponto.fkp".into() }, Placement::default(), None);
+        let furos = furos_do_mundo(&a, Some(&dir), &mut PartCache::default(), &[]);
+        let [f] = &furos[..] else { panic!("{furos:?}") };
+        assert!(norm(sub(f.boca, [10., 5., 10.])) < 1e-6 && f.dir[2] < -0.99 && f.diametro == 0. && f.nome.ends_with("Pino"), "{f:?}");
+        // qualquer tamanho serve ao ponto
+        let fam = biblioteca::familia("iso4762").unwrap();
+        assert_eq!(tamanhos_que_casam(fam, f).len(), fam.tamanhos.len());
+        let r = inserir_avulso(&mut a, &dir, biblioteca::publica(), &param(f.clone(), "iso4762", "M8")).unwrap();
+        let rep = solve::solve(&mut a);
+        assert!(rep.converged && rep.dof == 0, "{rep:?}");
+        let p = a.node(r.comp).unwrap().placement;
+        assert!(norm(sub(p.origin, [10., 5., 10.])) < 0.01, "{:?}", p.origin);
+        // o parafuso inserido publica a ponta, mas peça de fixador não vira alvo
+        let depois = furos_do_mundo(&a, Some(&dir), &mut PartCache::default(), &[]);
+        assert!(depois.iter().all(|x| x.comp != r.comp), "{depois:?}");
     }
 
     #[test]
