@@ -517,4 +517,44 @@ mod tests {
         assert_eq!(b.st().asm.geometria.as_ref().map(|g| g.features.len()), Some(2));
         assert!(b.st().modified);
     }
+
+    #[test]
+    fn abrir_pelo_caminho_atualiza_os_links_dos_subconjuntos() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // B382: os recentes, a tela inicial e a linha de comando abrem por `open_path`, que não
+        // atualizava os links; só o menu atualizava, e o kart não recebia o entre-eixos novo
+        std::env::set_var("FENKRA_DEMO_TESTE", "1");
+        let dir = std::env::temp_dir().join(format!("fenkra_abrir_links_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mestre = |ee: &str| {
+            let mut d = Document::new("Mestre");
+            let id = d.alloc();
+            d.params.push(fenkra_core::Parameter { published: true, ..fenkra_core::Parameter::novo(id, "EE", ee, fenkra_core::Unit::Comprimento) });
+            std::fs::write(dir.join("mestre.fkp"), d.to_json()).unwrap();
+        };
+        mestre("20");
+        let mut filha = bloco("Filha", 10.);
+        filha.add_link("Mestre", dir.join("mestre.fkp").to_str().unwrap(), "EE", fenkra_core::LinkedGeo::Value(20.));
+        std::fs::write(dir.join("filha.fkp"), filha.to_json()).unwrap();
+        let mut sub = Assembly::new("Sub");
+        sub.add_component("Filha", NodeKind::Part { path: "filha.fkp".into() }, Placement::default(), None);
+        std::fs::write(dir.join("sub.fka"), sub.to_json()).unwrap();
+        let mut topo = Assembly::new("Topo");
+        topo.add_component("Mestre", NodeKind::Part { path: "mestre.fkp".into() }, Placement::default(), None);
+        topo.add_component("Sub", NodeKind::SubAssembly { path: "sub.fka".into() }, Placement::default(), None);
+        std::fs::write(dir.join("topo.fka"), topo.to_json()).unwrap();
+        mestre("35");
+
+        let mut app = App::new(&eframe::CreationContext::_new_kittest(egui::Context::default()));
+        app.open_path(&dir.join("topo.fka"));
+        assert!(app.asm.is_some());
+        assert!(app.settings.bench == Bench::Montagem);
+        let d = Document::from_json(&std::fs::read_to_string(dir.join("filha.fkp")).unwrap()).unwrap();
+        let valor = d.external.iter().find(|e| e.publication == "EE").and_then(|e| e.snapshot.clone());
+        assert_eq!(valor, Some(fenkra_core::LinkedGeo::Value(35.)), "a peça do subconjunto recebe o valor novo do mestre");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
