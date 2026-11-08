@@ -6,7 +6,7 @@
 //! Passos separados por `;`, em pontos da janela: `clique:x,y`, `arrasto:x0,y0,x1,y1` (aperta, move em
 //! passos e solta) e `segura:x0,y0,x1,y1` (igual, mas deixa o botão apertado, para capturar a sombra do
 //! encaixe ou um redimensionamento em andamento) e `rolar:x,y,dy` (roda do mouse sobre o ponto, `dy` em
-//! pontos; negativo desce o conteúdo). Começam 4 s depois da abertura.
+//! pontos; negativo desce o conteúdo) e `pairar:x,y` (leva o ponteiro ao ponto e para, para a dica aparecer). Começam 4 s depois da abertura.
 
 use eframe::egui::{self, Event, PointerButton, Pos2};
 use std::collections::VecDeque;
@@ -20,6 +20,8 @@ enum Passo {
     Clique(Pos2),
     Arrasto(Pos2, Pos2, bool),
     Rolar(Pos2, f32),
+    /// só leva o ponteiro ao ponto e para ali, para a dica do botão aparecer
+    Pairar(Pos2),
 }
 
 fn ler(t: &str) -> Option<Vec<Passo>> {
@@ -32,6 +34,7 @@ fn ler_passo(t: &str) -> Option<Passo> {
     match (nome, n.as_slice()) {
         ("clique", [x, y]) => Some(Passo::Clique(egui::pos2(*x, *y))),
         ("arrasto", [a, b, c, d]) => Some(Passo::Arrasto(egui::pos2(*a, *b), egui::pos2(*c, *d), true)),
+        ("pairar", [x, y]) => Some(Passo::Pairar(egui::pos2(*x, *y))),
         ("rolar", [x, y, dy]) => Some(Passo::Rolar(egui::pos2(*x, *y), *dy)),
         ("segura", [a, b, c, d]) => Some(Passo::Arrasto(egui::pos2(*a, *b), egui::pos2(*c, *d), false)),
         _ => None,
@@ -41,6 +44,7 @@ fn ler_passo(t: &str) -> Option<Passo> {
 fn quadros(p: Passo) -> VecDeque<Vec<Event>> {
     let botao = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
     match p {
+        Passo::Pairar(q) => [vec![Event::PointerMoved(q)], vec![]].into(),
         Passo::Clique(q) => [vec![Event::PointerMoved(q)], vec![botao(q, true)], vec![botao(q, false)], vec![]].into(),
         Passo::Rolar(q, dy) => {
             let roda = Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: egui::vec2(0., dy), modifiers: Default::default(), phase: egui::TouchPhase::Move, source: egui::MouseWheelSource::Unknown };
@@ -94,6 +98,7 @@ mod testes {
         assert_eq!(v[1], Passo::Arrasto(egui::pos2(0., 0.), egui::pos2(9., 9.), true));
         assert_eq!(v[2], Passo::Arrasto(egui::pos2(1., 1.), egui::pos2(2., 2.), false));
         assert_eq!(ler("rolar:5,6,-300").unwrap()[0], Passo::Rolar(egui::pos2(5., 6.), -300.));
+        assert_eq!(ler("pairar:7,8").unwrap()[0], Passo::Pairar(egui::pos2(7., 8.)));
         assert!(ler("clique:1").is_none() && ler("pulo:1,2").is_none());
     }
 
