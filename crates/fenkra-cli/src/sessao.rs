@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 /// Todos os comandos que existem. Nada fora desta lista roda, e nenhum deles interpreta código.
-pub const COMANDOS: [&str; 25] = [
+pub const COMANDOS: [&str; 28] = [
     "versao",
     "comandos",
     "nova_peca",
@@ -41,10 +41,13 @@ pub const COMANDOS: [&str; 25] = [
     "comparar",
     "reproduzir",
     "registro",
+    "adicionar",
+    "selecionar",
+    "biblioteca",
 ];
 
 /// Os que mudam o modelo: são estes que entram no registro e que `reproduzir` aceita.
-pub const COMANDOS_DE_MODELO: [&str; 10] = [
+pub const COMANDOS_DE_MODELO: [&str; 11] = [
     "nova_peca",
     "definir_parametro",
     "criar_plano",
@@ -55,6 +58,7 @@ pub const COMANDOS_DE_MODELO: [&str; 10] = [
     "chanfrar",
     "desfazer",
     "abrir",
+    "adicionar",
 ];
 
 const LEITURA_PECA: [&str; 2] = ["fkx", "fkp"];
@@ -230,6 +234,9 @@ impl Sessao {
             "comparar" => self.comparar(args),
             "reproduzir" => self.reproduzir(args),
             "registro" => Ok(self.registro_json()),
+            "adicionar" => self.adicionar_tipo(args),
+            "selecionar" => self.selecionar(args),
+            "biblioteca" => crate::biblioteca::consultar(args),
             _ => Err(ErroApi::novo(
                 "comando_desconhecido",
                 format!("comando '{comando}' não existe; veja `comandos`"),
@@ -521,6 +528,28 @@ impl Sessao {
         Ok(saida)
     }
 
+    /// Qualquer comando do formato da árvore pelo `tipo` (B420): revolução, casca, primitiva, padrão,
+    /// espelho e o que o esquema ganhar depois. O esquema publicado valida o resto.
+    fn adicionar_tipo(&mut self, args: &Value) -> Result<Value, ErroApi> {
+        let tipo = texto(args, "tipo")?;
+        if !tipos_do_esquema().contains(&tipo) {
+            return Err(ErroApi::argumento(format!("tipo '{tipo}' não existe no formato da árvore; use {}", tipos_do_esquema().join(", "))));
+        }
+        let mut resto = args.clone();
+        if let Some(o) = resto.as_object_mut() {
+            o.remove("tipo");
+        }
+        let nome = rotulo_do_tipo(&tipo);
+        self.adicionar(&tipo, &tipo, &nome, &resto)
+    }
+
+    /// Faces ou arestas por lado, tipo e raio, devolvidas como pontos para filete, chanfro e casca.
+    fn selecionar(&mut self, args: &Value) -> Result<Value, ErroApi> {
+        let forma = self.forma()?;
+        let t = topologia::analisar(&forma)?.json(&["faces", "arestas"], usize::MAX);
+        crate::selecao::selecionar(&t, args)
+    }
+
     fn criar_plano(&mut self, args: &Value) -> Result<Value, ErroApi> {
         let peca = self.peca()?;
         let id = args["id"]
@@ -777,4 +806,35 @@ fn com_padrao(args: &Value, chave: &str, padrao: Value) -> Value {
         v[chave] = padrao;
     }
     v
+}
+
+/// Os `tipo` de comando que o esquema publicado da árvore aceita, na ordem do esquema.
+pub fn tipos_do_esquema() -> Vec<String> {
+    let e: Value = serde_json::from_str(arvore::ESQUEMA).unwrap_or_default();
+    e["$defs"]["comando"]["oneOf"]
+        .as_array()
+        .map(|l| {
+            l.iter()
+                .map(|v| match v["$ref"].as_str() {
+                    Some(r) => e["$defs"][r.trim_start_matches("#/$defs/")]["properties"]["tipo"]["const"].clone(),
+                    None => v["properties"]["tipo"]["const"].clone(),
+                })
+                .filter_map(|t| t.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Nome do item na árvore quando o pedido não traz um: "casca" vira "Casca".
+fn rotulo_do_tipo(tipo: &str) -> String {
+    match tipo {
+        "revolucao" => "Revolução".into(),
+        "padrao" => "Padrão".into(),
+        "esboco" => "Esboço".into(),
+        "extrusao" => "Extrusão".into(),
+        _ => {
+            let mut c = tipo.chars();
+            c.next().map(|p| p.to_uppercase().chain(c).collect()).unwrap_or_default()
+        }
+    }
 }

@@ -898,3 +898,104 @@ fn entrada_fechada_encerra_o_servidor() {
         std::thread::sleep(std::time::Duration::from_millis(20));
     }
 }
+
+// ------------------------------------------------------------------ ondas do B420
+
+fn retangulo(x0: f64, y0: f64, x1: f64, y1: f64) -> (Value, Value) {
+    let pontos = json!([{ "id": "p0", "x": x0, "y": y0 }, { "id": "p1", "x": x1, "y": y0 }, { "id": "p2", "x": x1, "y": y1 }, { "id": "p3", "x": x0, "y": y1 }]);
+    let curvas: Vec<Value> = (0..4).map(|i| json!({ "id": format!("c{i}"), "geometria": { "tipo": "reta", "a": format!("p{i}"), "b": format!("p{}", (i + 1) % 4) } })).collect();
+    (pontos, json!(curvas))
+}
+
+/// B420: revolução, seleção semântica, chanfro, furo em padrão circular e espelho só com o que o
+/// servidor oferece, conferindo volume e caixa; a sequência refeita sem servidor dá a mesma peça.
+#[test]
+fn ondas_revolucao_padrao_espelho_e_selecao_pelo_servidor() {
+    precisa_kernel!();
+    let pasta = pasta_limpa("ondas");
+    let mut c = Cliente::iniciar(&pasta, false);
+    let r = c.pedido("tools/list", json!({}));
+    let nomes: Vec<&str> = r["result"]["tools"].as_array().unwrap().iter().map(|t| t["name"].as_str().unwrap()).collect();
+    for n in ["revolucionar", "criar_padrao", "espelhar", "criar_casca", "criar_primitiva", "selecionar", "consultar_biblioteca", "listar_comandos"] {
+        assert!(nomes.contains(&n), "{n}: {nomes:?}");
+    }
+    let d = c.chamar("listar_comandos", json!({ "busca": "padrão" }));
+    assert!(d["ferramentas"].as_array().unwrap().iter().any(|t| t["nome"] == "criar_padrao"), "{d}");
+
+    c.chamar("nova_peca", json!({ "nome": "anel" }));
+    // anel: perfil de x 10 a 20 e z 0 a 30, girado em Z
+    let (pontos, curvas) = retangulo(10., 0., 20., 30.);
+    let e = c.chamar("criar_esboco", json!({ "id": "perfil", "plano": "XZ", "pontos": pontos, "curvas": curvas }));
+    assert_eq!(e["status"], "ok", "{e}");
+    let r = c.chamar("revolucionar", json!({ "id": "anel", "esboco": "perfil", "eixo": "Z", "angulo": 360, "operacao": "unir" }));
+    assert_eq!(r["status"], "ok", "{r}");
+    let pi = std::f64::consts::PI;
+    let v_anel = pi * (400. - 100.) * 30.;
+    assert!((r["volume"].as_f64().unwrap() - v_anel).abs() < 1., "{r}");
+
+    // as duas bordas de cima, sem ler a topologia
+    let s = c.chamar("selecionar", json!({ "lado": "topo", "tipo": "circulo" }));
+    assert_eq!(s["quantidade"], 2, "{s}");
+    let r = c.chamar("chanfrar", json!({ "distancia": 1, "arestas": s["pontos"] }));
+    assert_eq!(r["status"], "ok", "{r}");
+    let v_chanfro = r["volume"].as_f64().unwrap();
+    // dois chanfros 1 × 1: cada um tira um triângulo de área 0,5 girado no raio do seu centroide
+    let tirado = 0.5 * 2. * pi * (20. - 1. / 3.) + 0.5 * 2. * pi * (10. + 1. / 3.);
+    assert!((v_anel - v_chanfro - tirado).abs() < 0.5, "{v_chanfro}");
+
+    // furo Ø3 passante em r = 15, repetido 6 vezes em volta de Z
+    let ponto = json!({ "id": "furos", "plano": "XY", "pontos": [{ "id": "p0", "x": 15., "y": 0. }], "curvas": [{ "id": "c0", "geometria": { "tipo": "ponto", "ponto": "p0" } }] });
+    c.chamar("criar_esboco", ponto);
+    let r = c.chamar("furar", json!({ "id": "furo1", "esboco": "furos", "diametro": 3, "termino": { "tipo": "atravessar" }, "inverter": true }));
+    assert_eq!(r["status"], "ok", "{r}");
+    let v_um_furo = r["volume"].as_f64().unwrap();
+    assert!((v_chanfro - v_um_furo - pi * 1.5 * 1.5 * 30.).abs() < 1., "{r}");
+    let r = c.chamar("criar_padrao", json!({ "forma": { "tipo": "circular", "eixo": "Z", "quantidade": 6, "angulo": 360 }, "fontes": ["furo1"] }));
+    assert_eq!(r["status"], "ok", "{r}");
+    let v_furos = r["volume"].as_f64().unwrap();
+    assert!((v_chanfro - v_furos - 6. * pi * 1.5 * 1.5 * 30.).abs() < 1., "{v_furos}");
+    let s = c.chamar("selecionar", json!({ "alvo": "faces", "tipo": "cilindro", "raio": 1.5 }));
+    assert_eq!(s["quantidade"], 6, "seis paredes de furo: {s}");
+
+    // espelho pelo XY: o anel dobra para baixo
+    let r = c.chamar("espelhar", json!({ "plano": "XY" }));
+    assert_eq!(r["status"], "ok", "{r}");
+    let r = c.chamar("recalcular", json!({}));
+    assert_eq!(r["status"], "ok", "{r}");
+    assert!((r["caixa"]["min"][2].as_f64().unwrap() + 30.).abs() < 1e-3, "{r}");
+    assert!((r["caixa"]["max"][2].as_f64().unwrap() - 30.).abs() < 1e-3, "{r}");
+    assert!((r["volume"].as_f64().unwrap() - 2. * v_furos).abs() < 1., "{r}");
+    let m = c.chamar("medir", json!({}));
+
+    // biblioteca: há famílias, e a busca vazia não quebra
+    let b = c.chamar("consultar_biblioteca", json!({ "busca": "" }));
+    assert!(!b["familias"].as_array().unwrap().is_empty(), "{b}");
+
+    // a sequência refeita sem servidor dá a mesma peça
+    let registro = c.recurso("fenkra://comandos");
+    let arquivo = registro["arquivo"].as_str().unwrap().to_string();
+    drop(c);
+    let mut s = Sessao::nova(Pasta::nova(&pasta).unwrap(), Isolamento::Local);
+    s.executar("reproduzir", &json!({ "arquivo": arquivo })).unwrap();
+    assert_eq!(s.executar("medir", &json!({})).unwrap()["massa"], m["massa"]);
+}
+
+/// B420: casca pela face de cima escolhida por sentido.
+#[test]
+fn casca_abre_a_face_escolhida_por_lado() {
+    precisa_kernel!();
+    let pasta = pasta_limpa("casca_ondas");
+    let mut c = Cliente::iniciar(&pasta, false);
+    c.chamar("nova_peca", json!({}));
+    let (pontos, curvas) = retangulo(0., 0., 40., 20.);
+    c.chamar("criar_esboco", json!({ "id": "base", "plano": "XY", "pontos": pontos, "curvas": curvas }));
+    c.chamar("extrudar", json!({ "esboco": "base", "operacao": "unir", "termino": { "tipo": "cego", "distancia": "10" } }));
+    let s = c.chamar("selecionar", json!({ "alvo": "faces", "lado": "topo" }));
+    assert_eq!(s["quantidade"], 1, "{s}");
+    let r = c.chamar("criar_casca", json!({ "faces": s["pontos"], "espessura": 2 }));
+    assert_eq!(r["status"], "ok", "{r}");
+    let v = r["volume"].as_f64().unwrap();
+    assert!((v - (8000. - 36. * 16. * 8.)).abs() < 1., "{r}");
+    let (e, erro) = c.tentar("criar_casca", json!({ "tipo": "padrao", "faces": [], "espessura": 2 }));
+    assert!(erro, "tipo trocado passou: {e}");
+}
