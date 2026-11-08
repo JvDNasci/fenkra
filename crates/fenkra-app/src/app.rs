@@ -4919,7 +4919,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let mut usados = self.curso_ui.usados.clone();
         usados.extend(crate::curso::anotados());
         let nomes = [self.asm.as_ref().map_or("", |s| s.asm.name.as_str()), self.dwg.as_ref().map_or("", |s| s.d.name.as_str())];
-        let cx = crate::curso::Contexto { doc: &self.open.doc, componentes, restricoes, folhas, vistas, cotas, tabelas, notas, vistas_planas, tabelas_dobras, carimbo, nomes, usados: &usados };
+        let cx = crate::curso::Contexto { doc: &self.open.doc, componentes, restricoes, folhas, vistas, cotas, tabelas, notas, vistas_planas, tabelas_dobras, carimbo, nomes, usados: &usados, alterados: &[] };
         let a = crate::curso_ui::painel(ctx, area, &mut self.curso_ui, &mut self.settings, &cx);
         let b = crate::curso_ui::pergunta_inicial(ctx, &mut self.curso_ui, &mut self.settings);
         for saida in [a, b] {

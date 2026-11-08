@@ -72,6 +72,9 @@ pub enum Cond {
     /// gesto de câmera ou de seleção feito na vista nesta sessão (`anotar`): girar, mover, zoom,
     /// cubo de vistas, selecionar
     Gesto(&'static str),
+    /// B323: um comando com esta etiqueta mudou de valor desde que o passo começou (mudar a distância
+    /// na árvore, puxar um nó da gaiola); quem compara é o painel do curso (`alterados`)
+    Mudou(&'static str),
     /// sem rastro no documento: a pessoa confirma
     Manual,
 }
@@ -155,7 +158,7 @@ pub const AULAS: &[Aula] = &[
     ]),
     a("sol_volume", "Dar volume ao esboço", "A extrusão empurra o perfil e cria o primeiro sólido.", Solidos, Iniciante, None, Some("extrusao"), &[
         p("Extrude o perfil fechado por uma distância.", "extrusao", Feature("extrusao", 1)),
-        p("Mude a distância na árvore e veja o sólido recalcular.", "", Manual),
+        p("Mude a distância na árvore e veja o sólido recalcular.", "", Mudou("extrusao")),
     ]),
     a("sol_furo", "Furos e recortes", "Furo e recorte tiram material; o recorte usa um sketch, o furo usa só um ponto e um diâmetro.", Solidos, Iniciante, None, None, &[
         p("Faça um furo numa face do sólido.", "furo_simples", Feature("furo", 1)),
@@ -171,7 +174,7 @@ pub const AULAS: &[Aula] = &[
     ]),
     a("sol_casca", "Esvaziar uma peça", "A casca deixa só uma parede de espessura constante.", Solidos, Intermediario, Some("Caixa com casca"), Some("casca"), &[
         p("Abra a peça de exemplo Caixa com casca.", "exemplo", Exemplo("Caixa com casca")),
-        p("Mude a espessura da casca na árvore e veja a parede mudar.", "casca", Manual),
+        p("Mude a espessura da casca na árvore e veja a parede mudar.", "casca", Mudou("casca")),
     ]),
     // ---- Superfícies
     a("sup_curvas", "Curvas guia", "Curvas bem feitas são a base de toda superfície limpa.", Superficies, Intermediario, None, None, &[
@@ -193,11 +196,11 @@ pub const AULAS: &[Aula] = &[
     // ---- Forma livre
     a("ff_primeira", "Primeira forma", "A forma livre nasce de uma gaiola de nós; a superfície lisa aparece por dentro dela.", FormaLivre, Iniciante, None, None, &[
         p("Crie uma caixa de forma: clique no plano e arraste o tamanho.", "forma_caixa", Feature("forma", 1)),
-        p("Clique num nó da gaiola e puxe: a superfície lisa acompanha.", "", Manual),
+        p("Clique num nó da gaiola e puxe: a superfície lisa acompanha.", "", Mudou("forma")),
     ]),
     a("ff_moldar", "Moldar a gaiola", "Poucos nós bem postos dão uma superfície limpa; alterne entre a gaiola e o liso para conferir.", FormaLivre, Iniciante, Some("Forma suave"), None, &[
         p("Abra a peça de exemplo Forma suave.", "exemplo", Exemplo("Forma suave")),
-        p("Arraste dois ou três nós e alterne entre a gaiola e a superfície lisa.", "", Manual),
+        p("Arraste dois ou três nós e alterne entre a gaiola e a superfície lisa.", "", Mudou("forma")),
     ]),
     a("ff_vincos", "Vincos e arestas vivas", "Um vinco endurece uma aresta: o peso vai de suave (0) a viva (1).", FormaLivre, Intermediario, Some("Forma suave"), None, &[
         p("Abra a peça de exemplo Forma suave.", "exemplo", Exemplo("Forma suave")),
@@ -254,7 +257,7 @@ pub const AULAS: &[Aula] = &[
     ]),
     a("est_cantos", "Cantos e uniões", "O encontro de dois membros pode ser meia-esquadria, topo ou encaixe.", Estrutural, Intermediario, Some("Quadro de mesa"), None, &[
         p("Abra a peça de exemplo Quadro de mesa.", "exemplo", Exemplo("Quadro de mesa")),
-        p("Troque o tipo de canto e veja o corte dos perfis mudar.", "st_canto_meia", Manual),
+        p("Troque o tipo de canto e veja o corte dos perfis mudar.", "st_canto_meia", Mudou("st_membro")),
     ]),
     a("est_placas", "Placas e reforços", "Placas de ponta e reforços ligam e enrijecem os membros.", Estrutural, Intermediario, None, None, &[
         p("Coloque uma placa na ponta de um membro.", "st_placa", Feature("st_placa", 1)),
@@ -347,11 +350,13 @@ pub struct Contexto<'a> {
     pub nomes: [&'a str; 2],
     /// ícones dos comandos acionados nesta sessão
     pub usados: &'a [&'static str],
+    /// etiquetas de comando que mudaram de valor desde que o passo atual começou
+    pub alterados: &'a [&'static str],
 }
 
 impl<'a> Contexto<'a> {
     pub fn so_documento(doc: &'a Document) -> Self {
-        Contexto { doc, componentes: 0, restricoes: 0, folhas: 0, vistas: 0, cotas: 0, tabelas: 0, notas: 0, vistas_planas: 0, tabelas_dobras: 0, carimbo: false, nomes: ["", ""], usados: &[] }
+        Contexto { doc, componentes: 0, restricoes: 0, folhas: 0, vistas: 0, cotas: 0, tabelas: 0, notas: 0, vistas_planas: 0, tabelas_dobras: 0, carimbo: false, nomes: ["", ""], usados: &[], alterados: &[] }
     }
 }
 
@@ -438,6 +443,7 @@ impl Cond {
             Carimbo => c.carimbo,
             Comando(icone) => c.usados.contains(&icone),
             Gesto(g) => c.usados.contains(&g),
+            Mudou(etq) => c.alterados.contains(&etq),
             Manual => false,
         }
     }
@@ -698,7 +704,7 @@ mod testes {
         let a = aula("sol_volume").unwrap();
         let mut e = EstadoCurso::default();
         let flange = doc_do_exemplo("Flange");
-        // o sketch e a extrusão do Flange cumprem o passo 0; o passo 1 é manual
+        // o sketch e a extrusão do Flange cumprem o passo 0; o passo 1 espera a mudança (ou "já fiz")
         assert!(e.sincronizar(a, &Contexto::so_documento(&flange)));
         assert_eq!(e.andamento(a), (1, 2));
         assert_eq!(e.proximo_passo(a), Some(1));
@@ -797,7 +803,7 @@ mod testes {
     fn so_ficam_manuais_os_passos_sem_rastro_reconhecivel() {
         let manuais: Vec<String> = AULAS.iter().flat_map(|a| a.passos.iter().enumerate().filter(|(_, p)| p.cond == Manual).map(move |(i, _)| format!("{}:{i}", a.id))).collect();
         // olhar, ajustar, conferir ou mover: só a pessoa sabe
-        let esperados = ["sol_volume:1", "sol_casca:1", "sup_curvas:1", "mon_verificar:1", "est_cantos:1", "ff_primeira:1", "ff_moldar:1"];
+        let esperados = ["sup_curvas:1", "mon_verificar:1"];
         for m in &manuais {
             assert!(esperados.contains(&m.as_str()), "passo manual inesperado: {m}");
         }
@@ -933,8 +939,9 @@ mod testes {
         let volume = aula("sol_volume").unwrap();
         let ext = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         e.sincronizar(volume, &Contexto::so_documento(&d));
-        e.confirmar(volume, 1);
-        assert!(e.concluida(volume));
+        assert_eq!(e.proximo_passo(volume), Some(1), "mudar a distância ainda falta");
+        e.sincronizar(volume, &Contexto { alterados: &["extrusao"], ..Contexto::so_documento(&d) });
+        assert!(e.concluida(volume), "mudar o valor na árvore conclui sem 'já fiz'");
 
         let furo = aula("sol_furo").unwrap();
         d.add_feature(FeatureKind::Hole(Hole { sketch: sk, kind: HoleKind::Simples, diameter: "5".into(), depth: Extent::ThroughAll, thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false, extra: Default::default() }));

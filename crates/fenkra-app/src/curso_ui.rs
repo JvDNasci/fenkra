@@ -41,9 +41,33 @@ pub struct CursoUi {
     pub sem_auto: bool,
     /// ícones dos comandos acionados nesta sessão (passos que não deixam rastro no modelo)
     pub usados: Vec<&'static str>,
+    /// B323: valores dos comandos quando o passo "mude o valor" começou (aula, passo, id e texto)
+    base_mudou: Option<(&'static str, usize, Vec<(u64, String)>)>,
 }
 
 impl CursoUi {
+    /// Etiquetas que mudaram de valor desde que o passo atual (do tipo `Mudou`) começou. No primeiro
+    /// quadro do passo guarda como os comandos estavam; depois compara.
+    pub fn alterados(&mut self, s: &Settings, doc: &fenkra_core::Document) -> Vec<&'static str> {
+        let Some(a) = self.aula.or(s.curso.atual.as_deref()).and_then(curso::aula) else { return vec![] };
+        let Some(i) = s.curso.proximo_passo(a) else { return vec![] };
+        let curso::Cond::Mudou(etq) = a.passos[i].cond else {
+            self.base_mudou = None;
+            return vec![];
+        };
+        let agora: Vec<(u64, String)> = doc.features.iter().filter(|f| !f.suppressed && curso::etiqueta(&f.kind) == etq).map(|f| (f.id.0, serde_json::to_string(&f.kind).unwrap_or_default())).collect();
+        match &self.base_mudou {
+            Some((aula, passo, antes)) if *aula == a.id && *passo == i => {
+                let mudou = antes.iter().any(|(id, x)| agora.iter().any(|(j, y)| j == id && y != x));
+                if mudou { vec![etq] } else { vec![] }
+            }
+            _ => {
+                self.base_mudou = Some((a.id, i, agora));
+                vec![]
+            }
+        }
+    }
+
     /// Anota que o comando foi acionado; o passo "Comando" da aula em andamento passa a valer.
     pub fn usou(&mut self, icone: &'static str) {
         if !self.usados.contains(&icone) {
@@ -234,6 +258,8 @@ pub fn painel(ctx: &egui::Context, area: egui::Rect, st: &mut CursoUi, s: &mut S
     // o documento diz quais passos da aula em andamento já foram cumpridos
     // (a aula aberta na tela e a que ficou em andamento; nunca mais que duas por quadro)
     let em_andamento = s.curso.atual.clone();
+    let alterados = st.alterados(s, cx.doc);
+    let cx = &Contexto { alterados: &alterados, ..*cx };
     for id in [em_andamento.as_deref(), st.aula].into_iter().flatten() {
         if let Some(a) = curso::aula(id) {
             if s.curso.sincronizar(a, cx) {
@@ -692,6 +718,28 @@ mod testes {
             }
         }
         assert!(faltam.is_empty(), "sem tradução: {faltam:#?}");
+    }
+
+    /// B323: o passo "mude a distância na árvore" fica verde quando a distância muda de verdade.
+    #[test]
+    fn mudar_o_valor_na_arvore_cumpre_o_passo() {
+        let mut st = CursoUi::default();
+        let mut s = Settings::default();
+        let a = curso::aula("sol_volume").unwrap();
+        st.abrir_aula(a, &mut s);
+        let (mut d, _) = crate::curso_exemplos::peca("Flange").unwrap();
+        s.curso.sincronizar(a, &Contexto::so_documento(&d));
+        assert_eq!(s.curso.proximo_passo(a), Some(1));
+        assert!(st.alterados(&s, &d).is_empty(), "o primeiro quadro só guarda");
+        assert!(st.alterados(&s, &d).is_empty(), "nada mudou");
+        let ext = d.features.iter_mut().find(|f| curso::etiqueta(&f.kind) == "extrusao").unwrap();
+        if let fenkra_core::FeatureKind::Extrude(e) = &mut ext.kind {
+            e.extent = fenkra_core::Extent::Blind("37".into());
+        }
+        let alt = st.alterados(&s, &d);
+        assert_eq!(alt, vec!["extrusao"]);
+        s.curso.sincronizar(a, &Contexto { alterados: &alt, ..Contexto::so_documento(&d) });
+        assert!(s.curso.concluida(a));
     }
 
     #[test]
