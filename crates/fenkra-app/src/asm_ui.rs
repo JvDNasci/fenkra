@@ -4590,7 +4590,9 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
             crate::ui_ext::wheel(ui, &resp, v);
         });
     };
-    egui::Window::new(tr("⚙ Engrenagens")).id(egui::Id::unique("janela_engrenagens")).open(&mut open).default_width(430.).show(ctx, |ui| {
+    // B281: com o eixo gráfico ligado o conteúdo passa da altura da tela; sem rolagem, o perfil lateral
+    // e os recursos de seção ficavam cortados abaixo da borda
+    egui::Window::new(tr("⚙ Engrenagens")).id(egui::Id::unique("janela_engrenagens")).open(&mut open).default_width(430.).vscroll(true).show(ctx, |ui| {
         if crate::app::done_bar(ui) {
             close = true;
         }
