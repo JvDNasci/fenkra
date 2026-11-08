@@ -336,6 +336,10 @@ impl<'a, N: egui::emath::Numeric> Deslizante<'a, N> {
         self.sl = self.sl.suffix(s);
         self
     }
+    pub fn show_value(mut self, v: bool) -> Self {
+        self.sl = self.sl.show_value(v);
+        self
+    }
 }
 
 impl<N: egui::emath::Numeric> egui::Widget for Deslizante<'_, N> {

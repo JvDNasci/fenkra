@@ -113,7 +113,7 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
             if ui.button(if e.tocando { tr("⏸ Pausar") } else { tr("▶ Animar") }).on_hover_text(tr("Leva o cabeçote pelos pontos na ordem da máquina, no 3D e na vista desenvolvida.")).clicked() {
                 e.tocando = !e.tocando;
             }
-            ui.add(egui::Slider::new(&mut e.t, 0.0..=1.0).show_value(false));
+            ui.add(crate::ui_ext::slider(&mut e.t, 0.0..=1.0).show_value(false));
             if ui.button(tr("CSV…")).on_hover_text(tr("Tabela por ponto: operação, etapa, X, giro A, posição no perímetro, bisel, vetor da tocha e se corta.")).clicked() {
                 csv = true;
             }
