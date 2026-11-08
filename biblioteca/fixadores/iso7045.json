@@ -1,0 +1,136 @@
+{
+ "id": "iso7045",
+ "nome": "Parafuso de cabeça panela com recesso cruzado",
+ "norma": "ISO 7045 (DIN 7985)",
+ "revisao": "2011",
+ "versao": 1,
+ "gerador": "parafuso_cruz",
+ "tipo": "parafuso_cruz",
+ "classe": "4.8",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "fasten.it — DIN EN ISO 7045 (edição 12/2011)",
+   "url": "https://fasten.it/norms/norm/din_en_iso_7045"
+  },
+  {
+   "rotulo": "Westfield Fasteners — cabeça panela com recesso cruzado, tabela 1 e nota de diferenças ISO",
+   "url": "https://www.westfieldfasteners.co.uk/Standards/ScrewBolt-PhilRaPan-M.html"
+  }
+ ],
+ "campos": [
+  "P",
+  "dk",
+  "k"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "M2",
+   "valores": {
+    "P": 0.4,
+    "dk": 4,
+    "k": 1.6
+   },
+   "confirmado_por": 2,
+   "nota": "P, dk, k: 2 fontes. fasten.it (ISO 7045, edição 12/2011) e a tabela da Westfield concordam; a Westfield avisa que a ISO difere da DIN 7985 só em dk de M3 e M5 e em k de M2,5, M3,5 e M5, por isso esses tamanhos ficam fora. Recesso cruzado nº 0 (1 fonte, fasten.it), modelado como cruz simplificada; a cabeça panela vira cilindro dk x k. Comprimentos: série usual dentro da faixa de l da fasten.it (1 fonte)",
+   "comprimentos": [
+    3,
+    4,
+    5,
+    6,
+    8,
+    10,
+    12,
+    16,
+    20
+   ]
+  },
+  {
+   "designacao": "M4",
+   "valores": {
+    "P": 0.7,
+    "dk": 8,
+    "k": 3.1
+   },
+   "confirmado_por": 2,
+   "nota": "P, dk, k: 2 fontes. fasten.it (ISO 7045, edição 12/2011) e a tabela da Westfield concordam; a Westfield avisa que a ISO difere da DIN 7985 só em dk de M3 e M5 e em k de M2,5, M3,5 e M5, por isso esses tamanhos ficam fora. Recesso cruzado nº 2 (1 fonte, fasten.it), modelado como cruz simplificada; a cabeça panela vira cilindro dk x k. Comprimentos: série usual dentro da faixa de l da fasten.it (1 fonte)",
+   "comprimentos": [
+    5,
+    6,
+    8,
+    10,
+    12,
+    16,
+    20,
+    25,
+    30,
+    35,
+    40
+   ]
+  },
+  {
+   "designacao": "M6",
+   "valores": {
+    "P": 1,
+    "dk": 12,
+    "k": 4.6
+   },
+   "confirmado_por": 2,
+   "nota": "P, dk, k: 2 fontes. fasten.it (ISO 7045, edição 12/2011) e a tabela da Westfield concordam; a Westfield avisa que a ISO difere da DIN 7985 só em dk de M3 e M5 e em k de M2,5, M3,5 e M5, por isso esses tamanhos ficam fora. Recesso cruzado nº 3 (1 fonte, fasten.it), modelado como cruz simplificada; a cabeça panela vira cilindro dk x k. Comprimentos: série usual dentro da faixa de l da fasten.it (1 fonte)",
+   "comprimentos": [
+    8,
+    10,
+    12,
+    16,
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    60
+   ]
+  },
+  {
+   "designacao": "M8",
+   "valores": {
+    "P": 1.25,
+    "dk": 16,
+    "k": 6
+   },
+   "confirmado_por": 2,
+   "nota": "P, dk, k: 2 fontes. fasten.it (ISO 7045, edição 12/2011) e a tabela da Westfield concordam; a Westfield avisa que a ISO difere da DIN 7985 só em dk de M3 e M5 e em k de M2,5, M3,5 e M5, por isso esses tamanhos ficam fora. Recesso cruzado nº 4 (1 fonte, fasten.it), modelado como cruz simplificada; a cabeça panela vira cilindro dk x k. Comprimentos: série usual dentro da faixa de l da fasten.it (1 fonte)",
+   "comprimentos": [
+    10,
+    12,
+    16,
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    60
+   ]
+  },
+  {
+   "designacao": "M10",
+   "valores": {
+    "P": 1.5,
+    "dk": 20,
+    "k": 7.5
+   },
+   "confirmado_por": 2,
+   "nota": "P, dk, k: 2 fontes. fasten.it (ISO 7045, edição 12/2011) e a tabela da Westfield concordam; a Westfield avisa que a ISO difere da DIN 7985 só em dk de M3 e M5 e em k de M2,5, M3,5 e M5, por isso esses tamanhos ficam fora. Recesso cruzado nº 4 (1 fonte, fasten.it), modelado como cruz simplificada; a cabeça panela vira cilindro dk x k. Comprimentos: série usual dentro da faixa de l da fasten.it (1 fonte)",
+   "comprimentos": [
+    12,
+    16,
+    20,
+    25
+   ]
+  }
+ ]
+}

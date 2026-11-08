@@ -489,8 +489,15 @@ fn campos_corrente(ui: &mut egui::Ui, t: &mut TransUi) {
     if let Some(c) = dados::corrente(&t.corrente) {
         let cor = if c.liberada() { crate::theme::st_ok() } else { crate::theme::st_warn() };
         ui.label(RichText::new(format!("{}: p {} · rolo {} · largura {} · {} ({})", tr("Linha"), fmt(c.passo), fmt(c.rolo), if c.largura > 0. { fmt(c.largura) } else { "—".into() }, tr(c.conferencia.rotulo()), c.fontes)).small().color(cor));
-        if !c.liberada() {
-            ui.label(RichText::new(tr("Esta linha ainda não tem duas fontes: não gera peça.")).small());
+        match dados::corrente_para_gerar(&t.corrente) {
+            // B395: gera com a largura provisória, como parâmetro, e diz isso
+            Ok((_, Some(aviso))) => {
+                ui.label(RichText::new(format!("⚠ {}", tr(&aviso))).small().color(crate::theme::st_warn()));
+            }
+            Ok((_, None)) => {}
+            Err(_) => {
+                ui.label(RichText::new(tr("Esta linha ainda não tem duas fontes: não gera peça.")).small());
+            }
         }
     }
     inteiro(ui, "Dentes do pinhão (z1)", &mut t.z1, 9..=120, "Dentes da roda menor, a motora.");

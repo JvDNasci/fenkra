@@ -1,0 +1,128 @@
+{
+ "id": "din25201",
+ "nome": "Arruela de travamento por cunha (par)",
+ "norma": "DIN 25201",
+ "revisao": "1986",
+ "versao": 1,
+ "gerador": "arruela",
+ "tipo": "arruela",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "fasten.it — DIN 25201 (substituída pela DIN 25201-1)",
+   "url": "https://fasten.it/norms/norm/din_25201"
+  },
+  {
+   "rotulo": "ITA Fasteners — arruelas de travamento por cunha, DIN 25201",
+   "url": "https://itafasteners.com/products-washers-wedge-lock.php"
+  }
+ ],
+ "campos": [
+  "d1",
+  "d2",
+  "h"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "M3",
+   "valores": {
+    "d1": 3.4,
+    "d2": 7,
+    "h": 1.8
+   },
+   "confirmado_por": 2,
+   "nota": "d1, d2 e espessura: 2 fontes (fasten.it, edição 11/1986, e ITA Fasteners) concordam. h é a espessura do par montado (as duas metades com as cunhas uma contra a outra), como as revendas a informam; as cunhas não são modeladas. M4 e de M27 em diante ficam fora: as fontes discordam"
+  },
+  {
+   "designacao": "M5",
+   "valores": {
+    "d1": 5.4,
+    "d2": 9,
+    "h": 1.8
+   },
+   "confirmado_por": 2,
+   "nota": "d1, d2 e espessura: 2 fontes (fasten.it, edição 11/1986, e ITA Fasteners) concordam. h é a espessura do par montado (as duas metades com as cunhas uma contra a outra), como as revendas a informam; as cunhas não são modeladas. M4 e de M27 em diante ficam fora: as fontes discordam"
+  },
+  {
+   "designacao": "M6",
+   "valores": {
+    "d1": 6.5,
+    "d2": 10.8,
+    "h": 1.8
+   },
+   "confirmado_por": 2,
+   "nota": "d1, d2 e espessura: 2 fontes (fasten.it, edição 11/1986, e ITA Fasteners) concordam. h é a espessura do par montado (as duas metades com as cunhas uma contra a outra), como as revendas a informam; as cunhas não são modeladas. M4 e de M27 em diante ficam fora: as fontes discordam"
+  },
+  {
+   "designacao": "M8",
+   "valores": {
+    "d1": 8.7,
+    "d2": 13.5,
+    "h": 2.5
+   },
+   "confirmado_por": 2,
+   "nota": "d1, d2 e espessura: 2 fontes (fasten.it, edição 11/1986, e ITA Fasteners) concordam. h é a espessura do par montado (as duas metades com as cunhas uma contra a outra), como as revendas a informam; as cunhas não são modeladas. M4 e de M27 em diante ficam fora: as fontes discordam"
+  },
+  {
+   "designacao": "M10",
+   "valores": {
+    "d1": 10.7,
+    "d2": 16.6,
+    "h": 2.5
+   },
+   "confirmado_por": 2,
+   "nota": "d1, d2 e espessura: 2 fontes (fasten.it, edição 11/1986, e ITA Fasteners) concordam. h é a espessura do par montado (as duas metades com as cunhas uma contra a outra), como as revendas a informam; as cunhas não são modeladas. M4 e de M27 em diante ficam fora: as fontes discordam"
+  },
+  {
+   "designacao": "M12",
+   "valores": {
+    "d1": 13,
+    "d2": 19.5,
+    "h": 2.5
+   },
+   "confirmado_por": 2,
+   "nota": "d1, d2 e espessura: 2 fontes (fasten.it, edição 11/1986, e ITA Fasteners) concordam. h é a espessura do par montado (as duas metades com as cunhas uma contra a outra), como as revendas a informam; as cunhas não são modeladas. M4 e de M27 em diante ficam fora: as fontes discordam"
+  },
+  {
+   "designacao": "M14",
+   "valores": {
+    "d1": 15.2,
+    "d2": 23,
+    "h": 3.4
+   },
+   "confirmado_por": 2,
+   "nota": "d1, d2 e espessura: 2 fontes (fasten.it, edição 11/1986, e ITA Fasteners) concordam. h é a espessura do par montado (as duas metades com as cunhas uma contra a outra), como as revendas a informam; as cunhas não são modeladas. M4 e de M27 em diante ficam fora: as fontes discordam"
+  },
+  {
+   "designacao": "M16",
+   "valores": {
+    "d1": 17,
+    "d2": 25.4,
+    "h": 3.4
+   },
+   "confirmado_por": 2,
+   "nota": "d1, d2 e espessura: 2 fontes (fasten.it, edição 11/1986, e ITA Fasteners) concordam. h é a espessura do par montado (as duas metades com as cunhas uma contra a outra), como as revendas a informam; as cunhas não são modeladas. M4 e de M27 em diante ficam fora: as fontes discordam"
+  },
+  {
+   "designacao": "M20",
+   "valores": {
+    "d1": 21.4,
+    "d2": 30.7,
+    "h": 3.4
+   },
+   "confirmado_por": 2,
+   "nota": "d1, d2 e espessura: 2 fontes (fasten.it, edição 11/1986, e ITA Fasteners) concordam. h é a espessura do par montado (as duas metades com as cunhas uma contra a outra), como as revendas a informam; as cunhas não são modeladas. M4 e de M27 em diante ficam fora: as fontes discordam"
+  },
+  {
+   "designacao": "M24",
+   "valores": {
+    "d1": 25.3,
+    "d2": 39,
+    "h": 3.4
+   },
+   "confirmado_por": 2,
+   "nota": "d1, d2 e espessura: 2 fontes (fasten.it, edição 11/1986, e ITA Fasteners) concordam. h é a espessura do par montado (as duas metades com as cunhas uma contra a outra), como as revendas a informam; as cunhas não são modeladas. M4 e de M27 em diante ficam fora: as fontes discordam"
+  }
+ ]
+}

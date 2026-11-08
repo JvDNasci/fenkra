@@ -1,0 +1,221 @@
+{
+ "id": "din938",
+ "nome": "Prisioneiro, ponta fixa de cerca de 1 d",
+ "norma": "DIN 938",
+ "revisao": "2012",
+ "versao": 1,
+ "gerador": "prisioneiro",
+ "tipo": "prisioneiro",
+ "classe": "8.8",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "fasten.it — DIN 938 (edição 12/2012)",
+   "url": "https://fasten.it/norms/norm/din_938"
+  },
+  {
+   "rotulo": "Torqbolt — DIN 938, prisioneiros com ponta fixa de 1 d",
+   "url": "https://torqbolt.com/din-938-double-end-stud-bolts-with-thread-engagement-length-equals-to-1-x-diameter-dimensions-standards-specifications"
+  }
+ ],
+ "campos": [
+  "P",
+  "b",
+  "bm"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "M5",
+   "valores": {
+    "P": 0.8,
+    "b": 16,
+    "bm": 5
+   },
+   "confirmado_por": 2,
+   "nota": "bm (ponta fixa) e b (rosca do lado da porca, para l até 125): 2 fontes (fasten.it e Torqbolt) concordam. P é o passo grosso da rosca métrica. Comprimentos l (sem contar bm): série usual de 2,5 d a 10 d + 20 (regra do repositório, não conferida em duas fontes)",
+   "comprimentos": [
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70
+   ]
+  },
+  {
+   "designacao": "M6",
+   "valores": {
+    "P": 1,
+    "b": 18,
+    "bm": 6
+   },
+   "confirmado_por": 2,
+   "nota": "bm (ponta fixa) e b (rosca do lado da porca, para l até 125): 2 fontes (fasten.it e Torqbolt) concordam. P é o passo grosso da rosca métrica. Comprimentos l (sem contar bm): série usual de 2,5 d a 10 d + 20 (regra do repositório, não conferida em duas fontes)",
+   "comprimentos": [
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70,
+    80
+   ]
+  },
+  {
+   "designacao": "M8",
+   "valores": {
+    "P": 1.25,
+    "b": 22,
+    "bm": 8
+   },
+   "confirmado_por": 2,
+   "nota": "bm (ponta fixa) e b (rosca do lado da porca, para l até 125): 2 fontes (fasten.it e Torqbolt) concordam. P é o passo grosso da rosca métrica. Comprimentos l (sem contar bm): série usual de 2,5 d a 10 d + 20 (regra do repositório, não conferida em duas fontes)",
+   "comprimentos": [
+    20,
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70,
+    80,
+    90,
+    100
+   ]
+  },
+  {
+   "designacao": "M10",
+   "valores": {
+    "P": 1.5,
+    "b": 26,
+    "bm": 10
+   },
+   "confirmado_por": 2,
+   "nota": "bm (ponta fixa) e b (rosca do lado da porca, para l até 125): 2 fontes (fasten.it e Torqbolt) concordam. P é o passo grosso da rosca métrica. Comprimentos l (sem contar bm): série usual de 2,5 d a 10 d + 20 (regra do repositório, não conferida em duas fontes)",
+   "comprimentos": [
+    25,
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70,
+    80,
+    90,
+    100,
+    110,
+    120
+   ]
+  },
+  {
+   "designacao": "M12",
+   "valores": {
+    "P": 1.75,
+    "b": 30,
+    "bm": 12
+   },
+   "confirmado_por": 2,
+   "nota": "bm (ponta fixa) e b (rosca do lado da porca, para l até 125): 2 fontes (fasten.it e Torqbolt) concordam. P é o passo grosso da rosca métrica. Comprimentos l (sem contar bm): série usual de 2,5 d a 10 d + 20 (regra do repositório, não conferida em duas fontes)",
+   "comprimentos": [
+    30,
+    35,
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70,
+    80,
+    90,
+    100,
+    110,
+    120
+   ]
+  },
+  {
+   "designacao": "M16",
+   "valores": {
+    "P": 2,
+    "b": 38,
+    "bm": 16
+   },
+   "confirmado_por": 2,
+   "nota": "bm (ponta fixa) e b (rosca do lado da porca, para l até 125): 2 fontes (fasten.it e Torqbolt) concordam. P é o passo grosso da rosca métrica. Comprimentos l (sem contar bm): série usual de 2,5 d a 10 d + 20 (regra do repositório, não conferida em duas fontes)",
+   "comprimentos": [
+    40,
+    45,
+    50,
+    55,
+    60,
+    65,
+    70,
+    80,
+    90,
+    100,
+    110,
+    120
+   ]
+  },
+  {
+   "designacao": "M20",
+   "valores": {
+    "P": 2.5,
+    "b": 46,
+    "bm": 20
+   },
+   "confirmado_por": 2,
+   "nota": "bm (ponta fixa) e b (rosca do lado da porca, para l até 125): 2 fontes (fasten.it e Torqbolt) concordam. P é o passo grosso da rosca métrica. Comprimentos l (sem contar bm): série usual de 2,5 d a 10 d + 20 (regra do repositório, não conferida em duas fontes)",
+   "comprimentos": [
+    50,
+    55,
+    60,
+    65,
+    70,
+    80,
+    90,
+    100,
+    110,
+    120
+   ]
+  },
+  {
+   "designacao": "M24",
+   "valores": {
+    "P": 3,
+    "b": 54,
+    "bm": 24
+   },
+   "confirmado_por": 2,
+   "nota": "bm (ponta fixa) e b (rosca do lado da porca, para l até 125): 2 fontes (fasten.it e Torqbolt) concordam. P é o passo grosso da rosca métrica. Comprimentos l (sem contar bm): série usual de 2,5 d a 10 d + 20 (regra do repositório, não conferida em duas fontes)",
+   "comprimentos": [
+    60,
+    65,
+    70,
+    80,
+    90,
+    100,
+    110,
+    120
+   ]
+  }
+ ]
+}

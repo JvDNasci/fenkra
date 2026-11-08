@@ -118,6 +118,7 @@ mod textos_transmissao;
 mod eixo_ui;
 mod textos_biblioteca3;
 mod textos_biblioteca4;
+mod textos_biblioteca5;
 mod textos_conversor;
 mod textos_formatos;
 mod textos_visualizacao;

@@ -77,6 +77,86 @@ pub fn furos_do_mundo(asm: &Assembly, dir: Option<&Path>, cache: &mut PartCache,
             let Some(espessura) = espessura.filter(|e| *e > 1e-6) else { continue };
             v.push(FuroAlvo { comp: id, nome: nome.clone(), boca: pl.point(r.pos), dir: unit(pl.dir(r.dir)), diametro: r.diameter, espessura, passante: r.through, rosca: r.thread.trim().to_string() });
         }
+        // furo sem comando de furo (corte de círculo, peça importada): pela aresta circular da boca
+        let Some(forma) = lp.shape.as_ref() else { continue };
+        for (boca, dir, diametro, espessura) in furos_por_aresta(&lp.result, forma) {
+            let (boca, dir) = (pl.point(boca), unit(pl.dir(dir)));
+            if v.iter().any(|f| f.comp == id && mesmo_eixo(f, boca, dir, diametro)) {
+                continue;
+            }
+            v.push(FuroAlvo { comp: id, nome: nome.clone(), boca, dir, diametro, espessura, passante: true, rosca: String::new() });
+        }
+        // ponto publicado: o item assenta nele, com o eixo na normal da face, e serve a qualquer
+        // tamanho (diâmetro 0). Fixadores já inseridos publicam a ponta; esses não viram alvo.
+        if lp.doc.props.part_type == fenkra_core::PartType::Hardware {
+            continue;
+        }
+        for (publicacao, g) in fenkra_solidos::publications(&lp.doc) {
+            let fenkra_core::LinkedGeo::Point(p) = g else { continue };
+            let Some(din) = normal_para_dentro(forma, p) else { continue };
+            let espessura = crate::fixadores::espessura_ao_longo(forma, p, din, 1.).unwrap_or(1.);
+            v.push(FuroAlvo { comp: id, nome: format!("{nome} · {publicacao}"), boca: pl.point(p), dir: unit(pl.dir(din)), diametro: 0., espessura, passante: false, rosca: String::new() });
+        }
+    }
+    v
+}
+
+/// Sentido para dentro do material num ponto da superfície da peça: o dos eixos da peça em que, um
+/// milímetro antes do ponto, o raio bate na face no próprio ponto. `None` se o ponto não está numa
+/// face plana alinhada a um eixo (o caso comum das publicações de montagem).
+fn normal_para_dentro(forma: &fenkra_kernel::Shape, p: V3) -> Option<V3> {
+    let eixos: [V3; 6] = [[0., 0., -1.], [0., 0., 1.], [-1., 0., 0.], [1., 0., 0.], [0., -1., 0.], [0., 1., 0.]];
+    eixos.into_iter().find(|d| {
+        let o: V3 = [0, 1, 2].map(|i| p[i] - d[i]);
+        matches!(forma.ray_hit(o, *d), Ok(Some((q, _))) if norm(sub(q, p)) < 0.05)
+    })
+}
+
+/// O furo `f` está no mesmo eixo de `boca`/`dir` e tem o mesmo diâmetro (as duas bocas de um passante,
+/// ou o furo que o comando de furo já listou).
+fn mesmo_eixo(f: &FuroAlvo, boca: V3, dir: V3, diametro: f64) -> bool {
+    let paralelo = norm(cross(f.dir, dir)) < 1e-3;
+    let fora = sub(boca, f.boca);
+    let dist = norm(sub(fora, f.dir.map(|x| x * dot(fora, f.dir))));
+    paralelo && dist < 0.05 && (f.diametro - diametro).abs() < 0.05
+}
+
+/// Furos passantes achados pelas arestas circulares inteiras da peça (coordenadas da peça): boca,
+/// sentido para dentro do material, diâmetro e espessura. Uma aresta é boca de furo quando, a um passo
+/// para fora do raio, a face começa no plano da aresta (há material ao redor) e, pelo centro, o raio
+/// atravessa a peça sem tocar nada (é vazio por dentro, até o outro lado). Ressalto e pino não entram:
+/// pelo centro deles o raio bate na face.
+pub fn furos_por_aresta(res: &fenkra_solidos::RecomputeResult, forma: &fenkra_kernel::Shape) -> Vec<(V3, V3, f64, f64)> {
+    let mut v: Vec<(V3, V3, f64, f64)> = vec![];
+    for b in &res.bodies {
+        let n_arestas = b.mesh.edge_geom.len() / fenkra_kernel::EDGE_GEOM;
+        for e in 0..n_arestas {
+            let Some(fenkra_kernel::EdgeFormula::Conic { c, u, v: w, t0, t1 }) = b.mesh.edge_formula(e) else { continue };
+            let (ru, rw) = (norm(u), norm(w));
+            if (ru - rw).abs() > 1e-6 * ru.max(1.) || (t1 - t0) < 2. * std::f64::consts::PI - 1e-6 || ru < 0.5 {
+                continue;
+            }
+            let eixo = unit(cross(u, w));
+            let radial = unit(u);
+            for din in [eixo, eixo.map(|x| -x)] {
+                // material começa no plano da aresta, logo fora do raio
+                let anel: V3 = [0, 1, 2].map(|i| c[i] + radial[i] * (ru + 0.4) - din[i]);
+                let toca = matches!(forma.ray_hit(anel, din), Ok(Some((p, _))) if (dot(sub(p, anel), din) - 1.).abs() < 0.05);
+                if !toca {
+                    continue;
+                }
+                // vazio pelo centro, de ponta a ponta
+                let centro: V3 = [0, 1, 2].map(|i| c[i] - din[i]);
+                if !matches!(forma.ray_hit(centro, din), Ok(None)) {
+                    continue;
+                }
+                let Some(esp) = crate::fixadores::espessura_ao_longo(forma, c, din, 2. * ru).filter(|e| *e > 1e-6) else { continue };
+                let alvo = FuroAlvo { comp: Id(0), nome: String::new(), boca: c, dir: din, diametro: 2. * ru, espessura: esp, passante: true, rosca: String::new() };
+                if !v.iter().any(|(bb, dd, d, _)| mesmo_eixo(&alvo, *bb, *dd, *d)) {
+                    v.push((c, din, 2. * ru, esp));
+                }
+            }
+        }
     }
     v
 }
@@ -84,6 +164,10 @@ pub fn furos_do_mundo(asm: &Assembly, dir: Option<&Path>, cache: &mut PartCache,
 /// O tamanho serve ao furo? Liso: o diâmetro cai na faixa do tamanho (fina a folgada, ou a faixa que a
 /// família declara). Roscado: a rosca do furo é a do tamanho.
 pub fn casa(fam: &Familia, t: &Tamanho, f: &FuroAlvo) -> bool {
+    // ponto publicado: não tem diâmetro, qualquer tamanho assenta nele
+    if f.diametro <= 0. {
+        return true;
+    }
     if !f.rosca.is_empty() {
         return tamanho_da_rosca(fam, &f.rosca).is_some_and(|d| d == t.designacao);
     }
@@ -156,9 +240,10 @@ pub struct Inserido {
 
 /// Grava uma cópia própria da peça, com número livre na pasta `fixadores/`.
 fn arquivo_copia(dir: &Path, fam: &Familia, t: &Tamanho, l: Option<f64>) -> Result<(String, String), String> {
+    let d = crate::fixadores::designacao_de_arquivo(&t.designacao);
     let base = match l {
-        Some(l) => format!("{}_{}x{}", fam.id, t.designacao, num(l)),
-        None => format!("{}_{}", fam.id, t.designacao),
+        Some(l) => format!("{}_{}x{}", fam.id, d, num(l)),
+        None => format!("{}_{}", fam.id, d),
     };
     let pasta = dir.join("fixadores");
     std::fs::create_dir_all(&pasta).map_err(|e| format!("{}: {e}", pasta.display()))?;
@@ -337,6 +422,113 @@ mod tests {
         // comprimento sugerido: 10 + 2 passos = 12 → L12 ou o próximo da série
         let l = comprimento_sugerido(fam, fam.tamanho("M6").unwrap(), f).unwrap();
         assert!(l >= 12. && fam.comprimentos_de(fam.tamanho("M6").unwrap()).contains(&l), "{l}");
+    }
+
+    /// Placa 40 x 40 x 10 com um furo de Ø6,6 feito por corte de cilindro (sem comando de furo) e um
+    /// pino de Ø6,6 em cima, que não é furo.
+    fn placa_cortada() -> fenkra_core::Document {
+        use fenkra_core::*;
+        let mut d = Document::new("placa_cortada");
+        let s = |x: &str| x.to_string();
+        d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Caixa, plane: PlaneRef::Origin(OriginPlane::XY), a: s("40"), b: s("40"), c: s("10"), d: s("0"), op: BoolOp::Add }));
+        let baixo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "-1");
+        d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Datum(baixo), a: s("3.3"), b: s("12"), c: s("0"), d: s("0"), op: BoolOp::Cut }));
+        let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "10");
+        let _ = topo;
+        d
+    }
+
+    #[test]
+    fn furo_feito_por_corte_aparece_pela_aresta_circular_e_recebe_o_parafuso() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("avulso_aresta");
+        std::fs::write(dir.join("cortada.fkp"), placa_cortada().to_json()).unwrap();
+        let mut a = Assembly::new("Aresta");
+        let c = a.add_component("Cortada", NodeKind::Part { path: "cortada.fkp".into() }, Placement::default(), None);
+        let furos = furos_do_mundo(&a, Some(&dir), &mut PartCache::default(), &[]);
+        // um alvo só para as duas bocas do mesmo furo
+        let [f] = &furos[..] else { panic!("{furos:?}") };
+        assert_eq!(f.comp, c);
+        assert!((f.diametro - 6.6).abs() < 1e-6 && f.passante && f.rosca.is_empty(), "{f:?}");
+        assert!(f.boca[0].hypot(f.boca[1]) < 1e-6 && (f.espessura - 10.).abs() < 0.05, "{f:?}");
+        assert!(f.dir[2].abs() > 0.99 && ((f.boca[2] - 10.).abs() < 1e-6 || f.boca[2].abs() < 1e-6), "{f:?}");
+        let fam = biblioteca::familia("iso4762").unwrap();
+        assert_eq!(tamanhos_que_casam(fam, f).iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["M6"]);
+        let r = inserir_avulso(&mut a, &dir, biblioteca::publica(), &param(f.clone(), "iso4762", "M6")).unwrap();
+        let rep = solve::solve(&mut a);
+        assert!(rep.converged && rep.dof == 0, "{rep:?}");
+        let p = a.node(r.comp).unwrap().placement;
+        assert!(p.origin[0].hypot(p.origin[1]) < 0.01, "no eixo do furo: {:?}", p.origin);
+    }
+
+    #[test]
+    fn ponto_publicado_vira_alvo_e_o_item_entra_restrito_nele() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::*;
+        // placa maciça 40 x 40 x 10 com um ponto publicado na face de cima, fora do centro
+        let mut d = Document::new("placa_ponto");
+        d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Caixa, plane: PlaneRef::Origin(OriginPlane::XY), a: "40".into(), b: "40".into(), c: "10".into(), d: "0".into(), op: BoolOp::Add }));
+        let pid = d.add_geometry(RefKind::PointCoords { x: "10".into(), y: "5".into(), z: "10".into(), frame: None });
+        if let Some(r) = d.references.iter_mut().find(|r| r.id == pid) {
+            r.name = "Pino".into();
+            r.published = true;
+        }
+        let dir = pasta("avulso_ponto_pub");
+        std::fs::write(dir.join("placa_ponto.fkp"), d.to_json()).unwrap();
+        let mut a = Assembly::new("Ponto");
+        a.add_component("Placa", NodeKind::Part { path: "placa_ponto.fkp".into() }, Placement::default(), None);
+        let furos = furos_do_mundo(&a, Some(&dir), &mut PartCache::default(), &[]);
+        let [f] = &furos[..] else { panic!("{furos:?}") };
+        assert!(norm(sub(f.boca, [10., 5., 10.])) < 1e-6 && f.dir[2] < -0.99 && f.diametro == 0. && f.nome.ends_with("Pino"), "{f:?}");
+        // qualquer tamanho serve ao ponto
+        let fam = biblioteca::familia("iso4762").unwrap();
+        assert_eq!(tamanhos_que_casam(fam, f).len(), fam.tamanhos.len());
+        let r = inserir_avulso(&mut a, &dir, biblioteca::publica(), &param(f.clone(), "iso4762", "M8")).unwrap();
+        let rep = solve::solve(&mut a);
+        assert!(rep.converged && rep.dof == 0, "{rep:?}");
+        let p = a.node(r.comp).unwrap().placement;
+        assert!(norm(sub(p.origin, [10., 5., 10.])) < 0.01, "{:?}", p.origin);
+        // o parafuso inserido publica a ponta, mas peça de fixador não vira alvo
+        let depois = furos_do_mundo(&a, Some(&dir), &mut PartCache::default(), &[]);
+        assert!(depois.iter().all(|x| x.comp != r.comp), "{depois:?}");
+    }
+
+    #[test]
+    fn tamanho_em_polegada_com_barra_grava_a_peca() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // "3/8-16 UNC": a barra virava pasta e a gravação falhava (B51)
+        let dir = pasta("avulso_polegada");
+        let mut a = Assembly::new("Polegada");
+        let lib = biblioteca::publica();
+        for modo in [ModoInsercao::Padrao, ModoInsercao::Personalizado] {
+            let r = inserir_livre(&mut a, &dir, lib, "asme_b18_3", "3/8-16 UNC", None, modo, PosicaoLivre::Solto { origem: [0., 0., 0.] }, None).unwrap();
+            assert!(!r.arquivo.contains('/') || r.arquivo.starts_with("fixadores/") && !r.arquivo["fixadores/".len()..].contains('/'), "{}", r.arquivo);
+            assert!(dir.join(&r.arquivo).exists(), "{}", r.arquivo);
+        }
+        assert_eq!(crate::fixadores::designacao_de_arquivo("M6"), "M6");
+        assert_eq!(crate::fixadores::designacao_de_arquivo("#10-24 UNC"), "_10-24_UNC");
+    }
+
+    #[test]
+    fn ressalto_circular_nao_vira_furo() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_core::*;
+        // cilindro maciço: as duas arestas circulares são de pino, não de furo
+        let mut d = Document::new("pino");
+        d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Origin(OriginPlane::XY), a: "3.3".into(), b: "10".into(), c: "0".into(), d: "0".into(), op: BoolOp::Add }));
+        let dir = pasta("avulso_pino");
+        std::fs::write(dir.join("pino.fkp"), d.to_json()).unwrap();
+        let mut a = Assembly::new("Pino");
+        a.add_component("Pino", NodeKind::Part { path: "pino.fkp".into() }, Placement::default(), None);
+        assert!(furos_do_mundo(&a, Some(&dir), &mut PartCache::default(), &[]).is_empty());
     }
 
     #[test]

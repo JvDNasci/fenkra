@@ -61,12 +61,20 @@ pub struct CalculoRoda {
     pub diametro_cubo: f64,
 }
 
-fn dados(corr: &str) -> Result<&'static Corrente, String> {
-    let c = crate::transmissao_dados::corrente(corr).ok_or_else(|| format!("corrente '{corr}' fora da biblioteca"))?;
-    if !c.liberada() {
-        return Err(format!("{}: dado {}: a geração só usa linhas conferidas em duas fontes", c.designacao, c.conferencia.rotulo()));
+/// A linha da corrente para gerar; a largura pode ser provisória (219), e então vem o aviso.
+fn dados_com_aviso(corr: &str) -> Result<(Corrente, Option<String>), String> {
+    crate::transmissao_dados::corrente_para_gerar(corr)
+}
+
+fn dados(corr: &str) -> Result<Corrente, String> {
+    dados_com_aviso(corr).map(|(c, _)| c)
+}
+
+/// Grava o aviso da largura provisória nas propriedades da peça, para a lista de peças e a árvore.
+fn marcar_aviso(m: &mut Montador, aviso: Option<String>) {
+    if let Some(a) = aviso {
+        m.doc.props.custom.push(("Aviso".into(), a));
     }
-    Ok(c)
 }
 
 pub fn calculo_roda(p: &ParamRoda) -> Result<CalculoRoda, String> {
@@ -130,9 +138,10 @@ fn passos_roda(c: &Corrente, n: u32) -> Result<([f64; 2], Vec<Passo>), String> {
 
 /// Documento da roda de corrente: dentes extrudados pela largura do dente, cubo e furo.
 pub fn roda_documento(p: &ParamRoda) -> Result<Document, String> {
-    let c = dados(&p.corrente)?;
+    let (c, aviso) = dados_com_aviso(&p.corrente)?;
     let k = calculo_roda(p)?;
     let mut m = Montador::novo(&format!("Roda {} z{}", c.designacao, p.dentes));
+    marcar_aviso(&mut m, aviso);
     m.doc.props.material = "Aço 1045".into();
     m.doc.props.part_type = PartType::Fabricada;
     m.param("p", &c.passo.to_string())?;
@@ -141,7 +150,7 @@ pub fn roda_documento(p: &ParamRoda) -> Result<Document, String> {
     m.param("furo", &p.furo.to_string())?;
     m.param("dcubo", &k.diametro_cubo.to_string())?;
     m.doc.add_param("N", &p.dentes.to_string(), Unit::Numero).map_err(|e| e.to_string())?;
-    let (inicio, passos) = passos_roda(c, p.dentes)?;
+    let (inicio, passos) = passos_roda(&c, p.dentes)?;
     let sk = m.sketch_contorno("Perfil_dentes", PlaneRef::Origin(OriginPlane::XY), inicio, &passos, 0., None);
     let id = m.doc.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("w".into()), reverse: false, taper: "0".into(), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
     if let Some(f) = m.doc.features.iter_mut().find(|f| f.id == id) {
@@ -335,13 +344,14 @@ pub struct ParamLacoCorrente {
 /// Corrente 3D: `elos` rolos (círculos extrudados entre as placas) e duas fitas de placas ao longo do
 /// laço, `z = 0` a `largura` entre elas. Num corpo só.
 pub fn corrente_documento(p: &ParamLacoCorrente) -> Result<Document, String> {
-    let c = dados(&p.corrente)?;
+    let (c, aviso) = dados_com_aviso(&p.corrente)?;
     let (d1, d2) = (diametro_primitivo_roda(c.passo, p.dentes1), diametro_primitivo_roda(c.passo, p.dentes2));
     let cam = Caminho::novo(d1 / 2., d2 / 2., p.centros)?;
     if p.elos < 20 || p.elos > 400 {
         return Err("a corrente precisa de 20 a 400 elos".into());
     }
     let mut m = Montador::novo(&format!("Corrente {} {} elos", c.designacao, p.elos));
+    marcar_aviso(&mut m, aviso);
     m.doc.props.material = "Aço 1045".into();
     m.doc.props.part_type = PartType::Comprada;
     m.param("p", &c.passo.to_string())?;
@@ -521,12 +531,44 @@ mod tests {
     }
 
     #[test]
-    fn corrente_428_gera_roda_e_219_aguarda_a_largura() {
+    fn corrente_428_gera_roda_e_219_gera_com_largura_provisoria() {
         let c = calculo_roda(&ParamRoda::nova("428", 11, 8.)).unwrap();
         assert!((c.diametro_primitivo - 12.7 / (std::f64::consts::PI / 11.).sin()).abs() < 1e-6);
         assert!((c.largura_dente - 0.9 * 7.75).abs() < 1e-9);
-        let e = calculo_roda(&ParamRoda::nova("219", 11, 8.)).unwrap_err();
-        assert!(!e.is_empty(), "219 recusada até a largura ter valor único");
+        // B395: a 219 sai com a menor largura das fontes (4,6 mm), como parâmetro e com aviso
+        let c = calculo_roda(&ParamRoda::nova("219", 82, 40.)).unwrap();
+        assert!((c.diametro_primitivo - 7.774 / (std::f64::consts::PI / 82.).sin()).abs() < 1e-6);
+        assert!((c.largura_dente - 0.9 * 4.6).abs() < 1e-9);
+        let d = roda_documento(&ParamRoda::nova("219", 82, 40.)).unwrap();
+        assert!(d.props.custom.iter().any(|(k, v)| k == "Aviso" && v.contains("provisória")));
+        assert!(d.params.iter().any(|p| p.name == "w"));
+        // a 428 não leva aviso
+        assert!(!roda_documento(&ParamRoda::nova("428", 11, 8.)).unwrap().props.custom.iter().any(|(k, _)| k == "Aviso"));
+    }
+
+    #[test]
+    fn roda_e_corrente_219_do_kart_geram_solidos() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // kart: pinhão de 11 e coroa de 82 dentes; a largura da roda é 0,9 da largura provisória
+        // o pinhão de 11 dentes só aceita furo pequeno (cubo dentro da raiz)
+        for (z, furo) in [(11, 8.), (82, 20.)] {
+            let d = roda_documento(&ParamRoda::nova("219", z, furo)).unwrap();
+            let r = crate::recompute(&d);
+            assert!(r.param_error.is_none() && r.bodies.len() == 1, "z{z}");
+            assert!(d.features.iter().all(|f| r.status[&f.id] == crate::Status::Ok), "z{z}");
+            let (v, lo, hi) = medir(&d);
+            let topo = crate::transmissao_dados::diametro_topo_roda(7.774, z);
+            assert!(v > 0. && (hi[0] - lo[0] - topo).abs() < 0.05 * topo, "z{z}: {lo:?} {hi:?} topo {topo}");
+        }
+        let elos = crate::transmissao_dados::elos_da_corrente(7.774, 11, 82, 300.);
+        let cc = crate::transmissao_dados::distancia_corrigida_corrente(7.774, 11, 82, elos).unwrap();
+        let d = corrente_documento(&ParamLacoCorrente { corrente: "219".into(), dentes1: 11, dentes2: 82, elos, centros: cc, com_rolos: true }).unwrap();
+        assert!(d.props.custom.iter().any(|(k, _)| k == "Aviso"));
+        let (_, lo, hi) = medir(&d);
+        // entre as placas a largura provisória 4,6 mm
+        assert!(lo[2] < -0.5 && hi[2] > 4.6 + 0.5, "{lo:?} {hi:?}");
     }
 
     #[test]
