@@ -5225,7 +5225,18 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                             Some(fid) => {
                                 drawn_folders.push(fid);
                                 let name = doc.folder(fid).map(|x| x.name.clone()).unwrap_or_default();
-                                let h = crate::tree_ui::grupo(ui, ("pasta", fid.0), Some("pasta"), name.as_str(), true).corpo(ui, |ui| {
+                                // B16: a pasta de comandos também tem olho e menu no próprio item; oculta, os
+                                // sketches de dentro somem e cada um guarda o próprio estado
+                                let oculta = doc.folder(fid).is_some_and(|x| x.hidden);
+                                let h = crate::tree_ui::no(ui, ("pasta", fid.0), true, |ui| {
+                                    if eye(ui, oculta) {
+                                        actions.push(TreeAction::FolderShown(fid, oculta));
+                                    }
+                                    crate::tree_ui::icone(ui, "pasta");
+                                    let t = if oculta || !c.visible { RichText::new(name.as_str()).weak() } else { RichText::new(name.as_str()) };
+                                    ui.selectable_label(self.sel == Sel::Folder(fid), t)
+                                });
+                                let h = h.corpo(ui, |ui| {
                                     for (j, g) in feats.iter().filter(|(_, g)| g.folder == Some(fid)) {
                                         self.feature_row(ui, &doc, *j, g, &mut new_sel, &mut actions);
                                     }
@@ -5237,6 +5248,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                                     ui.label(RichText::new(&name).strong());
                                     if ui.button(tr("✎ Renomear   F2")).clicked() {
                                         actions.push(TreeAction::StartRename(fid));
+                                        ui.close();
+                                    }
+                                    if ui.button(if oculta { tr("👁 Mostrar o conteúdo") } else { tr("👁 Ocultar o conteúdo") }).clicked() {
+                                        actions.push(TreeAction::FolderShown(fid, oculta));
                                         ui.close();
                                     }
                                     ui.separator();

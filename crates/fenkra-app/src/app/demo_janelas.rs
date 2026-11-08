@@ -82,6 +82,35 @@ impl App {
                 self.sent_doc = None;
                 self.sel = Sel::Ref(ids[1]);
             }
+            // B16: `ocultar_pasta` põe os sketches do primeiro corpo numa pasta de comandos oculta;
+            // `ocultar_corpo` oculta o primeiro corpo (os sketches dele somem junto, cada um com o seu estado)
+            "ocultar_pasta" | "ocultar_corpo" => {
+                let d = &mut self.open.doc;
+                if let Some(c) = d.collectors.first().map(|c| c.id) {
+                    if nome == "ocultar_corpo" {
+                        d.collectors[0].visible = false;
+                    } else {
+                        let fo = d.add_folder("Esboços");
+                        let sks: Vec<Id> = d.features.iter().filter(|f| f.target == c && matches!(f.kind, FeatureKind::Sketch(_)) && !d.is_free(f)).map(|f| f.id).collect();
+                        for s in sks {
+                            if let Some(f) = d.feature_mut(s) {
+                                f.folder = Some(fo);
+                                f.hidden = false;
+                            }
+                        }
+                        if let Some(f) = d.folders.iter_mut().find(|f| f.id == fo) {
+                            f.hidden = true;
+                        }
+                    }
+                    self.scene_dirty = true;
+                }
+            }
+            // B24: ponto definido no plano YZ, selecionado: as setas do referencial dele aparecem no 3D
+            "ponto_referencial" => {
+                let p = self.open.doc.add_geometry(RefKind::PointCoords { x: "20".into(), y: "20".into(), z: "30".into(), frame: Some(PlaneRef::Origin(OriginPlane::YZ)) });
+                self.sel = Sel::Ref(p);
+                self.scene_dirty = true;
+            }
             "daltonico" => self.settings.acessibilidade.paleta_segura = true,
             // B378: o gerenciador único de salvamento e exportação
             "gerenciador" => self.abrir_gerenciador(),

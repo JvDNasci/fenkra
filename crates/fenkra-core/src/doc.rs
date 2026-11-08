@@ -4427,9 +4427,10 @@ impl Document {
         r.visible && !self.folder_hidden(r.folder)
     }
 
-    /// Sketch oculto de fato: o seu estado ou o de uma pasta acima (B16).
+    /// Sketch oculto de fato: o seu estado, o de uma pasta acima ou, para os sketches da linha do
+    /// tempo de um corpo, o do corpo (B16: o pai oculta os filhos sem mexer no estado de cada um).
     pub fn sketch_hidden(&self, f: &Feature) -> bool {
-        f.hidden || self.folder_hidden(f.folder)
+        f.hidden || self.folder_hidden(f.folder) || (!self.is_free(f) && self.collectors.iter().any(|c| c.id == f.target && !c.visible))
     }
 
     /// `a` está dentro de `b` (ou é `b`)?
@@ -5374,6 +5375,28 @@ mod tests {
         d.folders.iter_mut().find(|f| f.id == a).unwrap().hidden = false;
         assert!(d.ref_shown(d.reference(p).unwrap()));
         assert!(!d.ref_shown(d.reference(q).unwrap()));
+        assert!(!d.sketch_hidden(d.feature(sk).unwrap()));
+    }
+
+    #[test]
+    fn corpo_e_pasta_de_comandos_ocultos_escondem_os_sketches_sem_mudar_o_estado_deles() {
+        let mut d = Document::new("t");
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::default(), data: Default::default() }));
+        let c = d.feature(sk).unwrap().target;
+        assert!(!d.is_free(d.feature(sk).unwrap()));
+        assert!(!d.sketch_hidden(d.feature(sk).unwrap()));
+        // ocultar o corpo (o pai) esconde o sketch da sua linha do tempo
+        d.collectors.iter_mut().find(|x| x.id == c).unwrap().visible = false;
+        assert!(d.sketch_hidden(d.feature(sk).unwrap()));
+        assert!(!d.feature(sk).unwrap().hidden, "o sketch guarda o próprio estado");
+        d.collectors.iter_mut().find(|x| x.id == c).unwrap().visible = true;
+        assert!(!d.sketch_hidden(d.feature(sk).unwrap()));
+        // pasta de comandos oculta faz o mesmo
+        let fo = d.add_folder("Cmds");
+        d.feature_mut(sk).unwrap().folder = Some(fo);
+        d.folders.iter_mut().find(|f| f.id == fo).unwrap().hidden = true;
+        assert!(d.sketch_hidden(d.feature(sk).unwrap()));
+        d.folders.iter_mut().find(|f| f.id == fo).unwrap().hidden = false;
         assert!(!d.sketch_hidden(d.feature(sk).unwrap()));
     }
 

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Fenkra — CAD paramétrico open source.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// a tabela de traduções encadeia muitas listas (`i18n.rs`): o tipo do iterador passa do limite padrão
+#![recursion_limit = "256"]
 
 mod app;
 mod examples;
