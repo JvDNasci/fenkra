@@ -95,7 +95,12 @@ impl App {
             }
             "diagnostico" => self.demo_diagnostico(),
             // B361: a face de cima do primeiro corpo já escolhida (contorno externo, furos de fora)
-            "face" => {
+            // B372: `roda_face` escolhe a face de cima e abre a roda, para ver o conteúdo por seleção
+            "face" | "roda_face" => {
+                if nome == "roda_face" {
+                    let r = ctx.content_rect();
+                    self.roda.fase = crate::roda::Fase::Fixa { p0: [r.center().x, r.center().y] };
+                }
                 let alvo = self.result.as_ref().and_then(|r| r.bodies.first()).and_then(|b| {
                     let m = &b.mesh;
                     (0..m.face_ranges.len()).filter_map(|f| {
