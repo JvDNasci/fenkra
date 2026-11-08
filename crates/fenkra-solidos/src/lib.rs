@@ -2250,6 +2250,11 @@ impl Ctx<'_> {
                 let m = match mode {
                     SweepMode::Corrigido => 0,
                     SweepMode::Fixo => 1,
+                    // B386: o círculo normal à guia é o mesmo girado em qualquer ângulo, então o triedro
+                    // só decide onde fica a costura, não a forma do tubo. Frenet puro perde a direção onde
+                    // a guia tem inflexão ou trecho reto e não varre; no tubo vale o Corrigido, com o
+                    // mesmo resultado que o Frenet daria se tivesse direção
+                    SweepMode::Frenet if matches!(profile, SweepProfile::Circle(_)) => 0,
                     SweepMode::Frenet => 2,
                 };
                 Geo::Surface(Shape::sweep_surface(&prof, &sp.pts, m).map_err(|x| x.0)?)

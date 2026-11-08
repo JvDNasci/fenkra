@@ -819,6 +819,14 @@ std::unique_ptr<Shape> thicken(const Shape& s, double t1, double t2) {
         mk.MakeThickSolidBySimple(base, t1 + t2);
         if (!mk.IsDone()) throw std::runtime_error("não foi possível engrossar (raio de curvatura menor que a espessura?)");
         TopoDS_Shape r = mk.Shape();
+        // B386: no tubo de varredura em guia 3D, a tampa anular que o engrosse cria sai com as
+        // curvas da borda fora da tolerância da face (BRepCheck reprova a face, o volume fica certo).
+        // A cura de forma refaz curvas e tolerâncias; só fica se o resultado passar na conferência
+        if (!BRepCheck_Analyzer(r).IsValid()) {
+            Handle(ShapeFix_Shape) fx = new ShapeFix_Shape(r);
+            fx->Perform();
+            if (BRepCheck_Analyzer(fx->Shape()).IsValid()) r = fx->Shape();
+        }
         GProp_GProps g;
         BRepGProp::VolumeProperties(r, g);
         if (g.Mass() < 0) r.Reverse();  // casco com a normal para dentro
