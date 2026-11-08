@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 // a tabela de traduções é uma cadeia longa de `chain`; o tipo dela passa da profundidade padrão
 // a tabela de traduções encadeia muitas listas (`i18n.rs`): o tipo do iterador passa do limite padrão
+// a tabela de traduções encadeia dezenas de `textos_*`: o tipo do iterador passa do limite padrão
 #![recursion_limit = "256"]
 
 mod app;
@@ -150,6 +151,9 @@ mod textos_dobra_tubo;
 mod st_dobra_ui;
 mod st_dobra_corte_ui;
 mod st_cantos_ui;
+mod st_acesso_ui;
+mod st_tocha_ui;
+mod st_corte_tubo_ui;
 mod st_limite_ui;
 mod textos_st_limite;
 mod st_encaixe_ui;

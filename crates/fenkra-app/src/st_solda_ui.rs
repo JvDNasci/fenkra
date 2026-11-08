@@ -169,6 +169,8 @@ pub fn solda_panel(ui: &mut egui::Ui, doc: &Document, me: Id, w: &mut StructWeld
         ui.text_edit_singleline(&mut w.material).on_hover_text(tr("Metal de adição. Vazio usa o material da peça."));
     });
     ui.label(RichText::new(tr("O símbolo de solda do desenho é preenchido a partir deste cordão: medida z, contorno e n×l (e).")).weak().small());
+    // B174: acessibilidade da tocha
+    crate::st_tocha_ui::secao(ui, me);
 }
 
 fn atualizar(app: &crate::app::App, ctx: &egui::Context) {
@@ -192,6 +194,7 @@ pub fn overlay(app: &mut crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, c
     }
     atualizar(app, ui.ctx());
     let Some(c) = cache(ui.ctx()) else { return };
+    crate::st_tocha_ui::overlay(app, ui, rect, cam, &c.cordoes);
     let em_edicao = app.session.as_ref().map(|s| s.id);
     let (agora, realce) = (ui.ctx().input(|i| i.time), ui.ctx().data(|d| d.get_temp::<(f64, Id, Option<usize>)>(chave_realce())));
     let v = ui.visuals().clone();

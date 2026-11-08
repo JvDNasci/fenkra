@@ -192,6 +192,8 @@ pub fn windows(app: &mut App, ctx: &egui::Context) {
     cut_list(app, ctx);
     crate::st_cantos_ui::window(app, ctx);
     crate::st_montagem_ui::window(app, ctx);
+    crate::st_acesso_ui::window(app, ctx);
+    crate::st_corte_tubo_ui::window(app, ctx);
 }
 
 /// Gerar montagem: uma peça por grupo de peças iguais e a montagem, em `<nome>_montagem` ao lado
@@ -440,6 +442,8 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     };
     let mut open = true;
     let mut export = false;
+    let mut export_ifc = false;
+    let mut export_nc = false;
     let mut gerar = false;
     let mut acao_maq: Option<crate::st_maquina_ui::Acao> = None;
     let mut hover_row: Option<usize> = None;
@@ -578,6 +582,15 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                 if ui.button(tr("💾 Exportar CSV…")).clicked() {
                     export = true;
                 }
+                if ui.button(tr("Exportar IFC…")).on_hover_text(tr("Estrutura de aço em IFC4: membros, placas e soldas com o corpo já cortado, o perfil paramétrico, o material e o comprimento de corte.")).clicked() {
+                    export_ifc = true;
+                }
+                if ui.button(tr("Exportar NC1 e STEP…")).on_hover_text(tr("Para as máquinas de perfil e de tubo: um arquivo DSTV NC1 (cabeçalho, cortes inclinados e furos) e um STEP do sólido já cortado por item da lista, numa pasta.")).clicked() {
+                    export_nc = true;
+                }
+                if ui.button(tr("Caminho de corte…")).on_hover_text(tr("Caminho da máquina de tubo rotativo para os encaixes: vista desenvolvida, tabela por ponto, CSV e animação do cabeçote.")).clicked() {
+                    crate::st_corte_tubo_ui::abrir(ui.ctx());
+                }
                 if ui.button(tr("Gerar montagem…")).on_hover_text(tr("Abre o resumo com peças, instâncias, pasta e nomes dos arquivos; nada é gravado antes de Confirmar.")).clicked() {
                     gerar = true;
                 }
@@ -596,6 +609,12 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     ctx.data_mut(|d| d.insert_temp(estado_id, ui_state));
     if gerar {
         crate::st_montagem_ui::abrir(app);
+    }
+    if export_ifc {
+        exportar_ifc(app);
+    }
+    if export_nc {
+        exportar_nc(app);
     }
     if export {
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_corte.csv").save_file() {
@@ -618,6 +637,25 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     }
     if !open {
         app.st_cut_open = false;
+    }
+}
+
+/// B176: grava, numa pasta escolhida, o NC1 e o STEP de cada item da lista de corte.
+fn exportar_nc(app: &mut App) {
+    let Some(pasta) = rfd::FileDialog::new().pick_folder() else { return };
+    match fenkra_solidos::st_dstv::gravar_saidas(app.doc(), &pasta) {
+        Ok(v) => app.toast(format!("{}: {} {}", tr("NC1 e STEP gravados"), v.len(), tr("arquivos")), false),
+        Err(e) => app.toast(format!("{}: {}", tr("Erro"), tr(&e)), true),
+    }
+}
+
+/// B134: grava a estrutura da peça em IFC4.
+fn exportar_ifc(app: &mut App) {
+    let nome = format!("{}.ifc", if app.doc().name.trim().is_empty() { "estrutura" } else { app.doc().name.trim() });
+    let Some(p) = rfd::FileDialog::new().add_filter("IFC", &["ifc"]).set_file_name(nome).save_file() else { return };
+    match fenkra_solidos::st_ifc::ifc_da_estrutura(app.doc()).and_then(|r| std::fs::write(&p, &r.texto).map(|_| r).map_err(|e| e.to_string())) {
+        Ok(r) => app.toast(format!("{}: {} {}, {} {}, {} {}", tr("IFC exportado"), r.membros, tr("membros"), r.placas, tr("placas"), r.soldas, tr("soldas")), false),
+        Err(e) => app.toast(format!("{}: {}", tr("Erro"), tr(&e)), true),
     }
 }
 

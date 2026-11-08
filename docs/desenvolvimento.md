@@ -106,6 +106,7 @@ preferências do usuário.
 | `FENKRA_DEMO_JANELA=ocultar_pasta\|ocultar_corpo\|ponto_referencial` | (B16, B24) sketches do primeiro corpo numa pasta de comandos oculta; o primeiro corpo oculto (os sketches dele somem junto); ponto no plano YZ selecionado, com as setas do referencial |
 | `FENKRA_DEMO_JANELA=filete_regra` | (B95) caixa de cantos arredondados com um filete que grava a regra "tangentes" a partir de uma aresta de cima, com o painel do filete aberto |
 | `FENKRA_DEMO_COMPARAR=1` | (B237) abre Comparar com um alvo usando como alvo a mesma peça com o primeiro parâmetro 5% maior: medidas, furos por diâmetro, mapa de distância e marcas |
+| `FENKRA_DEMO_ACESSO=1` ou `gerada` | (B136) comando Escada e guarda-corpo aberto ao lado de uma plataforma, com a prévia das linhas no 3D; `gerada` já põe a escada de dois lances (4,4 m) na peça, sem o painel |
 | `FENKRA_DEMO_FOTO=<arquivo.png>` | grava a janela depois de 9 s e fecha o programa |
 | `FENKRA_DEMO_POLIMENTO=<caso>` | abre uma peça de prova do polimento da superfície (B346): `esfera`, `cilindro`, `toro`, `superficie` (painel de dupla curvatura), `filete`, `bolso`, `filete_sup` |
 | `FENKRA_DEMO_QUALIDADE=<desvio>,<ângulo>` | força a malha de trabalho, por exemplo `0.02,45` (a mais grossa aceita); `FENKRA_EXIBIR` também aceita `sombreado` e `render` |

@@ -351,6 +351,8 @@ pub struct App {
     pub st_cut_open: bool,
     /// B37: janela dos cantos da estrutura, canto escolhido (ponto) e cantos lidos no último quadro
     pub st_cantos_open: bool,
+    /// B136: comando Escada e guarda-corpo aberto
+    pub st_acesso_open: bool,
     /// B50: resumo de confirmação do Gerar montagem (aberto até Confirmar ou Cancelar)
     pub st_asm_resumo: Option<crate::st_montagem_ui::Resumo>,
     pub st_cantos_sel: Option<[f64; 3]>,
@@ -508,6 +510,7 @@ impl App {
             st_lib_open: false,
             st_cut_open: false,
             st_cantos_open: false,
+            st_acesso_open: std::env::var("FENKRA_DEMO_ACESSO").is_ok(),
             st_asm_resumo: None,
             st_cantos_sel: None,
             st_cantos: vec![],
@@ -2550,6 +2553,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
             Cmd::StCorners => {
                 self.st_cantos_open = true;
+                return;
+            }
+            Cmd::StAcesso => {
+                crate::st_acesso_ui::abrir(self);
                 return;
             }
             Cmd::StAssembly => {
@@ -8324,6 +8331,8 @@ pub enum Cmd {
     StLibrary,
     StCutList,
     StCorners,
+    /// B136: escada, plataforma e guarda-corpo
+    StAcesso,
     StAssembly,
     /// anotação 3D: 0 linear … 8 tolerância geométrica
     Pmi(u8),
