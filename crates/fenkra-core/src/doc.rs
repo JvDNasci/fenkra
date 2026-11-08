@@ -4531,7 +4531,8 @@ impl Document {
         let ext = self.alloc();
         let target = match &geo {
             LinkedGeo::Value(v) => {
-                let name = self.unique_name(&base);
+                // B379: o mesmo nome da curva ligada (`mestre_EE`); número só se já estiver em uso
+                let name = if self.name_taken(&base) { self.unique_name(&base) } else { base.clone() };
                 let id = self.alloc();
                 self.params.push(Parameter { comment: format!("link: {source}.{publication}"), ..Parameter::novo(id, &name, &format!("{v}"), Unit::Comprimento) });
                 id
@@ -5255,6 +5256,24 @@ pub fn rename_ident(src: &str, old: &str, new: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    /// B379: o parâmetro ligado nasce com o nome da publicação (`mestre_EE`), como a curva ligada,
+    /// e a fórmula escrita com esse nome resolve; o número só aparece no segundo link igual.
+    #[test]
+    fn parametro_ligado_sem_sufixo_numerico() {
+        let mut d = Document::new("peca");
+        let a = d.add_link("mestre", "mestre.fkp", "EE", LinkedGeo::Value(40.));
+        assert_eq!(d.params.iter().find(|p| p.id == a).unwrap().name, "mestre_EE");
+        let c = d.add_link("mestre", "mestre.fkp", "Borda", LinkedGeo::Curve(vec![[0.; 3], [1., 0., 0.]]));
+        assert_eq!(d.name_of(c), "mestre_Borda");
+        let id = d.alloc();
+        d.params.push(Parameter::novo(id, "Altura", "mestre_EE + 10", Unit::Comprimento));
+        let v = d.eval_params().unwrap();
+        assert!((v["Altura"] - 50.).abs() < 1e-9);
+        let b = d.add_link("mestre", "mestre.fkp", "EE", LinkedGeo::Value(40.));
+        assert_eq!(d.params.iter().find(|p| p.id == b).unwrap().name, "mestre_EE1");
+    }
+
     use super::*;
 
     #[test]
