@@ -10,14 +10,17 @@
     "Global Fastener, DIN 6885 (b×h de 8×7 a 22×14): https://www.globalfastener.com/standards/detail_20214.html",
     "TU Dortmund, prova exemplo TZ WS10/11 (t1 de 6×6 e 10×8): https://lkp.mb.tu-dortmund.de/storages/me-mb/r/dokumente/Klausuren/Beispielklausuren/Klausur_bspl_TZ_WS1011.pdf",
     "fasten.it, DIN 6885-1 (faixas do eixo, b×h, t1 e t2 de 2×2 a 22×14): https://fasten.it/norms/norm/din_6885-1",
-    "J.W. Winco, catálogo DIN 6885-1 em PDF (t1 e t2 por diâmetro de eixo, de 2×2 a 14×9): https://live-catalog.jwwinco.com/pdf/winco/us/6885-1.pdf"
+    "J.W. Winco, catálogo DIN 6885-1 em PDF (t1 e t2 por diâmetro de eixo, de 2×2 a 14×9): https://live-catalog.jwwinco.com/pdf/winco/us/6885-1.pdf",
+    "TU Dortmund, prova exemplo TZ SS09, extrato da DIN 6885 T1 (faixas do eixo, b×h e t1 de 3×3 a 32×18): https://lkp.mb.tu-dortmund.de/storages/me-mb/r/dokumente/Klausuren/Beispielklausuren/Klausur_bspl_TZ_SS09.pdf",
+    "Wilhelm Sass KG, lista de medidas 'Nabe mit Passfeder DIN 6885' em PDF (largura do rasgo e d + t2 por furo, de Ø10 a Ø398): https://www.gelenkwellenfabrik.de/pdb/AFL_DIN.pdf"
   ],
   "confirmado_por": [
     "faixas e b×h de 2×2 a 12×8: duas fontes (contexto + J.W. Winco)",
     "b×h de 14×9 a 22×14: duas fontes (contexto + Global Fastener); faixas do eixo só na fonte 1",
     "t1 de 6×6 e 10×8: duas fontes (contexto + TU Dortmund); demais t1 só na fonte 1",
     "t1 e t2 de 2×2 a 14×9: três fontes (contexto, fasten.it e o PDF da J.W. Winco)",
-    "t1 e t2 de 16×10 a 22×14 e as faixas do eixo de 44 a 85 mm: uma fonte gratuita (fasten.it), que repete o valor de contexto de origem não verificada; PENDENTE de segunda fonte independente"
+    "t1 e t2 de 16×10 a 22×14: duas fontes independentes (fasten.it; t1 na prova TZ SS09 da TU Dortmund e t2 = (d + t2) − d na lista da Wilhelm Sass KG)",
+    "faixas do eixo de 2×2 a 22×14: três fontes (contexto, fasten.it e a prova TZ SS09 da TU Dortmund); de 44 a 85 mm também na Wilhelm Sass KG, pela troca da largura do rasgo"
   ],
   "faixas": [
     { "d_acima": 6, "d_ate": 8, "b": 2, "h": 2, "t1": 1.2, "t2": 1.0 },

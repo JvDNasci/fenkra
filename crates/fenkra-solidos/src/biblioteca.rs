@@ -638,6 +638,14 @@ mod tests {
         // B52: t2 (rasgo do cubo) agora com segunda fonte gratuita; o que segue com uma só diz PENDENTE
         assert!(t.confirmado_por.iter().any(|c| c.starts_with("t1 e t2 de 2×2 a 14×9") && c.contains("fasten.it") && c.contains("Winco")));
         assert!(!t.confirmado_por.iter().any(|c| c.starts_with("t2: só na fonte 1")));
+        // B52: de 16×10 a 22×14 a segunda fonte independente (TU Dortmund para t1, Sass KG para t2)
+        // fecha a tabela inteira: nenhuma linha fica PENDENTE de segunda fonte
+        assert!(t.confirmado_por.iter().any(|c| c.starts_with("t1 e t2 de 16×10 a 22×14") && c.contains("Dortmund") && c.contains("Sass")));
+        assert!(!t.confirmado_por.iter().any(|c| c.contains("PENDENTE")));
+        for (d, b, h, t1, t2) in [(55., 16., 10., 6., 4.3), (60., 18., 11., 7., 4.4), (70., 20., 12., 7.5, 4.9), (80., 22., 14., 9., 5.4)] {
+            let c = chaveta_para_eixo(d).unwrap();
+            assert_eq!((c.b, c.h, c.t1, c.t2), (b, h, t1, t2), "Ø{d}");
+        }
         let c = chaveta_para_eixo(20.).unwrap();
         assert_eq!((c.b, c.h, c.t1, c.t2), (6., 6., 3.5, 2.8));
         let c = chaveta_para_eixo(40.).unwrap();

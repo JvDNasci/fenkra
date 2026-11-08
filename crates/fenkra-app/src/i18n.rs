@@ -77,6 +77,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_paineis::TEXTOS.iter())
             .chain(crate::textos_interface2::TEXTOS.iter())
             .chain(crate::textos_verificar::TEXTOS.iter())
+            .chain(crate::engrenagens_verificar_ui::TEXTOS.iter())
             .chain(crate::textos_features::TEXTOS.iter())
             .chain(crate::textos_forma::TEXTOS.iter())
             .chain(crate::props_geometria::TEXTOS.iter())

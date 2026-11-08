@@ -142,11 +142,13 @@ pub struct GearsUi {
     pub trecho_sel: Option<usize>,
     pub eixo_grafico: bool,
     pub malha_eixo: Option<std::sync::Arc<crate::eixo_ui::MalhaEixo>>,
+    /// abas Projeto e Verificar e as entradas da verificação de resistência (B52)
+    pub verificar: crate::engrenagens_verificar_ui::EstadoVerificar,
 }
 
 impl Default for GearsUi {
     fn default() -> Self {
-        GearsUi { p: fenkra_solidos::ParamEngrenagem { furo: 8., ..Default::default() }, dentes_coroa: 40, msg: vec![], eixo: Default::default(), malhas: None, dimensionar: false, dim_a: 90., dim_i: 2., recursos: vec![], trecho_sel: Some(0), eixo_grafico: false, malha_eixo: None }
+        GearsUi { p: fenkra_solidos::ParamEngrenagem { furo: 8., ..Default::default() }, dentes_coroa: 40, msg: vec![], eixo: Default::default(), malhas: None, dimensionar: false, dim_a: 90., dim_i: 2., recursos: vec![], trecho_sel: Some(0), eixo_grafico: false, malha_eixo: None, verificar: Default::default() }
     }
 }
 
@@ -4597,6 +4599,13 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
             close = true;
         }
         ui.label(RichText::new(tr("Gera engrenagens com perfil em evolvente e insere o par já engrenado: distância entre centros, dentes encaixados e restrição de engrenagem. O pinhão é a peça de z1 dentes.")).weak().small());
+        // B52: a aba Verificar só confere o par; a geometria fica na aba Projeto
+        crate::engrenagens_verificar_ui::abas(ui, &mut g.verificar);
+        if g.verificar.aba == crate::engrenagens_verificar_ui::Aba::Verificar {
+            let par_ref = par.as_ref().map(|c| (&c.pinhao, &c.coroa)).map_err(|e| e.as_str());
+            crate::engrenagens_verificar_ui::aba_verificar(ui, &mut g.verificar, par_ref);
+            return;
+        }
         crate::editor::section(ui, "Tipo");
         ui.horizontal_wrapped(|ui| {
             for t in TipoEngrenagem::ALL {
@@ -4644,6 +4653,7 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
                 }
             }
             campo(ui, "Correção do perfil (x)", &mut g.p.coef_correcao, -1.0..=1., "", 0.01);
+            crate::engrenagens_verificar_ui::linha_correcao_minima(ui, &mut g.p);
         }
 
         crate::editor::section(ui, "Cálculo");
