@@ -87,7 +87,7 @@ pub fn demo(ctx: &egui::Context, doc: &Document, modo: &str) {
     ctx.data_mut(|m| {
         let e = m.get_temp_mut_or_default::<Est>(egui::Id::new(ID));
         e.aberta = true;
-        e.aba = u8::from(modo == "dobra");
+        e.aba = u8::from(modo == "dobra" || modo == "inviavel");
         e.puncoes = vec![["Punção exemplo".into(), "88".into(), "1".into(), "100".into(), "30".into()]];
         e.matrizes = vec![["Matriz exemplo".into(), "8*espessura".into(), "88".into(), "60".into(), "20".into()]];
         e.altura_livre = "300".into();
@@ -106,7 +106,13 @@ pub fn demo(ctx: &egui::Context, doc: &Document, modo: &str) {
     // roda uma vez o que a captura mostra
     ctx.data_mut(|m| {
         let e = m.get_temp_mut_or_default::<Est>(egui::Id::new(ID));
-        if modo == "dobra" {
+        if modo == "inviavel" {
+            // B173: matriz larga demais para a bainha curta, na ordem da tabela: a dobra
+            // inviável aparece marcada no 3D
+            e.matrizes[0][1] = "40".into();
+            e.sequencia = e.plana.as_ref().map(ordem_do_usuario).unwrap_or_default();
+            simular(e);
+        } else if modo == "dobra" {
             sugerir(e, doc);
         } else {
             rodar_nesting(e);
@@ -172,11 +178,18 @@ fn sugerir(e: &mut Est, doc: &Document) {
         Ok(None) => {
             e.nos = None;
             e.msg = Some((tr("Nenhuma ordem viável com este ferramental: veja o motivo simulando a ordem da tabela de dobras.").to_string(), true));
-            e.sequencia = (0..p.dobras.len()).collect();
+            e.sequencia = ordem_do_usuario(&p);
             simular(e);
         }
         Err(er) => e.msg = Some((er, true)),
     }
+}
+
+/// B304: a sequência na ordem dos glifos (número repetido mantém a posição do mapa entre eles).
+pub fn ordem_do_usuario(p: &Planificada) -> Vec<usize> {
+    let mut v: Vec<usize> = (0..p.dobras.len()).collect();
+    v.sort_by_key(|i| (p.dobras[*i].ordem, *i));
+    v
 }
 
 fn simular(e: &mut Est) {
@@ -451,5 +464,95 @@ fn aba_dobra(ui: &mut egui::Ui, e: &mut Est, doc: &Document) {
     if let Some(n) = sobe {
         e.sequencia.swap(n, n - 1);
         simular(e);
+    }
+}
+
+/// Dobra inviável marcada no 3D: `indice` acha a linha de dobra, `ordem` é o número que o usuário
+/// vê (pode repetir, B304) e `texto` diz o passo e o primeiro motivo.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MarcaInviavel {
+    /// índice da dobra em `Planificada::dobras` e em `RecomputeResult::bend_lines`
+    pub indice: usize,
+    pub ordem: usize,
+    pub texto: String,
+}
+
+/// Marcas das dobras inviáveis da última simulação, uma por dobra (a primeira vez que ela falha).
+pub fn marcas_inviaveis(s: &sim::Simulacao) -> Vec<MarcaInviavel> {
+    let mut out: Vec<MarcaInviavel> = vec![];
+    for (n, p) in s.passos.iter().enumerate() {
+        if p.viavel() || out.iter().any(|m| m.indice == p.dobra) {
+            continue;
+        }
+        let motivo = p.problemas.first().map(|q| q.texto.as_str()).unwrap_or_default();
+        out.push(MarcaInviavel { indice: p.dobra, ordem: p.ordem_dobra, texto: format!("✖ {} {} · {} {}: {motivo}", tr("passo"), n + 1, tr("dobra"), p.ordem_dobra) });
+    }
+    out
+}
+
+/// B173: com a janela aberta na sequência de dobra, a dobra inviável aparece no 3D, na peça dobrada
+/// ou planificada, como a linha de dobra engrossada na cor de erro do tema e o motivo ao lado.
+pub fn overlay_inviaveis(ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera, r: &fenkra_solidos::RecomputeResult) {
+    let e: Option<Est> = ui.ctx().data(|m| m.get_temp(egui::Id::new(ID)));
+    let Some(s) = e.filter(|e| e.aberta && e.aba == 1).and_then(|e| e.sim) else { return };
+    let painter = ui.painter_at(rect);
+    let cor = crate::theme::st_err();
+    let v = |p: [f64; 3]| glam::Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
+    for m in marcas_inviaveis(&s) {
+        let Some(b) = r.bend_lines.get(m.indice) else { continue };
+        let linha: Vec<[f64; 3]> = if b.curva.len() > 2 { b.curva.clone() } else { b.center.to_vec() };
+        let pts: Vec<egui::Pos2> = linha.iter().filter_map(|q| cam.project(rect, v(*q))).collect();
+        if pts.len() < 2 {
+            continue;
+        }
+        painter.add(egui::Shape::line(pts.clone(), egui::Stroke::new(4., cor)));
+        // começo e fim da zona dobrada, finos, para ver a faixa que não dobra
+        for q in [b.start, b.end].into_iter().filter(|_| b.curva.len() <= 2) {
+            if let (Some(a), Some(c)) = (cam.project(rect, v(q[0])), cam.project(rect, v(q[1]))) {
+                painter.line_segment([a, c], egui::Stroke::new(1.5, cor));
+            }
+        }
+        let meio = pts[pts.len() / 2];
+        let g = painter.layout_no_wrap(m.texto, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), ui.visuals().text_color());
+        let lr = egui::Rect::from_min_size(meio + egui::vec2(10., 8.), g.size() + egui::vec2(10., 6.));
+        let lr = crate::chapa_manip_ui::reserva_rotulo(ui, lr, rect);
+        painter.rect_filled(lr, 4., ui.visuals().extreme_bg_color);
+        painter.rect_stroke(lr, 4., egui::Stroke::new(1.5, cor), egui::StrokeKind::Inside);
+        painter.galley(lr.min + egui::vec2(5., 3.), g, ui.visuals().text_color());
+    }
+}
+
+#[cfg(test)]
+mod testes {
+    use super::*;
+
+    fn passo(ordem: usize, problema: Option<&str>) -> sim::PassoSim {
+        sim::PassoSim {
+            dobra: ordem - 1,
+            ordem_dobra: ordem,
+            puncao: "p".into(),
+            matriz: "m".into(),
+            alvo: 90.,
+            sobredobra: 0.,
+            retorno: 0.,
+            aba: 20.,
+            aba_minima: 10.,
+            vira: false,
+            problemas: problema.map(|t| vec![sim::Problema { tipo: sim::Tipo::PernaNoPuncao, texto: t.into() }]).unwrap_or_default(),
+            nao_verificado: vec![],
+        }
+    }
+
+    /// B173: só a dobra inviável vira marca, com o passo e o motivo, uma vez por dobra.
+    #[test]
+    fn marca_so_as_dobras_inviaveis_com_o_motivo() {
+        let s = sim::Simulacao { passos: vec![passo(2, None), passo(1, Some("a perna bate no punção")), passo(3, Some("aba curta")), passo(1, Some("de novo"))], viavel: false, troca_ferramenta: 0, viradas: 0 };
+        let m = marcas_inviaveis(&s);
+        assert_eq!(m.iter().map(|x| x.ordem).collect::<Vec<_>>(), vec![1, 3]);
+        assert_eq!(m.iter().map(|x| x.indice).collect::<Vec<_>>(), vec![0, 2]);
+        assert!(m[0].texto.contains("2") && m[0].texto.contains("a perna bate no punção"), "{}", m[0].texto);
+        assert!(m[1].texto.contains("aba curta"));
+        let ok = sim::Simulacao { passos: vec![passo(1, None)], viavel: true, troca_ferramenta: 0, viradas: 0 };
+        assert!(marcas_inviaveis(&ok).is_empty());
     }
 }

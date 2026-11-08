@@ -472,12 +472,16 @@ pub fn dxf(p: &Planificada) -> String {
     }
     for dobra in &p.dobras {
         let camada = if dobra.cima { CAMADA_DOBRA_CIMA } else { CAMADA_DOBRA_BAIXO };
-        if dobra.curva.len() > 2 {
-            d.itens.extend(dobra.curva.windows(2).map(|w| Item::novo(camada, D::Linha(w[0], w[1]))));
+        // B03: a linha curva é uma polilinha só (a máquina lê uma dobra, não N retas soltas) e o
+        // rótulo fica no meio da curva, não no meio da corda, que pode cair fora da chapa
+        let meio = if dobra.curva.len() > 2 {
+            d.itens.push(Item::novo(camada, D::Polilinha { vertices: dobra.curva.iter().map(|p| fenkra_dxf::Vertice { p: *p, bojo: 0. }).collect(), fechada: false }));
+            dobra.curva[dobra.curva.len() / 2]
         } else {
             d.itens.push(Item::novo(camada, D::Linha(dobra.a, dobra.b)));
-        }
-        let meio = [(dobra.a[0] + dobra.b[0]) / 2. + 1., (dobra.a[1] + dobra.b[1]) / 2. + 1.];
+            [(dobra.a[0] + dobra.b[0]) / 2., (dobra.a[1] + dobra.b[1]) / 2.]
+        };
+        let meio = [meio[0] + 1., meio[1] + 1.];
         let texto = format!("{} {}", dobra.ordem, dobra.rotulo);
         d.itens.push(Item::novo(CAMADA_ROTULOS, D::Texto { pos: meio, altura: 2.5, angulo: 0., anexo: Anexo::Esquerda, texto }));
     }

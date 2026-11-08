@@ -353,24 +353,40 @@ fn linha_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     let Some(r) = app.result.as_ref() else { return true };
     let alvo = app.open.doc.feature(id).map(|f| f.target).unwrap_or(Id(0));
     let mid = geo3d::lerp(a, b, 0.5);
-    let Some(n) = chapa_manip::normal_perto(r, alvo, mid) else { return true };
-    // triângulos da face da linha, recortados pelo lado fixo e pelo móvel
-    if let Some(body) = r.bodies.iter().find(|x| x.collector == alvo) {
-        if let Some((fi, _)) = crate::picking::face_e_distancia(&body.mesh, mid) {
-            let m = &body.mesh;
-            let i0 = m.face_ranges.get(fi).map(|x| *x as usize).unwrap_or(0);
-            let i1 = m.face_ranges.get(fi + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
-            let (cor_fixa, cor_movel) = (crate::theme::st_ok().gamma_multiply(0.35), normal_cor.gamma_multiply(0.4));
-            for t in m.indices[i0..i1].chunks_exact(3) {
-                let tri: Vec<V3> = t.iter().map(|i| [m.positions[*i as usize * 3] as f64, m.positions[*i as usize * 3 + 1] as f64, m.positions[*i as usize * 3 + 2] as f64]).collect();
-                let (fixa, movel) = chapa_linha::recorta_metades(&tri, a, b, n, flip);
-                for (poly, cor) in [(fixa, cor_fixa), (movel, cor_movel)] {
-                    let pts: Vec<Pos2> = poly.iter().filter_map(|p| cam.project(rect, v3(*p))).collect();
-                    if pts.len() >= 3 && pts.len() == poly.len() {
-                        painter.add(egui::Shape::convex_polygon(pts, cor, Stroke::NONE));
-                    }
-                }
+    // a normal é a da face onde a linha foi desenhada (o lado fixo continua nela); no meio da linha,
+    // depois da dobra, já está o arco, cuja normal é inclinada
+    let plana = r.bodies.iter().find(|x| x.collector == alvo).and_then(|x| normal_do_plano_da_linha(&x.mesh, a, b));
+    let Some(n) = plana.or_else(|| chapa_manip::normal_perto(r, alvo, mid)) else { return true };
+    // metades coloridas: os triângulos da peça no plano da face da linha (a face fixa e, na
+    // veneziana, a móvel também), recortados pela linha. Depois da dobra o lado móvel saiu do plano;
+    // aí ele aparece como uma faixa no lugar de onde saiu, para as duas metades sempre se verem.
+    let (cor_fixa, cor_movel) = (crate::theme::st_ok().gamma_multiply(0.35), normal_cor.gamma_multiply(0.4));
+    let pinta = |poly: &[V3], cor: Color32| {
+        let pts: Vec<Pos2> = poly.iter().filter_map(|p| cam.project(rect, v3(*p))).collect();
+        if pts.len() >= 3 && pts.len() == poly.len() {
+            painter.add(egui::Shape::convex_polygon(pts, cor, Stroke::NONE));
+        }
+    };
+    let mut area_movel = 0.;
+    if let Some(m) = r.bodies.iter().find(|x| x.collector == alvo).map(|x| &x.mesh) {
+        let no_plano = |p: V3| geo3d::dot(geo3d::sub(p, mid), n).abs() < 1e-3;
+        for t in m.indices.chunks_exact(3) {
+            let tri: Vec<V3> = t.iter().map(|i| [m.positions[*i as usize * 3] as f64, m.positions[*i as usize * 3 + 1] as f64, m.positions[*i as usize * 3 + 2] as f64]).collect();
+            if !tri.iter().all(|p| no_plano(*p)) {
+                continue;
             }
+            let (fixa, movel) = chapa_linha::recorta_metades(&tri, a, b, n, flip);
+            if movel.len() >= 3 {
+                area_movel += geo3d::norm(fenkra_kernel::cross(geo3d::sub(movel[1], movel[0]), geo3d::sub(movel[2], movel[0])));
+            }
+            pinta(&fixa, cor_fixa);
+            pinta(&movel, cor_movel);
+        }
+    }
+    if area_movel < 1e-6 {
+        if let Some(sl) = chapa_linha::lado_movel(a, b, n, flip) {
+            let fundo = geo3d::mul(sl, geo3d::dist(a, b) * 0.35);
+            pinta(&[a, b, geo3d::add(b, fundo), geo3d::add(a, fundo)], cor_movel);
         }
     }
     let (Some(sa), Some(sb)) = (cam.project(rect, v3(a)), cam.project(rect, v3(b))) else { return true };
@@ -402,7 +418,9 @@ fn linha_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
         escreve_linha(&mut app.open.doc, id, na, nb, None);
     }
     // inverter o lado móvel e, na dobra, a posição da linha
-    let pos = Pos2::new((sa.x + sb.x) / 2., (sa.y + sb.y) / 2.) + egui::vec2(14., 14.);
+    // o menu fica além da ponta final, fora do caminho dos rótulos das alças, que nascem no meio
+    let dir = (sb - sa).normalized();
+    let pos = sb + dir * 30. + egui::vec2(0., -14.);
     egui::Area::new(egui::Id::new(("chapa_linha_menu", id.0))).fixed_pos(pos).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.horizontal(|ui| {
@@ -428,6 +446,29 @@ fn linha_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
         });
     });
     true
+}
+
+/// Normal (externa, pela ordem dos vértices) da maior área plana da malha cujo plano contém a linha
+/// `a`–`b`: a face em que a linha foi desenhada. `None` se nenhum triângulo contém a linha.
+pub(crate) fn normal_do_plano_da_linha(m: &fenkra_kernel::Mesh, a: V3, b: V3) -> Option<V3> {
+    let mut melhor: Option<(f64, V3)> = None;
+    for t in m.indices.chunks_exact(3) {
+        let p: Vec<V3> = t.iter().map(|i| [m.positions[*i as usize * 3] as f64, m.positions[*i as usize * 3 + 1] as f64, m.positions[*i as usize * 3 + 2] as f64]).collect();
+        let c = fenkra_kernel::cross(geo3d::sub(p[1], p[0]), geo3d::sub(p[2], p[0]));
+        let area = geo3d::norm(c);
+        let Some(nt) = geo3d::unit(c) else { continue };
+        if geo3d::dot(geo3d::sub(a, p[0]), nt).abs() > 1e-3 || geo3d::dot(geo3d::sub(b, p[0]), nt).abs() > 1e-3 {
+            continue;
+        }
+        let soma = melhor.map_or(0., |(s, _)| s);
+        // soma a área dos triângulos de mesma normal; troca quando outra normal junta mais área
+        match melhor {
+            Some((s, n)) if geo3d::dot(n, nt) > 0.999 => melhor = Some((s + area, n)),
+            _ if area > soma => melhor = Some((area, nt)),
+            _ => {}
+        }
+    }
+    melhor.map(|(_, n)| n)
 }
 
 /// Grava a linha (e o lado móvel, se vier) no comando.
@@ -459,6 +500,19 @@ fn escreve_linha(doc: &mut Document, id: Id, a: V3, b: V3, flip: Option<bool>) {
 #[cfg(test)]
 mod testes_rotulos {
     use super::*;
+
+    /// B243: a linha no meio da zona dobrada usa a normal da face onde foi desenhada (a de cima da
+    /// placa), não a do arco; triângulos fora do plano não entram.
+    #[test]
+    fn normal_vem_da_face_da_linha() {
+        let mut m = fenkra_kernel::Mesh::default();
+        // placa de cima (z = 2), dois triângulos, e um triângulo inclinado (o arco)
+        m.positions = vec![0., 0., 2., 50., 0., 2., 50., 60., 2., 0., 60., 2., 50., 0., 2., 60., 0., 8., 60., 60., 8.];
+        m.indices = vec![0, 1, 2, 0, 2, 3, 4, 5, 6];
+        let n = normal_do_plano_da_linha(&m, [20., 0., 2.], [20., 60., 2.]).unwrap();
+        assert!((n[2] - 1.).abs() < 1e-9, "{n:?}");
+        assert!(normal_do_plano_da_linha(&m, [20., 0., 5.], [20., 60., 5.]).is_none());
+    }
 
     fn r(x: f32, y: f32) -> Rect {
         Rect::from_min_size(Pos2::new(x, y), egui::vec2(120., 22.))

@@ -337,6 +337,8 @@ pub struct App {
     pub asm: Option<crate::asm_ui::AsmState>,
     /// janela de parâmetros de chapa
     sheet_open: bool,
+    /// B304: fração mostrada pela animação de dobrar (o documento continua no estado dele)
+    pub(crate) chapa_anim: Option<f64>,
     /// anotação 3D esperando seleções
     pub pmi_pending: Option<u8>,
     /// anotação realçada (1 clique): ela e o que ela marca ficam em destaque, sem abrir a edição
@@ -490,6 +492,7 @@ impl App {
             relink_ext: None,
             asm: None,
             sheet_open: false,
+            chapa_anim: None,
             pmi_pending: None,
             pmi_focus: None,
             sketch_wait_plane: false,
@@ -734,6 +737,37 @@ impl App {
                 // converter em chapa sobre um canal de fora, sem comando de chapa (B35): o mapa de
                 // dobras e, com FENKRA_DEMO_PLANA=1, o corpo desdobrado
                 "canal" => d = crate::demo_chapa::canal_convertido(std::env::var("FENKRA_DEMO_PLANA").is_ok()),
+                // B304: janela de chapa aberta com o controle de dobrar em FENKRA_DEMO_DOBRA_PCT
+                // (50 se faltar) e a ordem de dobra editada: a bainha antes da aba, as duas no 1
+                // com FENKRA_DEMO_ORDEM=repetida
+                "animada" => {
+                    let pct: f64 = std::env::var("FENKRA_DEMO_DOBRA_PCT").ok().and_then(|v| v.parse().ok()).unwrap_or(50.);
+                    let (aba, bainha) = (d.features[2].id, d.features[3].id);
+                    if let Some(sp) = d.sheet.as_mut() {
+                        let repetida = std::env::var("FENKRA_DEMO_ORDEM").is_ok_and(|v| v == "repetida");
+                        sp.define_ordem(bainha, 0, 1);
+                        sp.define_ordem(aba, 0, if repetida { 1 } else { 2 });
+                        sp.flat = pct >= 100.;
+                    }
+                    if pct > 0. && pct < 100. {
+                        cc.egui_ctx.data_mut(|m| m.insert_temp(egui::Id::new("chapa_anim_pedido"), pct));
+                    }
+                    abre_janela = true;
+                }
+                // B35: aba entre perfis (funil); com FENKRA_DEMO_PLANA=1, planificada
+                "funil" => d = crate::demo_chapa::funil(std::env::var("FENKRA_DEMO_PLANA").is_ok()),
+                // B03: dobra por linha numa spline; com FENKRA_DEMO_PLANA=1, planificada
+                "spline" => crate::demo_chapa::spline(&mut d, std::env::var("FENKRA_DEMO_PLANA").is_ok()),
+                // B243 e B249: dobra por linha, joggle e veneziana com nome (FENKRA_EDITAR=DobraLinha,
+                // Joggle ou Veneziana); `linha_nova` traz a dobra ainda sem linha
+                "linhas" | "linha_nova" => crate::demo_chapa::linhas(&mut d, variante == "linha_nova"),
+                // B86: chapa planificada com veneziana, a janela de chapa aberta e a verificação
+                // da planificada já pedida (propriedades do blank, ausentes e sobreposições)
+                "planificada" => {
+                    crate::demo_chapa::planificada(&mut d);
+                    cc.egui_ctx.data_mut(|m| m.insert_temp(egui::Id::new("planificada_pedido"), 1u8));
+                    abre_janela = true;
+                }
                 _ => {}
             }
             d.hide_consumed(d.features[1].id);
@@ -1249,8 +1283,29 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         self.worker.enviar((self.gen_sent, d, false, self.qualidade_malha, self.pedido_de_edicao()));
     }
 
+    /// B304: calcula a peça com as dobras abertas na fração `f`, sem trocar o documento. O
+    /// `sent_doc` fica o documento de verdade, para a edição normal não achar que ele mudou.
+    pub(crate) fn enviar_animacao(&mut self, f: f64) {
+        self.chapa_anim = Some(f);
+        self.gen_sent += 1;
+        self.sent_doc = Some(self.open.doc.clone());
+        let d = fenkra_solidos::chapa_animacao::doc_parcial(&self.open.doc, f);
+        self.worker.enviar((self.gen_sent, d, false, self.qualidade_malha, self.pedido_de_edicao()));
+    }
+
+    /// O documento que o worker calculou por último: o `sent_doc`, ou a peça parcial durante a
+    /// animação de dobrar (B304). Quem repede só a malha (polimento) usa este.
+    pub(crate) fn doc_enviado(&self) -> Option<Document> {
+        let d = self.sent_doc.clone()?;
+        Some(match self.chapa_anim {
+            Some(f) => fenkra_solidos::chapa_animacao::doc_parcial(&d, f),
+            None => d,
+        })
+    }
+
     /// Pede o cálculo; `fresh` descarta o cache (reconstruir tudo do zero).
     fn send_recompute(&mut self, fresh: bool) {
+        self.chapa_anim = None;
         self.gen_sent += 1;
         self.sent_doc = Some(self.open.doc.clone());
         self.worker.enviar((self.gen_sent, self.open.doc.clone(), fresh, self.qualidade_malha, self.pedido_de_edicao()));
@@ -1276,9 +1331,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         }
         if q != self.qualidade_malha {
             self.qualidade_malha = q;
-            let doc = self.sent_doc.clone().unwrap_or_else(|| self.open.doc.clone());
+            let doc = self.doc_enviado().unwrap_or_else(|| self.open.doc.clone());
+            if self.sent_doc.is_none() {
+                self.sent_doc = Some(doc.clone());
+            }
             self.gen_sent += 1;
-            self.sent_doc = Some(doc.clone());
             self.worker.enviar((self.gen_sent, doc, false, q, self.pedido_de_edicao()));
         }
     }
@@ -4466,11 +4523,21 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let vars = self.vars();
         let mut open = true;
         // tabela do mapa: mesma ordem e etiqueta das linhas de dobra da vista
-        let table = match &self.result {
-            Some(r) => fenkra_solidos::tabela_dobras(&self.open.doc, &r.bend_lines),
-            None => fenkra_solidos::bend_table(&self.open.doc),
+        // B304: durante a animação de dobrar o resultado é o da peça parcial; a tabela mostra a última
+        // da peça de verdade
+        let k_tab = egui::Id::new("tabela_dobras_real");
+        let table = match (&self.result, self.chapa_anim) {
+            (Some(_), Some(_)) => ctx.data(|m| m.get_temp::<Vec<fenkra_solidos::BendRow>>(k_tab)).unwrap_or_else(|| fenkra_solidos::bend_table(&self.open.doc)),
+            (Some(r), None) => {
+                let t = fenkra_solidos::tabela_dobras(&self.open.doc, &r.bend_lines);
+                ctx.data_mut(|m| m.insert_temp(k_tab, t.clone()));
+                t
+            }
+            (None, _) => fenkra_solidos::bend_table(&self.open.doc),
         };
         let k_blank = egui::Id::new("planificada_resultado");
+        let anim = self.chapa_anim;
+        let fixos: Vec<String> = fenkra_solidos::chapa_animacao::fixos(&self.open.doc).iter().filter_map(|id| self.open.doc.feature(*id).map(|f| f.name.clone())).collect();
         let blank: Option<Result<fenkra_solidos::planificada::Planificada, String>> = ctx.data(|m| m.get_temp(k_blank));
         let d = &mut self.open.doc;
         let sp_real = d.sheet.get_or_insert_with(SheetParams::default);
@@ -4591,6 +4658,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     ui.radio_value(&mut sp.flat, false, tr("dobrada"));
                     ui.radio_value(&mut sp.flat, true, tr("planificada"));
                 });
+                crate::chapa_anim_ui::controle(ui, &mut sp.flat, &fixos, anim);
                 editor::section(ui, "Tabela de dobras");
                 if table.is_empty() {
                     ui.label(RichText::new(tr("nenhuma dobra ainda")).weak());
@@ -4666,6 +4734,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
             _ => {}
         }
+        crate::chapa_anim_ui::processa(self, ctx);
         if !open {
             self.sheet_open = false;
         }
@@ -7958,6 +8027,13 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 crate::asm_encaixe::overlay(self, ui, rect, &cam);
                 crate::asm_chaveta::overlay(self, ui, rect, &cam);
                 crate::feat_ui::bend_overlay(self, ui, rect, &cam);
+                if let Some(r) = self.result.as_ref().filter(|_| !self.in_asm()) {
+                    crate::chapa_fab_ui::overlay_inviaveis(ui, rect, &cam, r);
+                }
+                // B304: glifos da ordem de dobra com a janela de chapa aberta
+                if self.sheet_open && !self.in_asm() {
+                    crate::chapa_anim_ui::glifos(self, ui, rect, &cam);
+                }
                 crate::feat_ui::cut_overlay(self, ui, rect, &cam);
                 crate::st_solda_ui::overlay(self, ui, rect, &cam);
                 crate::previa::overlay(self, ui, rect, &cam);
@@ -8688,11 +8764,11 @@ impl eframe::App for App {
                 self.polir.resultado_chegou(&r);
                 // referências antigas (só o ponto) que resolveram ganham a chave v2 no documento
                 let promoted = std::mem::take(&mut r.promoted);
-                if g == self.gen_sent && !promoted.is_empty() {
+                if g == self.gen_sent && self.chapa_anim.is_none() && !promoted.is_empty() {
                     self.apply_promoted(&promoted);
                 }
                 // B392: recorte recém-criado que foi para o lado sem material vira o sentido, uma vez
-                if g == self.gen_sent && crate::sentido_corte_ui::ajusta(&mut self.open.doc, self.sent_doc.as_ref(), self.session.as_ref().filter(|s| s.is_new).map(|s| s.id), &r.status) {
+                if g == self.gen_sent && self.chapa_anim.is_none() && crate::sentido_corte_ui::ajusta(&mut self.open.doc, self.sent_doc.as_ref(), self.session.as_ref().filter(|s| s.is_new).map(|s| s.id), &r.status) {
                     self.toast(tr(crate::sentido_corte_ui::VIRADO), false);
                     self.request_recompute();
                 }

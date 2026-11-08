@@ -2714,6 +2714,35 @@ pub struct SheetParams {
     /// tamanho padrão do alívio de canto (vazio = o comando pergunta)
     #[serde(default)]
     pub corner: String,
+    /// B304: ordem de dobra escolhida pelo usuário (glifos numerados); dobra sem entrada usa a
+    /// posição no mapa. Número repetido vale: dobras feitas no mesmo golpe.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ordem_dobras: Vec<OrdemDobra>,
+}
+
+/// Número de ordem de uma dobra, preso ao comando que a fez e à posição dela entre as linhas desse
+/// comando (`k`, a partir de 0), para sobreviver a comandos novos antes ou depois.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+pub struct OrdemDobra {
+    pub feature: Id,
+    pub k: u32,
+    pub ordem: u32,
+}
+
+impl SheetParams {
+    /// Ordem escolhida para a `k`-ésima dobra do comando `feature`, se houver.
+    pub fn ordem_de(&self, feature: Id, k: u32) -> Option<u32> {
+        self.ordem_dobras.iter().find(|o| o.feature == feature && o.k == k).map(|o| o.ordem)
+    }
+
+    /// Grava a ordem da dobra (1 ou mais), trocando a que já existir.
+    pub fn define_ordem(&mut self, feature: Id, k: u32, ordem: u32) {
+        let ordem = ordem.max(1);
+        match self.ordem_dobras.iter_mut().find(|o| o.feature == feature && o.k == k) {
+            Some(o) => o.ordem = ordem,
+            None => self.ordem_dobras.push(OrdemDobra { feature, k, ordem }),
+        }
+    }
 }
 
 impl Default for SheetParams {
@@ -2731,6 +2760,7 @@ impl Default for SheetParams {
             relief: String::new(),
             relief_kind: 0,
             corner: String::new(),
+            ordem_dobras: vec![],
         }
     }
 }

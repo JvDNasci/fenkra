@@ -1271,12 +1271,25 @@ pub fn bend_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, 
         return;
     }
     let Some(r) = app.result.as_ref() else { return };
-    if r.bend_lines.is_empty() {
+    if r.bend_lines.is_empty() && r.cut_outlines.is_empty() {
         return;
     }
     let painter = ui.painter_at(rect);
     let v = |p: [f64; 3]| glam::Vec3::new(p[0] as f32, p[1] as f32, p[2] as f32);
     let col = Color32::from_rgb(230, 120, 40);
+    // B86: veneziana e estampo não somem da chapa plana: a marca da ferramenta aparece no 3D, a
+    // mesma que vai para a camada de ferramenta do DXF
+    for o in &r.cut_outlines {
+        if !app.open.doc.feature(o.feature).is_some_and(|f| matches!(f.kind, FeatureKind::SmLouver(_) | FeatureKind::SmStamp(_))) {
+            continue;
+        }
+        for l in &o.flat {
+            let pts: Vec<egui::Pos2> = l.iter().filter_map(|q| cam.project(rect, v(*q))).collect();
+            if pts.len() >= 2 && pts.len() == l.len() {
+                painter.add(egui::Shape::line(pts, egui::Stroke::new(1.6, col)));
+            }
+        }
+    }
     for b in &r.bend_lines {
         let seg = |q: [[f64; 3]; 2]| match (cam.project(rect, v(q[0])), cam.project(rect, v(q[1]))) {
             (Some(a), Some(c)) => Some([a, c]),
@@ -1290,15 +1303,19 @@ pub fn bend_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, 
                 }
             }
         }
-        if let Some([a, c]) = seg(b.center).filter(|_| b.curva.len() <= 2) {
+        // B03: a dobra curva também leva o rótulo, no meio da curva
+        let meio_curva = (b.curva.len() > 2).then(|| b.curva[b.curva.len() / 2]).and_then(|q| cam.project(rect, v(q)));
+        if let Some(m) = meio_curva.or_else(|| seg(b.center).filter(|_| b.curva.len() <= 2).map(|[a, c]| {
             painter.extend(egui::Shape::dashed_line(&[a, c], egui::Stroke::new(1.6, col), 10., 4.));
-            let m = a + (c - a) * 0.5;
+            a + (c - a) * 0.5
+        })) {
             let g = painter.layout_no_wrap(b.label(), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), col);
             let rr = egui::Rect::from_min_size(m + egui::vec2(6., -g.size().y - 6.), g.size() + egui::vec2(8., 4.));
             painter.rect_filled(rr, 3., Color32::from_rgba_unmultiplied(20, 20, 24, 200));
             painter.galley(rr.min + egui::vec2(4., 2.), g, col);
         }
-        for q in [b.start, b.end] {
+        // na dobra curva o começo e o fim da zona são cordas, que cruzariam a curva: ficam de fora
+        for q in [b.start, b.end].into_iter().filter(|_| b.curva.len() <= 2) {
             if let Some([a, c]) = seg(q) {
                 painter.line_segment([a, c], egui::Stroke::new(1., col.gamma_multiply(0.6)));
             }
