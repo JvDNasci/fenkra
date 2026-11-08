@@ -750,12 +750,21 @@ pub fn demo(st: &mut AsmState, nome: &str) {
                 "conicas" => crate::transmissao_ui::Tipo::Conicas,
                 "diferencial" | "caixa_solta" => crate::transmissao_ui::Tipo::Diferencial,
                 "semfim" => crate::transmissao_ui::Tipo::SemFim,
-                "corrente" => crate::transmissao_ui::Tipo::Corrente,
+                "corrente" | "corrente_219" => crate::transmissao_ui::Tipo::Corrente,
                 "correia" => crate::transmissao_ui::Tipo::Correia,
                 _ => crate::transmissao_ui::Tipo::Retas,
             };
         }
         t.caixa_solta = std::env::var("FENKRA_DEMO_TRANS").is_ok_and(|v| v == "caixa_solta");
+        if std::env::var("FENKRA_DEMO_TRANS").is_ok_and(|v| v == "corrente_219") {
+            // B395: a transmissão do kart, pinhão de 11 e coroa de 82 na corrente 219 (largura provisória)
+            t.corrente = "219".into();
+            t.z1 = 11;
+            t.z2 = 82;
+            t.centros = 300.;
+            t.furo1 = 8.;
+            t.furo2 = 20.;
+        }
         if std::env::var("FENKRA_DEMO_TRANS_MEDIDA").is_ok() {
             // dois pontos já clicados nas placas de exemplo, como o mouse os deixaria
             t.medindo = true;
