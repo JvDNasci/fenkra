@@ -70,6 +70,7 @@ preferências do usuário.
 | `FENKRA_DEMO_INICIO=1` | mostra a tela inicial |
 | `FENKRA_DEMO_TEMA=<nome>` | usa o tema (Escuro, Claro, NeoTech Minimalista…) |
 | `FENKRA_DEMO_IMPORTAR=<arquivo>` | abre o painel de importação com o arquivo; `FENKRA_DEMO_IMPORTAR_OK=1` confirma sozinho |
+| `FENKRA_DEMO_INVALIDO=1` | todo corpo conta como inválido na conferência de validade (B413): a árvore mostra o aviso "sólido inválido" em cada comando que mexe em corpo |
 | `FENKRA_DEMO_DEFEITO=n` | com a confirmação automática, já realça o defeito n do relatório |
 | `FENKRA_DEMO_PASTA=<pasta>` | grava as peças de um conjunto importado nessa pasta, sem perguntar; a peça sem arquivo também salva nela, sem abrir o diálogo |
 | `FENKRA_DEMO_ABRIR=<caso>` | com `FENKRA_DEMO_ASM=1`, percorre a ida e a volta entre a montagem e a peça ativa, um passo a cada cálculo assentado: `ida` (peça ativa com o conjunto em volta), `volta`, `suja` (a pergunta ao voltar), `editada` (edita, salva e volta) e `ausente` (o arquivo da peça sumiu) |
