@@ -774,7 +774,7 @@
    "tokens_k": 150,
    "teste": "Visual",
    "area": "Chapa metálica",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -870,7 +870,7 @@
    "tokens_k": 250,
    "teste": "Auto",
    "area": "Chapa metálica",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -4216,7 +4216,7 @@
    "tokens_k": 350,
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -4312,7 +4312,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
