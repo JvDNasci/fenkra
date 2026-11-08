@@ -39,16 +39,16 @@ fn ler(c: &str) -> ModeloXde {
 }
 
 fn datum(letra: &str, posicao: u32, face: u32, alvo: Option<AlvoXde>) -> AnotacaoXde {
-    AnotacaoXde { produto: 0, nome: letra.into(), faces: vec![face], dado: DadoXde::Datum { letra: letra.into(), posicao, alvo } }
+    AnotacaoXde { apresentacao: None, produto: 0, nome: letra.into(), faces: vec![face], dado: DadoXde::Datum { letra: letra.into(), posicao, alvo } }
 }
 
 #[allow(clippy::too_many_arguments)]
 fn tol(tipo: TipoToleranciaXde, v: f64, zona: ZonaXde, mat: MaterialXde, mz: ModZonaXde, mzv: f64, mods: Vec<ModToleranciaXde>, datums: Vec<usize>, face: u32) -> AnotacaoXde {
-    AnotacaoXde { produto: 0, nome: "".into(), faces: vec![face], dado: DadoXde::Tolerancia { tipo, valor: v, zona, material: mat, mod_zona: mz, valor_zona: mzv, modificadores: mods, datums } }
+    AnotacaoXde { apresentacao: None, produto: 0, nome: "".into(), faces: vec![face], dado: DadoXde::Tolerancia { tipo, valor: v, zona, material: mat, mod_zona: mz, valor_zona: mzv, modificadores: mods, datums } }
 }
 
 fn dim(tipo: TipoDimensaoXde, v: f64, t: Option<(f64, f64)>, f1: u32, f2: Option<u32>) -> AnotacaoXde {
-    AnotacaoXde { produto: 0, nome: "".into(), faces: vec![f1], dado: DadoXde::Dimensao { tipo, valor: v, tolerancia: t, faces2: f2.into_iter().collect() } }
+    AnotacaoXde { apresentacao: None, produto: 0, nome: "".into(), faces: vec![f1], dado: DadoXde::Dimensao { tipo, valor: v, tolerancia: t, faces2: f2.into_iter().collect() } }
 }
 
 fn tolerancias(m: &ModeloXde) -> Vec<&DadoXde> {

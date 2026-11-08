@@ -70,4 +70,6 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("O pior caso cabe nos limites", "The worst case fits the limits"),
     ("O pior caso passa dos limites: aperte as cotas de maior contribuição", "The worst case exceeds the limits: tighten the dimensions with the largest contribution"),
     ("Fechar", "Close"),
+    ("Cadeia reconhecida, cotas", "Chain recognised, dimensions"),
+    ("Base reconhecida: distância entre a cota escolhida e a vizinha da base", "Baseline recognised: distance between the chosen dimension and its neighbour in the baseline"),
 ];

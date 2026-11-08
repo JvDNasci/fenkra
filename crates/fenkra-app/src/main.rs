@@ -4,6 +4,8 @@
 // a tabela de traduções é uma cadeia longa de `chain`; o tipo dela passa da profundidade padrão
 // a tabela de traduções encadeia muitas listas (`i18n.rs`): o tipo do iterador passa do limite padrão
 // a tabela de traduções encadeia dezenas de `textos_*`: o tipo do iterador passa do limite padrão
+// a tabela de traduções de `i18n.rs` encadeia uma fatia por bancada; com elas todas, o rustc passa do
+// limite padrão de profundidade ao calcular o tipo do iterador (a compilação release falhava)
 #![recursion_limit = "256"]
 
 mod app;
@@ -71,6 +73,7 @@ mod pmi_setas;
 mod pmi_cordao;
 mod pmi_consultor_3d;
 mod pmi_empilhamento;
+mod pmi_inspecao_3d;
 mod textos_pmi_consultor;
 mod pmi_arvore;
 mod pmi_legivel;

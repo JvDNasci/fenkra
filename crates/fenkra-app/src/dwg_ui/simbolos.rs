@@ -139,6 +139,13 @@ pub(super) fn rugosidade(ui: &mut egui::Ui, n: &mut Note) {
             ui.add(egui::TextEdit::singleline(&mut valor).desired_width(56.).hint_text("1,6")).on_hover_text(tr("Valor da rugosidade em µm"));
         });
         ui.end_row();
+        // B149: acabamento em várias linhas (outras exigências acima da primeira)
+        ui.label(tr("Outras exigências"));
+        let mut outras = r.outras.join("\n");
+        if ui.add(egui::TextEdit::multiline(&mut outras).desired_rows(2).desired_width(180.).hint_text("Rz 6,3")).on_hover_text(tr("Uma exigência por linha, empilhadas acima da primeira (ISO 1302)")).changed() {
+            r.outras = outras.lines().map(|l| l.to_string()).collect();
+        }
+        ui.end_row();
         ui.label(tr("Embaixo da barra"));
         ui.horizontal(|ui| {
             ui.add(egui::TextEdit::singleline(&mut r.metodo).desired_width(96.).hint_text(tr("método"))).on_hover_text(tr("Processo de fabricação, escrito abaixo da barra"));

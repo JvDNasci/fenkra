@@ -10,8 +10,9 @@
 //! desvios da norma; sem tolerância escrita, a tolerância geral ISO 2768 citada nas notas (por
 //! exemplo "ISO 2768-m"). A cota de inspeção (valor no oval) é marcada para conferência de 100%.
 //!
-//! Saídas: a tabela de características na folha, os balões numerados, CSV e XLSX no leiaute do
-//! formulário 3 da AS9102 (resultados das características).
+//! Saídas: a tabela de características na folha, os balões numerados, CSV do formulário 3 da AS9102
+//! (resultados das características) e XLSX com os formulários 1 (identificação da peça), 2 (materiais
+//! e processos) e 3. As medições voltam de um CSV preenchido e mostram a situação de cada uma.
 
 use crate::layout::dim_value;
 use crate::source::Models;
@@ -22,11 +23,14 @@ use fenkra_tolerancias::geral::ClasseGeral;
 use serde::{Deserialize, Serialize};
 
 /// Opções do plano de inspeção do desenho.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct OpcoesInspecao {
     /// desenha o balão numerado junto de cada característica
     #[serde(default)]
     pub baloes: bool,
+    /// resultados importados do relatório preenchido, pelo número da característica
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub medicoes: Vec<Medicao>,
 }
 
 /// Que tipo de requisito a característica é.
@@ -243,10 +247,21 @@ pub fn linhas(d: &Drawing, cs: &[Caracteristica]) -> Vec<Vec<String>> {
         .collect()
 }
 
-/// Dados da tabela de características na folha.
+/// Dados da tabela de características na folha. Com medições importadas, ganha as colunas do valor
+/// medido e da situação.
 pub fn tabela(d: &Drawing, m: &mut Models) -> crate::source::TableData {
     let cs = caracteristicas(d, m);
-    crate::source::TableData { headers: CABECALHOS.iter().map(|s| s.to_string()).collect(), rows: linhas(d, &cs) }
+    let mut headers: Vec<String> = CABECALHOS.iter().map(|s| s.to_string()).collect();
+    let mut rows = linhas(d, &cs);
+    if !d.inspecao.medicoes.is_empty() {
+        headers.extend(["Medido".to_string(), "Situação".to_string()]);
+        for (r, c) in rows.iter_mut().zip(&cs) {
+            let v = medida(d, c.numero);
+            r.push(v.unwrap_or("").to_string());
+            r.push(v.map(|v| situacao(c, v).label().to_string()).unwrap_or_default());
+        }
+    }
+    crate::source::TableData { headers, rows }
 }
 
 /// Colunas do formulário 3 da AS9102 (números dos campos da norma) com o que o desenho já sabe;
@@ -277,10 +292,11 @@ fn linhas_form3(d: &Drawing, cs: &[Caracteristica]) -> Vec<Vec<String>> {
                 fmt(d, c.nominal),
                 fmt(d, c.minimo),
                 fmt(d, c.maximo),
+                medida(d, c.numero).unwrap_or("").to_string(),
                 String::new(),
-                String::new(),
-                String::new(),
+                medida(d, c.numero).filter(|v| situacao(c, v) == Situacao::NaoConforme).map(|_| "Sim".to_string()).unwrap_or_default(),
                 c.tipo.label().to_string(),
+
             ]
         })
         .collect()
@@ -321,37 +337,136 @@ fn coluna(i: usize) -> String {
     s
 }
 
-/// XLSX do formulário 3: cabeçalho da peça (formulário 1 resumido) e a tabela das características.
-pub fn xlsx(d: &Drawing, cs: &[Caracteristica], codigo: &str, nome: &str) -> Vec<u8> {
-    let mut linhas: Vec<Vec<String>> = vec![
-        vec!["Relatório de primeiro artigo — formulário 3 (AS9102): resultados das características".into()],
-        vec!["Código da peça".into(), codigo.into(), "Nome da peça".into(), nome.into(), "Revisão".into(), d.title.revision.clone()],
-        vec![],
-        FORM3.iter().map(|s| s.to_string()).collect(),
-    ];
-    linhas.extend(linhas_form3(d, cs));
+/// Formulário 1 da AS9102 (identificação da peça): rótulo do campo e o que o desenho já sabe. Os
+/// números são os dos campos da norma; os textos são nossos.
+pub fn form1(d: &Drawing, cs: &[Caracteristica], codigo: &str, nome: &str, montagem: bool) -> Vec<(String, String)> {
+    let (medidas, nc, faltam) = resumo(d, cs);
+    let conforme = if medidas == 0 {
+        String::new()
+    } else if nc == 0 && faltam == 0 {
+        "Sim".into()
+    } else if nc > 0 {
+        format!("Não ({nc} não conformes)")
+    } else {
+        format!("Incompleto ({faltam} sem medida)")
+    };
+    let t = &d.title;
+    let pn = if codigo.is_empty() { t.pn.clone() } else { codigo.to_string() };
+    vec![
+        ("1. Código da peça".into(), pn.clone()),
+        ("2. Nome da peça".into(), if nome.is_empty() { t.title.clone() } else { nome.to_string() }),
+        ("3. Número de série".into(), String::new()),
+        ("4. Número do relatório".into(), String::new()),
+        ("5. Revisão da peça".into(), t.revision.clone()),
+        ("6. Número do desenho".into(), if pn.is_empty() { d.name.clone() } else { pn }),
+        ("7. Revisão do desenho".into(), t.revision.clone()),
+        ("8. Alterações incluídas".into(), String::new()),
+        ("9. Referência do processo de fabricação".into(), String::new()),
+        ("10. Organização".into(), t.company.clone()),
+        ("11. Código do fornecedor".into(), String::new()),
+        ("12. Pedido de compra".into(), String::new()),
+        ("13. Peça ou montagem".into(), if montagem { "Montagem".into() } else { "Peça".into() }),
+        ("14. Completo ou parcial".into(), "Completo".into()),
+        ("15. Características no relatório".into(), cs.len().to_string()),
+        ("19. Resultado conforme".into(), conforme),
+        ("20. Preparado por".into(), t.drawn_by.clone()),
+        ("21. Data".into(), t.date.clone()),
+        ("22. Revisado por".into(), t.checked_by.clone()),
+        ("24. Aprovado por".into(), t.approved_by.clone()),
+    ]
+}
+
+/// Cabeçalhos do formulário 2 da AS9102 (materiais, processos especiais e ensaios).
+pub const FORM2: [&str; 7] = ["5. Material ou processo", "6. Especificação", "7. Código", "8. Fornecedor", "9. Aprovação do cliente", "10. Certificado", "14. Observações"];
+
+/// Normas que marcam uma nota como especificação de material ou processo.
+const NORMAS: [&str; 9] = ["ISO", "NBR", "DIN", "EN ", "ASTM", "SAE", "AMS", "ASME", "JIS"];
+
+/// Linhas do formulário 2: o material da legenda e cada linha de nota que cita uma norma (tratamento,
+/// pintura, solda...). Fornecedor, aprovação e certificado ficam para quem recebe a peça.
+pub fn form2(d: &Drawing) -> Vec<Vec<String>> {
+    let mut out = vec![];
+    if !d.title.material.trim().is_empty() {
+        out.push(vec![d.title.material.trim().to_string(), String::new(), String::new(), String::new(), String::new(), String::new(), "Material".into()]);
+    }
+    let notas = d.notes.iter().filter(|n| n.kind == NoteKind::Text).map(|n| n.text.as_str()).chain(std::iter::once(d.title.notes.as_str()));
+    for t in notas {
+        for l in t.lines().map(str::trim).filter(|l| !l.is_empty()) {
+            // a tolerância geral não é processo: já está no formulário 3
+            if l.contains("2768") {
+                continue;
+            }
+            if let Some(norma) = NORMAS.iter().find_map(|n| l.find(n).map(|i| l[i..].split([',', ';', ')']).next().unwrap_or("").trim().to_string())) {
+                out.push(vec![l.to_string(), norma, String::new(), String::new(), String::new(), String::new(), "Processo ou especificação".into()]);
+            }
+        }
+    }
+    out
+}
+
+/// Uma folha da planilha em XML. `numero` diz quais células (linha, coluna) vão como número.
+fn planilha(linhas: &[Vec<String>], numero: &dyn Fn(usize, usize) -> bool) -> String {
     let mut folha = String::from(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>"#);
     for (r, l) in linhas.iter().enumerate() {
         folha.push_str(&format!(r#"<row r="{}">"#, r + 1));
         for (c, v) in l.iter().enumerate() {
             let celula = format!("{}{}", coluna(c), r + 1);
-            // números (nominal e limites) vão como número, o resto como texto
             match v.replace(',', ".").parse::<f64>() {
-                Ok(x) if r >= 4 && (4..=6).contains(&c) => folha.push_str(&format!(r#"<c r="{celula}"><v>{x}</v></c>"#)),
+                Ok(x) if numero(r, c) => folha.push_str(&format!(r#"<c r="{celula}"><v>{x}</v></c>"#)),
                 _ => folha.push_str(&format!(r#"<c r="{celula}" t="inlineStr"><is><t>{}</t></is></c>"#, xml(v))),
             }
         }
         folha.push_str("</row>");
     }
     folha.push_str("</sheetData></worksheet>");
-    let arquivos: [(&str, String); 5] = [
-        ("[Content_Types].xml", r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>"#.into()),
-        ("_rels/.rels", r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#.into()),
-        ("xl/workbook.xml", r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Formulario 3" sheetId="1" r:id="rId1"/></sheets></workbook>"#.into()),
-        ("xl/_rels/workbook.xml.rels", r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>"#.into()),
-        ("xl/worksheets/sheet1.xml", folha),
+    folha
+}
+
+/// XLSX com os três formulários da AS9102 em três abas: identificação da peça (1), materiais e
+/// processos (2) e resultados das características (3), com as medições importadas.
+pub fn xlsx(d: &Drawing, cs: &[Caracteristica], codigo: &str, nome: &str) -> Vec<u8> {
+    xlsx_completo(d, cs, codigo, nome, false)
+}
+
+/// Como `xlsx`, dizendo se o desenho é de montagem (campo 13 do formulário 1).
+pub fn xlsx_completo(d: &Drawing, cs: &[Caracteristica], codigo: &str, nome: &str, montagem: bool) -> Vec<u8> {
+    let f1: Vec<Vec<String>> = std::iter::once(vec!["Relatório de primeiro artigo — formulário 1 (AS9102): identificação da peça".to_string()])
+        .chain(std::iter::once(vec![]))
+        .chain(form1(d, cs, codigo, nome, montagem).into_iter().map(|(a, b)| vec![a, b]))
+        .collect();
+    let mut f2: Vec<Vec<String>> = vec![vec!["Relatório de primeiro artigo — formulário 2 (AS9102): materiais, processos especiais e ensaios".into()], vec![], FORM2.iter().map(|s| s.to_string()).collect()];
+    f2.extend(form2(d));
+    let mut f3: Vec<Vec<String>> = vec![
+        vec!["Relatório de primeiro artigo — formulário 3 (AS9102): resultados das características".into()],
+        vec!["Código da peça".into(), codigo.into(), "Nome da peça".into(), nome.into(), "Revisão".into(), d.title.revision.clone()],
+        vec![],
+        FORM3.iter().map(|s| s.to_string()).collect(),
     ];
-    zip_sem_compressao(&arquivos.iter().map(|(n, c)| (*n, c.as_bytes())).collect::<Vec<_>>())
+    f3.extend(linhas_form3(d, cs));
+    // nominal, limites e resultado numérico vão como número
+    let folhas = [("Formulario 1", planilha(&f1, &|_, _| false)), ("Formulario 2", planilha(&f2, &|_, _| false)), ("Formulario 3", planilha(&f3, &|r, c| r >= 4 && (4..=7).contains(&c)))];
+    let mut tipos = String::from(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>"#);
+    let mut abas = String::new();
+    let mut rels = String::from(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">"#);
+    for (i, (nome_aba, _)) in folhas.iter().enumerate() {
+        let k = i + 1;
+        tipos.push_str(&format!(r#"<Override PartName="/xl/worksheets/sheet{k}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>"#));
+        abas.push_str(&format!(r#"<sheet name="{nome_aba}" sheetId="{k}" r:id="rId{k}"/>"#));
+        rels.push_str(&format!(r#"<Relationship Id="rId{k}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{k}.xml"/>"#));
+    }
+    tipos.push_str("</Types>");
+    rels.push_str("</Relationships>");
+    let livro = format!(r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>{abas}</sheets></workbook>"#);
+    let mut arquivos: Vec<(String, String)> = vec![
+        ("[Content_Types].xml".into(), tipos),
+        ("_rels/.rels".into(), r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>"#.into()),
+        ("xl/workbook.xml".into(), livro),
+        ("xl/_rels/workbook.xml.rels".into(), rels),
+    ];
+    for (i, (_, x)) in folhas.into_iter().enumerate() {
+        arquivos.push((format!("xl/worksheets/sheet{}.xml", i + 1), x));
+    }
+    zip_sem_compressao(&arquivos.iter().map(|(n, c)| (n.as_str(), c.as_bytes())).collect::<Vec<_>>())
 }
 
 fn crc32(b: &[u8]) -> u32 {
@@ -409,4 +524,123 @@ pub fn zip_sem_compressao(arquivos: &[(&str, &[u8])]) -> Vec<u8> {
     le32(&mut out, ini);
     le16(&mut out, 0);
     out
+}
+
+/// Valor medido de uma característica, como veio do relatório preenchido.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Medicao {
+    pub numero: usize,
+    pub valor: String,
+}
+
+/// Como a medida fica contra os limites.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Situacao {
+    Conforme,
+    NaoConforme,
+    /// sem limites no desenho para comparar (o medido fica registrado)
+    SemLimite,
+    /// o resultado não é um número ("ok", "visual"): fica como está
+    Texto,
+}
+
+impl Situacao {
+    pub fn label(self) -> &'static str {
+        match self {
+            Situacao::Conforme => "Conforme",
+            Situacao::NaoConforme => "Não conforme",
+            Situacao::SemLimite => "Sem limite",
+            Situacao::Texto => "Anotado",
+        }
+    }
+}
+
+/// Situação do valor medido contra os limites da característica. A rugosidade e a tolerância
+/// geométrica só têm máximo.
+pub fn situacao(c: &Caracteristica, valor: &str) -> Situacao {
+    let Some(v) = numero(valor.trim().trim_start_matches('Ø')) else { return Situacao::Texto };
+    match (c.minimo, c.maximo) {
+        (None, None) => Situacao::SemLimite,
+        (lo, hi) => {
+            let folga = 1e-9;
+            if lo.is_some_and(|l| v < l - folga) || hi.is_some_and(|h| v > h + folga) {
+                Situacao::NaoConforme
+            } else {
+                Situacao::Conforme
+            }
+        }
+    }
+}
+
+/// Medida registrada para a característica `numero`.
+pub fn medida(d: &Drawing, numero: usize) -> Option<&str> {
+    d.inspecao.medicoes.iter().find(|m| m.numero == numero).map(|m| m.valor.as_str())
+}
+
+fn separar(linha: &str, sep: char) -> Vec<String> {
+    // campos entre aspas podem ter o separador dentro
+    let mut out = vec![];
+    let mut atual = String::new();
+    let mut aspas = false;
+    let mut cs = linha.chars().peekable();
+    while let Some(c) = cs.next() {
+        match c {
+            '"' if aspas && cs.peek() == Some(&'"') => {
+                atual.push('"');
+                cs.next();
+            }
+            '"' => aspas = !aspas,
+            c if c == sep && !aspas => out.push(std::mem::take(&mut atual)),
+            c => atual.push(c),
+        }
+    }
+    out.push(atual);
+    out.into_iter().map(|s| s.trim().to_string()).collect()
+}
+
+/// Lê as medições de um CSV: o formulário 3 que o Fenkra grava, preenchido na coluna "9. Resultado"
+/// (separador ";" ou ","), ou uma planilha simples de duas colunas, número e valor. Linhas sem número
+/// ou sem resultado ficam de fora.
+pub fn importar_medicoes(texto: &str) -> Result<Vec<Medicao>, String> {
+    let linhas: Vec<&str> = texto.lines().filter(|l| !l.trim().is_empty()).collect();
+    let Some(primeira) = linhas.first() else { return Err("arquivo vazio".into()) };
+    let sep = if primeira.matches(';').count() >= primeira.matches(',').count() { ';' } else { ',' };
+    let cab = separar(primeira, sep);
+    let achar = |prefixos: &[&str]| cab.iter().position(|h| prefixos.iter().any(|p| h.to_lowercase().starts_with(p)));
+    let (col_n, col_v, inicio) = match (achar(&["5.", "nº", "n°", "numero", "número", "char"]), achar(&["9.", "resultado", "medido", "valor", "result"])) {
+        (Some(n), Some(v)) => (n, v, 1),
+        // sem cabeçalho: número e valor nas duas primeiras colunas
+        _ if separar(primeira, sep).first().is_some_and(|s| s.parse::<usize>().is_ok()) => (0, 1, 0),
+        _ => return Err("não achei as colunas do número da característica e do resultado".into()),
+    };
+    let mut out: Vec<Medicao> = vec![];
+    for l in &linhas[inicio..] {
+        let campos = separar(l, sep);
+        let (Some(n), Some(v)) = (campos.get(col_n).and_then(|s| s.parse::<usize>().ok()), campos.get(col_v).filter(|v| !v.is_empty())) else { continue };
+        match out.iter_mut().find(|m| m.numero == n) {
+            Some(m) => m.valor = v.clone(),
+            None => out.push(Medicao { numero: n, valor: v.clone() }),
+        }
+    }
+    if out.is_empty() {
+        return Err("nenhuma linha com número e resultado".into());
+    }
+    Ok(out)
+}
+
+/// Resumo das medições: (medidas, não conformes, sem medida).
+pub fn resumo(d: &Drawing, cs: &[Caracteristica]) -> (usize, usize, usize) {
+    let mut r = (0, 0, 0);
+    for c in cs {
+        match medida(d, c.numero) {
+            Some(v) => {
+                r.0 += 1;
+                if situacao(c, v) == Situacao::NaoConforme {
+                    r.1 += 1;
+                }
+            }
+            None => r.2 += 1,
+        }
+    }
+    r
 }

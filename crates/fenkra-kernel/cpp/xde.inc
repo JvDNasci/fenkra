@@ -53,9 +53,23 @@ struct XdeDoc::Impl {
     std::vector<TDF_Label> labels;
     // datums gravados por `xde_pmi_add`, na ordem do `id` que a ponte recebeu
     std::vector<TDF_Label> pmi_datums;
+    // nome da apresentação de cada anotação, na ordem de `xde_pmi_add` (as vistas citam por ele)
+    std::vector<std::string> pmi_prs;
+    // vistas salvas a gravar: o gravador do OCCT 8.0.1 não escreve vistas, a ponte as escreve (B191)
+    struct View {
+        std::string name;
+        gp_Pnt eye;
+        gp_Dir dir, up;
+        bool ortho = true;
+        double zoom = 0., w = 0., h = 0.;
+        std::vector<uint32_t> shown;
+    };
+    std::vector<View> views;
     std::map<std::string, uint32_t> index;
     std::vector<uint32_t> roots;
     std::string schema, units;
+    // unidade de comprimento do arquivo lido, em mm (o leitor do OCCT devolve a janela da vista crua)
+    double unit_mm = 1.;
     // o que o arquivo trazia e a leitura deixou para trás; só o IGES preenche
     std::vector<std::string> skipped;
 
@@ -93,6 +107,22 @@ struct XdeDoc::Impl {
         return i;
     }
 };
+
+// Unidade de comprimento pelo nome que o arquivo traz ("INCH", "MM", "METRE"...), em mm.
+double unit_in_mm(std::string u) {
+    for (char& c : u) c = char(std::toupper(static_cast<unsigned char>(c)));
+    if (u == "INCH" || u == "IN") return 25.4;
+    if (u == "FOOT" || u == "FT") return 304.8;
+    if (u == "M" || u == "METRE" || u == "METER") return 1000.;
+    if (u == "CM" || u == "CENTIMETRE") return 10.;
+    if (u == "KM") return 1e6;
+    if (u == "MICRON" || u == "UM") return 1e-3;
+    return 1.;
+}
+
+// Em xde_pmi.inc: a apresentação gráfica no sistema de unidades do arquivo e as vistas salvas.
+void xde_prs_scale(XdeDoc::Impl& x, double factor);
+void xde_views_write(XdeDoc::Impl& x, STEPCAFControl_Writer& w, double unit_mm);
 
 namespace {
 
@@ -192,6 +222,7 @@ std::unique_ptr<XdeDoc> xde_read(rust::Str path, const XdeReadOpts& o) {
         NCollection_Sequence<TCollection_AsciiString> lengths, angles, solid_angles;
         base.FileUnits(lengths, angles, solid_angles);
         if (!lengths.IsEmpty()) x.units = lengths.First().ToCString();
+        x.unit_mm = unit_in_mm(x.units);
         NCollection_Sequence<TDF_Label> free;
         x.shapes->GetFreeShapes(free);
         for (const TDF_Label& l : free) x.roots.push_back(x.visit(l));
@@ -370,10 +401,11 @@ void xde_write(XdeDoc& d, rust::Str path, const XdeWriteOpts& o) {
             case 2: params.WriteSchema = DESTEP_Parameters::WriteMode_StepSchema_AP242DIS; break;
             default: throw std::runtime_error("esquema STEP desconhecido");
         }
+        double unit_mm = 1.;
         switch (o.unit) {
             case 0: params.WriteUnit = UnitsMethods_LengthUnit_Millimeter; break;
-            case 1: params.WriteUnit = UnitsMethods_LengthUnit_Inch; break;
-            case 2: params.WriteUnit = UnitsMethods_LengthUnit_Meter; break;
+            case 1: params.WriteUnit = UnitsMethods_LengthUnit_Inch; unit_mm = 25.4; break;
+            case 2: params.WriteUnit = UnitsMethods_LengthUnit_Meter; unit_mm = 1000.; break;
             default: throw std::runtime_error("unidade desconhecida");
         }
         STEPCAFControl_Writer w;
@@ -381,7 +413,11 @@ void xde_write(XdeDoc& d, rust::Str path, const XdeWriteOpts& o) {
         w.SetNameMode(o.names);
         w.SetLayerMode(o.layers);
         w.SetDimTolMode(o.gdt);
+        // o gravador converte a geometria e o plano da anotação para a unidade do arquivo, mas copia os
+        // pontos da apresentação crus; o leitor os multiplica pela unidade: sem isto, polegada sai 25,4x
+        if (o.gdt && unit_mm != 1.) xde_prs_scale(x, 1. / unit_mm);
         if (!w.Transfer(x.doc, params, STEPControl_AsIs)) throw std::runtime_error("falha ao converter para STEP");
+        if (o.gdt) xde_views_write(x, w, unit_mm);
         if (w.Write(to_std(path).c_str()) != IFSelect_RetDone) throw std::runtime_error("falha ao gravar o arquivo STEP");
     });
 }

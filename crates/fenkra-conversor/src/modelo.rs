@@ -61,10 +61,17 @@ impl ModeloNeutro {
     /// Modelo da peça aberta com o PMI semântico (cotas, tolerâncias, referências e alvos) ligado às
     /// faces. Devolve junto as notas do que o STEP não leva. Sem PMI no documento, sai como `de_documento`.
     pub fn de_documento_pmi(doc: &fenkra_core::Document) -> Result<(ModeloNeutro, Vec<crate::Nota>), ErroConv> {
+        Self::de_documento_pmi_modo(doc, crate::ModoPmi::Semantico)
+    }
+
+    /// Como `de_documento_pmi`, no modo pedido: só semântico, só desenho (PMI gráfico) ou os dois, com
+    /// as capturas do PMI como vistas salvas nos modos com desenho (B191).
+    pub fn de_documento_pmi_modo(doc: &fenkra_core::Document, modo: crate::ModoPmi) -> Result<(ModeloNeutro, Vec<crate::Nota>), ErroConv> {
         let mut m = Self::de_documento(doc)?;
         let Some(forma) = m.xde.produtos[0].forma.as_ref() else { return Ok((m, vec![])) };
-        let saida = crate::pmi_step::anotacoes_do_documento(doc, forma);
+        let saida = crate::pmi_step::anotacoes_com_modo(doc, forma, modo);
         m.xde.anotacoes = saida.anotacoes;
+        m.xde.vistas = saida.vistas;
         Ok((m, saida.fora))
     }
 

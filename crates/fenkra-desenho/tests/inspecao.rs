@@ -132,3 +132,83 @@ fn zip_sem_compressao_tem_crc_e_tamanhos_certos() {
     assert_eq!(&z[14..18], &0x3524_41C2u32.to_le_bytes());
     assert_eq!(&z[18..22], &3u32.to_le_bytes());
 }
+
+fn carac(numero: usize, min: Option<f64>, max: Option<f64>) -> inspecao::Caracteristica {
+    inspecao::Caracteristica { numero, dono: Id(numero as u64), folha: Id(1), zona: "A1".into(), tipo: TipoCarac::Dimensao, requisito: "x".into(), nominal: None, minimo: min, maximo: max, unidade: "mm", cem_por_cento: false, pos: [0., 0.] }
+}
+
+#[test]
+fn medicoes_voltam_do_formulario_preenchido_e_dizem_a_situacao() {
+    // o CSV que o Fenkra grava, preenchido na coluna "9. Resultado" (uma linha com aspas e ponto e vírgula)
+    let csv = "5. Nº da característica;6. Local de referência (folha/zona);7. Designador;8. Requisito;Nominal;Mínimo;Máximo;9. Resultado;10. Ferramenta;11. Não conformidade;14. Observações\n\
+               1;F1 A1;;\"Ra 1;6 (µm)\";;;1,6;1,2;rugosímetro;;\n\
+               2;F1 B2;;50 (mm);50;49,9;50,1;50,15;paquímetro;;\n\
+               3;F1 B3;;\"Ø10 (mm)\";10;9,964;10;9,98;;;\n\
+               4;F1 C1;;;;;;;;;\n\
+               5;F1 D1;;;;;;visual ok;;;\n";
+    let m = inspecao::importar_medicoes(csv).unwrap();
+    assert_eq!(m.iter().map(|x| (x.numero, x.valor.as_str())).collect::<Vec<_>>(), vec![(1, "1,2"), (2, "50,15"), (3, "9,98"), (5, "visual ok")]);
+    // planilha simples de duas colunas, sem cabeçalho, com vírgula
+    let simples = inspecao::importar_medicoes("1,1.2\n2,50.05\n").unwrap();
+    assert_eq!(simples.len(), 2);
+    assert!(inspecao::importar_medicoes("").is_err());
+    assert!(inspecao::importar_medicoes("a;b\nx;y\n").is_err());
+
+    use inspecao::Situacao::*;
+    assert_eq!(inspecao::situacao(&carac(1, None, Some(1.6)), "1,2"), Conforme);
+    assert_eq!(inspecao::situacao(&carac(2, Some(49.9), Some(50.1)), "50,15"), NaoConforme);
+    assert_eq!(inspecao::situacao(&carac(3, Some(9.964), Some(10.)), "10"), Conforme, "o limite é aceito");
+    assert_eq!(inspecao::situacao(&carac(3, Some(9.964), Some(10.)), "9,96"), NaoConforme);
+    assert_eq!(inspecao::situacao(&carac(4, None, None), "3"), SemLimite);
+    assert_eq!(inspecao::situacao(&carac(5, None, Some(1.)), "visual ok"), Texto);
+
+    // no desenho: o formulário 3 sai com o resultado e a não conformidade; o resumo conta
+    let mut d = Drawing::new("Placa", Format::A3);
+    d.inspecao.medicoes = m;
+    let cs = vec![carac(1, None, Some(1.6)), carac(2, Some(49.9), Some(50.1)), carac(3, Some(9.964), Some(10.)), carac(4, None, None)];
+    assert_eq!(inspecao::resumo(&d, &cs), (3, 1, 1));
+    let saida = inspecao::csv(&d, &cs);
+    let l: Vec<&str> = saida.lines().collect();
+    assert!(l[2].contains(";50,15;") && l[2].ends_with(";Sim;Dimensão"), "{}", l[2]);
+    assert!(!l[1].contains(";Sim;"), "{}", l[1]);
+}
+
+#[test]
+fn xlsx_leva_os_formularios_1_2_e_3() {
+    let mut d = Drawing::new("Placa", Format::A3);
+    d.title.pn = "FK-0001".into();
+    d.title.title = "Placa de apoio".into();
+    d.title.material = "Aço SAE 1020".into();
+    d.title.revision = "B".into();
+    d.title.drawn_by = "JV".into();
+    let s = d.sheets[0].id;
+    let id = d.alloc();
+    d.notes.push(Note { id, sheet: s, kind: NoteKind::Text, pos: [30., 40.], text: "Tolerâncias gerais ISO 2768-m\nZincado conforme NBR 10476, 8 µm\nQuebrar cantos vivos".into(), ..Default::default() });
+    let cs = vec![carac(1, Some(49.9), Some(50.1)), carac(2, None, Some(1.6))];
+    d.inspecao.medicoes = vec![inspecao::Medicao { numero: 1, valor: "50".into() }, inspecao::Medicao { numero: 2, valor: "1,4".into() }];
+    let f1 = inspecao::form1(&d, &cs, "", "", false);
+    let campo = |n: &str| f1.iter().find(|(k, _)| k.starts_with(n)).map(|(_, v)| v.as_str()).unwrap();
+    assert_eq!(campo("1. "), "FK-0001");
+    assert_eq!(campo("2. "), "Placa de apoio");
+    assert_eq!(campo("5. "), "B");
+    assert_eq!(campo("13. "), "Peça");
+    assert_eq!(campo("15. "), "2");
+    assert_eq!(campo("19. "), "Sim", "tudo medido e conforme");
+    assert_eq!(campo("20. "), "JV");
+    // formulário 2: o material e a nota com norma (não a tolerância geral nem a nota sem norma)
+    let f2 = inspecao::form2(&d);
+    assert_eq!(f2.len(), 2, "{f2:?}");
+    assert_eq!(f2[0][0], "Aço SAE 1020");
+    assert!(f2[1][0].starts_with("Zincado") && f2[1][1] == "NBR 10476", "{:?}", f2[1]);
+    let x = inspecao::xlsx(&d, &cs, "FK-0001", "Placa de apoio");
+    let texto = String::from_utf8_lossy(&x);
+    for parte in ["xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml", "xl/worksheets/sheet3.xml", "Formulario 1", "Formulario 2", "Formulario 3", "NBR 10476", "19. Resultado conforme", "9. Resultado"] {
+        assert!(texto.contains(parte), "sem {parte}");
+    }
+    // o resultado do formulário 3 vai como número
+    assert!(texto.contains("<v>50</v>"), "resultado numérico");
+    // não conforme muda o campo 19
+    d.inspecao.medicoes[0].valor = "51".into();
+    assert!(inspecao::form1(&d, &cs, "", "", true).iter().any(|(k, v)| k.starts_with("19. ") && v.starts_with("Não")));
+    assert!(inspecao::form1(&d, &cs, "", "", true).iter().any(|(k, v)| k.starts_with("13. ") && v == "Montagem"));
+}

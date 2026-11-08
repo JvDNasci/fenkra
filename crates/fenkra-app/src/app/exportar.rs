@@ -83,7 +83,20 @@ pub(super) fn opcoes_ui(ui: &mut egui::Ui, formato: Formato, o: &mut OpcoesExpor
                 }
             }).response.on_hover_text(tr("AP214 leva cores e camadas; AP203 não; AP242 é o mais novo."));
             if o.esquema == EsquemaSaida::Ap242 {
-                ui.checkbox(&mut o.pmi, tr("Anotações semânticas (PMI)")).on_hover_text(tr("Grava as cotas com tolerância, os quadros de tolerância geométrica, as referências e os alvos ligados às faces. Rugosidade, solda e notas ainda ficam de fora."));
+                // B191: nenhum / gráfico / gráfico + semântico (a semântica sempre vai com o desenho aqui)
+                if o.pmi {
+                    o.pmi_grafico = true;
+                }
+                let opcoes = [((false, false), "Nenhum", "O arquivo leva só a peça, sem anotações."), ((false, true), "Gráfico", "Cada anotação vai desenhada em linhas (texto em traços), e as capturas do PMI viram vistas salvas. Quem abre vê, mas não consegue ler os valores como tolerância."), ((true, true), "Gráfico + semântico", "O desenho e, junto, as cotas com tolerância, os quadros, as referências e os alvos ligados às faces, que outro programa lê como dado. Rugosidade, solda e notas vão como desenho.")];
+                let atual = opcoes.iter().find(|(k, ..)| *k == (o.pmi, o.pmi_grafico)).copied().unwrap_or(opcoes[0]);
+                ui.label(tr("PMI no arquivo"));
+                egui::ComboBox::from_id_salt("exportar_pmi").selected_text(tr(atual.1)).width(LARGURA - 40.).show_ui(ui, |ui| {
+                    for (k, nome, dica) in opcoes {
+                        if ui.selectable_label(k == (o.pmi, o.pmi_grafico), tr(nome)).on_hover_text(tr(dica)).clicked() {
+                            (o.pmi, o.pmi_grafico) = k;
+                        }
+                    }
+                }).response.on_hover_text(tr(atual.2));
             }
         } else if formato == Formato::Iges {
             ui.label(tr("Modo do IGES"));
@@ -173,7 +186,17 @@ impl Dialogo {
 
 impl App {
     pub(super) fn abrir_painel_exportar(&mut self, formato: Formato) {
-        self.exportar_dialogo = Some(Dialogo::novo(formato, self.settings.opcoes_exportar, self.in_asm()));
+        let mut opcoes = self.settings.opcoes_exportar;
+        // desenvolvimento: FENKRA_DEMO_EXPORTAR_PMI=nenhum|grafico|ambos abre em AP242 com esse modo de PMI (B191)
+        if let Ok(m) = std::env::var("FENKRA_DEMO_EXPORTAR_PMI") {
+            opcoes.esquema = EsquemaSaida::Ap242;
+            (opcoes.pmi, opcoes.pmi_grafico) = match m.as_str() {
+                "grafico" => (false, true),
+                "ambos" => (true, true),
+                _ => (false, false),
+            };
+        }
+        self.exportar_dialogo = Some(Dialogo::novo(formato, opcoes, self.in_asm()));
     }
 
     pub(super) fn painel_exportar(&mut self, ctx: &egui::Context, area: Rect) {
@@ -211,10 +234,10 @@ impl App {
         let r = if d.formato.e_2d() || (!d.montagem && fenkra_solidos::corpo_malha::tem_corpo_de_malha(&self.open.doc)) {
             Registro::default().gravar_documento(&self.open.doc, &caminho, &d.opcoes)
         } else {
-            let com_pmi = d.formato == Formato::Step && d.opcoes.pmi && d.opcoes.esquema == EsquemaSaida::Ap242 && !d.montagem;
+            let modo_pmi = d.opcoes.modo_pmi().filter(|_| d.formato == Formato::Step && d.opcoes.esquema == EsquemaSaida::Ap242 && !d.montagem);
             let modelo = match (self.asm.as_ref().filter(|_| d.montagem), &pasta) {
                 (Some(s), Some(pasta)) => ModeloNeutro::da_montagem(&s.asm, pasta),
-                _ if com_pmi => ModeloNeutro::de_documento_pmi(&self.open.doc).map(|(m, fora)| {
+                _ if modo_pmi.is_some() => ModeloNeutro::de_documento_pmi_modo(&self.open.doc, modo_pmi.unwrap_or_default()).map(|(m, fora)| {
                     fora_do_step = fora;
                     m
                 }),

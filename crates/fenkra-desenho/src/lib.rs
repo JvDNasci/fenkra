@@ -9,6 +9,7 @@
 
 pub mod alcas;
 pub mod automatico;
+pub mod baloes;
 pub mod centros;
 pub mod conjunto;
 pub mod corte;
@@ -608,11 +609,14 @@ pub struct Note {
     /// anotação 3D (PMI) de onde veio, quando importada (B371)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pmi: Option<Id>,
+    /// balão: texto de baixo, quantidade, nós das chamadas e peça (B149)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub balao: Option<baloes::DwgBalao>,
 }
 
 impl Default for Note {
     fn default() -> Self {
-        Note { id: Id(0), sheet: Id(0), kind: NoteKind::Text, pos: [0., 0.], leader: None, leaders_extra: vec![], anchors_extra: vec![], text: String::new(), size: 3.5, weld: None, rough: None, gdt: None, style: Default::default(), view: None, anchor3: None, snapped: false, pmi: None }
+        Note { id: Id(0), sheet: Id(0), kind: NoteKind::Text, pos: [0., 0.], leader: None, leaders_extra: vec![], anchors_extra: vec![], text: String::new(), size: 3.5, weld: None, rough: None, gdt: None, style: Default::default(), view: None, anchor3: None, snapped: false, pmi: None, balao: None }
     }
 }
 

@@ -150,6 +150,30 @@ pub mod bridge {
         target_number: u32,
         target_length: f64,
         target_width: f64,
+        /// PMI gráfico (B191): segmentos da apresentação, 6 números cada (x1 y1 z1 x2 y2 z2); vazio = sem
+        /// apresentação. `kind` 3 é só gráfico (rótulo comum, sem faces nem semântica).
+        prs: Vec<f64>,
+        prs_name: String,
+        /// plano da anotação: origem, normal e direção x (9 números); vazio = sem plano
+        plane: Vec<f64>,
+        /// ponto de ancoragem do texto (3 números); vazio = sem
+        text_at: Vec<f64>,
+    }
+
+    /// Vista salva (B191): câmera e as anotações que aparecem nela. `shown` indexa as anotações na ordem
+    /// em que entraram com `xde_pmi_add` (ou na ordem de `xde_pmi_read`, na leitura).
+    struct XdeView {
+        name: String,
+        /// ponto de projeção (olho), direção de visada e direção para cima
+        eye: [f64; 3],
+        dir: [f64; 3],
+        up: [f64; 3],
+        ortho: bool,
+        /// distância do olho ao plano de vista e tamanho da janela, em mm
+        zoom: f64,
+        width: f64,
+        height: f64,
+        shown: Vec<u32>,
     }
 
     unsafe extern "C++" {
@@ -379,6 +403,8 @@ pub mod bridge {
         fn xde_write(d: Pin<&mut XdeDoc>, path: &str, o: &XdeWriteOpts) -> Result<()>;
         fn xde_pmi_add(d: Pin<&mut XdeDoc>, m: &XdePmi) -> Result<()>;
         fn xde_pmi_read(d: &XdeDoc) -> Result<Vec<XdePmi>>;
+        fn xde_view_add(d: Pin<&mut XdeDoc>, v: &XdeView) -> Result<()>;
+        fn xde_views_read(d: &XdeDoc) -> Result<Vec<XdeView>>;
         fn xde_write_iges(d: Pin<&mut XdeDoc>, path: &str, o: &XdeIgesOpts) -> Result<()>;
         /// `m`: matriz 3x4 por linhas
         fn xde_moved(s: &Shape, m: &[f64]) -> Result<UniquePtr<Shape>>;

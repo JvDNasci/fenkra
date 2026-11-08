@@ -252,6 +252,7 @@ pub fn compute(st: &mut DwgState, m: V2, snap: &SnapFn, view_at: &ViewAt) -> Opt
             g.items = layout::dim_items(&st.d, &dm, &mut st.models);
         }
         c::CENTER => g.items = super::centros_ui::fantasma(st, m),
+        c::AUTO_BALLOONS => g.items = super::baloes_ui::fantasma(st),
         c::NOTE | c::BALLOON | c::ROUGH | c::WELD | c::GDT | c::DATUM => {
             let (kind, text) = symbol_note(st, tool);
             let is_gdt = kind == NoteKind::Gdt;

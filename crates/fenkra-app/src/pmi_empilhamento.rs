@@ -117,12 +117,42 @@ pub fn abrir(app: &mut App) {
     }
     let lista = crate::pmi_ui::list(app);
     ids.retain(|id| lista.iter().any(|p| p.id == *id && p.kind.is_dimension()));
+    // uma cota só: a cadeia ou a base de que ela faz parte, reconhecida pela geometria
+    let mut sentido = vec![None; ids.len()];
+    let mut aviso = None;
+    if ids.len() == 1 {
+        if let Some((novos, s, a)) = do_conjunto(&lista, ids[0]) {
+            (ids, sentido, aviso) = (novos, s, Some(a));
+        }
+    }
     if ids.len() < 2 {
         app.toast(tr("Escolha ao menos duas cotas (Ctrl+clique na árvore ou no 3D) e chame o empilhamento").to_string(), true);
         return;
     }
-    let n = ids.len();
-    *travar() = Some(Estado { ids, sentido: vec![None; n], amostras: 10_000, lim_min: String::new(), lim_max: String::new() });
+    if let Some(a) = aviso {
+        app.toast(a, false);
+    }
+    *travar() = Some(Estado { ids, sentido, amostras: 10_000, lim_min: String::new(), lim_max: String::new() });
+}
+
+/// A cadeia ou a base de que a cota faz parte, como elos do empilhamento. Cadeia: todas as cotas,
+/// somadas (o fecho é a distância total). Base: cada cota parte da mesma origem, então o que ela
+/// controla é a distância até o elemento anterior da base: entram a cota escolhida (+) e a anterior
+/// (−); na mais curta, ela (−) e a seguinte (+).
+pub fn do_conjunto(lista: &[Pmi], id: Id) -> Option<(Vec<Id>, Vec<Option<f64>>, String)> {
+    use fenkra_core::pmi_cotas::{conjunto_de, TipoConjunto};
+    let c = conjunto_de(lista, id, 0.01)?;
+    match c.tipo {
+        TipoConjunto::Cadeia => {
+            let n = c.ids.len();
+            Some((c.ids, vec![None; n], format!("{}: {n}", tr("Cadeia reconhecida, cotas"))))
+        }
+        TipoConjunto::Base => {
+            let k = c.ids.iter().position(|i| *i == id)?;
+            let (a, b) = if k == 0 { (c.ids[0], *c.ids.get(1)?) } else { (c.ids[k - 1], c.ids[k]) };
+            Some((vec![a, b], vec![Some(-1.), Some(1.)], tr("Base reconhecida: distância entre a cota escolhida e a vizinha da base").to_string()))
+        }
+    }
 }
 
 /// Abre o painel com as cotas dadas (exemplo de captura).
@@ -219,7 +249,40 @@ mod testes {
     /// Caixa de 60 com três peças de 20 em cadeia (cotadas no sentido contrário): folga 0, com a
     /// classe H7 na caixa, ± nas peças, e a cota teórica e a de referência fora.
     #[test]
+    fn uma_cota_so_abre_a_cadeia_ou_a_base_inteira() {
+        use fenkra_core::pmi_cotas::{baseline, build, chain};
+        let p = |x: f64, y: f64| ([x, y, 0.], None);
+        let cadeia = build(&PmiKind::Linear, &chain(&[p(0., 0.), p(10., 0.), p(25., 0.), p(45., 0.)], [0., 0., 12.]), 1, "Cadeia", "Cadeia 1");
+        let base = build(&PmiKind::Linear, &baseline(&[p(0., 50.), p(15., 50.), p(30., 50.), p(50., 50.)], [0., 0., 1.], 8.), 10, "Base", "Base 1");
+        let mut lista: Vec<Pmi> = cadeia.into_iter().chain(base).collect();
+        for q in lista.iter_mut() {
+            q.tol_plus = "0,1".into();
+            q.tol_minus = "0,1".into();
+        }
+        // da cadeia: as três, somadas = 45 ± 0,3 no pior caso
+        let (ids, sentido, _) = do_conjunto(&lista, Id(2)).unwrap();
+        assert_eq!(ids, vec![Id(1), Id(2), Id(3)]);
+        let est = Estado { ids, sentido, amostras: 0, ..Default::default() };
+        let (dentro, fora) = elos(&lista, &est);
+        assert!(fora.is_empty());
+        let r = analisar(&dentro.iter().map(|(_, e)| e.clone()).collect::<Vec<_>>(), 0, 1, None);
+        assert!((r.nominal - 45.).abs() < 1e-9, "{}", r.nominal);
+        assert!((r.pior.1 - 45.3).abs() < 1e-9 && (r.pior.0 - 44.7).abs() < 1e-9, "{:?}", r.pior);
+        // da base: a escolhida (0 a 30) menos a anterior (0 a 15) = 15 ± 0,2
+        let (ids, sentido, _) = do_conjunto(&lista, Id(11)).unwrap();
+        assert_eq!(ids, vec![Id(10), Id(11)]);
+        let est = Estado { ids, sentido, amostras: 0, ..Default::default() };
+        let (dentro, _) = elos(&lista, &est);
+        let r = analisar(&dentro.iter().map(|(_, e)| e.clone()).collect::<Vec<_>>(), 0, 1, None);
+        assert!((r.nominal - 15.).abs() < 1e-9, "{}", r.nominal);
+        assert!((r.pior.1 - 15.2).abs() < 1e-9 && (r.pior.0 - 14.8).abs() < 1e-9, "{:?}", r.pior);
+        // a mais curta da base: ela (−) e a seguinte (+)
+        assert_eq!(do_conjunto(&lista, Id(10)).unwrap().0, vec![Id(10), Id(11)]);
+    }
+
+    #[test]
     fn cadeia_do_pmi_vira_elos_com_sentido_e_desvios() {
+
         let mut lista = vec![
             cota(1, [0., 0., 0.], [60., 0., 0.], "H7", ""),
             cota(2, [60., 0., 0.], [40., 0., 0.], "0,05", "0,05"),

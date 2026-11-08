@@ -281,6 +281,12 @@ pub fn dim_value(dm: &Dim, v: &View, p: &Proj) -> Option<(f64, Vec<V2>)> {
         }
         _ => return None,
     };
+    let val = match dm.kind {
+        // B149: comprimento de arco = raio (vértice ao primeiro ponto) × ângulo
+        DimKind::Angle if dm.opcoes.arco => val.to_radians() * v2len(v2sub(q[1], q[0])),
+        DimKind::Horizontal | DimKind::Vertical | DimKind::Aligned if dm.opcoes.meia => 2. * val,
+        _ => val,
+    };
     Some((val, pts))
 }
 
@@ -290,6 +296,7 @@ pub fn dim_text(d: &Drawing, dm: &Dim, val: f64) -> String {
     let base = match dm.kind {
         DimKind::Radius => format!("R{n}"),
         DimKind::Diameter => format!("Ø{n}"),
+        DimKind::Angle if dm.opcoes.arco => format!("⌒{n}"),
         DimKind::Angle => format!("{n}°"),
         _ => n,
     };
@@ -993,7 +1000,8 @@ fn rough_extended(o: &mut Out, p: V2, text: &str, r: &crate::simbolos::DwgRough,
     let sob = r.sobremedida.trim();
     // a barra cobre o valor e a linha de baixo (método + sobremedida)
     let baixo = text_width(metodo, s) + if sob.is_empty() { 0. } else { text_width(sob, s) + s } + if r.direcao.trim().is_empty() { 0. } else { s * 1.6 };
-    let fim = x0 + text_width(&valor, s).max(baixo) + 1.;
+    let outras: Vec<&str> = r.outras.iter().map(|l| l.trim()).filter(|l| !l.is_empty()).collect();
+    let fim = x0 + outras.iter().map(|l| text_width(l, s)).fold(text_width(&valor, s), f64::max).max(baixo) + 1.;
     match r.tipo {
         RugTipo::Qualquer => {
             o.line(vec![[p[0] - h * 0.6, p[1] + h * 0.6], p, [x0, yb], [fim, yb]], Style::Thin);
@@ -1009,6 +1017,11 @@ fn rough_extended(o: &mut Out, p: V2, text: &str, r: &crate::simbolos::DwgRough,
         }
     }
     o.text([x0 + 0.5, yb + 0.6], valor, s, 0., Align::Left);
+    // B149: as outras exigências empilhadas acima da primeira
+    for (k, l) in outras.iter().enumerate() {
+        o.text([x0 + 0.5, yb + 0.6 + (k + 1) as f64 * s * 1.5], l.to_string(), s, 0., Align::Left);
+    }
+
     let mut x = x0 + 0.5;
     let y1 = yb - s * 1.5;
     if !metodo.is_empty() {
@@ -1231,6 +1244,9 @@ fn dimension(o: &mut Out, dm: &Dim, pts: &[V2], text: &str, th: f64) {
         5 => (false, false),
         _ => (true, true),
     };
+    // meia cota (B149): o primeiro ponto é o eixo; sem a seta e a linha de chamada dele
+    let meia = dm.opcoes.meia && matches!(dm.kind, DimKind::Horizontal | DimKind::Vertical | DimKind::Aligned);
+    let first = first && !meia;
     match dm.kind {
         DimKind::Horizontal | DimKind::Vertical | DimKind::Aligned => {
             let (p1, p2) = (pts[0], pts[1]);
@@ -1249,7 +1265,10 @@ fn dimension(o: &mut Out, dm: &Dim, pts: &[V2], text: &str, th: f64) {
             let q1 = v2add(p1, v2mul(n, base - dot2(p1, n)));
             let q2 = v2add(p2, v2mul(n, base - dot2(p2, n)));
             let sg = if dm.offset >= 0. { 1. } else { -1. };
-            for (p, q) in [(p1, q1), (p2, q2)] {
+            for (k, (p, q)) in [(p1, q1), (p2, q2)].into_iter().enumerate() {
+                if meia && k == 0 {
+                    continue;
+                }
                 let dir = v2unit(v2sub(q, p));
                 if v2len(v2sub(q, p)) > gap {
                     o.seg(v2add(p, v2mul(dir, gap)), v2add(q, v2mul(n, over * sg)), Style::Thin);
@@ -1260,6 +1279,11 @@ fn dimension(o: &mut Out, dm: &Dim, pts: &[V2], text: &str, th: f64) {
             o.seg(q1, q2, Style::Thin);
             let d = v2sub(q2, q1);
             let ud = v2unit(d);
+            if meia {
+                // a linha de cota passa um pouco do eixo, sem seta
+                o.seg(q1, v2sub(q1, v2mul(ud, 2. * a)), Style::Thin);
+            }
+
             let inside = match dm.arrows {
                 1 => true,
                 2 => false,
@@ -1514,6 +1538,39 @@ fn leader_box(o: &mut Out, lo: V2, hi: V2, tip: V2, s: f64, st: &PmiStyle, k: us
     o.arrow_kind = antes;
 }
 
+/// Nós da chamada `k` de um balão (B149), do balão para a ponta.
+fn nos_da_chamada(n: &Note, k: usize) -> &[V2] {
+    n.balao.as_ref().and_then(|b| b.nos.get(k)).map(|v| v.as_slice()).unwrap_or(&[])
+}
+
+/// Quantidade escrita ao lado do balão, à direita de `x` (B149).
+fn quantidade_do_balao(o: &mut Out, n: &Note, x: f64, s: f64) {
+    if let Some(q) = n.balao.as_ref().map(|b| b.quantidade.trim()).filter(|q| !q.is_empty()) {
+        o.text([x + s * 0.4, n.pos[1] - s / 2.], q.to_string(), s, 0., Align::Left);
+    }
+}
+
+/// Como `leader_box`, passando pelos nós da chamada: o lado de saída olha para o primeiro nó.
+#[allow(clippy::too_many_arguments)]
+fn leader_box_nos(o: &mut Out, lo: V2, hi: V2, tip: V2, nos: &[V2], s: f64, st: &PmiStyle, k: usize) {
+    let Some(&primeiro) = nos.first() else { return leader_box(o, lo, hi, tip, s, st, k) };
+    o.caixa_texto = Some((lo, hi));
+    if st.hide_leader {
+        return;
+    }
+    let c = v2mul(v2add(lo, hi), 0.5);
+    let d = v2sub(primeiro, c);
+    let (w, h) = (hi[0] - lo[0], hi[1] - lo[1]);
+    let att = if d[0].abs() * h >= d[1].abs() * w { [if d[0] < 0. { lo[0] } else { hi[0] }, c[1]] } else { [c[0], if d[1] > 0. { hi[1] } else { lo[1] }] };
+    let mut pts = vec![att];
+    pts.extend_from_slice(nos);
+    pts.push(tip);
+    let antes = o.arrow_kind;
+    o.arrow_kind = ponta_da_chamada(st, k, antes);
+    leader_line(o, pts, s, st, true);
+    o.arrow_kind = antes;
+}
+
 /// Ponta da chamada `k`: a própria (B368/B370) ou, em `Padrao`, a do estilo.
 fn ponta_da_chamada(st: &PmiStyle, k: usize, estilo: PmiArrow) -> PmiArrow {
     match st.leader_arrow.get(k).copied().unwrap_or_default() {
@@ -1643,23 +1700,35 @@ fn note(o: &mut Out, n: &Note) {
                 leader_box(o, lo, hi, t, s, st, k);
             }
         }
-        NoteKind::Balloon if st.frame != PmiFrame::Padrao => {
-            // balão com outra moldura (quadrado, losango…)
-            let (lo, hi) = text_box(o, n.pos, &[n.text.clone()], s, st, PmiFrame::Circulo, PmiBg::Nenhum);
+        NoteKind::Balloon if st.frame != PmiFrame::Padrao || n.balao.as_ref().is_some_and(|b| !b.abaixo.is_empty()) => {
+            // balão com outra moldura (quadrado, losango…) ou dividido (texto em cima e embaixo, B149)
+            let abaixo = n.balao.as_ref().map(|b| b.abaixo.clone()).unwrap_or_default();
+            let (linhas, padrao) = if abaixo.is_empty() { (vec![n.text.clone()], PmiFrame::Circulo) } else { (vec![n.text.clone(), abaixo], PmiFrame::CirculoRiscado) };
+            let mut st2 = st.clone();
+            st2.justify = 1;
+            let (lo, hi) = text_box(o, n.pos, &linhas, s, &st2, padrao, PmiBg::Nenhum);
+            quantidade_do_balao(o, n, hi[0], s);
             for (k, t) in crate::setas_nota::pontas(n).into_iter().enumerate() {
-                leader_box(o, lo, hi, t, s, st, k);
+                leader_box_nos(o, lo, hi, t, nos_da_chamada(n, k), s, st, k);
             }
         }
         NoteKind::Balloon => {
-            let r = s * 1.6;
+            // largura fixa (B149): o diâmetro do círculo, para balões do mesmo tamanho
+            let r = (s * 1.6).max(text_width(&n.text, s) / 2. + s * 0.5).max(st.frame_fixed as f64 / 2.);
             let col = o.color;
             o.color = st.frame_color.or(col);
             o.dline(circle(n.pos, r), true, Style::Thin, st.frame_dash);
             o.color = col;
             o.text([n.pos[0], n.pos[1] - s / 2.], n.text.clone(), s, 0., Align::Center);
-            for t in crate::setas_nota::pontas(n) {
-                let u = v2unit(v2sub(t, n.pos));
-                leader_line(o, vec![v2add(n.pos, v2mul(u, r)), t], s, st, false);
+            quantidade_do_balao(o, n, n.pos[0] + r, s);
+            for (k, t) in crate::setas_nota::pontas(n).into_iter().enumerate() {
+                let nos = nos_da_chamada(n, k);
+                let rumo = nos.first().copied().unwrap_or(t);
+                let u = v2unit(v2sub(rumo, n.pos));
+                let mut pts = vec![v2add(n.pos, v2mul(u, r))];
+                pts.extend_from_slice(nos);
+                pts.push(t);
+                leader_line(o, pts, s, st, false);
                 if !st.hide_leader {
                     o.fill(circle(t, 0.6));
                 }
@@ -1670,11 +1739,20 @@ fn note(o: &mut Out, n: &Note) {
             match n.rough.as_ref().filter(|r| !r.basico()) {
                 // √ com a barra: valor em cima
                 None => {
+                    // B149: acabamento em várias linhas: a primeira em cima da barra, as outras embaixo
+                    // dela, à direita da perna longa (como as posições a e b da ISO 1302)
                     let h = s * 1.4;
-                    o.line(vec![[p[0] - h * 0.6, p[1] + h * 0.6], p, [p[0] + h * 0.9, p[1] + h * 1.6], [p[0] + h * 0.9 + text_width(&n.text, s) + 1., p[1] + h * 1.6]], Style::Thin);
+                    let linhas: Vec<&str> = n.text.lines().collect();
+                    let primeira = linhas.first().copied().unwrap_or("");
+                    let largura = linhas.iter().map(|l| text_width(l, s)).fold(0., f64::max);
+                    o.line(vec![[p[0] - h * 0.6, p[1] + h * 0.6], p, [p[0] + h * 0.9, p[1] + h * 1.6], [p[0] + h * 0.9 + largura + 1., p[1] + h * 1.6]], Style::Thin);
                     o.seg([p[0] - h * 0.6, p[1] + h * 0.6], [p[0] + h * 0.35, p[1] + h * 0.6], Style::Thin);
-                    o.text([p[0] + h * 0.9 + 0.5, p[1] + h * 1.6 + 0.6], n.text.clone(), s, 0., Align::Left);
+                    o.text([p[0] + h * 0.9 + 0.5, p[1] + h * 1.6 + 0.6], primeira.to_string(), s, 0., Align::Left);
+                    for (i, l) in linhas.iter().enumerate().skip(1) {
+                        o.text([p[0] + h * 0.9 + 0.5, p[1] + h * 1.6 - 0.6 - s - (i - 1) as f64 * s * 1.5], l.to_string(), s, 0., Align::Left);
+                    }
                 }
+
                 Some(r) => rough_extended(o, p, &n.text, r, s),
             }
             for (k, t) in crate::setas_nota::pontas(n).into_iter().enumerate() {

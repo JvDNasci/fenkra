@@ -24,6 +24,13 @@ pub struct DimOpcoes {
     /// casas decimais só da tolerância (None = as do valor)
     #[serde(default)]
     pub precisao_tol: Option<u8>,
+    /// meia cota (B149): peça simétrica cotada até o eixo; só a seta do lado medido, a linha passa do
+    /// eixo e o valor é o dobro do medido
+    #[serde(default)]
+    pub meia: bool,
+    /// cota de ângulo escrita como comprimento do arco (B149): raio × ângulo, com o sinal ⌒
+    #[serde(default)]
+    pub arco: bool,
 }
 
 impl DimOpcoes {

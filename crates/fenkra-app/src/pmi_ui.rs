@@ -1285,6 +1285,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let pick_filter = crate::picking::Filter { faces: true, edges: true, vertices: true, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None };
     let mut clicked = None;
     let fields = title_fields(app);
+    // B117: número de inspeção de cada característica, quando os balões estão ligados
+    let inspecao: Vec<(Id, usize)> = if crate::pmi_inspecao_3d::ligado() { crate::pmi_inspecao_3d::numeracao(list(app)) } else { vec![] };
     let enquadradas = fenkra_core::pmi_alvos::ids_enquadrados(list(app));
     let gstyle = app.settings.pmi_style.clone();
     let ctx = ui.ctx().clone();
@@ -1596,6 +1598,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         }
         // rótulo girado na tela: a área de clique envolve o rótulo girado
         let rect_lbl = if plane.is_none() && !matches!(pm.kind, PmiKind::Datum { .. } | PmiKind::Balloon { .. } | PmiKind::Weld { .. } | PmiKind::Roughness { .. } | PmiKind::DatumTarget { .. }) { pen.outer(rect_lbl) } else { rect_lbl };
+        if let Some((_, n)) = inspecao.iter().find(|(i, _)| *i == pm.id) {
+            crate::pmi_inspecao_3d::desenhar(&painter, rect_lbl, *n, crate::theme::accent(ui.visuals()), ui.visuals().extreme_bg_color);
+        }
         // anotação realçada/em edição: as âncoras viram alças (arraste e solte numa face, aresta ou vértice)
         if (is_sel || bad) && !matches!(pm.kind, PmiKind::TitleBlock { .. }) {
             for (k, q) in a.iter().enumerate() {
@@ -2126,7 +2131,14 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_captura
     });
     let h = h.on_hover_text(tr("Cotas, notas, rugosidade, solda e tolerâncias no modelo 3D (grupo Detalhamento 3D)."));
     h.context_menu(|ui| {
+        let ligado = crate::pmi_inspecao_3d::ligado();
+        if ui.button(tr(if ligado { "Esconder os balões de inspeção" } else { "Mostrar os balões de inspeção" })).on_hover_text(tr("Número de inspeção em cada cota, tolerância geométrica e rugosidade, na ordem da lista")).clicked() {
+            crate::pmi_inspecao_3d::alternar();
+            ui.close();
+        }
+        ui.separator();
         ui.label(RichText::new(tr("Nova anotação 3D")).strong());
+
         for (i, n) in [(17u8, "◎ Cota inteligente"), (0u8, "↔ Cota linear"), (1, "R Raio"), (2, "Ø Diâmetro"), (3, "∠ Ângulo"), (4, "✎ Nota"), (5, "√ Rugosidade"), (6, "⌒ Solda"), (7, "▭ Referência (datum)"), (8, "⊞ Tolerância geométrica"), (9, "▤ Legenda 3D"), (11, "⊢ Cota ordenada"), (12, "⌒ Comprimento de arco"), (13, "⇔ Cadeia de cotas"), (14, "⇥ Cotas a partir de uma base"), (15, "ƒ Chamada de feature"), (18, "① Balão à mão"), (19, "⊕ Alvo de referência"), (20, "⌒ Solda dos cordões da bancada Estrutural")] {
             if ui.button(tr(n)).clicked() {
                 create = Some(i);
