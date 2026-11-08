@@ -4121,6 +4121,9 @@ pub struct Document {
     /// atualização automática ou manual da árvore (B59); fora do arquivo quando é o padrão
     #[serde(default, skip_serializing_if = "ModoAtualizacao::e_automatica")]
     pub atualizacao: ModoAtualizacao,
+    /// requisitos que a peça declara e `verificar` confere (B418)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub requisitos: Vec<crate::requisitos::Requisito>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -4176,6 +4179,7 @@ impl Document {
             features: vec![],
             rollback: 0,
             atualizacao: ModoAtualizacao::Automatica,
+            requisitos: vec![],
             origem: None,
             malhas: Default::default(),
         };

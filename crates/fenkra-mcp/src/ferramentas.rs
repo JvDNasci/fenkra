@@ -9,14 +9,14 @@ use serde_json::{json, Value};
 
 pub struct Ferramenta {
     pub nome: &'static str,
-    titulo: &'static str,
-    descricao: &'static str,
+    pub(crate) titulo: &'static str,
+    pub(crate) descricao: &'static str,
     pub comando: &'static str,
     /// devolve dado lido de um STEP: exige o aceite da pessoa
     pub le_step: bool,
     /// não muda modelo nem arquivo
-    somente_leitura: bool,
-    esquema: fn() -> Value,
+    pub(crate) somente_leitura: bool,
+    pub(crate) esquema: fn() -> Value,
     pub traduzir: fn(&Value) -> Result<Value, ErroApi>,
 }
 
@@ -326,7 +326,51 @@ const fn edicao(
     }
 }
 
-pub const FERRAMENTAS: [Ferramenta; 19] = [
+fn e_selecionar() -> Value {
+    objeto(
+        json!({
+            "alvo": { "enum": ["arestas", "faces"], "description": "padrão arestas" },
+            "lado": { "description": "topo, base, frente, tras, esquerda, direita ou uma normal [x, y, z]: fica com as faces planas que olham para lá (e as arestas delas)" },
+            "extrema": { "type": "boolean", "description": "padrão verdadeiro: só a camada mais afastada daquele lado (a face de cima, não os degraus)" },
+            "tipo": { "type": "string", "description": "arestas: reta, circulo, arco, elipse; faces: plano, cilindro, cone, esfera, toro, livre" },
+            "raio": { "type": "number", "description": "mm; filtra círculos, arcos e cilindros pelo raio" },
+            "perto": { "description": "ponto [x, y, z]: fica com o que estiver mais perto dele (o meio da aresta, um ponto da face)" },
+            "quantas": { "type": "integer", "description": "com `perto`, quantas devolver; padrão 1" },
+        }),
+        &[],
+    )
+}
+
+fn e_topologia_sem_secoes() -> Value {
+    sem_args()
+}
+
+fn e_verificar() -> Value {
+    objeto(
+        json!({
+            "requisitos": {
+                "type": "array",
+                "description": "somam-se aos que a peça declara. Cada um: {nome, tipo, ...}. massa (min, max em kg); furos (diametro, quantidade, tol); folga (min em mm entre corpos); sem_interferencia (tol em mm³); caixa (max [x, y, z] em mm); propagacao (parametro, valor, medida: volume, caixa_x, caixa_y, caixa_z ou massa; esperado e tol opcionais)",
+                "items": { "type": "object", "required": ["nome", "tipo"] }
+            }
+        }),
+        &[],
+    )
+}
+
+fn e_biblioteca() -> Value {
+    objeto(
+        json!({
+            "busca": { "type": "string", "description": "filtra as famílias por nome, norma ou id" },
+            "familia": { "type": "string", "description": "id da família: traz os tamanhos com medidas e furo de passagem" },
+            "tamanho": { "type": "string", "description": "designação, como M6" },
+            "furo": { "type": "number", "description": "mm: diz quais tamanhos da família passam num furo deste diâmetro" },
+        }),
+        &[],
+    )
+}
+
+pub const FERRAMENTAS: [Ferramenta; 23] = [
     Ferramenta { nome: "consultar_step", titulo: "Consultar STEP", descricao: "Lista caixa envolvente, massa, faces, arestas, planos, cilindros e furos de um STEP do projeto. Os planos trazem a normal para fora, as arestas trazem a fórmula, e os furos já vêm agrupados. Exige o aceite --liberar-step.", comando: "topologia", le_step: true, somente_leitura: true, esquema: e_consultar, traduzir: t_consultar },
     edicao("nova_peca", "Nova peça", "Começa uma peça vazia.", "nova_peca", e_nova, igual),
     edicao("abrir_peca", "Abrir peça", "Abre uma peça .fkx ou .fkp do projeto.", "abrir", e_abrir, igual),
@@ -345,5 +389,9 @@ pub const FERRAMENTAS: [Ferramenta; 19] = [
     leitura("topologia_modelo", "Topologia da peça", "Faces, arestas, planos, cilindros e furos da peça em edição. Use os meios das arestas para filetar.", "topologia", e_topologia, t_topologia),
     Ferramenta { nome: "comparar_alvo", titulo: "Comparar com o alvo", descricao: "Checador de similaridade: compara a peça com o STEP alvo por volume, área, centroide, caixa, inércia, furos por diâmetro e distância entre superfícies, e diz onde diverge. Exige o aceite --liberar-step.", comando: "comparar", le_step: true, somente_leitura: true, esquema: e_comparar, traduzir: t_comparar },
     edicao("salvar_peca", "Salvar peça", "Grava a peça em .fkx ou .fkp. Nunca troca um arquivo que existe sem `sobrescrever`.", "salvar", e_salvar, igual),
+    leitura("selecionar", "Selecionar faces ou arestas", "Seleção por sentido: as arestas da face de cima, os círculos de raio 4, as faces que olham para a frente. Devolve `pontos` prontos para `arestas` de filetar e chanfrar ou `faces` de criar_casca.", "selecionar", e_selecionar, igual),
+    leitura("reconhecer_features", "Reconhecer features", "O que a geometria da peça em edição mostra: furos passantes e cegos (com rebaixo, escareado e ponta), filetes e chanfros, com medidas e centro. É inferência da forma, não histórico.", "features", e_topologia_sem_secoes, t_topologia),
+    leitura("verificar", "Verificar requisitos", "Confere os requisitos da peça, um resultado por requisito com o que foi medido: massa, furos, folga e interferência entre corpos, caixa máxima e se um parâmetro trocado chega na forma. Serve de critério quando não há STEP alvo. Não muda a peça.", "verificar", e_verificar, igual),
+    leitura("consultar_biblioteca", "Consultar biblioteca de normas", "Famílias de fixadores normalizados, tamanhos, medidas e a faixa do furo de passagem. Use antes de furar para um parafuso.", "biblioteca", e_biblioteca, igual),
     edicao("exportar_step", "Exportar STEP", "Grava o sólido em STEP. Nunca troca um arquivo que existe sem `sobrescrever`.", "exportar", e_exportar, igual),
 ];

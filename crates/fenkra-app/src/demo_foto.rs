@@ -60,3 +60,10 @@ pub fn apresentacao(doc: &mut fenkra_core::Document) {
         doc.origin_visible = false;
     }
 }
+
+/// O mesmo para a montagem aberta: a origem dela também cruzava o kart inteiro nas capturas.
+pub fn apresentacao_montagem(a: &mut fenkra_montagem::Assembly) {
+    if std::env::var("FENKRA_DEMO_APRESENTACAO").is_ok_and(|v| v != "0") {
+        a.origem_oculta = true;
+    }
+}

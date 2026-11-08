@@ -9,10 +9,13 @@
 //! local, e tudo o que uma ferramenta devolve vai para esse modelo. Por isso as duas ferramentas que
 //! leem STEP ficam recusadas até a pessoa dar o aceite em `--liberar-step`, que o agente não alcança.
 
+mod descoberta;
 pub mod ferramentas;
+pub mod geradas;
 
 use fenkra_cli::{ErroApi, Sessao};
 use ferramentas::{Ferramenta, FERRAMENTAS};
+use geradas::geradas;
 use serde_json::{json, Value};
 use std::io::{BufRead, Read, Write};
 
@@ -122,15 +125,22 @@ impl Servidor {
 
     fn ferramenta(&mut self, params: &Value) -> Result<Value, (i64, String)> {
         let nome = params["name"].as_str().unwrap_or_default();
-        let f = FERRAMENTAS
-            .iter()
-            .find(|f| f.nome == nome)
-            .ok_or((-32602, format!("ferramenta desconhecida: {nome}")))?;
         let args = if params["arguments"].is_null() {
             json!({})
         } else {
             params["arguments"].clone()
         };
+        if nome == descoberta::NOME {
+            return Ok(Self::resultado_ferramenta(descoberta::listar(&args)));
+        }
+        if let Some(g) = geradas().iter().find(|g| g.nome == nome) {
+            let r = g.traduzir(&args).and_then(|a| self.sessao.executar("adicionar", &a));
+            return Ok(Self::resultado_ferramenta(r));
+        }
+        let f = FERRAMENTAS
+            .iter()
+            .find(|f| f.nome == nome)
+            .ok_or((-32602, format!("ferramenta desconhecida: {nome}")))?;
         Ok(Self::resultado_ferramenta(self.chamar(f, &args)))
     }
 
@@ -179,9 +189,7 @@ impl Servidor {
             "initialize" => Ok(Self::inicializar(params)),
             "server/discover" => Ok(Self::descobrir()),
             "ping" => Ok(json!({})),
-            "tools/list" => {
-                Ok(json!({ "tools": FERRAMENTAS.iter().map(Ferramenta::json).collect::<Vec<_>>() }))
-            }
+            "tools/list" => Ok(json!({ "tools": descoberta::todas() })),
             "tools/call" => self.ferramenta(params),
             "resources/list" => Ok(
                 json!({ "resources": RECURSOS.iter().map(|(uri, nome, descricao)| json!({ "uri": uri, "name": nome, "description": descricao, "mimeType": "application/json" })).collect::<Vec<_>>() }),

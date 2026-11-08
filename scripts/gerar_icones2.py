@@ -274,6 +274,8 @@ def desenhos():
     ic("an_conexao", B="M6 30c6-10 12-10 16-10M42 30c-6-10-12-10-16-10", R="M24 10v28M18 14l6-4 6 4M18 34l6 4 6-4")
     ic("an_desvio", B="M6 34c10-12 26-12 36 0", R="M6 22c10-12 26-12 36 0M14 17v9M24 14v9M34 17v9")
     ic("an_pente", B="M6 38c8-14 26-20 36-20", R="M10 32l-5-7M17 26l-4-9M25 22l-2-12M33 19l1-9M41 18l3-5")
+    # B418: lista de requisitos (base) com as marcas de conferido (resultado)
+    ic("verificar", B=Q(10, 6, 28, 36) + "M22 15h11M22 24h11M22 33h11", R=L((13, 15), (15.5, 17.5), (19, 12)) + L((13, 24), (15.5, 26.5), (19, 21)) + L((13, 33), (15.5, 35.5), (19, 30)))
     ic("canto", B="M24 26v18M24 26L8 16M24 26l16-10", R="M16 21c4-5 12-5 16 0c0 6-3 10-8 14c-5-4-8-8-8-14z")
 
     # ---------- sketch ----------
@@ -746,6 +748,7 @@ SO_INTERFACE |= {"filete_assimetrico"}
 SO_INTERFACE |= {"an_inclinacao", "an_isofotas", "an_dfm"}
 SO_INTERFACE |= {"asm_chaveta", "asm_calculo", "pmi_captura", "pmi_captura_modelo"}
 SO_INTERFACE |= {"asm_conjunto", "asm_regras_cor"}
+SO_INTERFACE |= {"verificar"}
 
 
 # ---------- saída ----------

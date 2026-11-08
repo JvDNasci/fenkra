@@ -10,11 +10,13 @@
 //! Quem lê arquivo de fora usa [`filho`]: um STEP hostil que derrube o OpenCASCADE derruba o filho, e
 //! a sessão segue viva (ADR 0023). A forma do JSON está em `docs/formatos/api-json.md`.
 
+pub mod biblioteca;
 pub mod checador;
 pub mod filho;
 pub mod pasta;
 mod registro;
 pub mod saida;
+pub mod selecao;
 mod sessao;
 pub mod features;
 pub mod topologia;
@@ -22,7 +24,10 @@ pub mod ver;
 pub mod visualizar;
 
 pub use registro::{ler_comandos, Registro};
-pub use sessao::{Isolamento, Sessao, COMANDOS, COMANDOS_DE_MODELO};
+pub use sessao::{tipos_do_esquema, Isolamento, Sessao, COMANDOS, COMANDOS_DE_MODELO};
+
+/// Esquema publicado da árvore: as ferramentas geradas do MCP saem dele (B420).
+pub use fenkra_conversor::arvore::ESQUEMA as ESQUEMA_ARVORE;
 
 use serde_json::{json, Value};
 

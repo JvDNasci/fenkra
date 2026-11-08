@@ -34,6 +34,7 @@ pub mod projecao;
 pub mod vinculo;
 pub mod qualidade;
 pub mod regras;
+pub mod requisitos;
 pub mod sketch;
 pub mod subd;
 pub mod subd_ops;

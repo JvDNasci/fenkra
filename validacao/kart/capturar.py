@@ -140,6 +140,8 @@ a("EX-10.fkp", "EX-10", "Sólidos", "pronta", "Pastilha")
 a("EX-11.fkp", "EX-11", "Sólidos", "pronta", "Cilindro-mestre com rosca cosmética")
 a("EX-12.fkp", "EX-12", "Superfícies", "falhou", "Linha de freio: a varredura de superfície na spline 3D falhou", res="falhou", FENKRA_BANCADA="sup")
 a("EX-12B.fkp", "EX-12", "Sólidos", "segunda_tentativa", "Linha de freio: varredura sólida na mesma spline")
+# peça parada antes do primeiro sólido: a legenda mostra a massa como "—", nunca "-0,000 kg" (B430)
+a("EX-12.fkp", "EX-12", "Superfícies", "sem_corpo", "Linha de freio antes do sólido: massa sem corpo na legenda", rollback=0, FENKRA_BANCADA="sup")
 a("PO-05.fkp", "PO-05", "Chapa", "pronta", "Pedal de freio")
 a("PO-06.fkp", "PO-06", "Chapa", "pronta", "Pedal de acelerador")
 a("PO-01.fkp", "PO-01", "Forma livre", "pronta", "Banco em Forma livre convertido em sólido", espera=30)
@@ -159,7 +161,9 @@ for c, n in [("CV-CHAPA1", "Estampo, veneziana e colar"), ("CV-CHAPA2", "Bainha 
 for s_, n in [("SC-QUADRO", "Subconjunto do quadro"), ("SC-EIXO", "Subconjunto do eixo e rodas traseiras"), ("SC-DIRECAO", "Subconjunto da direção"), ("SC-MOTOR", "Subconjunto do motor e transmissão"), ("SC-FREIO", "Subconjunto do freio e pedais"), ("SC-POSTO", "Subconjunto do posto do piloto"), ("SC-CARROCERIA", "Subconjunto da carroceria")]:
     a(f"{s_}.fka", s_, "Montagem", "pronta", n, espera=25)
 a("KART-PLANO.fka", "KART", "Montagem", "geral", "Montagem geral do kart", espera=60)
-a("KART-PLANO.fka", "KART", "Montagem", "lateral", "Kart de lado", espera=60, FENKRA_DEMO_CAMERA="0,5,0.9")
+# o kart corre ao longo de X (assim foi montado em conjunto.rs), então "de lado" é olhar por -Y, a vista
+# Frente do cubo: yaw -90. Com yaw 0 o olho fica em +X (vista Direita) e o kart aparece de frente (B430).
+a("KART-PLANO.fka", "KART", "Montagem", "lateral", "Kart de lado (vista Frente do cubo)", espera=60, FENKRA_DEMO_CAMERA="-90,5,0.9")
 a("KART.fka", "KART", "Montagem", "subconjuntos", "Montagem de topo com o mestre e os subconjuntos", espera=60)
 # estados que só o mouse abre, pelas variáveis FENKRA_DEMO (B431): Biblioteca, gerador, simulação e Sketch
 a("SC-QUADRO.fka", "BIBLIOTECA", "Montagem", "painel", "Biblioteca de normas com o M6 escolhido", espera=30, painel="biblioteca", sem_arquivo=True, FENKRA_DEMO_ASM="biblioteca")

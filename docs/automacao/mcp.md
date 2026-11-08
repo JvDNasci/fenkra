@@ -53,6 +53,12 @@ do cliente.
 | `ver` | Imagem da peça sem aplicativo aberto, por vista (ou quatro de uma vez), com corte por plano e zoom; volta como imagem |
 | `comparar_alvo` | Checador de similaridade contra o STEP alvo. Pede aceite |
 | `salvar_peca`, `exportar_step` | Gravar na pasta. Nunca sobrescreve sem `sobrescrever` |
+| `revolucionar`, `criar_padrao`, `espelhar`, `criar_casca`, `criar_primitiva` | Geradas do esquema publicado da árvore (B420): cada `tipo` de comando do formato sem ferramenta escrita à mão vira uma, com o esquema de entrada tirado do arquivo. Tipo novo no formato chega como `adicionar_<tipo>` |
+| `selecionar` | Seleção por sentido: arestas ou faces por lado (topo, base, frente, tras, esquerda, direita ou normal), tipo, raio e o mais perto de um ponto. Devolve `pontos` para filetar, chanfrar e criar_casca |
+| `reconhecer_features` | Furos, filetes e chanfros inferidos da geometria da peça em edição |
+| `verificar` | Requisitos da peça (B418), declarados nela ou passados na chamada: massa, furos, folga, interferência, caixa e propagação de parâmetro, com resultado por requisito |
+| `consultar_biblioteca` | Famílias de fixadores, tamanhos, medidas e faixa do furo de passagem |
+| `listar_comandos` | Descoberta: filtra as ferramentas por palavra e diz o que ainda não passa pelo servidor (montagem, chapa metálica, estrutural) |
 
 Os campos seguem o [formato da árvore](../formatos/arvore.md), e as respostas seguem o
 [contrato JSON](../formatos/api-json.md).
