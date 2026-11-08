@@ -20,6 +20,8 @@ pub enum Aba {
     #[default]
     Mapa,
     Trilhas,
+    /// B376: tutoriais por peça
+    Tutoriais,
     Perfil,
 }
 
@@ -144,6 +146,7 @@ impl CursoUi {
             st.aberto = true;
             match v.as_str() {
                 "aulas" => st.aba = Aba::Trilhas,
+                "tutoriais" => st.aba = Aba::Tutoriais,
                 "perfil" => st.aba = Aba::Perfil,
                 "pergunta" => st.pergunta = true,
                 outro => {
@@ -274,7 +277,7 @@ pub fn painel(ctx: &egui::Context, area: egui::Rect, st: &mut CursoUi, s: &mut S
     let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
         ui.horizontal(|ui| {
             ui.add(imagem("curso", 20.));
-            for (aba, rotulo) in [(Aba::Mapa, "Mapa"), (Aba::Trilhas, "Aulas"), (Aba::Perfil, "De onde você vem?")] {
+            for (aba, rotulo) in [(Aba::Mapa, "Mapa"), (Aba::Trilhas, "Aulas"), (Aba::Tutoriais, "Tutoriais"), (Aba::Perfil, "De onde você vem?")] {
                 if ui.selectable_label(st.aba == aba, tr(rotulo)).clicked() {
                     st.aba = aba;
                 }
@@ -289,6 +292,7 @@ pub fn painel(ctx: &egui::Context, area: egui::Rect, st: &mut CursoUi, s: &mut S
         egui::ScrollArea::vertical().auto_shrink([false, true]).max_height(520.).show(ui, |ui| match st.aba {
             Aba::Mapa => aba_mapa(ui, st, s, &mut out),
             Aba::Trilhas => aba_trilhas(ui, st, s, &mut out),
+            Aba::Tutoriais => aba_tutoriais(ui, st, s, &mut out),
             Aba::Perfil => aba_perfil(ui, st, s, &mut out, false),
         });
     });
@@ -351,6 +355,43 @@ fn aba_mapa(ui: &mut egui::Ui, st: &mut CursoUi, s: &mut Settings, out: &mut Sai
     }
     if atual != s.bench && ui.button(tr("Ir para esta bancada")).clicked() {
         out.pedidos.push(Pedido::Bancada(atual));
+    }
+}
+
+// ------------------------------------------------------------------ tutoriais por peça (B376)
+
+fn aba_tutoriais(ui: &mut egui::Ui, st: &mut CursoUi, s: &mut Settings, out: &mut Saida) {
+    ui.label(RichText::new(tr("Escolha o que quer desenhar: a peça pronta abre ao lado e cada passo leva à aula do comando.")).weak());
+    ui.add_space(4.);
+    for b in BANCADAS {
+        let lista: Vec<_> = crate::tutoriais::da_bancada(b).collect();
+        if lista.is_empty() {
+            continue;
+        }
+        ui.label(RichText::new(tr(mapa_macro::nome_da_bancada(b))).strong().small().color(ui.visuals().weak_text_color()));
+        for tu in lista {
+            let (feitos, total) = s.curso.andamento(&tu.aula);
+            egui::Frame::group(ui.style()).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                ui.label(RichText::new(tr(tu.objetivo)).strong());
+                ui.label(RichText::new(tr(tu.aula.resumo)).weak().small());
+                ui.horizontal_wrapped(|ui| {
+                    if ui.button(tr("Abrir a aula")).on_hover_text(tr("Passo a passo no modelo real; dá para pular a qualquer momento")).clicked() {
+                        st.abrir_aula(&tu.aula, s);
+                        out.mudou = true;
+                    }
+                    if let Some(ex) = tu.aula.exemplo {
+                        if ui.button(tr("Abrir a peça pronta")).on_hover_text(tr("Abre uma peça pronta para você olhar e mexer")).clicked() {
+                            out.pedidos.push(Pedido::Exemplo(ex));
+                        }
+                    }
+                    if feitos > 0 {
+                        barra(ui, feitos, total);
+                    }
+                });
+            });
+        }
+        ui.add_space(4.);
     }
 }
 
@@ -496,6 +537,17 @@ fn aula_aberta(ui: &mut egui::Ui, a: &'static Aula, st: &mut CursoUi, s: &mut Se
                 }
                 if ui.small_button(tr("Pular o passo")).clicked() {
                     s.curso.pular_passo(a, i);
+                    out.mudou = true;
+                }
+            });
+        }
+        // B376: no tutorial, cada passo leva à aula do comando
+        if let Some(l) = crate::tutoriais::tutorial(a.id).and_then(|t| t.licoes.get(i)).and_then(|l| curso::aula(l)) {
+            ui.horizontal(|ui| {
+                ui.add_space(22.);
+                if ui.small_button(format!("{}: {}", tr("Aula do comando"), tr(l.titulo))).on_hover_text(tr("Abre a aula que explica este comando com calma")).clicked() {
+                    st.abrir_aula(l, s);
+                    st.t_aula = 0.;
                     out.mudou = true;
                 }
             });
@@ -761,7 +813,7 @@ mod testes {
         let doc = fenkra_core::Document::new("Peça");
         let cx = Contexto::so_documento(&doc);
         let area = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200., 800.));
-        for aba in [Aba::Mapa, Aba::Trilhas, Aba::Perfil] {
+        for aba in [Aba::Mapa, Aba::Trilhas, Aba::Tutoriais, Aba::Perfil] {
             st.aba = aba;
             for b in BANCADAS {
                 st.bancada = Some(b);

@@ -220,6 +220,12 @@ pub const AULAS: &[Aula] = &[
         p("Aplique uma coincidência entre duas faces.", "rest_coincidencia", Restricoes(1)),
         p("Aplique uma segunda restrição, como distância ou paralelismo.", "rest_distancia", Restricoes(2)),
     ]),
+    // B376: regras dos fixadores inteligentes, a aula para onde o tutorial de parafusos leva
+    a("mon_fixadores", "Fixadores inteligentes", "O parafuso nasce do furo: diâmetro pela folga, comprimento pela espessura atravessada, arruela e porca pela pilha.", Montagem, Intermediario, Some("Conjunto de exemplo"), None, &[
+        p("Preencha os furos com fixadores: furos no mesmo eixo recebem um parafuso só.", "asm_fixadores", Comando("asm_fixadores")),
+        p("Crie um conjunto de fixadores e troque a pilha sob a cabeça: todos os alvos mudam juntos.", "asm_conjunto", Comando("asm_conjunto")),
+        p("Cadastre o que cada cor quer dizer e escolha os furos daquela cor de uma vez.", "asm_regras_cor", Comando("asm_regras_cor")),
+    ]),
     a("mon_verificar", "Verificar a montagem", "Antes de documentar, procure peças que se atravessam.", Montagem, Intermediario, Some("Conjunto de exemplo"), None, &[
         p("Rode a verificação de interferências e leia o resultado.", "rest_interferencia", Comando("rest_interferencia")),
         p("Mova uma peça e confira se as restrições seguram o resto.", "", Manual),
@@ -291,7 +297,7 @@ pub const TRILHAS: &[Trilha] = &[
     Trilha { id: "solidos", titulo: "Modelagem sólida", resumo: "Tudo o que a bancada de sólidos faz, na ordem em que se usa.", nivel: Intermediario, aulas: &["sol_camera", "sol_esboco", "sol_volume", "sol_furo", "sol_acabamento", "sol_repetir", "sol_casca"] },
     Trilha { id: "superficies", titulo: "Superfícies", resumo: "Curvas, superfícies, união e verificação de continuidade.", nivel: Avancado, aulas: &["sup_curvas", "sup_criar", "sup_juntar", "sup_verificar"] },
     Trilha { id: "forma_livre", titulo: "Forma livre", resumo: "Gaiola de nós, superfície lisa, vincos e conversão em sólido.", nivel: Intermediario, aulas: &["ff_primeira", "ff_moldar", "ff_vincos", "ff_converter"] },
-    Trilha { id: "montagem", titulo: "Montagens", resumo: "Inserir, restringir, verificar e documentar.", nivel: Intermediario, aulas: &["mon_inserir", "mon_restringir", "mon_verificar", "mon_documentar"] },
+    Trilha { id: "montagem", titulo: "Montagens", resumo: "Inserir, restringir, verificar e documentar.", nivel: Intermediario, aulas: &["mon_inserir", "mon_restringir", "mon_fixadores", "mon_verificar", "mon_documentar"] },
     Trilha { id: "chapa", titulo: "Chapa metálica", resumo: "Da chapa base à planificação e ao desenho de fabricação.", nivel: Intermediario, aulas: &["ch_base", "ch_abas", "ch_recortes", "ch_planificar", "ch_desenho"] },
     Trilha { id: "estrutural", titulo: "Estruturas soldadas", resumo: "Esqueleto, perfis, cantos, placas e lista de corte.", nivel: Intermediario, aulas: &["est_membros", "est_cantos", "est_placas", "est_corte"] },
     Trilha { id: "desenho", titulo: "Desenho técnico", resumo: "Folha, vistas, cotas e tabelas.", nivel: Intermediario, aulas: &["des_folha", "des_vistas", "des_cotas", "des_tabelas"] },
@@ -299,7 +305,8 @@ pub const TRILHAS: &[Trilha] = &[
 ];
 
 pub fn aula(id: &str) -> Option<&'static Aula> {
-    AULAS.iter().find(|a| a.id == id)
+    // os tutoriais por peça (B376) são aulas também: mesmo progresso, pular e retomar
+    AULAS.iter().find(|a| a.id == id).or_else(|| crate::tutoriais::tutorial(id).map(|t| &t.aula))
 }
 
 pub fn trilha(id: &str) -> Option<&'static Trilha> {

@@ -194,6 +194,7 @@ mod curso_exemplos;
 mod mapa_macro;
 mod compat;
 mod curso_ui;
+mod tutoriais;
 mod textos_pmi;
 mod textos_pmi_step;
 mod textos_pmi_captura;

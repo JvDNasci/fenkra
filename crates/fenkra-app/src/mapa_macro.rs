@@ -71,6 +71,7 @@ pub const MAPAS: &[Mapa] = &[
         etapas: &[
             e("mon_inserir", "Trazer peças e subconjuntos, ou criar uma peça já dentro da montagem.", &["asm_inserir", "asm_peca_nova", "asm_subconjunto"]),
             e("mon_restringir", "Posicionar com coincidência, distância, ângulo, engrenagem e outras restrições.", &["rest_coincidencia", "rest_distancia", "rest_fixar"]),
+            e("mon_fixadores", "Preencher furos com parafusos, arruelas e porcas que saem do furo e da espessura.", &["asm_fixadores", "asm_conjunto", "asm_regras_cor"]),
             e("mon_verificar", "Procurar interferências e simular o movimento dos mecanismos.", &["rest_interferencia", "mec_simular"]),
             e("mon_documentar", "Gerar lista de peças e numerar os itens para o desenho.", &["asm_lista", "asm_numerar"]),
         ],
