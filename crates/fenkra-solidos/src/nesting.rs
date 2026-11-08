@@ -492,6 +492,8 @@ pub fn peca_na_chapa(p: &PecaNesting, k: &Colocacao) -> Planificada {
         };
         d.a = f(d.a);
         d.b = f(d.b);
+        // B03: a linha de dobra curva anda junto com a peça
+        d.curva = d.curva.iter().map(|q| f(*q)).collect();
     }
     s
 }
@@ -531,7 +533,11 @@ pub fn dxf_chapa(pecas: &[PecaNesting], layout: &Layout, indice: usize, op: &Opc
         }
         for b in &s.dobras {
             let camada = if b.cima { planificada::CAMADA_DOBRA_CIMA } else { planificada::CAMADA_DOBRA_BAIXO };
-            d.itens.push(Item::novo(camada, D::Linha(b.a, b.b)));
+            if b.curva.len() > 2 {
+                d.itens.push(Item::novo(camada, D::Polilinha { vertices: b.curva.iter().map(|q| Vertice { p: *q, bojo: 0. }).collect(), fechada: false }));
+            } else {
+                d.itens.push(Item::novo(camada, D::Linha(b.a, b.b)));
+            }
         }
         let pts: Vec<P> = s.contorno.iter().flat_map(pontos_entidade).collect();
         let (mn, mx) = caixa(&pts);
