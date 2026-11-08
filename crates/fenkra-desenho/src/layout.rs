@@ -1170,9 +1170,10 @@ pub fn dim_anchors_ok(dm: &Dim, p: &Proj) -> Vec<bool> {
     let q: Vec<V2> = dm.anchors.iter().map(|a| ax.project(*a)).collect();
     if matches!(dm.kind, DimKind::Radius | DimKind::Diameter) && q.len() >= 2 {
         let arcs: Vec<(V2, f64)> = p.lines.iter().filter_map(|(pl, _)| arc_center(pl)).collect();
-        let center = arcs.iter().find(|(c, _)| near2(*c, q[0]));
-        let on = center.is_some_and(|(c, r)| (v2len(v2sub(q[1], *c)) - r).abs() <= ANCHOR_TOL.max(r * 0.01));
-        return vec![center.is_some(), on];
+        // furos com rebaixo têm dois círculos no mesmo centro: a borda vale em qualquer um deles
+        let mesmos: Vec<&(V2, f64)> = arcs.iter().filter(|(c, _)| near2(*c, q[0])).collect();
+        let on = mesmos.iter().any(|(c, r)| (v2len(v2sub(q[1], *c)) - r).abs() <= ANCHOR_TOL.max(r * 0.01));
+        return vec![!mesmos.is_empty(), on];
     }
     let cands = anchor_candidates(p);
     q.iter().map(|a| cands.iter().any(|c| near2(*c, *a))).collect()

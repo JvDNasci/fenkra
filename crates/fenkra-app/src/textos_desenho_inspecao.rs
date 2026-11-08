@@ -3,6 +3,16 @@
 
 pub static TEXTOS: &[(&str, &str)] = &[
     ("Inspeção", "Inspection"),
+    // B144: desenho automático (na mesma tabela: a corrente de .chain do i18n.rs está no limite)
+    ("Automático", "Automatic"),
+    ("Desenho automático por regras", "Rule-based automatic drawing"),
+    ("Sem vistas, cria a frente, a superior e a lateral pela peça; depois cota o contorno (largura e altura na frente, profundidade nas projetadas), um diâmetro por tamanho de furo (n×), as marcas de centro e a tabela de furos num canto livre. O carimbo se preenche pela peça. Rodar de novo não duplica.", "Without views, creates the front, top and side views from the part; then dimensions the outline (width and height on the front, depth on the projected views), one diameter per hole size (n×), the center marks and the hole table in a free corner. The title block fills in from the part. Running again does not duplicate."),
+    ("Desenho automático", "Automatic drawing"),
+    ("cotas", "dimensions"),
+    ("marcas de centro", "center marks"),
+    ("tabela de furos", "hole table"),
+    ("a folha não tem vistas: crie as vistas antes", "the sheet has no views: create the views first"),
+    ("a tabela de furos não coube na folha", "the hole table did not fit on the sheet"),
     ("CSV", "CSV"),
     ("XLSX", "XLSX"),
     ("Tabela de características (plano de inspeção)", "Characteristics table (inspection plan)"),

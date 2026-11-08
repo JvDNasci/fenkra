@@ -345,6 +345,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("des_detalhe", "Detalhe", "Vista de detalhe", "Selecione a vista, clique o centro e o raio, e posicione a ampliação (2× a escala).", Cmd(C::Dwg(14)))),
             One(it("des_planificada", "Planificada", "Vista planificada", "Chapa desdobrada vista de cima (peça de chapa como origem).", Cmd(C::Dwg(15)))),
             One(it("des_esquema", "Esquema", "Esquema cinemático", "Montagem com juntas como origem: símbolos das juntas, barras entre elas e terra nas peças fixas (direção do painel).", Cmd(C::Dwg(17)))),
+            One(it("des_automatico", "Automático", "Desenho automático por regras", "Sem vistas, cria a frente, a superior e a lateral pela peça; depois cota o contorno (largura e altura na frente, profundidade nas projetadas), um diâmetro por tamanho de furo (n×), as marcas de centro e a tabela de furos num canto livre. O carimbo se preenche pela peça. Rodar de novo não duplica.", Cmd(C::Dwg(46)))),
             One(it("des_vista_camera", "Câmera", "Vista pela câmera do 3D", "Vista na direção em que a peça ou a montagem está no 3D agora (gire no 3D e clique na folha).", Cmd(C::Dwg(18)))),
         ],
         Group::DesCotas => vec![

@@ -14,6 +14,7 @@ use std::path::PathBuf;
 
 mod alcas;
 mod assistentes;
+mod automatico_ui;
 mod centros_ui;
 mod cota_inteligente;
 mod corte_ui;
@@ -75,6 +76,8 @@ pub mod c {
     pub const FAI_BALOES: u8 = 45;
     pub const FAI_CSV: u8 = 6;
     pub const FAI_XLSX: u8 = 7;
+    /// desenho automático por regras (B144)
+    pub const AUTO: u8 = 46;
     pub const SHEET: u8 = 50;
 }
 
@@ -360,6 +363,7 @@ pub fn demo_ajustar(st: &mut DwgState) {
     demo_centros_tabela(st);
     esboco_ui::demo(st);
     inspecao_ui::demo(st);
+    automatico_ui::demo(st);
     match std::env::var("FENKRA_DEMO_DWG_SIMBOLO").unwrap_or_default().as_str() {
         kind @ ("rug" | "solda") => {
             let id = st.d.alloc();
@@ -533,6 +537,10 @@ pub fn command(app: &mut App, i: u8) {
         }
         c::AUTO_BALLOONS => auto_balloons(app),
         c::FAI_BALOES => inspecao_ui::alternar_baloes(app.dwg.as_mut().unwrap()),
+        c::AUTO => {
+            let (m, e) = automatico_ui::executar(app.dwg.as_mut().unwrap());
+            app.toast(m, e);
+        }
         c::FAI_CSV | c::FAI_XLSX => {
             let st = app.dwg.as_mut().unwrap();
             if let Some((m, e)) = inspecao_ui::exportar(st, i == c::FAI_XLSX) {

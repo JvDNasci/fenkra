@@ -8,6 +8,7 @@
 //! - [`export`]: PDF, SVG e DXF.
 
 pub mod alcas;
+pub mod automatico;
 pub mod centros;
 pub mod conjunto;
 pub mod corte;
