@@ -378,6 +378,15 @@ fn ang_txt(a: Option<f64>) -> String {
     a.map(|v| format!("{}°", fmt(v))).unwrap_or_else(|| "—".into())
 }
 
+/// Texto da ponta na lista de corte: a ponta de encaixe (B387) diz que é encaixe em vez de "—".
+fn ponta_txt(a: Option<f64>, encaixe: bool) -> String {
+    if encaixe && a.is_none() {
+        tr("encaixe").to_string()
+    } else {
+        ang_txt(a)
+    }
+}
+
 /// Ordena as linhas pela coluna escolhida (estável; empate cai na ordem do item).
 fn ordenar(rows: &mut [fenkra_solidos::CutRow], col: usize, desc: bool) {
     let num = |a: Option<f64>| a.unwrap_or(f64::MAX);
@@ -514,8 +523,12 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                     } else if (r.long - r.length).abs() > 0.05 && r.item > 0 {
                         comp.on_hover_text(format!("{}: {} mm", tr("ponta longa"), fmt(r.long)));
                     }
-                    ui.label(ang_txt(r.angle1));
-                    ui.label(ang_txt(r.angle2));
+                    for (a, e) in [(r.angle1, r.encaixe1), (r.angle2, r.encaixe2)] {
+                        let l = ui.label(ponta_txt(a, e));
+                        if e {
+                            l.on_hover_text(tr("Ponta recortada no contorno do outro membro (encaixe)"));
+                        }
+                    }
                     ui.label(format!("{}", r.count));
                     if r.bars > 1 {
                         ui.label(RichText::new(format!("⚠ {} ({})", r.bars * r.count, tr("emenda"))).color(egui::Color32::from_rgb(240, 170, 80)))
@@ -588,13 +601,14 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_corte.csv").save_file() {
             let mut t = String::from("perfil;material;comprimento_mm;angulo1_graus;angulo2_graus;quantidade;barras_materia_prima;dobras;modo_da_dobra;corte_encaixe_mm\n");
             let num = |a: Option<f64>| a.map(fmt).unwrap_or_default();
+            let ponta = |a: Option<f64>, e: bool| if e && a.is_none() { "encaixe".to_string() } else { num(a) };
             // B155: comprimento de corte do encaixe das pontas (laser ou plasma em tubo), por peça
             let encaixes = fenkra_solidos::st_encaixe_doc::encaixes_da_estrutura(app.doc(), &Default::default());
             for r in &rows {
                 let encaixe = r.members.first().and_then(|m| encaixes.iter().find(|e| (e.feature, e.linha) == *m)).map(|e| fmt(e.comprimento_de_corte())).unwrap_or_default();
                 let dobras = r.tubo.as_ref().map(|t| t.resumo()).unwrap_or_default();
                 let modo = r.tubo.as_ref().and_then(|t| t.modo()).map(|m| fenkra_solidos::st_dobra::nome_modo(m)).unwrap_or_default();
-                t += &format!("{};{};{};{};{};{};{};{};{};{}\n", r.designation, r.material, fmt(r.length), num(r.angle1), num(r.angle2), r.count, r.bars * r.count, dobras, modo, encaixe);
+                t += &format!("{};{};{};{};{};{};{};{};{};{}\n", r.designation, r.material, fmt(r.length), ponta(r.angle1, r.encaixe1), ponta(r.angle2, r.encaixe2), r.count, r.bars * r.count, dobras, modo, encaixe);
             }
             match std::fs::write(&p, t) {
                 Ok(()) => app.toast(tr("Lista de corte exportada"), false),

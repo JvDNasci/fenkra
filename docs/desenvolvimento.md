@@ -148,6 +148,8 @@ preferências do usuário.
 | `FENKRA_DEMO_PAINEL=<passos>` | manda eventos de ponteiro crus, em pontos da janela, para mexer nos painéis como o mouse mexeria (B358): `clique:x,y`, `arrasto:x0,y0,x1,y1` (aperta, move e solta) `segura:x0,y0,x1,y1` (deixa o botão apertado, para capturar a sombra do encaixe ou um redimensionamento em andamento) e `rolar:x,y,dy` (roda do mouse sobre o ponto; `dy` negativo desce o conteúdo) e `pairar:x,y` (leva o ponteiro ao botão e para ali, para capturar a dica: com 5 s parado aparecem a animação e o passo a passo; `config.json` com `"dica_simples": true` mostra a dica simples), separados por `;`. Começa 4 s depois de abrir |
 | `FENKRA_DEMO_ENCAIXE=1` | abre um tubo redondo oblíquo encaixado noutro (B155), com a janela de cantos e o cartão do encaixe abertos; `=folga` mostra também o rótulo flutuante da folga |
 | `FENKRA_DEMO_LIMITE=<x\|y\|z>:<mm>[:estender]` | com `FENKRA_DEMO_EST=1`, abre a janela de cantos com a seção de aparar/estender até limite (B37) e o plano escolhido |
+| `FENKRA_DEMO_REFORCO=<triangular\|chanfrado\|poligonal>` | L de tubo quadrado com placa de extremidade e reforço na aresta de encontro (B255); com `FENKRA_EDITAR=Reforço1` ou `Placa1` abre o painel |
+| `FENKRA_DEMO_QUADRO=1` | quadro de tubo com longarinas dobradas e travessas em Encaixe no meio de um trecho e num nó de dobra, com a lista de corte aberta (B387, K-09) |
 | `FENKRA_DEMO_GOMOS=1` | L de tubo redondo com corte simples em quatro gomos (B326); com `FENKRA_EDITAR=Membro` abre o painel do nó |
 | `FENKRA_DEMO_SOLDA=<cosmetico\|solido\|intermitente>` | tubo contra placa com o cordão de filete (B285) |
 | `FENKRA_DEMO_ESTADO=<nome>` | força o estado na barra: `sem`, `liberada`, `editado`, `leitura` ou `conflito` |

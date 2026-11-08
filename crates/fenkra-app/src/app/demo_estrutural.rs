@@ -7,6 +7,11 @@
 //!   de dobras e a lista de corte (B331).
 //! * `FENKRA_DEMO_SOLDA=<cosmetico|solido|intermitente>`: tubo contra placa com o cordão de filete
 //!   (B285); com `FENKRA_EDITAR=Cordão` abre o painel do cordão.
+//! * `FENKRA_DEMO_REFORCO=<triangular|chanfrado|poligonal>`: L de tubo quadrado com placa de
+//!   extremidade interna recuada e reforço na aresta de encontro (B255), três reforços repetidos ao
+//!   longo da aresta; com `FENKRA_EDITAR=Reforço1` ou `Placa1` abre o painel.
+//! * `FENKRA_DEMO_QUADRO=1`: quadro de tubo redondo com longarinas dobradas e travessas com canto
+//!   Encaixe chegando no meio de um trecho e num nó de dobra (B387, K-09 do kart), com a lista de corte.
 
 use super::*;
 
@@ -142,6 +147,97 @@ impl App {
                 w.spacing = s("20");
             }
             d.add_feature(FeatureKind::StructWeld(w));
+            for r in &mut d.references {
+                r.visible = false;
+            }
+            self.load_doc(d, None, None);
+            self.settings.bench = crate::settings::Bench::Estrutural;
+            self.started = true;
+        }
+        if std::env::var("FENKRA_DEMO_QUADRO").is_ok() {
+            let mut d = Document::new("Quadro K-09");
+            let z = 40.;
+            let tubo = |paths: Vec<CurveRef>, corner: CornerMode| StructMember {
+                paths,
+                family: s("Tubo redondo"),
+                designation: s("Ø30x2,4"),
+                kind: SectionKind::TuboRedondo,
+                dims: vec![s("30"), s("2.4")],
+                anchor: 0,
+                angle: s("0"),
+                off_x: s("0"),
+                off_y: s("0"),
+                ext1: s("0"),
+                ext2: s("0"),
+                corner,
+                gap: s("0"),
+                joints: vec![],
+                material: String::new(),
+                mirror: false,
+            };
+            let linha = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
+            for (y, yd) in [(350., 280.), (-350., -280.)] {
+                let p = [[-100., y, z + 35.], [120., y, z], [624., y, z], [870., yd, z], [1100., yd, z]];
+                let c: Vec<CurveRef> = p.windows(2).map(|w| linha(&mut d, w[0], w[1])).collect();
+                let f = d.add_feature(FeatureKind::StructMember(tubo(c, CornerMode::Nenhum)));
+                if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|x| &mut x.kind) {
+                    for i in 1..4 {
+                        m.joints.push(StructJoint { mine: i, other: f, other_path: i - 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: BendMode::Dobradeira, radius: s("90"), ..Default::default() }) });
+                    }
+                }
+            }
+            for (a, b) in [
+                ([120., -350., z], [120., 350., z]),
+                ([436.8, -350., z], [436.8, 350., z]),
+                ([1000., -280., z], [1000., 280., z]),
+                ([300., 350., z], [300., 190., z + 170.]),
+                ([300., -350., z], [300., -190., z + 170.]),
+            ] {
+                let l = linha(&mut d, a, b);
+                d.add_feature(FeatureKind::StructMember(tubo(vec![l], CornerMode::Encaixe)));
+            }
+            for r in &mut d.references {
+                r.visible = false;
+            }
+            self.load_doc(d, None, None);
+            self.settings.bench = crate::settings::Bench::Estrutural;
+            self.st_cut_open = true;
+            self.started = true;
+        }
+        if let Ok(modo) = std::env::var("FENKRA_DEMO_REFORCO") {
+            let mut d = Document::new("Placa e reforço");
+            let tubo = |paths: Vec<CurveRef>| StructMember {
+                paths,
+                family: s("Tubo quadrado"),
+                designation: s("40x3"),
+                kind: SectionKind::TuboQuadrado,
+                dims: vec![s("40"), s("3")],
+                anchor: 0,
+                angle: s("0"),
+                off_x: s("0"),
+                off_y: s("0"),
+                ext1: s("0"),
+                ext2: s("0"),
+                corner: CornerMode::Nenhum,
+                gap: s("0"),
+                joints: vec![],
+                material: String::new(),
+                mirror: false,
+            };
+            for (a, b) in [([0., 0., 0.], [0., 0., 500.]), ([0., 0., 0.], [400., 0., 0.])] {
+                let l = CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
+                d.add_feature(FeatureKind::StructMember(tubo(vec![l])));
+            }
+            let mut pl = StructPlate::nova([0., 0., 500.], "8", "15");
+            pl.holes = None;
+            d.add_feature(FeatureKind::StructPlate(pl));
+            let mut g = StructGusset::novo([0., 0., 0.], "90", "6", if modo == "chanfrado" { "15" } else { "0" });
+            g.leg2 = s("120");
+            if modo == "poligonal" {
+                g.profile = GussetProfile::Poligonal;
+                g.poly = [["0", "0"], ["90", "0"], ["90", "20"], ["20", "120"], ["0", "120"]].iter().map(|q| [s(q[0]), s(q[1])]).collect();
+            }
+            d.add_feature(FeatureKind::StructGusset(g));
             for r in &mut d.references {
                 r.visible = false;
             }

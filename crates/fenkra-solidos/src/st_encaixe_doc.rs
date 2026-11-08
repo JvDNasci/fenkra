@@ -11,7 +11,7 @@
 
 use crate::st_dobra_corte::Desenho;
 use crate::st_encaixe::{calcular, tubo_aberto, CorteEncaixe, Membro, Opcoes, Secao};
-use crate::{geo3d, shared_end, Ctx, MemberGeom};
+use crate::{geo3d, shared_end, t_junction, Ctx, MemberGeom};
 use fenkra_core::{CornerMode, Document, FeatureKind, Id, SectionKind};
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -110,27 +110,42 @@ pub fn encaixes_da_estrutura(doc: &Document, opc: &Opcoes) -> Vec<MembroComEncai
     let lines = cx.all_member_lines();
     // (linha cortada, índice da ponta) -> hospedeiros e a folga do canto
     type Chave = (usize, bool);
-    let mut grupos: Vec<(Chave, [f64; 3], [f64; 3], Vec<usize>, f64)> = vec![];
+    // o hospedeiro leva junto se a ponta cai no meio dele (junta em T, B387)
+    let mut grupos: Vec<(Chave, [f64; 3], [f64; 3], Vec<(usize, bool)>, f64)> = vec![];
     for a in 0..lines.len() {
         for b in a + 1..lines.len() {
-            let Some((p, da, db)) = shared_end(&lines[a].3, &lines[b].3) else { continue };
             let (la, lb) = (&lines[a], &lines[b]);
+            // ponta com ponta: quem continua sai da regra; em T a ponta que chega é sempre a cortada
+            let junta = match shared_end(&la.3, &lb.3) {
+                Some((p, da, db)) => Some((p, da, db, None)),
+                None => match (t_junction(&la.3, &lb.3), t_junction(&lb.3, &la.3)) {
+                    (Some((p, da, _)), _) => Some((p, da, [0.; 3], Some(a))),
+                    (None, Some((p, db, _))) => Some((p, [0.; 3], db, Some(b))),
+                    _ => None,
+                },
+            };
+            let Some((p, da, db, em_t)) = junta else { continue };
             let Ok((modo, a_continua, folga)) = cx.joint_rule((la.0, la.1, la.2), (lb.0, lb.1, lb.2)) else { continue };
             if modo != CornerMode::Encaixe {
                 continue;
             }
+            let a_continua = match em_t {
+                Some(c) => c == b,
+                None => a_continua,
+            };
             let (corte, host, dir_corte) = if a_continua { (b, a, db) } else { (a, b, da) };
             if !lines[corte].3.straight || !lines[host].3.straight {
                 continue;
             }
             let g = &lines[corte].3;
             let fim = geo3d::dist(p, g.start) >= 1e-4;
+            let h = (host, em_t.is_some());
             match grupos.iter_mut().find(|x| x.0 == (corte, fim)) {
                 Some(x) => {
-                    x.3.push(host);
+                    x.3.push(h);
                     x.4 = x.4.max(folga);
                 }
-                None => grupos.push(((corte, fim), p, dir_corte, vec![host], folga)),
+                None => grupos.push(((corte, fim), p, dir_corte, vec![h], folga)),
             }
         }
     }
@@ -140,11 +155,16 @@ pub fn encaixes_da_estrutura(doc: &Document, opc: &Opcoes) -> Vec<MembroComEncai
         let Some(m) = membro(doc, lc.0, &lc.3, p, dir) else { continue };
         let mut hs = vec![];
         let mut origem = vec![];
-        for h in hosts {
+        for (h, em_t) in hosts {
             let lh = &lines[h];
-            // o hospedeiro se estende do nó para dentro dele
-            let para_dentro = if geo3d::dist(p, lh.3.start) < 1e-4 { lh.3.z } else { geo3d::mul(lh.3.z, -1.) };
-            if let Some(mh) = membro(doc, lh.0, &lh.3, p, para_dentro) {
+            // o hospedeiro se estende do nó para dentro dele; em T ele passa pelo ponto e vale inteiro
+            let mh = if em_t {
+                membro(doc, lh.0, &lh.3, lh.3.start, lh.3.z)
+            } else {
+                let para_dentro = if geo3d::dist(p, lh.3.start) < 1e-4 { lh.3.z } else { geo3d::mul(lh.3.z, -1.) };
+                membro(doc, lh.0, &lh.3, p, para_dentro)
+            };
+            if let Some(mh) = mh {
                 hs.push(mh);
                 origem.push((lh.0, lh.1));
             }

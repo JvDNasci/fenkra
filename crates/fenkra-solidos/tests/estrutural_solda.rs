@@ -212,7 +212,11 @@ fn sem_faces_ou_sem_encontro_avisa_ou_falha_sem_derrubar() {
     w.picking_b = true;
     w.adicionar([-20., 0., 250.], None);
     let id2 = d2.add_feature(FeatureKind::StructWeld(w));
-    assert!(matches!(recompute(&d2).status[&id2], Status::Error(_)), "{:?}", recompute(&d2).status[&id2]);
+    match &recompute(&d2).status[&id2] {
+        // a mensagem diz a que distância um conjunto ficou do outro (faces opostas do tubo 40)
+        Status::Error(e) => assert!(e.contains("cerca de 40.0 mm"), "{e}"),
+        o => panic!("devia falhar: {o:?}"),
+    }
     // perna inválida
     let (d3, id3) = cordao(|w| w.leg = s("0"));
     assert!(matches!(recompute(&d3).status[&id3], Status::Error(_)));

@@ -12,6 +12,8 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("parede interna", "inner wall"),
     ("média das paredes", "mean of the walls"),
     ("sem contato", "no contact"),
+    ("encaixe", "cope"),
+    ("Ponta recortada no contorno do outro membro (encaixe)", "End cut to the outline of the other member (cope)"),
     (
         "Automático: ponto a ponto, a parede que toca primeiro; nunca invade o outro tubo e dá a menor abertura. Externa, interna e média escolhem uma só, e a invasão, se houver, é avisada.",
         "Automatic: point by point, the wall that touches first; it never enters the other tube and gives the smallest opening. Outer, inner and mean pick a single one, and any overlap is reported.",

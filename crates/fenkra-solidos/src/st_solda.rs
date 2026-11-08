@@ -336,7 +336,11 @@ impl Ctx<'_> {
         let pts = self.resolve_faces("cordão de solda", f, &corpo, &owners, &roles, &w.faces, &w.face_keys)?;
         let (q1, q2) = pts.split_at(p1.len());
         let (s1, s2) = (self.faces_do_conjunto(&corpo, q1, w.tangent)?, self.faces_do_conjunto(&corpo, q2, w.tangent)?);
-        let caminhos = s1.section(&s2).map_err(|_| "os dois conjuntos de faces não se encontram: não há caminho para o cordão".to_string())?;
+        let caminhos = s1.section(&s2).map_err(|_| match distancia_aproximada(&s1, &s2) {
+            // kart CV-EST: dizer quão longe um conjunto está do outro ajuda a achar a face errada
+            Some(d) if d > 0.05 => format!("os dois conjuntos de faces não se encontram: o conjunto 1 fica a cerca de {d:.1} mm do conjunto 2 (as faces precisam se tocar); confira as faces escolhidas"),
+            _ => "os dois conjuntos de faces não se encontram: não há caminho para o cordão".to_string(),
+        })?;
         // término em plano
         let mut caminhos = caminhos;
         if let Some(pl) = &w.end_plane {
@@ -431,6 +435,20 @@ pub fn num_curto(v: f64) -> String {
     } else {
         format!("{v:.1}").replace('.', ",")
     }
+}
+
+/// Menor distância entre os vértices das malhas de dois conjuntos de faces (aproximada pela
+/// malha; serve só para a mensagem de erro).
+fn distancia_aproximada(a: &Shape, b: &Shape) -> Option<f64> {
+    let pts = |s: &Shape| -> Option<Vec<[f64; 3]>> {
+        let m = s.mesh_angle(0.5, 0.35).ok()?;
+        Some(m.positions.chunks(3).map(|v| [v[0] as f64, v[1] as f64, v[2] as f64]).collect())
+    };
+    let (pa, pb) = (pts(a)?, pts(b)?);
+    if pa.is_empty() || pb.is_empty() || pa.len().saturating_mul(pb.len()) > 4_000_000 {
+        return None;
+    }
+    pa.iter().flat_map(|p| pb.iter().map(move |q| geo3d::dist(*p, *q))).min_by(f64::total_cmp)
 }
 
 #[cfg(test)]
