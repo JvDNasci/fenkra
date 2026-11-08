@@ -955,8 +955,17 @@ pub fn demo(st: &mut AsmState, nome: &str) {
             st.cmd = Some(pen);
             atualizar(st);
         }
+        "perdida" => {
+            // a face da base não existe mais na peça: a restrição avisa e oferece reancorar
+            let mut a = plano(base, 12., 1.);
+            let sumida = fenkra_core::FaceKey { owner: fenkra_core::Id(999_999), role: 1, kind: 0, normal_or_axis: [0., 0., 1.], area: 1. };
+            a.viva = Some(fenkra_montagem::releitura::Viva::Face { chave: Some(sumida), perdida: true });
+            let id = st.asm.add_mate(MateKind::Contact, a, plano(tampa, 0., -1.));
+            st.solve();
+            st.sel = Some(id);
+        }
         "manip" => {
-            let fr = fenkra_montagem::kin::JFrame::from_axis([48., 24., 0.], [0., 0., 1.]);
+            let fr =fenkra_montagem::kin::JFrame::from_axis([48., 24., 0.], [0., 0., 1.]);
             st.asm.add_joint(JointKind::Revolute, fenkra_montagem::kin::JRef { comp: base, frame: fr }, fenkra_montagem::kin::JRef { comp: tampa, frame: fr });
             st.solve();
             st.sel = Some(tampa);

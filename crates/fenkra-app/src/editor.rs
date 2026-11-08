@@ -715,6 +715,11 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                     }
                 });
             });
+            // B408: nome que veio de arquivo ou importação e não está na tabela: a massa cai na
+            // densidade padrão, e isso não pode passar calado
+            if fenkra_core::materiais::aviso_fora_da_tabela(&p.material).is_some() {
+                ui.label(RichText::new(format!("⚠ {}", tr("Material fora da tabela: a massa usa a densidade padrão (7,85 g/cm³). Escolha um da lista."))).color(crate::theme::st_warn()).small());
+            }
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("Tipo")));
                 egui::ComboBox::from_id_salt("tipo").selected_text(p.part_type.label()).show_ui(ui, |ui| {

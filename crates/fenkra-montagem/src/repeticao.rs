@@ -400,13 +400,18 @@ mod tests {
         let id = a.gravar_repeticao(&r, None);
         sincronizar(&mut a, &mut c, Some(&d));
         assert!((origens(&a, id)[0][2] - 60.).abs() < 1e-9);
-        // a peça encurta e engrossa: o mesmo ponto agora fica na face da ponta, normal +X
+        // a peça encurta e engrossa: o ponto clicado fica dentro da peça, e a face mais perto dele
+        // é a da ponta, normal +X. Pular para ela era o defeito do reporte do filete: a primeira
+        // leitura guardou o nome da face de cima, e a referência continua nela, agora em Z = 10
         std::thread::sleep(std::time::Duration::from_millis(20));
         std::fs::write(d.join("p.fkp"), chapa(50., 10., 2, vec![]).to_json()).unwrap();
         c.forget(&d.join("p.fkp"));
         sincronizar(&mut a, &mut c, Some(&d));
         let o = origens(&a, id)[0];
-        assert!((o[0] - 10.).abs() < 1e-6 && (o[2] - 50.).abs() < 1e-6, "a direção agora é a da peça: {o:?}");
+        assert!(o[0].abs() < 1e-6 && (o[2] - 60.).abs() < 1e-6, "não pulou para a face da ponta: {o:?}");
+        let r = a.patterns.iter().find(|p| p.id == id).unwrap().ref1.unwrap();
+        assert!(!crate::releitura::perdida(&r), "{r:?}");
+        assert!(matches!(r.geom, Geom::Plane { p, n } if (p[2] - 10.).abs() < 1e-9 && n[2] > 0.999), "{r:?}");
         let _ = std::fs::remove_dir_all(d);
     }
 

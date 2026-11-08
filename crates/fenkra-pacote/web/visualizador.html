@@ -71,6 +71,9 @@ main.com-painel #painel{display:flex}
 .zgrade input[type=number],.fila input[type=number]{background:var(--campo);border:1px solid var(--linha);border-radius:var(--raio);padding:0 8px;min-height:40px;width:100%;min-width:0}
 .item small{white-space:pre-line}
 #plm{font-size:12px;color:var(--suave);padding:2px 8px;border:1px solid var(--linha);border-radius:999px;white-space:nowrap}
+#faltas{font-size:12px;color:var(--erro);padding:2px 10px;min-height:32px;border:1px solid var(--erro);border-radius:999px;white-space:nowrap;background:none}
+ul.faltas{margin:0 0 8px;padding-left:18px;color:var(--erro)}
+ul.faltas li{margin:0 0 4px;overflow-wrap:anywhere}
 ul.arv{list-style:none;margin:0;padding:0}
 ul.arv ul{list-style:none;margin:0;padding-left:16px;border-left:1px solid var(--linha)}
 .lin{display:flex;align-items:center;gap:4px;min-height:38px;border-radius:var(--raio);padding-right:4px}
@@ -106,6 +109,7 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--suav
   <header>
     <h1 id="titulo">Visualizador Fenkra</h1>
     <span id="plm" hidden></span>
+    <button id="faltas" hidden></button>
     <div class="seg" id="modos" role="tablist" hidden>
       <button id="m3d" role="tab" aria-pressed="true" data-t="3D">3D</button>
       <button id="mfolha" role="tab" aria-pressed="false" data-t="folhas">Folhas</button>
@@ -163,7 +167,8 @@ const TX = {
   abrir_outro:"Abrir outro pacote para comparar", cmp_dica:"Abra outro .fkv do mesmo documento (outra versão) para ver o que mudou.", nova:"nova", antiga:"antiga", aberto:"Aberto",
   trocar_lado:"Trocar lados", cmp_igual:"Nenhuma diferença encontrada.", totais:"Totais", adicionados:"Adicionados", removidos:"Removidos", movidos:"Movidos", alterados:"Alterados",
   so_no_outro:"só no outro pacote", girou:"girou", visivel:"Visível", estado:"Estado", versao:"Versão",
-  capturas:"Capturas", etapa_de:"Captura {i} de {n}", anterior:"Anterior", proxima:"Próxima", sem_capturas:"Este pacote não tem capturas.", todas_etapas:"Mostrar todas as anotações", cordoes:"Mostrar o cordão das soldas" },
+  capturas:"Capturas", etapa_de:"Captura {i} de {n}", anterior:"Anterior", proxima:"Próxima", sem_capturas:"Este pacote não tem capturas.", todas_etapas:"Mostrar todas as anotações", cordoes:"Mostrar o cordão das soldas",
+  faltas:"{n} ficaram de fora", faltas_t:"Ficaram de fora do pacote", faltas_dica:"Peças que não puderam ser mostradas. Veja o motivo de cada uma em Dados." },
  en:{ "3D":"3D", folhas:"Sheets", painel:"Panel", abrir:"Open", tema:"Theme",
   vazio_t:"Open a .fkv package", vazio_p:"Drop the .fkv file on this screen, or tap Open and choose it. Nothing leaves your device.", vazio_p2:"No .fkv yet? In Fenkra, use File, Export viewer package.", vazio_p3:"On a phone: if the file does not show up when you tap Open, send the .fkv to the device and look in Files or Downloads.",
   arvore:"Tree", dados:"Data", pmi:"PMI", vistas:"Views", estados:"States", lista:"List",
@@ -185,7 +190,8 @@ const TX = {
   folga_nota:"Shortest distance between parts that do not interfere, up to {n} mm (approximate, from vertices).", onde_usado:"Where used", raiz:"Root",
   abrir_outro:"Open another package to compare", cmp_dica:"Open another .fkv of the same document (another version) to see what changed.", nova:"new", antiga:"old", aberto:"Open",
   trocar_lado:"Swap sides", cmp_igual:"No differences found.", totais:"Totals", adicionados:"Added", removidos:"Removed", movidos:"Moved", alterados:"Changed",
-  so_no_outro:"only in the other package", girou:"rotated", visivel:"Visible", estado:"State", versao:"Version" }
+  so_no_outro:"only in the other package", girou:"rotated", visivel:"Visible", estado:"State", versao:"Version",
+  faltas:"{n} left out", faltas_t:"Left out of the package", faltas_dica:"Parts that could not be shown. See why for each one in Data." }
 };
 const IDIOMA = (navigator.language||"pt").toLowerCase().startsWith("en") ? "en" : "pt";
 const T = k => (TX[IDIOMA][k] ?? TX.pt[k] ?? k);
@@ -733,6 +739,8 @@ function abaDados(c){
   const m = P.m;
   if (!e){
     c.append(el("h3",{},m.nome), m.atributos?tabelaAttr(m.atributos):null);
+    const faltas = m.avisos||[];
+    if (faltas.length) c.append(el("h3",{id:"faltas-t",style:"color:var(--erro)"},"⚠ "+T("faltas_t")+" ("+faltas.length+")"), el("ul",{class:"faltas"},faltas.map(a=>el("li",{},a))));
     const s = m.estatisticas||{}; const t = el("table",{class:"dados"});
     [["pecas","pecas_unicas"],["instancias","instancias"],["triangulos","triangulos"]].forEach(([l,k])=>s[k]!=null&&t.append(el("tr",{},el("th",{},T(l)),el("td",{},String(s[k])))));
     c.append(t); if (m.decimado) c.append(el("p",{class:"nada"},T("decimado")+" ("+Math.round(m.decimado*100)+"%)"));
@@ -1229,6 +1237,13 @@ function montarPlm(){
   const partes = m ? [m.estado, m.revisao?("Rev "+m.revisao):null, m.versao].filter(Boolean) : [];
   c.hidden = !partes.length; c.textContent = partes.join(" · ");
 }
+/* peças que ficaram de fora do pacote (comando em erro, arquivo sumido): à vista no cabeçalho, com o motivo em Dados */
+function montarFaltas(){
+  const b=$("#faltas"), l=(P.m&&P.m.avisos)||[];
+  b.hidden = !l.length; if (!l.length) return;
+  b.textContent = "⚠ "+T("faltas").replace("{n}",l.length); b.title = T("faltas_dica");
+  b.onclick = ()=>{ P.sel=null; mostrarAba("dados", true); };
+}
 function mostrarErro(msg){
   const a=$("#aviso"); a.classList.add("on"); a.querySelector("h2").textContent=T("erro"); a.querySelector("p").textContent=msg; a.querySelectorAll("p.dica").forEach(n=>n.hidden=true);
 }
@@ -1257,8 +1272,9 @@ async function carregar(fonte, opcoes){
     barraEtapas();
     if (opcoes&&opcoes.outro){ try{ P.outro = await prepararOutro(opcoes.outro.buf); }catch(e){ console.error(e); } }
     montarPlm();
+    montarFaltas();
     montarAbas();
-    mostrarAba(P.outro?"comparar":(m.arvore.length?"arvore":"dados"));
+    mostrarAba(P.outro?"comparar":(m.arvore.length&&!(m.avisos||[]).length?"arvore":"dados"));
     await definirModo(tem3d?"3d":"folha");
     if (window.matchMedia("(max-width:760px)").matches) { /* painel recolhido só se o usuário pedir; começa aberto na metade de baixo */ }
     window.__fkv = {P,V3,Folha};
