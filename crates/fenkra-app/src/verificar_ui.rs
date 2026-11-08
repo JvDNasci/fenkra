@@ -175,6 +175,9 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
                 if ui.add_enabled(!lista.is_empty(), egui::Button::new(RichText::new(rot).strong())).on_hover_text(tr("Confere cada requisito na peça e mostra o que foi medido. Folga e propagação recalculam cópias da peça.")).clicked() {
                     conferir = true;
                 }
+                if ui.button(tr("Comparar com um alvo…")).on_hover_text(tr("Compara a peça aberta com um corpo alvo (STEP) e mostra no 3D onde diverge.")).clicked() {
+                    crate::comparar_ui::abrir();
+                }
                 if ui.button(tr("Fechar")).clicked() {
                     fechar = true;
                 }

@@ -109,6 +109,7 @@ mod textos_interface2;
 mod textos_interface3;
 mod textos_verificar;
 mod verificar_ui;
+mod comparar_ui;
 mod forma_progresso;
 mod ajuda_cmd;
 mod roda;

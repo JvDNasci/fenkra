@@ -268,7 +268,34 @@ fn comparar_furos(alvo: &Resumo, modelo: &Resumo, t: &Tolerancias) -> Value {
     }
     let sobram: Vec<Value> = livres.iter().map(|f| furo_json(f)).collect();
     let ok = errados.is_empty() && deslocados.is_empty() && faltam.is_empty() && sobram.is_empty();
-    json!({ "ok": ok, "alvo": alvo.furos.len(), "modelo": modelo.furos.len(), "faltam": faltam, "sobram": sobram, "deslocados": deslocados, "diametro_errado": errados })
+    json!({ "ok": ok, "alvo": alvo.furos.len(), "modelo": modelo.furos.len(), "por_diametro": por_diametro(alvo, modelo, t.furo_diametro), "faltam": faltam, "sobram": sobram, "deslocados": deslocados, "diametro_errado": errados })
+}
+
+/// Contagem de furos por diâmetro nos dois corpos (B237): diâmetros dentro de `tol` contam juntos.
+/// Cada linha diz quantos furos daquele diâmetro o alvo e o modelo têm, do menor para o maior.
+fn por_diametro(alvo: &Resumo, modelo: &Resumo, tol: f64) -> Vec<Value> {
+    let mut grupos: Vec<(f64, usize, usize)> = vec![];
+    let mut contar = |d: f64, qual: usize| {
+        let i = match grupos.iter().position(|g| (g.0 - d).abs() <= tol) {
+            Some(i) => i,
+            None => {
+                grupos.push((d, 0, 0));
+                grupos.len() - 1
+            }
+        };
+        if qual == 0 {
+            grupos[i].1 += 1;
+        } else {
+            grupos[i].2 += 1;
+        }
+    };
+    alvo.furos.iter().for_each(|f| contar(f.diametro, 0));
+    modelo.furos.iter().for_each(|f| contar(f.diametro, 1));
+    grupos.sort_by(|a, b| a.0.total_cmp(&b.0));
+    grupos
+        .into_iter()
+        .map(|(d, a, m)| json!({ "diametro": r6(d), "alvo": a, "modelo": m, "ok": a == m }))
+        .collect()
 }
 
 fn medida(nome: &str, alvo: f64, modelo: f64, desvio: f64, tolerancia: f64) -> Value {

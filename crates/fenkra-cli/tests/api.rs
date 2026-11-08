@@ -531,6 +531,24 @@ fn checador_aprova_igual_em_1e6_e_aponta_o_furo_deslocado() {
 }
 
 #[test]
+fn checador_conta_os_furos_por_diametro_nos_dois_corpos() {
+    precisa_kernel!();
+    let completa = analisar(&final_shape(&placa(20.)).unwrap()).unwrap();
+    let mut lisa = Document::new("lisa");
+    let base = sk_rect(&mut lisa, PlaneRef::Origin(OriginPlane::XY), [-50., -30.], [50., 30.]);
+    lisa.add_feature(ext(base, BoolOp::Add, "8"));
+    let lisa = analisar(&final_shape(&lisa).unwrap()).unwrap();
+    let r = comparar(&completa, &lisa, &Tolerancias::default());
+    let linhas = r["furos"]["por_diametro"].as_array().unwrap();
+    assert!(!linhas.is_empty(), "{}", r["furos"]);
+    let total_alvo: u64 = linhas.iter().map(|l| l["alvo"].as_u64().unwrap()).sum();
+    assert_eq!(total_alvo as usize, completa.furos.len());
+    assert!(linhas.iter().all(|l| l["modelo"] == 0 && l["ok"] == false), "{}", r["furos"]);
+    let r = comparar(&completa, &completa, &Tolerancias::default());
+    assert!(r["furos"]["por_diametro"].as_array().unwrap().iter().all(|l| l["ok"] == true));
+}
+
+#[test]
 fn checador_acha_furo_que_falta_sobra_e_superficie_longe() {
     precisa_kernel!();
     let completa = analisar(&final_shape(&placa(20.)).unwrap()).unwrap();
@@ -866,4 +884,40 @@ fn api_python_abre_muda_parametro_e_exporta() {
         String::from_utf8_lossy(&o.stdout),
         String::from_utf8_lossy(&o.stderr)
     );
+}
+
+/// B237: cada peça do corpus, montada duas vezes, passa no checador com tudo em 1e-6 relativo; e a
+/// mesma peça depois de ida e volta por STEP passa nas medidas de massa e nos furos em 1e-6.
+#[test]
+fn checador_aprova_as_pecas_do_corpus_iguais_em_1e6() {
+    precisa_kernel!();
+    let justas = Tolerancias {
+        volume: 1e-6,
+        area: 1e-6,
+        centroide: 1e-6,
+        caixa: 1e-6,
+        inercia: 1e-6,
+        distancia: 1e-6,
+        ..Default::default()
+    };
+    // o gravador de STEP não aceita acento no caminho: pasta própria, só ASCII
+    let dir = std::env::temp_dir().join(format!("fenkra-b237-corpus-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    for (i, (a, b)) in common::corpus::pecas().iter().zip(common::corpus::pecas().iter()).enumerate() {
+        let sa = final_shape(a).unwrap_or_else(|| panic!("{}", a.name));
+        let ra = analisar(&sa).unwrap();
+        let r = comparar(&ra, &analisar(&final_shape(b).unwrap()).unwrap(), &justas);
+        assert_eq!(r["aprovado"], true, "{}: {r}", a.name);
+        // ida e volta por STEP: a geometria é a mesma, só a malha pode mudar
+        let arq = dir.join(format!("peca{i:02}.step"));
+        sa.export_step(&arq.to_string_lossy()).unwrap_or_else(|e| panic!("{}: {e:?} {}", a.name, arq.display()));
+        let volta = fenkra_kernel::Shape::import_step(&arq.to_string_lossy()).unwrap();
+        let r = comparar(&ra, &analisar(&volta).unwrap(), &justas);
+        for m in r["medidas"].as_array().unwrap() {
+            if m["nome"] != "caixa" {
+                assert_eq!(m["ok"], true, "{} depois do STEP: {m}", a.name);
+            }
+        }
+        assert_eq!(r["furos"]["ok"], true, "{} depois do STEP: {}", a.name, r["furos"]);
+    }
 }
