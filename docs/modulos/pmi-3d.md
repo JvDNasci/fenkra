@@ -14,7 +14,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **STEP AP242 gráfico e vistas salvas** (Exportar, "PMI no arquivo": nenhum / gráfico / gráfico + semântico) —
   cada anotação desenhada em polilinhas (chamada, linha de cota com setas, quadro e texto em traços), rugosidade,
   solda, notas, balões e legenda como rótulo comum, e as capturas do PMI como vistas salvas com as anotações
-  de cada uma; valores em mm em qualquer unidade do arquivo. [ADR 0082](../arquitetura/adr/0082-pmi-grafico-e-vistas-no-step.md).
+  de cada uma; valores em mm em qualquer unidade do arquivo. [ADR 0084](../arquitetura/adr/0084-pmi-grafico-e-vistas-no-step.md).
 
 ## 🟡 Parcial
 
