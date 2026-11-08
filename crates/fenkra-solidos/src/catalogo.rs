@@ -447,10 +447,10 @@ mod testes {
         assert_eq!(f(Filtro { sistema: Some(Sistema::Polegada), ..Default::default() }), 0);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Allen), ..Default::default() }), 2);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Sextavada), ..Default::default() }), 3);
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 6);
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 7);
         assert_eq!(f(Filtro { material: Some("Aço".into()), ..Default::default() }), familias().len());
         assert_eq!(f(Filtro { material: Some("Aço inoxidável".into()), ..Default::default() }), 0);
-        assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 1);
+        assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 2);
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Rolamento), ..Default::default() }), 1);
     }
 
