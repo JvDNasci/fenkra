@@ -68,6 +68,20 @@ impl App {
                 self.sent_doc = None;
                 self.sel = Sel::Ref(ultimo);
             }
+            // B407: três curvas ligadas lado a lado e uma usada por outro elemento; a do meio selecionada
+            "curvas_ligadas" => {
+                let mut d = Document::new("Peça ligada");
+                let ids: Vec<Id> = (0..3)
+                    .map(|i| {
+                        let y = i as f64 * 6.;
+                        d.add_link("mestre", "mestre.fkp", &format!("LONG_E_{i}"), fenkra_core::LinkedGeo::Curve(vec![[0., y, 0.], [120., y, 0.]]))
+                    })
+                    .collect();
+                d.add_geometry(RefKind::PointOnCurve { curve: CurveRef::Ref(ids[0]), at: OnCurve::Ratio("0.5".into()), reverse: false });
+                self.open.doc = d;
+                self.sent_doc = None;
+                self.sel = Sel::Ref(ids[1]);
+            }
             "daltonico" => self.settings.acessibilidade.paleta_segura = true,
             "diagnostico" => self.demo_diagnostico(),
             // B361: a face de cima do primeiro corpo já escolhida (contorno externo, furos de fora)

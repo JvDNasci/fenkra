@@ -5606,10 +5606,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         if resp.double_clicked() {
             actions.push(TreeAction::EditSketch(r.id));
         }
-        let resp = match self.status_of(r.id).and_then(|s| s.message()) {
-            Some(m) => resp.on_hover_text(m),
-            None => resp,
-        };
+        // B407: o `·N` e a origem do link ganham explicação; a mensagem de erro vem antes
+        let dica = [self.status_of(r.id).and_then(|s| s.message()).map(str::to_string), crate::rotulo_ligado::dica_da_linha(doc, r, users)].into_iter().flatten().collect::<Vec<_>>().join("
+");
+        let resp = if dica.is_empty() { resp } else { resp.on_hover_text(dica) };
         resp.context_menu(|ui| {
             ui.label(RichText::new(&r.name).strong());
             if ui.button(tr("✏ Editar   (duplo clique)")).clicked() {
@@ -7500,7 +7500,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             // rótulos de pontos e curvas de referência
             if let (Some(r), true) = (&self.result, self.settings.filter.rotulos) {
                 let d = &self.open.doc;
-                let vis = |id: Id| d.reference(id).filter(|rf| d.ref_shown(rf) != self.hidden_env).map(|rf| rf.name.clone());
+                // B407: geometria ligada só leva rótulo (curto) quando selecionada
+                let vis = |id: Id| d.reference(id).filter(|rf| d.ref_shown(rf) != self.hidden_env).and_then(|rf| crate::rotulo_ligado::rotulo_3d(d, rf, self.sel == Sel::Ref(id) || self.multi.borrow().contains(&id)));
                 for p in &r.points {
                     let Some(name) = vis(p.id).filter(|_| self.settings.filter.pontos) else { continue };
                     if let Some(pos) = vp.project(rect, Vec3::from(p.p.map(|v| v as f32))) {

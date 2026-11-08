@@ -13,6 +13,10 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("publicação(ões) do sketch", "sketch publication(s)"),
     ("nova(s)", "new"),
     ("Publicado como", "Published as"),
+    // B407: explicação do contador e da origem do link na árvore
+    ("Ligado à publicação", "Linked to publication"),
+    ("usado por", "used by"),
+    ("elemento(s) ou comando(s)", "element(s) or command(s)"),
     ("Escolha uma aresta ou curva de sketch para extrair.", "Pick an edge or sketch curve to extract."),
     ("elemento(s) extraído(s) para a pasta de geometria", "element(s) extracted to the geometry folder"),
     ("◫ Extrair (curva associativa)", "◫ Extract (associative curve)"),

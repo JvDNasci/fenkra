@@ -204,6 +204,7 @@ mod sketch_painel;
 mod sketch_snap;
 mod sketch_textos;
 mod sketch_pub;
+mod rotulo_ligado;
 mod perfil;
 mod relatorio;
 mod param_ui;
