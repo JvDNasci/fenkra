@@ -211,6 +211,15 @@ impl std::fmt::Write for Bytes<'_> {
 /// Exporta pelo sufixo: .pdf (todas as folhas), .svg ou .dxf (a folha dada).
 pub fn save(d: &Drawing, sheet: Id, m: &mut crate::source::Models, path: &str) -> Result<(), String> {
     let lower = path.to_lowercase();
+    // B393: vista de montagem ainda calculando (ou só com a prévia por malha) não vai para o arquivo
+    let mut pendente = false;
+    for v in &d.views {
+        let p = m.proj(d, v.id);
+        pendente |= p.calculando || p.previa;
+    }
+    if pendente {
+        return Err("há vistas ainda em cálculo: espere a barra de progresso terminar e exporte de novo".into());
+    }
     let r = if lower.ends_with(".pdf") {
         let pages: Vec<(V2, Vec<Item>)> = d.sheets.iter().map(|s| (s.size(), crate::layout::sheet(d, s.id, m))).collect();
         std::fs::write(path, pdf(&pages))

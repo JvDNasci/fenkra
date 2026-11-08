@@ -12,6 +12,7 @@ pub mod centros;
 pub mod conjunto;
 pub mod corte;
 pub mod cotas;
+pub mod esboco;
 pub mod export;
 pub mod importar;
 pub mod layout;
@@ -19,6 +20,7 @@ pub mod novo;
 pub mod ocupacao;
 pub mod opcoes;
 pub mod fundo;
+pub mod hlr_processos;
 pub mod setas_nota;
 pub mod simbolos;
 pub mod solda_cordao;
@@ -739,6 +741,9 @@ pub struct Drawing {
     /// método de projeção das vistas (1º ou 3º diedro)
     #[serde(default)]
     pub projection: novo::Projecao,
+    /// sketches na folha ou dentro das vistas (B352)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub esbocos: Vec<esboco::EsbocoDesenho>,
 }
 
 fn one() -> u8 {
@@ -763,6 +768,7 @@ impl Drawing {
             text_height: 3.5,
             decimals: 1,
             projection: novo::Projecao::Primeiro,
+            esbocos: vec![],
         };
         d.add_sheet(format);
         d
@@ -789,6 +795,18 @@ impl Drawing {
 
     pub fn sheet(&self, id: Id) -> Option<&Sheet> {
         self.sheets.iter().find(|s| s.id == id)
+    }
+
+    /// Esboço novo, vazio, preso à folha ou à vista (B352).
+    pub fn add_esboco(&mut self, dono: esboco::DonoEsboco) -> Id {
+        let id = self.alloc();
+        let n = self.esbocos.len() + 1;
+        self.esbocos.push(esboco::EsbocoDesenho { id, nome: format!("Esboço {n}"), dono, dados: Default::default(), tipos: vec![], cotas: true });
+        id
+    }
+
+    pub fn esboco_mut(&mut self, id: Id) -> Option<&mut esboco::EsbocoDesenho> {
+        self.esbocos.iter_mut().find(|e| e.id == id)
     }
 
     pub fn view(&self, id: Id) -> Option<&View> {
@@ -846,9 +864,16 @@ impl Drawing {
         self.notes.retain(|n| n.id != id && !n.view.is_some_and(|v| kill.contains(&v)));
         self.tables.retain(|t| t.id != id);
         self.centers.retain(|c| c.id != id && !kill.contains(&c.view));
+        // o esboço da vista vai com ela
+        self.esbocos.retain(|e| e.id != id && !matches!(e.dono, esboco::DonoEsboco::Vista(v) if kill.contains(&v)));
         if self.sheets.len() > 1 && self.sheets.iter().any(|s| s.id == id) {
             self.sheets.retain(|s| s.id != id);
             let first = self.sheets[0].id;
+            for e in &mut self.esbocos {
+                if e.dono == esboco::DonoEsboco::Folha(id) {
+                    e.dono = esboco::DonoEsboco::Folha(first);
+                }
+            }
             for v in &mut self.views {
                 if v.sheet == id {
                     v.sheet = first;

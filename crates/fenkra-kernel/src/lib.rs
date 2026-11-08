@@ -309,6 +309,75 @@ mod imp {
 
     pub const AVAILABLE: bool = true;
 
+    /// B393: a projeção exata de linhas ocultas do OpenCASCADE guarda estado global. Duas ao mesmo
+    /// tempo no processo (a vista de uma peça na interface e a de uma montagem na thread de
+    /// projeção, por exemplo) saem vazias ou com linhas a menos, sem erro. Uma por vez.
+    static HLR_EXATA: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn trava_hlr() -> std::sync::MutexGuard<'static, ()> {
+        HLR_EXATA.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    // Cada trabalho tem a sua forma e o seu resultado e só é usado por uma thread de cada vez.
+    struct Trabalho(UniquePtr<b::HlrTrabalho>);
+    unsafe impl Send for Trabalho {}
+
+    /// Linhas ocultas de várias vistas (B393). `poligonal = Some(desvio)` projeta a malha (bem
+    /// mais rápido, arestas retas; serve de prévia), uma thread por vista, cada vista além da
+    /// primeira com a sua cópia da forma. A projeção exata (`None`) roda uma vista depois da outra:
+    /// o algoritmo exato do OpenCASCADE guarda estado global, e duas threads ao mesmo tempo
+    /// devolvem vistas vazias ou com linhas a menos, sem erro (visto no kart: 2067, 2063, 2068 e 0
+    /// linhas para quatro cópias da mesma vista). Para a exata em paralelo, use processos.
+    pub fn hlr_varias(vistas: &[VistaHlr], poligonal: Option<f64>) -> Vec<KResult<Vec<(Vec<[f64; 2]>, u8)>>> {
+        let desvio = poligonal.unwrap_or(0.);
+        let mut trabalhos: Vec<KResult<Trabalho>> = vec![];
+        for (i, v) in vistas.iter().enumerate() {
+            // `Shape::clone` divide a topologia: comparar os `Shape` não diz se duas vistas leem a
+            // mesma forma, e as linhas ocultas de duas threads na mesma topologia saem vazias
+            // (visto no kart). Toda vista depois da primeira projeta uma cópia própria.
+            let copiar = poligonal.is_some() && i > 0;
+            let t = b::hlr_trabalho_novo(v.forma.ponte(), v.para[0], v.para[1], v.para[2], v.x[0], v.x[1], v.x[2], v.ocultas, copiar, desvio);
+            trabalhos.push(t.map(Trabalho).map_err(err));
+        }
+        let baixa = vistas.first().is_some_and(|v| v.prioridade_baixa);
+        if poligonal.is_none() {
+            let _uma = trava_hlr();
+            for t in trabalhos.iter_mut().filter_map(|t| t.as_mut().ok()) {
+                if let Some(p) = t.0.as_mut() {
+                    b::hlr_trabalho_rodar(p);
+                }
+            }
+        } else {
+            std::thread::scope(|sc| {
+            for t in trabalhos.iter_mut().filter_map(|t| t.as_mut().ok()) {
+                sc.spawn(move || {
+                    if baixa {
+                        super::reduzir_prioridade_da_thread();
+                    }
+                    if let Some(p) = t.0.as_mut() {
+                        b::hlr_trabalho_rodar(p);
+                    }
+                });
+            }
+            });
+        }
+        trabalhos
+            .into_iter()
+            .map(|t| {
+                let t = t?;
+                let (mut ends, mut kinds) = (vec![], vec![]);
+                let f = b::hlr_trabalho_resultado(&t.0, &mut ends, &mut kinds).map_err(err)?;
+                let mut out = vec![];
+                let mut s = 0usize;
+                for (e, k) in ends.iter().zip(kinds) {
+                    out.push(((s..*e as usize).map(|i| [f[2 * i], f[2 * i + 1]]).collect(), k));
+                    s = *e as usize;
+                }
+                Ok(out)
+            })
+            .collect()
+    }
+
     pub struct Shape(UniquePtr<b::Shape>);
 
     impl Shape {
@@ -852,9 +921,21 @@ mod imp {
         pub fn to_brep(&self) -> KResult<String> {
             b::to_brep(&self.0).map_err(err)
         }
+        /// Forma em binário, para outro processo (sem malha).
+        pub fn para_bin(&self) -> KResult<Vec<u8>> {
+            b::forma_para_bin(&self.0).map_err(err)
+        }
+        pub fn de_bin(dados: &[u8]) -> KResult<Shape> {
+            b::forma_de_bin(dados).map(Shape).map_err(err)
+        }
+        /// A mesma topologia (`clone` divide a forma; isto diz se duas são a mesma).
+        pub fn mesma(&self, outra: &Shape) -> bool {
+            b::forma_mesma(&self.0, &outra.0)
+        }
         /// Projeção com linhas ocultas: (polilinha 2D, tipo) — 0 visível, 1 tangente, 2 contorno, 3 oculta.
         pub fn hlr(&self, toward_viewer: [f64; 3], x: [f64; 3], hidden: bool) -> KResult<Vec<(Vec<[f64; 2]>, u8)>> {
             let (mut ends, mut kinds) = (vec![], vec![]);
+            let _uma = trava_hlr();
             let f = b::hlr_project(&self.0, toward_viewer[0], toward_viewer[1], toward_viewer[2], x[0], x[1], x[2], hidden, &mut ends, &mut kinds).map_err(err)?;
             let mut out = vec![];
             let mut s = 0usize;
@@ -1082,6 +1163,10 @@ mod imp {
     use super::*;
 
     pub const AVAILABLE: bool = false;
+
+    pub fn hlr_varias(vistas: &[VistaHlr], _: Option<f64>) -> Vec<KResult<Vec<(Vec<[f64; 2]>, u8)>>> {
+        vistas.iter().map(|_| no()).collect()
+    }
 
     #[derive(Clone)]
     pub struct Shape;
@@ -1359,6 +1444,15 @@ mod imp {
         pub fn to_brep(&self) -> KResult<String> {
             no()
         }
+        pub fn para_bin(&self) -> KResult<Vec<u8>> {
+            no()
+        }
+        pub fn de_bin(_: &[u8]) -> KResult<Shape> {
+            no()
+        }
+        pub fn mesma(&self, _: &Shape) -> bool {
+            false
+        }
         pub fn hlr(&self, _: [f64; 3], _: [f64; 3], _: bool) -> KResult<Vec<(Vec<[f64; 2]>, u8)>> {
             no()
         }
@@ -1464,7 +1558,18 @@ mod imp {
     }
 }
 
-pub use imp::{limitar_tempo, GuardaPrazo, ligar_cancelamento, GuardaCancelamento, definir_fios_malhador, definir_malhador_delabella, malhador_delabella, fios_aplicados, fios_malhador, version, Shape, AVAILABLE};
+/// Uma vista para `hlr_varias`: forma, direção para o observador, eixo x da folha e se traça as
+/// linhas ocultas.
+pub struct VistaHlr<'a> {
+    pub forma: &'a Shape,
+    pub para: [f64; 3],
+    pub x: [f64; 3],
+    pub ocultas: bool,
+    /// roda as threads com prioridade abaixo do normal (fora da thread da interface)
+    pub prioridade_baixa: bool,
+}
+
+pub use imp::{hlr_varias, limitar_tempo, GuardaPrazo, ligar_cancelamento, GuardaCancelamento, definir_fios_malhador, definir_malhador_delabella, malhador_delabella, fios_aplicados, fios_malhador, version, Shape, AVAILABLE};
 
 /// Põe a thread atual abaixo da prioridade normal, para o cálculo não disputar processador com a
 /// interface. Chame uma vez, dentro da thread de cálculo. Devolve se a prioridade mudou.
@@ -1763,6 +1868,28 @@ mod tests {
             }
         }
         n.values().filter(|c| **c % 2 != 0).count()
+    }
+
+    /// B393: várias vistas de uma vez. A exata dá o mesmo que `hlr` vista a vista (corre uma por
+    /// vez); a por malha, em threads, traça todas as vistas e a forma volta inteira pelo binário.
+    #[test]
+    fn varias_vistas_exatas_e_por_malha() {
+        let s = placa(3);
+        let entalhe = Shape::box_tool([27., -5., 3.], [1., 0., 0.], [0., 0., 1.], [6., 10., 4.]).unwrap();
+        let e = s.boolean(&entalhe, Bool::Cut).unwrap();
+        let dirs = [([0., 0., 1.], [1., 0., 0.]), ([0., -1., 0.], [1., 0., 0.]), ([1., 0., 0.], [0., 1., 0.])];
+        let vistas: Vec<_> = dirs.iter().map(|(p, x)| VistaHlr { forma: &e, para: *p, x: *x, ocultas: true, prioridade_baixa: false }).collect();
+        let exatas = hlr_varias(&vistas, None);
+        for ((p, x), r) in dirs.iter().zip(&exatas) {
+            let uma = e.hlr(*p, *x, true).unwrap();
+            assert_eq!(r.as_ref().unwrap().len(), uma.len());
+        }
+        let malha = hlr_varias(&vistas, Some(0.05));
+        assert!(malha.iter().all(|r| r.as_ref().is_ok_and(|l| l.iter().any(|(_, k)| *k == 0))));
+        let volta = Shape::de_bin(&e.para_bin().unwrap()).unwrap();
+        assert!((volta.mass().volume - e.mass().volume).abs() < 1e-6);
+        assert!(volta.mesma(&volta) && !volta.mesma(&e));
+        assert!(e.clone().mesma(&e), "clone divide a topologia");
     }
 
     #[test]

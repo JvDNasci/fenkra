@@ -21,13 +21,19 @@ fn montar(nome: &str, pecas: usize) -> (std::path::PathBuf, Source) {
     (dir, Source { path: "raiz.fka".into(), display_state: String::new(), hidden: vec![] })
 }
 
-fn esperar_pronta(m: &mut Models, d: &Drawing, v: Id) -> fenkra_desenho::source::Proj {
+/// Espera a projeção exata; devolve também se a prévia por malha apareceu antes.
+fn esperar_exata(m: &mut Models, d: &Drawing, v: Id) -> (fenkra_desenho::source::Proj, bool) {
     let t = Instant::now();
+    let mut viu_previa = false;
     loop {
         m.sondar();
         let p = m.proj(d, v);
-        if !p.calculando {
-            return p;
+        if p.previa {
+            assert!(!p.lines.is_empty() && p.error.is_none(), "a prévia já traz as linhas: {:?}", p.error);
+            viu_previa = true;
+        }
+        if !p.calculando && !p.previa {
+            return (p, viu_previa);
         }
         assert!(t.elapsed() < Duration::from_secs(120), "a projeção em segundo plano não chegou");
         std::thread::sleep(Duration::from_millis(20));
@@ -56,7 +62,9 @@ fn vista_de_montagem_sai_da_thread_da_interface_e_chega_igual_a_sincrona() {
     assert!(primeira.lines.is_empty() && primeira.error.is_none());
     assert!(t.elapsed() < Duration::from_secs(2), "pedir não pode calcular aqui: {:?}", t.elapsed());
     assert!(m.andamento_do_fundo().is_some(), "há trabalho em andamento");
-    let pronta = esperar_pronta(&mut m, &d, v);
+    m.sondar();
+    let (pronta, viu_previa) = esperar_exata(&mut m, &d, v);
+    assert!(viu_previa, "B393: a prévia por malha chega antes da exata");
     assert!(pronta.error.is_none(), "{:?}", pronta.error);
     assert_eq!(pronta.lines.len(), esperada.lines.len());
     assert!((pronta.hi[0] - esperada.hi[0]).abs() < 1e-6 && (pronta.lo[0] - esperada.lo[0]).abs() < 1e-6);
@@ -69,7 +77,7 @@ fn vista_de_montagem_sai_da_thread_da_interface_e_chega_igual_a_sincrona() {
 }
 
 #[test]
-fn vista_filha_espera_a_mae_e_cancelar_deixa_as_vistas_paradas_sem_recalcular_a_cada_quadro() {
+fn vistas_do_mesmo_quadro_vao_num_lote_e_cancelar_deixa_as_vistas_paradas_sem_recalcular_a_cada_quadro() {
     if !fenkra_kernel::AVAILABLE {
         return;
     }
@@ -77,23 +85,42 @@ fn vista_filha_espera_a_mae_e_cancelar_deixa_as_vistas_paradas_sem_recalcular_a_
     let mut d = Drawing::new("t", Format::A3);
     let s = d.sheets[0].id;
     let f = d.add_view(s, src.clone(), ViewKind::Standard(Dir::Frente), [100., 100.], 1.);
-    let t = d.add_view(s, src, ViewKind::Projected { parent: f, dir: Dir::Topo }, [100., 40.], 1.);
+    let t = d.add_view(s, src.clone(), ViewKind::Projected { parent: f, dir: Dir::Topo }, [100., 40.], 1.);
+    let iso = d.add_view(s, src, ViewKind::Standard(Dir::Iso), [200., 100.], 1.);
+    // B393: a exata vai em processos, como no aplicativo
+    fenkra_desenho::hlr_processos::definir_executavel(env!("CARGO_BIN_EXE_fenkra-hlr").into());
     let mut m = Models::new(Some(dir.clone()));
     m.ativar_fundo(|| {});
-    // a filha pedida antes da mãe vira o lugar dela e só segue quando a mãe chega
-    assert!(m.proj(&d, t).calculando);
+    // B393: a projetada não espera a mãe; as três pedidas no mesmo quadro vão juntas
+    for v in [f, t, iso] {
+        assert!(m.proj(&d, v).calculando);
+    }
+    m.sondar();
+    let a = m.andamento_do_fundo().expect("em andamento");
+    assert!(a.calculando && a.esperando == 0, "um lote só com as três vistas: {a:?}");
     m.cancelar_fundo();
     assert!(m.vistas_canceladas());
-    let parada = m.proj(&d, f);
-    assert!(!parada.calculando && parada.error.as_deref() == Some("cálculo cancelado"), "{:?}", parada.error);
+    for v in [f, t, iso] {
+        let parada = m.proj(&d, v);
+        assert!(!parada.calculando && parada.error.as_deref() == Some("cálculo cancelado"), "{:?}", parada.error);
+    }
     // pedir de novo no quadro seguinte não manda nada para a thread
+    m.sondar();
     assert!(m.andamento_do_fundo().is_none());
-    // a pessoa pede de novo: as vistas vêm
+    // a pessoa pede de novo: as vistas vêm, cada uma com a exata igual à calculada aqui
     m.retomar_fundo();
     assert!(!m.vistas_canceladas());
-    let pronta = esperar_pronta(&mut m, &d, f);
-    assert!(pronta.error.is_none() && !pronta.lines.is_empty(), "{:?}", pronta.error);
-    let filha = esperar_pronta(&mut m, &d, t);
-    assert!(filha.error.is_none() && !filha.lines.is_empty(), "{:?}", filha.error);
+    for v in [f, t, iso] {
+        let _ = m.proj(&d, v);
+    }
+    let mut sinc = Models::new(Some(dir.clone()));
+    for v in [f, t, iso] {
+        let (pronta, _) = esperar_exata(&mut m, &d, v);
+        // a prévia guardada não pede a exata de novo: chegada a exata, nada mais na fila
+        assert!(m.andamento_do_fundo().is_none(), "exata pedida duas vezes: {:?}", m.andamento_do_fundo());
+        let esperada = sinc.proj(&d, v);
+        assert!(pronta.error.is_none() && !pronta.lines.is_empty(), "{:?}", pronta.error);
+        assert_eq!(pronta.lines.len(), esperada.lines.len(), "a exata em paralelo é a mesma da sequencial");
+    }
     let _ = std::fs::remove_dir_all(dir);
 }

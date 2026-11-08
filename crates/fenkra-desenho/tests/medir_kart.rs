@@ -28,6 +28,112 @@ fn tempo_das_vistas_do_conjunto_do_kart() {
     }
 }
 
+/// B393: linhas ocultas das quatro vistas, uma depois da outra, em paralelo e por malha.
+/// `FENKRA_MEDIR_SEQ=1` mede também a sequencial (demora minutos).
+#[test]
+#[ignore]
+fn hlr_paralelo_e_por_malha_no_kart() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../validacao/kart/modelo");
+    let src = Source { path: "KART.fka".into(), display_state: String::new(), hidden: vec![] };
+    let mut m = Models::new(Some(dir));
+    let t = Instant::now();
+    let forma = m.load(&src).shape.clone().expect("forma do kart");
+    println!("carga: {:?}", t.elapsed());
+    let eixos: Vec<_> = [Dir::Frente, Dir::Topo, Dir::Esquerda, Dir::Iso].iter().map(|d| source::Axes::of(*d)).collect();
+    let vistas: Vec<_> = eixos.iter().map(|a| fenkra_kernel::VistaHlr { forma: &forma, para: a.toward, x: a.x, ocultas: false, prioridade_baixa: false }).collect();
+    if std::env::var("FENKRA_MEDIR_SEQ").is_ok() {
+        for a in &eixos {
+            let t = Instant::now();
+            let l = forma.hlr(a.toward, a.x, false).unwrap();
+            println!("sequencial: {:?} linhas={}", t.elapsed(), l.len());
+        }
+    }
+    fenkra_desenho::hlr_processos::definir_executavel(env!("CARGO_BIN_EXE_fenkra-hlr").into());
+    let t = Instant::now();
+    let r = fenkra_desenho::hlr_processos::exatas(&vistas, None).expect("processos");
+    println!("exata em processos: {:?} linhas={:?}", t.elapsed(), r.iter().map(|x| x.as_ref().map_or(0, |l| l.len())).collect::<Vec<_>>());
+    let (lo, hi) = forma.bbox().unwrap();
+    let big = (0..3).map(|k| hi[k] - lo[k]).fold(0., f64::max);
+    let t = Instant::now();
+    let r = fenkra_kernel::hlr_varias(&vistas, Some(big * 0.0005));
+    println!("por malha em paralelo: {:?} linhas={:?}", t.elapsed(), r.iter().map(|x| x.as_ref().map_or(0, |l| l.len())).collect::<Vec<_>>());
+    assert!(r.iter().all(|x| x.as_ref().is_ok_and(|l| !l.is_empty())));
+}
+
+/// B393: o caminho da interface: quatro vistas (frente, duas projetadas e isométrica) pedidas no
+/// mesmo quadro à thread de projeção. Mede quando chega a prévia e quando chega a exata.
+#[test]
+#[ignore]
+fn quatro_vistas_do_kart_pela_thread_de_projecao() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../validacao/kart/modelo");
+    let src = Source { path: "KART.fka".into(), display_state: String::new(), hidden: vec![] };
+    let mut d = Drawing::new("kart", Format::A1);
+    let s = d.sheets[0].id;
+    let f = d.add_view(s, src.clone(), ViewKind::Standard(Dir::Frente), [200., 300.], 0.05);
+    let t = d.add_view(s, src.clone(), ViewKind::Projected { parent: f, dir: Dir::Topo }, [200., 150.], 0.05);
+    let e = d.add_view(s, src.clone(), ViewKind::Projected { parent: f, dir: Dir::Esquerda }, [400., 300.], 0.05);
+    let i = d.add_view(s, src, ViewKind::Standard(Dir::Iso), [400., 150.], 0.05);
+    let vistas = [f, t, e, i];
+    // a exata vai em processos, como no aplicativo
+    fenkra_desenho::hlr_processos::definir_executavel(env!("CARGO_BIN_EXE_fenkra-hlr").into());
+    let mut m = Models::new(Some(dir));
+    m.ativar_fundo(|| {});
+    let t0 = Instant::now();
+    let (mut previa, mut exata) = (None, None);
+    while exata.is_none() {
+        m.sondar();
+        let ps: Vec<_> = vistas.iter().map(|v| m.proj(&d, *v)).collect();
+        if previa.is_none() && ps.iter().all(|p| p.previa || (!p.calculando && !p.lines.is_empty())) {
+            previa = Some(t0.elapsed());
+            println!("prévia das quatro: {:?} linhas={:?}", t0.elapsed(), ps.iter().map(|p| p.lines.len()).collect::<Vec<_>>());
+        }
+        if ps.iter().all(|p| !p.calculando && !p.previa) {
+            exata = Some(t0.elapsed());
+            println!("exata das quatro: {:?} linhas={:?} erros={:?}", t0.elapsed(), ps.iter().map(|p| p.lines.len()).collect::<Vec<_>>(), ps.iter().filter_map(|p| p.error.clone()).collect::<Vec<_>>());
+            // duas threads na mesma topologia devolviam vistas vazias, sem erro
+            assert!(ps.iter().all(|p| p.error.is_none() && !p.lines.is_empty()), "toda vista exata tem linhas");
+        }
+        assert!(t0.elapsed().as_secs() < 900, "não terminou");
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+}
+
+/// Sonda: quatro cópias da mesma vista em paralelo devem dar o mesmo resultado da sequencial.
+#[test]
+#[ignore]
+fn sonda_hlr_paralelo_deterministico() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../validacao/kart/modelo");
+    let src = Source { path: "KART.fka".into(), display_state: String::new(), hidden: vec![] };
+    let mut m = Models::new(Some(dir));
+    let forma = m.load(&src).shape.clone().expect("forma do kart");
+    let a = source::Axes::of(Dir::Iso);
+    let vistas: Vec<_> = (0..4).map(|_| fenkra_kernel::VistaHlr { forma: &forma, para: a.toward, x: a.x, ocultas: false, prioridade_baixa: false }).collect();
+    if std::env::var("FENKRA_SONDA_POLY").is_ok() {
+        let um = fenkra_kernel::hlr_varias(&vistas[..1], Some(3.)).remove(0).unwrap().len();
+        for _ in 0..3 {
+            let r: Vec<_> = fenkra_kernel::hlr_varias(&vistas, Some(3.)).into_iter().map(|x| x.map_or(0, |l| l.len())).collect();
+            println!("malha: uma={um} paralelo={r:?}");
+        }
+        return;
+    }
+    let seq = forma.hlr(a.toward, a.x, false).unwrap().len();
+    for _ in 0..2 {
+        let r: Vec<_> = fenkra_kernel::hlr_varias(&vistas, None).into_iter().map(|x| x.map_or(0, |l| l.len())).collect();
+        println!("sequencial={seq} paralelo={r:?}");
+    }
+    let seq2 = forma.hlr(a.toward, a.x, false).unwrap().len();
+    println!("sequencial de novo={seq2}");
+}
+
 /// Onde vai o tempo da carga da montagem (B393): calcular cada peça, posicionar ou juntar.
 #[test]
 #[ignore]

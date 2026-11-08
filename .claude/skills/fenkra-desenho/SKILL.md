@@ -40,6 +40,11 @@ Consulte pmi, montagem quando a mudança atravessar a fronteira da área.
 
 Registre aqui erros que se repetiram.
 
+- A HLR exata do OpenCASCADE (`HLRBRep_Algo`) guarda estado global: duas no mesmo processo, mesmo com cópia
+  profunda da forma, devolvem vista vazia ou com linhas a menos, sem erro. Paralelize só em processos
+  (`hlr_processos.rs`); o kernel serializa as chamadas no processo (`HLR_EXATA`). A projeção por malha
+  (`HLRBRep_PolyAlgo`) roda bem em threads (B393, ADR 0080).
+
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.

@@ -22,6 +22,9 @@ pub fn sondar(st: &mut DwgState, ctx: &egui::Context) -> bool {
 
 /// Texto do progresso: "12 de 85 peças · 2 vistas na fila".
 pub fn texto(a: &fenkra_desenho::fundo::Andamento) -> String {
+    if a.refinando {
+        return tr("Refinando vistas: a prévia por malha já está na folha").to_string();
+    }
     let base = if a.total > 0 { format!("{} {} {} {}", tr("Calculando vistas"), a.feitos.min(a.total), tr("de"), a.total) } else { tr("Calculando vistas…").to_string() };
     if a.esperando > 0 {
         format!("{base} · {} {}", a.esperando, tr("na fila"))
