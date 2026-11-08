@@ -1716,7 +1716,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 painter.rect_filled(sh, 3., tx.gamma_multiply(120. / 255. * fade));
             }
             let stage = if p < 0.3 { "Iniciando o kernel OpenCASCADE…" } else if p < 0.6 { "Carregando ferramentas e ícones…" } else if p < 0.95 { "Calculando a peça…" } else { "Pronto" };
-            painter.text(bar.center_bottom() + egui::vec2(0., 16.), egui::Align2::CENTER_CENTER, tr(stage), egui::FontId::proportional(12.), tx.gamma_multiply(140. / 255. * fade));
+            // forma livre convertendo na abertura: a tela diz quanto falta em vez de só "calculando" (B426)
+            let stage = crate::forma_progresso::texto(fenkra_solidos::forma_brep_cache::andamento::atual()).unwrap_or_else(|| tr(stage).to_string());
+            painter.text(bar.center_bottom() + egui::vec2(0., 16.), egui::Align2::CENTER_CENTER, stage, egui::FontId::proportional(12.), tx.gamma_multiply(140. / 255. * fade));
             painter.text(rect.right_bottom() - egui::vec2(16., 14.), egui::Align2::RIGHT_BOTTOM, concat!("v", env!("CARGO_PKG_VERSION")), egui::FontId::monospace(11.), tx.gamma_multiply(90. / 255. * fade));
         });
         root.ctx().request_repaint();
@@ -8893,6 +8895,7 @@ impl eframe::App for App {
         crate::sup_inclinacao::painel_inclinacao(self, ctx, area);
         crate::dfm_ui::painel(self, ctx, area);
         crate::verificar_ui::painel(self, ctx, area);
+        crate::forma_progresso::desenhar(ctx, area, self.gen_done < self.gen_sent);
         self.painel_importar(ctx, area);
         self.painel_features(ctx, area);
         self.painel_exportar(ctx, area);

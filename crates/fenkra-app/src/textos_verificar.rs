@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Traduções do painel "Verificar requisitos" (B418), à parte de `i18n.rs`.
+//! Traduções do painel "Verificar requisitos" (B418) e do progresso da forma livre (B426), à parte
+//! de `i18n.rs`.
 
 pub static TEXTOS: &[(&str, &str)] = &[
     ("Requisitos", "Requirements"),
@@ -48,4 +49,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("tamanho em Y (mm)", "size in Y (mm)"),
     ("tamanho em Z (mm)", "size in Z (mm)"),
     ("massa (kg)", "mass (kg)"),
+    // B426: progresso da conversão da forma livre
+    ("Convertendo a forma livre em sólido…", "Converting the free form into a solid…"),
+    ("O resultado fica guardado: a próxima vez abre sem converter.", "The result is kept: next time it opens without converting."),
 ];

@@ -179,6 +179,16 @@ fn nomes_das_faces(s: &Shape, d: &Decomposicao, centros: &[(V3, i32)]) -> Result
 pub fn converter(g: &Gaiola, continuidade: u8, tol: f64) -> Result<(Shape, Vec<i32>, RelatorioForma), String> {
     let t0 = std::time::Instant::now();
     let d = decompor(g)?;
+    // progresso para a interface (B426): costura do apoio, cada região e a costura final
+    use crate::forma_brep_cache::andamento;
+    struct Fim;
+    impl Drop for Fim {
+        fn drop(&mut self) {
+            andamento::terminar();
+        }
+    }
+    let _fim = Fim;
+    andamento::comecar(d.regioes.len() as u32 + 2);
     let tol = tol.max(1e-5);
     let mut rel = RelatorioForma { pedida: continuidade, remendos: d.remendos.len(), exatos: d.exatos(), ..Default::default() };
     // quem vai por preenchimento sai da lista de remendos
@@ -192,6 +202,7 @@ pub fn converter(g: &Gaiola, continuidade: u8, tol: f64) -> Result<(Shape, Vec<i
     let base: Vec<&Remendo> = d.remendos.iter().zip(&fora).filter(|(_, f)| !**f).map(|(r, _)| r).collect();
     let apoio = Shape::bezier_faces(&polos_planos(&base)).map_err(|e| e.0)?;
     let apoio = apoio.sewn(tol).map_err(|e| format!("não deu para costurar os remendos: {}", e.0))?;
+    andamento::passo();
     let mut tudo = apoio.clone();
     let mut centros: Vec<(V3, i32)> = base.iter().map(|r| (r.centro, nome_do_remendo(r))).collect();
     for (k, r) in d.regioes.iter().enumerate() {
@@ -229,6 +240,7 @@ pub fn converter(g: &Gaiola, continuidade: u8, tol: f64) -> Result<(Shape, Vec<i
         }
         rel.desvio_max = rel.desvio_max.max(item.desvio);
         rel.regioes.push(item);
+        andamento::passo();
     }
     let casca = tudo.sewn(tol.max(1e-3)).map_err(|e| format!("não deu para costurar: {}", e.0))?;
     let mut s = casca.clone();

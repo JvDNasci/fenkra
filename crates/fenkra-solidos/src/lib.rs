@@ -10,6 +10,7 @@ pub mod validade;
 pub mod verificar;
 pub mod forma_brep;
 pub mod forma_cache;
+pub mod forma_brep_cache;
 pub mod forma_vinculo;
 pub mod polimento;
 pub mod geo3d;
@@ -5883,7 +5884,7 @@ impl Ctx<'_> {
                 }
                 let Some(c) = fm.conversao.as_ref().filter(|c| !c.pausada) else { return Ok(aviso_vinculo) };
                 let tol = ev(&c.tol, &self.vars, "tolerância")?;
-                let (sh, nomes, rel) = forma_brep::converter(&gaiola, c.continuidade, tol)?;
+                let (sh, nomes, rel) = forma_brep_cache::converter(&gaiola, c.continuidade, tol)?;
                 let aviso = [aviso_vinculo, forma_brep::resumo(&rel)].into_iter().flatten().reduce(|a, b| format!("{a}; {b}"));
                 self.relatorios_forma.push((f.id, rel));
                 if sh.is_solid() {
