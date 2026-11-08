@@ -1115,6 +1115,10 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
     est.escolher("iso4762", Some("M6"));
     est.comprimento = Some(16.);
     est.fontes_abertas_demo = nome == "biblioteca_fontes";
+    // B241: `FENKRA_DEMO_BUSCA=<texto>` já escreve a busca do navegador, como a pessoa digitaria
+    if let Ok(b) = std::env::var("FENKRA_DEMO_BUSCA") {
+        est.filtro.busca = b;
+    }
     match nome {
         "biblioteca_ponto" | "biblioteca_solto" => {
             est.alvo = if nome.ends_with("ponto") { Alvo::Ponto } else { Alvo::Solto };
