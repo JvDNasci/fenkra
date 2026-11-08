@@ -751,16 +751,34 @@ impl AsmState {
                 geom_at(sh, local)?
             }
         };
+        // como reencontrar o elemento quando a peça mudar: pelo nome da face ou da aresta na peça,
+        // que sobrevive a um filete ou a uma face que andou
+        use fenkra_montagem::releitura::{self, Viva};
+        let mut pick = matches!(p, Pick::Face { .. }).then_some(local);
         let viva = match p {
-            Pick::Edge { .. } => Some(fenkra_montagem::releitura::Viva::Aresta { ponto: local }),
-            Pick::Vertex { .. } => Some(fenkra_montagem::releitura::Viva::Vertice),
+            Pick::Edge { .. } | Pick::Face { .. } => {
+                let NodeKind::Part { path } = &node.kind else { unreachable!() };
+                let full = full_path(self.dir().as_deref(), path);
+                let lp = self.cache.get(&full, true).ok();
+                match (p, lp) {
+                    (Pick::Edge { .. }, Some(lp)) => Some(releitura::viva_da_aresta(lp, local)),
+                    (Pick::Edge { .. }, None) => Some(Viva::Aresta { ponto: local }),
+                    (_, lp) => lp.and_then(|lp| {
+                        // o clique cai na malha da vista: leva o ponto até a superfície exata
+                        pick = lp.shape.as_ref().and_then(|s| s.surface_near(local).ok()).map(|(q, _)| q).or(pick);
+                        releitura::viva_da_face(lp, pick.unwrap_or(local))
+                    }),
+                }
+            }
+            Pick::Vertex { .. } => Some(Viva::Vertice),
             _ => None,
         };
-        Ok(MateRef { comp, geom, pick: matches!(p, Pick::Face { .. }).then_some(local), viva })
+        Ok(MateRef { comp, geom, pick, viva })
     }
 }
 
-pub(crate) const DICA_ALINHAMENTO: &str = "Troca o sentido das normais: a peça vira, e a cota continua do mesmo lado.";
+pub(crate) const DICA_PERDIDA: &str = "A peça mudou e a face ou aresta desta restrição não foi reencontrada. A restrição segue com a última posição boa: escolha o elemento de novo e use Reancorar.";
+pub(crate) const DICA_ALINHAMENTO: &str ="Troca o sentido das normais: a peça vira, e a cota continua do mesmo lado.";
 pub(crate) const DICA_LADO: &str = "Passa a cota para o outro lado da referência: a peça muda de lado sem virar.";
 
 // ============================================================== comandos
@@ -1894,16 +1912,20 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     let _ = crate::tree_ui::grupo(ui, "arvore_restricoes", Some("rest_contato"), format!("{} ({})", tr("Restrições e juntas"), st.asm.mates.len() + st.asm.rigid.len() + st.asm.joints.len() + st.asm.couplings.len() + st.asm.patterns.len()), true).corpo(ui, |ui| {
         for m in &st.asm.mates {
             let failed = st.report.failed.contains(&m.id) || st.em_conflito(m.id);
-            let txt = format!("{} {}  ({} ↔ {}){}", m.kind.icon(), m.name, st.asm.name_of(m.a.comp), st.asm.name_of(m.b.comp), if failed { " ✖" } else { "" });
+            let perdida = fenkra_montagem::releitura::perdida(&m.a) || fenkra_montagem::releitura::perdida(&m.b);
+            let txt = format!("{} {}  ({} ↔ {}){}{}", m.kind.icon(), m.name, st.asm.name_of(m.a.comp), st.asm.name_of(m.b.comp), if perdida { " ⚠" } else { "" }, if failed { " ✖" } else { "" });
             let mut t = RichText::new(txt).small();
             if failed {
                 t = t.color(crate::theme::st_err());
+            } else if perdida {
+                t = t.color(crate::theme::st_warn());
             }
             if m.suppressed {
                 t = t.strikethrough().weak();
             }
             crate::tree_ui::marca(ui);
             let r = ui.selectable_label(st.sel == Some(m.id) || st.simbolos.hover == Some(m.id), t);
+            let r = if perdida { r.on_hover_text(tr(DICA_PERDIDA)) } else { r };
             if st.sel == Some(m.id) {
                 crate::tree_ui::achar(r.rect);
             }
@@ -2639,7 +2661,16 @@ fn item_info(st: &AsmState, sel: Option<Id>) -> Option<(String, String, String, 
         return Some((icon.into(), kind.to_string(), n.name.clone(), chip));
     }
     if let Some(m) = st.asm.mates.iter().find(|m| m.id == s) {
-        let chip = if m.suppressed { off } else if st.report.failed.contains(&s) { bad } else { ok };
+        let perdida = fenkra_montagem::releitura::perdida(&m.a) || fenkra_montagem::releitura::perdida(&m.b);
+        let chip = if m.suppressed {
+            off
+        } else if st.report.failed.contains(&s) {
+            bad
+        } else if perdida {
+            ("PERDIDA", crate::theme::st_warn())
+        } else {
+            ok
+        };
         return Some((m.kind.icon().to_string(), tr(m.kind.label()).to_string(), m.name.clone(), chip));
     }
     if let Some(j) = st.asm.joints.iter().find(|j| j.id == s) {
@@ -2751,6 +2782,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let mut inverter: Option<(Id, bool)> = None;
     let vars_asm = st.asm.vars();
     let picked_comps = st.comps_of(&app.picks);
+    let ultimo_pick = app.picks.last().copied();
+    // elemento perdido a reancorar: (restrição, lado A)
+    let mut reancorar: Option<(Id, bool)> = None;
     match sel.and_then(|s| st.asm.nodes.iter().position(|n| n.id == s)) {
         Some(i) => {
             let n = &mut st.asm.nodes[i];
@@ -2990,6 +3024,18 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                     if failed {
                         ui.label(RichText::new(tr("✖ não satisfeita: conflita com outras restrições ou é impossível")).color(crate::theme::st_err()));
                     }
+                    for (lado_a, r, nome) in [(true, &m.a, na.clone()), (false, &m.b, nb.clone())] {
+                        if !fenkra_montagem::releitura::perdida(r) {
+                            continue;
+                        }
+                        ui.label(RichText::new(format!("⚠ {}: {nome}", tr("Referência perdida"))).color(crate::theme::st_warn())).on_hover_text(tr(DICA_PERDIDA));
+                        let pode = ultimo_pick.is_some();
+                        let b = ui.add_enabled(pode, egui::Button::new(format!("⊙ {} {nome}", tr("Reancorar na seleção atual:"))));
+                        let b = b.on_hover_text(tr("Clique no 3D a face ou aresta certa da mesma peça e use este botão: a restrição passa a usar ela."));
+                        if b.clicked() {
+                            reancorar = Some((m.id, lado_a));
+                        }
+                    }
                     // converter o tipo sem apagar o vínculo
                     let cur = m.kind.label();
                     egui::ComboBox::from_id_salt("tipo_rest").selected_text(tr(cur)).show_ui(ui, |ui| {
@@ -3116,6 +3162,16 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             }
         }
     }
+    }
+    if let (Some((id, lado_a)), Some(p)) = (reancorar, ultimo_pick) {
+        // o passo de desfazer sai da comparação com `before`, no fim do painel
+        let feito = st.mate_ref(p).and_then(|nova| fenkra_montagem::releitura::reancorar(&mut st.asm, id, lado_a, nova));
+        match feito {
+            Ok(()) => {
+                aviso_links = Some((tr("Restrição reancorada").to_string(), false));
+            }
+            Err(e) => aviso_links = Some((format!("{}: {}", tr("Não deu para reancorar"), tr(&e)), true)),
+        }
     }
     if let Some(id) = reinit {
         st.asm.init_motion(id);

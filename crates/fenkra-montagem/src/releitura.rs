@@ -4,7 +4,10 @@
 //! Uma restrição guarda a geometria já lida no sistema da peça. Isso é rápido para resolver, mas fica
 //! velho quando a peça muda. Ler de novo depende do que foi clicado, e é isso que [`Viva`] guarda:
 //!
-//! - **face**: o ponto clicado (`MateRef::pick`) volta para `geom_at`;
+//! - **face**: a nomeação topológica da peça (ADR 0010): o comando que criou a face e o papel dela
+//!   para ele. Um filete ou uma face que andou não trocam a face; o ponto clicado (`MateRef::pick`)
+//!   só desempata. Face sem nome usa o ponto, mas só enquanto ele continuar sobre a peça;
+//! - **aresta nomeada**: a aresta entre duas faces nomeadas;
 //! - **aresta**: procura na malha a aresta mais perto do ponto guardado. Perguntar pela face ali
 //!   devolveria o eixo do cilindro vizinho, e não a aresta;
 //! - **vértice**: a ponta de aresta mais perto;
@@ -13,15 +16,18 @@
 //! - **geometria da montagem**: a identidade do plano, ponto, linha ou sketch no documento embutido.
 //!
 //! Nada aqui adivinha: quando o que foi clicado sumiu, a referência fica como estava e a restrição
-//! continua valendo com a última geometria boa.
+//! continua valendo com a última geometria boa. A face e a aresta ainda ficam marcadas como
+//! perdidas, para a interface avisar e oferecer reancorar ([`reancorar`]).
 
 use crate::encaixe::{self, TipoEncaixe};
 use crate::kin::JFrame;
 use crate::load::{full_path, geom_at, LoadedPart, PartCache};
 use crate::*;
-use fenkra_kernel::Mesh;
+use fenkra_core::{EdgeKey, FaceKey};
+use fenkra_kernel::{Mesh, Topology};
 use fenkra_solidos::geo3d::{fit_circle, Curve3};
-use fenkra_solidos::RecomputeResult;
+use fenkra_solidos::refs::{self, View};
+use fenkra_solidos::{BodyResult, RecomputeResult};
 use std::path::{Path, PathBuf};
 
 /// Como a referência se reencontra. Sem isto, vale o ponto clicado na face.
@@ -35,6 +41,215 @@ pub enum Viva {
     Encaixe { tipo: TipoEncaixe },
     /// plano, ponto, linha ou sketch da geometria da montagem
     Geometria { id: Id },
+    /// face pelo nome que ela tem na peça (ADR 0010). `chave` vazia: a face não tem papel conhecido,
+    /// e vale o ponto clicado. `perdida`: a peça mudou e não há como saber qual é a mesma face
+    Face {
+        chave: Option<FaceKey>,
+        #[serde(default)]
+        perdida: bool,
+    },
+    /// aresta entre duas faces nomeadas, com o ponto do meio para desempatar
+    ArestaNomeada {
+        chave: EdgeKey,
+        ponto: V3,
+        #[serde(default)]
+        perdida: bool,
+    },
+}
+
+/// Distância do ponto clicado até a face para ele ainda contar como "sobre a face" (mm). Cobre o
+/// erro da malha em faces curvas; uma face que andou mais que isso deixa o ponto no ar.
+const NA_FACE: f64 = 0.5;
+
+/// A referência perdeu a face ou a aresta em que nasceu?
+pub fn perdida(r: &MateRef) -> bool {
+    matches!(r.viva, Some(Viva::Face { perdida: true, .. } | Viva::ArestaNomeada { perdida: true, .. }))
+}
+
+/// Troca o elemento A (`lado_a`) ou B da restrição por `nova`, escolhida de novo pelo usuário na
+/// mesma peça. É a saída quando a referência se perdeu: nada é adivinhado, quem decide é o usuário.
+pub fn reancorar(a: &mut Assembly, mate: Id, lado_a: bool, nova: MateRef) -> Result<(), String> {
+    let m = a.mates.iter_mut().find(|m| m.id == mate).ok_or("restrição não encontrada")?;
+    let (velha, outra) = if lado_a { (&m.a, &m.b) } else { (&m.b, &m.a) };
+    if nova.comp != velha.comp {
+        return Err("escolha o elemento novo na mesma peça".into());
+    }
+    let (ga, gb) = if lado_a { (nova.geom, outra.geom) } else { (outra.geom, nova.geom) };
+    if !par_valido(&m.kind, &ga, &gb) {
+        return Err("este elemento não serve para esta restrição".into());
+    }
+    if lado_a {
+        m.a = nova;
+    } else {
+        m.b = nova;
+    }
+    Ok(())
+}
+
+/// Topologia de um corpo, lida da malha (mesma ordem de faces e arestas).
+fn topologia(m: &Mesh) -> Topology {
+    Topology { faces: m.face_info.clone(), edge_mids: m.edge_mids.chunks_exact(3).map(|v| [v[0] as f64, v[1] as f64, v[2] as f64]).collect(), edge_faces: m.edge_faces.clone() }
+}
+
+fn vista<'a>(t: &'a Topology, b: &'a BodyResult) -> View<'a> {
+    View { topo: t, owners: &b.face_owner, roles: &b.face_role }
+}
+
+fn distancia_ao_triangulo(p: V3, a: V3, b: V3, c: V3) -> f64 {
+    let (ab, ac) = (sub(b, a), sub(c, a));
+    let n = cross(ab, ac);
+    let nn = dot(n, n);
+    if nn > 1e-24 {
+        // projeção no plano do triângulo; se cair dentro, a distância é a altura
+        let t = dot(sub(p, a), n) / nn;
+        let q = [0, 1, 2].map(|i| p[i] - n[i] * t);
+        let qa = sub(q, a);
+        let (d00, d01, d11, d20, d21) = (dot(ab, ab), dot(ab, ac), dot(ac, ac), dot(qa, ab), dot(qa, ac));
+        let den = d00 * d11 - d01 * d01;
+        let v = (d11 * d20 - d01 * d21) / den;
+        let u = (d00 * d21 - d01 * d20) / den;
+        if v >= 0. && u >= 0. && v + u <= 1. {
+            return norm(sub(p, q));
+        }
+    }
+    distancia_ao_segmento(p, a, b).min(distancia_ao_segmento(p, b, c)).min(distancia_ao_segmento(p, c, a))
+}
+
+fn distancia_a_face(m: &Mesh, f: usize, q: V3) -> f64 {
+    let (i0, i1) = (m.face_ranges[f] as usize, m.face_ranges.get(f + 1).map_or(m.indices.len(), |x| *x as usize));
+    let v = |k: u32| {
+        let k = k as usize * 3;
+        [m.positions[k] as f64, m.positions[k + 1] as f64, m.positions[k + 2] as f64]
+    };
+    m.indices[i0..i1].chunks_exact(3).map(|t| distancia_ao_triangulo(q, v(t[0]), v(t[1]), v(t[2]))).fold(f64::MAX, f64::min)
+}
+
+/// Face da peça mais perto de `q`: (corpo, face, distância).
+fn face_perto(lp: &LoadedPart, q: V3) -> Option<(usize, usize, f64)> {
+    lp.result.bodies.iter().enumerate().flat_map(|(bi, b)| (0..b.mesh.face_ranges.len()).map(move |f| (bi, f, distancia_a_face(&b.mesh, f, q)))).min_by(|a, b| a.2.total_cmp(&b.2))
+}
+
+/// Aresta da peça mais perto de `q`: (corpo, aresta).
+fn aresta_indice_perto(lp: &LoadedPart, q: V3) -> Option<(usize, usize)> {
+    let medida = |p: &[V3]| p.windows(2).map(|w| distancia_ao_segmento(q, w[0], w[1])).fold(f64::MAX, f64::min);
+    lp.result
+        .bodies
+        .iter()
+        .enumerate()
+        .flat_map(|(bi, b)| (0..b.mesh.edge_ranges.len()).map(move |e| (bi, e, medida(&encaixe::polilinha(&b.mesh, e)))))
+        .min_by(|a, b| a.2.total_cmp(&b.2))
+        .map(|(bi, e, _)| (bi, e))
+}
+
+/// Como reencontrar a face clicada em `q` (sistema da peça): pelo nome dela, quando a face tem
+/// papel conhecido e o nome sozinho já a separa das outras; senão pelo ponto.
+pub fn viva_da_face(lp: &LoadedPart, q: V3) -> Option<Viva> {
+    let (bi, j, d) = face_perto(lp, q)?;
+    if d > NA_FACE {
+        return None;
+    }
+    let b = &lp.result.bodies[bi];
+    let t = topologia(&b.mesh);
+    Some(Viva::Face { chave: refs::promote_face(&vista(&t, b), j), perdida: false })
+}
+
+/// Como reencontrar a aresta clicada perto de `ponto`: entre as duas faces nomeadas, quando dá; senão
+/// pela aresta mais perto do ponto, como antes.
+pub fn viva_da_aresta(lp: &LoadedPart, ponto: V3) -> Viva {
+    let chave = aresta_indice_perto(lp, ponto).and_then(|(bi, e)| {
+        let b = &lp.result.bodies[bi];
+        let t = topologia(&b.mesh);
+        refs::promote_edge(&vista(&t, b), e)
+    });
+    match chave {
+        Some(chave) => Viva::ArestaNomeada { chave, ponto, perdida: false },
+        None => Viva::Aresta { ponto },
+    }
+}
+
+/// Elemento da face `j` do corpo `bi`. No plano, o ponto é o anterior levado até o plano novo: o
+/// solucionador só olha o plano, e assim a restrição não muda à toa.
+fn geom_da_face(lp: &LoadedPart, bi: usize, j: usize, antes: &Geom) -> Option<Geom> {
+    let info = lp.result.bodies.get(bi)?.mesh.face_info.get(j)?;
+    let g = geom_at(lp.shape.as_ref()?, info.point).ok()?;
+    Some(match g {
+        Geom::Plane { n, p } => {
+            let p0 = base(antes).0;
+            let s = dot(sub(p0, p), n);
+            Geom::Plane { p: if s.abs() < 1e-9 { p0 } else { [0, 1, 2].map(|i| p0[i] - n[i] * s) }, n }
+        }
+        g => g,
+    })
+}
+
+/// Mesmo tipo e mesma direção: plano com a normal para o mesmo lado, eixo paralelo.
+fn mesma_direcao(a: &Geom, b: &Geom) -> bool {
+    match (a, b) {
+        (Geom::Plane { n: u, .. }, Geom::Plane { n: v, .. }) => dot(unit(*u), unit(*v)) > 0.999,
+        (Geom::Axis { d: u, .. }, Geom::Axis { d: v, .. }) => dot(unit(*u), unit(*v)).abs() > 0.999,
+        _ => false,
+    }
+}
+
+/// O que uma leitura devolve: geometria, o que lembrar e o ponto clicado novo (quando o antigo ficou
+/// fora da face).
+type Lida = (Geom, Option<Viva>, Option<V3>);
+
+/// Leitura da face, pelo nome ou, sem nome, pelo ponto clicado.
+fn ler_face(r: &MateRef, lp: &LoadedPart, chave: Option<FaceKey>) -> Option<Lida> {
+    let perdeu = |chave| Some((r.geom, Some(Viva::Face { chave, perdida: true }), None));
+    let (bi, j, chave) = match chave {
+        Some(k) => {
+            let achadas: Vec<(usize, usize)> = lp
+                .result
+                .bodies
+                .iter()
+                .enumerate()
+                .filter_map(|(bi, b)| {
+                    let t = topologia(&b.mesh);
+                    refs::find_face(&vista(&t, b), &k, r.pick).ok().map(|j| (bi, j))
+                })
+                .collect();
+            let [(bi, j)] = achadas[..] else { return perdeu(Some(k)) };
+            (bi, j, Some(k))
+        }
+        None => {
+            // face sem nome: o ponto clicado. Fora da peça, a face mais perto só vale se estiver
+            // virada para o mesmo lado; antes valia qualquer uma, e a restrição pulava de face
+            let (bi, j, d) = face_perto(lp, r.pick?)?;
+            if d > NA_FACE && !mesma_direcao(&geom_da_face(lp, bi, j, &r.geom)?, &r.geom) {
+                return perdeu(None);
+            }
+            let b = &lp.result.bodies[bi];
+            let t = topologia(&b.mesh);
+            (bi, j, refs::promote_face(&vista(&t, b), j))
+        }
+    };
+    let g = geom_da_face(lp, bi, j, &r.geom)?;
+    // mantém o tipo escolhido: uma face plana que virou curva não é mais a mesma referência
+    if std::mem::discriminant(&g) != std::mem::discriminant(&r.geom) {
+        return perdeu(chave);
+    }
+    let m = &lp.result.bodies[bi].mesh;
+    let pick = r.pick.filter(|q| distancia_a_face(m, j, *q) > NA_FACE).and_then(|_| m.face_info.get(j).map(|i| i.point));
+    Some((g, Some(Viva::Face { chave, perdida: false }), pick))
+}
+
+/// Leitura da aresta entre duas faces nomeadas.
+fn ler_aresta_nomeada(r: &MateRef, lp: &LoadedPart, chave: EdgeKey, ponto: V3) -> Option<Lida> {
+    let achadas: Vec<Vec<V3>> = lp
+        .result
+        .bodies
+        .iter()
+        .filter_map(|b| {
+            let t = topologia(&b.mesh);
+            refs::find_edge(&vista(&t, b), &chave, Some(ponto)).ok().map(|e| encaixe::polilinha(&b.mesh, e))
+        })
+        .collect();
+    let perdeu = Some((r.geom, Some(Viva::ArestaNomeada { chave, ponto, perdida: true }), None));
+    let [pts] = &achadas[..] else { return perdeu };
+    let Some(g) = eixo_da_aresta(pts, base(&r.geom).1) else { return perdeu };
+    Some((g, Some(Viva::ArestaNomeada { chave, ponto: encaixe::meio(pts), perdida: false }), None))
 }
 
 fn malhas(lp: &LoadedPart) -> Vec<&Mesh> {
@@ -94,22 +309,21 @@ fn base(g: &Geom) -> (V3, Option<V3>) {
 }
 
 /// Leitura nova da referência na peça dela. Devolve a geometria e o que precisa ser lembrado.
-fn ler_na_peca(r: &MateRef, lp: &LoadedPart) -> Option<(Geom, Option<Viva>)> {
+fn ler_na_peca(r: &MateRef, lp: &LoadedPart) -> Option<Lida> {
     let ms = malhas(lp);
     let (p, d) = base(&r.geom);
     match r.viva {
         Some(Viva::Aresta { ponto }) => {
             let pts = aresta_perto(&ms, ponto)?;
             let g = eixo_da_aresta(&pts, d)?;
-            Some((g, Some(Viva::Aresta { ponto: encaixe::meio(&pts) })))
+            Some((g, Some(Viva::Aresta { ponto: encaixe::meio(&pts) }), None))
         }
-        Some(Viva::Vertice) => Some((Geom::Point(vertice_perto(&ms, p)?), r.viva)),
+        Some(Viva::ArestaNomeada { chave, ponto, .. }) => ler_aresta_nomeada(r, lp, chave, ponto),
+        Some(Viva::Vertice) => Some((Geom::Point(vertice_perto(&ms, p)?), r.viva, None)),
         Some(Viva::Encaixe { .. } | Viva::Geometria { .. }) => None,
-        None => {
-            let g = geom_at(lp.shape.as_ref()?, r.pick?).ok()?;
-            // mantém o tipo escolhido (um ponto continua ponto)
-            (std::mem::discriminant(&g) == std::mem::discriminant(&r.geom)).then_some((g, None))
-        }
+        Some(Viva::Face { chave, .. }) => ler_face(r, lp, chave),
+        // arquivo antigo, só com o ponto clicado: a primeira leitura já guarda o nome da face
+        None => ler_face(r, lp, None),
     }
 }
 
@@ -167,7 +381,7 @@ impl<'a> Leitor<'a> {
     /// Atualiza a referência. Devolve se a geometria mudou.
     pub fn reler(&mut self, r: &mut MateRef) -> bool {
         let lida = if let Some(Viva::Geometria { id }) = r.viva {
-            self.geometria.as_ref().and_then(|g| ler_geometria(g, id, Some(&r.geom))).map(|g| (g, r.viva))
+            self.geometria.as_ref().and_then(|g| ler_geometria(g, id, Some(&r.geom))).map(|g| (g, r.viva, None))
         } else if r.viva.is_none() && r.pick.is_none() {
             None
         } else {
@@ -176,16 +390,19 @@ impl<'a> Leitor<'a> {
             if let Some(Viva::Encaixe { tipo }) = r.viva {
                 let todos = self.encaixes.entry(arq.clone()).or_insert_with(|| encaixes_da_peca(lp));
                 let (p, d) = base(&r.geom);
-                d.and_then(|z| encaixe_perto(todos, tipo, p, z)).map(|c| (encaixe::geom_local(&c, &Placement::default()), r.viva))
+                d.and_then(|z| encaixe_perto(todos, tipo, p, z)).map(|c| (encaixe::geom_local(&c, &Placement::default()), r.viva, None))
             } else {
                 ler_na_peca(r, lp)
             }
         };
-        let Some((g, viva)) = lida else { return false };
+        let Some((g, viva, pick)) = lida else { return false };
         let mudou = g != r.geom;
         r.geom = g;
         if viva.is_some() {
             r.viva = viva;
+        }
+        if pick.is_some() {
+            r.pick = pick;
         }
         mudou
     }
@@ -269,6 +486,109 @@ mod tests {
         let f = dir.join("b.fkp");
         std::fs::write(&f, doc.to_json()).unwrap();
         cache.forget(&f);
+    }
+
+    /// O bloco com filete de raio `r` na aresta de cima em X = `l`.
+    fn bloco_com_filete(l: f64, h: f64, x: f64, r: f64) -> Document {
+        use fenkra_core::{EdgeOp, EdgeSel};
+        let mut d = bloco(l, h, x);
+        d.add_feature(FeatureKind::Fillet(EdgeOp { value: r.to_string(), edges: EdgeSel::Edges(vec![[l, 10., h]]), mode: Default::default(), prop: Default::default(), keys: vec![], extra: Default::default() }));
+        d
+    }
+
+    /// Referência criada como a interface cria: clique na face, guardando o nome dela.
+    fn clique_na_face(dir: &Path, cache: &mut PartCache, c: Id, q: V3) -> MateRef {
+        let lp = cache.get(&dir.join("b.fkp"), true).unwrap();
+        let geom = geom_at(lp.shape.as_ref().unwrap(), q).unwrap();
+        MateRef { comp: c, geom, pick: Some(q), viva: viva_da_face(lp, q) }
+    }
+
+    #[test]
+    fn filete_na_peca_mantem_a_restricao_na_mesma_face() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("filete");
+        let (a, c, mut cache) = montagem(&dir, &bloco(40., 10., 12.));
+        // face de cima, clicada perto da aresta que vai ganhar o filete
+        let mut r = clique_na_face(&dir, &mut cache, c, [37., 10., 10.]);
+        assert!(matches!(r.viva, Some(Viva::Face { chave: Some(_), perdida: false })), "{:?}", r.viva);
+        // filete de 4 na aresta e a peça 5 mais alta: o ponto clicado fica dentro da peça, mais perto
+        // da face da ponta do que da de cima
+        trocar(&dir, &mut cache, &bloco_com_filete(40., 15., 12., 4.));
+        Leitor::novo(&a, &mut cache, Some(&dir)).reler(&mut r);
+        let Geom::Plane { p, n } = r.geom else { panic!("{:?}", r.geom) };
+        assert!(n[2] > 0.999, "continua na face de cima: {n:?}");
+        assert!((p[2] - 15.).abs() < 1e-6, "{p:?}");
+        assert!(!perdida(&r));
+    }
+
+    #[test]
+    fn face_que_andou_continua_a_mesma() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("face_andou");
+        let (a, c, mut cache) = montagem(&dir, &bloco(40., 10., 12.));
+        let mut r = clique_na_face(&dir, &mut cache, c, [40., 10., 5.]);
+        trocar(&dir, &mut cache, &bloco(60., 10., 12.));
+        assert!(Leitor::novo(&a, &mut cache, Some(&dir)).reler(&mut r));
+        let Geom::Plane { p, n } = r.geom else { panic!("{:?}", r.geom) };
+        assert!(n[0] > 0.999, "a face da ponta, não a de cima: {n:?}");
+        assert!((p[0] - 60.).abs() < 1e-6, "{p:?}");
+        // o ponto clicado vai junto, para a reserva continuar valendo
+        assert!((r.pick.unwrap()[0] - 60.).abs() < 1e-6, "{:?}", r.pick);
+    }
+
+    #[test]
+    fn referencia_antiga_sem_nome_avisa_em_vez_de_pular_para_outra_face() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("antiga");
+        let (a, c, mut cache) = montagem(&dir, &bloco(40., 10., 12.));
+        let antes = Geom::Plane { p: [40., 10., 5.], n: [1., 0., 0.] };
+        // como gravavam as versões anteriores: só o ponto clicado
+        let mut r = MateRef { comp: c, geom: antes, pick: Some([40., 10., 5.]), viva: None };
+        trocar(&dir, &mut cache, &bloco(60., 10., 12.));
+        Leitor::novo(&a, &mut cache, Some(&dir)).reler(&mut r);
+        assert_eq!(r.geom, antes, "a face mais perto do ponto é a de cima: não pode virar ela");
+        assert!(perdida(&r));
+        // sem mudança, a referência antiga ganha o nome da face na primeira leitura
+        let mut r2 = MateRef { comp: c, geom: Geom::Plane { p: [60., 10., 5.], n: [1., 0., 0.] }, pick: Some([60., 10., 5.]), viva: None };
+        Leitor::novo(&a, &mut cache, Some(&dir)).reler(&mut r2);
+        assert!(matches!(r2.viva, Some(Viva::Face { chave: Some(_), perdida: false })), "{:?}", r2.viva);
+    }
+
+    #[test]
+    fn aresta_que_virou_filete_avisa_e_aceita_reancorar() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let dir = pasta("aresta_filete");
+        let (mut a, c, mut cache) = montagem(&dir, &bloco(40., 10., 12.));
+        let ponto = [40., 10., 10.];
+        let viva = viva_da_aresta(cache.get(&dir.join("b.fkp"), true).unwrap(), ponto);
+        assert!(matches!(viva, Viva::ArestaNomeada { perdida: false, .. }), "{viva:?}");
+        let antes = Geom::Axis { p: [40., 0., 10.], d: [0., 1., 0.] };
+        let ra = MateRef { comp: c, geom: antes, pick: None, viva: Some(viva) };
+        let outra = a.add_component("Outra", NodeKind::Part { path: "o.fkp".into() }, Placement::default(), None);
+        let rb = MateRef { comp: outra, geom: Geom::Axis { p: [0.; 3], d: [0., 1., 0.] }, pick: None, viva: None };
+        let m = a.add_mate(MateKind::Coincident { flip: false }, ra, rb);
+        // a aresta virou filete: não há mais aresta entre as duas faces
+        trocar(&dir, &mut cache, &bloco_com_filete(40., 10., 12., 3.));
+        reler_montagem(&mut a, &mut cache, Some(&dir));
+        let mm = a.mates.iter().find(|x| x.id == m).unwrap();
+        assert!(perdida(&mm.a));
+        assert_eq!(mm.a.geom, antes, "segue com a última geometria boa");
+        // reancorar: só na mesma peça
+        let errada = MateRef { comp: outra, ..mm.a };
+        assert!(reancorar(&mut a, m, true, errada).is_err());
+        let viva = viva_da_aresta(cache.get(&dir.join("b.fkp"), true).unwrap(), [37., 10., 10.]);
+        let nova = MateRef { comp: c, geom: Geom::Axis { p: [37., 0., 10.], d: [0., 1., 0.] }, pick: None, viva: Some(viva) };
+        reancorar(&mut a, m, true, nova).unwrap();
+        reler_montagem(&mut a, &mut cache, Some(&dir));
+        assert!(!perdida(&a.mates.iter().find(|x| x.id == m).unwrap().a));
     }
 
     #[test]
