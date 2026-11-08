@@ -5481,6 +5481,8 @@ impl Ctx<'_> {
                 // cantos com qualquer outra linha de membro (deste comando ou de outro)
                 let diag = |g: &MemberGeom| (g.w * g.w + g.h * g.h).sqrt() + 1.;
                 let mut joints: Vec<Vec<(V3, V3, V3, MemberGeom, CornerMode, bool, f64)>> = vec![vec![]; geo.len()];
+                // B387: linhas cuja ponta entra no meio de outro membro sem Aparar nem Encaixe
+                let mut sem_tratamento: Vec<usize> = vec![];
                 for i in 0..geo.len() {
                     let gi = geo[i].clone();
                     for (oid, oi, ok, og) in &lines {
@@ -5497,7 +5499,16 @@ impl Ctx<'_> {
                             },
                         };
                         let (mode, first, gap) = self.joint_rule((f.id, i, my_k), (*oid, *oi, *ok))?;
+                        if em_t && !matches!(mode, CornerMode::Aparar | CornerMode::Encaixe) && !sem_tratamento.contains(&i) {
+                            sem_tratamento.push(i);
+                        }
                         let (mode, first) = if em_t { (if matches!(mode, CornerMode::Aparar | CornerMode::Encaixe) { mode } else { CornerMode::Nenhum }, false) } else { (mode, first) };
+                        // B387: num nó de dobra fundido, o tubo dobrado continua pelo nó; outro membro
+                        // que chega ali é cortado contra ele, mas esta perna não ganha sobra (a sobra
+                        // apagava o recuo da dobradeira e deixava um bico de perna saindo da curva)
+                        if first && *oid != f.id && plano_dobra.cadeias.iter().flat_map(|c| &c.nos).any(|n| (n.antes == i || n.depois == i) && geo3d::dist(n.p, p) < 1e-4 && st_dobra_geo::no_fundivel(n)) {
+                            continue;
+                        }
                         // dobra de tubo: a dobradeira recua as pernas e põe um arco (nada a cortar); os
                         // demais modos cortam em esquadria (os rasgos em V são os itens B328 e B333)
                         let mode = if mode == CornerMode::Dobra {
@@ -5726,6 +5737,16 @@ impl Ctx<'_> {
                         .map(|l| format!("{:.0} mm ({} barras)", l, (l / lim).ceil()))
                         .collect();
                     (!long.is_empty() && lim > 0.).then(|| format!("⚠ emenda: barra maior que a matéria-prima de {lim:.0} mm — {}", long.join(", ")))
+                };
+                let warn = if sem_tratamento.is_empty() {
+                    warn
+                } else {
+                    let l: Vec<String> = sem_tratamento.iter().map(|i| (i + 1).to_string()).collect();
+                    let t = format!("⚠ ponta entra no meio de outro membro sem corte (linhas {}): use o canto Aparar ou Encaixe", l.join(", "));
+                    Some(match warn {
+                        Some(w) => format!("{t} | {w}"),
+                        None => t,
+                    })
                 };
                 let warn = if dobra_avisos.is_empty() {
                     warn
@@ -6845,7 +6866,7 @@ struct MemberGeom {
 /// Ponta de `a` que cai no meio do eixo de `b` (junta em T): (ponto, direção para dentro de `a`,
 /// direção de `b`). Fica de fora a ponta que já coincide com uma ponta de `b` (é `shared_end`) e a que
 /// está fora da linha. A tolerância é de 0,05 mm do eixo.
-fn t_junction(a: &MemberGeom, b: &MemberGeom) -> Option<(V3, V3, V3)> {
+pub(crate) fn t_junction(a: &MemberGeom, b: &MemberGeom) -> Option<(V3, V3, V3)> {
     let eixo = geo3d::sub(b.end, b.start);
     let comp = geo3d::norm(eixo);
     let u = geo3d::unit(eixo)?;
@@ -6972,6 +6993,10 @@ pub struct CutRow {
     pub angle2: Option<f64>,
     /// comprimento da ponta longa (maior extensão do sólido ao longo do eixo); só leitura, vem do sólido
     pub long: f64,
+    /// B387: a ponta 1 (ou 2) é um encaixe contra outro membro (corte que acompanha o contorno; o
+    /// ângulo fica `None` porque a ponta não é plana)
+    pub encaixe1: bool,
+    pub encaixe2: bool,
     /// tubo dobrado por dobradeira: `length` é o comprimento desenvolvido da barra reta (B331)
     pub tubo: Option<st_dobra::TuboDobrado>,
 }
@@ -7302,6 +7327,8 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
             angle2: end_angles(&g.shape).1,
             long: (g.signature.bbox[5] - g.signature.bbox[2]) as f64 / 10.,
             tubo: None,
+            encaixe1: false,
+            encaixe2: false,
         })
         .collect();
     // B331: o tubo dobrado em um sólido só leva as dobras, os raios e o modo na linha
@@ -7310,6 +7337,16 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         for r in rows.iter_mut() {
             if let Some(&(f, i)) = r.members.first() {
                 r.tubo = tubos.iter().find(|t| t.fundido && t.feature == f && t.linhas.first() == Some(&i)).cloned();
+            }
+        }
+    }
+    // B387: pontas de encaixe ditas na linha (o ângulo de uma ponta que não é plana fica vazio)
+    let encaixes = st_encaixe_doc::encaixes_da_estrutura(doc, &Default::default());
+    if !encaixes.is_empty() {
+        for r in rows.iter_mut() {
+            if let Some(e) = r.members.first().and_then(|m| encaixes.iter().find(|e| (e.feature, e.linha) == *m)) {
+                r.encaixe1 = e.ponta1.is_some();
+                r.encaixe2 = e.ponta2.is_some();
             }
         }
     }
@@ -7344,6 +7381,8 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
                     angle2: None,
                     long: len,
                     tubo: None,
+                    encaixe1: false,
+                    encaixe2: false,
                 }),
             }
         }
