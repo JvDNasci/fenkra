@@ -579,6 +579,8 @@ fn contour_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, i
 }
 
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
+    // B136: prévia das linhas da escada e do guarda-corpo enquanto o comando está aberto
+    crate::st_acesso_ui::overlay(app, ui, rect, &cam);
     alcas(app, ui, rect, cam);
     // B411: os rótulos de valor vão por cima de todas as setas e anéis, para nenhum ficar cortado
     crate::chapa_manip_ui::descarrega_rotulos(ui, rect);

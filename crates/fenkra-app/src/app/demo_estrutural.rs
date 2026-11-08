@@ -12,6 +12,8 @@
 //!   longo da aresta; com `FENKRA_EDITAR=Reforço1` ou `Placa1` abre o painel.
 //! * `FENKRA_DEMO_QUADRO=1`: quadro de tubo redondo com longarinas dobradas e travessas com canto
 //!   Encaixe chegando no meio de um trecho e num nó de dobra (B387, K-09 do kart), com a lista de corte.
+//! * `FENKRA_DEMO_ACESSO=<1|gerada>`: comando Escada e guarda-corpo aberto ao lado de uma plataforma (B136), com a
+//!   prévia das linhas no 3D; `gerada` já põe a escada de dois lances na peça e fecha o painel.
 
 use super::*;
 
@@ -149,6 +151,31 @@ impl App {
             d.add_feature(FeatureKind::StructWeld(w));
             for r in &mut d.references {
                 r.visible = false;
+            }
+            self.load_doc(d, None, None);
+            self.settings.bench = crate::settings::Bench::Estrutural;
+            self.started = true;
+        }
+        if let Ok(v) = std::env::var("FENKRA_DEMO_ACESSO") {
+            let mut d = Document::new("Escada");
+            if v == "gerada" {
+                let e = fenkra_solidos::st_acesso::Escada { altura: 4400., ..Default::default() };
+                if let Ok((_, p)) = fenkra_solidos::st_acesso::pecas_escada(&e) {
+                    fenkra_solidos::st_acesso::inserir(&mut d, &p, [0.; 3], 0.);
+                }
+                for r in &mut d.references {
+                    r.visible = false;
+                }
+                self.st_acesso_open = false;
+            } else {
+                // contexto da prévia: o guarda-corpo da plataforma onde a escada padrão (2 m) chega
+                let gc = fenkra_solidos::st_acesso::GuardaCorpo::default();
+                let borda = [[-500., 0., 2000.], [-500., 1500., 2000.], [500., 1500., 2000.], [500., 0., 2000.]];
+                let p = fenkra_solidos::st_acesso::guarda_corpo(&borda, false, &gc, "Plataforma: ");
+                fenkra_solidos::st_acesso::inserir(&mut d, &p, [0., 2070., 0.], 0.);
+                for r in &mut d.references {
+                    r.visible = false;
+                }
             }
             self.load_doc(d, None, None);
             self.settings.bench = crate::settings::Bench::Estrutural;

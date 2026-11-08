@@ -146,7 +146,7 @@ modelos!(
     "sm_aba_superficie", "sm_alivio_canto", "sm_bainha", "sm_desdobrar", "sm_dobra_linha", "sm_estampo",
     "sm_furo_flangeado", "sm_joggle", "sm_parametros", "sm_parede", "sm_rasgo_circular", "sm_recorte",
     "sm_veneziana", "spine", "spline", "spline_controle", "st_biblioteca", "st_canto_aparar",
-    "st_canto_encaixe", "st_canto_meia", "st_canto_nenhum", "st_corte", "st_membro", "st_montagem", "st_placa",
+    "st_canto_encaixe", "st_canto_meia", "st_canto_nenhum", "st_corte", "st_escada", "st_membro", "st_montagem", "st_placa",
     "st_reforco", "st_solda", "sup_cilindro", "sup_concordancia", "sup_conectar", "sup_deslocada", "sup_esfera",
     "sup_extraida", "sup_extrudada", "sup_filete", "sup_filete_aresta", "sup_multisecoes", "sup_preenchida",
     "sup_regrada", "sup_revolucao", "sup_tubo", "sup_varredura", "sup_varredura_av", "sweep_corrigido", "sweep_fixo",

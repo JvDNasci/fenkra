@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Fenkra — CAD paramétrico open source.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// a tabela de traduções encadeia dezenas de `textos_*`: o tipo do iterador passa do limite padrão
+#![recursion_limit = "256"]
 
 mod app;
 mod examples;
@@ -145,6 +147,7 @@ mod textos_dobra_tubo;
 mod st_dobra_ui;
 mod st_dobra_corte_ui;
 mod st_cantos_ui;
+mod st_acesso_ui;
 mod st_limite_ui;
 mod textos_st_limite;
 mod st_encaixe_ui;
