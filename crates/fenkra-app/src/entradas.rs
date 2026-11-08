@@ -118,6 +118,8 @@ pub fn campo_ativo(k: &FeatureKind) -> Option<Espera> {
         FeatureKind::SmBend(x) if x.sketch.is_none() && x.a == x.b => Some(Espera::Face),
         FeatureKind::SmJoggle(x) if x.plane.is_none() && x.a == x.b => Some(Espera::Face),
         FeatureKind::SmLouver(x) if x.a == x.b => Some(Espera::Face),
+        // B31: a aba curva vinda de outro modo ainda não tem a cadeia de arestas
+        FeatureKind::SmCurveFlange(x) if x.edge.len() < 2 => Some(Espera::Aresta),
         FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => match (&o.mode, &o.edges) {
             (EdgeMode::FaceFace(a, b), _) if *a == z || *b == z => Some(Espera::Face),
             (EdgeMode::FullRound { mid, a, b }, _) if [mid, a, b].iter().any(|p| **p == z) => Some(Espera::Face),
@@ -477,6 +479,18 @@ mod tests {
         assert_eq!(campo_ativo(&FeatureKind::SmBend(b)), None);
         let v = SmLouver { a: [1.; 3], b: [1.; 3], width: s("10"), height: s("4"), flip: false, down: false };
         assert_eq!(campo_ativo(&FeatureKind::SmLouver(v)), Some(Espera::Face));
+    }
+
+    /// B31: trocar a aba de aresta para o modo curva ou perfil não diz "entradas completas": a curva
+    /// pede a aresta e o perfil pede o sketch (antes acusava referência perdida do sketch #0).
+    #[test]
+    fn aba_trocada_de_modo_pede_o_suporte_que_falta() {
+        use fenkra_core::aba_unif::{converter_aba, ModoAba};
+        let aba = FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None });
+        assert_eq!(campo_ativo(&converter_aba(&aba, ModoAba::Curva).unwrap()), Some(Espera::Aresta));
+        let Some(FeatureKind::SmProfileFlange(mut p)) = converter_aba(&aba, ModoAba::Perfil) else { panic!() };
+        p.sketch = crate::slots::UNSET_SKETCH;
+        assert_eq!(campo_ativo(&FeatureKind::SmProfileFlange(p)), Some(Espera::Perfil));
     }
 
     #[test]

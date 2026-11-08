@@ -116,7 +116,7 @@ preferências do usuário.
 | `FENKRA_DEMO_JANELA=gerenciador` | (B378) o gerenciador Salvar e exportar; com `FENKRA_DEMO_DWG=1` as linhas do desenho ficam ativas |
 | `FENKRA_DEMO_JANELA=peca` | (B408) o painel Propriedades da peça, o mesmo que abre ao clicar no nome da peça no topo da árvore; `FENKRA_DEMO_MATERIAL=<nome>` escolhe o material (um nome fora da tabela mostra o aviso) |
 | `FENKRA_DEMO_SIMULAR=<protanopia\|deuteranopia\|tritanopia>` | com `FENKRA_DEMO_FOTO`, grava a captura como essa visão a veria |
-| `FENKRA_DEMO_CHAPA=aba` ou `abaerro` | com `FENKRA_EDITAR=AbaUnificada`, abre o comando de aba unificado (o segundo com valores fora do limite); `FENKRA_DEMO_ABA=<n>` escolhe a aba do painel |
+| `FENKRA_DEMO_CHAPA=aba` ou `abaerro` | com `FENKRA_EDITAR=AbaUnificada`, abre o comando de aba unificado (o segundo com valores fora do limite); `FENKRA_DEMO_ABA=<n>` escolhe a aba do painel; `FENKRA_DEMO_MODO=2`, `3` ou `4` troca a aba para o modo curva, perfil ou superfície |
 | `FENKRA_DEMO_CHAPA=canal` | canal em U sem comando de chapa e o Converter em chapa sobre ele (mapa de dobras); com `FENKRA_DEMO_PLANA=1` já aparece desdobrado; `FENKRA_DEMO_CHAPA=canto` com `FENKRA_EDITAR=FechaCanto` mostra a alça da folga do canto |
 | `FENKRA_DEMO_CHAPA=spline` | (B03) dobra por linha numa spline: a parede segue a curva; com `FENKRA_DEMO_PLANA=1`, a planificada com a linha de dobra curva e o rótulo |
 | `FENKRA_DEMO_CHAPA=linhas` / `linha_nova` | (B243, B249) dobra por linha, joggle e veneziana com nome fixo; `FENKRA_EDITAR=DobraLinha`, `Joggle` ou `Veneziana` abre o comando com a linha, as metades e as alças; `linha_nova` traz a dobra sem linha, no passo da face fixa |

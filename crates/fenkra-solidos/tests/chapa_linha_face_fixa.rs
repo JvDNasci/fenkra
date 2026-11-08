@@ -125,3 +125,27 @@ fn ponto_sobre_a_linha_nao_decide_o_lado() {
     assert_eq!(flip_para_fixo([60., 0., 2.], [60., 50., 2.], NORMAL, [60., 10., 2.]), None);
     assert_eq!(flip_para_fixo([60., 0., 2.], [60., 0., 2.], NORMAL, [10., 10., 2.]), None);
 }
+
+/// Recém-criados, os três comandos ainda não têm linha (as duas pontas iguais). Isso é a espera
+/// pela face fixa, não um erro: o recálculo avisa o que fazer e a chapa fica como estava (antes,
+/// "os dois pontos da linha coincidem" deixava o comando em erro e a prévia inválida).
+#[test]
+fn sem_linha_ainda_espera_sem_erro() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let z = [0.; 3];
+    for k in [
+        FeatureKind::SmBend(SmBend { a: z, b: z, angle: s("90"), radius: None, flip: false, down: false, sketch: None, position: 0 }),
+        FeatureKind::SmJoggle(SmJoggle { a: z, b: z, depth: s("3"), run: s("6"), flip: false, angle: None, plane: None, keep_length: false }),
+        FeatureKind::SmLouver(SmLouver { a: z, b: z, width: s("10"), height: s("4"), flip: false, down: false }),
+    ] {
+        let mut d = base();
+        let id = d.add_feature(k);
+        let r = recompute(&d);
+        assert!(matches!(&r.status[&id], Status::Warning(m) if m.contains("face fixa")), "{:?}", r.status[&id]);
+        assert!((volume_total(&r) - 10000.).abs() < 1., "a chapa fica como estava: {}", volume_total(&r));
+        let zmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MIN, f32::max);
+        assert!((zmax - 2.).abs() < 1e-3, "nada sai do plano: zmax {zmax}");
+    }
+}

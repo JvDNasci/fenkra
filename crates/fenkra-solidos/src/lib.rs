@@ -80,6 +80,7 @@ pub mod chapa_desdobra;
 pub mod chapa_converte;
 mod chapa_converte_mapa;
 mod chapa_perfis;
+pub mod chapa_perfis_plana;
 #[cfg(test)]
 mod chapa_canto_tests;
 pub use chapa_laco::{laco_de_malha, recuos_extensao};
@@ -4632,6 +4633,13 @@ impl Ctx<'_> {
             FeatureKind::Draft(d) if d.faces.is_empty() => Ok(Some("escolha na viewport as faces que recebem a saída — até lá nada é aplicado".into())),
             FeatureKind::Thickness(t) if t.faces.is_empty() => Ok(Some("escolha na viewport as faces a engrossar — até lá nada é aplicado".into())),
             FeatureKind::DirectEdit(d) if d.faces.is_empty() => Ok(Some("escolha na viewport as faces a editar — até lá nada é aplicado".into())),
+            // B243: dobra por linha, joggle e veneziana recém-criados ainda não têm linha (as duas
+            // pontas iguais): é a espera pela face fixa e pela linha, não um erro
+            FeatureKind::SmBend(bd) if bd.sketch.is_none() && bd.a == bd.b => Ok(Some("clique na face fixa e desenhe a linha de dobra — até lá nada é aplicado".into())),
+            FeatureKind::SmJoggle(j) if j.plane.is_none() && j.a == j.b => Ok(Some("clique na face fixa e desenhe a linha do joggle — até lá nada é aplicado".into())),
+            FeatureKind::SmLouver(lv) if lv.a == lv.b => Ok(Some("clique na face fixa e desenhe a linha da veneziana — até lá nada é aplicado".into())),
+            // B31: a aba curva vinda de outro modo do comando unificado ainda sem a cadeia de arestas
+            FeatureKind::SmCurveFlange(cf) if cf.edge.len() < 2 => Ok(Some("clique numa aresta (reta ou curva) da chapa — até lá nada é aplicado".into())),
             FeatureKind::DirectEdit(d) => self.edicao_direta(f, d),
             FeatureKind::Shell(sh) => {
                 let t = ev(&sh.thickness, &self.vars, "espessura")?;
@@ -5226,13 +5234,14 @@ impl Ctx<'_> {
                 if sk.open.is_empty() {
                     return Err("a aba por perfil precisa de uma cadeia aberta (linhas e arcos) no sketch".into());
                 }
+                // B31: a mesma faixa válida que o painel pinta de vermelho
                 let r = match &pf.radius {
-                    Some(e) => ev(e, &self.vars, "raio")?,
+                    Some(e) => chapa_laco::ev_faixa(e, &self.vars, "raio interno", 0.01, f64::INFINITY, "mm")?,
                     None => sp.r,
                 };
                 if sp.flat {
-                    let l1 = ev(&pf.l1, &self.vars, "comprimento 1")?;
-                    let l2 = if pf.l2.trim().is_empty() { 0. } else { ev(&pf.l2, &self.vars, "comprimento 2")? };
+                    let l1 = chapa_laco::ev_faixa(&pf.l1, &self.vars, "comprimento lado 1", 0., f64::INFINITY, "mm")?;
+                    let l2 = if pf.l2.trim().is_empty() { 0. } else { chapa_laco::ev_faixa(&pf.l2, &self.vars, "comprimento lado 2", 0., f64::INFINITY, "mm")? };
                     return self.aba_perfil_planificada(f, &frame, sk, sp, r, l1, l2, !pf.flip);
                 }
                 // cantos arredondados no raio de dobra (linha média da chapa)
@@ -5241,8 +5250,8 @@ impl Ctx<'_> {
                 sk2.open = sk.open.iter().map(|ch| round_corners(ch, r + sp.t / 2.)).collect();
                 let t = format!("{}", sp.t);
                 let (face, _) = self.profile_face(&frame, &sk2, Some(&t), if pf.flip { 1 } else { 0 })?;
-                let l1 = ev(&pf.l1, &self.vars, "comprimento 1")?;
-                let l2 = if pf.l2.trim().is_empty() { 0. } else { ev(&pf.l2, &self.vars, "comprimento 2")? };
+                let l1 = chapa_laco::ev_faixa(&pf.l1, &self.vars, "comprimento lado 1", 0., f64::INFINITY, "mm")?;
+                let l2 = if pf.l2.trim().is_empty() { 0. } else { chapa_laco::ev_faixa(&pf.l2, &self.vars, "comprimento lado 2", 0., f64::INFINITY, "mm")? };
                 let tool = face.extrude(frame.normal, l1, l2).map_err(k)?;
                 self.apply(f.target, tool, BoolOp::Add, f.id)?;
                 Ok(None)
@@ -5252,10 +5261,11 @@ impl Ctx<'_> {
                 if cf.edge.len() < 2 {
                     return Err("escolha uma aresta (reta ou curva) da chapa".into());
                 }
-                let len = ev(&cf.length, &self.vars, "comprimento")?;
-                let ang = if cf.angle.trim().is_empty() { 90. } else { ev(&cf.angle, &self.vars, "ângulo")? };
+                // B31: a mesma faixa válida que o painel pinta de vermelho
+                let len = chapa_laco::ev_faixa(&cf.length, &self.vars, "comprimento", 0., f64::INFINITY, "mm")?;
+                let ang = if cf.angle.trim().is_empty() { 90. } else { chapa_laco::ev_faixa(&cf.angle, &self.vars, "ângulo", 0.01, 180., "°")? };
                 let r = match &cf.radius {
-                    Some(e) => ev(e, &self.vars, "raio")?,
+                    Some(e) => chapa_laco::ev_faixa(e, &self.vars, "raio interno", 0.01, f64::INFINITY, "mm")?,
                     None => sp.r,
                 };
                 // a chave guarda uma aresta da cadeia; a polilinha é cache e acompanha o deslocamento dela
@@ -5272,9 +5282,10 @@ impl Ctx<'_> {
             }
             FeatureKind::SmSurfFlange(sf) => {
                 let sp = self.sheet()?;
-                let len = ev(&sf.length, &self.vars, "comprimento (EOP)")?;
+                // B31: a mesma faixa válida que o painel pinta de vermelho
+                let len = chapa_laco::ev_faixa(&sf.length, &self.vars, "comprimento (EOP)", 0., f64::INFINITY, "mm")?;
                 let r = match &sf.radius {
-                    Some(e) => ev(e, &self.vars, "raio")?,
+                    Some(e) => chapa_laco::ev_faixa(e, &self.vars, "raio de dobra", 0.01, f64::INFINITY, "mm")?,
                     None => sp.r,
                 };
                 let b = self.body(f.target).ok_or("a aba precisa de uma web (parede base)")?.clone();
@@ -5347,7 +5358,7 @@ impl Ctx<'_> {
                 }
                 let ang = if sf.mode == 2 {
                     // ângulo constante dado (a OML continua a do suporte)
-                    if sf.angle.trim().is_empty() { 90. } else { ev(&sf.angle, &self.vars, "ângulo")? }
+                    if sf.angle.trim().is_empty() { 90. } else { chapa_laco::ev_faixa(&sf.angle, &self.vars, "ângulo", 0.01, 180., "°")? }
                 } else {
                     geo3d::dot(u, d).atan2(geo3d::dot(u, out)).to_degrees()
                 };
