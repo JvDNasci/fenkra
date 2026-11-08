@@ -268,6 +268,14 @@ fn aba_curva_com_valor_fora_da_faixa_vira_erro_com_o_limite() {
             o => panic!("esperava erro com {trecho}, veio {o:?}"),
         }
     }
+    // sem a cadeia de arestas (vinda de outro modo) é espera, não erro
+    let mut d = placa();
+    let mut sem = curva("10", "90", None);
+    if let FeatureKind::SmCurveFlange(c) = &mut sem {
+        c.edge = vec![[100., 25., 2.]];
+    }
+    let id = d.add_feature(sem);
+    assert!(matches!(&recompute(&d).status[&id], Status::Warning(m) if m.contains("até lá")), "{:?}", recompute(&d).status[&id]);
     let mut d = placa();
     let id = d.add_feature(curva("10", "90", Some("2")));
     assert!(matches!(recompute(&d).status[&id], Status::Ok | Status::Warning(_)), "{:?}", recompute(&d).status[&id]);

@@ -4638,6 +4638,8 @@ impl Ctx<'_> {
             FeatureKind::SmBend(bd) if bd.sketch.is_none() && bd.a == bd.b => Ok(Some("clique na face fixa e desenhe a linha de dobra — até lá nada é aplicado".into())),
             FeatureKind::SmJoggle(j) if j.plane.is_none() && j.a == j.b => Ok(Some("clique na face fixa e desenhe a linha do joggle — até lá nada é aplicado".into())),
             FeatureKind::SmLouver(lv) if lv.a == lv.b => Ok(Some("clique na face fixa e desenhe a linha da veneziana — até lá nada é aplicado".into())),
+            // B31: a aba curva vinda de outro modo do comando unificado ainda sem a cadeia de arestas
+            FeatureKind::SmCurveFlange(cf) if cf.edge.len() < 2 => Ok(Some("clique numa aresta (reta ou curva) da chapa — até lá nada é aplicado".into())),
             FeatureKind::DirectEdit(d) => self.edicao_direta(f, d),
             FeatureKind::Shell(sh) => {
                 let t = ev(&sh.thickness, &self.vars, "espessura")?;
