@@ -209,11 +209,37 @@ pub(crate) fn sketch_pick(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docu
     });
 }
 
+/// Suporte dos modos curva, perfil e superfície do comando de aba unificado (B31), antes da barra
+/// de modos, como o da aresta e do laço em `chapa_unif_ui::suporte`.
+fn suporte_aba_modos(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut FeatureKind, seed: &Seed) {
+    match kind {
+        FeatureKind::SmCurveFlange(cf) => {
+            section(ui, "Suporte");
+            ui.label(RichText::new(if cf.edge.len() >= 2 { format!("{} {}", cf.edge.len(), tr("pontos na aresta")) } else { tr("⚠ clique numa aresta curva da chapa").to_string() }).small());
+            let picked = seed.curves.iter().find_map(|c| c.edge_pts().cloned());
+            if ui.add_enabled(picked.is_some(), egui::Button::new(tr("⊙ Usar a aresta selecionada"))).clicked() {
+                cf.edge = picked.unwrap_or_default();
+            }
+        }
+        FeatureKind::SmProfileFlange(p) => {
+            section(ui, "Suporte");
+            sketch_pick(ui, "smp_sk", "Perfil (aberto)", doc, idx, &mut p.sketch);
+        }
+        FeatureKind::SmSurfFlange(sf) => {
+            section(ui, "Suporte");
+            ui.label(RichText::new(if sf.face == [0.; 3] { tr("⚠ clique na face da web (a parede base)").to_string() } else { format!("{} {}", tr("face da web em"), crate::app::p3(sf.face, 1)) }).small());
+            crate::geo_ui::surf_slot(ui, "smsf_sup", "Superfície", doc, me, &mut sf.support, seed);
+        }
+        _ => {}
+    }
+}
+
 /// Painel das features novas. Devolve false se `kind` não é uma delas.
 #[allow(clippy::too_many_arguments)]
 pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut FeatureKind, vars: &Vars, picked_faces: &[[f64; 3]], seed: &Seed) -> bool {
     // comando de aba unificado (B31): Suporte, Modo, Parâmetros e Avançado
     crate::chapa_unif_ui::suporte(ui, kind);
+    suporte_aba_modos(ui, doc, idx, me, kind, seed);
     crate::chapa_unif_ui::modos(ui, kind);
     match kind {
         FeatureKind::Forma(fm) => {
@@ -816,40 +842,33 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.label(RichText::new(tr("Desenhe o perfil num sketch na face da chapa. Vale no dobrado e no planificado.")).weak().small());
         }
         FeatureKind::SmProfileFlange(p) => {
-            section(ui, "Aba por perfil");
-            sketch_pick(ui, "smp_sk", "Perfil (aberto)", doc, idx, &mut p.sketch);
-            expr(ui, "Comprimento lado 1", &mut p.l1, vars, "mm");
-            expr(ui, "Comprimento lado 2", &mut p.l2, vars, "mm");
+            section(ui, "Parâmetros");
+            crate::editor::expr_lim(ui, "Comprimento lado 1", &mut p.l1, vars, "mm", Some((0., f64::INFINITY)));
+            crate::editor::expr_lim(ui, "Comprimento lado 2", &mut p.l2, vars, "mm", Some((0., f64::INFINITY)));
             let mut own = p.radius.is_some();
             if crate::editor::check(ui, &mut own, "raio próprio nos cantos (senão o da chapa)").changed() {
                 p.radius = own.then(|| crate::chapa_unif_ui::raio_da_regra(doc));
             }
             if let Some(r) = &mut p.radius {
-                expr(ui, "Raio interno", r, vars, "mm");
+                crate::editor::expr_lim(ui, "Raio interno", r, vars, "mm", Some((0.01, f64::INFINITY)));
             }
             crate::chapa_unif_ui::inverter(ui, &mut p.flip);
             ui.label(RichText::new(tr("Desenhe a cadeia aberta (linhas e arcos) num plano que corta a aresta; os cantos ganham o raio de dobra.")).weak().small());
         }
         FeatureKind::SmCurveFlange(cf) => {
-            section(ui, "Aba em aresta curva");
-            ui.label(RichText::new(if cf.edge.len() >= 2 { format!("{} {}", cf.edge.len(), tr("pontos na aresta")) } else { tr("⚠ clique numa aresta curva da chapa").to_string() }).small());
-            let picked = seed.curves.iter().find_map(|c| c.edge_pts().cloned());
-            if ui.add_enabled(picked.is_some(), egui::Button::new(tr("⊙ Usar a aresta selecionada"))).clicked() {
-                cf.edge = picked.unwrap_or_default();
-            }
-            expr(ui, "Comprimento", &mut cf.length, vars, "mm");
+            section(ui, "Parâmetros");
+            crate::editor::expr_lim(ui, "Comprimento", &mut cf.length, vars, "mm", Some((0., f64::INFINITY)));
             if cf.angle.trim().is_empty() {
                 cf.angle = "90".into();
             }
-            expr(ui, "Ângulo", &mut cf.angle, vars, "°");
+            crate::editor::expr_lim(ui, "Ângulo", &mut cf.angle, vars, "°", Some((0.01, 180.)));
             let mut own = cf.radius.is_some();
             if crate::editor::check(ui, &mut own, "raio próprio (senão o da chapa)").changed() {
                 cf.radius = own.then(|| crate::chapa_unif_ui::raio_da_regra(doc));
             }
             if let Some(r) = &mut cf.radius {
-                expr(ui, "Raio interno", r, vars, "mm");
+                crate::editor::expr_lim(ui, "Raio interno", r, vars, "mm", Some((0.01, f64::INFINITY)));
             }
-            crate::chapa_unif_ui::inverter(ui, &mut cf.flip);
             ui.horizontal_wrapped(|ui| {
                 ui.label(tr("Lado do material"));
                 for (k, n, tip) in [
@@ -860,21 +879,11 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     ui.selectable_value(&mut cf.side, k, tr(n)).on_hover_text(tr(tip));
                 }
             });
+            crate::chapa_unif_ui::inverter(ui, &mut cf.flip);
             ui.label(RichText::new(tr("A aba segue a aresta e as que continuam tangentes (reta e curva juntas), com o raio de dobra; planifica pelo comprimento desenvolvido.")).weak().small());
         }
         FeatureKind::SmSurfFlange(sf) => {
-            section(ui, "Base (web)");
-            ui.label(RichText::new(if sf.face == [0.; 3] { tr("⚠ clique na face da web (a parede base)").to_string() } else { format!("{} {}", tr("face da web em"), crate::app::p3(sf.face, 1)) }).small());
-            crate::editor::check(ui, &mut sf.keep_base, "não relimitar a web pelo suporte");
-            let mut own = sf.radius.is_some();
-            if crate::editor::check(ui, &mut own, "raio de dobra próprio (senão o da chapa)").changed() {
-                sf.radius = own.then(|| crate::chapa_unif_ui::raio_da_regra(doc));
-            }
-            if let Some(r) = &mut sf.radius {
-                expr(ui, "Raio de dobra", r, vars, "mm");
-            }
-            section(ui, "Suporte");
-            crate::geo_ui::surf_slot(ui, "smsf_sup", "Superfície", doc, me, &mut sf.support, seed);
+            section(ui, "Parâmetros");
             ui.horizontal_wrapped(|ui| {
                 ui.label(tr("Tipo"));
                 for (k, n, tip) in [
@@ -885,21 +894,30 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     ui.selectable_value(&mut sf.mode, k, tr(n)).on_hover_text(tr(tip));
                 }
             });
+            // o ângulo só vale no tipo Ângulo: nos outros o suporte decide
             if sf.mode == 2 {
                 if sf.angle.trim().is_empty() {
                     sf.angle = "90".into();
                 }
-                expr(ui, "Ângulo", &mut sf.angle, vars, "°");
+                crate::editor::expr_lim(ui, "Ângulo", &mut sf.angle, vars, "°", Some((0.01, 180.)));
             }
+            crate::editor::expr_lim(ui, "Comprimento (EOP)", &mut sf.length, vars, "mm", Some((0., f64::INFINITY)));
+            let mut own = sf.radius.is_some();
+            if crate::editor::check(ui, &mut own, "raio de dobra próprio (senão o da chapa)").changed() {
+                sf.radius = own.then(|| crate::chapa_unif_ui::raio_da_regra(doc));
+            }
+            if let Some(r) = &mut sf.radius {
+                crate::editor::expr_lim(ui, "Raio de dobra", r, vars, "mm", Some((0.01, f64::INFINITY)));
+            }
+            crate::chapa_unif_ui::inverter(ui, &mut sf.flip);
             let help = match sf.mode {
                 1 => "Aproximação: suporte trocado pelo plano tangente no meio da OML (dobra reta).",
                 2 => "Ângulo: linha de dobra no suporte, aba com o ângulo dado a partir da web.",
                 _ => "Exato: a aba se apoia no suporte escolhido. A linha de dobra (OML) é a interseção do suporte com o plano da web.",
             };
             ui.label(RichText::new(tr(help)).weak().small());
-            section(ui, "EOP e direção");
-            expr(ui, "Comprimento (EOP)", &mut sf.length, vars, "mm");
-            crate::chapa_unif_ui::inverter(ui, &mut sf.flip);
+            section(ui, "Avançado");
+            crate::editor::check(ui, &mut sf.keep_base, "não relimitar a web pelo suporte");
         }
         FeatureKind::SmArcSlot(sl) => {
             section(ui, "Rasgo circular");

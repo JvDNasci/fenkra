@@ -718,6 +718,14 @@ impl App {
                     let erro = variante == "abaerro";
                     let id = d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s(if erro { "-5" } else { "25" }), angle: s(if erro { "200" } else { "90" }), radius: Some(s("1.5*espessura")), off1: s("8"), off2: s("8"), flip: false, relief: Some(s("3")), relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
                     d.feature_mut(id).map(|f| f.name = "AbaUnificada".into());
+                    // FENKRA_DEMO_MODO=2, 3 ou 4: a mesma aba trocada para curva, perfil ou superfície
+                    if let Some(m) = std::env::var("FENKRA_DEMO_MODO").ok().and_then(|v| v.parse::<usize>().ok()).and_then(|i| fenkra_core::aba_unif::MODOS_ABA.get(i).copied()) {
+                        if let Some(f) = d.feature_mut(id) {
+                            if let Some(novo) = fenkra_core::aba_unif::converter_aba(&f.kind, m) {
+                                f.kind = novo;
+                            }
+                        }
+                    }
                 }
                 // desdobrar parcial (B35): uma das duas abas planificada
                 "parcial" => {

@@ -253,6 +253,26 @@ fn aba_com_valor_fora_da_faixa_vira_erro_com_o_limite() {
     assert!(matches!(recompute(&d).status[&id], Status::Ok | Status::Warning(_)));
 }
 
+/// B31: o modo curva do comando de aba unificado segue a mesma faixa válida que o painel pinta de
+/// vermelho (antes o recálculo aceitava ângulo 200, raio 0 e comprimento negativo).
+#[test]
+fn aba_curva_com_valor_fora_da_faixa_vira_erro_com_o_limite() {
+    let curva = |len: &str, ang: &str, raio: Option<&str>| {
+        FeatureKind::SmCurveFlange(fenkra_core::SmCurveFlange { edge: vec![[100., 0., 2.], [100., 25., 2.], [100., 50., 2.]], length: s(len), flip: false, angle: s(ang), radius: raio.map(s), side: 0, edge_key: None })
+    };
+    for (k, trecho) in [(curva("10", "200", None), "ângulo"), (curva("10", "0", None), "ângulo"), (curva("-3", "90", None), "comprimento"), (curva("10", "90", Some("0")), "raio")] {
+        let mut d = placa();
+        let id = d.add_feature(k);
+        match &recompute(&d).status[&id] {
+            Status::Error(m) => assert!(m.contains(trecho) && m.contains("faixa"), "{m}"),
+            o => panic!("esperava erro com {trecho}, veio {o:?}"),
+        }
+    }
+    let mut d = placa();
+    let id = d.add_feature(curva("10", "90", Some("2")));
+    assert!(matches!(recompute(&d).status[&id], Status::Ok | Status::Warning(_)), "{:?}", recompute(&d).status[&id]);
+}
+
 #[test]
 fn aba_laco_sobrevive_a_salvar_e_abrir() {
     let mut d = placa();

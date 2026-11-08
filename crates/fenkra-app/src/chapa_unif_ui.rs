@@ -68,7 +68,14 @@ pub fn modos(ui: &mut egui::Ui, kind: &mut FeatureKind) {
     section(ui, "Modo da aba");
     let opts: Vec<(&str, &str, &str, bool)> = MODOS.iter().zip(MODOS_ABA).map(|((ic, n, d), m)| (*ic, tr(n), tr(d), m == atual)).collect();
     if let Some(i) = crate::editor::icon_choice(ui, &opts) {
-        if let Some(novo) = converter_aba(kind, MODOS_ABA[i]) {
+        if let Some(mut novo) = converter_aba(kind, MODOS_ABA[i]) {
+            // o perfil ainda não escolhido fica com o marcador de entrada pendente, para o painel
+            // pedir o perfil em vez de acusar referência perdida
+            if let FeatureKind::SmProfileFlange(p) = &mut novo {
+                if p.sketch == fenkra_core::Id(0) {
+                    p.sketch = crate::slots::UNSET_SKETCH;
+                }
+            }
             *kind = novo;
         }
     }
