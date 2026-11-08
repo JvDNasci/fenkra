@@ -1929,6 +1929,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             crate::pmi_minibar::drop_session();
         }
     }
+    // B38: etiquetas do consultor junto das anotações com problema
+    crate::pmi_consultor_3d::etiquetas(app, ui, rect, cam);
     crate::pmi_minibar::show(app, ui, rect, cam, sel_lbl);
 }
 

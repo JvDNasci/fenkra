@@ -62,6 +62,10 @@ pub fn mensagens(ui: &mut egui::Ui, avisos: &[Aviso], max: usize) {
             Gravidade::Info => (ui.visuals().weak_text_color(), "ℹ"),
         };
         ui.label(RichText::new(format!("{marca} {}", tr(&a.msg))).color(cor).small());
+        // B38: o que fazer, logo abaixo do diagnóstico
+        if !a.acao.is_empty() {
+            ui.label(RichText::new(format!("→ {}", tr(&a.acao))).weak().small());
+        }
     }
     if ord.len() > max {
         ui.label(RichText::new(format!("+{}", ord.len() - max)).weak().small());
@@ -296,9 +300,9 @@ pub fn campo_letra(ui: &mut egui::Ui, letra: &mut String, outras: &[String]) -> 
     }
     let mut av = vec![];
     if let Err(m) = letra_valida(letra) {
-        av.push(Aviso { gravidade: Gravidade::Erro, msg: m.to_string() });
+        av.push(Aviso { gravidade: Gravidade::Erro, msg: m.to_string(), acao: "use uma letra de A a Z, sem I, O e Q".into(), correcao: None });
     } else if outras.iter().any(|u| u == letra.trim()) {
-        av.push(Aviso { gravidade: Gravidade::Erro, msg: "essa letra já é de outra referência".to_string() });
+        av.push(Aviso { gravidade: Gravidade::Erro, msg: "essa letra já é de outra referência".to_string(), acao: "escolha a próxima letra livre".into(), correcao: None });
     }
     mensagens(ui, &av, 2);
     mudou

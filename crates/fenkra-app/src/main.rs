@@ -65,6 +65,8 @@ mod pmi_handles;
 mod pmi_minibar;
 mod pmi_setas;
 mod pmi_cordao;
+mod pmi_consultor_3d;
+mod textos_pmi_consultor;
 mod pmi_arvore;
 mod pmi_legivel;
 mod pmi_sobrepoe;
