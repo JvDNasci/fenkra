@@ -46,6 +46,9 @@ pub enum Encaixe {
     Direita,
     Topo,
     Base,
+    /// B366: fora da janela principal, numa janela nativa do sistema (outro monitor). `pos` guarda o
+    /// canto da janela em coordenadas da área de trabalho, então o layout lembra o monitor.
+    Janela,
 }
 
 impl Encaixe {
@@ -141,7 +144,7 @@ pub fn borda_perto(p: Pos2, area: Rect) -> Option<Encaixe> {
 pub fn colocar(posicao: Posicao, padrao: Pos2, tam: Vec2, area: Rect) -> Pos2 {
     let base = posicao.pos.map_or(padrao, |[x, y]| egui::pos2(x, y));
     let alvo = match posicao.encaixe {
-        Encaixe::Livre => base,
+        Encaixe::Livre | Encaixe::Janela => base,
         Encaixe::Esquerda => egui::pos2(area.left() + FAIXA_ARVORE + MARGEM, base.y),
         Encaixe::Direita => egui::pos2(area.right() - tam.x - MARGEM, base.y),
         Encaixe::Topo => egui::pos2(base.x, area.top() + MARGEM),
@@ -189,7 +192,7 @@ pub fn colocar_empilhado(posicao: Posicao, padrao: Pos2, tam: Vec2, area: Rect, 
 pub fn faixa_da_guia(e: Encaixe, tam: Vec2, area: Rect) -> Option<Rect> {
     let (x0, x1, y0, y1) = (area.left() + FAIXA_ARVORE, area.right(), area.top(), area.bottom());
     Some(match e {
-        Encaixe::Livre => return None,
+        Encaixe::Livre | Encaixe::Janela => return None,
         Encaixe::Esquerda => Rect::from_min_max(egui::pos2(x0, y0), egui::pos2(x0 + tam.x + 2. * MARGEM, y1)),
         Encaixe::Direita => Rect::from_min_max(egui::pos2(x1 - tam.x - 2. * MARGEM, y0), egui::pos2(x1, y1)),
         Encaixe::Topo => Rect::from_min_max(egui::pos2(x0, y0), egui::pos2(x1, y0 + tam.y + 2. * MARGEM)),
@@ -229,6 +232,93 @@ pub struct Saida<R> {
     /// borda em que foi solto, quando foi solto numa
     pub solto_em: Option<Encaixe>,
     pub rect: Option<Rect>,
+}
+
+// ------------------------------------------------------------------ outro monitor (B366)
+
+/// O painel foi solto com o ponteiro fora da janela principal (`tela`, em pontos da janela)?
+pub fn soltou_fora(ponteiro: Option<Pos2>, tela: Rect) -> bool {
+    ponteiro.is_some_and(|p| !tela.contains(p))
+}
+
+/// Canto da janela nativa na área de trabalho: o canto de dentro da janela principal mais o ponto do
+/// painel na janela. Sem saber onde a principal está (sistema que não diz), usa o próprio ponto.
+pub fn na_area_de_trabalho(principal: Option<Rect>, p: Pos2) -> Pos2 {
+    principal.map_or(p, |r| r.min + p.to_vec2())
+}
+
+/// A janela nativa voltou para cima da principal: mais da metade dela está dentro.
+pub fn voltou_para_dentro(principal: Rect, nativa: Rect) -> bool {
+    let i = principal.intersect(nativa);
+    i.is_positive() && i.area() > nativa.area() * 0.5
+}
+
+/// Posição do painel dentro da janela principal quando a nativa volta: o mesmo lugar da tela.
+pub fn de_volta_na_janela(principal: Rect, nativa: Rect) -> Pos2 {
+    (nativa.min - principal.min).to_pos2()
+}
+
+/// Mostra o painel numa janela nativa própria. O conteúdo é o mesmo do painel flutuante; o
+/// cabeçalho ganha o botão de voltar. Fechar a janela pelo sistema também a devolve.
+fn mostrar_janela<R>(ctx: &egui::Context, cfg: &Painel, posicao: Posicao, conteudo: impl FnOnce(&mut egui::Ui) -> R) -> Saida<R> {
+    use crate::i18n::tr;
+    let mut saida = Saida { conteudo: None, movido: None, solto_em: None, rect: None };
+    let vid = egui::ViewportId::from_hash_of(("painel_nativo", cfg.nome.as_str()));
+    let tam = egui::vec2(posicao.largura.unwrap_or(cfg.largura), posicao.altura.unwrap_or(460.));
+    let mut b = egui::ViewportBuilder::default().with_title(cfg.titulo.as_str()).with_inner_size(tam).with_min_inner_size([LARGURA_MIN, ALTURA_MIN]);
+    if let Some([x, y]) = posicao.pos {
+        b = b.with_position(egui::pos2(x, y));
+    }
+    let principal = ctx.input(|i| i.viewport().inner_rect);
+    let mut conteudo = Some(conteudo);
+    let (dentro, externa, interna, fechou, voltar) = ctx.show_viewport_immediate(vid, b, |raiz, _| {
+        let mut voltar = false;
+        let estilo = raiz.ctx().global_style();
+        let r = egui::CentralPanel::default().frame(egui::Frame::window(&estilo).inner_margin(egui::Margin::same(8))).show_inside(raiz, |ui| {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(cfg.titulo.as_str()).small().strong());
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if ui.small_button(tr("Voltar para a janela principal")).on_hover_text(tr("O painel volta a flutuar sobre a vista; arrastar esta janela de volta para a principal faz o mesmo")).clicked() {
+                        voltar = true;
+                    }
+                });
+            });
+            ui.separator();
+            egui::ScrollArea::vertical().id_salt("corpo_nativo").show(ui, |ui| conteudo.take().map(|c| c(ui))).inner
+        });
+        let (externa, interna, fechou) = raiz.input(|i| (i.viewport().outer_rect, i.viewport().inner_rect, i.viewport().close_requested()));
+        (r.inner, externa, interna, fechou, voltar)
+    });
+    saida.conteudo = dentro;
+    let mut n = posicao;
+    // a janela mudou de lugar ou de tamanho: guarda (é assim que o layout lembra o monitor)
+    if let Some(o) = externa {
+        if posicao.pos.is_none_or(|[x, y]| (egui::pos2(x, y) - o.min).length() > 1.) {
+            n.pos = Some([o.min.x, o.min.y]);
+        }
+    }
+    if let Some(i) = interna {
+        if (i.width() - tam.x).abs() > 1. || (i.height() - tam.y).abs() > 1. {
+            n.largura = Some(i.width());
+            n.altura = Some(i.height());
+        }
+    }
+    let de_volta = matches!((principal, externa), (Some(p), Some(o)) if voltou_para_dentro(p, o));
+    if voltar || fechou || de_volta {
+        n.encaixe = Encaixe::Livre;
+        n.pos = match (principal, externa) {
+            (Some(p), Some(o)) if de_volta => {
+                let q = de_volta_na_janela(p, o);
+                Some([q.x, q.y])
+            }
+            _ => None,
+        };
+        n.altura = None;
+    }
+    if n != posicao {
+        saida.movido = Some(n);
+    }
+    saida
 }
 
 /// Quadro translúcido dos painéis, nas cores do tema.
@@ -509,6 +599,20 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
         return saida;
     }
 
+    // captura sem mouse: `FENKRA_DEMO_JANELA_NATIVA=<nome do painel>` já abre o painel numa janela
+    // própria, à direita, cobrindo menos da metade da principal
+    if std::env::var("FENKRA_DEMO_JANELA_NATIVA").is_ok_and(|v| v == cfg.nome) && posicao.encaixe != Encaixe::Janela {
+        posicao.encaixe = Encaixe::Janela;
+        posicao.pos = ctx.input(|i| i.viewport().inner_rect).map(|r| [r.max.x - cfg.largura * 0.4, r.min.y + 90.]);
+    }
+    if posicao.encaixe == Encaixe::Janela {
+        if !ctx.embed_viewports() {
+            return mostrar_janela(ctx, cfg, posicao, conteudo);
+        }
+        // sistema sem janelas nativas: o painel fica flutuando dentro da principal
+        posicao.encaixe = Encaixe::Livre;
+        posicao.pos = None;
+    }
     let id = Id::unique(("painel", cfg.nome.as_str(), op.variante));
     let (id_arrasto, id_redim, id_rect, id_extra, id_camada) = (id.with("arrasto"), id.with("redim"), id.with("rect"), id.with("extra"), id.with("camada"));
     let arrastando = ctx.data(|d| d.get_temp::<bool>(id_arrasto)).unwrap_or(false);
@@ -663,6 +767,10 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
                 sombra(ctx, f, destino, crate::i18n::tr("solte para encaixar"));
             }
         }
+        // B366: com o ponteiro fora da janela, soltar abre o painel numa janela própria
+        if soltou_fora(ponteiro, ctx.content_rect()) && !ctx.embed_viewports() {
+            sombra(ctx, rect, rect, crate::i18n::tr("solte para abrir numa janela própria"));
+        }
         ctx.data_mut(|d| d.insert_temp(Id::unique(("painel_previa", cfg.nome.as_str())), previa));
         ctx.request_repaint();
     } else {
@@ -672,6 +780,15 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
             let mut n = base;
             n.encaixe = borda.unwrap_or_default();
             n.pos = Some([rect.min.x, rect.min.y]);
+            // B366: solto fora da janela principal vira janela nativa, no ponto em que o mouse soltou
+            if let (true, Some(p), false) = (soltou_fora(ponteiro, ctx.content_rect()), ponteiro, ctx.embed_viewports()) {
+                let pega = origem.map_or(egui::Vec2::ZERO, |o| o - alvo);
+                let q = na_area_de_trabalho(ctx.input(|i| i.viewport().inner_rect), p - pega);
+                n.encaixe = Encaixe::Janela;
+                n.pos = Some([q.x, q.y]);
+                n.largura = Some(rect.width());
+                n.altura = Some(rect.height().max(ALTURA_MIN));
+            }
             saida.movido = Some(n);
         }
         ctx.data_mut(|d| d.insert_temp(Id::unique(("painel_previa", cfg.nome.as_str())), None::<Rect>));
@@ -696,6 +813,37 @@ pub fn abaixo_do_cubo(area: Rect, largura: f32) -> Pos2 {
 mod tests {
     use super::*;
     use egui::{pos2, vec2};
+
+    /// B366: soltar fora da janela vira janela nativa no ponto da área de trabalho; arrastar a nativa
+    /// de volta (mais da metade sobre a principal) devolve o painel ao mesmo lugar da tela; a posição
+    /// em coordenadas da área de trabalho vai e volta do arquivo, então o monitor fica lembrado.
+    #[test]
+    fn painel_sai_para_outro_monitor_e_volta() {
+        let tela = Rect::from_min_size(pos2(0., 0.), vec2(1400., 900.));
+        assert!(!soltou_fora(Some(pos2(700., 400.)), tela));
+        assert!(soltou_fora(Some(pos2(1500., 400.)), tela), "à direita da janela");
+        assert!(soltou_fora(Some(pos2(-30., 400.)), tela), "à esquerda, no monitor do lado");
+        assert!(!soltou_fora(None, tela));
+        // a principal está em (100, 50) da área de trabalho; o ponto 1500 da janela cai em 1600
+        let principal = Rect::from_min_size(pos2(100., 50.), vec2(1400., 900.));
+        assert_eq!(na_area_de_trabalho(Some(principal), pos2(1500., 400.)), pos2(1600., 450.));
+        // segundo monitor à direita: a nativa lá não volta; arrastada para cima da principal, volta
+        let la = Rect::from_min_size(pos2(1950., 200.), vec2(320., 460.));
+        assert!(!voltou_para_dentro(principal, la));
+        let meio = Rect::from_min_size(pos2(1395., 200.), vec2(320., 460.));
+        assert!(!voltou_para_dentro(principal, meio), "só um terço por cima ainda não volta");
+        let dentro = Rect::from_min_size(pos2(900., 200.), vec2(320., 460.));
+        assert!(voltou_para_dentro(principal, dentro));
+        assert_eq!(de_volta_na_janela(principal, dentro), pos2(800., 150.));
+        let mut s = prefs(Bench::Solidos);
+        let p = Posicao { encaixe: Encaixe::Janela, pos: Some([1950., 200.]), largura: Some(320.), altura: Some(460.), ..Default::default() };
+        s.guardar_painel("comando", p);
+        let volta: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert_eq!(volta.painel("comando", Encaixe::Livre), p, "o layout lembra a janela e o monitor");
+        // janela nativa não tem faixa de encaixe nem muda de lugar ao ser colocada
+        assert!(faixa_da_guia(Encaixe::Janela, vec2(300., 200.), tela).is_none());
+        assert_eq!(colocar(p, pos2(0., 0.), vec2(10., 10.), Rect::from_min_size(pos2(0., 0.), vec2(4000., 2000.))), pos2(1950., 200.));
+    }
 
     fn prefs(b: Bench) -> Settings {
         Settings { bench: b, ..Default::default() }
@@ -946,7 +1094,7 @@ mod tests {
                 Encaixe::Topo => assert!((sombra.top() - (tela().top() + MARGEM)).abs() < 1., "{sombra:?}"),
                 Encaixe::Base => assert!((sombra.bottom() - (tela().bottom() - MARGEM)).abs() < 1., "{sombra:?}"),
                 Encaixe::Esquerda => assert!((sombra.left() - (tela().left() + FAIXA_ARVORE + MARGEM)).abs() < 1., "{sombra:?}"),
-                Encaixe::Livre => unreachable!(),
+                Encaixe::Livre | Encaixe::Janela => unreachable!(),
             }
             b.soltar(alvo);
             assert_eq!(b.posicao.encaixe, esperado);

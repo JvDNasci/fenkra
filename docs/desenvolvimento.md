@@ -147,6 +147,7 @@ preferências do usuário.
 | `FENKRA_DEMO_PREVIA=passo_<mm>` e `FENKRA_DEMO_PASSO=1` | caixa com esse lado e a extrusão aberta; a seta mostra o salto do arrasto em mm e em pixels |
 | `FENKRA_DEMO_PREVIA=plano_<mm>` e `FENKRA_DEMO_INVERTER=1` | (B228) cubo com esse lado e o plano deslocado de 0,4 lado aberto: retângulo translúcido, seta, rótulo e botão de inverter; com `FENKRA_DEMO_INVERTER=1` o botão é apertado uma vez |
 | `FENKRA_DEMO_PREVIA=ponto_xyz` | (B228) ponto por coordenadas aberto: três setas, três planos e a esfera de posição no meio |
+| `FENKRA_DEMO_JANELA_NATIVA=<painel>` | (B366) abre o painel (`comando`, `curso`...) numa janela nativa própria, à direita, cobrindo menos da metade da principal (a foto do `FENKRA_DEMO_FOTO` só pega a principal; a nativa se captura pela janela do sistema) |
 | `FENKRA_DEMO_CURSO=tutoriais` | (B376) painel do curso na aba Tutoriais; `aula:tut_flange` abre um tutorial |
 | `FENKRA_DEMO_SKETCH_CURSOR=x,y` | com `FENKRA_DEMO_SKETCH`, põe o cursor nessas coordenadas do plano do sketch |
 | `FENKRA_DEMO_SKETCH_GESTO=<passos>` | com `FENKRA_DEMO_SKETCH`, manda eventos de ponteiro crus para o app, no caminho do mouse de verdade: `clique:x,y`, `shift:x,y`, `ctrl:x,y` e `arrasto:x0,y0,x1,y1`, separados por `;`, em coordenadas do plano do sketch. Começa 5 s depois de abrir; a seleção de cada passo sai na saída de erro |

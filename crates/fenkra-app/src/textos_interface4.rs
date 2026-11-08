@@ -2,6 +2,10 @@
 //! Traduções da bancada Interface, leva s6 (vocabulário das alças e o que vier nos itens seguintes).
 
 pub static TEXTOS: &[(&str, &str)] = &[
+    // B366: painéis em outro monitor
+    ("Voltar para a janela principal", "Back to the main window"),
+    ("O painel volta a flutuar sobre a vista; arrastar esta janela de volta para a principal faz o mesmo", "The panel floats over the view again; dragging this window back onto the main one does the same"),
+    ("solte para abrir numa janela própria", "release to open in its own window"),
     // B376: tutoriais por peça e a aula dos fixadores inteligentes
     ("Fixadores inteligentes", "Smart fasteners"),
     ("O parafuso nasce do furo: diâmetro pela folga, comprimento pela espessura atravessada, arruela e porca pela pilha.", "The bolt comes from the hole: diameter from the clearance, length from the thickness it crosses, washer and nut from the stack."),
