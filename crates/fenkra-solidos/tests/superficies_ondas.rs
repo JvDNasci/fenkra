@@ -570,3 +570,62 @@ fn filete_de_superficie_marca_as_bordas_tangentes_como_suaves() {
     eprintln!("filete de superfície: {} arestas, {} suaves, {} faces", malha.edge_smooth.len(), suaves, malha.face_ranges.len());
     assert!(suaves >= 2, "as duas bordas tangentes do filete devem ser suaves: {suaves} de {}", malha.edge_smooth.len());
 }
+
+/// Rasgo de 30 entre centros e raio 5, extrudado: a borda de cima tem duas linhas e dois arcos
+/// tangentes, e cada vértice dela também recebe uma aresta vertical.
+fn rasgo(d: &mut Document, altura: &str) -> Id {
+    let mut data = SketchData::default();
+    let mut al = || d.alloc();
+    data.add_slot(&mut al, [0., 0.], [30., 0.], 5.);
+    let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+    extrusao(d, sk, altura)
+}
+
+/// Aresta reta de cima do rasgo, pela chave (dono e papel).
+fn aresta_de_cima(r: &RecomputeResult, z: f64) -> CurveRef {
+    let b = &r.bodies[0];
+    let m = &b.mesh.edge_mids;
+    let e = (0..m.len() / 3)
+        .find(|e| (m[3 * e] as f64 - 15.).abs() < 1e-3 && (m[3 * e + 1] as f64).abs() > 4.99 && (m[3 * e + 2] as f64 - z).abs() < 1e-3)
+        .expect("aresta de cima");
+    let mid = [m[3 * e] as f64, m[3 * e + 1] as f64, m[3 * e + 2] as f64];
+    match b.edge_key(e) {
+        Some(key) => CurveRef::BodyEdge { pts: vec![mid, mid], key },
+        None => CurveRef::Edge(vec![mid, mid]),
+    }
+}
+
+/// B21: a propagação da aresta extraída fica no elemento e o recálculo a refaz no modelo novo.
+#[test]
+fn extrair_aresta_refaz_a_propagacao_e_conta() {
+    let mut d = Document::new("t");
+    let ex = rasgo(&mut d, "10");
+    let r = recompute(&d);
+    let edge = aresta_de_cima(&r, 10.);
+    let ext = |d: &mut Document, prop, expected| d.add_geometry(RefKind::CurveExtract { edge: edge.clone(), surface: None, prop, expected });
+    let so = ext(&mut d, Propagation::Nenhuma, None);
+    let tan = ext(&mut d, Propagation::Tangente, None);
+    let pto = ext(&mut d, Propagation::Ponto, None);
+    let mudou = ext(&mut d, Propagation::Tangente, Some(3));
+    let r = recompute(&d);
+    ok(&r, so);
+    ok(&r, tan);
+    let n = |r: &RecomputeResult, x: Id| r.notes[&x].count.unwrap().0;
+    assert_eq!((n(&r, so), n(&r, tan)), (1, 4));
+    let compr = |r: &RecomputeResult, x: Id| fenkra_solidos::geo3d::Curve3::poly(r.curves.iter().find(|c| c.id == x).unwrap().pts.clone(), false).unwrap().length();
+    assert!((compr(&r, so) - 30.).abs() < 1e-6, "{}", compr(&r, so));
+    // duas linhas de 30 e dois meios círculos de raio 5 (a malha encurta um pouco os arcos)
+    let laco = 60. + 10. * std::f64::consts::PI;
+    assert!((compr(&r, tan) - laco).abs() < 0.3, "{}", compr(&r, tan));
+    // por ponto, a cadeia desce pelas arestas verticais e se ramifica: erro claro, nunca curva errada
+    assert!(matches!(&r.status[&pto], Status::Error(m) if m.contains("ramificam")), "{:?}", r.status[&pto]);
+    assert!(matches!(&r.status[&mudou], Status::Warning(m) if m.contains("3 arestas") && m.contains('4')), "{:?}", r.status[&mudou]);
+    // a peça cresce: a extração vai junto, com a mesma contagem
+    muda_altura(&mut d, ex, "25");
+    let r = recompute(&d);
+    ok(&r, tan);
+    assert_eq!(n(&r, tan), 4);
+    let c = r.curves.iter().find(|c| c.id == tan).unwrap();
+    assert!(c.pts.iter().all(|q| (q[2] - 25.).abs() < 1e-6), "{:?}", &c.pts[..3]);
+    assert!((compr(&r, tan) - laco).abs() < 0.3);
+}

@@ -675,6 +675,19 @@ pub enum RefKind {
     SplineControl { points: Vec<PointRef>, closed: bool },
     /// Cópia de uma curva (aresta extraída do modelo).
     CurveCopy { curve: CurveRef },
+    /// Aresta extraída com propagação gravada (B21): o recálculo acha a aresta de novo no modelo
+    /// e refaz a cadeia de vizinhas pelo critério escolhido.
+    CurveExtract {
+        edge: CurveRef,
+        /// superfície dona da aresta; `None` = arestas dos corpos
+        #[serde(default)]
+        surface: Option<Id>,
+        #[serde(default)]
+        prop: Propagation,
+        /// arestas que a extração tinha quando foi feita; mudou, vira aviso
+        #[serde(default)]
+        expected: Option<u32>,
+    },
     /// Junta curvas que se tocam nas pontas numa curva só (contorno fechado vira perfil de sólido).
     CurveJoin { curves: Vec<CurveRef> },
 
@@ -1216,6 +1229,12 @@ impl RefKind {
                 }
             }
             CurveCopy { curve } => curve.walk(ids),
+            CurveExtract { edge, surface, .. } => {
+                edge.walk(ids);
+                if let Some(x) = surface {
+                    ids(x)
+                }
+            }
             SurfOffset { surface, dist, .. } => {
                 surface.walk(ids);
                 exprs(dist)

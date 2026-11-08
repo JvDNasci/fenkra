@@ -1965,17 +1965,61 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             _ => None,
         });
         let chave = egui::Id::unique(EXTRACT_CURVE_REQ);
-        if let Some(old) = ctx.data_mut(|m| {
-            let q = m.get_temp::<CurveRef>(chave);
-            m.remove::<CurveRef>(chave);
+        if let Some((old, prop)) = ctx.data_mut(|m| {
+            let q = m.get_temp::<(CurveRef, Propagation)>(chave);
+            m.remove::<(CurveRef, Propagation)>(chave);
             q
         }) {
             let d = &mut self.open.doc;
-            let new = CurveRef::Ref(d.add_geometry(RefKind::CurveCopy { curve: old.clone() }));
+            // aresta do modelo: extração com a propagação gravada (B21); curva de sketch: cópia
+            let kind = match &old {
+                CurveRef::Edge(_) | CurveRef::BodyEdge { .. } => RefKind::CurveExtract { edge: old.clone(), surface: None, prop, expected: None },
+                _ => RefKind::CurveCopy { curve: old.clone() },
+            };
+            let new = CurveRef::Ref(d.add_geometry(kind));
             if let Some(r) = d.references.iter_mut().find(|r| Some(r.id) == target) {
                 swap_ref(&mut r.kind, &old, &new);
             } else if let Some(f) = target.and_then(|t| d.feature_mut(t)) {
                 swap_ref(&mut f.kind, &old, &new);
+            }
+        }
+        // campo de ponto: o vértice, o centro ou o ponto de sketch vira um ponto extraído, que
+        // continua seguindo a origem
+        let chave = egui::Id::unique(crate::geo_ui::EXTRACT_POINT_REQ);
+        if let Some(old) = ctx.data_mut(|m| {
+            let q = m.get_temp::<PointRef>(chave);
+            m.remove::<PointRef>(chave);
+            q
+        }) {
+            let d = &mut self.open.doc;
+            let new = PointRef::Ref(d.add_geometry(crate::sketch_pub::kind_de_ponto(old)));
+            if let Some(r) = d.references.iter_mut().find(|r| Some(r.id) == target) {
+                swap_ref(&mut r.kind, &old, &new);
+            } else if let Some(f) = target.and_then(|t| d.feature_mut(t)) {
+                swap_ref(&mut f.kind, &old, &new);
+            }
+        }
+        // campo de eixo: aresta reta vira aresta extraída; eixo de face, a linha do eixo dela
+        let chave = egui::Id::unique(crate::geo_ui::EXTRACT_AXIS_REQ);
+        if let Some(old) = ctx.data_mut(|m| {
+            let q = m.get_temp::<AxisRef>(chave);
+            m.remove::<AxisRef>(chave);
+            q
+        }) {
+            let d = &mut self.open.doc;
+            let kind = match old {
+                AxisRef::Edge { mid, key: Some(key) } => Some(RefKind::CurveExtract { edge: CurveRef::BodyEdge { pts: vec![mid, mid], key }, surface: None, prop: Propagation::Nenhuma, expected: None }),
+                AxisRef::Edge { mid, key: None } => Some(RefKind::CurveExtract { edge: CurveRef::Edge(vec![mid, mid]), surface: None, prop: Propagation::Nenhuma, expected: None }),
+                AxisRef::Face { point, .. } => Some(RefKind::LineAxis { face: point }),
+                _ => None,
+            };
+            if let Some(kind) = kind {
+                let new = AxisRef::Ref(d.add_geometry(kind));
+                if let Some(r) = d.references.iter_mut().find(|r| Some(r.id) == target) {
+                    swap_ref(&mut r.kind, &old, &new);
+                } else if let Some(f) = target.and_then(|t| d.feature_mut(t)) {
+                    swap_ref(&mut f.kind, &old, &new);
+                }
             }
         }
         let key = egui::Id::unique(EXTRACT_REQ);
@@ -6647,7 +6691,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     ui.radio_value(&mut o.prop, p, tr(t));
                 }
             });
-            ui.label(RichText::new(tr("Ponto: tudo o que está ligado. Tangente: continua enquanto não houver canto vivo. Curvatura: também para onde a curvatura muda (nas faces vale como tangente).")).weak().small());
+            ui.label(RichText::new(tr("Ponto: tudo o que está ligado. Tangente: continua enquanto não houver canto vivo. Curvatura: também para onde a curvatura muda (no modo simples, gravada no elemento, vale como tangente).")).weak().small());
             ui.checkbox(&mut o.publish, tr("publicar o resultado (outras peças podem usar)"));
         });
         self.extract_last = o;
@@ -6665,6 +6709,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     fn run_extract(&mut self, o: ExtractOpts) {
         use crate::extract::{edge_pts, edge_set, face_point, face_set, Prop};
         let mut gravadas: Vec<([f64; 3], Id, Option<FaceKey>)> = vec![];
+        let mut arestas_gravadas: Vec<(CurveRef, Option<Id>)> = vec![];
         use crate::picking::Pick;
         // o resultado sai emprestado durante a coleta e volta logo depois
         let Some(r) = self.result.take() else { return };
@@ -6695,6 +6740,25 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     if !set.is_empty() {
                         faces.push(set);
                     }
+                }
+                Pick::Edge { body, edge, .. } if !o.multi => {
+                    // aresta solta: a propagação fica gravada e o recálculo a refaz (B21); o que
+                    // ela alcança agora só serve para não repetir a mesma cadeia
+                    let Some(m) = crate::picking::mesh_of(&r, body) else { continue };
+                    if seen_e.contains(&(body, edge)) {
+                        continue;
+                    }
+                    seen_e.extend(edge_set(m, edge, o.prop).into_iter().map(|e| (body, e)));
+                    let pts = edge_pts(m, edge);
+                    if pts.len() < 2 {
+                        continue;
+                    }
+                    let seed = match r.bodies.get(body).and_then(|b| b.edge_key(edge)) {
+                        Some(key) => CurveRef::BodyEdge { pts, key },
+                        None => CurveRef::Edge(pts),
+                    };
+                    let surface = if body >= crate::picking::SURF_BASE { crate::picking::surface_of(&r, body) } else { None };
+                    arestas_gravadas.push((seed, surface));
                 }
                 Pick::Edge { body, edge, .. } => {
                     let Some(m) = crate::picking::mesh_of(&r, body) else { continue };
@@ -6774,6 +6838,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         }
         for (face, owner, key) in gravadas {
             made.push(d.add_geometry(RefKind::SurfExtract { face, owner: Some(owner), prop: o.prop.gravada(), complement: false, expected: None, key }));
+        }
+        for (edge, surface) in arestas_gravadas {
+            made.push(d.add_geometry(RefKind::CurveExtract { edge, surface, prop: o.prop.gravada(), expected: None }));
         }
         if made.is_empty() {
             self.toast("Selecione faces, arestas, vértices ou elementos de sketch na viewport e conclua a extração", true);

@@ -149,6 +149,20 @@ impl Curve3 {
             unit(sub(self.pts[0], self.pts[1])).unwrap_or([1., 0., 0.])
         }
     }
+    /// Tangente na ponta, para fora, corrigida para polilinha amostrada de curva lisa. A corda do
+    /// último trecho de um arco desvia meio ângulo do trecho da tangente verdadeira (10° num arco
+    /// de raio 5 da malha de tela, além da folga de 5° da cadeia tangente); extrapolar meio passo
+    /// com o trecho anterior cancela esse erro, e na reta dá o mesmo que a corda.
+    pub fn end_tangent_smooth(&self, at_end: bool) -> V3 {
+        let n = self.pts.len();
+        let t2 = self.end_tangent(at_end);
+        if n < 3 || self.closed {
+            return t2;
+        }
+        let (a, b) = if at_end { (self.pts[n - 3], self.pts[n - 2]) } else { (self.pts[2], self.pts[1]) };
+        let Some(t1) = unit(sub(b, a)) else { return t2 };
+        unit(sub(mul(t2, 1.5), mul(t1, 0.5))).unwrap_or(t2)
+    }
     /// Vetor curvatura (d²p/ds²) aproximado na ponta.
     pub fn end_curvature(&self, at_end: bool) -> V3 {
         let n = self.pts.len();
@@ -942,11 +956,11 @@ pub fn tangent_chain(cs: &[Curve3], start: usize, tol: f64) -> Vec<usize> {
     while let Some(i) = todo.pop() {
         for at_end in [false, true] {
             let tip = if at_end { cs[i].end() } else { cs[i].start() };
-            let out = cs[i].end_tangent(at_end);
+            let out = cs[i].end_tangent_smooth(at_end);
             for j in 0..cs.len() {
                 for nb_end in [false, true] {
                     let other = if nb_end { cs[j].end() } else { cs[j].start() };
-                    if !seen[j] && dist(tip, other) <= tol && dot(out, mul(cs[j].end_tangent(nb_end), -1.)) > 0.9962 {
+                    if !seen[j] && dist(tip, other) <= tol && dot(out, mul(cs[j].end_tangent_smooth(nb_end), -1.)) > 0.9962 {
                         seen[j] = true;
                         todo.push(j);
                     }
@@ -955,6 +969,56 @@ pub fn tangent_chain(cs: &[Curve3], start: usize, tol: f64) -> Vec<usize> {
         }
     }
     (0..cs.len()).filter(|i| seen[*i]).collect()
+}
+
+/// Polilinhas das arestas de uma malha, na ordem de `edge_ranges`. Aresta degenerada (ponta de
+/// esfera, por exemplo) vira `None`, para os índices continuarem batendo com os da malha.
+pub fn mesh_edge_curves(m: &fenkra_kernel::Mesh) -> Vec<Option<Curve3>> {
+    let nseg = m.edges.len() / 6;
+    (0..m.edge_ranges.len())
+        .map(|e| {
+            let s0 = m.edge_ranges[e] as usize;
+            let s1 = m.edge_ranges.get(e + 1).map_or(nseg, |x| *x as usize);
+            let mut pl: Vec<V3> = vec![];
+            for g in m.edges.chunks_exact(6).take(s1).skip(s0) {
+                if pl.is_empty() {
+                    pl.push([g[0] as f64, g[1] as f64, g[2] as f64]);
+                }
+                pl.push([g[3] as f64, g[4] as f64, g[5] as f64]);
+            }
+            let len: f64 = pl.windows(2).map(|w| dist(w[0], w[1])).sum();
+            if len < 1e-6 {
+                return None;
+            }
+            let closed = pl.len() > 2 && dist(pl[0], *pl.last().unwrap()) < 1e-6;
+            Curve3::poly(pl, closed).ok()
+        })
+        .collect()
+}
+
+/// Cadeia de arestas que a propagação alcança a partir de `start` (B21). Nenhuma = só ela; ponto e
+/// completo = tudo o que se liga pelas pontas; tangente = só onde não há canto vivo. Erro quando
+/// a cadeia se ramifica num vértice, porque aí ela não vira uma curva só.
+pub fn edge_chain(cs: &[Curve3], start: usize, prop: fenkra_core::Propagation, tol: f64) -> Result<Vec<usize>, String> {
+    use fenkra_core::Propagation as P;
+    let set = match prop {
+        P::Nenhuma => vec![start],
+        P::Ponto | P::Completo => chain_indices(cs, start, tol),
+        P::Tangente => tangent_chain(cs, start, tol),
+    };
+    // cada ponta pode encostar em no máximo uma outra aresta da cadeia
+    for &i in &set {
+        if cs[i].closed {
+            continue;
+        }
+        for tip in [cs[i].start(), cs[i].end()] {
+            let n = set.iter().filter(|&&j| j != i).filter(|&&j| dist(tip, cs[j].start()) <= tol || dist(tip, cs[j].end()) <= tol).count();
+            if n > 1 {
+                return Err(format!("a propagação alcançou {} arestas que se ramificam num vértice: elas não formam uma curva só; use tangente ou nenhuma", set.len()));
+            }
+        }
+    }
+    Ok(set)
 }
 
 /// Reamostra a curva em `n` pontos igualmente espaçados pelo comprimento.

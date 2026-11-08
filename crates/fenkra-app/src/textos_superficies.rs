@@ -3,6 +3,11 @@
 //! virar gargalo.
 
 pub static TEXTOS: &[(&str, &str)] = &[
+    ("Extrair com tangência", "Extract with tangency"),
+    ("Escolha uma aresta ou face do modelo para extrair.", "Pick a model edge or face to extract."),
+    ("Escolha um vértice ou ponto do modelo para extrair.", "Pick a model vertex or point to extract."),
+    ("Tangente: segue as vizinhas sem canto vivo. Ponto: tudo o que se liga pelas pontas, desde que não se ramifique.", "Tangent: follows neighbors without sharp corners. Point: everything joined at the ends, as long as it does not branch."),
+    ("Ponto: tudo o que está ligado. Tangente: continua enquanto não houver canto vivo. Curvatura: também para onde a curvatura muda (no modo simples, gravada no elemento, vale como tangente).", "Point: everything connected. Tangent: continues until a sharp corner. Curvature: also stops where curvature changes (in single mode, stored in the element, it acts as tangent)."),
     ("Soltar: até este elemento", "Release: up to this element"),
     ("Desvincular", "Unlink"),
     ("Troca a expressão pelo valor de agora; a seta volta a arrastar.", "Replaces the expression with the current value; the arrow drags again."),

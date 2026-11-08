@@ -1641,6 +1641,32 @@ impl Ctx<'_> {
         Ok((join_curves(set.into_iter().map(|i| cs[i].clone()).collect())?, n))
     }
 
+    /// Aresta extraída com propagação (B21): acha de novo a aresta mais perto de `mid` nas formas e
+    /// junta a cadeia que a propagação gravada alcança.
+    fn edge_extract(&self, shapes: &[Shape], mid: V3, prop: Propagation) -> Result<(Curve3, u32), String> {
+        let mut best: Option<(f64, Vec<Curve3>, usize)> = None;
+        for sh in shapes {
+            let Ok(m) = tesselar(sh, &self.qualidade) else { continue };
+            let all = geo3d::mesh_edge_curves(&m);
+            let idx: Vec<usize> = (0..all.len()).filter(|i| all[*i].is_some()).collect();
+            let cs: Vec<Curve3> = idx.iter().map(|i| all[*i].clone().unwrap()).collect();
+            for (k, c) in cs.iter().enumerate() {
+                let g = geo3d::dist(c.nearest(mid).1, mid);
+                if best.as_ref().is_none_or(|b| g < b.0) {
+                    best = Some((g, cs.clone(), k));
+                }
+            }
+        }
+        let (gap, cs, start) = best.ok_or("nenhuma aresta no modelo")?;
+        if gap > 0.5 {
+            return Err(format!("referência perdida: a aresta extraída não existe mais (a mais perto fica a {gap:.2} mm); escolha de novo"));
+        }
+        let size = cs.iter().map(|c| c.length()).sum::<f64>().max(1.);
+        let set = geo3d::edge_chain(&cs, start, prop, (1e-4 * size).max(1e-3))?;
+        let n = set.len() as u32;
+        Ok((join_curves(set.into_iter().map(|i| cs[i].clone()).collect())?, n))
+    }
+
     /// Guarda o que a extração alcançou; se mudou desde que foi feita, vira aviso.
     fn count_note(&self, id: Id, n: u32, edges: u32, expected: Option<u32>, what: &str) {
         let mut note = RefNote { count: Some((n, edges)), ..Default::default() };
@@ -2099,6 +2125,18 @@ impl Ctx<'_> {
             }
             SplineControl { points, closed } => Geo::Curve(bspline(&self.points(points, d)?, *closed)?),
             CurveCopy { curve } => Geo::Curve(self.curve(curve, d)?),
+            CurveExtract { edge, surface, prop, expected } => {
+                // o meio da aresta, seguida pela chave quando há; a cadeia sai do modelo atual
+                let seed = self.curve(edge, d)?;
+                let mid = seed.at_ratio(0.5).0;
+                let shapes: Vec<Shape> = match surface {
+                    Some(s) => vec![self.surface_shape(&SurfRef::Ref(*s), d)?],
+                    None => self.bodies.values().map(|(b, _, _)| b.clone()).collect(),
+                };
+                let (c, n) = self.edge_extract(&shapes, mid, *prop)?;
+                self.count_note(id, n, n, *expected, "arestas");
+                Geo::Curve(c)
+            }
             CurveJoin { curves } => {
                 let cs: Vec<Curve3> = curves.iter().map(|c| self.curve(c, d)).collect::<Result<_, _>>()?;
                 Geo::Curve(join_curves(cs)?)
