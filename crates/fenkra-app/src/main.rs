@@ -195,6 +195,7 @@ mod mapa_macro;
 mod compat;
 mod curso_ui;
 mod tutoriais;
+mod figura_cota;
 mod textos_pmi;
 mod textos_pmi_step;
 mod textos_pmi_captura;

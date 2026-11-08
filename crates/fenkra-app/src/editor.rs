@@ -152,6 +152,8 @@ fn dica_do_campo(ui: &mut egui::Ui, rotulo_pt: &str, unit: &str) {
         if !unit.is_empty() {
             ui.label(RichText::new(format!("{}: {unit}", tr("Unidade"))).small());
         }
+        // a figura da cota mostra o que o número mede (B278)
+        crate::figura_cota::desenhar(ui, rotulo_pt);
     }
 }
 
@@ -227,6 +229,11 @@ pub(crate) fn expr_lim(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Va
             match crate::textos_campos::dica(rotulo_pt) {
                 Some(_) => resp.on_hover_ui(|ui| {
                     dica_do_campo(ui, rotulo_pt, unit);
+                    // o limite do campo também na dica, não só quando o valor sai dele
+                    if let Some((a, b)) = lim {
+                        let faixa = if b.is_finite() { format!("{} {} {} {} {unit}", tr("válido de"), fmt(a), tr("até"), fmt(b)) } else { format!("{} {} {unit}", tr("válido a partir de"), fmt(a)) };
+                        ui.label(RichText::new(faixa).small());
+                    }
                     ui.label(RichText::new(tr(EXPR_HINT)).weak().small());
                 }),
                 None => resp.on_hover_text(tr(EXPR_HINT)),
