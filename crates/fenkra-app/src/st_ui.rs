@@ -193,6 +193,7 @@ pub fn windows(app: &mut App, ctx: &egui::Context) {
     crate::st_cantos_ui::window(app, ctx);
     crate::st_montagem_ui::window(app, ctx);
     crate::st_acesso_ui::window(app, ctx);
+    crate::st_corte_tubo_ui::window(app, ctx);
 }
 
 /// Gerar montagem: uma peça por grupo de peças iguais e a montagem, em `<nome>_montagem` ao lado
@@ -586,6 +587,9 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                 }
                 if ui.button(tr("Exportar NC1 e STEP…")).on_hover_text(tr("Para as máquinas de perfil e de tubo: um arquivo DSTV NC1 (cabeçalho, cortes inclinados e furos) e um STEP do sólido já cortado por item da lista, numa pasta.")).clicked() {
                     export_nc = true;
+                }
+                if ui.button(tr("Caminho de corte…")).on_hover_text(tr("Caminho da máquina de tubo rotativo para os encaixes: vista desenvolvida, tabela por ponto, CSV e animação do cabeçote.")).clicked() {
+                    crate::st_corte_tubo_ui::abrir(ui.ctx());
                 }
                 if ui.button(tr("Gerar montagem…")).on_hover_text(tr("Abre o resumo com peças, instâncias, pasta e nomes dos arquivos; nada é gravado antes de Confirmar.")).clicked() {
                     gerar = true;
