@@ -289,7 +289,13 @@ pub fn gaiola_do_arraste(tipo: PrimitivaForma, plano: &[V3; 4], a: V3, b: V3) ->
     let (lu, lv) = (lu.max(1.), lv.max(1.));
     let alt = lu.min(lv);
     let (cu, cv) = ((u0 + u1) / 2., (v0 + v1) / 2.);
-    let mut g = Gaiola::primitiva(tipo, [0., 0., if tipo == PrimitivaForma::Plano { 0. } else { alt / 2. }], [lu, lv, alt]);
+    // apoiada no plano: o anel (B399) tem a altura do tubo, um quarto do raio externo
+    let z = match tipo {
+        PrimitivaForma::Plano => 0.,
+        PrimitivaForma::Anel => alt / 8.,
+        _ => alt / 2.,
+    };
+    let mut g = Gaiola::primitiva(tipo, [0., 0., z], [lu, lv, alt]);
     for n in &mut g.nos {
         n.p = no_quadro(plano, cu + n.p[0], cv + n.p[1], n.p[2]);
     }
@@ -1314,6 +1320,14 @@ fn demo_vinculos(app: &mut App, id: Id) -> Option<Id> {
 
 /// Desenvolvimento: `FENKRA_DEMO_FORMA=1` abre a cúpula em edição, com o nó do topo selecionado.
 pub fn demo(app: &mut App, modo: &str) {
+    // B399: `anel` abre a primitiva nova como o arraste de 80 mm a criaria
+    if modo == "anel" {
+        app.settings.bench = Bench::FormaLivre;
+        let xy = [[0.; 3], [1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];
+        criar_feature(app, gaiola_do_arraste(PrimitivaForma::Anel, &xy, [-40., -40., 0.], [40., 40., 0.]));
+        app.forma.modo = ModoVista::Ambos;
+        return;
+    }
     let mut g = Gaiola::caixa([0., 0., 15.], [60., 60., 30.], [2, 2, 2]);
     fe::alternar_simetria(&mut g, 0).ok();
     let topo = g.nos.iter().find(|n| n.p[0].abs() < 1e-9 && n.p[1].abs() < 1e-9 && n.p[2] > 29.).map(|n| n.id);
@@ -1370,6 +1384,23 @@ pub fn demo(app: &mut App, modo: &str) {
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    /// B399: o anel arrastado de 0 a 80 no XY tem a gaiola apoiada no plano e o diâmetro externo do
+    /// arraste; a superfície lisa fica por dentro dela, como nas outras primitivas.
+    #[test]
+    fn anel_arrastado_fica_apoiado_no_plano() {
+        let xy = [[0.; 3], [1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];
+        let g = gaiola_do_arraste(PrimitivaForma::Anel, &xy, [0.; 3], [80., 80., 0.]);
+        let fundo = g.nos.iter().map(|n| n.p[2]).fold(f64::MAX, f64::min);
+        let largura = g.nos.iter().map(|n| n.p[0]).fold(f64::MIN, f64::max) - g.nos.iter().map(|n| n.p[0]).fold(f64::MAX, f64::min);
+        assert!(fundo.abs() < 1e-6, "fundo da gaiola {fundo}");
+        assert!((largura - 80.).abs() < 1e-6, "{largura}");
+        let m = g.lisa(3).unwrap();
+        let (a, b) = m.caixa().unwrap();
+        assert!(a[2] > 0. && b[0] - a[0] > 60. && b[0] - a[0] < 80., "{a:?} {b:?}");
+        assert!(((a[0] + b[0]) / 2. - 40.).abs() < 1e-6);
+        assert!(m.volume() > 0.);
+    }
 
     #[test]
     fn raio_acha_a_superficie_da_forma_e_erra_fora_dela() {

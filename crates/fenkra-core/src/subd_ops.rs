@@ -13,6 +13,8 @@ pub enum PrimitivaForma {
     Plano,
     Cilindro,
     Esfera,
+    /// B399: toro de quadriláteros (anel), fechado e sem nós irregulares
+    Anel,
 }
 
 fn indice_em(f: &[u32], v: u32) -> Option<usize> {
@@ -109,12 +111,48 @@ impl Gaiola {
         g
     }
 
+    /// B399: anel (toro) de eixo Z centrado em `c`: `raio` até o meio do tubo, tubo de raio `r`;
+    /// `lados` em volta do eixo e `secoes` em volta do tubo. Todo nó tem valência 4, então a
+    /// superfície lisa não tem ponto singular e a gaiola é fechada (gênero 1).
+    pub fn anel(c: V3, raio: f64, r: f64, lados: u32, secoes: u32) -> Gaiola {
+        let (n, m) = (lados.max(3), secoes.max(3));
+        let mut g = Gaiola::default();
+        let tau = std::f64::consts::TAU;
+        let nos: Vec<Vec<u32>> = (0..n)
+            .map(|i| {
+                let a = tau * i as f64 / n as f64;
+                (0..m)
+                    .map(|j| {
+                        let b = tau * j as f64 / m as f64;
+                        let rr = raio + r * b.cos();
+                        g.novo_no([c[0] + rr * a.cos(), c[1] + rr * a.sin(), c[2] + r * b.sin()])
+                    })
+                    .collect()
+            })
+            .collect();
+        for i in 0..n as usize {
+            let i2 = (i + 1) % n as usize;
+            for j in 0..m as usize {
+                let j2 = (j + 1) % m as usize;
+                // ordem que dá a normal para fora do tubo
+                g.nova_face(vec![nos[i][j], nos[i2][j], nos[i2][j2], nos[i][j2]]);
+            }
+        }
+        g
+    }
+
     pub fn primitiva(tipo: PrimitivaForma, c: V3, tam: V3) -> Gaiola {
         match tipo {
             PrimitivaForma::Caixa => Gaiola::caixa(c, tam, [2, 2, 2]),
             PrimitivaForma::Plano => Gaiola::plano(c, [tam[0], tam[1]], [4, 4]),
             PrimitivaForma::Cilindro => Gaiola::cilindro(c, tam[0].min(tam[1]) / 2., tam[2], 8, 2),
             PrimitivaForma::Esfera => Gaiola::esfera(c, tam[0].min(tam[1]) / 2., 2),
+            // o arraste dá o diâmetro externo; o tubo ocupa um quarto dele
+            PrimitivaForma::Anel => {
+                let fora = tam[0].min(tam[1]) / 2.;
+                let tubo = fora / 4.;
+                Gaiola::anel(c, fora - tubo, tubo, 8, 4)
+            }
         }
     }
 
@@ -675,6 +713,30 @@ mod testes {
         let (t, _) = g.topologia().expect("topologia");
         assert!(t.gemea.iter().all(|x| *x != u32::MAX), "malha aberta");
         assert_eq!(euler(g), 2, "esfera topológica");
+    }
+
+    /// B399: o anel é fechado, de gênero 1 (Euler 0), sem nós irregulares, com a normal para fora,
+    /// e a superfície lisa fica perto do toro de verdade (volume 2π²Rr²).
+    #[test]
+    fn anel_e_toro_fechado_regular_e_com_volume_de_toro() {
+        let g = Gaiola::anel([0.; 3], 30., 10., 12, 8);
+        let (t, _) = g.topologia().unwrap();
+        assert!(t.gemea.iter().all(|x| *x != u32::MAX), "malha aberta");
+        assert_eq!(euler(&g), 0, "toro");
+        assert!(g.nos_irregulares().is_empty());
+        let m = g.lisa(3).unwrap();
+        let v = m.volume();
+        let toro = 2. * std::f64::consts::PI.powi(2) * 30. * 100.;
+        // a superfície lisa fica por dentro da gaiola (como na caixa e na esfera): com 8 seções no
+        // tubo ela encolhe uns 26% em volume; maior que isso seria a gaiola mal orientada
+        assert!(v > 0.65 * toro && v < toro, "volume {v} x {toro}");
+        let (a, b) = m.caixa().unwrap();
+        assert!(b[0] < 40. && b[0] > 36. && (a[0] + b[0]).abs() < 1e-6, "{a:?} {b:?}");
+        assert!(b[2] < 10. && b[2] > 8., "{b:?}");
+        // pela primitiva: o arraste de 80 dá diâmetro externo perto de 80
+        let p = Gaiola::primitiva(PrimitivaForma::Anel, [0.; 3], [80., 80., 20.]);
+        assert_eq!(euler(&p), 0);
+        assert!(p.lisa(2).unwrap().volume() > 0.);
     }
 
     #[test]

@@ -266,7 +266,7 @@ pub fn padrao(chave: &str) -> &'static [&'static str] {
         "estrutural:peca:*" => &["st_membro", "wf_repetir", "st_placa", "st_reforco", "st_solda", "st_canto_meia", "st_corte", "st_montagem"],
         "estrutural:peca:aresta" => &["st_membro", "st_solda", "st_reforco", "st_canto_meia", "chanfro", "arestas_selecionar", "st_corte", "ajustar"],
         "estrutural:peca:vertice" => &["st_placa", "st_reforco", "st_canto_meia", "st_membro", "ponto_coord", "linha_pontos", "st_solda", "ajustar"],
-        "forma_livre:peca:*" => &["forma_caixa", "forma_esfera", "forma_cilindro", "forma_plano", "sketch", "ajustar"],
+        "forma_livre:peca:*" => &["forma_caixa", "forma_esfera", "forma_cilindro", "forma_anel", "forma_plano", "sketch", "ajustar"],
         "*:sketch:*" => &["sk_cota", "sk_offset", "sk_aparar", "sk_espelhar", "sk_filete", "sk_construcao", "sk_concluir", "sk_estender"],
         "chapa:peca:*" => &["sm_parede", "sm_aba", "sm_desdobrar", "sketch", "extrusao", "recorte", "furo_simples", "ajustar"],
         "chapa:peca:face" => &["sm_aba", "sm_dobra_linha", "sm_recorte", "furo_simples", "sm_estampo", "sm_veneziana", "sm_desdobrar", "sketch"],

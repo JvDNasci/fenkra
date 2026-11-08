@@ -509,6 +509,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("forma_caixa", "Caixa de forma", "Caixa com nós: arraste no plano", "Clique no plano e arraste o tamanho. Nasce uma gaiola de 2 por 2 por 2 faces, com a superfície lisa por dentro; depois é só clicar num nó e puxar.", Cmd(C::Forma(PrimitivaForma::Caixa)))),
             One(it("forma_esfera", "Esfera de forma", "Esfera de quadriláteros", "Arraste o diâmetro no plano. Tem oito nós de valência 3, sem polos.", Cmd(C::Forma(PrimitivaForma::Esfera)))),
             One(it("forma_cilindro", "Cilindro de forma", "Cilindro com tampas", "Arraste o diâmetro no plano. Oito lados e dois andares para puxar.", Cmd(C::Forma(PrimitivaForma::Cilindro)))),
+            One(it("forma_anel", "Anel de forma", "Anel (toro) com nós", "Arraste o diâmetro externo no plano. Oito lados em volta e quatro no tubo, todos os nós regulares: dá alças, argolas e aros.", Cmd(C::Forma(PrimitivaForma::Anel)))),
             One(it("forma_plano", "Plano de forma", "Folha aberta", "Arraste o retângulo no plano. A folha tem borda: vira superfície, não sólido.", Cmd(C::Forma(PrimitivaForma::Plano)))),
         ],
         Group::Hibrido => vec![
