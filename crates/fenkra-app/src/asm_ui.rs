@@ -3738,6 +3738,7 @@ fn publicacoes_panel(st: &mut AsmState, ui: &mut egui::Ui, comp: Id) -> Option<(
 /// Janelas do contexto: a escolha ao voltar e a peça nova.
 pub fn contexto_window(app: &mut App, ctx: &egui::Context) {
     crate::asm_abrir::demo_quadro(app);
+    crate::asm_interf::demo_quadro(app);
     let Some(st) = app.asm.as_mut() else { return };
     if let Some(v) = st.volta_adiada.take() {
         pedir_volta(app, v);

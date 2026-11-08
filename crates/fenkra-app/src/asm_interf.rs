@@ -334,6 +334,39 @@ pub fn demo(st: &mut AsmState, nome: &str) {
     }
 }
 
+/// `FENKRA_DEMO_INTERF=<nomes>` com uma montagem aberta (`FENKRA_ABRIR=<.fka>`): quando a vista
+/// assenta, abre o painel, analisa com os subconjuntos abertos em peças e escolhe o primeiro item cujo
+/// título tem todos os nomes separados por vírgula (B388: `EX-01,RD-02` no eixo do kart). Valor
+/// vazio ou `1` só abre a lista.
+pub fn demo_quadro(app: &mut App) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static FEITO: AtomicBool = AtomicBool::new(false);
+    let Ok(nomes) = std::env::var("FENKRA_DEMO_INTERF") else { return };
+    if FEITO.load(Ordering::Relaxed) || app.calculando() {
+        return;
+    }
+    let Some(st) = app.asm.as_mut() else { return };
+    if st.compondo || st.dirty || st.envio_pendente || st.view.is_none() {
+        return;
+    }
+    FEITO.store(true, Ordering::Relaxed);
+    let mut est = st.interf.take().unwrap_or_default();
+    est.op.sub_unico = false;
+    est.demais = Demais::Transparentes;
+    let t = std::time::Instant::now();
+    verificar(st, &mut est);
+    // o tempo da análise na interface (B394), para conferir sem cronômetro
+    eprintln!("interferências: {} achados em {:.1} s", est.achados.len(), t.elapsed().as_secs_f64());
+    let partes: Vec<&str> = nomes.split(',').map(str::trim).filter(|n| !n.is_empty() && *n != "1").collect();
+    let escolha = (!partes.is_empty()).then(|| est.achados.iter().position(|x| partes.iter().all(|n| titulo_do(x).contains(n)))).flatten();
+    est.escolhido = escolha;
+    let caixa = escolha.and_then(|i| est.achados.get(i)).and_then(caixa_de);
+    st.interf = Some(est);
+    if let Some(b) = caixa {
+        app.enquadrar_caixa(b);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
