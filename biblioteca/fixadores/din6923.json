@@ -1,0 +1,118 @@
+{
+ "id": "din6923",
+ "nome": "Porca sextavada com aba (flangeada)",
+ "norma": "DIN 6923",
+ "revisao": "1983",
+ "versao": 1,
+ "gerador": "porca_flangeada",
+ "tipo": "porca",
+ "classe": "8",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "fasten.it — DIN 6923 (retirada, 06/1983)",
+   "url": "https://fasten.it/norms/norm/din_6923"
+  },
+  {
+   "rotulo": "Westfield Fasteners — porca sextavada com aba DIN 6923",
+   "url": "https://www.westfieldfasteners.co.uk/Standards/Nut-HexFlgPln-M.html"
+  }
+ ],
+ "campos": [
+  "s",
+  "m",
+  "dc",
+  "c"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "M5",
+   "valores": {
+    "s": 8,
+    "m": 5,
+    "dc": 11.8,
+    "c": 1
+   },
+   "confirmado_por": 2,
+   "nota": "s, m e dc: 2 fontes (fasten.it e Westfield) concordam. c (espessura da aba) é o mínimo da Westfield (1 fonte). Modelo: aba cilíndrica dc x c rente à face de apoio, sem o cone nem o serrilhado"
+  },
+  {
+   "designacao": "M6",
+   "valores": {
+    "s": 10,
+    "m": 6,
+    "dc": 14.2,
+    "c": 1.1
+   },
+   "confirmado_por": 2,
+   "nota": "s, m e dc: 2 fontes (fasten.it e Westfield) concordam. c (espessura da aba) é o mínimo da Westfield (1 fonte). Modelo: aba cilíndrica dc x c rente à face de apoio, sem o cone nem o serrilhado"
+  },
+  {
+   "designacao": "M8",
+   "valores": {
+    "s": 13,
+    "m": 8,
+    "dc": 17.9,
+    "c": 1.2
+   },
+   "confirmado_por": 2,
+   "nota": "s, m e dc: 2 fontes (fasten.it e Westfield) concordam. c (espessura da aba) é o mínimo da Westfield (1 fonte). Modelo: aba cilíndrica dc x c rente à face de apoio, sem o cone nem o serrilhado"
+  },
+  {
+   "designacao": "M10",
+   "valores": {
+    "s": 15,
+    "m": 10,
+    "dc": 21.8,
+    "c": 1.5
+   },
+   "confirmado_por": 2,
+   "nota": "s, m e dc: 2 fontes (fasten.it e Westfield) concordam. c (espessura da aba) é o mínimo da Westfield (1 fonte). Modelo: aba cilíndrica dc x c rente à face de apoio, sem o cone nem o serrilhado"
+  },
+  {
+   "designacao": "M12",
+   "valores": {
+    "s": 18,
+    "m": 12,
+    "dc": 26,
+    "c": 1.8
+   },
+   "confirmado_por": 2,
+   "nota": "s, m e dc: 2 fontes (fasten.it e Westfield) concordam. c (espessura da aba) é o mínimo da Westfield (1 fonte). Modelo: aba cilíndrica dc x c rente à face de apoio, sem o cone nem o serrilhado"
+  },
+  {
+   "designacao": "M14",
+   "valores": {
+    "s": 21,
+    "m": 14,
+    "dc": 29.9,
+    "c": 2.1
+   },
+   "confirmado_por": 2,
+   "nota": "s, m e dc: 2 fontes (fasten.it e Westfield) concordam. c (espessura da aba) é o mínimo da Westfield (1 fonte). Modelo: aba cilíndrica dc x c rente à face de apoio, sem o cone nem o serrilhado"
+  },
+  {
+   "designacao": "M16",
+   "valores": {
+    "s": 24,
+    "m": 16,
+    "dc": 34.5,
+    "c": 2.4
+   },
+   "confirmado_por": 2,
+   "nota": "s, m e dc: 2 fontes (fasten.it e Westfield) concordam. c (espessura da aba) é o mínimo da Westfield (1 fonte). Modelo: aba cilíndrica dc x c rente à face de apoio, sem o cone nem o serrilhado"
+  },
+  {
+   "designacao": "M20",
+   "valores": {
+    "s": 30,
+    "m": 20,
+    "dc": 42.8,
+    "c": 3
+   },
+   "confirmado_por": 2,
+   "nota": "s, m e dc: 2 fontes (fasten.it e Westfield) concordam. c (espessura da aba) é o mínimo da Westfield (1 fonte). Modelo: aba cilíndrica dc x c rente à face de apoio, sem o cone nem o serrilhado"
+  }
+ ]
+}

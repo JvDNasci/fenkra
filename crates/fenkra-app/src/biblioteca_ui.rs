@@ -361,7 +361,7 @@ fn conteudo(ui: &mut egui::Ui, est: &mut Estado) {
         let mut m = est.filtro.sistema == Some(Sistema::Metrico);
         let mut p = est.filtro.sistema == Some(Sistema::Polegada);
         chip(ui, &mut m, "Métrico", "Só famílias com tamanhos métricos (M3, M6…).");
-        chip(ui, &mut p, "Polegada", "Só famílias em polegada. A biblioteca pública ainda não traz nenhuma: os dados só entram conferidos em duas fontes.");
+        chip(ui, &mut p, "Polegada", "Só famílias em polegada (ASME). Os dados só entram conferidos em duas fontes.");
         est.filtro.sistema = if m && est.filtro.sistema != Some(Sistema::Metrico) { Some(Sistema::Metrico) } else if p && est.filtro.sistema != Some(Sistema::Polegada) { Some(Sistema::Polegada) } else if !m && !p { None } else { est.filtro.sistema };
         ui.separator();
         for c in Cabeca::TODAS {
@@ -616,18 +616,53 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
     let e = |s: f64| s * 1.1547;
     let mut notas: Vec<(String, f64)> = vec![];
     match ficha.tipo {
-        TipoFixador::ParafusoAllen | TipoFixador::ParafusoSextavado => {
+        TipoFixador::Prisioneiro => {
+            // haste única: ponta fixa bm em cima (entra na peça roscada), rosca b do lado da porca embaixo
+            let bm = valor("bm").unwrap_or(d);
+            let ls = comprimento.or(l.comprimentos.iter().copied().find(|x| *x >= 4. * d)).or(l.comprimentos.last().copied()).unwrap_or(d * 4.);
+            let esc = ((rect.height() - 40.) / (bm + ls) as f32).min((rect.width() * 0.5 - 20.) / d as f32);
+            let cx = rect.left() + 70.;
+            let topo = rect.top() + 14.;
+            let (sw, hb, sl) = (d as f32 * esc, bm as f32 * esc, ls as f32 * esc);
+            p.rect_stroke(Rect::from_min_size(Pos2::new(cx - sw / 2., topo), egui::vec2(sw, hb + sl)), 0., traco, egui::StrokeKind::Middle);
+            // a face da peça roscada fica no fim da ponta fixa
+            p.line_segment([Pos2::new(cx - sw, topo + hb), Pos2::new(cx + sw, topo + hb)], fino);
+            p.line_segment([Pos2::new(cx, topo - 6.), Pos2::new(cx, topo + hb + sl + 6.)], fino);
+            notas.push((format!("d {}", fmt(d)), 0.));
+            notas.push((format!("bm {}", fmt(bm)), 1.));
+            notas.push((format!("L {}", fmt(ls)), 2.));
+            if let Some(b) = valor("b") {
+                notas.push((format!("b {}", fmt(b)), 3.));
+            }
+            if let Some(pp) = valor("P") {
+                notas.push((format!("P {}", fmt(pp)), 4.));
+            }
+        }
+        TipoFixador::ParafusoAllen | TipoFixador::ParafusoSextavado | TipoFixador::ParafusoCruz => {
+            let escareada = ficha.cabeca == catalogo::Cabeca::Escareada;
             let k = valor("k").unwrap_or(d * 0.6);
             let larg = valor("dk").unwrap_or_else(|| e(valor("s").unwrap_or(d * 1.6)));
             let ls = comprimento.or(l.comprimentos.iter().copied().find(|x| *x >= 4. * d)).or(l.comprimentos.last().copied()).unwrap_or(d * 4.);
-            let esc = ((rect.height() - 40.) / (k + ls) as f32).min((rect.width() * 0.5 - 20.) / larg as f32);
+            // no escareado o L conta a cabeça
+            let total = if escareada { ls } else { k + ls };
+            let esc = ((rect.height() - 40.) / total as f32).min((rect.width() * 0.5 - 20.) / larg as f32);
             let cx = rect.left() + 70.;
             let topo = rect.top() + 14.;
-            let (hw, hh, sw, sl) = (larg as f32 * esc, k as f32 * esc, d as f32 * esc, ls as f32 * esc);
-            let cabeca = Rect::from_min_size(Pos2::new(cx - hw / 2., topo), egui::vec2(hw, hh));
+            let (hw, hh, sw) = (larg as f32 * esc, k as f32 * esc, d as f32 * esc);
+            let sl = (total - k) as f32 * esc;
+            if escareada {
+                let pts = vec![Pos2::new(cx - hw / 2., topo), Pos2::new(cx + hw / 2., topo), Pos2::new(cx + sw / 2., topo + hh), Pos2::new(cx - sw / 2., topo + hh)];
+                p.add(egui::Shape::closed_line(pts, traco));
+            } else {
+                p.rect_stroke(Rect::from_min_size(Pos2::new(cx - hw / 2., topo), egui::vec2(hw, hh)), 1., traco, egui::StrokeKind::Middle);
+            }
             let haste = Rect::from_min_size(Pos2::new(cx - sw / 2., topo + hh), egui::vec2(sw, sl));
-            p.rect_stroke(cabeca, 1., traco, egui::StrokeKind::Middle);
             p.rect_stroke(haste, 0., traco, egui::StrokeKind::Middle);
+            // ombro: a rosca menor dr continua depois do ombro
+            if let (Some(dr), Some(b)) = (valor("dr"), valor("b")) {
+                let (rw, rl) = (dr as f32 * esc, (b as f32 * esc).min(rect.bottom() - haste.bottom() - 4.).max(0.));
+                p.rect_stroke(Rect::from_min_size(Pos2::new(cx - rw / 2., haste.bottom()), egui::vec2(rw, rl)), 0., traco, egui::StrokeKind::Middle);
+            }
             p.line_segment([Pos2::new(cx, topo - 6.), Pos2::new(cx, haste.bottom() + 6.)], fino);
             notas.push((format!("{} {}", if valor("dk").is_some() { "dk" } else { "e" }, fmt(larg)), 0.));
             notas.push((format!("k {}", fmt(k)), 1.));
@@ -689,6 +724,14 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
             notas.push((format!("d1 {}", fmt(d1)), 0.));
             notas.push((format!("d2 {}", fmt(d2)), 1.));
             notas.push((format!("h {}", fmt(h)), 2.));
+        }
+    }
+    // toda letra da ficha aparece no esquema, mesmo as que o desenho não cota (dr, dc, c...)
+    let mut prox = notas.iter().map(|(_, i)| *i).fold(-1., f64::max) + 1.;
+    for (c, v) in ficha.cotas.iter().zip(&l.valores) {
+        if !notas.iter().any(|(t, _)| t.split_whitespace().next() == Some(c.simbolo.as_str())) {
+            notas.push((format!("{} {}", c.simbolo, fmt(*v)), prox));
+            prox += 1.;
         }
     }
     for (texto, i) in notas {
@@ -1110,6 +1153,30 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
                 let lib = biblioteca::publica();
                 let _ = avulso::inserir_livre(&mut st.asm, &dir, lib, "iso15_60", "6010", None, est.modo, PosicaoLivre::Solto { origem: [110., -60., 40.] }, None);
                 let _ = avulso::inserir_livre(&mut st.asm, &dir, lib, "iso15_60", "6005", None, est.modo, PosicaoLivre::Solto { origem: [10., -150., 40.] }, None);
+                st.solve();
+                st.dirty = true;
+            }
+        }
+        // `biblioteca_ficha_<id>`: a ficha da família aberta no tamanho do meio e esse item solto na
+        // montagem (B51, B398). `biblioteca_b51` larga as famílias novas lado a lado.
+        n if n.starts_with("biblioteca_ficha_") || n == "biblioteca_b51" => {
+            let lib = biblioteca::publica();
+            let ids: Vec<&str> = match n.strip_prefix("biblioteca_ficha_") {
+                Some(id) => vec![id],
+                None => vec!["iso10642", "iso7045", "iso7379", "din938", "din6923", "din6798a", "din25201", "asme_b18_3"],
+            };
+            let meio = |id: &str| lib.familia(id).and_then(|f| f.tamanhos.get(f.tamanhos.len() / 2)).map(|t| t.designacao.clone());
+            if let Some(t) = meio(ids[0]) {
+                est.escolher(ids[0], Some(t.as_str()));
+                est.comprimento = None;
+            }
+            if let Some(dir) = st.dir() {
+                for (i, id) in ids.iter().enumerate() {
+                    if let Some(t) = meio(id) {
+                        let origem = [i as f64 * 40. + 20., -70., 40.];
+                        let _ = avulso::inserir_livre(&mut st.asm, &dir, lib, id, &t, None, est.modo, PosicaoLivre::Solto { origem }, None);
+                    }
+                }
                 st.solve();
                 st.dirty = true;
             }

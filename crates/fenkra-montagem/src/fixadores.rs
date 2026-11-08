@@ -730,10 +730,25 @@ pub(crate) fn trava_de_giro(asm: &mut Assembly, a: Id, b: Id, eixo: (V3, V3)) {
 /// Grava a peça do fixador (se ainda não existe) e devolve (caminho relativo à montagem, nome).
 /// Peça já gravada que a biblioteca atual superou entra em `velhos` (o arquivo não é regravado:
 /// a montagem pode ter restrições apoiadas nele).
+/// Designação como pedaço de nome de arquivo: "3/8-16 UNC" tem barra, que o sistema de arquivos lê
+/// como pasta. Barra vira hífen; espaço e os outros caracteres proibidos viram sublinhado. As
+/// designações métricas ("M6") saem iguais, então os arquivos já gravados continuam valendo.
+pub(crate) fn designacao_de_arquivo(designacao: &str) -> String {
+    designacao
+        .chars()
+        .map(|c| match c {
+            '/' | '\\' => '-',
+            ':' | '*' | '?' | '"' | '<' | '>' | '|' | '#' | ' ' => '_',
+            c => c,
+        })
+        .collect()
+}
+
 pub(crate) fn arquivo_fixador(dir: &Path, fam: &Familia, t: &Tamanho, l: Option<f64>, memo: &mut HashMap<String, (String, String)>, velhos: &mut Vec<String>) -> Result<(String, String), String> {
+    let d = designacao_de_arquivo(&t.designacao);
     let base = match l {
-        Some(l) => format!("{}_{}x{}", fam.id, t.designacao, num(l)),
-        None => format!("{}_{}", fam.id, t.designacao),
+        Some(l) => format!("{}_{}x{}", fam.id, d, num(l)),
+        None => format!("{}_{}", fam.id, d),
     };
     if let Some(r) = memo.get(&base) {
         return Ok(r.clone());

@@ -1,0 +1,149 @@
+{
+ "id": "iso7379",
+ "nome": "Parafuso de ombro com sextavado interno",
+ "norma": "ISO 7379",
+ "revisao": "1983",
+ "versao": 1,
+ "gerador": "parafuso_ombro",
+ "tipo": "parafuso_allen",
+ "classe": "12.9",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "fasten.it — ISO 7379",
+   "url": "https://fasten.it/norms/norm/iso_7379"
+  },
+  {
+   "rotulo": "Elesa+Ganter — ficha ISO 7379 (parafusos de ombro)",
+   "url": "https://www.elesa.com/siteassets/PDF/PDF_US/ISO%207379.pdf"
+  }
+ ],
+ "campos": [
+  "P",
+  "dk",
+  "k",
+  "s",
+  "dr",
+  "b"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "M6 Ø8",
+   "d_nominal": 8,
+   "valores": {
+    "P": 1,
+    "dk": 13,
+    "k": 5.5,
+    "s": 4,
+    "dr": 6,
+    "b": 11.25
+   },
+   "confirmado_por": 2,
+   "nota": "ds, dk, k, s e b: 2 fontes (fasten.it, tabela da ISO 7379, e a ficha do fabricante de elementos normalizados Elesa+Ganter, que confirma ds-rosca, dk, k e s). Comprimento L é o do ombro. Série de L: valores usuais dentro da matriz de 10 a 120 da fasten.it (1 fonte). Furo aceito: do ds a ds + 0,5 (furo para o ombro, escolha do modelo, não da norma)",
+   "comprimentos": [
+    10,
+    12,
+    16,
+    20,
+    25,
+    30,
+    35,
+    40,
+    50,
+    60
+   ],
+   "furo_min": 8,
+   "furo_max": 8.5
+  },
+  {
+   "designacao": "M8 Ø10",
+   "d_nominal": 10,
+   "valores": {
+    "P": 1.25,
+    "dk": 16,
+    "k": 7,
+    "s": 5,
+    "dr": 8,
+    "b": 13.25
+   },
+   "confirmado_por": 2,
+   "nota": "ds, dk, k, s e b: 2 fontes (fasten.it, tabela da ISO 7379, e a ficha do fabricante de elementos normalizados Elesa+Ganter, que confirma ds-rosca, dk, k e s). Comprimento L é o do ombro. Série de L: valores usuais dentro da matriz de 10 a 120 da fasten.it (1 fonte). Furo aceito: do ds a ds + 0,5 (furo para o ombro, escolha do modelo, não da norma)",
+   "comprimentos": [
+    12,
+    16,
+    20,
+    25,
+    30,
+    35,
+    40,
+    50,
+    60,
+    70,
+    80
+   ],
+   "furo_min": 10,
+   "furo_max": 10.5
+  },
+  {
+   "designacao": "M10 Ø13",
+   "d_nominal": 13,
+   "valores": {
+    "P": 1.5,
+    "dk": 18,
+    "k": 9,
+    "s": 6,
+    "dr": 10,
+    "b": 16.4
+   },
+   "confirmado_por": 2,
+   "nota": "ds, dk, k, s e b: 2 fontes (fasten.it, tabela da ISO 7379, e a ficha do fabricante de elementos normalizados Elesa+Ganter, que lista ds 13 para M10 na ISO; dk, k e s conferidos numa revenda de catálogo, que confirma ds-rosca, dk, k e s). Comprimento L é o do ombro. Série de L: valores usuais dentro da matriz de 10 a 120 da fasten.it (1 fonte). Furo aceito: do ds a ds + 0,5 (furo para o ombro, escolha do modelo, não da norma)",
+   "comprimentos": [
+    16,
+    20,
+    25,
+    30,
+    35,
+    40,
+    50,
+    60,
+    70,
+    80,
+    90,
+    100
+   ],
+   "furo_min": 13,
+   "furo_max": 13.5
+  },
+  {
+   "designacao": "M12 Ø16",
+   "d_nominal": 16,
+   "valores": {
+    "P": 1.75,
+    "dk": 24,
+    "k": 11,
+    "s": 8,
+    "dr": 12,
+    "b": 18.4
+   },
+   "confirmado_por": 2,
+   "nota": "ds, dk, k, s e b: 2 fontes (fasten.it, tabela da ISO 7379, e a ficha do fabricante de elementos normalizados Elesa+Ganter, que confirma ds-rosca, dk, k e s). Comprimento L é o do ombro. Série de L: valores usuais dentro da matriz de 10 a 120 da fasten.it (1 fonte). Furo aceito: do ds a ds + 0,5 (furo para o ombro, escolha do modelo, não da norma)",
+   "comprimentos": [
+    20,
+    25,
+    30,
+    35,
+    40,
+    50,
+    60,
+    70,
+    80,
+    90,
+    100,
+    120
+   ],
+   "furo_min": 16,
+   "furo_max": 16.5
+  }
+ ]
+}

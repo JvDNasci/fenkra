@@ -1,0 +1,334 @@
+{
+ "id": "asme_b18_3",
+ "nome": "Parafuso de cabeça cilíndrica com sextavado interno, polegada",
+ "norma": "ASME B18.3",
+ "revisao": "2003",
+ "versao": 1,
+ "gerador": "parafuso_allen",
+ "tipo": "parafuso_allen",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "fasten.it — ASME B18.3 tabela 1A",
+   "url": "https://www.fasten.it/en/norms/norm/asme_b18.3_table_1a"
+  },
+  {
+   "rotulo": "AFT Fasteners — dimensões de parafusos Allen ASME B18.3-2003",
+   "url": "https://aftfasteners.com/socket-cap-screws-dimensions-and-mechanical-properties"
+  }
+ ],
+ "campos": [
+  "P",
+  "dk",
+  "k",
+  "s",
+  "b"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "#4-40 UNC",
+   "original": "#4",
+   "d_nominal": 2.845,
+   "valores": {
+    "P": 0.635,
+    "dk": 4.648,
+    "k": 2.845,
+    "s": 2.388,
+    "b": 19.05
+   },
+   "confirmado_por": 2,
+   "nota": "dk, k e s: 2 fontes (fasten.it, ASME B18.3 tabela 1A, e AFT Fasteners, ASME B18.3-2003) concordam; valores em polegada (dk 0.183, k 0.112, s 0.094) convertidos para mm. P = 25,4 / fios por polegada (UNC). b é o comprimento roscado LT. Comprimentos: série usual em polegada convertida (1 fonte, regra do repositório). Furo aceito: sem tabela conferida de folga em polegada, a faixa vai do diâmetro nominal a 1,15 vezes ele",
+   "comprimentos": [
+    6.35,
+    9.525,
+    12.7,
+    15.875,
+    19.05,
+    22.225,
+    25.4,
+    31.75,
+    38.1,
+    44.45
+   ],
+   "furo_min": 2.845,
+   "furo_max": 3.272
+  },
+  {
+   "designacao": "#6-32 UNC",
+   "original": "#6",
+   "d_nominal": 3.505,
+   "valores": {
+    "P": 0.7937,
+    "dk": 5.74,
+    "k": 3.505,
+    "s": 2.769,
+    "b": 19.05
+   },
+   "confirmado_por": 2,
+   "nota": "dk, k e s: 2 fontes (fasten.it, ASME B18.3 tabela 1A, e AFT Fasteners, ASME B18.3-2003) concordam; valores em polegada (dk 0.226, k 0.138, s 0.109) convertidos para mm. P = 25,4 / fios por polegada (UNC). b é o comprimento roscado LT. Comprimentos: série usual em polegada convertida (1 fonte, regra do repositório). Furo aceito: sem tabela conferida de folga em polegada, a faixa vai do diâmetro nominal a 1,15 vezes ele",
+   "comprimentos": [
+    6.35,
+    9.525,
+    12.7,
+    15.875,
+    19.05,
+    22.225,
+    25.4,
+    31.75,
+    38.1,
+    44.45,
+    50.8
+   ],
+   "furo_min": 3.505,
+   "furo_max": 4.031
+  },
+  {
+   "designacao": "#8-32 UNC",
+   "original": "#8",
+   "d_nominal": 4.166,
+   "valores": {
+    "P": 0.7937,
+    "dk": 6.858,
+    "k": 4.166,
+    "s": 3.581,
+    "b": 22.225
+   },
+   "confirmado_por": 2,
+   "nota": "dk, k e s: 2 fontes (fasten.it, ASME B18.3 tabela 1A, e AFT Fasteners, ASME B18.3-2003) concordam; valores em polegada (dk 0.27, k 0.164, s 0.141) convertidos para mm. P = 25,4 / fios por polegada (UNC). b é o comprimento roscado LT. Comprimentos: série usual em polegada convertida (1 fonte, regra do repositório). Furo aceito: sem tabela conferida de folga em polegada, a faixa vai do diâmetro nominal a 1,15 vezes ele",
+   "comprimentos": [
+    6.35,
+    9.525,
+    12.7,
+    15.875,
+    19.05,
+    22.225,
+    25.4,
+    31.75,
+    38.1,
+    44.45,
+    50.8,
+    57.15
+   ],
+   "furo_min": 4.166,
+   "furo_max": 4.791
+  },
+  {
+   "designacao": "#10-24 UNC",
+   "original": "#10",
+   "d_nominal": 4.826,
+   "valores": {
+    "P": 1.0583,
+    "dk": 7.925,
+    "k": 4.826,
+    "s": 3.962,
+    "b": 22.225
+   },
+   "confirmado_por": 2,
+   "nota": "dk, k e s: 2 fontes (fasten.it, ASME B18.3 tabela 1A, e AFT Fasteners, ASME B18.3-2003) concordam; valores em polegada (dk 0.312, k 0.19, s 0.156) convertidos para mm. P = 25,4 / fios por polegada (UNC). b é o comprimento roscado LT. Comprimentos: série usual em polegada convertida (1 fonte, regra do repositório). Furo aceito: sem tabela conferida de folga em polegada, a faixa vai do diâmetro nominal a 1,15 vezes ele",
+   "comprimentos": [
+    9.525,
+    12.7,
+    15.875,
+    19.05,
+    22.225,
+    25.4,
+    31.75,
+    38.1,
+    44.45,
+    50.8,
+    57.15,
+    63.5,
+    69.85
+   ],
+   "furo_min": 4.826,
+   "furo_max": 5.55
+  },
+  {
+   "designacao": "1/4-20 UNC",
+   "original": "1/4 pol",
+   "d_nominal": 6.35,
+   "valores": {
+    "P": 1.27,
+    "dk": 9.525,
+    "k": 6.35,
+    "s": 4.775,
+    "b": 25.4
+   },
+   "confirmado_por": 2,
+   "nota": "dk, k e s: 2 fontes (fasten.it, ASME B18.3 tabela 1A, e AFT Fasteners, ASME B18.3-2003) concordam; valores em polegada (dk 0.375, k 0.25, s 0.188) convertidos para mm. P = 25,4 / fios por polegada (UNC). b é o comprimento roscado LT. Comprimentos: série usual em polegada convertida (1 fonte, regra do repositório). Furo aceito: sem tabela conferida de folga em polegada, a faixa vai do diâmetro nominal a 1,15 vezes ele",
+   "comprimentos": [
+    9.525,
+    12.7,
+    15.875,
+    19.05,
+    22.225,
+    25.4,
+    31.75,
+    38.1,
+    44.45,
+    50.8,
+    57.15,
+    63.5,
+    69.85,
+    76.2,
+    88.9
+   ],
+   "furo_min": 6.35,
+   "furo_max": 7.302
+  },
+  {
+   "designacao": "5/16-18 UNC",
+   "original": "5/16 pol",
+   "d_nominal": 7.938,
+   "valores": {
+    "P": 1.4111,
+    "dk": 11.913,
+    "k": 7.925,
+    "s": 6.35,
+    "b": 28.575
+   },
+   "confirmado_por": 2,
+   "nota": "dk, k e s: 2 fontes (fasten.it, ASME B18.3 tabela 1A, e AFT Fasteners, ASME B18.3-2003) concordam; valores em polegada (dk 0.469, k 0.312, s 0.25) convertidos para mm. P = 25,4 / fios por polegada (UNC). b é o comprimento roscado LT. Comprimentos: série usual em polegada convertida (1 fonte, regra do repositório). Furo aceito: sem tabela conferida de folga em polegada, a faixa vai do diâmetro nominal a 1,15 vezes ele",
+   "comprimentos": [
+    12.7,
+    15.875,
+    19.05,
+    22.225,
+    25.4,
+    31.75,
+    38.1,
+    44.45,
+    50.8,
+    57.15,
+    63.5,
+    69.85,
+    76.2,
+    88.9,
+    101.6
+   ],
+   "furo_min": 7.938,
+   "furo_max": 9.129
+  },
+  {
+   "designacao": "3/8-16 UNC",
+   "original": "3/8 pol",
+   "d_nominal": 9.525,
+   "valores": {
+    "P": 1.5875,
+    "dk": 14.275,
+    "k": 9.525,
+    "s": 7.938,
+    "b": 31.75
+   },
+   "confirmado_por": 2,
+   "nota": "dk, k e s: 2 fontes (fasten.it, ASME B18.3 tabela 1A, e AFT Fasteners, ASME B18.3-2003) concordam; valores em polegada (dk 0.562, k 0.375, s 0.3125) convertidos para mm. P = 25,4 / fios por polegada (UNC). b é o comprimento roscado LT. Comprimentos: série usual em polegada convertida (1 fonte, regra do repositório). Furo aceito: sem tabela conferida de folga em polegada, a faixa vai do diâmetro nominal a 1,15 vezes ele",
+   "comprimentos": [
+    15.875,
+    19.05,
+    22.225,
+    25.4,
+    31.75,
+    38.1,
+    44.45,
+    50.8,
+    57.15,
+    63.5,
+    69.85,
+    76.2,
+    88.9,
+    101.6
+   ],
+   "furo_min": 9.525,
+   "furo_max": 10.954
+  },
+  {
+   "designacao": "1/2-13 UNC",
+   "original": "1/2 pol",
+   "d_nominal": 12.7,
+   "valores": {
+    "P": 1.9538,
+    "dk": 19.05,
+    "k": 12.7,
+    "s": 9.525,
+    "b": 38.1
+   },
+   "confirmado_por": 2,
+   "nota": "dk, k e s: 2 fontes (fasten.it, ASME B18.3 tabela 1A, e AFT Fasteners, ASME B18.3-2003) concordam; valores em polegada (dk 0.75, k 0.5, s 0.375) convertidos para mm. P = 25,4 / fios por polegada (UNC). b é o comprimento roscado LT. Comprimentos: série usual em polegada convertida (1 fonte, regra do repositório). Furo aceito: sem tabela conferida de folga em polegada, a faixa vai do diâmetro nominal a 1,15 vezes ele",
+   "comprimentos": [
+    19.05,
+    22.225,
+    25.4,
+    31.75,
+    38.1,
+    44.45,
+    50.8,
+    57.15,
+    63.5,
+    69.85,
+    76.2,
+    88.9,
+    101.6
+   ],
+   "furo_min": 12.7,
+   "furo_max": 14.605
+  },
+  {
+   "designacao": "5/8-11 UNC",
+   "original": "5/8 pol",
+   "d_nominal": 15.875,
+   "valores": {
+    "P": 2.3091,
+    "dk": 23.825,
+    "k": 15.875,
+    "s": 12.7,
+    "b": 44.45
+   },
+   "confirmado_por": 2,
+   "nota": "dk, k e s: 2 fontes (fasten.it, ASME B18.3 tabela 1A, e AFT Fasteners, ASME B18.3-2003) concordam; valores em polegada (dk 0.938, k 0.625, s 0.5) convertidos para mm. P = 25,4 / fios por polegada (UNC). b é o comprimento roscado LT. Comprimentos: série usual em polegada convertida (1 fonte, regra do repositório). Furo aceito: sem tabela conferida de folga em polegada, a faixa vai do diâmetro nominal a 1,15 vezes ele",
+   "comprimentos": [
+    25.4,
+    31.75,
+    38.1,
+    44.45,
+    50.8,
+    57.15,
+    63.5,
+    69.85,
+    76.2,
+    88.9,
+    101.6
+   ],
+   "furo_min": 15.875,
+   "furo_max": 18.256
+  },
+  {
+   "designacao": "3/4-10 UNC",
+   "original": "3/4 pol",
+   "d_nominal": 19.05,
+   "valores": {
+    "P": 2.54,
+    "dk": 28.575,
+    "k": 19.05,
+    "s": 15.875,
+    "b": 50.8
+   },
+   "confirmado_por": 2,
+   "nota": "dk, k e s: 2 fontes (fasten.it, ASME B18.3 tabela 1A, e AFT Fasteners, ASME B18.3-2003) concordam; valores em polegada (dk 1.125, k 0.75, s 0.625) convertidos para mm. P = 25,4 / fios por polegada (UNC). b é o comprimento roscado LT. Comprimentos: série usual em polegada convertida (1 fonte, regra do repositório). Furo aceito: sem tabela conferida de folga em polegada, a faixa vai do diâmetro nominal a 1,15 vezes ele",
+   "comprimentos": [
+    31.75,
+    38.1,
+    44.45,
+    50.8,
+    57.15,
+    63.5,
+    69.85,
+    76.2,
+    88.9,
+    101.6
+   ],
+   "furo_min": 19.05,
+   "furo_max": 21.907
+  }
+ ]
+}

@@ -37,7 +37,11 @@ pub enum Cabeca {
     /// cilíndrica com sextavado interno
     Allen,
     Sextavada,
-    /// porca e arruela não têm cabeça
+    /// cônica, rente à face (com sextavado interno)
+    Escareada,
+    /// panela com recesso cruzado
+    Panela,
+    /// porca, arruela e prisioneiro não têm cabeça
     Nenhuma,
 }
 
@@ -46,18 +50,24 @@ impl Cabeca {
         match self {
             Cabeca::Allen => "Allen",
             Cabeca::Sextavada => "Sextavada",
+            Cabeca::Escareada => "Escareada",
+            Cabeca::Panela => "Panela com cruz",
             Cabeca::Nenhuma => "Sem cabeça",
         }
     }
 
-    pub const TODAS: [Cabeca; 3] = [Cabeca::Allen, Cabeca::Sextavada, Cabeca::Nenhuma];
+    pub const TODAS: [Cabeca; 5] = [Cabeca::Allen, Cabeca::Sextavada, Cabeca::Escareada, Cabeca::Panela, Cabeca::Nenhuma];
 }
 
 pub fn cabeca_de(f: &Familia) -> Cabeca {
+    if f.gerador == "parafuso_escareado" {
+        return Cabeca::Escareada;
+    }
     match f.tipo {
         TipoFixador::ParafusoAllen => Cabeca::Allen,
         TipoFixador::ParafusoSextavado => Cabeca::Sextavada,
-        TipoFixador::Porca | TipoFixador::Arruela | TipoFixador::Rolamento => Cabeca::Nenhuma,
+        TipoFixador::ParafusoCruz => Cabeca::Panela,
+        TipoFixador::Porca | TipoFixador::Arruela | TipoFixador::Rolamento | TipoFixador::Prisioneiro => Cabeca::Nenhuma,
     }
 }
 
@@ -136,7 +146,9 @@ fn tamanho_do_token(f: &Familia, tok: &str) -> Option<String> {
         .iter()
         .find(|t| {
             let k = t.chave();
-            k == tok || k.strip_prefix('m') == Some(tok) || t.original.as_deref().is_some_and(|o| crate::biblioteca::Tamanho::chave_de(o) == tok)
+            // a primeira palavra também vale: "m8" acha o "M8 Ø10" do parafuso de ombro
+            let primeira = t.designacao.split_whitespace().next().map(crate::biblioteca::Tamanho::chave_de).unwrap_or_default();
+            k == tok || k.strip_prefix('m') == Some(tok) || primeira == tok || primeira.strip_prefix('m') == Some(tok) || t.original.as_deref().is_some_and(|o| crate::biblioteca::Tamanho::chave_de(o) == tok)
         })
         .map(|t| t.designacao.clone())
 }
@@ -221,9 +233,11 @@ fn ordem_do_tipo(t: TipoFixador) -> u8 {
     match t {
         TipoFixador::ParafusoAllen => 0,
         TipoFixador::ParafusoSextavado => 1,
-        TipoFixador::Porca => 2,
-        TipoFixador::Arruela => 3,
-        TipoFixador::Rolamento => 4,
+        TipoFixador::ParafusoCruz => 2,
+        TipoFixador::Prisioneiro => 3,
+        TipoFixador::Porca => 4,
+        TipoFixador::Arruela => 5,
+        TipoFixador::Rolamento => 6,
     }
 }
 
@@ -240,8 +254,12 @@ pub fn nome_da_cota(tipo: TipoFixador, simbolo: &str) -> &'static str {
     match (tipo, simbolo) {
         (_, "P") => "passo da rosca",
         (_, "dk") => "diâmetro da cabeça",
-        (TipoFixador::ParafusoAllen, "k") => "altura da cabeça",
-        (TipoFixador::ParafusoSextavado, "k") => "altura da cabeça",
+        (TipoFixador::ParafusoAllen | TipoFixador::ParafusoSextavado | TipoFixador::ParafusoCruz, "k") => "altura da cabeça",
+        (_, "dr") => "diâmetro da rosca depois do ombro",
+        (_, "bm") => "rosca da ponta fixa, que entra na peça",
+        (TipoFixador::Prisioneiro, "b") => "rosca do lado da porca",
+        (TipoFixador::Porca, "dc") => "diâmetro da aba",
+        (TipoFixador::Porca, "c") => "espessura da aba",
         (TipoFixador::ParafusoAllen, "s") => "abertura do sextavado interno",
         (TipoFixador::ParafusoSextavado | TipoFixador::Porca, "s") => "distância entre as faces da chave",
         (_, "b") => "comprimento roscado de referência",
@@ -425,15 +443,17 @@ mod testes {
 
     #[test]
     fn m8_nao_acha_m80_e_numero_solto_acha_o_tamanho() {
-        // nenhuma família tem M80, mas "m8" tem de casar só com M8
+        // nenhuma família tem M80, mas "m8" tem de casar só com M8 (ou com o "M8 Ø10" do parafuso de ombro)
         let r = achar("m8");
-        assert!(r.iter().all(|(_, t)| t.as_deref() == Some("M8")));
-        assert_eq!(achar("8").iter().filter(|(_, t)| t.as_deref() == Some("M8")).count(), achar("m8").len());
+        let e_m8 = |t: &Option<String>| t.as_deref().and_then(|t| t.split_whitespace().next()) == Some("M8");
+        assert!(r.iter().all(|(_, t)| e_m8(t)), "{r:?}");
+        assert!(r.iter().any(|(i, t)| i == "iso7379" && t.as_deref() == Some("M8 Ø10")), "{r:?}");
+        assert_eq!(achar("8").iter().filter(|(_, t)| e_m8(t)).count(), achar("m8").len());
     }
 
     #[test]
     fn busca_ignora_acento_caixa_e_acha_pela_norma_e_pela_classe() {
-        assert_eq!(achar("PORCA").len(), 4);
+        assert_eq!(achar("PORCA").len(), 5);
         assert_eq!(achar("iso 4762").len(), 1);
         assert!(achar("8.8").iter().any(|(i, _)| i == "iso4762"));
         assert!(achar("inoxidavel").is_empty(), "nenhuma família é inox hoje");
@@ -443,14 +463,20 @@ mod testes {
     #[test]
     fn chips_filtram_por_sistema_cabeca_e_material() {
         let f = |c: Filtro| buscar(familias(), &c).len();
-        assert_eq!(f(Filtro { sistema: Some(Sistema::Metrico), ..Default::default() }), familias().len());
-        assert_eq!(f(Filtro { sistema: Some(Sistema::Polegada), ..Default::default() }), 0);
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Allen), ..Default::default() }), 2);
+        // só a ASME B18.3 é em polegada
+        assert_eq!(f(Filtro { sistema: Some(Sistema::Metrico), ..Default::default() }), familias().len() - 1);
+        assert_eq!(f(Filtro { sistema: Some(Sistema::Polegada), ..Default::default() }), 1);
+        // ISO 4762, ISO 7380-1, ISO 7379 e ASME B18.3
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Allen), ..Default::default() }), 4);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Sextavada), ..Default::default() }), 3);
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 7);
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Escareada), ..Default::default() }), 1);
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Panela), ..Default::default() }), 1);
+        // 5 porcas, 4 arruelas, 2 prisioneiros e o rolamento
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 12);
         assert_eq!(f(Filtro { material: Some("Aço".into()), ..Default::default() }), familias().len());
         assert_eq!(f(Filtro { material: Some("Aço inoxidável".into()), ..Default::default() }), 0);
-        assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 2);
+        assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 4);
+        assert_eq!(f(Filtro { tipo: Some(TipoFixador::Prisioneiro), ..Default::default() }), 2);
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Rolamento), ..Default::default() }), 1);
     }
 
@@ -460,7 +486,7 @@ mod testes {
         let a = arvore(&todas);
         let total: usize = a.iter().flat_map(|n| &n.tipos).map(|t| t.familias.len()).sum();
         assert_eq!(total, familias().len());
-        assert_eq!(a.iter().map(|n| n.entidade.as_str()).collect::<Vec<_>>(), ["DIN", "ISO"]);
+        assert_eq!(a.iter().map(|n| n.entidade.as_str()).collect::<Vec<_>>(), ["ASME", "DIN", "ISO"]);
         let iso = a.iter().find(|n| n.entidade == "ISO").unwrap();
         assert_eq!(iso.tipos[0].tipo, TipoFixador::ParafusoAllen);
     }

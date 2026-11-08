@@ -62,16 +62,24 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
 
     let mut m = Montador::novo(&desc);
     m.param("d", &d.to_string())?;
-    match fam.tipo {
-        TipoFixador::ParafusoAllen => allen(&mut m, fam, t, comp.unwrap_or(0.))?,
-        TipoFixador::ParafusoSextavado => sextavado(&mut m, fam, t, comp.unwrap_or(0.))?,
-        TipoFixador::Porca => porca(&mut m, fam, t)?,
-        TipoFixador::Arruela => arruela(&mut m, fam, t)?,
-        TipoFixador::Rolamento => {
+    // a forma vem do gerador; o tipo só diz como a montagem usa a peça
+    let l = comp.unwrap_or(0.);
+    match fam.gerador.as_str() {
+        "parafuso_allen" => allen(&mut m, fam, t, l)?,
+        "parafuso_sextavado" => sextavado(&mut m, fam, t, l)?,
+        "parafuso_escareado" => escareado(&mut m, fam, t, l)?,
+        "parafuso_cruz" => cruz(&mut m, fam, t, l)?,
+        "parafuso_ombro" => ombro(&mut m, fam, t, l)?,
+        "prisioneiro" => prisioneiro(&mut m, fam, t, l)?,
+        "porca" => porca(&mut m, fam, t)?,
+        "porca_flangeada" => porca_flangeada(&mut m, fam, t)?,
+        "arruela" => arruela(&mut m, fam, t)?,
+        "rolamento" => {
             m.param("D", &medida(fam, t, "D")?.to_string())?;
             m.param("B", &medida(fam, t, "B")?.to_string())?;
             crate::rolamentos::corpo(&mut m)?;
         }
+        g => return Err(format!("{}: gerador '{g}' sem geometria", fam.id)),
     }
     propriedades(&mut m.doc, fam, t);
     publicacoes(&mut m, fam)?;
@@ -104,17 +112,25 @@ fn propriedades(doc: &mut Document, fam: &Familia, t: &Tamanho) {
 /// Publica o eixo, o plano de apoio e (nos parafusos) a ponta, para a montagem se prender a eles
 /// por link. Todos seguem os parâmetros: mudar `L` move a ponta.
 fn publicacoes(m: &mut Montador, fam: &Familia) -> Result<(), String> {
-    let (inicio, fim) = match fam.tipo {
-        TipoFixador::ParafusoAllen | TipoFixador::ParafusoSextavado => ("-L", "k"),
-        TipoFixador::Porca => ("-m", "0"),
-        TipoFixador::Arruela => ("-h", "0"),
-        TipoFixador::Rolamento => ("-B", "0"),
+    let (inicio, fim) = match (fam.gerador.as_str(), fam.tipo) {
+        // o escareado fica todo abaixo da face (cabeça rente); o ombro tem a rosca depois do ombro
+        ("parafuso_escareado", _) => ("-L", "0"),
+        ("parafuso_ombro", _) => ("-L-b", "k"),
+        ("prisioneiro", _) => ("-L", "bm"),
+        (_, TipoFixador::ParafusoAllen | TipoFixador::ParafusoSextavado | TipoFixador::ParafusoCruz | TipoFixador::Prisioneiro) => ("-L", "k"),
+        (_, TipoFixador::Porca) => ("-m", "0"),
+        (_, TipoFixador::Arruela) => ("-h", "0"),
+        (_, TipoFixador::Rolamento) => ("-B", "0"),
     };
     let ponto0 = PointRef::Origin;
     m.publicar("Eixo", RefKind::LineDir { point: ponto0, dir: AxisRef::Origin(OriginAxis::Z), start: inicio.into(), end: fim.into() });
     m.publicar("Plano_apoio", RefKind::OffsetPlane { base: PlaneRef::Origin(OriginPlane::XY), offset: "0".into() });
     if fam.tipo.e_parafuso() {
-        m.publicar("Ponta", RefKind::PointCoords { x: "0".into(), y: "0".into(), z: "-L".into(), frame: None });
+        m.publicar("Ponta", RefKind::PointCoords { x: "0".into(), y: "0".into(), z: inicio.into(), frame: None });
+    }
+    if fam.gerador == "parafuso_ombro" {
+        // fim do ombro: o contato da peça que gira no ombro
+        m.publicar("Plano_ombro", RefKind::OffsetPlane { base: PlaneRef::Origin(OriginPlane::XY), offset: "-L".into() });
     }
     Ok(())
 }
@@ -180,6 +196,101 @@ fn sextavado(m: &mut Montador, fam: &Familia, t: &Tamanho, l: f64) -> Result<(),
     m.prim("Cabeca", PrimKind::Prisma, topo, [LADOS, "cc/2", "k", "0"], BoolOp::Add)?;
     let p_corpo = m.plano("Plano_corpo", "-L")?;
     m.prim("Corpo", PrimKind::Cilindro, p_corpo, ["d/2", "L", "0", "0"], BoolOp::Add)
+}
+
+/// ISO 10642: cabeça escareada de 90° rente à face (z de -k a 0, de Ø d a Ø dk) e sextavado interno.
+/// O `L` da norma conta a cabeça: a haste vai de -L até o início do cone.
+fn escareado(m: &mut Montador, fam: &Familia, t: &Tamanho, l: f64) -> Result<(), String> {
+    let (dk, k, s) = (medida(fam, t, "dk")?, medida(fam, t, "k")?, medida(fam, t, "s")?);
+    if s >= dk || l <= k {
+        return Err(format!("{} {}: sextavado maior que a cabeça ou comprimento menor que a cabeça", fam.norma, t.designacao));
+    }
+    m.param("L", &l.to_string())?;
+    m.param("P", &medida(fam, t, "P")?.to_string())?;
+    m.param("dk", &dk.to_string())?;
+    m.param("k", &k.to_string())?;
+    m.param("s", &s.to_string())?;
+    // a profundidade t mudou entre revisões da norma; o modelo usa uma fração fixa da cabeça
+    m.param("prof", "0.6*k")?;
+    let p_corpo = m.plano("Plano_corpo", "-L")?;
+    m.prim("Corpo", PrimKind::Cilindro, p_corpo, ["d/2", "L-k", "0", "0"], BoolOp::Add)?;
+    let p_cabeca = m.plano("Plano_cabeca", "-k")?;
+    m.prim("Cabeca", PrimKind::Cone, p_cabeca, ["d/2", "dk/2", "k", "0"], BoolOp::Add)?;
+    let p_soquete = m.plano("Plano_sextavado", "-prof")?;
+    m.prim("Sextavado_interno", PrimKind::Prisma, p_soquete, [LADOS, "s/(2*cos(30))", "prof+1", "0"], BoolOp::Cut)
+}
+
+/// ISO 7045: cabeça panela simplificada (cilindro dk x k) com recesso cruzado em duas fendas.
+fn cruz(m: &mut Montador, fam: &Familia, t: &Tamanho, l: f64) -> Result<(), String> {
+    m.param("L", &l.to_string())?;
+    m.param("P", &medida(fam, t, "P")?.to_string())?;
+    m.param("dk", &medida(fam, t, "dk")?.to_string())?;
+    m.param("k", &medida(fam, t, "k")?.to_string())?;
+    // recesso: braços de 0,5·dk por 0,12·dk, até a metade da altura da cabeça (desenho, não tabela)
+    m.param("prof", "k/2")?;
+    let topo = PlaneRef::Origin(OriginPlane::XY);
+    m.prim("Cabeca", PrimKind::Cilindro, topo, ["dk/2", "k", "0", "0"], BoolOp::Add)?;
+    let p_corpo = m.plano("Plano_corpo", "-L")?;
+    m.prim("Corpo", PrimKind::Cilindro, p_corpo, ["d/2", "L", "0", "0"], BoolOp::Add)?;
+    let p_recesso = m.plano("Plano_recesso", "k-prof")?;
+    m.prim("Recesso_x", PrimKind::Caixa, p_recesso.clone(), ["0.5*dk", "0.12*dk", "prof+1", "0"], BoolOp::Cut)?;
+    m.prim("Recesso_y", PrimKind::Caixa, p_recesso, ["0.12*dk", "0.5*dk", "prof+1", "0"], BoolOp::Cut)
+}
+
+/// ISO 7379: cabeça Allen, ombro de Ø d (= ds) e comprimento L, e a rosca menor Ø dr de comprimento b
+/// depois do ombro.
+fn ombro(m: &mut Montador, fam: &Familia, t: &Tamanho, l: f64) -> Result<(), String> {
+    let (dk, k, s, dr) = (medida(fam, t, "dk")?, medida(fam, t, "k")?, medida(fam, t, "s")?, medida(fam, t, "dr")?);
+    let d = t.diametro_nominal().unwrap_or(0.);
+    if s >= dk || dr >= d || d >= dk {
+        return Err(format!("{} {}: precisa de s < dk e rosca < ombro < cabeça", fam.norma, t.designacao));
+    }
+    m.param("L", &l.to_string())?;
+    m.param("P", &medida(fam, t, "P")?.to_string())?;
+    m.param("dk", &dk.to_string())?;
+    m.param("k", &k.to_string())?;
+    m.param("s", &s.to_string())?;
+    m.param("dr", &dr.to_string())?;
+    m.param("b", &medida(fam, t, "b")?.to_string())?;
+    m.param("prof", "k/2")?;
+    let topo = PlaneRef::Origin(OriginPlane::XY);
+    m.prim("Cabeca", PrimKind::Cilindro, topo, ["dk/2", "k", "0", "0"], BoolOp::Add)?;
+    let p_ombro = m.plano("Plano_ombro_base", "-L")?;
+    m.prim("Ombro", PrimKind::Cilindro, p_ombro, ["d/2", "L", "0", "0"], BoolOp::Add)?;
+    let p_rosca = m.plano("Plano_rosca", "-L-b")?;
+    m.prim("Rosca", PrimKind::Cilindro, p_rosca, ["dr/2", "b", "0", "0"], BoolOp::Add)?;
+    let p_soquete = m.plano("Plano_sextavado", "k-prof")?;
+    m.prim("Sextavado_interno", PrimKind::Prisma, p_soquete, [LADOS, "s/(2*cos(30))", "prof+1", "0"], BoolOp::Cut)
+}
+
+/// DIN 938 / 939: haste Ø d de z = -L (lado da porca) a z = bm (ponta fixa, no lugar da cabeça).
+/// O plano de apoio z = 0 é a face da peça roscada onde a ponta fixa entra.
+fn prisioneiro(m: &mut Montador, fam: &Familia, t: &Tamanho, l: f64) -> Result<(), String> {
+    m.param("L", &l.to_string())?;
+    m.param("P", &medida(fam, t, "P")?.to_string())?;
+    m.param("b", &medida(fam, t, "b")?.to_string())?;
+    m.param("bm", &medida(fam, t, "bm")?.to_string())?;
+    let p_corpo = m.plano("Plano_corpo", "-L")?;
+    m.prim("Corpo", PrimKind::Cilindro, p_corpo, ["d/2", "L+bm", "0", "0"], BoolOp::Add)
+}
+
+/// DIN 6923: porca sextavada s x m com aba Ø dc x c rente à face de apoio (z = 0).
+fn porca_flangeada(m: &mut Montador, fam: &Familia, t: &Tamanho) -> Result<(), String> {
+    let (s, dc, c, mm) = (medida(fam, t, "s")?, medida(fam, t, "dc")?, medida(fam, t, "c")?, medida(fam, t, "m")?);
+    if dc <= s / 30_f64.to_radians().cos() || c >= mm {
+        return Err(format!("{} {}: a aba precisa passar dos cantos do sextavado e ser mais fina que a porca", fam.norma, t.designacao));
+    }
+    m.param("s", &s.to_string())?;
+    m.param("m", &mm.to_string())?;
+    m.param("dc", &dc.to_string())?;
+    m.param("c", &c.to_string())?;
+    m.param("cc", "s/cos(30)")?;
+    let p_corpo = m.plano("Plano_porca", "-m")?;
+    m.prim("Corpo", PrimKind::Prisma, p_corpo, [LADOS, "cc/2", "m", "0"], BoolOp::Add)?;
+    let p_aba = m.plano("Plano_aba", "-c")?;
+    m.prim("Aba", PrimKind::Cilindro, p_aba, ["dc/2", "c", "0", "0"], BoolOp::Add)?;
+    let p_furo = m.plano("Plano_furo", "-m-1")?;
+    m.prim("Furo", PrimKind::Cilindro, p_furo, ["d/2", "m+2", "0", "0"], BoolOp::Cut)
 }
 
 /// ISO 4032 / DIN 934: prisma sextavado s × m com furo de diâmetro d, de z = -m a z = 0.
@@ -466,6 +577,96 @@ mod tests {
     }
 
     #[test]
+    fn escareado_iso10642_fica_rente_e_tem_o_cone_da_norma() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // M6x20: L conta a cabeça; nada acima da face; Ø13,44 no topo
+        let (v, lo, hi) = medir(&fixador_documento("iso10642", "M6", Some(20.)).unwrap());
+        assert!(hi[2].abs() < 1e-3 && (lo[2] + 20.).abs() < 1e-3, "{lo:?} {hi:?}");
+        assert!((hi[1] - lo[1] - 13.44).abs() < 0.2, "{lo:?} {hi:?}");
+        let (r1, r2, k): (f64, f64, f64) = (3., 6.72, 3.72);
+        let prof = 0.6 * k;
+        let esperado = PI * 9. * (20. - k) + PI * k / 3. * (r1 * r1 + r1 * r2 + r2 * r2) - 3_f64.sqrt() / 2. * 16. * prof;
+        assert!((v - esperado).abs() / esperado < 0.01, "volume {v} vs {esperado}");
+    }
+
+    #[test]
+    fn panela_iso7045_tira_o_recesso_da_cabeca() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (v, lo, hi) = medir(&fixador_documento("iso7045", "M6", Some(20.)).unwrap());
+        assert!((hi[2] - 4.6).abs() < 1e-3 && (lo[2] + 20.).abs() < 1e-3 && (hi[0] - lo[0] - 12.).abs() < 0.2, "{lo:?} {hi:?}");
+        // cabeça e haste menos a cruz (dois braços 6 x 1,44 cruzados, 2,3 de fundo)
+        let (a, b, p) = (6., 1.44, 2.3);
+        let esperado = PI * 36. * 4.6 + PI * 9. * 20. - (2. * a * b - b * b) * p;
+        assert!((v - esperado).abs() / esperado < 0.01, "volume {v} vs {esperado}");
+    }
+
+    #[test]
+    fn ombro_iso7379_tem_ombro_rosca_e_plano_publicado() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let d = fixador_documento("iso7379", "M8 Ø10", Some(30.)).unwrap();
+        assert_eq!(d.props.description, "ISO 7379 M8 Ø10x30");
+        assert!(d.references.iter().any(|r| r.name == "Plano_ombro" && r.published));
+        let (v, lo, hi) = medir(&d);
+        // cabeça 7 acima, ombro 30 e rosca 13,25 abaixo
+        assert!((hi[2] - 7.).abs() < 1e-3 && (lo[2] + 43.25).abs() < 1e-3 && (hi[0] - lo[0] - 16.).abs() < 0.2, "{lo:?} {hi:?}");
+        let esperado = PI * 64. * 7. + PI * 25. * 30. + PI * 16. * 13.25 - 3_f64.sqrt() / 2. * 25. * 3.5;
+        assert!((v - esperado).abs() / esperado < 0.01, "volume {v} vs {esperado}");
+    }
+
+    #[test]
+    fn prisioneiro_din938_e_939_trazem_a_ponta_fixa() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // DIN 938 M10x40: ponta fixa de 10 acima da face; DIN 939: 12
+        let (v, lo, hi) = medir(&fixador_documento("din938", "M10", Some(40.)).unwrap());
+        assert!((hi[2] - 10.).abs() < 1e-3 && (lo[2] + 40.).abs() < 1e-3, "{lo:?} {hi:?}");
+        assert!((v - PI * 25. * 50.).abs() / v < 0.01);
+        let (_, _, hi) = medir(&fixador_documento("din939", "M10", Some(40.)).unwrap());
+        assert!((hi[2] - 12.).abs() < 1e-3);
+    }
+
+    #[test]
+    fn porca_flangeada_din6923_tem_a_aba_na_face_de_apoio() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (v, lo, hi) = medir(&fixador_documento("din6923", "M8", None).unwrap());
+        // aba Ø17,9 manda na caixa; altura 8 abaixo da face
+        assert!((hi[2] - lo[2] - 8.).abs() < 1e-3 && hi[2].abs() < 1e-3 && (hi[1] - lo[1] - 17.9).abs() < 0.2, "{lo:?} {hi:?}");
+        let hex = 3_f64.sqrt() / 2. * 169.;
+        let aba = PI / 4. * 17.9 * 17.9;
+        let esperado = hex * (8. - 1.2) + aba * 1.2 - PI / 4. * 64. * 8.;
+        assert!((v - esperado).abs() / esperado < 0.01, "volume {v} vs {esperado}");
+    }
+
+    #[test]
+    fn arruelas_do_b51_e_allen_em_polegada() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // DIN 6798 A M8: anel 8,4 x 15 x 0,8; par de cunha DIN 25201 M10: 10,7 x 16,6 x 2,5
+        let (v, _, _) = medir(&fixador_documento("din6798a", "M8", None).unwrap());
+        let e = PI / 4. * (225. - 8.4 * 8.4) * 0.8;
+        assert!((v - e).abs() / e < 0.01, "{v} {e}");
+        let (_, lo, hi) = medir(&fixador_documento("din25201", "M10", None).unwrap());
+        assert!((hi[2] - lo[2] - 2.5).abs() < 1e-3 && (hi[0] - lo[0] - 16.6).abs() < 0.2);
+        // 1/4-20 UNC: cabeça 0,375" (9,525 mm) por 0,25" (6,35 mm), haste 1" abaixo
+        let d = fixador_documento("asme_b18_3", "1/4-20 UNC", Some(25.4)).unwrap();
+        assert_eq!(d.props.description, "ASME B18.3 1/4-20 UNCx25.4");
+        let (_, lo, hi) = medir(&d);
+        assert!((hi[2] - 6.35).abs() < 1e-3 && (lo[2] + 25.4).abs() < 1e-3 && (hi[0] - lo[0] - 9.525).abs() < 0.2, "{lo:?} {hi:?}");
+        // pelo valor original também
+        assert!(fixador_documento("asme_b18_3", "1/4 pol", Some(25.4)).is_ok());
+    }
+
+    #[test]
     fn todos_os_tamanhos_de_todas_as_familias_geram() {
         if !fenkra_kernel::AVAILABLE {
             return;
@@ -479,7 +680,9 @@ mod tests {
                 for l in f.comprimentos_de(t).into_iter().filter(|_| f.tipo.e_parafuso()) {
                     let doc = fixador_documento(&f.id, &t.designacao, Some(l)).unwrap_or_else(|e| panic!("{} {} L{l}: {e}", f.id, t.designacao));
                     let (v, lo, _) = medir(&doc);
-                    assert!(v > 0. && (lo[2] + l).abs() < 1e-3, "{} {} L{l}", f.id, t.designacao);
+                    // o parafuso de ombro tem a rosca b depois do ombro de comprimento L
+                    let fundo = l + if f.gerador == "parafuso_ombro" { t.valor("b").unwrap() } else { 0. };
+                    assert!(v > 0. && (lo[2] + fundo).abs() < 1e-3, "{} {} L{l}", f.id, t.designacao);
                 }
             }
         }

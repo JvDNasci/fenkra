@@ -43,6 +43,10 @@ pub enum TipoFixador {
     Arruela,
     /// rolamento de esferas pelas medidas de contorno (furo d, externo D, largura B)
     Rolamento,
+    /// parafuso de máquina com recesso cruzado na cabeça (ISO 7045)
+    ParafusoCruz,
+    /// haste roscada nas duas pontas, sem cabeça (DIN 938, 939)
+    Prisioneiro,
 }
 
 /// Geradores de geometria nomeados. Uma família escolhe o gerador pelo nome (`"gerador"` no JSON);
@@ -53,7 +57,23 @@ pub const GERADORES: &[(&str, TipoFixador)] = &[
     ("porca", TipoFixador::Porca),
     ("arruela", TipoFixador::Arruela),
     ("rolamento", TipoFixador::Rolamento),
+    ("parafuso_cruz", TipoFixador::ParafusoCruz),
+    ("prisioneiro", TipoFixador::Prisioneiro),
+    // geradores de forma própria sobre um tipo já existente: o tipo diz como a montagem usa a peça
+    ("parafuso_escareado", TipoFixador::ParafusoAllen),
+    ("parafuso_ombro", TipoFixador::ParafusoAllen),
+    ("porca_flangeada", TipoFixador::Porca),
 ];
+
+/// Campos que o gerador precisa, além dos do tipo.
+pub fn campos_do_gerador(gerador: &str) -> &'static [&'static str] {
+    match gerador {
+        "parafuso_ombro" => &["dr", "b"],
+        "porca_flangeada" => &["dc", "c"],
+        "prisioneiro" => &["b", "bm"],
+        _ => &[],
+    }
+}
 
 impl TipoFixador {
     pub fn rotulo(self) -> &'static str {
@@ -63,16 +83,18 @@ impl TipoFixador {
             TipoFixador::Porca => "Porca",
             TipoFixador::Arruela => "Arruela",
             TipoFixador::Rolamento => "Rolamento",
+            TipoFixador::ParafusoCruz => "Parafuso de cabeça com cruz",
+            TipoFixador::Prisioneiro => "Prisioneiro",
         }
     }
 
-    /// Nome do gerador deste tipo.
+    /// Nome do gerador padrão deste tipo.
     pub fn gerador(self) -> &'static str {
         GERADORES.iter().find(|(_, t)| *t == self).map(|(n, _)| *n).unwrap_or("")
     }
 
     pub fn e_parafuso(self) -> bool {
-        matches!(self, TipoFixador::ParafusoAllen | TipoFixador::ParafusoSextavado)
+        matches!(self, TipoFixador::ParafusoAllen | TipoFixador::ParafusoSextavado | TipoFixador::ParafusoCruz | TipoFixador::Prisioneiro)
     }
 
     /// Campos que a geometria do tipo precisa em todo tamanho.
@@ -85,6 +107,8 @@ impl TipoFixador {
             TipoFixador::Arruela => &["d1", "d2", "h"],
             // o furo d é o diâmetro nominal do tamanho
             TipoFixador::Rolamento => &["D", "B"],
+            TipoFixador::ParafusoCruz => &["P", "dk", "k"],
+            TipoFixador::Prisioneiro => &["P"],
         }
     }
 }
@@ -170,7 +194,7 @@ pub struct Familia {
     /// versão dos dados desta família; sobe a cada correção de medida
     pub versao: u32,
     pub tipo: TipoFixador,
-    /// nome do gerador de geometria (ver [`GERADORES`])
+    /// nome do gerador de geometria (ver [`GERADORES`]); sem ele no JSON, o padrão do tipo
     pub gerador: String,
     /// nível de uso da fonte: A, B, C ou X
     pub nivel: String,
@@ -243,7 +267,7 @@ impl TryFrom<FamiliaBruta> for Familia {
             revisao: b.revisao,
             versao: b.versao,
             tipo,
-            gerador: tipo.gerador().to_string(),
+            gerador: b.gerador.unwrap_or_else(|| tipo.gerador().to_string()),
             nivel: b.nivel,
             licenca: b.licenca,
             fontes: b.fontes,
@@ -338,9 +362,9 @@ impl Familia {
         if self.campos.is_empty() {
             return er("sem campos");
         }
-        for c in self.tipo.campos_obrigatorios() {
+        for c in self.tipo.campos_obrigatorios().iter().chain(campos_do_gerador(&self.gerador)) {
             if !self.campos.iter().any(|x| x == c) {
-                return er(&format!("falta o campo '{c}' exigido pelo tipo {}", self.tipo.rotulo()));
+                return er(&format!("falta o campo '{c}' exigido pelo tipo {} (gerador {})", self.tipo.rotulo(), self.gerador));
             }
         }
         for (c, u) in &self.unidades {
@@ -480,6 +504,15 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso7380_1.json", include_str!("../../../biblioteca/fixadores/iso7380_1.json")),
     ("din985.json", include_str!("../../../biblioteca/fixadores/din985.json")),
     ("din127b.json", include_str!("../../../biblioteca/fixadores/din127b.json")),
+    ("iso10642.json", include_str!("../../../biblioteca/fixadores/iso10642.json")),
+    ("iso7045.json", include_str!("../../../biblioteca/fixadores/iso7045.json")),
+    ("din6923.json", include_str!("../../../biblioteca/fixadores/din6923.json")),
+    ("din6798a.json", include_str!("../../../biblioteca/fixadores/din6798a.json")),
+    ("din25201.json", include_str!("../../../biblioteca/fixadores/din25201.json")),
+    ("din938.json", include_str!("../../../biblioteca/fixadores/din938.json")),
+    ("din939.json", include_str!("../../../biblioteca/fixadores/din939.json")),
+    ("iso7379.json", include_str!("../../../biblioteca/fixadores/iso7379.json")),
+    ("asme_b18_3.json", include_str!("../../../biblioteca/fixadores/asme_b18_3.json")),
     ("iso15_60.json", include_str!("../../../biblioteca/rolamentos/iso15_60.json")),
 ];
 
@@ -616,7 +649,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 12);
+        assert_eq!(b.familias.len(), 21);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -624,7 +657,8 @@ mod tests {
             assert_eq!(f.nivel, "C");
             assert!(f.licenca.starts_with("CC BY 4.0"));
         }
-        assert_eq!(familias().iter().filter(|f| f.tipo.e_parafuso()).count(), 5);
+        // 4762, 4017, 933, 4014, 7380-1, 10642, 7045, 938, 939, 7379, B18.3
+        assert_eq!(familias().iter().filter(|f| f.tipo.e_parafuso()).count(), 11);
     }
 
     #[test]
@@ -662,6 +696,44 @@ mod tests {
                 assert!(t.confirmado_por >= 2 && t.nota.as_deref().is_some_and(|n| n.contains("fontes") || n.contains("fonte")), "{id} {}", t.designacao);
             }
         }
+    }
+
+    #[test]
+    fn familias_novas_do_b51_tem_gerador_proprio_e_duas_fontes() {
+        let ids = ["iso10642", "iso7045", "din6923", "din6798a", "din25201", "din938", "din939", "iso7379", "asme_b18_3"];
+        for id in ids {
+            let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
+            assert!(f.fontes.len() >= 2, "{id}");
+            assert!(f.tamanhos.iter().all(|t| t.confirmado_por >= 2 && t.nota.is_some()), "{id}");
+        }
+        let g = |id: &str| familia(id).unwrap().gerador.clone();
+        assert_eq!((g("iso10642"), g("iso7045"), g("din6923"), g("din938"), g("iso7379")), ("parafuso_escareado".into(), "parafuso_cruz".into(), "porca_flangeada".into(), "prisioneiro".into(), "parafuso_ombro".into()));
+        // a porca flangeada continua porca para a montagem; o escareado e o ombro continuam Allen
+        assert_eq!(familia("din6923").unwrap().tipo, TipoFixador::Porca);
+        assert_eq!(familia("iso7379").unwrap().tipo, TipoFixador::ParafusoAllen);
+        // ISO 10642 M8: dk 17,92 e k 4,96 (cone de 90°: (dk - d) / 2 = k)
+        let t = tamanho("iso10642", "M8").unwrap();
+        assert_eq!((t.valor("dk"), t.valor("k"), t.valor("s")), (Some(17.92), Some(4.96), Some(5.)));
+        assert!(((17.92 - 8.) / 2. - 4.96_f64).abs() < 1e-9);
+        // DIN 6923 M10: chave 15 (não 17) e aba de 21,8
+        let t = tamanho("din6923", "M10").unwrap();
+        assert_eq!((t.valor("s"), t.valor("dc")), (Some(15.), Some(21.8)));
+        // prisioneiros: bm = d na DIN 938 e 1,25 d na 939
+        for t in &familia("din938").unwrap().tamanhos {
+            assert_eq!(t.valor("bm"), t.diametro_nominal(), "{}", t.designacao);
+        }
+        assert_eq!(tamanho("din939", "M16").unwrap().valor("bm"), Some(20.));
+        // ombro: o tamanho é "M8 Ø10", com d nominal do ombro e a rosca menor
+        let t = tamanho("iso7379", "M8 Ø10").unwrap();
+        assert_eq!((t.diametro_nominal(), t.valor("dr")), (Some(10.), Some(8.)));
+        // polegada: 3/8-16 UNC guardado em mm, achado também por "3/8 pol"
+        let t = tamanho("asme_b18_3", "3/8 pol").unwrap();
+        assert_eq!(t.designacao, "3/8-16 UNC");
+        assert_eq!((t.diametro_nominal(), t.valor("dk"), t.valor("k")), (Some(9.525), Some(14.275), Some(9.525)));
+        assert!((t.valor("P").unwrap() - 25.4 / 16.).abs() < 1e-3);
+        // sem campo do gerador a família não valida
+        let sem_aba = include_str!("../../../biblioteca/fixadores/din6923.json").replace("\"c\"", "\"x\"");
+        assert!(Biblioteca::de_jsons(Camada::Publica, &[("t.json", &sem_aba)]).is_err());
     }
 
     #[test]
@@ -781,7 +853,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 13);
+        assert_eq!(m.familias.len(), 22);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);
@@ -792,7 +864,8 @@ mod tests {
     fn toda_familia_publica_tem_revisao_serie_e_fonte() {
         for f in familias() {
             assert!(!f.revisao.is_empty() && f.versao >= 1, "{}", f.id);
-            assert_eq!(f.gerador, f.tipo.gerador());
+            // o gerador existe e pertence ao tipo da família
+            assert!(GERADORES.iter().any(|(g, t)| *g == f.gerador && *t == f.tipo), "{}: gerador {} do tipo {:?}", f.id, f.gerador, f.tipo);
             if f.tipo.e_parafuso() {
                 for t in &f.tamanhos {
                     assert!(!t.comprimentos.is_empty(), "{} {} sem série própria", f.id, t.designacao);
