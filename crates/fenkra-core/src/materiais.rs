@@ -45,12 +45,36 @@ pub const MATERIAIS: &[Material] = &[
     Material { nome: "Madeira (pinus)", densidade: 0.5, familia: "Madeira" },
     Material { nome: "Concreto", densidade: 2.4, familia: "Construção" },
     Material { nome: "Vidro", densidade: 2.5, familia: "Cerâmica" },
+    // B408: o kart pediu cromo-molibdênio e borracha, e os dois caíam na densidade padrão
+    Material { nome: "Aço AISI 4130", densidade: 7.85, familia: "Aço" },
+    Material { nome: "Aço AISI 4140", densidade: 7.85, familia: "Aço" },
+    Material { nome: "Borracha natural", densidade: 0.93, familia: "Elastômero" },
+    Material { nome: "Borracha nitrílica (NBR)", densidade: 1.0, familia: "Elastômero" },
+    Material { nome: "Policloropreno (CR)", densidade: 1.23, familia: "Elastômero" },
+    Material { nome: "Poliuretano", densidade: 1.2, familia: "Elastômero" },
 ];
 
-/// Material da tabela pelo nome (sem diferenciar maiúsculas).
+/// Nomes curtos que as pessoas escrevem, apontando para a linha da tabela.
+const APELIDOS: &[(&str, &str)] = &[
+    ("borracha", "Borracha natural"),
+    ("aço 4130", "Aço AISI 4130"),
+    ("4130", "Aço AISI 4130"),
+    ("cromo-molibdênio", "Aço AISI 4130"),
+    ("aço 4140", "Aço AISI 4140"),
+    ("nbr", "Borracha nitrílica (NBR)"),
+];
+
+/// Material da tabela pelo nome ou apelido (sem diferenciar maiúsculas).
 pub fn material(nome: &str) -> Option<&'static Material> {
     let n = nome.trim().to_lowercase();
+    let n = APELIDOS.iter().find(|(a, _)| *a == n).map_or(n, |(_, alvo)| alvo.to_lowercase());
     MATERIAIS.iter().find(|m| m.nome.to_lowercase() == n)
+}
+
+/// Aviso para um material que não está na tabela: a massa sai com a densidade padrão, e isso
+/// precisa aparecer em vez de passar calado. `None` para nome vazio ou conhecido.
+pub fn aviso_fora_da_tabela(nome: &str) -> Option<String> {
+    (!nome.trim().is_empty() && material(nome).is_none()).then(|| format!("'{}' não está na tabela de materiais: a massa usa {DENSIDADE_PADRAO} g/cm³", nome.trim()))
 }
 
 /// Densidade em g/cm³; fora da tabela vale `DENSIDADE_PADRAO`.
@@ -101,6 +125,20 @@ mod tests {
         assert_eq!(densidade("alumínio 6061"), 2.7);
         assert_eq!(densidade("material inventado"), DENSIDADE_PADRAO);
         assert!(material("Cobre").is_some());
+    }
+
+    #[test]
+    fn cromo_molibdenio_e_borracha_estao_na_tabela() {
+        assert_eq!(densidade("Aço AISI 4130"), 7.85);
+        assert_eq!(densidade("borracha"), 0.93, "o apelido leva à borracha natural");
+        assert_eq!(material("aço 4130").map(|m| m.nome), Some("Aço AISI 4130"));
+        let mut doc = Document::new("m");
+        doc.props.material = "Borracha".into();
+        // 1 dm³ de borracha: 0,93 kg, e não 7,85 kg do aço padrão
+        assert!((massa_kg(&doc, crate::doc::Id(0), 1e6) - 0.93).abs() < 1e-9);
+        assert!(aviso_fora_da_tabela("Borracha").is_none());
+        assert!(aviso_fora_da_tabela("").is_none());
+        assert!(aviso_fora_da_tabela("Unobtânio").unwrap().contains("7.85"));
     }
 
     #[test]

@@ -18,4 +18,8 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("escolha o elemento novo na mesma peça", "pick the new element on the same part"),
     ("este elemento não serve para esta restrição", "this element does not fit this constraint"),
     ("restrição não encontrada", "constraint not found"),
+    (
+        "Material fora da tabela: a massa usa a densidade padrão (7,85 g/cm³). Escolha um da lista.",
+        "Material not in the table: mass uses the default density (7.85 g/cm³). Pick one from the list.",
+    ),
 ];
