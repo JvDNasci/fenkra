@@ -239,3 +239,33 @@ fn dois_vertices_em_sequencia_medem_a_distancia_com_afastamento_do_mouse() {
     assert!((valor - (b[0] - a[0])).abs() < 1e-6, "{valor} x {}", b[0] - a[0]);
     assert!(dm.offset.abs() >= 1., "afastamento vem do mouse");
 }
+
+#[test]
+fn conjunto_padrao_com_escala_alta_nao_cobre_as_vistas() {
+    // B412: o espaçamento fixo cobria as vistas com peça grande em escala alta
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let (mut st, _) = estado_com_placa("fenkra_dwg_ui_conjunto_escala");
+    st.d.views.clear();
+    st.new_scale = 5.;
+    st.scale_auto = false;
+    let (t, ids) = ghost::new_views(&mut st, c::SET, [200., 200.]).expect("conjunto");
+    assert_eq!(ids.len(), 4);
+    let caixas: Vec<(V2, V2)> = ids
+        .iter()
+        .map(|i| {
+            let v = t.view(*i).unwrap().clone();
+            let p = st.models.proj(&t, *i);
+            let (lo, hi) = (fenkra_desenho::layout::to_sheet(&v, &p, p.lo), fenkra_desenho::layout::to_sheet(&v, &p, p.hi));
+            ([lo[0].min(hi[0]), lo[1].min(hi[1])], [lo[0].max(hi[0]), lo[1].max(hi[1])])
+        })
+        .collect();
+    for i in 0..caixas.len() {
+        for j in i + 1..caixas.len() {
+            let (a, b) = (caixas[i], caixas[j]);
+            let cobre = a.0[0] < b.1[0] && b.0[0] < a.1[0] && a.0[1] < b.1[1] && b.0[1] < a.1[1];
+            assert!(!cobre, "vistas {i} e {j} se cobrem: {a:?} {b:?}");
+        }
+    }
+}

@@ -102,11 +102,10 @@ pub fn new_views(st: &mut DwgState, tool: u8, at: V2) -> Option<(Drawing, Vec<Id
     let sheet = st.sheet;
     let ids = match tool {
         c::SET => {
-            // espaçamento pelo tamanho da peça (a superior e a lateral não se encostam)
+            // B412: a mesma conta do conjunto real (conjunto::criar_sem_sobrepor): frente, lateral,
+            // superior e isométrica não se encostam, na escala escolhida
             let mut g = scratch(st, 1);
-            let f = g.add_view(sheet, src.clone(), ViewKind::Standard(Dir::Frente), at, sc);
-            let p = st.models.proj(&g, f);
-            let gap = ((p.hi[0] - p.lo[0]).max(p.hi[1] - p.lo[1]) * sc + 25.).max(40.);
+            let gap = fenkra_desenho::conjunto::distancia(&mut g, &mut st.models, sheet, &src, sc, 25.).max(40.);
             t.add_standard_set(sheet, src, at, sc, gap)
         }
         c::ISO => vec![t.add_view(sheet, src, ViewKind::Standard(Dir::Iso), at, sc)],
