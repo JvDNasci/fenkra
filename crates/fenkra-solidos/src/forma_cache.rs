@@ -14,9 +14,26 @@ use std::collections::HashMap;
 /// recém-feito. `None` se faltou algum comando no cache (cálculo cancelado ou interrompido): quem
 /// chama volta a `final_shape`.
 pub fn forma_do_cache(doc: &Document, cache: &Cache) -> Option<Shape> {
-    // a configuração ativa da tabela de projeto vale também aqui (B102), como no cálculo
     let efetivo = doc.efetivo().ok()?;
     let doc: &Document = &efetivo;
+    let corpos = corpos_do_cache(doc, cache)?;
+    let mut all = Shape::empty();
+    for c in doc.collectors.iter().filter(|c| c.visible) {
+        if let Some(b) = corpos.get(&c.id) {
+            all = if all.is_null() { b.clone() } else { all.compound(b) };
+        }
+    }
+    // as faces do cache já foram malhadas, e a malha engorda a caixa envolvente; `final_shape` devolve
+    // a forma sem malha, e quem usa a caixa (restrições, filtros de colisão) conta com ela exata
+    if !all.is_null() {
+        all.discard_mesh().ok();
+    }
+    (!all.is_null()).then_some(all)
+}
+
+/// O corpo de cada coletor ao fim dos comandos ativos, tirado do cache (sem refazer nenhum comando).
+/// `doc` já deve ser o efetivo (configuração ativa). Os corpos ainda trazem a malha do cache.
+pub fn corpos_do_cache(doc: &Document, cache: &Cache) -> Option<HashMap<Id, Shape>> {
     let mut corpos: HashMap<Id, Shape> = HashMap::new();
     for f in doc.active_features().map(|(_, f)| f) {
         let entrada = cache.feats.get(&f.id)?;
@@ -31,18 +48,7 @@ pub fn forma_do_cache(doc: &Document, cache: &Cache) -> Option<Shape> {
             }
         }
     }
-    let mut all = Shape::empty();
-    for c in doc.collectors.iter().filter(|c| c.visible) {
-        if let Some(b) = corpos.get(&c.id) {
-            all = if all.is_null() { b.clone() } else { all.compound(b) };
-        }
-    }
-    // as faces do cache já foram malhadas, e a malha engorda a caixa envolvente; `final_shape` devolve
-    // a forma sem malha, e quem usa a caixa (restrições, filtros de colisão) conta com ela exata
-    if !all.is_null() {
-        all.discard_mesh().ok();
-    }
-    (!all.is_null()).then_some(all)
+    Some(corpos)
 }
 
 #[cfg(test)]

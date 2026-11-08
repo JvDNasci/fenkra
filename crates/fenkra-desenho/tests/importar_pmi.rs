@@ -94,3 +94,53 @@ fn importa_so_as_escolhidas_ligadas_ao_modelo_e_atualiza_com_ele() {
     assert_eq!(importar::atualizar(&mut d, &mut m), vec![d.dims[0].id]);
     let _ = std::fs::remove_dir_all(dir);
 }
+
+fn montagem_com_pmi(nome: &str, comprimento: f64) -> (Drawing, Models, Id, std::path::PathBuf) {
+    use fenkra_montagem::{Assembly, NodeKind, Placement};
+    let dir = std::env::temp_dir().join(format!("{nome}_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("placa.fkp"), fenkra_solidos::example_document().to_json()).unwrap();
+    let mut a = Assembly::new("conj");
+    a.add_component("P", NodeKind::Part { path: "placa.fkp".into() }, Placement::default(), None);
+    a.pmi.push(pmi(9101, "Comprimento", PmiKind::Linear, vec![[0., 0., 0.], [comprimento, 0., 0.]], ""));
+    a.pmi.push(pmi(9102, "Rebarbar", PmiKind::Note, vec![[10., 0., 5.], [30., 0., 5.]], "Rebarbar"));
+    a.pmi.push(pmi(9103, "Legenda", PmiKind::TitleBlock { template: "{nome}".into() }, vec![[0.; 3]], ""));
+    std::fs::write(dir.join("conj.fka"), a.to_json()).unwrap();
+    let src = Source { path: "conj.fka".into(), display_state: String::new(), hidden: vec![] };
+    let mut d = Drawing::new("t", Format::A3);
+    let s = d.sheets[0].id;
+    let v = d.add_view(s, src, ViewKind::Standard(Dir::Frente), [150., 150.], 1.);
+    (d, Models::new(Some(dir.clone())), v, dir)
+}
+
+#[test]
+fn montagem_importa_as_anotacoes_do_conjunto_e_atualiza_com_ele() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let (mut d, mut m, v, dir) = montagem_com_pmi("fenkra_importar_montagem", 120.);
+    let l = importar::reconhecer(&d, &mut m, v);
+    let de = |id: u64| l.iter().find(|c| c.pmi == Id(id)).unwrap().destino.clone();
+    assert_eq!(de(9101), Ok(Como::Cota(DimKind::Horizontal)));
+    assert_eq!(de(9102), Ok(Como::Nota(NoteKind::Text)));
+    assert_eq!(de(9103), Err(Fora::Legenda));
+    let rel = importar::importar(&mut d, &mut m, v, &[Id(9101), Id(9102), Id(9103)]);
+    assert_eq!((rel.cotas.len(), rel.notas.len()), (1, 1));
+    assert_eq!(rel.recusadas, vec![(Id(9103), Fora::Legenda)]);
+    // a nota de duas âncoras chega com duas setas, as duas presas ao modelo (B370)
+    let n = &d.notes[0];
+    assert_eq!(setas_nota::pontas(n).len(), 2);
+    assert_eq!(setas_nota::ancora(n, 0), Some([10., 0., 5.]));
+    assert_eq!(setas_nota::ancora(n, 1), Some([30., 0., 5.]));
+    let antes = n.leaders_extra[0];
+    // o conjunto muda no disco: a segunda âncora anda 20 mm e a seta acompanha
+    std::thread::sleep(std::time::Duration::from_millis(30));
+    let txt = std::fs::read_to_string(dir.join("conj.fka")).unwrap();
+    let mut a2 = fenkra_montagem::Assembly::from_json(&txt).unwrap();
+    a2.pmi.iter_mut().find(|p| p.id == Id(9102)).unwrap().anchors[1] = [50., 0., 5.];
+    std::fs::write(dir.join("conj.fka"), a2.to_json()).unwrap();
+    assert!(importar::atualizar(&mut d, &mut m).is_empty());
+    let depois = d.notes[0].leaders_extra[0];
+    assert!(((depois[0] - antes[0]).abs() - 20.).abs() < 1e-6, "a seta andou 20 mm: {antes:?} -> {depois:?}");
+    let _ = std::fs::remove_dir_all(dir);
+}

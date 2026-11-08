@@ -6,7 +6,9 @@
 //! 2 direita, 3 topo, 4 base; seta `Padrao` herda a do estilo). A moldura acompanha porque a
 //! chamada sai da caixa do texto já com moldura (ver `layout::note`).
 
-use crate::{Note, V2};
+use crate::layout::to_sheet;
+use crate::source::Models;
+use crate::{Drawing, Note, V2, V3};
 use fenkra_core::pmi::PmiArrow;
 
 /// Todas as pontas da nota, na ordem (a primeira é a de `leader`).
@@ -42,8 +44,15 @@ pub fn remover(n: &mut Note, k: usize) -> bool {
     }
     if k == 0 {
         n.leader = if n.leaders_extra.is_empty() { None } else { Some(n.leaders_extra.remove(0)) };
+        // a primeira ponta passa a ser a próxima: leva a âncora do modelo junto
+        let prox = if n.anchors_extra.is_empty() { None } else { n.anchors_extra.remove(0) };
+        n.anchor3 = prox;
+        n.snapped = n.snapped && prox.is_some();
     } else {
         n.leaders_extra.remove(k - 1);
+        if k - 1 < n.anchors_extra.len() {
+            n.anchors_extra.remove(k - 1);
+        }
     }
     if k < n.style.leader_side.len() {
         n.style.leader_side.remove(k);
@@ -52,6 +61,55 @@ pub fn remover(n: &mut Note, k: usize) -> bool {
         n.style.leader_arrow.remove(k);
     }
     true
+}
+
+/// Ponto do modelo onde a ponta `k` encosta, se ela está presa à vista da nota.
+pub fn ancora(n: &Note, k: usize) -> Option<V3> {
+    if k == 0 {
+        n.anchor3
+    } else {
+        n.anchors_extra.get(k - 1).copied().flatten()
+    }
+}
+
+/// Prende a ponta `k` ao ponto `a` do modelo (ou solta, com `None`). `false` se a ponta não existe.
+/// A ponta extra só acompanha o modelo se a nota pertence a uma vista.
+pub fn prender(n: &mut Note, k: usize, a: Option<V3>) -> bool {
+    if k >= pontas(n).len() {
+        return false;
+    }
+    if k == 0 {
+        n.anchor3 = a;
+        n.snapped = a.is_some();
+    } else {
+        if n.anchors_extra.len() < k {
+            n.anchors_extra.resize(k, None);
+        }
+        n.anchors_extra[k - 1] = a;
+        while n.anchors_extra.last().is_some_and(|x| x.is_none()) {
+            n.anchors_extra.pop();
+        }
+    }
+    true
+}
+
+/// Leva as pontas presas ao modelo para onde a vista as projeta hoje, em `n` (cópia de trabalho
+/// para desenhar). As soltas ficam como estão.
+pub fn acompanhar_modelo(d: &Drawing, n: &mut Note, m: &mut Models) {
+    let Some(v) = n.view.and_then(|id| d.view(id)) else { return };
+    if n.anchor3.is_none() && n.anchors_extra.iter().all(|a| a.is_none()) {
+        return;
+    }
+    let p = m.proj(d, v.id);
+    let Some(ax) = p.axes else { return };
+    if let Some(a3) = n.anchor3 {
+        n.leader = Some(to_sheet(v, &p, ax.project(a3)));
+    }
+    for (k, a) in n.anchors_extra.clone().into_iter().enumerate() {
+        if let (Some(a3), Some(t)) = (a, n.leaders_extra.get_mut(k)) {
+            *t = to_sheet(v, &p, ax.project(a3));
+        }
+    }
 }
 
 /// Lado da caixa de onde sai a chamada da ponta `k`.
@@ -71,6 +129,34 @@ pub fn definir_lado(n: &mut Note, k: usize, lado: u8) -> bool {
     let mudou = n.style.leader_side[k] != lado;
     n.style.leader_side[k] = lado;
     mudou
+}
+
+/// Ponto da borda da caixa do texto de onde sai a chamada, para o lado 1 esquerda, 2 direita,
+/// 3 topo, 4 base (a mesma regra do desenho da chamada). `lado` 0 = o automático para `ponta`.
+pub fn ponto_de_saida(lo: V2, hi: V2, ponta: V2, lado: u8) -> V2 {
+    let c = [(lo[0] + hi[0]) / 2., (lo[1] + hi[1]) / 2.];
+    let lado = if lado != 0 { lado } else { lado_pelo_ponto(lo, hi, ponta) };
+    match lado {
+        1 => [lo[0], c[1]],
+        2 => [hi[0], c[1]],
+        3 => [c[0], hi[1]],
+        _ => [c[0], lo[1]],
+    }
+}
+
+/// Lado da caixa mais próximo de `p` (1 esquerda, 2 direita, 3 topo, 4 base): o que a alça
+/// do início da seta escolhe quando é arrastada.
+pub fn lado_pelo_ponto(lo: V2, hi: V2, p: V2) -> u8 {
+    let c = [(lo[0] + hi[0]) / 2., (lo[1] + hi[1]) / 2.];
+    let (w, h) = ((hi[0] - lo[0]).max(1e-6), (hi[1] - lo[1]).max(1e-6));
+    let d = [p[0] - c[0], p[1] - c[1]];
+    if d[0].abs() * h >= d[1].abs() * w {
+        if d[0] < 0. { 1 } else { 2 }
+    } else if d[1] > 0. {
+        3
+    } else {
+        4
+    }
 }
 
 /// Seta da ponta `k` (`Padrao` = a do estilo).
@@ -141,10 +227,54 @@ mod tests {
     }
 
     #[test]
+    fn ponta_extra_presa_ao_modelo_acompanha_a_vista_e_a_solta_nao() {
+        let mut d = Drawing::new("t", Format::A3);
+        let s = d.sheets[0].id;
+        let v = d.add_view(s, crate::Source { path: "x.fkp".into(), display_state: String::new(), hidden: vec![] }, crate::ViewKind::Standard(crate::Dir::Frente), [100., 100.], 1.);
+        let mut m = Models::new(None);
+        // sem arquivo não há eixos: monta a projeção de uma vista conhecida
+        let p = m.proj(&d, v);
+        let mut n = nota();
+        n.view = Some(v);
+        adicionar(&mut n, [140., 130.]);
+        adicionar(&mut n, [100., 60.]);
+        assert!(prender(&mut n, 2, Some([1., 2., 3.])));
+        assert_eq!(ancora(&n, 2), Some([1., 2., 3.]));
+        assert_eq!(ancora(&n, 1), None);
+        assert!(!prender(&mut n, 9, None));
+        // tirar a ponta 1 leva a âncora da 2 para a posição 1
+        assert!(remover(&mut n, 1));
+        assert_eq!(ancora(&n, 1), Some([1., 2., 3.]));
+        // promover a próxima como primeira leva a âncora junto
+        assert!(remover(&mut n, 0));
+        assert_eq!(n.anchor3, Some([1., 2., 3.]));
+        assert!(n.anchors_extra.is_empty());
+        let _ = p;
+    }
+
+    #[test]
+    fn alca_de_saida_segue_o_lado_e_o_arraste_escolhe_o_lado() {
+        let (lo, hi) = ([90., 95.], [110., 105.]);
+        assert_eq!(ponto_de_saida(lo, hi, [0., 0.], 2), [110., 100.]);
+        assert_eq!(ponto_de_saida(lo, hi, [0., 0.], 3), [100., 105.]);
+        // automático: ponta à esquerda sai pela esquerda
+        assert_eq!(ponto_de_saida(lo, hi, [40., 100.], 0), [90., 100.]);
+        assert_eq!(lado_pelo_ponto(lo, hi, [100., 150.]), 3);
+        assert_eq!(lado_pelo_ponto(lo, hi, [100., 50.]), 4);
+        assert_eq!(lado_pelo_ponto(lo, hi, [200., 101.]), 2);
+        // a caixa que a interface usa é a mesma do desenho da chamada
+        let d = Drawing::new("t", Format::A3);
+        let mut m = Models::new(None);
+        let n = nota();
+        let (l, h) = crate::layout::caixa_da_nota(&d, &n, &mut m).expect("nota com chamada");
+        assert!(l[0] < n.pos[0] + 1. && h[0] > n.pos[0] - 1. && l[1] < h[1]);
+    }
+
+    #[test]
     fn nota_antiga_sem_pontas_extras_le_igual() {
         let n = nota();
         let j = serde_json::to_string(&n).unwrap();
-        assert!(!j.contains("leaders_extra"), "vazio não polui o arquivo");
+        assert!(!j.contains("leaders_extra") && !j.contains("anchors_extra"), "vazio não polui o arquivo");
         let volta: Note = serde_json::from_str(&j).unwrap();
         assert_eq!(volta, n);
     }

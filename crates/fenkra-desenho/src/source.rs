@@ -85,6 +85,8 @@ pub struct Proj {
     pub hi: V2,
     pub axes: Option<Axes>,
     pub error: Option<String>,
+    /// B427: a projeção está sendo calculada em segundo plano; isto é só o lugar dela
+    pub calculando: bool,
 }
 
 impl Proj {
@@ -123,6 +125,15 @@ pub struct Models {
     parts: PartCache,
     loaded: HashMap<(PathBuf, String), Loaded>,
     proj: HashMap<Id, (u64, Proj)>,
+    /// projeção das vistas de montagem fora da thread da interface (B427); `None` = tudo aqui
+    fundo: Option<crate::fundo::Fundo>,
+    /// só na thread de projeção: progresso e cancelamento do pedido em andamento
+    controle: Option<fenkra_core::trabalho::Controle>,
+}
+
+/// Vista de montagem: a que mais demora e a que vai para a thread de projeção.
+fn e_montagem(path: &str) -> bool {
+    Path::new(path).extension().is_some_and(|e| e.eq_ignore_ascii_case("fka"))
 }
 
 fn stamp(p: &Path) -> Option<SystemTime> {
@@ -131,7 +142,10 @@ fn stamp(p: &Path) -> Option<SystemTime> {
 
 impl Models {
     pub fn new(dir: Option<PathBuf>) -> Self {
-        Models { dir, ..Default::default() }
+        let mut m = Models { dir, ..Default::default() };
+        // o desenho projeta o sólido: não precisa da malha das peças (B393)
+        m.parts.so_forma = true;
+        m
     }
 
     pub fn full(&self, path: &str) -> PathBuf {
@@ -149,7 +163,22 @@ impl Models {
                 }
             }
         }
-        !stale.is_empty()
+        // montagens calculadas em segundo plano: arquivo mudado esquece a projeção; o próximo pedido refaz
+        let mut velhas = vec![];
+        if let Some(f) = self.fundo.as_mut() {
+            let ks: Vec<_> = f.arquivos.iter().filter(|(_, a)| a.iter().any(|(p, t)| stamp(p) != *t)).map(|(k, _)| k.clone()).collect();
+            for k in ks {
+                if let Some(a) = f.arquivos.remove(&k) {
+                    velhas.extend(a.into_iter().map(|(p, _)| p));
+                }
+                f.extras.remove(&k);
+                self.loaded.remove(&k);
+            }
+        }
+        for p in &velhas {
+            self.parts.forget(p);
+        }
+        !stale.is_empty() || !velhas.is_empty()
     }
 
     /// Estado da vista: erro de projeção, origem (ou vista mãe) alterada no disco desde a última
@@ -176,6 +205,11 @@ impl Models {
 
     /// Esquece tudo (recarregar à força).
     pub fn clear(&mut self) {
+        if let Some(f) = self.fundo.as_mut() {
+            f.cancelar_tudo();
+            f.cancelados.clear();
+            f.arquivos.clear();
+        }
         self.loaded.clear();
         self.proj.clear();
         self.parts = PartCache::default();
@@ -201,10 +235,35 @@ impl Models {
         let full = self.full(&src.path);
         let key = (full.clone(), format!("{}|{:?}", src.display_state, src.hidden));
         if !self.loaded.contains_key(&key) {
-            let l = self.read(&full, &src.display_state, &src.hidden);
+            // com a thread de projeção ligada, a montagem inteira (formas) só é montada lá: aqui
+            // entra só o que a interface precisa a cada quadro (a árvore, as tabelas, os nomes)
+            let l = if self.fundo.is_some() && e_montagem(&src.path) { self.read_leve(&full, &key) } else { self.read(&full, &src.display_state, &src.hidden) };
             self.loaded.insert(key.clone(), l);
         }
         &self.loaded[&key]
+    }
+
+    /// Leitura leve de uma montagem: o modelo, sem montar nenhuma forma (B427).
+    fn read_leve(&self, full: &Path, fonte: &crate::fundo::Fonte) -> Loaded {
+        let mut files = vec![(full.to_path_buf(), stamp(full))];
+        if let Some(a) = self.fundo.as_ref().and_then(|f| f.arquivos.get(fonte)) {
+            files = a.clone();
+        }
+        let nomes = self.fundo.as_ref().and_then(|f| f.extras.get(fonte)).map(|e| e.1.clone()).unwrap_or_default();
+        match std::fs::read_to_string(full).map_err(|e| e.to_string()).and_then(|t| Assembly::from_json(&t)) {
+            Ok(a) => Loaded { model: Model::Asm(Box::new(a)), shape: None, pieces: vec![], piece_names: nomes, linhas: vec![], files, error: None },
+            Err(e) => Loaded { model: Model::Part(Box::new(Document::new("?"))), shape: None, pieces: vec![], piece_names: vec![], linhas: vec![], files, error: Some(format!("{}: {e}", full.display())) },
+        }
+    }
+
+    /// Volume da forma da origem, em mm³ (0 se ainda não há forma). Montagem calculada em segundo
+    /// plano devolve o que a thread mediu.
+    pub fn volume(&mut self, src: &Source) -> f64 {
+        if self.fundo.is_some() && e_montagem(&src.path) {
+            let fonte = self.fonte_de(src);
+            return self.fundo.as_ref().and_then(|f| f.extras.get(&fonte)).map_or(0., |e| e.0);
+        }
+        self.load(src).shape.as_ref().map_or(0., |s| s.mass().volume)
     }
 
     fn read(&mut self, full: &Path, state: &str, hidden: &[u64]) -> Loaded {
@@ -254,7 +313,17 @@ impl Models {
         let mut all = Shape::empty();
         let mut pieces: Vec<Shape> = vec![];
         let mut piece_names: Vec<String> = vec![];
+        // progresso: um passo por componente e mais um para a projeção
+        if let Some(c) = &self.controle {
+            c.definir_total(shown_asm.nodes.len() as u32 + 1);
+        }
         for n in &shown_asm.nodes {
+            if let Some(c) = &self.controle {
+                c.avancar();
+                if c.cancelado() {
+                    return fail(files, "cancelado".into());
+                }
+            }
             if let NodeKind::SubAssembly { path } = &n.kind {
                 // B381: subconjunto entra com as peças de dentro, no sistema de quem o contém
                 let fp = full_path(dir.as_deref(), path);
@@ -294,15 +363,27 @@ impl Models {
             _ => None,
         };
         let parent_proj = parent.map(|p| self.proj(d, p));
-        let mut h = DefaultHasher::new();
-        serde_json::to_string(&(&v.source, &v.kind, v.hidden_lines, v.tangent_edges, v.render, &v.corte, &v.detalhe)).unwrap_or_default().hash(&mut h);
-        if let Some(pp) = &parent_proj {
-            format!("{:?}{:?}", pp.axes, pp.center).hash(&mut h);
-            pp.lines.len().hash(&mut h);
+        // a mãe ainda está sendo calculada: a filha espera por ela
+        if parent_proj.as_ref().is_some_and(|p| p.calculando) {
+            return Proj { calculando: true, ..Default::default() };
         }
-        for (p, t) in &self.load(&v.source).files {
-            p.hash(&mut h);
-            t.hash(&mut h);
+        let no_fundo = self.fundo.is_some() && e_montagem(&v.source.path);
+        let mut h = DefaultHasher::new();
+        crate::fundo::chave_da_vista(v, parent_proj.as_ref(), &mut h);
+        if no_fundo {
+            // sem carregar a montagem aqui: vale o que a thread leu e as datas de quando leu
+            let fonte = self.fonte_de(&v.source);
+            if let Some(a) = self.fundo.as_ref().and_then(|f| f.arquivos.get(&fonte)) {
+                for (p, t) in a {
+                    p.hash(&mut h);
+                    t.hash(&mut h);
+                }
+            }
+        } else {
+            for (p, t) in &self.load(&v.source).files {
+                p.hash(&mut h);
+                t.hash(&mut h);
+            }
         }
         let key = h.finish();
         if let Some((k, p)) = self.proj.get(&id) {
@@ -310,9 +391,116 @@ impl Models {
                 return p.clone();
             }
         }
+        if no_fundo {
+            return self.pedir_em_fundo(v, parent_proj, key);
+        }
         let p = self.compute(v, parent_proj.as_ref());
         self.proj.insert(id, (key, p.clone()));
         p
+    }
+
+    fn fonte_de(&self, src: &Source) -> crate::fundo::Fonte {
+        (self.full(&src.path), format!("{}|{:?}", src.display_state, src.hidden))
+    }
+
+    /// Liga a projeção das vistas de montagem numa thread própria. `acordar` chama a interface
+    /// quando uma vista fica pronta.
+    pub fn ativar_fundo(&mut self, acordar: impl Fn() + Send + 'static) {
+        if self.fundo.is_none() {
+            self.fundo = Some(crate::fundo::Fundo::novo(acordar));
+        }
+    }
+
+    pub fn fundo_ativo(&self) -> bool {
+        self.fundo.is_some()
+    }
+
+    /// Pede a projeção em segundo plano e devolve o lugar dela: vazia, marcada `calculando`, ou com
+    /// o aviso de que foi cancelada.
+    fn pedir_em_fundo(&mut self, v: &View, mae: Option<Proj>, chave: u64) -> Proj {
+        let dir = self.dir.clone();
+        let Some(f) = self.fundo.as_mut() else { return Proj::default() };
+        if f.cancelados.get(&v.id) == Some(&chave) {
+            return Proj { error: Some("cálculo cancelado".into()), ..Default::default() };
+        }
+        f.cancelados.remove(&v.id);
+        if !f.pedida(v.id, chave) {
+            f.pedir(crate::fundo::Pedido { id: v.id, vista: v.clone(), mae, dir }, chave);
+        }
+        Proj { calculando: true, ..Default::default() }
+    }
+
+    /// Recolhe as vistas que a thread terminou. `true` se alguma chegou (redesenhar).
+    pub fn sondar(&mut self) -> bool {
+        let Some(mut f) = self.fundo.take() else { return false };
+        let mut chegou = false;
+        while let Some((r, ped, _)) = f.receber() {
+            let fonte = r.fonte.clone();
+            f.arquivos.insert(r.fonte, r.arquivos);
+            f.extras.insert(fonte.clone(), (r.volume, r.nomes));
+            // a leitura leve guardada não tinha os nomes das peças nem os arquivos
+            self.loaded.remove(&fonte);
+            // a chave final conta os arquivos que a thread acabou de ler
+            let mut h = DefaultHasher::new();
+            crate::fundo::chave_da_vista(&ped.vista, ped.mae.as_ref(), &mut h);
+            for (p, t) in f.arquivos.get(&fonte).into_iter().flatten() {
+                p.hash(&mut h);
+                t.hash(&mut h);
+            }
+            self.proj.insert(ped.id, (h.finish(), r.proj));
+            chegou = true;
+        }
+        self.fundo = Some(f);
+        chegou
+    }
+
+    /// Progresso da projeção em segundo plano; `None` sem fundo ou sem nada a fazer.
+    pub fn andamento_do_fundo(&self) -> Option<crate::fundo::Andamento> {
+        self.fundo.as_ref().filter(|f| f.ocupado()).map(|f| f.andamento())
+    }
+
+    /// Cancela a projeção em segundo plano: as vistas pedidas ficam marcadas como canceladas.
+    pub fn cancelar_fundo(&mut self) {
+        if let Some(f) = self.fundo.as_mut() {
+            f.cancelar_tudo();
+        }
+    }
+
+    /// Há vistas paradas porque a pessoa cancelou o cálculo?
+    pub fn vistas_canceladas(&self) -> bool {
+        self.fundo.as_ref().is_some_and(|f| !f.cancelados.is_empty())
+    }
+
+    /// Libera as vistas canceladas para serem calculadas de novo (o próximo quadro pede).
+    pub fn retomar_fundo(&mut self) {
+        if let Some(f) = self.fundo.as_mut() {
+            f.cancelados.clear();
+        }
+    }
+
+    /// Trabalho da thread de projeção: carrega a montagem (com progresso), projeta e devolve.
+    pub(crate) fn calcular_em_fundo(&mut self, p: crate::fundo::Pedido, ctl: &fenkra_core::trabalho::Controle) -> Option<crate::fundo::Resposta> {
+        self.dir = p.dir.clone();
+        // arquivo salvo desde a última vez: esquece a peça velha antes de calcular
+        self.refresh();
+        self.controle = Some(ctl.clone());
+        self.parts.cancelar = Some(ctl.bandeira());
+        let proj = self.compute(&p.vista, p.mae.as_ref());
+        self.controle = None;
+        self.parts.cancelar = None;
+        if ctl.cancelado() {
+            // nada pela metade: a carga cancelada não fica no cache
+            self.loaded.clear();
+            self.proj.clear();
+            return None;
+        }
+        ctl.avancar();
+        let fonte = self.fonte_de(&p.vista.source);
+        let (arquivos, volume, nomes) = {
+            let l = self.load(&p.vista.source);
+            (l.files.clone(), l.shape.as_ref().map_or(0., |s| s.mass().volume), l.piece_names.clone())
+        };
+        Some(crate::fundo::Resposta { id: p.id, proj, fonte, arquivos, volume, nomes })
     }
 
     fn compute(&mut self, v: &View, parent: Option<&Proj>) -> Proj {

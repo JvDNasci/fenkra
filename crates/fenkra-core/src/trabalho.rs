@@ -43,6 +43,10 @@ impl Controle {
         self.total.store(n, Ordering::Relaxed);
         self.feito.store(0, Ordering::Relaxed);
     }
+    /// Acrescenta passos ao total quando o trabalho descobre mais (subconjunto aberto no caminho).
+    pub fn somar_total(&self, n: u32) {
+        self.total.fetch_add(n, Ordering::Relaxed);
+    }
     pub fn avancar(&self) {
         self.feito.fetch_add(1, Ordering::Relaxed);
     }

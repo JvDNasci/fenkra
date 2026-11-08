@@ -8,6 +8,7 @@
 
 use super::*;
 use crate::paineis::{self, Encaixe, Painel};
+use fenkra_core::trabalho::Controle;
 use fenkra_pacote::{de_desenho, de_montagem, de_peca, pagina_html, Opcoes, Pacote};
 use std::path::Path;
 
@@ -41,12 +42,31 @@ struct Gravado {
     kb: usize,
 }
 
+/// Geração do pacote numa thread (B427): o painel mostra o progresso e deixa cancelar, e a janela
+/// continua respondendo. Montagem grande leva minutos.
+struct Trabalho {
+    rx: std::sync::mpsc::Receiver<Result<Pacote, String>>,
+    controle: Controle,
+    caminho: PathBuf,
+    saida: Saida,
+    nome: String,
+}
+
 pub struct Dialogo {
     saida: Saida,
     simplificada: bool,
     avancado_aberto: bool,
     gravado: Option<Gravado>,
+    trabalho: Option<Trabalho>,
+    /// o que está aberto é uma montagem: só nela há análise de interferências e folgas
+    montagem: bool,
+    /// incluir a análise no pacote (B400); `None` = acompanha a versão simplificada, que sai sem ela
+    /// porque é o que leva mais de um minuto numa montagem grande
+    analise: Option<bool>,
 }
+
+/// Quem gera o pacote do que está aberto, pronto para ir para a thread.
+type Gerador = Box<dyn FnOnce(&Opcoes) -> Result<Pacote, String> + Send>;
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Acao {
@@ -54,19 +74,38 @@ enum Acao {
     Gravar,
     Abrir,
     Fechar,
+    /// parar a geração em andamento
+    Parar,
 }
 
 impl Dialogo {
     fn novo(simplificada: bool) -> Dialogo {
-        Dialogo { saida: Saida::Html, simplificada, avancado_aberto: false, gravado: None }
+        Dialogo { saida: Saida::Html, simplificada, avancado_aberto: false, gravado: None, trabalho: None, montagem: false, analise: None }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui) -> Acao {
         let mut acao = Acao::Nada;
         ui.set_max_width(LARGURA - 20.);
+        if let Some(t) = &self.trabalho {
+            let (feitos, total) = t.controle.progresso();
+            let frac = if total > 0 { (feitos as f32 / total as f32).clamp(0., 1.) } else { 0. };
+            ui.label(format!("{}: {}", tr("Gerando"), t.nome));
+            let texto = if total > 0 { format!("{} {} {}", feitos.min(total), tr("de"), total) } else { tr("Preparando…").to_string() };
+            ui.add(egui::ProgressBar::new(frac).text(texto).animate(total == 0)).on_hover_text(tr("Montagem grande leva minutos. A janela continua respondendo; dá para cancelar."));
+            if ui.button(tr("Cancelar")).on_hover_text(tr("Para a geração no próximo componente e não grava nada.")).clicked() {
+                acao = Acao::Parar;
+            }
+            return acao;
+        }
         ui.label(tr("O que sai"));
         ui.radio_value(&mut self.saida, Saida::Html, tr("Página web (.html)")).on_hover_text(tr("Um arquivo só, com o visualizador e o modelo dentro. Abre com duplo clique no navegador, sem internet e sem o Fenkra."));
         ui.checkbox(&mut self.simplificada, tr("Versão simplificada")).on_hover_text(tr("Reduz a malha e tira os pontos de medição exatos: protege a geometria e o arquivo fica menor."));
+        if self.montagem {
+            let mut on = self.analise.unwrap_or(!self.simplificada);
+            if ui.checkbox(&mut on, tr("Incluir análise de interferências e folgas")).on_hover_text(tr("Calcula as interferências e as folgas entre as peças e as grava no pacote. Numa montagem grande leva mais de um minuto; a versão simplificada sai sem ela, a menos que você marque.")).changed() {
+                self.analise = Some(on);
+            }
+        }
         egui::CollapsingHeader::new(tr("Avançado")).id_salt("visualizacao_avancado").default_open(self.avancado_aberto || self.saida == Saida::Fkv).show(ui, |ui| {
             ui.radio_value(&mut self.saida, Saida::Fkv, tr("Pacote (.fkv)")).on_hover_text(tr("Só o modelo, sem a página. Abre pela página Fenkra Visualizador.html (arrastar ou escolher o arquivo), por um link ou pela associação do .fkv em Configurações."));
         });
@@ -102,28 +141,36 @@ impl Dialogo {
 }
 
 impl App {
-    fn pacote_do_que_esta_aberto(&self, o: &Opcoes) -> Result<(Pacote, String), String> {
+    /// O que está aberto, pronto para ser gerado numa thread: o nome e a função que gera. Copia o
+    /// documento (só é lido) para a thread não depender da interface.
+    fn gerador_do_que_esta_aberto(&self) -> Result<(String, Gerador), String> {
         if self.settings.bench == crate::settings::Bench::Desenho {
             if let Some(d) = &self.dwg {
-                let pasta = d.path.as_ref().and_then(|p| p.parent()).ok_or_else(|| tr("Salve o desenho antes de exportar: as peças das vistas são lidas dos arquivos dele.").to_string())?;
-                return de_desenho(&d.d, pasta, o).map(|p| (p, d.d.name.clone()));
+                let pasta = d.path.as_ref().and_then(|p| p.parent()).ok_or_else(|| tr("Salve o desenho antes de exportar: as peças das vistas são lidas dos arquivos dele.").to_string())?.to_path_buf();
+                let desenho = d.d.clone();
+                return Ok((desenho.name.clone(), Box::new(move |o| de_desenho(&desenho, &pasta, o))));
             }
         }
         if self.in_asm() {
             let s = self.asm.as_ref().ok_or("sem montagem")?;
-            let pasta = s.file.as_ref().and_then(|p| p.parent()).ok_or_else(|| tr("Salve a montagem antes de exportar: as peças são lidas dos arquivos dela.").to_string())?;
-            return de_montagem(&s.asm, pasta, o).map(|p| (p, s.asm.name.clone()));
+            let pasta = s.file.as_ref().and_then(|p| p.parent()).ok_or_else(|| tr("Salve a montagem antes de exportar: as peças são lidas dos arquivos dela.").to_string())?.to_path_buf();
+            let asm = s.asm.clone();
+            return Ok((asm.name.clone(), Box::new(move |o| de_montagem(&asm, &pasta, o))));
         }
-        de_peca(&self.open.doc, o).map(|p| (p, self.open.doc.name.clone()))
+        let doc = self.open.doc.clone();
+        Ok((doc.name.clone(), Box::new(move |o| de_peca(&doc, o))))
     }
 
     /// Abre o painel do comando. `simplificada` já liga a opção (atalho do menu).
     pub(super) fn exportar_visualizacao(&mut self, simplificada: bool) {
-        self.visualizacao_dialogo = Some(Dialogo::novo(simplificada));
+        let mut d = Dialogo::novo(simplificada);
+        d.montagem = self.in_asm();
+        self.visualizacao_dialogo = Some(d);
     }
 
     pub(super) fn painel_visualizacao(&mut self, ctx: &egui::Context, area: Rect) {
         let Some(mut d) = self.visualizacao_dialogo.take() else { return };
+        self.concluir_visualizacao(&mut d, ctx);
         let padrao = paineis::abaixo_do_cubo(area, LARGURA);
         let cfg = Painel { nome: "visualizacao".into(), titulo: tr("Exportar visualização").to_string(), padrao, largura: LARGURA, redimensiona: false };
         let posicao = self.settings.painel("visualizacao", Encaixe::Direita);
@@ -133,13 +180,23 @@ impl App {
         }
         match saida.conteudo.unwrap_or(Acao::Nada) {
             Acao::Nada => self.visualizacao_dialogo = Some(d),
-            Acao::Fechar => {}
+            Acao::Fechar => {
+                if let Some(t) = &d.trabalho {
+                    t.controle.cancelar();
+                }
+            }
             Acao::Gravar => {
-                self.gravar_visualizacao(&mut d);
+                self.gravar_visualizacao(&mut d, ctx);
                 self.visualizacao_dialogo = Some(d);
             }
             Acao::Abrir => {
                 self.abrir_gravado(&d);
+                self.visualizacao_dialogo = Some(d);
+            }
+            Acao::Parar => {
+                if let Some(t) = &d.trabalho {
+                    t.controle.cancelar();
+                }
                 self.visualizacao_dialogo = Some(d);
             }
         }
@@ -157,9 +214,11 @@ impl App {
         }
     }
 
-    fn gravar_visualizacao(&mut self, d: &mut Dialogo) {
-        let o = if d.simplificada { Opcoes { decimar: Some(SIMPLIFICADA), capturas: false, ..Default::default() } } else { Opcoes::default() };
-        let (pacote, nome) = match self.pacote_do_que_esta_aberto(&o) {
+    /// Escolhe o arquivo e começa a gerar numa thread; `concluir_visualizacao` grava quando acabar.
+    fn gravar_visualizacao(&mut self, d: &mut Dialogo, ctx: &egui::Context) {
+        let analise = d.analise.unwrap_or(!d.simplificada);
+        let o = if d.simplificada { Opcoes { decimar: Some(SIMPLIFICADA), capturas: false, analise, ..Default::default() } } else { Opcoes { analise, ..Default::default() } };
+        let (nome, gerar) = match self.gerador_do_que_esta_aberto() {
             Ok(x) => x,
             Err(e) => return self.toast(format!("{}: {e}", tr("Falha ao exportar")), true),
         };
@@ -172,11 +231,39 @@ impl App {
         let Some(caminho) = escolhido else { return };
         // a extensão acompanha a escolha: arquivo sem extensão ou com a errada não abre com duplo clique
         let caminho = caminho.with_extension(d.saida.extensao());
+        let controle = Controle::novo();
+        let o = Opcoes { controle: Some(controle.clone()), ..o };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let acordar = ctx.clone();
+        let nasceu = std::thread::Builder::new().name("gerar-visualizacao".into()).spawn(move || {
+            fenkra_kernel::reduzir_prioridade_da_thread();
+            let _ = tx.send(gerar(&o));
+            acordar.request_repaint();
+        });
+        if let Err(e) = nasceu {
+            return self.toast(format!("{}: {e}", tr("Falha ao exportar")), true);
+        }
+        d.trabalho = Some(Trabalho { rx, controle, caminho, saida: d.saida, nome });
+    }
+
+    /// Recolhe o pacote pronto da thread, grava o arquivo e avisa.
+    fn concluir_visualizacao(&mut self, d: &mut Dialogo, ctx: &egui::Context) {
+        let Some(t) = &d.trabalho else { return };
+        ctx.request_repaint_after(std::time::Duration::from_millis(250));
+        let Ok(resultado) = t.rx.try_recv() else { return };
+        let Some(t) = d.trabalho.take() else { return };
+        let caminho = t.caminho;
+        let saida = t.saida;
+        let pacote = match resultado {
+            Ok(p) => p,
+            Err(e) if e == fenkra_pacote::CANCELADO => return self.toast(tr("Exportação cancelada: nada foi gravado.").to_string(), false),
+            Err(e) => return self.toast(format!("{}: {e}", tr("Falha ao exportar")), true),
+        };
         let bytes = match pacote.bytes() {
             Ok(b) => b,
             Err(e) => return self.toast(format!("{}: {e}", tr("Falha ao exportar")), true),
         };
-        let r = match d.saida {
+        let r = match saida {
             Saida::Html => std::fs::write(&caminho, pagina_html(Some(&bytes))),
             Saida::Fkv => std::fs::write(&caminho, &bytes),
         };
@@ -235,6 +322,20 @@ mod testes {
         let mut f = Dialogo::novo(false);
         f.saida = Saida::Fkv;
         assert!(textos(&mut f).contains("Pacote (.fkv)"));
+    }
+
+    #[test]
+    fn analise_acompanha_a_versao_simplificada_e_so_aparece_em_montagem() {
+        // B400: a análise é o que passa de um minuto numa montagem grande; a simplificada sai sem ela
+        let mut d = Dialogo::novo(false);
+        assert!(!textos(&mut d).contains("Incluir análise"));
+        d.montagem = true;
+        assert!(textos(&mut d).contains("Incluir análise de interferências e folgas"));
+        assert!(d.analise.unwrap_or(!d.simplificada));
+        d.simplificada = true;
+        assert!(!d.analise.unwrap_or(!d.simplificada));
+        d.analise = Some(true);
+        assert!(d.analise.unwrap_or(!d.simplificada), "a pessoa pode ligar de volta");
     }
 
     #[test]

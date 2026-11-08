@@ -85,6 +85,8 @@ struct Out {
     bold: bool,
     alert: bool,
     arrow_kind: PmiArrow,
+    /// caixa do texto da última nota desenhada com chamada (B370: de onde saem as setas)
+    caixa_texto: Option<(V2, V2)>,
 }
 
 impl Out {
@@ -362,6 +364,10 @@ fn view_into(o: &mut Out, d: &Drawing, v: &View, p: &Proj, th: f64) {
     if let Some(e) = &p.error {
         o.text([lo[0], hi[1] + 2.], format!("! {e}"), th * 0.8, 0., Align::Left);
     }
+    // B427: projeção em segundo plano; a vista está vazia por enquanto
+    if p.calculando {
+        o.text(v.pos, "Calculando…".to_string(), th, 0., Align::Center);
+    }
     if v.label {
         let lbl = match &v.kind {
             ViewKind::Section { label, .. } => format!("CORTE {label}-{label} ({})", scale_text(v.scale)),
@@ -565,20 +571,24 @@ pub fn table_items(pos: V2, title: &str, data: &crate::source::TableData, th: f6
 /// Primitivas de uma nota ou símbolo avulso (prévia/fantasma). A ponta presa à vista segue o
 /// ponto do modelo, como na folha.
 pub fn note_items(d: &Drawing, n: &Note, m: &mut Models) -> Vec<Item> {
+    note_out(d, n, m).items
+}
+
+/// Caixa do texto da nota (a de onde saem as setas), na folha. `None` sem chamada.
+pub fn caixa_da_nota(d: &Drawing, n: &Note, m: &mut Models) -> Option<(V2, V2)> {
+    note_out(d, n, m).caixa_texto
+}
+
+fn note_out(d: &Drawing, n: &Note, m: &mut Models) -> Out {
     let mut o = Out::default();
     o.reset(Some(n.id));
     let mut n2 = n.clone();
     let view = n.view.and_then(|id| d.view(id));
-    if let (Some(v), Some(a3)) = (view, n.anchor3) {
-        let p = m.proj(d, v.id);
-        if let Some(ax) = p.axes {
-            n2.leader = Some(to_sheet(v, &p, ax.project(a3)));
-        }
-    }
+    crate::setas_nota::acompanhar_modelo(d, &mut n2, m);
     n2.style = view.map(|v| n.style.over(&v.ann)).unwrap_or_else(|| n.style.clone());
     o.style(&n2.style);
     note(&mut o, &n2);
-    o.items
+    o
 }
 
 /// Linhas de uma marca de centro na folha (quebrada = avisa em vermelho como as cotas).
@@ -644,12 +654,7 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
         n2.text = crate::resolve(&n.text, &fields);
         // presa à vista: a ponta da chamada segue o ponto do modelo
         let view = n.view.and_then(|id| d.view(id));
-        if let (Some(v), Some(a3)) = (view, n.anchor3) {
-            let p = m.proj(d, v.id);
-            if let Some(ax) = p.axes {
-                n2.leader = Some(to_sheet(v, &p, ax.project(a3)));
-            }
-        }
+        crate::setas_nota::acompanhar_modelo(d, &mut n2, m);
         if let (Some(v), true, Some(a3)) = (view, n.snapped, n.anchor3) {
             let p = m.proj(d, v.id);
             o.alert = !p.error.is_some() && !point_on_geometry(&p, a3);
@@ -692,7 +697,7 @@ pub fn sheet_fields(d: &Drawing, sh: &Sheet, m: &mut Models) -> std::collections
     let first = d.views.iter().find(|v| v.sheet == sh.id).or(d.views.first());
     let idx = d.sheets.iter().position(|s| s.id == sh.id).unwrap_or(0) + 1;
     let (pn, desc, mat) = first.and_then(|v| m.props(&v.source)).unwrap_or_default();
-    let vol = first.and_then(|v| m.load(&v.source).shape.as_ref().map(|s| s.mass().volume)).unwrap_or(0.);
+    let vol = first.map(|v| m.volume(&v.source)).unwrap_or(0.);
     f.insert("codigo".into(), pn);
     f.insert("descricao".into(), if desc.is_empty() { d.name.clone() } else { desc });
     f.insert("material".into(), mat.clone());
@@ -1386,6 +1391,7 @@ fn turn_pt(p: V2, c: V2, deg: f64, mirror: bool, inverse: bool) -> V2 {
 
 /// Chamada da caixa lo–hi até `tip`: sai do lado voltado para a ponta, com um patamar.
 fn leader_box(o: &mut Out, lo: V2, hi: V2, tip: V2, s: f64, st: &PmiStyle, k: usize) {
+    o.caixa_texto = Some((lo, hi));
     if st.hide_leader {
         return;
     }

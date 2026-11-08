@@ -79,13 +79,22 @@ fn bloco(texto: &str) -> bool {
     texto.lines().count() > LINHAS_BLOCO || texto.chars().count() > CARACTERES_BLOCO
 }
 
-/// Lê o PMI do modelo da vista (peça) e classifica cada anotação para a vista `vista`.
+/// Anotações 3D do modelo: as da peça ou as da própria montagem. Na montagem elas já estão no
+/// sistema do conjunto, o mesmo em que a vista projeta; as anotações das peças de dentro ficam
+/// de fora (cada peça tem o seu sistema e a sua numeração).
+fn pmi_do_modelo(model: &Model) -> &[Pmi] {
+    match model {
+        Model::Part(doc) => &doc.pmi,
+        Model::Asm(a) => &a.pmi,
+    }
+}
+
+/// Lê o PMI do modelo da vista (peça ou montagem) e classifica cada anotação para a vista `vista`.
 pub fn reconhecer(d: &Drawing, m: &mut Models, vista: Id) -> Vec<Candidato> {
     let Some(v) = d.view(vista) else { return vec![] };
     let axes = m.proj(d, vista).axes;
     let loaded = m.load(&v.source);
-    let Model::Part(doc) = &loaded.model else { return vec![] };
-    doc.pmi
+    pmi_do_modelo(&loaded.model)
         .iter()
         .map(|p| Candidato { pmi: p.id, nome: p.name.clone(), destino: classificar(d, vista, p, axes.as_ref()) })
         .collect()
@@ -169,10 +178,7 @@ pub fn importar(d: &mut Drawing, m: &mut Models, vista: Id, escolhidas: &[Id]) -
     let proj = m.proj(d, vista);
     let Some(ax) = proj.axes else { return rel };
     let lista = reconhecer(d, m, vista);
-    let pmis: Vec<Pmi> = match &m.load(&v.source).model {
-        Model::Part(doc) => doc.pmi.clone(),
-        _ => vec![],
-    };
+    let pmis: Vec<Pmi> = pmi_do_modelo(&m.load(&v.source).model).to_vec();
     let th = d.text_height;
     for id in escolhidas {
         let (Some(c), Some(p)) = (lista.iter().find(|c| c.pmi == *id), pmis.iter().find(|p| p.id == *id)) else { continue };
@@ -195,6 +201,7 @@ pub fn importar(d: &mut Drawing, m: &mut Models, vista: Id, escolhidas: &[Id]) -
                 let pos = if dx.abs() + dy.abs() > 1e-6 { [tip[0] + dx, tip[1] + dy] } else { [tip[0] + 12., tip[1] + 10.] };
                 let mut n = Note { id: nid, sheet: v.sheet, kind: kind.clone(), pos, leader: Some(tip), text: p.text.clone(), size: th, view: Some(vista), anchor3: Some(a0), snapped: true, pmi: Some(*id), style: p.style.clone(), ..Default::default() };
                 preencher_nota(&mut n, p);
+                pontas_extras(&mut n, p, &v, &proj);
                 d.notes.push(n);
                 rel.notas.push(nid);
             }
@@ -233,10 +240,7 @@ pub fn atualizar(d: &mut Drawing, m: &mut Models) -> Vec<Id> {
     let vistas: Vec<Id> = d.views.iter().map(|v| v.id).collect();
     for vid in vistas {
         let Some(v) = d.view(vid).cloned() else { continue };
-        let pmis: Vec<Pmi> = match &m.load(&v.source).model {
-            Model::Part(doc) => doc.pmi.clone(),
-            _ => continue,
-        };
+        let pmis: Vec<Pmi> = pmi_do_modelo(&m.load(&v.source).model).to_vec();
         let proj = m.proj(d, vid);
         for dm in d.dims.iter_mut().filter(|x| x.view == vid && x.pmi.is_some()) {
             match pmis.iter().find(|p| Some(p.id) == dm.pmi) {
@@ -258,6 +262,7 @@ pub fn atualizar(d: &mut Drawing, m: &mut Models) -> Vec<Id> {
                     if let Some(ax) = proj.axes {
                         n.leader = Some(to_sheet(&v, &proj, ax.project(a0)));
                     }
+                    pontas_extras(n, p, &v, &proj);
                 }
                 None => orfas.push(n.id),
             }
@@ -265,4 +270,16 @@ pub fn atualizar(d: &mut Drawing, m: &mut Models) -> Vec<Id> {
     }
     let _: fn(&crate::View, &crate::source::Proj, V2) -> V2 = from_sheet;
     orfas
+}
+
+/// B370: as âncoras do PMI além da primeira viram pontas extras da nota, presas ao modelo; o lado e
+/// a seta de cada uma já vêm no estilo copiado do PMI.
+fn pontas_extras(n: &mut crate::Note, p: &Pmi, v: &crate::View, proj: &crate::source::Proj) {
+    n.leaders_extra.clear();
+    n.anchors_extra.clear();
+    let Some(ax) = proj.axes else { return };
+    for a in p.anchors.iter().skip(1) {
+        n.leaders_extra.push(to_sheet(v, proj, ax.project(*a)));
+        n.anchors_extra.push(Some(*a));
+    }
 }

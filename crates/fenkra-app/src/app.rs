@@ -1003,11 +1003,15 @@ lado oposto");
             }
             let _ = std::fs::write(dir.join("placa.fkp"), doc_demo.to_json());
             let src = Source { path: "placa.fkp".into(), display_state: String::new(), hidden: vec![] };
-            let mut d = Drawing::new("Placa de exemplo", Format::A3);
+            // B412: `FENKRA_DEMO_DWG=conjunto` põe o conjunto em escala 2:1 numa folha A1, onde o espaçamento
+            // fixo de antes cobria as vistas
+            let conjunto_grande = std::env::var("FENKRA_DEMO_DWG").as_deref() == Ok("conjunto");
+            let mut d = Drawing::new("Placa de exemplo", if conjunto_grande { Format::A1 } else { Format::A3 });
             let sh = d.sheets[0].id;
             let mut m = fenkra_desenho::source::Models::new(Some(dir.clone()));
             // B412: a distancia entre vistas acompanha o tamanho da peca
-            let (ids, _) = fenkra_desenho::conjunto::criar_sem_sobrepor(&mut d, &mut m, sh, src.clone(), [95., 235.], 1., 4.);
+            let (esc0, centro0) = if conjunto_grande { (2., [150., 440.]) } else { (1., [95., 235.]) };
+            let (ids, _) = fenkra_desenho::conjunto::criar_sem_sobrepor(&mut d, &mut m, sh, src.clone(), centro0, esc0, 4.);
             let f = m.proj(&d, ids[0]);
             let t = m.proj(&d, ids[1]);
             let ym = (t.lo[1] + t.hi[1]) / 2.;
@@ -1054,6 +1058,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     let k = fenkra_desenho::setas_nota::adicionar(&mut n, [190., 80.]);
                     fenkra_desenho::setas_nota::definir_lado(&mut n, k, 4);
                     fenkra_desenho::setas_nota::definir_seta(&mut n, k, PmiArrow::Aberta);
+                    // B370: a primeira seta extra presa ao modelo (canto da vista da frente): acompanha a peça
+                    if let Some(ax) = f.axes {
+                        n.view = Some(ids[0]);
+                        let a3 = ax.unproject([f.hi[0] - 6., f.lo[1] + 4.]);
+                        fenkra_desenho::setas_nota::prender(&mut n, 1, Some(a3));
+                    }
                     d.notes.push(n);
                     demo_sel = Some(id);
                 }
