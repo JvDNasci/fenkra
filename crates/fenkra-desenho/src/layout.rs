@@ -748,6 +748,38 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
             o.alert = false;
         }
     }
+    // B117: balão numerado junto de cada característica do plano de inspeção
+    if d.inspecao.baloes {
+        let caixas = owner_boxes(&o.items);
+        for c in crate::inspecao::caracteristicas(d, m).into_iter().filter(|c| c.folha == sheet) {
+            let r = th * 0.75;
+            // logo depois do texto da característica (na direção dele); sem texto, no canto da caixa
+            let texto = o.items.iter().filter(|it| it.owner == Some(c.dono)).find_map(|it| match &it.prim {
+                Prim::Text { pos, text, size, angle, align } => Some((*pos, text.chars().count() as f64 * size * 0.55, *size, *angle, *align)),
+                _ => None,
+            });
+            let texto = texto.filter(|_| c.tipo == crate::inspecao::TipoCarac::Dimensao);
+            let folga = if c.cem_por_cento { th * 0.6 } else { 0. };
+            let centro = match (texto, caixas.iter().find(|b| b.0 == c.dono)) {
+                (Some((pos, w, size, angle, align)), _) => {
+                    let (s, co) = angle.to_radians().sin_cos();
+                    let ini = match align {
+                        Align::Left => 0.,
+                        Align::Center => -w / 2.,
+                        Align::Right => -w,
+                    };
+                    let ao_longo = ini + w + folga + r * 1.4;
+                    [pos[0] + co * ao_longo - s * size * 0.4, pos[1] + s * ao_longo + co * size * 0.4]
+                }
+                (None, Some((_, _, hi))) => [hi[0] + r * 1.2, hi[1] + r * 0.6],
+                (None, None) => [c.pos[0] + r * 2., c.pos[1] + r * 2.],
+            };
+            o.reset(Some(c.dono));
+            let pts: Vec<V2> = (0..=32).map(|i| i as f64 / 32. * std::f64::consts::TAU).map(|a| [centro[0] + r * a.cos(), centro[1] + r * a.sin()]).collect();
+            o.line(pts, Style::Thin);
+            o.text([centro[0], centro[1] - th * 0.35], c.numero.to_string(), th * 0.7, 0., Align::Center);
+        }
+    }
     o.items
 }
 

@@ -376,6 +376,12 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("des_tab_furos", "Furos", "Tabela de furos", "Cada furo da peça com posição, diâmetro, profundidade e rosca.", Cmd(C::Dwg(41)))),
             One(it("des_tab_dobras", "Dobras", "Tabela de dobras", "Ângulo, raio, comprimento desenvolvido e dedução de cada dobra.", Cmd(C::Dwg(42)))),
             One(it("des_tab_corte", "Corte", "Lista de corte", "Perfis estruturais com comprimento e quantidade.", Cmd(C::Dwg(43)))),
+            Family("des_inspecao", vec![
+                it("des_inspecao", "Inspeção", "Tabela de características (plano de inspeção)", "Cada cota (menos as de referência), tolerância geométrica e rugosidade vira uma linha numerada, na ordem de leitura da folha, com zona, requisito e limites: ±, classe ISO 286 ou a tolerância geral ISO 2768 citada nas notas. Clique onde a tabela vai ficar.", Cmd(C::Dwg(44))),
+                it("des_inspecao_baloes", "Balões", "Balões de inspeção", "Liga e desliga o número junto de cada característica, o mesmo da tabela e do relatório.", Cmd(C::Dwg(45))),
+                it("des_inspecao_csv", "CSV", "Plano de inspeção em CSV", "Formulário 3 da AS9102 (resultados das características) com nominal e limites, e as colunas de resultado em branco para quem mede.", Cmd(C::Dwg(6))),
+                it("des_inspecao_xlsx", "XLSX", "Plano de inspeção em planilha", "O mesmo formulário 3 numa planilha, com código, nome e revisão da peça no cabeçalho.", Cmd(C::Dwg(7))),
+            ]),
         ],
         Group::Pmi => vec![
             Family("pmi_cota", vec![

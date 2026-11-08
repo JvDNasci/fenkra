@@ -1372,6 +1372,7 @@ dependencies = [
  "fenkra-kernel",
  "fenkra-montagem",
  "fenkra-solidos",
+ "fenkra-tolerancias",
  "serde",
  "serde_json",
 ]

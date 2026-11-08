@@ -21,7 +21,7 @@ pub struct Ghost {
 /// Neste clique a ferramenta escolhe a posição final do objeto (e por isso alinha)?
 pub fn places(tool: u8, n: usize) -> bool {
     match tool {
-        c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM | c::NOTE | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT => true,
+        c::SET | c::VIEW | c::ISO | c::FLAT | c::SCHEMA | c::VIEW_CAM | c::NOTE | c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT | c::T_FAI => true,
         // a linha do corte e o contorno do detalhe têm posicionamento próprio (`corte_ui`)
         c::SECTION | c::DETAIL => false,
         c::BALLOON | c::ROUGH | c::WELD | c::GDT | c::DATUM => n == 1,
@@ -191,6 +191,7 @@ fn table_kind(tool: u8) -> TableKind {
         c::T_BOM => TableKind::Bom,
         c::T_HOLES => TableKind::Holes,
         c::T_BENDS => TableKind::Bends,
+        c::T_FAI => TableKind::Caracteristicas,
         _ => TableKind::CutList,
     }
 }
@@ -259,12 +260,13 @@ pub fn compute(st: &mut DwgState, m: V2, snap: &SnapFn, view_at: &ViewAt) -> Opt
             let note = Note { id: Id(SCRATCH), sheet: st.sheet, kind, pos: at, leader, text, size: st.d.text_height, view, gdt: is_gdt.then(DwgGdt::default), ..Default::default() };
             g.items = layout::note_items(&st.d, &note, &mut st.models);
         }
-        c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT => {
+        c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT | c::T_FAI => {
             let kind = table_kind(tool);
+            let source = if tool == c::T_FAI { Some(super::inspecao_ui::origem_vazia()) } else { st.source.clone() };
             let data: TableData = match &st.ghost_table {
                 Some((k, d)) if *k == tool => d.clone(),
                 _ => {
-                    let t = Table { id: Id(SCRATCH), sheet: st.sheet, kind: kind.clone(), source: st.source.clone()?, pos: at, level: Default::default(), cfg: Default::default() };
+                    let t = Table { id: Id(SCRATCH), sheet: st.sheet, kind: kind.clone(), source: source?, pos: at, level: Default::default(), cfg: Default::default() };
                     let d = st.models.table(&t, &st.d);
                     st.ghost_table = Some((tool, d.clone()));
                     d

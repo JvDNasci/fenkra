@@ -22,6 +22,7 @@ mod esboco_ui;
 mod fundo_ui;
 mod ghost;
 mod importar_ui;
+mod inspecao_ui;
 mod options;
 mod setas_ui;
 mod simbolos;
@@ -69,6 +70,11 @@ pub mod c {
     pub const T_HOLES: u8 = 41;
     pub const T_BENDS: u8 = 42;
     pub const T_CUT: u8 = 43;
+    /// plano de inspeção (B117): tabela de características, balões, CSV e XLSX
+    pub const T_FAI: u8 = 44;
+    pub const FAI_BALOES: u8 = 45;
+    pub const FAI_CSV: u8 = 6;
+    pub const FAI_XLSX: u8 = 7;
     pub const SHEET: u8 = 50;
 }
 
@@ -353,6 +359,7 @@ pub fn demo_ajustar(st: &mut DwgState) {
     let sheet = st.sheet;
     demo_centros_tabela(st);
     esboco_ui::demo(st);
+    inspecao_ui::demo(st);
     match std::env::var("FENKRA_DEMO_DWG_SIMBOLO").unwrap_or_default().as_str() {
         kind @ ("rug" | "solda") => {
             let id = st.d.alloc();
@@ -482,7 +489,7 @@ fn hint(tool: u8, n: usize) -> &'static str {
         (c::BALLOON | c::ROUGH | c::WELD, _) => "Clique onde o símbolo vai ficar",
         (c::NOTE, _) => "Clique onde a nota vai ficar",
         (c::CENTER, _) => "Clique na borda ou dentro de um furo da vista",
-        (c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT, _) => "Clique o canto superior esquerdo da tabela",
+        (c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT | c::T_FAI, _) => "Clique o canto superior esquerdo da tabela",
         _ => "",
     }
 }
@@ -525,6 +532,13 @@ pub fn command(app: &mut App, i: u8) {
             st.sheet = st.d.add_sheet(f);
         }
         c::AUTO_BALLOONS => auto_balloons(app),
+        c::FAI_BALOES => inspecao_ui::alternar_baloes(app.dwg.as_mut().unwrap()),
+        c::FAI_CSV | c::FAI_XLSX => {
+            let st = app.dwg.as_mut().unwrap();
+            if let Some((m, e)) = inspecao_ui::exportar(st, i == c::FAI_XLSX) {
+                app.toast(m, e);
+            }
+        }
         c::ESBOCO => {
             // com um esboço escolhido, o comando abre a edição dele; senão pede onde criar
             let st = app.dwg.as_mut().unwrap();
@@ -1625,15 +1639,16 @@ fn click(app: &mut App, m: V2, snap: &SnapFn, view_at: &ViewAt) {
             st.d.notes.push(Note { id, sheet, kind, pos: st.clicks[1], leader: Some(st.clicks[0]), text, size: th, weld: None, gdt, view, anchor3, snapped: !st.loose && anchor3.is_some(), ..Default::default() });
             done(st, id);
         }
-        c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT => {
+        c::T_BOM | c::T_HOLES | c::T_BENDS | c::T_CUT | c::T_FAI => {
             let kind = match tool {
                 c::T_BOM => TableKind::Bom,
                 c::T_HOLES => TableKind::Holes,
                 c::T_BENDS => TableKind::Bends,
+                c::T_FAI => TableKind::Caracteristicas,
                 _ => TableKind::CutList,
             };
             let id = st.d.alloc();
-            let source = st.source.clone().unwrap();
+            let source = if tool == c::T_FAI { inspecao_ui::origem_vazia() } else { st.source.clone().unwrap() };
             st.d.tables.push(Table { id, sheet, kind, source, pos: m, level: Default::default(), cfg: Default::default() });
             done(st, id);
         }
@@ -2325,6 +2340,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
         ui.label(tr("Casas decimais"));
         { let __r = ui.add(crate::ui_ext::dv(&mut st.d.decimals).range(0..=4)); crate::ui_ext::wheel(ui, &__r, &mut st.d.decimals); __r };
     });
+    inspecao_ui::props(ui, st);
     ui.separator();
     ui.label(RichText::new(tr("Origem das novas vistas e tabelas")).strong());
     match &st.source {

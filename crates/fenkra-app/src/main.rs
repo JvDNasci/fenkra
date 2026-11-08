@@ -132,6 +132,7 @@ mod textos_desenho;
 mod textos_desenho_cotas;
 mod textos_desenho_tabelas;
 mod textos_desenho_esboco;
+mod textos_desenho_inspecao;
 mod textos_estrutural;
 mod textos_solda;
 mod textos_dobra_tubo;

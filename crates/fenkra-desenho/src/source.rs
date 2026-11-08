@@ -767,6 +767,10 @@ impl Models {
 
     /// Dados de uma tabela.
     pub fn table(&mut self, t: &Table, d: &Drawing) -> TableData {
+        // B117: o plano de inspeção vem do próprio desenho, não da peça
+        if t.kind == TableKind::Caracteristicas {
+            return crate::inspecao::tabela(d, self);
+        }
         let full = self.full(&t.source.path);
         let dir = full.parent().map(|p| p.to_path_buf());
         let num = |v: f64| d.num(v);
@@ -874,6 +878,8 @@ impl Models {
                     })
                     .collect(),
             },
+            // tratado no começo: vem do desenho
+            (TableKind::Caracteristicas, Model::Part(_)) => TableData { headers: vec![], rows: vec![] },
             (k, Model::Asm(_)) => TableData { headers: vec![k.label().into()], rows: vec![vec!["escolha uma peça (esta tabela não vale para montagem)".into()]] },
         }
     }
