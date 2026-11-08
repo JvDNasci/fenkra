@@ -264,6 +264,30 @@ struct TabRun {
     /// seção atual: escondida (y de início, recorte salvo) ou visível (cartão)
     hidden: Option<(f32, egui::Rect)>,
     card: Option<(egui::layers::ShapeIdx, f32)>,
+    /// B360: altura somada das seções neste quadro (visíveis e escondidas), para decidir no próximo
+    /// se o comando é curto (fluxo único) ou longo (abas)
+    altura: f32,
+}
+
+/// B360: acima desta altura somada das seções o painel vira abas; abaixo de `FLUXO_ATE` volta ao
+/// fluxo único. Entre as duas fica como estava, para o painel não piscar entre os modos.
+pub(crate) const ABAS_ACIMA: f32 = 720.;
+pub(crate) const FLUXO_ATE: f32 = 640.;
+/// O que uma seção escondida numa aba deixa de ocupar e ocuparia no fluxo: título e margens do cartão.
+const CARTAO_EXTRA: f32 = 25.;
+
+/// O painel do próximo quadro usa abas? `antes` é o modo do quadro anterior.
+pub(crate) fn usa_abas(secoes: usize, altura: f32, antes: bool) -> bool {
+    if secoes < 2 {
+        return false;
+    }
+    if altura > ABAS_ACIMA {
+        true
+    } else if altura < FLUXO_ATE {
+        false
+    } else {
+        antes
+    }
 }
 
 thread_local! {
@@ -283,7 +307,7 @@ pub(crate) fn tabs_begin(ui: &mut egui::Ui, key: impl std::hash::Hash) {
     let active: usize = ui.ctx().data(|d| d.get_temp::<usize>(key.with("ativa"))).unwrap_or(0);
     // desenvolvimento: FENKRA_DEMO_ABA=<n> abre o painel já na aba n (capturas sem mouse)
     let active = std::env::var("FENKRA_DEMO_ABA").ok().and_then(|v| v.parse().ok()).unwrap_or(active);
-    TABS.with(|t| *t.borrow_mut() = Some(TabRun { key, ui_id: ui.scope_id(), prev, titles: vec![], active, tabs: false, hidden: None, card: None }));
+    TABS.with(|t| *t.borrow_mut() = Some(TabRun { key, ui_id: ui.scope_id(), prev, titles: vec![], active, tabs: false, hidden: None, card: None, altura: 0. }));
 }
 
 /// Fecha a seção atual: volta o cursor (escondida) ou pinta o cartão por baixo (visível).
@@ -291,11 +315,15 @@ fn tab_close(ui: &mut egui::Ui, run: &mut TabRun) {
     if let Some((y0, clip)) = run.hidden.take() {
         ui.set_clip_rect(clip);
         let dy = ui.cursor().top() - y0;
+        // medida como se estivesse no fluxo: sem isto o painel medido em abas parecia curto e voltava ao
+        // fluxo, que medido de novo parecia longo, piscando a cada quadro
+        run.altura += dy.max(0.) + CARTAO_EXTRA;
         if dy > 0. {
             ui.add_space(-dy);
         }
     }
     if let Some((slot, top)) = run.card.take() {
+        run.altura += (ui.cursor().top() - top).max(0.);
         let r = egui::Rect::from_min_max(egui::pos2(ui.max_rect().left() - 4., top), egui::pos2(ui.max_rect().right() + 4., ui.cursor().top() + 4.));
         let fill = if ui.visuals().dark_mode { Color32::from_rgba_unmultiplied(255, 255, 255, 10) } else { Color32::from_rgba_unmultiplied(0, 0, 0, 10) };
         ui.painter().set(slot, egui::Shape::rect_filled(r, 10., fill));
@@ -307,7 +335,11 @@ fn tab_close(ui: &mut egui::Ui, run: &mut TabRun) {
 pub(crate) fn tabs_end(ui: &mut egui::Ui) {
     let Some(mut run) = TABS.with(|t| t.borrow_mut().take()) else { return };
     tab_close(ui, &mut run);
-    ui.ctx().data_mut(|d| d.insert_temp(run.key, run.titles.clone()));
+    let modo = usa_abas(run.titles.len(), run.altura, run.tabs);
+    ui.ctx().data_mut(|d| {
+        d.insert_temp(run.key, run.titles.clone());
+        d.insert_temp(run.key.with("modo_abas"), modo);
+    });
 }
 
 /// Barra de abas: poucas abas numa linha; muitas viram uma grade de botões iguais (2 ou 3 por
@@ -380,8 +412,10 @@ pub(crate) fn section(ui: &mut egui::Ui, title: &str) {
         }
         tab_close(ui, run);
         if run.titles.is_empty() {
-            // primeira seção: abas se o quadro anterior tinha 2 ou mais
-            run.tabs = run.prev.len() >= 2;
+            // primeira seção: abas só no comando longo (B360); o curto mostra tudo num fluxo,
+            // na ordem da decisão (elemento, tipo, definição)
+            let longo = ui.ctx().data(|d| d.get_temp::<bool>(run.key.with("modo_abas"))).unwrap_or(false);
+            run.tabs = run.prev.len() >= 2 && (longo || std::env::var_os("FENKRA_DEMO_ABA").is_some());
             if run.active >= run.prev.len() {
                 run.active = 0;
             }
@@ -409,6 +443,21 @@ pub(crate) fn section(ui: &mut egui::Ui, title: &str) {
         ui.add_space(6.);
         ui.label(RichText::new(format!("{} {title}", section_icon(title))).strong());
     }
+}
+
+/// B360: campos que dependem da escolha logo acima, recuados e com um fio na cor de destaque à
+/// esquerda: a hierarquia acompanha a decisão (tipo do furo, depois os campos daquele tipo).
+pub(crate) fn subnivel<R>(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    let cor = crate::theme::accent(ui.visuals()).gamma_multiply(0.7);
+    ui.horizontal_top(|ui| {
+        ui.add_space(6.);
+        let (x, top) = (ui.cursor().left(), ui.cursor().top());
+        ui.add_space(8.);
+        let r = ui.vertical(add);
+        ui.painter().line_segment([egui::pos2(x, top + 2.), egui::pos2(x, r.response.rect.bottom() - 2.)], egui::Stroke::new(1.5, cor));
+        r.inner
+    })
+    .inner
 }
 
 /// Selo de estado (como "ATIVO" nos menus do sistema).
@@ -1625,79 +1674,44 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         Some(i) => i,
         None => head_idx,
     };
-    section(ui, "Medida");
-    ui.horizontal(|ui| {
-        ui.add_sized([60., 18.], egui::Label::new(tr("Norma")));
-        egui::ComboBox::from_id_salt("norma_rosca").selected_text(norma.clone()).width(190.).show_ui(ui, |ui| {
-            for s in hardware::STANDARDS {
-                if ui.selectable_label(norma == s, s).clicked() && norma != s {
-                    norma = s.to_string();
-                    size = hardware::threads_of(s).next().map(|t| t.name.to_string()).unwrap_or_default();
+    // B360: os campos do tipo escolhido vêm logo abaixo dele, no mesmo fluxo
+    if !matches!(h.kind, HoleKind::Simples) {
+        subnivel(ui, |ui| {
+            match &mut h.kind {
+                HoleKind::Simples => {}
+                HoleKind::Rebaixado { diameter, depth } => {
+                    expr(ui, "Ø rebaixo", diameter, vars, "mm");
+                    expr(ui, "Prof. rebaixo", depth, vars, "mm");
+                }
+                HoleKind::Escareado { diameter, angle } => {
+                    expr(ui, "Ø escareado", diameter, vars, "mm");
+                    expr(ui, "Ângulo", angle, vars, "°");
+                    // B48: ângulos usuais e por norma
+                    ui.horizontal_wrapped(|ui| {
+                        for a in fenkra_solidos::hardware::ANGULOS_ESCAREADO {
+                            let atual = angle.trim().parse::<f64>().is_ok_and(|v| (v - a).abs() < 1e-9);
+                            if ui.selectable_label(atual, format!("{a}°")).clicked() {
+                                *angle = format!("{a}");
+                            }
+                        }
+                    });
+                    egui::ComboBox::from_id_salt("esc_norma").selected_text(tr("Ângulo por norma")).show_ui(ui, |ui| {
+                        for (nome, a) in fenkra_solidos::hardware::NORMAS_ESCAREADO {
+                            if ui.selectable_label(false, format!("{nome} ({a}°)")).clicked() {
+                                *angle = format!("{a}");
+                            }
+                        }
+                    });
+                }
+                HoleKind::Contrafurado { diameter, depth, angle } => {
+                    expr(ui, "Ø contrafuro", diameter, vars, "mm");
+                    expr(ui, "Prof. contrafuro", depth, vars, "mm");
+                    expr(ui, "Ângulo do fundo", angle, vars, "°");
                 }
             }
         });
-    });
-    ui.horizontal(|ui| {
-        ui.add_sized([60., 18.], egui::Label::new(tr("Tamanho")));
-        egui::ComboBox::from_id_salt("tam_rosca").selected_text(size.clone()).width(190.).show_ui(ui, |ui| {
-            for t in hardware::threads_of(&norma) {
-                ui.selectable_value(&mut size, t.name.to_string(), t.name);
-            }
-        });
-    });
-    if !tapped {
-        ui.horizontal(|ui| {
-            ui.add_sized([60., 18.], egui::Label::new(tr("Folga")));
-            for f in ["fino", "normal", "folgado"] {
-                ui.radio_value(&mut folga, f.to_string(), f);
-            }
-        });
     }
-
-    extent_ui(ui, "ext_furo", &mut h.depth, vars, &["Cego", "Passante", "Até o próximo", "Até o último", "Até plano", "Até a superfície"], doc, seed);
-
-
-    egui::CollapsingHeader::new(tr("Ajuste fino das dimensões")).default_open(false).show(ui, |ui| {
-        expr(ui, "Diâmetro", &mut h.diameter, vars, "mm");
-        match &mut h.kind {
-            HoleKind::Simples => {}
-            HoleKind::Rebaixado { diameter, depth } => {
-                expr(ui, "Ø rebaixo", diameter, vars, "mm");
-                expr(ui, "Prof. rebaixo", depth, vars, "mm");
-            }
-            HoleKind::Escareado { diameter, angle } => {
-                expr(ui, "Ø escareado", diameter, vars, "mm");
-                expr(ui, "Ângulo", angle, vars, "°");
-                // B48: ângulos usuais e por norma
-                ui.horizontal_wrapped(|ui| {
-                    for a in fenkra_solidos::hardware::ANGULOS_ESCAREADO {
-                        let atual = angle.trim().parse::<f64>().is_ok_and(|v| (v - a).abs() < 1e-9);
-                        if ui.selectable_label(atual, format!("{a}°")).clicked() {
-                            *angle = format!("{a}");
-                        }
-                    }
-                });
-                egui::ComboBox::from_id_salt("esc_norma").selected_text(tr("Ângulo por norma")).show_ui(ui, |ui| {
-                    for (nome, a) in fenkra_solidos::hardware::NORMAS_ESCAREADO {
-                        if ui.selectable_label(false, format!("{nome} ({a}°)")).clicked() {
-                            *angle = format!("{a}");
-                        }
-                    }
-                });
-            }
-            HoleKind::Contrafurado { diameter, depth, angle } => {
-                expr(ui, "Ø contrafuro", diameter, vars, "mm");
-                expr(ui, "Prof. contrafuro", depth, vars, "mm");
-                expr(ui, "Ângulo do fundo", angle, vars, "°");
-            }
-        }
-        if let Some(t) = &mut h.thread {
-            ui.horizontal(|ui| {
-                ui.add_sized([96., 18.], egui::Label::new(tr("Designação")));
-                ui.text_edit_singleline(t);
-            });
-        }
-    });
+    // B360: a rosca decide o resto (furo de broca de rosca ou de passagem), então vem antes da medida
     section(ui, "Rosca");
     let opts = [
         ("furo_simples", "Nenhuma", "Sem rosca: diâmetro de passagem pela folga", !tapped),
@@ -1720,6 +1734,47 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
     if new_tapped {
         crate::editor::check(ui, &mut h.left_hand, "rosca à esquerda");
     }
+    section(ui, "Medida");
+    ui.horizontal(|ui| {
+        ui.add_sized([60., 18.], egui::Label::new(tr("Norma")));
+        egui::ComboBox::from_id_salt("norma_rosca").selected_text(norma.clone()).width(190.).show_ui(ui, |ui| {
+            for s in hardware::STANDARDS {
+                if ui.selectable_label(norma == s, s).clicked() && norma != s {
+                    norma = s.to_string();
+                    size = hardware::threads_of(s).next().map(|t| t.name.to_string()).unwrap_or_default();
+                }
+            }
+        });
+    });
+    ui.horizontal(|ui| {
+        ui.add_sized([60., 18.], egui::Label::new(tr("Tamanho")));
+        egui::ComboBox::from_id_salt("tam_rosca").selected_text(size.clone()).width(190.).show_ui(ui, |ui| {
+            for t in hardware::threads_of(&norma) {
+                ui.selectable_value(&mut size, t.name.to_string(), t.name);
+            }
+        });
+    });
+    if !new_tapped {
+        ui.horizontal(|ui| {
+            ui.add_sized([60., 18.], egui::Label::new(tr("Folga")));
+            for f in ["fino", "normal", "folgado"] {
+                ui.radio_value(&mut folga, f.to_string(), f);
+            }
+        });
+    }
+
+    extent_ui(ui, "ext_furo", &mut h.depth, vars, &["Cego", "Passante", "Até o próximo", "Até o último", "Até plano", "Até a superfície"], doc, seed);
+
+
+    egui::CollapsingHeader::new(tr("Ajuste fino das dimensões")).default_open(false).show(ui, |ui| {
+        expr(ui, "Diâmetro", &mut h.diameter, vars, "mm");
+        if let Some(t) = &mut h.thread {
+            ui.horizontal(|ui| {
+                ui.add_sized([96., 18.], egui::Label::new(tr("Designação")));
+                ui.text_edit_singleline(t);
+            });
+        }
+    });
     if new_tapped && h.thread_modeled {
         crate::furo_painel::entrada_e_fim(ui, doc, h, vars, seed, head_idx != 0);
     }
@@ -1827,6 +1882,47 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
 #[cfg(test)]
 mod testes_repouso {
     use super::*;
+
+    /// B360: o comando curto fica num fluxo só (todas as seções visíveis, sem barra de abas); o longo
+    /// vira abas; entre os dois limites o modo não muda, para não piscar.
+    #[test]
+    fn comando_curto_e_um_fluxo_e_o_longo_vira_abas() {
+        assert!(!usa_abas(1, 5000., true), "uma seção nunca tem abas");
+        assert!(!usa_abas(3, 300., true));
+        assert!(usa_abas(3, 900., false));
+        assert!(usa_abas(3, 680., true) && !usa_abas(3, 680., false), "faixa de histerese");
+        let desenhar = |extra: f32| {
+            let ctx = egui::Context::default();
+            let mut visiveis = 0;
+            let mut historia = vec![];
+            for k in 0..8 {
+                let entrada = egui::RawInput { time: Some(k as f64), screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400., 2000.))), ..Default::default() };
+                let mut saida = ctx.run_ui(entrada, |ui| {
+                    tabs_begin(ui, ("teste_fluxo", extra as i32));
+                    visiveis = 0;
+                    for t in ["Elemento", "Tipo", "Definição"] {
+                        section(ui, t);
+                        if ui.is_rect_visible(ui.cursor()) {
+                            visiveis += 1;
+                        }
+                        ui.add_space(extra);
+                    }
+                    tabs_end(ui);
+                });
+                saida.textures_delta.clear();
+                historia.push(visiveis);
+            }
+            // depois de assentar, o modo não troca de um quadro para o outro (não pisca)
+            assert!(historia[3..].iter().all(|v| *v == visiveis), "o painel pisca entre fluxo e abas: {historia:?}");
+            visiveis
+        };
+        assert_eq!(desenhar(40.), 3, "curto: as três seções aparecem juntas");
+        assert_eq!(desenhar(400.), 1, "longo: só a aba ativa aparece");
+        // perto do limite, como o painel do plano de referência que piscava
+        for extra in [180., 200., 215., 230., 250.] {
+            desenhar(extra);
+        }
+    }
 
     /// B222: com o painel de abas aberto e nada mudando, a barra não agenda mais quadros.
     #[test]
