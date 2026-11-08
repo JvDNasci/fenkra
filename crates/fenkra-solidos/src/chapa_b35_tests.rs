@@ -257,6 +257,38 @@ fn aba_entre_perfis_erra_em_palavras() {
     assert!(erro(&d, id).contains("contorno fechado"));
 }
 
+/// Planificada do funil quadrado: a chapa plana tem a área das quatro faces na fibra neutra (K 0,44
+/// da face de dentro), deitada no plano do perfil de baixo, e uma linha de dobra em cada canto menos
+/// o da costura.
+#[test]
+fn aba_entre_perfis_planifica_por_triangulacao() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let (mut d, id) = funil(true, false);
+    d.sheet.as_mut().unwrap().flat = true;
+    let r = recompute(&d);
+    assert!(matches!(&r.status[&id], Status::Warning(w) if w.contains("triangulação")), "{:?}", r.status[&id]);
+    let m = mede(&d);
+    let incl = 10f64.atan2(30.);
+    let recuo = (1. - 0.44) * 2. / incl.cos();
+    let (a, b) = (20. - recuo, 10. - recuo);
+    let area = 4. * (2. * a + 2. * b) / 2. * (30f64.powi(2) + 10f64.powi(2)).sqrt();
+    assert!(perto(m.volume, area * 2., 0.002), "volume {} esperado {}", m.volume, area * 2.);
+    // plana: só a espessura em z, a partir do plano do perfil de baixo
+    assert!(m.lo[2].abs() < 1e-3 && (m.hi[2] - 2.).abs() < 1e-3, "z {} {}", m.lo[2], m.hi[2]);
+    // a planificada é bem maior que o funil (±20) no plano
+    assert!(m.hi[0] - m.lo[0] > 60. || m.hi[1] - m.lo[1] > 60., "caixa {:?} {:?}", m.lo, m.hi);
+    let linhas: Vec<_> = r.bend_lines.iter().filter(|l| l.feature == id).collect();
+    assert_eq!(linhas.len(), 3, "três cantos dobrados e um na costura");
+    let s = incl.sin();
+    let diedro = (s * s).acos().to_degrees();
+    assert!(linhas.iter().all(|l| (l.angle - diedro).abs() < 1e-6 && l.radius == 0.), "{:?}", linhas.iter().map(|l| l.angle).collect::<Vec<_>>());
+    // dobrada de novo: a casca volta
+    d.sheet.as_mut().unwrap().flat = false;
+    assert!(mede(&d).hi[2] > 29.9);
+}
+
 // ---------- converter sólido em chapa ----------
 
 fn bloco() -> Document {

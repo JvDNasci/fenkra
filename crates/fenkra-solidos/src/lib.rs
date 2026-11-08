@@ -80,6 +80,7 @@ pub mod chapa_desdobra;
 pub mod chapa_converte;
 mod chapa_converte_mapa;
 mod chapa_perfis;
+pub mod chapa_perfis_plana;
 #[cfg(test)]
 mod chapa_canto_tests;
 pub use chapa_laco::{laco_de_malha, recuos_extensao};
