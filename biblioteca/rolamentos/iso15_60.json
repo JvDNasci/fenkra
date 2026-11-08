@@ -10,6 +10,14 @@
  "licenca": "CC BY 4.0 (dados)",
  "fontes": [
   {
+   "rotulo": "SRV Bearing — tabela da série 6000",
+   "url": "https://www.srv-bearing.com/%ef%82%b7-deep-groove-ball-bearing-6000-series-product/"
+  },
+  {
+   "rotulo": "Partmatch — série 6000 (medidas de contorno)",
+   "url": "https://partmatch.io/bearings/6000"
+  },
+  {
    "rotulo": "NSK — rolamento 6005N, medidas de contorno",
    "url": "https://www.nsk.com/engineering/6005n-dgbb-sr-n.html"
   },
@@ -24,6 +32,14 @@
   {
    "rotulo": "Timken — catálogo de rolamentos rígidos de esferas, item 6010",
    "url": "https://cad.timken.com/item/deep-groove-ball-bearings/deep-groove-ball-bearings--6000--6200--6300--64/6010"
+  },
+  {
+   "rotulo": "NSK — rolamento 6000 (capacidade de carga)",
+   "url": "https://www.nsk.com/engineering/6000-dgbb-sr.html"
+  },
+  {
+   "rotulo": "Timken — catálogo de rolamentos rígidos de esferas (6001, 6002, 6007 e capacidades)",
+   "url": "https://cad.timken.com/viewitems/deep-groove-ball-bearings/deep-groove-ball-bearings--6000--6200--6300--64"
   }
  ],
  "campos": [
@@ -31,6 +47,66 @@
   "B"
  ],
  "tamanhos": [
+  {
+   "designacao": "6000",
+   "d_nominal": 10,
+   "valores": {
+    "D": 26,
+    "B": 8
+   },
+   "confirmado_por": 2,
+   "furo_min": 25.9,
+   "furo_max": 26.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante NSK: C = 5050 N, C0 = 1970 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6001",
+   "d_nominal": 12,
+   "valores": {
+    "D": 28,
+    "B": 8
+   },
+   "confirmado_por": 2,
+   "furo_min": 27.9,
+   "furo_max": 28.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante Timken: C = 5100 N, C0 = 2400 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6002",
+   "d_nominal": 15,
+   "valores": {
+    "D": 32,
+    "B": 9
+   },
+   "confirmado_por": 2,
+   "furo_min": 31.9,
+   "furo_max": 32.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante Timken: C = 5600 N, C0 = 2800 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6003",
+   "d_nominal": 17,
+   "valores": {
+    "D": 35,
+    "B": 10
+   },
+   "confirmado_por": 2,
+   "furo_min": 34.9,
+   "furo_max": 35.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6004",
+   "d_nominal": 20,
+   "valores": {
+    "D": 42,
+    "B": 12
+   },
+   "confirmado_por": 2,
+   "furo_min": 41.9,
+   "furo_max": 42.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
   {
    "designacao": "6005",
    "d_nominal": 25,
@@ -44,6 +120,54 @@
    "nota": "d, D e B: NSK (6005N) e Timken (6005) concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante; capacidade de carga não entra. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
   },
   {
+   "designacao": "6006",
+   "d_nominal": 30,
+   "valores": {
+    "D": 55,
+    "B": 13
+   },
+   "confirmado_por": 2,
+   "furo_min": 54.9,
+   "furo_max": 55.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6007",
+   "d_nominal": 35,
+   "valores": {
+    "D": 62,
+    "B": 14
+   },
+   "confirmado_por": 2,
+   "furo_min": 61.9,
+   "furo_max": 62.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas. Capacidade de carga citada do fabricante Timken: C = 15900 N, C0 = 10300 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "6008",
+   "d_nominal": 40,
+   "valores": {
+    "D": 68,
+    "B": 15
+   },
+   "confirmado_por": 2,
+   "furo_min": 67.9,
+   "furo_max": 68.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6009",
+   "d_nominal": 45,
+   "valores": {
+    "D": 75,
+    "B": 16
+   },
+   "confirmado_por": 2,
+   "furo_min": 74.9,
+   "furo_max": 75.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
    "designacao": "6010",
    "d_nominal": 50,
    "valores": {
@@ -54,6 +178,126 @@
    "furo_min": 79.9,
    "furo_max": 80.1,
    "nota": "d, D e B: NSK (6010) e Timken (6010) concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante; capacidade de carga não entra. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6011",
+   "d_nominal": 55,
+   "valores": {
+    "D": 90,
+    "B": 18
+   },
+   "confirmado_por": 2,
+   "furo_min": 89.9,
+   "furo_max": 90.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6012",
+   "d_nominal": 60,
+   "valores": {
+    "D": 95,
+    "B": 18
+   },
+   "confirmado_por": 2,
+   "furo_min": 94.9,
+   "furo_max": 95.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6013",
+   "d_nominal": 65,
+   "valores": {
+    "D": 100,
+    "B": 18
+   },
+   "confirmado_por": 2,
+   "furo_min": 99.9,
+   "furo_max": 100.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6014",
+   "d_nominal": 70,
+   "valores": {
+    "D": 110,
+    "B": 20
+   },
+   "confirmado_por": 2,
+   "furo_min": 109.9,
+   "furo_max": 110.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6015",
+   "d_nominal": 75,
+   "valores": {
+    "D": 115,
+    "B": 20
+   },
+   "confirmado_por": 2,
+   "furo_min": 114.9,
+   "furo_max": 115.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6016",
+   "d_nominal": 80,
+   "valores": {
+    "D": 125,
+    "B": 22
+   },
+   "confirmado_por": 2,
+   "furo_min": 124.9,
+   "furo_max": 125.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6017",
+   "d_nominal": 85,
+   "valores": {
+    "D": 130,
+    "B": 22
+   },
+   "confirmado_por": 2,
+   "furo_min": 129.9,
+   "furo_max": 130.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6018",
+   "d_nominal": 90,
+   "valores": {
+    "D": 140,
+    "B": 24
+   },
+   "confirmado_por": 2,
+   "furo_min": 139.9,
+   "furo_max": 140.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6019",
+   "d_nominal": 95,
+   "valores": {
+    "D": 145,
+    "B": 24
+   },
+   "confirmado_por": 2,
+   "furo_min": 144.9,
+   "furo_max": 145.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
+  },
+  {
+   "designacao": "6020",
+   "d_nominal": 100,
+   "valores": {
+    "D": 150,
+    "B": 24
+   },
+   "confirmado_por": 2,
+   "furo_min": 149.9,
+   "furo_max": 150.1,
+   "nota": "d, D e B: SRV Bearing e Partmatch concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar das esferas."
   }
  ]
 }

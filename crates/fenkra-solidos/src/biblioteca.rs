@@ -514,6 +514,7 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso7379.json", include_str!("../../../biblioteca/fixadores/iso7379.json")),
     ("asme_b18_3.json", include_str!("../../../biblioteca/fixadores/asme_b18_3.json")),
     ("iso15_60.json", include_str!("../../../biblioteca/rolamentos/iso15_60.json")),
+    ("iso15_62.json", include_str!("../../../biblioteca/rolamentos/iso15_62.json")),
 ];
 
 /// A biblioteca pública embutida. Os arquivos são validados nos testes; aqui um arquivo inválido
@@ -649,7 +650,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 21);
+        assert_eq!(b.familias.len(), 22);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -734,6 +735,31 @@ mod tests {
         // sem campo do gerador a família não valida
         let sem_aba = include_str!("../../../biblioteca/fixadores/din6923.json").replace("\"c\"", "\"x\"");
         assert!(Biblioteca::de_jsons(Camada::Publica, &[("t.json", &sem_aba)]).is_err());
+    }
+
+    #[test]
+    fn rolamentos_das_series_60_e_62_pelas_medidas_de_contorno() {
+        // B44: 6000 a 6020 e 6200 a 6220, d D B conferidos em duas fontes
+        let (s60, s62) = (familia("iso15_60").unwrap(), familia("iso15_62").unwrap());
+        assert_eq!((s60.tamanhos.len(), s62.tamanhos.len()), (21, 21));
+        for f in [s60, s62] {
+            assert!(f.tamanhos.iter().all(|t| t.confirmado_por >= 2 && t.diametro_nominal().is_some()), "{}", f.id);
+            // dentro da série, furo e externo crescem juntos e o anel tem espessura
+            for w in f.tamanhos.windows(2) {
+                assert!(w[1].diametro_nominal() > w[0].diametro_nominal() && w[1].valor("D") > w[0].valor("D"), "{} {}", f.id, w[1].designacao);
+            }
+            for t in &f.tamanhos {
+                assert!(t.valor("D").unwrap() > t.diametro_nominal().unwrap() + 10., "{}", t.designacao);
+            }
+        }
+        // a série 62 é mais robusta que a 60 no mesmo furo: 6205 (25 x 52 x 15) contra 6005 (25 x 47 x 12)
+        let (a, b) = (tamanho("iso15_62", "6205").unwrap(), tamanho("iso15_60", "6005").unwrap());
+        assert_eq!((a.diametro_nominal(), a.valor("D"), a.valor("B")), (Some(25.), Some(52.), Some(15.)));
+        assert!(a.valor("D") > b.valor("D") && a.valor("B") > b.valor("B"));
+        // o furo do alojamento acha o tamanho certo em cada série (o 80 é 6010 na 60 e 6208 na 62)
+        assert_eq!(s62.tamanhos_para_furo(80., 0.05).iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["6208"]);
+        // capacidade de carga só na nota, citando o fabricante
+        assert!(tamanho("iso15_60", "6000").unwrap().nota.as_deref().is_some_and(|n| n.contains("NSK") && n.contains("C = 5050 N")));
     }
 
     #[test]
@@ -853,7 +879,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 22);
+        assert_eq!(m.familias.len(), 23);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

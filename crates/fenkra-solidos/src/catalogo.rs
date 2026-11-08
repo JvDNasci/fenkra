@@ -471,13 +471,13 @@ mod testes {
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Sextavada), ..Default::default() }), 3);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Escareada), ..Default::default() }), 1);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Panela), ..Default::default() }), 1);
-        // 5 porcas, 4 arruelas, 2 prisioneiros e o rolamento
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 12);
+        // 5 porcas, 4 arruelas, 2 prisioneiros e os rolamentos das séries 60 e 62
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 13);
         assert_eq!(f(Filtro { material: Some("Aço".into()), ..Default::default() }), familias().len());
         assert_eq!(f(Filtro { material: Some("Aço inoxidável".into()), ..Default::default() }), 0);
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 4);
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Prisioneiro), ..Default::default() }), 2);
-        assert_eq!(f(Filtro { tipo: Some(TipoFixador::Rolamento), ..Default::default() }), 1);
+        assert_eq!(f(Filtro { tipo: Some(TipoFixador::Rolamento), ..Default::default() }), 2);
     }
 
     #[test]
