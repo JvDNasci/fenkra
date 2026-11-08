@@ -91,6 +91,7 @@ pub fn pagina(ui: &mut egui::Ui, s: &mut Settings, doc: &mut Document) {
     ui.label(RichText::new(tr("Cada gravação guarda a anterior como backup (config.json.bak). Se o arquivo estragar, o programa restaura o backup e avisa.")).weak().small());
 
     secao_fkv(ui);
+    secao_documentos(ui);
 }
 
 /// Associar o `.fkv` ao Fenkra no Windows (B365): só com clique, em HKCU, e com desfazer.
@@ -111,6 +112,35 @@ fn secao_fkv(ui: &mut egui::Ui) {
         }
         if ui.add_enabled(cfg!(windows) && ligado, egui::Button::new(tr("Desfazer a associação"))).on_hover_text(tr("Apaga as duas chaves que o botão ao lado criou.")).clicked() {
             let m = match crate::assoc_fkv::desfazer() {
+                Ok(()) => tr("Associação desfeita.").to_string(),
+                Err(e) => format!("{}: {e}", tr("Não consegui mudar a associação")),
+            };
+            ui.ctx().data_mut(|d| d.insert_temp(msg_key, m));
+        }
+    });
+    if let Some(m) = ui.ctx().data(|d| d.get_temp::<String>(msg_key)) {
+        ui.label(RichText::new(m).small());
+    }
+}
+
+/// Associar `.fkp`, `.fka` e `.fkd` ao Fenkra (B389): só com clique, em HKCU, e com desfazer.
+fn secao_documentos(ui: &mut egui::Ui) {
+    let msg_key = egui::Id::new("config_docs_msg");
+    ui.separator();
+    ui.label(RichText::new(tr("Abrir peças, montagens e desenhos com duplo clique")).strong());
+    ui.label(RichText::new(tr("Associa .fkp, .fka e .fkd ao Fenkra: o duplo clique no arquivo abre o programa já com ele. Vale só para o seu usuário do Windows e não pede administrador.")).weak().small());
+    let ligado = crate::assoc_docs::registrado();
+    ui.label(RichText::new(tr(if ligado { "Os arquivos do Fenkra abrem pelo programa com duplo clique." } else { "Os arquivos do Fenkra não estão associados ao programa." })).small());
+    ui.horizontal(|ui| {
+        if ui.add_enabled(cfg!(windows), egui::Button::new(tr("Associar arquivos do Fenkra"))).on_hover_text(tr("Grava seis chaves em HKCU\\Software\\Classes (três extensões e três classes). Só acontece com este clique.")).clicked() {
+            let m = match crate::assoc_docs::registrar() {
+                Ok(()) => tr("Associação feita.").to_string(),
+                Err(e) => format!("{}: {e}", tr("Não consegui mudar a associação")),
+            };
+            ui.ctx().data_mut(|d| d.insert_temp(msg_key, m));
+        }
+        if ui.add_enabled(cfg!(windows) && ligado, egui::Button::new(tr("Desfazer a associação"))).on_hover_text(tr("Apaga as seis chaves que o botão ao lado criou.")).clicked() {
+            let m = match crate::assoc_docs::desfazer() {
                 Ok(()) => tr("Associação desfeita.").to_string(),
                 Err(e) => format!("{}: {e}", tr("Não consegui mudar a associação")),
             };

@@ -116,6 +116,8 @@ mod textos_conversor;
 mod textos_formatos;
 mod textos_visualizacao;
 mod assoc_fkv;
+mod assoc_docs;
+mod textos_assoc;
 mod textos_malha;
 mod malha_ui;
 mod impressao_ui;
