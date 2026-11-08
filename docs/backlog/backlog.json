@@ -6361,7 +6361,7 @@
    "tokens_k": 400,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -6377,7 +6377,7 @@
    "tokens_k": 200,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -6857,7 +6857,7 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
