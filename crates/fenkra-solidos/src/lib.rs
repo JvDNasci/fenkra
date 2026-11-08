@@ -4632,6 +4632,11 @@ impl Ctx<'_> {
             FeatureKind::Draft(d) if d.faces.is_empty() => Ok(Some("escolha na viewport as faces que recebem a saída — até lá nada é aplicado".into())),
             FeatureKind::Thickness(t) if t.faces.is_empty() => Ok(Some("escolha na viewport as faces a engrossar — até lá nada é aplicado".into())),
             FeatureKind::DirectEdit(d) if d.faces.is_empty() => Ok(Some("escolha na viewport as faces a editar — até lá nada é aplicado".into())),
+            // B243: dobra por linha, joggle e veneziana recém-criados ainda não têm linha (as duas
+            // pontas iguais): é a espera pela face fixa e pela linha, não um erro
+            FeatureKind::SmBend(bd) if bd.sketch.is_none() && bd.a == bd.b => Ok(Some("clique na face fixa e desenhe a linha de dobra — até lá nada é aplicado".into())),
+            FeatureKind::SmJoggle(j) if j.plane.is_none() && j.a == j.b => Ok(Some("clique na face fixa e desenhe a linha do joggle — até lá nada é aplicado".into())),
+            FeatureKind::SmLouver(lv) if lv.a == lv.b => Ok(Some("clique na face fixa e desenhe a linha da veneziana — até lá nada é aplicado".into())),
             FeatureKind::DirectEdit(d) => self.edicao_direta(f, d),
             FeatureKind::Shell(sh) => {
                 let t = ev(&sh.thickness, &self.vars, "espessura")?;
