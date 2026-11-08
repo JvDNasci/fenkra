@@ -26,6 +26,10 @@ pub fn rampa(paradas: &[[f32; 3]; 4], t: f32) -> [f32; 3] {
 
 /// Escala do tema, da superfície plana (destaque) ao problema (erro).
 pub fn paradas(v: &egui::Visuals) -> [[f32; 3]; 4] {
+    // B321: com a paleta segura, a escala perceptual de luminância monótona (nunca só vermelho x verde)
+    if crate::acessibilidade::paleta_segura() {
+        return crate::acessibilidade::RAMPA_SEGURA.map(|c| c.map(|x| x as f32 / 255.));
+    }
     [rgb(crate::theme::accent(v)), rgb(crate::theme::st_ok()), rgb(crate::theme::st_warn()), rgb(crate::theme::st_err())]
 }
 

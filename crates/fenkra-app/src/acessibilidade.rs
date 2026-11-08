@@ -171,6 +171,17 @@ pub fn cor_papel(papel: Papel, escuro: bool, segura: bool) -> [u8; 3] {
     }
 }
 
+/// B321: escala dos mapas de análise (curvatura, desvio, inclinação) com a paleta segura: do azul
+/// escuro ao amarelo, com a luminância subindo sempre (família cividis, feita para daltonismo). Lida
+/// em cinza ou por qualquer das três dicromacias, a ordem dos valores não se perde e o vermelho
+/// nunca carrega sozinho o "ruim".
+pub const RAMPA_SEGURA: [[u8; 3]; 4] = [[0, 32, 77], [87, 92, 109], [166, 157, 117], [255, 234, 70]];
+
+/// Luminância relativa (WCAG) de uma cor.
+pub fn luminancia(c: [u8; 3]) -> f32 {
+    0.2126 * linear(c[0]) + 0.7152 * linear(c[1]) + 0.0722 * linear(c[2])
+}
+
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Papel {
     Retirada,
@@ -347,6 +358,20 @@ mod tests {
                         assert!(r >= 3.0, "{} (segura={segura}): {p:?} tem contraste {r:.2}", t.name);
                     }
                 }
+            }
+        }
+    }
+
+    /// B321: a escala dos mapas com a paleta segura sobe em luminância nas três dicromacias e em cinza,
+    /// e cada parada se separa da vizinha.
+    #[test]
+    fn rampa_segura_dos_mapas_sobe_em_luminancia_para_qualquer_visao() {
+        let visoes: Vec<Box<dyn Fn([u8; 3]) -> [u8; 3]>> = vec![Box::new(|c| c), Box::new(|c| simular(c, Deficiencia::Protanopia)), Box::new(|c| simular(c, Deficiencia::Deuteranopia)), Box::new(|c| simular(c, Deficiencia::Tritanopia))];
+        for (v, ver) in visoes.iter().enumerate() {
+            let l: Vec<f32> = RAMPA_SEGURA.iter().map(|c| luminancia(ver(*c))).collect();
+            for k in 1..l.len() {
+                assert!(l[k] > l[k - 1] * 1.4, "visão {v}: a parada {k} não clareia ({:?})", l);
+                assert!(delta_e(ver(RAMPA_SEGURA[k]), ver(RAMPA_SEGURA[k - 1])) > 15., "visão {v}: paradas {k} parecidas");
             }
         }
     }
