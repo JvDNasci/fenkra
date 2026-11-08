@@ -4,16 +4,41 @@
 use crate::settings::Bench;
 use fenkra_core::Document;
 
-/// Bancada em que o conteúdo do documento abre. Chapa dobrada abre na bancada de chapa; todo o
-/// resto, inclusive peças feitas de superfícies e de forma livre, abre em Modelagem Sólida: é lá
-/// que o corpo aparece inteiro e que a árvore tem todos os comandos. Antes a peça abria na bancada
-/// que estivesse ativa (por exemplo Desenho ou Forma livre) e a pessoa via uma tela vazia.
+/// Bancada em que o conteúdo do documento abre (B403, B423). A bancada é onde estão os comandos da
+/// peça: chapa dobrada abre em Chapa metálica, membros de perfil e tubo em Estrutural, malha de
+/// subdivisão em Forma livre e peça feita só de superfícies em Superfícies. O resto abre em
+/// Modelagem Sólida. Antes tudo isso abria na bancada que estivesse ativa (ou em Sólidos) e a pessoa
+/// não via os comandos que criaram a peça.
 pub fn bancada_do_conteudo(d: &Document) -> Bench {
+    use fenkra_core::FeatureKind as K;
     if d.sheet.is_some() {
-        Bench::Chapa
-    } else {
-        Bench::Solidos
+        return Bench::Chapa;
     }
+    let ativas = || d.features.iter().map(|f| &f.kind);
+    if ativas().any(|k| matches!(k, K::StructMember(_) | K::StructPlate(_) | K::StructGusset(_) | K::StructWeld(_))) {
+        return Bench::Estrutural;
+    }
+    if ativas().any(|k| matches!(k, K::Forma(_))) {
+        return Bench::FormaLivre;
+    }
+    let superficie = |k: &K| matches!(k, K::ThickSurface(_) | K::CloseSurface(_) | K::SewSurface(_) | K::BoundaryFill(_));
+    let solido = |k: &K| matches!(k, K::Extrude(_) | K::Revolve(_) | K::Primitive(_) | K::Sweep(_) | K::Loft(_) | K::Hole(_) | K::Shell(_) | K::Combine(_));
+    let tem_superficie = ativas().any(superficie) || d.references.iter().any(|r| r.kind.class() == fenkra_core::RefClass::Surface);
+    if tem_superficie && !ativas().any(solido) {
+        return Bench::Superficies;
+    }
+    Bench::Solidos
+}
+
+/// Arquivo de documento passado na linha de comando (B389): o primeiro argumento que não é opção e
+/// termina em `.fkp`, `.fka` ou `.fkd`. É o que o sistema entrega no duplo clique num arquivo
+/// associado ao programa. O `.fkv` tem caminho próprio (`--abrir-fkv`).
+pub fn arquivo_da_linha(args: &[String]) -> Option<std::path::PathBuf> {
+    args.iter().filter(|a| !a.starts_with("--")).find_map(|a| {
+        let p = std::path::Path::new(a);
+        let ext = p.extension()?.to_string_lossy().to_lowercase();
+        matches!(ext.as_str(), "fkp" | "fka" | "fkd").then(|| p.to_path_buf())
+    })
 }
 
 /// Estado do enquadramento ao abrir. A câmera só pode enquadrar depois que a cena NOVA subiu à
@@ -82,6 +107,32 @@ mod testes {
         let mut c = Document::new("Chapa");
         c.sheet = Some(Default::default());
         assert_eq!(bancada_do_conteudo(&c), Bench::Chapa);
+    }
+
+    #[test]
+    fn abre_na_bancada_do_conteudo_forma_superficie_e_tubos() {
+        let (forma, _) = crate::curso_exemplos::peca("Forma suave").unwrap();
+        assert_eq!(bancada_do_conteudo(&forma), Bench::FormaLivre);
+        let (sup, _) = crate::curso_exemplos::peca("Superfícies de exemplo").unwrap();
+        assert_eq!(bancada_do_conteudo(&sup), Bench::Superficies);
+        let quadro = crate::examples::all().into_iter().find(|e| e.name == "Quadro de mesa").unwrap();
+        assert_eq!(bancada_do_conteudo(&quadro.doc), Bench::Estrutural);
+        // superfícies que viraram volume: a peça é um sólido
+        let mut mista = sup.clone();
+        let solido = crate::examples::all().into_iter().flat_map(|e| e.doc.features).find(|f| matches!(f.kind, fenkra_core::FeatureKind::Extrude(_))).unwrap();
+        mista.add_feature(solido.kind);
+        assert_eq!(bancada_do_conteudo(&mista), Bench::Solidos);
+    }
+
+    #[test]
+    fn linha_de_comando_acha_o_documento_e_ignora_opcoes() {
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(arquivo_da_linha(&a(&["--seguro", "a/Peça.FKP"])), Some("a/Peça.FKP".into()));
+        assert_eq!(arquivo_da_linha(&a(&["m.fka"])), Some("m.fka".into()));
+        assert_eq!(arquivo_da_linha(&a(&["d.fkd", "outro.fkp"])), Some("d.fkd".into()));
+        assert_eq!(arquivo_da_linha(&a(&["--abrir-fkv", "x.fkv"])), None);
+        assert_eq!(arquivo_da_linha(&a(&[])), None);
+        assert_eq!(arquivo_da_linha(&a(&["leia.txt"])), None);
     }
 
     #[test]

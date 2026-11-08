@@ -35,3 +35,18 @@ pub fn quadro(ctx: &egui::Context) {
         });
     }
 }
+
+/// `FENKRA_DEMO_APARENCIA=preto|branco|<RRGGBB>` pinta a peça aberta com essa cor, para conferir o
+/// contraste dela com o fundo do tema (B425). `FENKRA_DEMO_TEMA` escolhe o tema.
+pub fn aparencia(doc: &mut fenkra_core::Document) {
+    let Ok(v) = std::env::var("FENKRA_DEMO_APARENCIA") else { return };
+    let cor = match v.as_str() {
+        "preto" => [12, 12, 14],
+        "branco" => [250, 250, 250],
+        hex => {
+            let n = u32::from_str_radix(hex.trim_start_matches('#'), 16).unwrap_or(0x808080);
+            [(n >> 16) as u8, (n >> 8) as u8, n as u8]
+        }
+    };
+    doc.appearance = Some(fenkra_core::Appearance { color: cor, finish: fenkra_core::Finish::Acetinado, texture: None });
+}

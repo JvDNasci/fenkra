@@ -1088,13 +1088,17 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 app.open_pending = app.open.doc.features.iter().find(|f| f.name == n).map(|f| f.id);
             }
         }
-        // desenvolvimento: FENKRA_ABRIR=<nome> abre esse comando para edição ao iniciar
-        if let Ok(n) = std::env::var("FENKRA_ABRIR") {
+        // desenvolvimento: FENKRA_ABRIR=<nome> abre esse comando para edição ao iniciar; se o valor for
+        // o caminho de um .fkp, .fka ou .fkd, abre o arquivo (B390), como a linha de comando
+        if let Some(arq) = std::env::var("FENKRA_ABRIR").ok().and_then(|n| crate::abertura::arquivo_da_linha(&[n])) {
+            app.open_path(&arq);
+        } else if let Ok(n) = std::env::var("FENKRA_ABRIR") {
             app.open_pending = app.open.doc.features.iter().find(|f| f.name == n).map(|f| f.id);
             if let Some(p) = app.open.doc.pmi.iter().find(|p| p.name == n) {
                 app.sel = Sel::Pmi(p.id);
             }
         }
+        crate::demo_foto::aparencia(&mut app.open.doc);
         app.demo_previa = crate::previa::demo_preparar(&mut app.open.doc);
         if let Some(id) = crate::sketch_demo::preparar(&mut app.open.doc) {
             app.begin_sketch_pending = Some(id);

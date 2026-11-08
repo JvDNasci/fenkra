@@ -278,6 +278,8 @@ fn main() -> eframe::Result {
         return Ok(());
     }
     let seguro = args.iter().any(|a| a == "--seguro");
+    // `.fkp`, `.fka` ou `.fkd` na linha de comando (ou duplo clique) abre o arquivo (B389)
+    let arquivo = abertura::arquivo_da_linha(&args);
     let forcado = std::env::var("WGPU_BACKEND").ok().filter(|v| !v.is_empty());
     let mut erros: Vec<(partida::Modo, String)> = Vec::new();
     for modo in partida::Modo::tentativas(seguro, forcado.is_some()) {
@@ -285,8 +287,13 @@ fn main() -> eframe::Result {
         let r = eframe::run_native(
             "Fenkra",
             opcoes(modo),
-            Box::new(move |cc| {
+            Box::new({
+                let arquivo = arquivo.clone();
+                move |cc| {
                 let mut app = app::App::new(cc);
+                if let Some(p) = &arquivo {
+                    app.open_path(p);
+                }
                 if let Some(rs) = &cc.wgpu_render_state {
                     let hw = perfil::detectar(rs);
                     app.avaliar_perfil(&hw);
@@ -296,6 +303,7 @@ fn main() -> eframe::Result {
                     }
                 }
                 Ok(Box::new(app))
+                }
             }),
         );
         match r {
