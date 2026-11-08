@@ -1024,6 +1024,28 @@ int32_t face_index(const Shape& s, double px, double py, double pz, double limit
     });
 }
 
+// B391: índices (na ordem de `topology`) das arestas que passam a menos de `limit` do ponto, medindo
+// na curva exata. Costuras e arestas degeneradas ficam de fora: um ponto sobre a costura de um
+// cilindro não deve escolher a costura no lugar do círculo.
+rust::Vec<uint32_t> edges_through(const Shape& s, double px, double py, double pz, double limit) {
+    return guard("aresta", [&] {
+        rust::Vec<uint32_t> out;
+        if (s.s.IsNull()) return out;
+        TopTools_IndexedMapOfShape emap;
+        TopExp::MapShapes(s.s, TopAbs_EDGE, emap);
+        TopTools_IndexedDataMapOfShapeListOfShape e2f;
+        TopExp::MapShapesAndAncestors(s.s, TopAbs_EDGE, TopAbs_FACE, e2f);
+        TopoDS_Vertex v = BRepBuilderAPI_MakeVertex(gp_Pnt(px, py, pz)).Vertex();
+        for (int i = 1; i <= emap.Extent(); ++i) {
+            const TopoDS_Edge& e = TopoDS::Edge(emap(i));
+            if (BRep_Tool::Degenerated(e) || edge_is_seam(e2f, e)) continue;
+            BRepExtrema_DistShapeShape d(e, v);
+            if (d.IsDone() && d.Value() <= limit) out.push_back(uint32_t(i - 1));
+        }
+        return out;
+    });
+}
+
 // Teto de fios do malhador: 0 = padrão (metade dos processadores lógicos, no mínimo 2).
 static std::atomic<int32_t> g_mesh_threads{0};
 

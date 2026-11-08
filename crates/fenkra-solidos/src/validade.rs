@@ -19,6 +19,11 @@ pub fn invalido(corpo: Option<&Shape>) -> bool {
     if testes::FORCAR.with(|f| f.get()) && corpo.is_some() {
         return true;
     }
+    // captura da árvore com o aviso (docs/desenvolvimento.md): os comandos de hoje já barram as
+    // causas conhecidas, então a demonstração finge que todo corpo é inválido
+    if corpo.is_some() && std::env::var_os("FENKRA_DEMO_INVALIDO").is_some() {
+        return true;
+    }
     let ruim = corpo.is_some_and(|s| !s.is_valid());
     if ruim && std::env::var_os("FENKRA_DEBUG_VALIDADE").is_some() {
         if let Some(s) = corpo {

@@ -339,5 +339,6 @@ fn rosca_cosmetica_do_furo_nao_tem_geometria_mas_deixa_o_dado() {
     // o dado continua no documento, para a chamada e o desenho
     let FeatureKind::Hole(h) = &d.feature(id).unwrap().kind else { panic!() };
     assert_eq!(h.thread.as_deref(), Some("M8x1.25"));
-    assert!(matches!(r.status[&id], Status::Warning(ref m) if m.contains("rosca cosmética")));
+    // B404: cosmética é o caso normal, sem aviso (aviso em situação normal ensina a ignorar aviso)
+    assert_eq!(r.status[&id], Status::Ok);
 }

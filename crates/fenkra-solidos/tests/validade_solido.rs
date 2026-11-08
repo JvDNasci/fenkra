@@ -68,9 +68,9 @@ fn extrusao_com_direcao_dentro_do_plano_do_sketch_e_erro_claro() {
     assert!((volume_total(&r) - 499_477.).abs() < 100., "{}", volume_total(&r));
 }
 
-/// K-13: filete por ponto numa aresta circular, com o ponto na aresta mas longe do ponto médio. O
-/// ponto exato continua sendo a regra (nunca a aresta vizinha), mas o erro agora diz qual é o ponto
-/// médio da aresta mais próxima, e usar esse ponto funciona.
+/// K-13: filete por ponto perto de uma aresta circular, mas fora dela (0,5 mm para fora do círculo).
+/// Nunca vale a aresta vizinha; o erro diz qual é o ponto médio da aresta mais próxima, e usar esse
+/// ponto funciona. Um ponto SOBRE a aresta, longe do médio, vale desde o B391 (ver aresta_por_ponto).
 #[test]
 fn filete_em_aresta_circular_por_ponto_fora_do_medio_sugere_o_ponto_certo() {
     if !kernel_disponivel() {
@@ -84,9 +84,9 @@ fn filete_em_aresta_circular_por_ponto_fora_do_medio_sugere_o_ponto_certo() {
     // aresta circular do topo (z = 20): ponto médio do lado oposto da costura
     let e = (0..b.mesh.edge_mids.len() / 3).find(|e| (b.mesh.edge_mids[e * 3 + 2] as f64 - 20.).abs() < 1e-3).expect("aresta do topo");
     let medio = ponto_medio(b, e);
-    // um ponto sobre o círculo do topo, a 90° do médio
+    // um ponto a 90° do médio, 0,5 mm para fora do círculo do topo
     let ang = medio[1].atan2(medio[0]) + std::f64::consts::FRAC_PI_2;
-    let fora = [10. * ang.cos(), 10. * ang.sin(), 20.];
+    let fora = [10.5 * ang.cos(), 10.5 * ang.sin(), 20.];
     let mut ruim = d.clone();
     ruim.add_feature(filete("1", vec![fora], vec![None]));
     let id = ruim.features.last().unwrap().id;

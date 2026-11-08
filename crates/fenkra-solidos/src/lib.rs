@@ -7,6 +7,7 @@
 pub mod erro;
 pub mod erro_acionavel;
 pub mod validade;
+pub mod sentido_corte;
 pub mod forma_brep;
 pub mod forma_cache;
 pub mod forma_vinculo;
@@ -2251,6 +2252,11 @@ impl Ctx<'_> {
                 let m = match mode {
                     SweepMode::Corrigido => 0,
                     SweepMode::Fixo => 1,
+                    // B386: o círculo normal à guia é o mesmo girado em qualquer ângulo, então o triedro
+                    // só decide onde fica a costura, não a forma do tubo. Frenet puro perde a direção onde
+                    // a guia tem inflexão ou trecho reto e não varre; no tubo vale o Corrigido, com o
+                    // mesmo resultado que o Frenet daria se tivesse direção
+                    SweepMode::Frenet if matches!(profile, SweepProfile::Circle(_)) => 0,
                     SweepMode::Frenet => 2,
                 };
                 Geo::Surface(Shape::sweep_surface(&prof, &sp.pts, m).map_err(|x| x.0)?)
@@ -3046,8 +3052,24 @@ impl Ctx<'_> {
                     }
                 },
                 None => {
-                    // sem chave e sem aresta a 1 mm do ponto: erro com sugestão, nunca a mais próxima
-                    let Some(e) = refs::edge_near(&v, *p, tol) else {
+                    // sem chave: o ponto médio guardado no clique casa direto; senão vale qualquer ponto
+                    // SOBRE a aresta (B391: na circular o médio fica do lado oposto da costura e a API
+                    // não tinha como adivinhá-lo). Ponto no vértice entre arestas é ambíguo e não escolhe
+                    let sobre = || -> Result<Option<usize>, String> {
+                        let mut on = b.edges_through(*p, tol.min(0.1)).map_err(k)?;
+                        on.retain(|e| v.topo.edge_faces.get(*e).is_some_and(|x| *x != [fenkra_kernel::NO_FACE, fenkra_kernel::NO_FACE]));
+                        if on.len() > 1 {
+                            let who = format!("o vértice em ({:.2}, {:.2}, {:.2}) (passe um ponto no meio da aresta desejada)", p[0], p[1], p[2]);
+                            return Err(self.lost(what, f, refs::Lost::Ambiguous(on.len()), who));
+                        }
+                        Ok(on.first().copied())
+                    };
+                    let perto = match refs::edge_near(&v, *p, tol) {
+                        Some(e) => Some(e),
+                        None => sobre()?,
+                    };
+                    // sem aresta que passe pelo ponto: erro com sugestão, nunca a mais próxima
+                    let Some(e) = perto else {
                         let mut who = format!("a aresta que passava perto de ({:.2}, {:.2}, {:.2})", p[0], p[1], p[2]);
                         // K-13: em aresta circular o ponto médio fica do lado oposto da costura; diz qual é
                         if let Some((e, d)) = refs::edge_nearest(&v, *p) {
@@ -4190,7 +4212,10 @@ impl Ctx<'_> {
                 if let Some(v0) = vol0 {
                     let v1 = self.body(f.target).map_or(0., |b| b.mass().volume);
                     if (v0 - v1).abs() <= 1e-9 * v0.abs().max(1.) {
-                        return Ok(Some("o corte não removeu material: a ferramenta não alcança o corpo — confira o sentido ('inverter') e a distância".into()));
+                        // B392: confere o outro lado para dizer com certeza se 'inverter' resolve
+                        let removeria = |t: &Shape| self.body(f.target).and_then(|b| b.boolean(t, Bool::Cut).ok()).is_some_and(|r| v0 - r.mass().volume > 1e-9 * v0.abs().max(1.));
+                        let outro_lado = self.tool_extrusao(e, &face, frame, dir.map(|x| -x), loops_size(&sk.loops), taper, f.target).is_ok_and(|(t, _)| removeria(&t));
+                        return Ok(Some(sentido_corte::aviso(outro_lado, e.reverse).into()));
                     }
                 }
                 Ok(warn_open)
@@ -4371,7 +4396,8 @@ impl Ctx<'_> {
                     if h.thread_modeled {
                         return Err(format!("rosca '{t}' não encontrada na tabela de normas"));
                     }
-                    return Ok(Some(format!("rosca cosmética {t}{}", if h.left_hand { " (esquerda)" } else { "" })));
+                    // fora da tabela é aviso de verdade: nada confere o furo contra a rosca
+                    return Ok(Some(format!("rosca '{t}' fora da tabela de normas: fica só como anotação, sem conferir o furo")));
                 };
                 let sulco = h.thread_modeled && self.leve != Some(f.id);
                 let (lo, hi) = self.body(f.target).and_then(|b| b.bbox()).ok_or("corpo sem dimensões")?;
@@ -4449,9 +4475,8 @@ impl Ctx<'_> {
                 if sem_espaco > 0 {
                     avisos.push(format!("a rosca {} não cabe em {sem_espaco} furo(s): menos de um passo depois do escareado e da folga", spec.name));
                 }
-                if !sulco && self.leve != Some(f.id) {
-                    avisos.insert(0, format!("rosca cosmética {t}{}", if h.left_hand { " (esquerda)" } else { "" }));
-                }
+                // B404: rosca cosmética é o caso normal (só anotação, sem sulco): não é aviso. Aviso
+                // repetido em situação normal ensina a ignorar os avisos de verdade
                 Ok((!avisos.is_empty()).then(|| avisos.join("; ")))
             }
             FeatureKind::Sweep(w) => {
@@ -5800,8 +5825,9 @@ impl Ctx<'_> {
                 let o = [0, 1, 2].map(|i| cyl.origin[i] + cyl.dir[i] * (cyl.h0 + start));
                 let sulco = t.modeled && self.leve != Some(f.id);
                 self.roscas.push(RoscaViz { feature: f.id, origin: o, dir: cyl.dir, radius: cyl.radius, len, pitch: spec.pitch, esquerda: false, interna: cyl.internal, modelada: sulco });
+                // B404: cosmética sem problema de medida fica ok; só a medida errada avisa
                 if !t.modeled {
-                    return Ok(Some(note.unwrap_or_else(|| format!("rosca cosmética {}", spec.name))));
+                    return Ok(note);
                 }
                 // prévia da edição: só a posição (linhas); o sulco é construído ao concluir
                 if !sulco {
