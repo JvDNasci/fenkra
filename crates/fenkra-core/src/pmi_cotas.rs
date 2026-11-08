@@ -79,6 +79,105 @@ pub fn build(kind: &PmiKind, parts: &[Trecho], first_id: u64, name: &str, folder
         .collect()
 }
 
+/// Como as cotas de um conjunto se ligam (B126).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TipoConjunto {
+    /// cada cota começa onde a anterior termina
+    Cadeia,
+    /// todas partem da mesma origem
+    Base,
+}
+
+/// Um conjunto reconhecido: o tipo e as cotas na ordem (da cadeia, ou da mais curta à mais longa).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Conjunto {
+    pub tipo: TipoConjunto,
+    pub ids: Vec<Id>,
+}
+
+fn d3(a: [f64; 3], b: [f64; 3]) -> f64 {
+    ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt()
+}
+
+fn linear(p: &Pmi) -> Option<([f64; 3], [f64; 3])> {
+    match p.kind {
+        PmiKind::Linear | PmiKind::Ordinate { .. } | PmiKind::Gap { .. } => Some((*p.anchors.first()?, *p.anchors.get(1)?)),
+        _ => None,
+    }
+}
+
+/// Direções paralelas (no mesmo sentido ou no contrário).
+fn paralelas(a: ([f64; 3], [f64; 3]), b: ([f64; 3], [f64; 3])) -> bool {
+    let u = [a.1[0] - a.0[0], a.1[1] - a.0[1], a.1[2] - a.0[2]];
+    let v = [b.1[0] - b.0[0], b.1[1] - b.0[1], b.1[2] - b.0[2]];
+    let (nu, nv) = (d3(a.0, a.1), d3(b.0, b.1));
+    if nu < 1e-9 || nv < 1e-9 {
+        return false;
+    }
+    let c = (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / (nu * nv);
+    c.abs() > 0.999
+}
+
+/// Reconhece, a partir de uma cota, a cadeia ou a base de que ela faz parte, pela geometria: cotas
+/// lineares paralelas que se encadeiam ponta com ponta (cadeia) ou que saem do mesmo ponto (base). Vale
+/// para as criadas pelos comandos Cadeia e Base e para as feitas uma a uma. `tol` em mm.
+pub fn conjunto_de(lista: &[Pmi], id: Id, tol: f64) -> Option<Conjunto> {
+    let alvo = lista.iter().find(|p| p.id == id)?;
+    let seg = linear(alvo)?;
+    let candidatas: Vec<(Id, ([f64; 3], [f64; 3]))> = lista.iter().filter_map(|p| linear(p).filter(|s| paralelas(*s, seg)).map(|s| (p.id, s))).collect();
+    // base: as que saem do mesmo ponto para o mesmo lado (na cadeia, as vizinhas dividem um ponto mas
+    // saem dele para lados opostos)
+    for (origem, outra) in [(seg.0, seg.1), (seg.1, seg.0)] {
+        let rumo = [outra[0] - origem[0], outra[1] - origem[1], outra[2] - origem[2]];
+        let mesmo_lado = |p: [f64; 3]| (p[0] - origem[0]) * rumo[0] + (p[1] - origem[1]) * rumo[1] + (p[2] - origem[2]) * rumo[2] > 0.;
+        let mut base: Vec<(Id, f64)> = candidatas
+            .iter()
+            .filter_map(|(i, s)| {
+                let ponta = if d3(s.0, origem) < tol {
+                    s.1
+                } else if d3(s.1, origem) < tol {
+                    s.0
+                } else {
+                    return None;
+                };
+                mesmo_lado(ponta).then(|| (*i, d3(s.0, s.1)))
+            })
+            .collect();
+        if base.len() >= 2 {
+            base.sort_by(|a, b| a.1.total_cmp(&b.1));
+            return Some(Conjunto { tipo: TipoConjunto::Base, ids: base.into_iter().map(|(i, _)| i).collect() });
+        }
+    }
+    // cadeia: anda para os dois lados ligando ponta com ponta
+    let mut ordem: Vec<(Id, ([f64; 3], [f64; 3]))> = vec![(id, seg)];
+    loop {
+        let fim = ordem.last().unwrap().1;
+        let antes = ordem.len();
+        if let Some(prox) = candidatas.iter().find(|(i, s)| !ordem.iter().any(|(j, _)| j == i) && (d3(fim.1, s.0) < tol || d3(fim.1, s.1) < tol)) {
+            // orienta o trecho para continuar do ponto de encontro
+            let s = prox.1;
+            let s = if d3(fim.1, s.0) < tol { s } else { (s.1, s.0) };
+            ordem.push((prox.0, s));
+        }
+        if ordem.len() == antes {
+            break;
+        }
+    }
+    loop {
+        let ini = ordem.first().unwrap().1;
+        let antes = ordem.len();
+        if let Some(prev) = candidatas.iter().find(|(i, s)| !ordem.iter().any(|(j, _)| j == i) && (d3(s.0, ini.0) < tol || d3(s.1, ini.0) < tol)) {
+            let s = prev.1;
+            let s = if d3(s.1, ini.0) < tol { s } else { (s.1, s.0) };
+            ordem.insert(0, (prev.0, s));
+        }
+        if ordem.len() == antes {
+            break;
+        }
+    }
+    (ordem.len() >= 2).then(|| Conjunto { tipo: TipoConjunto::Cadeia, ids: ordem.into_iter().map(|(i, _)| i).collect() })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -212,5 +311,42 @@ mod tests {
         let (main, stack) = pm.display_parts(Some(12.));
         assert_eq!(main, "12");
         assert_eq!(stack, Some(("+0,1".to_string(), "−0,2".to_string())));
+    }
+
+    #[test]
+    fn reconhece_a_cadeia_e_a_base_pela_geometria() {
+        let cadeia = build(&PmiKind::Linear, &chain(&[pt(0., 0., 0.), pt(10., 0., 0.), pt(25., 0., 0.), pt(45., 0., 0.)], [0., 0., 12.]), 1, "Cadeia", "Cadeia 1");
+        let base = build(&PmiKind::Linear, &baseline(&[pt(0., 50., 0.), pt(15., 50., 0.), pt(30., 50., 0.), pt(50., 50., 0.)], [0., 0., 1.], 8.), 10, "Base", "Base 1");
+        let mut solta = pmi(PmiKind::Linear, vec![]);
+        solta.id = Id(20);
+        solta.anchors = vec![[0., 100., 0.], [5., 100., 0.]];
+        // perpendicular encostada na ponta da cadeia: não entra
+        let mut perp = pmi(PmiKind::Linear, vec![]);
+        perp.id = Id(21);
+        perp.anchors = vec![[45., 0., 0.], [45., 30., 0.]];
+        let mut lista: Vec<Pmi> = cadeia.into_iter().chain(base).collect();
+        lista.push(solta);
+        lista.push(perp);
+        // a partir do meio da cadeia, ela inteira na ordem
+        let c = conjunto_de(&lista, Id(2), 0.01).unwrap();
+        assert_eq!(c.tipo, TipoConjunto::Cadeia);
+        assert_eq!(c.ids, vec![Id(1), Id(2), Id(3)]);
+        // a partir de qualquer cota da base, ela inteira da mais curta à mais longa
+        let b = conjunto_de(&lista, Id(11), 0.01).unwrap();
+        assert_eq!(b.tipo, TipoConjunto::Base);
+        assert_eq!(b.ids, vec![Id(10), Id(11), Id(12)]);
+        assert_eq!(conjunto_de(&lista, Id(20), 0.01), None, "cota sozinha não é conjunto");
+        assert_eq!(conjunto_de(&lista, Id(99), 0.01), None);
+        // feita à mão, com a segunda cota desenhada ao contrário: ainda é cadeia
+        let mut a = pmi(PmiKind::Linear, vec![]);
+        a.id = Id(30);
+        a.anchors = vec![[0., 0., 9.], [7., 0., 9.]];
+        let mut bb = pmi(PmiKind::Linear, vec![]);
+        bb.id = Id(31);
+        bb.anchors = vec![[19., 0., 9.], [7., 0., 9.]];
+        let c = conjunto_de(&[a, bb], Id(31), 0.01).unwrap();
+        let mut ids = c.ids.clone();
+        ids.sort_by_key(|i| i.0);
+        assert_eq!((c.tipo, ids), (TipoConjunto::Cadeia, vec![Id(30), Id(31)]));
     }
 }
