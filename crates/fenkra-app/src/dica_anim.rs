@@ -52,14 +52,38 @@ pub enum Cena {
     Padrao,
     Espelho,
     Dobra,
+    /// cota entre dois alvos: os dois elementos acendem e a linha de cota abre entre eles (B185)
+    Cota,
+    /// raio ou diâmetro: a linha sai do centro até a borda
+    CotaRaio,
+    /// ângulo: o arco abre entre as duas arestas
+    CotaAngulo,
     Generica,
+}
+
+/// A família das cotas (PMI 3D e desenho): todas mostram a mesma ideia, escolher os alvos e ver a
+/// medida aparecer, cada uma com o seu traço.
+fn cena_de_cota(n: &str) -> Option<Cena> {
+    let cota = n.starts_with("cota_") || n.starts_with("des_cota") || matches!(n, "pmi_linear" | "pmi_raio" | "pmi_diametro" | "pmi_angulo" | "pmi_ordenada" | "pmi_cadeia" | "pmi_base" | "pmi_arco" | "pmi_feature" | "sk_cota" | "sk_auto_cota");
+    if !cota {
+        return None;
+    }
+    Some(if n.contains("raio") || n.contains("diametro") || n.ends_with("_r") || n.ends_with("_d") || n == "pmi_feature" {
+        Cena::CotaRaio
+    } else if n.contains("ang") || n == "pmi_arco" {
+        Cena::CotaAngulo
+    } else {
+        Cena::Cota
+    })
 }
 
 /// Cena de um comando, pelo nome do ícone.
 pub fn cena_do_icone(icone: &str) -> Cena {
     let n = icone.to_lowercase();
     let tem = |t: &[&str]| t.iter().any(|x| n.contains(x));
-    if tem(&["revol", "giro"]) {
+    if let Some(c) = cena_de_cota(&n) {
+        c
+    } else if tem(&["revol", "giro"]) {
         Cena::Revolucao
     } else if tem(&["extru", "aba_", "nervura", "protrus"]) || n == "aba" {
         Cena::Extrusao
@@ -187,6 +211,49 @@ pub fn quadro(c: Cena, p: f32) -> Vec<Forma> {
                 Poligono(vec![[hx, 0.15], [hx, 0.85]], Guia, false),
             ]
         }
+        Cena::Cota => {
+            // a peça, os dois alvos acesos e a linha de cota abrindo entre eles, com as setas
+            let (a, b, y) = (0.22, 0.78, 0.30);
+            let m = 0.5;
+            let meia = (b - a) / 2. * p;
+            let mut v = vec![
+                Poligono(retangulo(a, 0.50, b, 0.85), Base, false),
+                Poligono(vec![[a, 0.50], [a, y - 0.06]], Guia, false),
+                Poligono(vec![[b, 0.50], [b, y - 0.06]], Guia, false),
+                Circulo([a, 0.50], 0.035, Resultado, true),
+                Circulo([b, 0.50], 0.035, Resultado, true),
+            ];
+            if p > 0.02 {
+                v.push(Poligono(vec![[m - meia, y], [m + meia, y]], Resultado, false));
+                v.push(Poligono(vec![[m - meia, y], [m - meia + 0.05, y - 0.03], [m - meia + 0.05, y + 0.03]], Resultado, true));
+                v.push(Poligono(vec![[m + meia, y], [m + meia - 0.05, y - 0.03], [m + meia - 0.05, y + 0.03]], Resultado, true));
+            }
+            v
+        }
+        Cena::CotaRaio => {
+            // o furo aceso e a linha de cota saindo do centro até a borda
+            let (c, r) = ([0.42, 0.55], 0.25);
+            let ang: f32 = -0.6;
+            let fim = [c[0] + r * ang.cos() * p, c[1] + r * ang.sin() * p];
+            let mut v = vec![Circulo(c, r, Base, false), Circulo(c, 0.02, Guia, true)];
+            if p > 0.02 {
+                v.push(Poligono(vec![c, fim], Resultado, false));
+                v.push(Poligono(vec![fim, [0.86, 0.12 + 0.18 * (1. - p)]], Guia, false));
+            }
+            v
+        }
+        Cena::CotaAngulo => {
+            // duas arestas que se encontram e o arco da cota abrindo de uma até a outra
+            let (o, r) = ([0.18, 0.82], 0.45);
+            let fim: f32 = -0.85;
+            let mut v = vec![Poligono(vec![o, [0.92, 0.82]], Base, false), Poligono(vec![o, [o[0] + 0.62 * fim.cos(), o[1] + 0.62 * fim.sin()]], Base, false)];
+            let n = 12;
+            let arco: Vec<[f32; 2]> = (0..=n).map(|i| fim * p * i as f32 / n as f32).map(|a| [o[0] + r * a.cos(), o[1] + r * a.sin()]).collect();
+            if p > 0.02 {
+                v.push(Poligono(arco, Resultado, false));
+            }
+            v
+        }
         Cena::Generica => {
             // clique no item e o resultado aparecendo
             vec![
@@ -250,7 +317,7 @@ pub fn desenhar(ui: &mut egui::Ui, icone: &str, t: f64, lado: f32) {
 mod testes {
     use super::*;
 
-    const TODAS: [Cena; 10] = [Cena::Extrusao, Cena::Revolucao, Cena::Furo, Cena::Arredondar, Cena::Chanfro, Cena::Casca, Cena::Padrao, Cena::Espelho, Cena::Dobra, Cena::Generica];
+    const TODAS: [Cena; 13] = [Cena::Extrusao, Cena::Revolucao, Cena::Furo, Cena::Arredondar, Cena::Chanfro, Cena::Casca, Cena::Padrao, Cena::Espelho, Cena::Dobra, Cena::Cota, Cena::CotaRaio, Cena::CotaAngulo, Cena::Generica];
 
     fn pontos(f: &Forma) -> Vec<[f32; 2]> {
         match f {
@@ -283,6 +350,22 @@ mod testes {
         assert_eq!(cena_do_icone("arestas_selecionar"), Cena::Arredondar);
         assert_eq!(cena_do_icone("sm_desdobrar"), Cena::Dobra);
         assert_eq!(cena_do_icone("qualquer_coisa"), Cena::Generica);
+    }
+
+    /// B185: toda cota do catálogo (PMI 3D, desenho e sketch) tem a animação de cota na dica, e o
+    /// raio não cai mais na cena do filete por causa do nome.
+    #[test]
+    fn toda_cota_do_catalogo_tem_animacao_de_cota() {
+        for n in ["pmi_linear", "pmi_ordenada", "pmi_cadeia", "pmi_base", "des_cota_h", "des_cota_v", "des_cota_al", "des_cota_inteligente", "cota_horizontal", "sk_cota"] {
+            assert_eq!(cena_do_icone(n), Cena::Cota, "{n}");
+        }
+        for n in ["pmi_raio", "pmi_diametro", "pmi_feature", "des_cota_r", "des_cota_d", "cota_raio", "cota_diametro"] {
+            assert_eq!(cena_do_icone(n), Cena::CotaRaio, "{n}");
+        }
+        for n in ["pmi_angulo", "pmi_arco", "des_cota_ang", "cota_angulo"] {
+            assert_eq!(cena_do_icone(n), Cena::CotaAngulo, "{n}");
+        }
+        assert_eq!(cena_do_icone("filete"), Cena::Arredondar);
     }
 
     #[test]
