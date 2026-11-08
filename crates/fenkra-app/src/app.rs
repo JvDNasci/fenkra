@@ -2960,11 +2960,20 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if !all && edges.is_empty() {
                     self.toast("Clique nas arestas na viewport para pô-las no comando (clique de novo tira)", false);
                 }
-                let keys = if all { vec![] } else { edge_keys.clone() };
+                let mut keys = if all { vec![] } else { edge_keys.clone() };
+                // B95: seleção feita por regra (tangentes, cadeia, concêntricas): grava só a semente e a
+                // regra, que o recompute refaz no modelo de cada momento
+                let mut sel = sel;
+                let mut extra = EdgeExtra::default();
+                if let Some(g) = crate::selecao_regras::regra_da_selecao(&self.picks).and_then(|r| r.gravada()).filter(|_| !all && !edges.is_empty()) {
+                    sel = EdgeSel::Edges(vec![edges[0]]);
+                    keys.truncate(1);
+                    extra.regras = vec![fenkra_core::RegraAresta { semente: 0, regra: g }];
+                }
                 // B289: o comando novo começa com o último valor usado (raio ou distância)
                 let fillet = matches!(c, Cmd::Fillet | Cmd::FilletAll | Cmd::FilletVar);
                 let ultimo = crate::arestas_ui::ultimo_valor_aresta(&self.open.doc, fillet);
-                let op = EdgeOp { value: ultimo, edges: sel, mode, prop: Default::default(), keys, extra: Default::default() };
+                let op = EdgeOp { value: ultimo, edges: sel, mode, prop: Default::default(), keys, extra };
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(if matches!(c, Cmd::Fillet | Cmd::FilletAll | Cmd::FilletVar) { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }))
             }
@@ -3242,6 +3251,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let Some(r) = self.result.as_ref() else { return };
         let novos = crate::selecao_regras::por_regra(r, &p, regra);
         let n = novos.len();
+        crate::selecao_regras::lembrar(&novos, regra);
         self.picks = novos;
         self.toasts.push((format!("{n} {}", tr("elemento(s) na seleção")), 0., false));
     }
@@ -5230,7 +5240,18 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                             Some(fid) => {
                                 drawn_folders.push(fid);
                                 let name = doc.folder(fid).map(|x| x.name.clone()).unwrap_or_default();
-                                let h = crate::tree_ui::grupo(ui, ("pasta", fid.0), Some("pasta"), name.as_str(), true).corpo(ui, |ui| {
+                                // B16: a pasta de comandos também tem olho e menu no próprio item; oculta, os
+                                // sketches de dentro somem e cada um guarda o próprio estado
+                                let oculta = doc.folder(fid).is_some_and(|x| x.hidden);
+                                let h = crate::tree_ui::no(ui, ("pasta", fid.0), true, |ui| {
+                                    if eye(ui, oculta) {
+                                        actions.push(TreeAction::FolderShown(fid, oculta));
+                                    }
+                                    crate::tree_ui::icone(ui, "pasta");
+                                    let t = if oculta || !c.visible { RichText::new(name.as_str()).weak() } else { RichText::new(name.as_str()) };
+                                    ui.selectable_label(self.sel == Sel::Folder(fid), t)
+                                });
+                                let h = h.corpo(ui, |ui| {
                                     for (j, g) in feats.iter().filter(|(_, g)| g.folder == Some(fid)) {
                                         self.feature_row(ui, &doc, *j, g, &mut new_sel, &mut actions);
                                     }
@@ -5242,6 +5263,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                                     ui.label(RichText::new(&name).strong());
                                     if ui.button(tr("✎ Renomear   F2")).clicked() {
                                         actions.push(TreeAction::StartRename(fid));
+                                        ui.close();
+                                    }
+                                    if ui.button(if oculta { tr("👁 Mostrar o conteúdo") } else { tr("👁 Ocultar o conteúdo") }).clicked() {
+                                        actions.push(TreeAction::FolderShown(fid, oculta));
                                         ui.close();
                                     }
                                     ui.separator();
@@ -9067,6 +9092,7 @@ impl eframe::App for App {
         crate::sup_inclinacao::painel_inclinacao(self, ctx, area);
         crate::dfm_ui::painel(self, ctx, area);
         crate::verificar_ui::painel(self, ctx, area);
+        crate::comparar_ui::painel(self, ctx, area);
         crate::forma_progresso::desenhar(ctx, area, self.gen_done < self.gen_sent);
         self.painel_importar(ctx, area);
         self.painel_features(ctx, area);
@@ -9320,6 +9346,7 @@ impl eframe::App for App {
                 };
                 let mut s = crate::medir_quadros::fase("cena", || scene::build(scene_doc, r, &opts));
                 crate::dfm_ui::decorar(&self.settings, r, &ctx.global_style().visuals, &mut s);
+                crate::comparar_ui::decorar(&ctx.global_style().visuals, &mut s);
                 if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {
                     crate::previa::reter_ultima(&mut sess.ultima_valida, &mut s, r.status.get(&sess.id));
                 }

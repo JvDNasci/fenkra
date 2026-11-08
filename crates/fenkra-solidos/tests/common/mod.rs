@@ -4,6 +4,8 @@
 //! semente fixa. Só usa a API pública; nada aqui toca `src/`.
 #![allow(dead_code)]
 
+pub mod corpus;
+
 use fenkra_core::sketch::Curve;
 use fenkra_core::*;
 use fenkra_solidos::{final_shape, recompute, BodyResult, RecomputeResult, Status};

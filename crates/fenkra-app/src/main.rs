@@ -2,6 +2,7 @@
 //! Fenkra — CAD paramétrico open source.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 // a tabela de traduções é uma cadeia longa de `chain`; o tipo dela passa da profundidade padrão
+// a tabela de traduções encadeia muitas listas (`i18n.rs`): o tipo do iterador passa do limite padrão
 #![recursion_limit = "256"]
 
 mod app;
@@ -110,6 +111,7 @@ mod textos_interface3;
 mod textos_interface4;
 mod textos_verificar;
 mod verificar_ui;
+mod comparar_ui;
 mod forma_progresso;
 mod ajuda_cmd;
 mod roda;

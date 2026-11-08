@@ -82,6 +82,53 @@ impl App {
                 self.sent_doc = None;
                 self.sel = Sel::Ref(ids[1]);
             }
+            // B16: `ocultar_pasta` põe os sketches do primeiro corpo numa pasta de comandos oculta;
+            // `ocultar_corpo` oculta o primeiro corpo (os sketches dele somem junto, cada um com o seu estado)
+            "ocultar_pasta" | "ocultar_corpo" => {
+                let d = &mut self.open.doc;
+                if let Some(c) = d.collectors.first().map(|c| c.id) {
+                    if nome == "ocultar_corpo" {
+                        d.collectors[0].visible = false;
+                    } else {
+                        let fo = d.add_folder("Esboços");
+                        let sks: Vec<Id> = d.features.iter().filter(|f| f.target == c && matches!(f.kind, FeatureKind::Sketch(_)) && !d.is_free(f)).map(|f| f.id).collect();
+                        for s in sks {
+                            if let Some(f) = d.feature_mut(s) {
+                                f.folder = Some(fo);
+                                f.hidden = false;
+                            }
+                        }
+                        if let Some(f) = d.folders.iter_mut().find(|f| f.id == fo) {
+                            f.hidden = true;
+                        }
+                    }
+                    self.scene_dirty = true;
+                }
+            }
+            // B95: caixa com as arestas verticais arredondadas e um filete com a regra "tangentes"
+            // gravada a partir de uma aresta de cima; o painel do filete aberto mostra a regra
+            "filete_regra" => {
+                let mut d = Document::new("Regra gravada");
+                let mut sk = fenkra_core::SketchData::default();
+                let mut al = || d.alloc();
+                sk.add_rect(&mut al, [-20., -15.], [20., 15.], false);
+                let s = d.add_feature(FeatureKind::Sketch(fenkra_core::Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: sk }));
+                d.add_feature(FeatureKind::Extrude(fenkra_core::Extrude { sketch: s, op: fenkra_core::BoolOp::Add, extent: fenkra_core::Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+                let canto = |m: Vec<[f64; 3]>, v: &str, regras: Vec<fenkra_core::RegraAresta>| {
+                    FeatureKind::Fillet(fenkra_core::EdgeOp { value: v.into(), edges: EdgeSel::Edges(m), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: EdgeExtra { regras, ..Default::default() } })
+                };
+                d.add_feature(canto(vec![[20., 15., 10.], [-20., 15., 10.], [-20., -15., 10.], [20., -15., 10.]], "4", vec![]));
+                let f = d.add_feature(canto(vec![[0., -15., 20.]], "1.5", vec![fenkra_core::RegraAresta { semente: 0, regra: fenkra_core::RegraSelecao::Tangentes }]));
+                self.open.doc = d;
+                self.sent_doc = None;
+                self.start_session(f, false, None);
+            }
+            // B24: ponto definido no plano YZ, selecionado: as setas do referencial dele aparecem no 3D
+            "ponto_referencial" => {
+                let p = self.open.doc.add_geometry(RefKind::PointCoords { x: "20".into(), y: "20".into(), z: "30".into(), frame: Some(PlaneRef::Origin(OriginPlane::YZ)) });
+                self.sel = Sel::Ref(p);
+                self.scene_dirty = true;
+            }
             "daltonico" => self.settings.acessibilidade.paleta_segura = true,
             // B378: o gerenciador único de salvamento e exportação
             "gerenciador" => self.abrir_gerenciador(),

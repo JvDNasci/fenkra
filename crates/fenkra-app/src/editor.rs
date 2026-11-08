@@ -1568,6 +1568,18 @@ fn feature_ui(
                 Some(1) => o.edges = EdgeSel::AllOfBody,
                 _ => {}
             }
+            // B95: regra de seleção gravada, refeita a cada recálculo
+            if let (Some(r), EdgeSel::Edges(m)) = (o.extra.regras.first().copied(), &o.edges) {
+                let mut soltar = false;
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(format!("{}: {} {} {}", tr("Regra gravada"), tr(crate::selecao_regras::nome_gravada(r.regra)), tr("a partir da aresta"), m.get(r.semente).map(|p| crate::app::p3(p, 1)).unwrap_or_default())).small())
+                        .on_hover_text(tr("A cada recálculo a regra é refeita a partir da aresta semente: arestas que a mudança do modelo criar ou mover entram sozinhas."));
+                    soltar = ui.small_button(tr("Soltar a regra")).on_hover_text(tr("Deixa só as arestas da lista, sem refazer a regra.")).clicked();
+                });
+                if soltar {
+                    o.extra.regras.clear();
+                }
+            }
             if let EdgeSel::Edges(m) = &mut o.edges {
                 // sacola: a lista das arestas (cada clique na aresta soma/tira)
                 crate::geo_ui::bag(
