@@ -83,6 +83,14 @@ impl App {
                 self.sel = Sel::Ref(ids[1]);
             }
             "daltonico" => self.settings.acessibilidade.paleta_segura = true,
+            // B408: o painel da peça aberto pelo clique na raiz da árvore; `FENKRA_DEMO_MATERIAL=<nome>`
+            // escolhe o material (um nome fora da tabela mostra o aviso)
+            "peca" => {
+                if let Ok(m) = std::env::var("FENKRA_DEMO_MATERIAL") {
+                    self.open.doc.props.material = m;
+                }
+                self.sel = Sel::Part;
+            }
             "diagnostico" => self.demo_diagnostico(),
             // B361: a face de cima do primeiro corpo já escolhida (contorno externo, furos de fora)
             "face" => {

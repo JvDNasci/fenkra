@@ -25,6 +25,7 @@ mod gravar;
 mod gerenciador;
 mod roda_app;
 mod demo_janelas;
+mod painel_peca;
 mod demo_pmi;
 mod demo_estrutural;
 mod estado_doc;
@@ -3986,6 +3987,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             self.open.doc.name_of(s.id)
         } else if let Some(p) = self.asm.as_ref().and_then(|s| s.cmd.as_ref()).filter(|_| self.in_asm()) {
             tr(p.c.tipo.label()).to_string()
+        } else if self.sel == Sel::Part {
+            tr("Propriedades da peça").to_string()
         } else {
             tr("Edição").to_string()
         };
@@ -5005,6 +5008,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             new_sel = Some(Sel::Part);
         }
         r.context_menu(|ui| {
+            // B408: material, PN e massa da peça
+            if ui.button(tr("📋 Propriedades da peça (material, massa)…")).clicked() {
+                new_sel = Some(Sel::Part);
+                ui.close();
+            }
             if ui.button(tr("🎨 Propriedades gráficas…")).clicked() {
                 actions.push(TreeAction::Props(AppTarget::Part));
                 ui.close();
@@ -9031,7 +9039,7 @@ impl eframe::App for App {
         } else if self.in_asm() {
             self.asm.as_ref().is_some_and(|s| s.editing())
         } else {
-            self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some() || matches!(self.sel, Sel::Params) || (matches!(self.sel, Sel::Pmi(_)) && !crate::pmi_minibar::open())
+            self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some() || self.sel.abre_painel(crate::pmi_minibar::open())
         };
         if active {
             self.painel_comando(ctx, area);
