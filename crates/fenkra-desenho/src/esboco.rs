@@ -89,41 +89,41 @@ impl EsbocoDesenho {
 /// Traço de uma curva no plano do esboço: polilinha e tipo.
 pub fn tracos(e: &EsbocoDesenho) -> Vec<(Vec<V2>, TipoLinha)> {
     let s = &e.dados;
-    let mut out = vec![];
-    for c in s.curves.iter().filter(|c| !c.construction) {
-        let pts: Vec<V2> = match &c.geom {
-            Curve::Line { a, b } => vec![s.pos(*a), s.pos(*b)],
-            Curve::Circle { c: cc, r } => arco(s.pos(*cc), *r, 0., std::f64::consts::TAU),
-            Curve::Arc { c: cc, s: a, e: b } => {
-                let (o, p, q) = (s.pos(*cc), s.pos(*a), s.pos(*b));
-                let r = ((p[0] - o[0]).powi(2) + (p[1] - o[1]).powi(2)).sqrt();
-                let t0 = (p[1] - o[1]).atan2(p[0] - o[0]);
-                let mut t1 = (q[1] - o[1]).atan2(q[0] - o[0]);
-                if t1 <= t0 {
-                    t1 += std::f64::consts::TAU;
-                }
-                arco(o, r, t0, t1)
+    s.curves.iter().filter(|c| !c.construction && !matches!(c.geom, Curve::Point { .. })).map(|c| (polilinha(s, c), e.tipo(c.id))).collect()
+}
+
+/// Polilinha de uma curva no plano do esboço (o ponto isolado vira um ponto só).
+pub fn polilinha(s: &SketchData, c: &fenkra_core::sketch::SkCurve) -> Vec<V2> {
+    match &c.geom {
+        Curve::Line { a, b } => vec![s.pos(*a), s.pos(*b)],
+        Curve::Circle { c: cc, r } => arco(s.pos(*cc), *r, 0., std::f64::consts::TAU),
+        Curve::Arc { c: cc, s: a, e: b } => {
+            let (o, p, q) = (s.pos(*cc), s.pos(*a), s.pos(*b));
+            let r = ((p[0] - o[0]).powi(2) + (p[1] - o[1]).powi(2)).sqrt();
+            let t0 = (p[1] - o[1]).atan2(p[0] - o[0]);
+            let mut t1 = (q[1] - o[1]).atan2(q[0] - o[0]);
+            if t1 <= t0 {
+                t1 += std::f64::consts::TAU;
             }
-            Curve::Spline { .. } => s.spline_uv(c.id),
-            Curve::Ellipse { c: cc, major, minor, t0, t1, .. } => {
-                let o = s.pos(*cc);
-                let a = (major[0].powi(2) + major[1].powi(2)).sqrt().max(1e-12);
-                let u = [major[0] / a, major[1] / a];
-                let v = [-u[1], u[0]];
-                let n = 64;
-                (0..=n)
-                    .map(|i| {
-                        let t = t0 + (t1 - t0) * i as f64 / n as f64;
-                        let (sn, cs) = t.sin_cos();
-                        [o[0] + u[0] * a * cs + v[0] * minor * sn, o[1] + u[1] * a * cs + v[1] * minor * sn]
-                    })
-                    .collect()
-            }
-            Curve::Point { .. } => continue,
-        };
-        out.push((pts, e.tipo(c.id)));
+            arco(o, r, t0, t1)
+        }
+        Curve::Spline { .. } => s.spline_uv(c.id),
+        Curve::Ellipse { c: cc, major, minor, t0, t1, .. } => {
+            let o = s.pos(*cc);
+            let a = (major[0].powi(2) + major[1].powi(2)).sqrt().max(1e-12);
+            let u = [major[0] / a, major[1] / a];
+            let v = [-u[1], u[0]];
+            let n = 64;
+            (0..=n)
+                .map(|i| {
+                    let t = t0 + (t1 - t0) * i as f64 / n as f64;
+                    let (sn, cs) = t.sin_cos();
+                    [o[0] + u[0] * a * cs + v[0] * minor * sn, o[1] + u[1] * a * cs + v[1] * minor * sn]
+                })
+                .collect()
+        }
+        Curve::Point { p } => vec![s.pos(*p)],
     }
-    out
 }
 
 fn arco(c: V2, r: f64, t0: f64, t1: f64) -> Vec<V2> {
@@ -143,6 +143,8 @@ pub struct CotaEsboco {
     pub pts: [V2; 2],
     pub valor: f64,
     pub referencia: bool,
+    /// sinal do afastamento (+1 ou -1): a cota sai para fora do esboço
+    pub lado: f64,
 }
 
 /// Cotas do sketch que viram cotas da folha. O valor é o medido (a geometria já resolvida).
@@ -158,6 +160,8 @@ pub fn cotas(e: &EsbocoDesenho) -> Vec<CotaEsboco> {
             _ => None,
         })
     };
+    let n = s.points.len().max(1) as f64;
+    let centro = s.points.iter().fold([0., 0.], |a, p| [a[0] + p.x / n, a[1] + p.y / n]);
     let mut out = vec![];
     for k in &s.constraints {
         let c = match &k.kind {
@@ -169,14 +173,26 @@ pub fn cotas(e: &EsbocoDesenho) -> Vec<CotaEsboco> {
             Kind::Diameter(c, _) => circulo(*c).map(|(o, r)| (DimKind::Diameter, [o, [o[0] + r * 0.7071, o[1] + r * 0.7071]])),
             _ => None,
         };
-        let Some((tipo, pts)) = c else { continue };
+        let Some((tipo, mut pts)) = c else { continue };
+        // a cota fica do lado de fora do esboço. Na alinhada o afastamento vai para a esquerda de
+        // pts[0]→pts[1], então a ordem se inverte quando essa esquerda aponta para o centro; a
+        // horizontal e a vertical têm normal fixa (para cima, para a esquerda) e o lado vai no sinal
+        let m = [(pts[0][0] + pts[1][0]) / 2., (pts[0][1] + pts[1][1]) / 2.];
+        let rumo = |n: V2| n[0] * (centro[0] - m[0]) + n[1] * (centro[1] - m[1]);
+        let mut lado = 1.;
+        match tipo {
+            DimKind::Horizontal if rumo([0., 1.]) > 1e-9 => lado = -1.,
+            DimKind::Vertical if rumo([-1., 0.]) > 1e-9 => lado = -1.,
+            DimKind::Aligned if rumo([pts[0][1] - pts[1][1], pts[1][0] - pts[0][0]]) > 1e-9 => pts.swap(0, 1),
+            _ => {}
+        }
         let valor = match tipo {
             DimKind::Horizontal => (pts[1][0] - pts[0][0]).abs(),
             DimKind::Vertical => (pts[1][1] - pts[0][1]).abs(),
             DimKind::Diameter => dist(pts[0], pts[1]) * 2.,
             _ => dist(pts[0], pts[1]),
         };
-        out.push(CotaEsboco { tipo, pts, valor, referencia: k.reference });
+        out.push(CotaEsboco { tipo, pts, valor, referencia: k.reference, lado });
     }
     out
 }

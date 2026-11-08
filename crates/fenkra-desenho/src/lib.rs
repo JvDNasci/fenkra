@@ -13,6 +13,7 @@ pub mod conjunto;
 pub mod corte;
 pub mod cotas;
 pub mod esboco;
+pub mod esboco_editar;
 pub mod export;
 pub mod importar;
 pub mod layout;

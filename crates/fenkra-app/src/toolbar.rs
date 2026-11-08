@@ -367,6 +367,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("des_rugosidade", "Rugosidade", "Símbolo de rugosidade", "√ com o valor (ex.: Ra 1,6) e chamada para a superfície.", Cmd(C::Dwg(32)))),
             One(it("des_solda", "Solda", "Símbolo de solda", "Linha de referência com o filete e a medida (ex.: a4).", Cmd(C::Dwg(33)))),
             One(it("des_centro", "Centro", "Marca de centro", "Cruz com linhas de centro traço-ponto.", Cmd(C::Dwg(34)))),
+            One(it("des_esboco", "Esboço", "Esboço na vista ou na folha", "Clique numa vista para prender o esboço a ela (anda e escala com a vista; cotas na medida do modelo) ou fora das vistas para deixá-lo solto na folha. Desenha com as ferramentas do sketch: linhas, retângulos, círculos, arcos, cotas e restrições, com tipo de linha por curva. Entra na exportação.", Cmd(C::Dwg(38)))),
             One(it("des_gdt", "GD&T", "Tolerância geométrica", "Quadro de controle (ISO 1101) com chamada presa à aresta da vista: acompanha a peça e a vista.", Cmd(C::Dwg(36)))),
             One(it("des_datum", "Referência", "Símbolo de referência (datum)", "Triângulo na aresta e a letra no quadro; preso à vista.", Cmd(C::Dwg(37)))),
         ],

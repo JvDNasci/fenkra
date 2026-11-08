@@ -485,7 +485,7 @@ fn esboco_into(o: &mut Out, d: &Drawing, e: &crate::esboco::EsbocoDesenho, f: &d
             view: e.id,
             kind: c.tipo,
             anchors: vec![],
-            offset: 8.,
+            offset: 8. * c.lado,
             text: String::new(),
             tol: String::new(),
             style: Default::default(),
