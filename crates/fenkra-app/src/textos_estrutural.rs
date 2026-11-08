@@ -134,4 +134,13 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("A peça ainda não foi salva: a montagem é gravada ao lado do arquivo dela.", "The part has not been saved yet: the assembly is written next to its file."),
     ("A peça tem alterações não salvas: a montagem usa o arquivo gravado.", "The part has unsaved changes: the assembly uses the saved file."),
     ("Grava as peças e a montagem e abre o resultado.", "Writes the parts and the assembly and opens the result."),
+    // B134: estrutura em IFC4
+    ("Exportar IFC…", "Export IFC…"),
+    ("Estrutura de aço em IFC4: membros, placas e soldas com o corpo já cortado, o perfil paramétrico, o material e o comprimento de corte.", "Steel structure as IFC4: members, plates and welds with the cut body, the parametric profile, the material and the cut length."),
+    ("IFC exportado", "IFC exported"),
+    ("membros", "members"),
+    ("placas", "plates"),
+    ("soldas", "welds"),
+    ("a peça não tem membros, placas nem soldas estruturais", "the part has no structural members, plates or welds"),
+    ("nenhum sólido estrutural pôde ser convertido em malha", "no structural solid could be converted to a mesh"),
 ];
