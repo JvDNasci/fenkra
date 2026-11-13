@@ -111,6 +111,10 @@ impl Registro {
         let saida = OpcoesExportar { unidade: UnidadeSaida::Polegada, esquema: crate::EsquemaSaida::Ap242, pmi_grafico: true, ..Default::default() };
         // quem não tem árvore recebe a mesma prova: montagem é uma das coisas medidas
         let gravou = self.gravar(&modelo_de_prova()?, &caminho, &saida).is_ok() && caminho.is_file();
+        // formato que só se lê (FBX): a prova vem de um arquivo de amostra feito pelo próprio Fenkra
+        if !gravou && formato == Formato::Fbx {
+            crate::malha::amostra_fbx(&modelo_de_prova()?, &caminho, &saida)?;
+        }
         let lido = self.provedor(formato)?.ler(formato, &caminho, &OpcoesImportar::default());
         Ok(match lido {
             Ok(m) => Capacidades { ler: true, gravar: gravou, ..medir(&m)? },

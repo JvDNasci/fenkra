@@ -34,14 +34,16 @@ pub enum Formato {
     Ifc,
     /// desenho 2D: vira sketches, como o DXF
     Svg,
+    /// FBX binário ou texto; só leitura (formato fechado: o Fenkra não grava)
+    Fbx,
 }
 
 impl Formato {
     /// Formatos de malha e visualização, que passam pela cena de [`crate::malha`].
-    pub const MALHA: [Formato; 13] = [Formato::Stl, Formato::Obj, Formato::Ply, Formato::Tmf, Formato::Amf, Formato::Gltf, Formato::Glb, Formato::Vrml, Formato::X3d, Formato::Collada, Formato::Usda, Formato::Usdz, Formato::Ifc];
+    pub const MALHA: [Formato; 14] = [Formato::Stl, Formato::Obj, Formato::Ply, Formato::Tmf, Formato::Amf, Formato::Gltf, Formato::Glb, Formato::Vrml, Formato::X3d, Formato::Collada, Formato::Usda, Formato::Usdz, Formato::Ifc, Formato::Fbx];
 
     /// Todos os formatos que o conversor conhece, na ordem da tela.
-    pub const TODOS: [Formato; 19] = [
+    pub const TODOS: [Formato; 20] = [
         Formato::Step,
         Formato::Iges,
         Formato::Brep,
@@ -61,6 +63,7 @@ impl Formato {
         Formato::Collada,
         Formato::Usda,
         Formato::Usdz,
+        Formato::Fbx,
     ];
 
     pub fn e_malha(self) -> bool {
@@ -93,6 +96,7 @@ impl Formato {
             Formato::Usdz => "USDZ",
             Formato::Ifc => "IFC",
             Formato::Svg => "SVG",
+            Formato::Fbx => "FBX",
         }
     }
 
@@ -117,6 +121,7 @@ impl Formato {
             Formato::Usdz => &["usdz"],
             Formato::Ifc => &["ifc"],
             Formato::Svg => &["svg"],
+            Formato::Fbx => &["fbx"],
         }
     }
 
@@ -180,6 +185,9 @@ fn por_conteudo_de_malha(conteudo: &[u8]) -> Option<Formato> {
         } else {
             None
         };
+    }
+    if crate::malha::fbx_binario(conteudo) || crate::malha::fbx_texto(conteudo) {
+        return Some(Formato::Fbx);
     }
     if conteudo.starts_with(b"glTF") {
         return Some(Formato::Glb);

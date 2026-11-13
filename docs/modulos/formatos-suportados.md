@@ -24,3 +24,4 @@
 | Collada | dae | sim | sim | – | sim | sim | – | sim | – | – | sim | Fenkra |
 | USD | usda, usd | – | sim | – | sim | sim | – | sim | – | – | sim | Fenkra |
 | USDZ | usdz | – | sim | – | sim | sim | – | sim | – | – | sim | Fenkra |
+| FBX | fbx | sim | – | – | sim | sim | – | sim | – | – | sim | Fenkra |
