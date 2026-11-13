@@ -563,3 +563,16 @@ Quadro geral:
 
 STATUS: DONE_WITH_CONCERNS
 SUMMARY: Não há violação evidente de direitos por estudar outros CADs, mas faltam LICENSE/NOTICE/THIRD-PARTY e a oferta de código do OCCT no zip, o logo da fênix vem de imagem de IA, o nome "Fenkra" não teve busca de marca conclusiva, e EULAs, termos de catálogos e patentes não puderam ser verificados.
+
+## Decisões do mantenedor (13/11/2026)
+
+- **Titular:** João Vitor Dias Nascimento, pessoa física. A empresa, quando aberta, recebe os direitos por cessão
+  ([ADR 0003](../arquitetura/adr/0003-licenca.md)).
+- **Contribuições:** [CLA](../../CLA.md) em lugar do DCO, para permitir uma futura solução integrada comercial.
+- **Logo da fênix:** fica como está. Foi gerado por IA, como imagem de referência, e vetorizado depois, sem selo.
+  Registramos que não temos proteção autoral forte sobre ele, e isso foi aceito. Um novo desenho a partir do modelo 3D
+  usado nos vídeos é possível, mas não compensa agora, porque obrigaria a trocar todos os ícones e o pacote.
+- **Nome:** a busca preliminar está em [marca-fenkra.md](marca-fenkra.md); sem advogado por enquanto.
+- **Patentes:** sem busca de liberdade de operação enquanto o Fenkra for livre e gratuito. Rever antes de vender.
+- **APIs dos CADs de origem:** integração por script liberada nas condições da
+  [ADR 0036](../arquitetura/adr/0036-termos-das-apis-e-exportadores-por-script.md), com o STEP como caminho ideal.
