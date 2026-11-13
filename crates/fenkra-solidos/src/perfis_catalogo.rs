@@ -218,8 +218,82 @@ pub fn linhas() -> Vec<Linha> {
         s(120., 8., 35.2, 27.6),
     ]);
     v.extend(tubos_en());
+    v.extend(perfis_s9());
     v
 }
+
+const HEM_STAD: (&str, &str) = ("EN 10365, tabela de perfis HE da Stad (HE M)", "2017");
+const HEM_2: &str = "Tabela HEM da Wermac (h, b, tw, tf; a massa é a da EN 10034, cerca de 2 % maior)";
+const UPE_STAD: (&str, &str) = ("EN 10365, tabela de perfis UPE da Stad", "2017");
+const UPE_2: &str = "Catálogo de perfis UPE da Kocaer (EN 10365)";
+const S_AMES: (&str, &str) = ("AISC, tabela de perfis S (American Standard) do AMESweb", "tabela vigente, colhida em 2026-11-13");
+const S_2: &str = "Tabela de vigas I padrão (perfis S) da Sugar Steel";
+
+/// B27 (leva s9): HEM e UPE (EN 10365) e S (AISC), cada linha conferida em duas tabelas gratuitas.
+fn perfis_s9() -> Vec<Linha> {
+    use SectionKind::*;
+    let duas = |mut l: Linha, f2: &'static str| {
+        l.nivel = Nivel::DuasFontes;
+        l.fonte2 = Some(f2);
+        l
+    };
+    let mut v = vec![];
+    for (n, h, b, tw, tf, a, m) in HEM_TAB {
+        v.push(duas(mm("EN 10365", "HEM", PerfilI, &format!("HEM {n}"), &[h, b, tw, tf], a, m, HEM_STAD), HEM_2));
+    }
+    for (h, b, tw, tf, a, m) in UPE_TAB {
+        v.push(duas(mm("EN 10365", "UPE", PerfilU, &format!("UPE {h}"), &[h, b, tw, tf], a, m, UPE_STAD), UPE_2));
+    }
+    for (des, d, bf, tw, tf, a, p) in S_TAB {
+        v.push(duas(pol("AISC", "Perfil S (AISC)", PerfilI, des, &[d, bf, tw, tf], a, p, S_AMES), S_2));
+    }
+    v
+}
+
+/// HEM: número, h, b, tw, tf (mm), A (cm²), massa (kg/m).
+const HEM_TAB: [(f64, f64, f64, f64, f64, f64, f64); 11] = [
+    (100.0, 120.0, 106.0, 12.0, 20.0, 53.24, 41.8),
+    (120.0, 140.0, 126.0, 12.5, 21.0, 66.41, 52.1),
+    (140.0, 160.0, 146.0, 13.0, 22.0, 80.56, 63.2),
+    (160.0, 180.0, 166.0, 14.0, 23.0, 97.05, 76.2),
+    (180.0, 200.0, 186.0, 14.5, 24.0, 113.25, 88.9),
+    (200.0, 220.0, 206.0, 15.0, 25.0, 131.28, 103.1),
+    (220.0, 240.0, 226.0, 15.5, 26.0, 149.44, 117.3),
+    (240.0, 270.0, 248.0, 18.0, 32.0, 199.59, 156.7),
+    (260.0, 290.0, 268.0, 18.0, 32.5, 219.65, 172.4),
+    (280.0, 310.0, 288.0, 18.5, 33.0, 240.17, 188.5),
+    (300.0, 340.0, 310.0, 21.0, 39.0, 303.08, 237.9),
+];
+
+/// UPE: h, b, tw, tf (mm), A (cm²), massa (kg/m).
+const UPE_TAB: [(f64, f64, f64, f64, f64, f64); 10] = [
+    (80.0, 50.0, 4.0, 7.0, 10.1, 7.9),
+    (100.0, 55.0, 4.5, 7.5, 12.5, 9.8),
+    (120.0, 60.0, 5.0, 8.0, 15.4, 12.1),
+    (140.0, 65.0, 5.0, 9.0, 18.4, 14.4),
+    (160.0, 70.0, 5.5, 9.5, 21.7, 17.0),
+    (180.0, 75.0, 5.5, 10.5, 25.1, 19.7),
+    (200.0, 80.0, 6.0, 11.0, 29.0, 22.8),
+    (220.0, 85.0, 6.5, 12.0, 33.9, 26.6),
+    (240.0, 90.0, 7.0, 12.5, 38.5, 30.2),
+    (270.0, 95.0, 7.5, 13.5, 44.8, 35.2),
+];
+
+/// S: designação, d, bf, tw, tf (pol), A (pol²), massa (lb/ft); tf é a média da aba inclinada.
+const S_TAB: [(&str, f64, f64, f64, f64, f64, f64); 12] = [
+    ("S3x5.7", 3.0, 2.33, 0.17, 0.26, 1.67, 5.7),
+    ("S4x7.7", 4.0, 2.663, 0.193, 0.293, 2.26, 7.7),
+    ("S5x10", 5.0, 3.004, 0.214, 0.326, 2.94, 10.0),
+    ("S6x12.5", 6.0, 3.332, 0.232, 0.359, 3.67, 12.5),
+    ("S8x18.4", 8.0, 4.001, 0.271, 0.426, 5.41, 18.4),
+    ("S10x25.4", 10.0, 4.661, 0.311, 0.491, 7.46, 25.4),
+    ("S12x31.8", 12.0, 5.0, 0.35, 0.544, 9.35, 31.8),
+    ("S12x50", 12.0, 5.477, 0.687, 0.659, 14.7, 50.0),
+    ("S15x42.9", 15.0, 5.501, 0.411, 0.622, 12.6, 42.9),
+    ("S18x54.7", 18.0, 6.001, 0.461, 0.691, 16.1, 54.7),
+    ("S20x66", 20.0, 6.255, 0.505, 0.795, 19.4, 66.0),
+    ("S24x80", 24.0, 7.0, 0.5, 0.87, 23.5, 80.0),
+];
 
 /// Tubos redondos, quadrados e retangulares das tabelas colhidas (dados em `perfis_catalogo_tubos`).
 fn tubos_en() -> Vec<Linha> {
@@ -360,6 +434,23 @@ mod tests {
         assert!((l.dims[0] - 101.6).abs() < 1e-9 && (l.dims[1] - 5.92).abs() < 0.01, "{:?}", l.dims);
         assert!((l.massa_kg_m - 18.13).abs() < 0.02, "{}", l.massa_kg_m);
         assert!((l.area_cm2 - 21.74).abs() < 0.05, "{}", l.area_cm2);
+    }
+
+    /// B27 (leva s9): HEM, UPE e S com as duas tabelas nomeadas em cada linha.
+    #[test]
+    fn hem_upe_e_s_com_duas_fontes() {
+        for (fam, n) in [("HEM", 11), ("UPE", 10), ("Perfil S (AISC)", 12)] {
+            let ls: Vec<Linha> = linhas().into_iter().filter(|l| l.familia == fam).collect();
+            assert_eq!(ls.len(), n, "{fam}");
+            assert!(ls.iter().all(|l| l.nivel == Nivel::DuasFontes && l.fonte2.is_some()), "{fam}");
+        }
+        let l = buscar("HEM", "HEM 200").unwrap();
+        assert_eq!((l.dims.clone(), l.area_cm2, l.massa_kg_m), (vec![220., 206., 15., 25.], 131.28, 103.1));
+        let l = buscar("UPE", "UPE 160").unwrap();
+        assert_eq!((l.dims.clone(), l.massa_kg_m), (vec![160., 70., 5.5, 9.5], 17.0));
+        // S8x18.4: 8 pol de altura, 18,4 lb/ft = 27,38 kg/m
+        let l = buscar("Perfil S (AISC)", "S8x18.4").unwrap();
+        assert!((l.dims[0] - 203.2).abs() < 1e-9 && (l.massa_kg_m - 27.38).abs() < 0.01, "{:?} {}", l.dims, l.massa_kg_m);
     }
 
     #[test]
