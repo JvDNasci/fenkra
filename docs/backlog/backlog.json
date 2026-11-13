@@ -725,7 +725,7 @@
    "tokens_k": 200,
    "teste": "Auto",
    "area": "Biblioteca de normas",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -1230,7 +1230,7 @@
    "tokens_k": 400,
    "teste": "Auto",
    "area": "Biblioteca de normas",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.4
   },
   {
