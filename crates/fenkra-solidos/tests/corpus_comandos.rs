@@ -1109,11 +1109,21 @@ fn invalido_nervura_de_chapa_mais_larga_que_a_curva_da_erro_nomeado() {
     let pts: Vec<Id> = GUIA_LONGA.iter().map(|q| data.add_point(&mut al, q[0], q[1])).collect();
     data.add_curve(&mut al, Curve::Spline { pts }, false);
     let curva = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(topo), data }));
-    let id = d.add_feature(FeatureKind::SmStamp(SmStamp { sketch: curva, depth: s("2"), flip: false, kind: 1, width: s("6"), punch: None }));
+    // a curva mais fechada da guia tem raio 5,97 mm (círculo por três amostras vizinhas). Com 12 de
+    // largura a nervura passa de 8 mm para cada lado no plano da chapa: dobra de verdade, erro nomeado.
+    let id = d.add_feature(FeatureKind::SmStamp(SmStamp { sketch: curva, depth: s("2"), flip: false, kind: 1, width: s("12"), punch: None }));
     let r = recompute(&d);
     let m = erro(&r, id);
     assert!(m.contains("dobraria"), "esperava o erro de dobra, veio: {m}");
     assert!((volume_total(&r) - 320. * 60. * 2.).abs() < 1e-6, "a chapa devia ficar intacta: {}", volume_total(&r));
+    // B337: com 6 de largura (5 mm para cada lado, menos que o raio) não há dobra; antes a aproximação de
+    // grau alto ondulava e inventava uma curva de raio menor, e a nervura era recusada sem motivo
+    if let Some(FeatureKind::SmStamp(st)) = d.feature_mut(id).map(|f| &mut f.kind) {
+        st.width = s("6");
+    }
+    let r = recompute(&d);
+    ok(&r, id);
+    assert!(volume_total(&r) > 320. * 60. * 2. + 100., "a nervura acrescenta material: {}", volume_total(&r));
 }
 
 #[test]

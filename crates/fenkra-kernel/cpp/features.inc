@@ -342,7 +342,24 @@ std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> s
         if (!c.IsNull()) {
             // Curva mais fechada que o braço do perfil: a parede passa por cima dela mesma. O kernel
             // aprova esse sólido, e nenhum triedro corrige, porque o defeito está na geometria pedida.
-            const double raio = raio_minimo(c), alcance = alcance_do_perfil(face.s, c->StartPoint(), c->Poles());
+            double raio = raio_minimo(c);
+            const double alcance = alcance_do_perfil(face.s, c->StartPoint(), c->Poles());
+            // B337: a aproximação de grau alto pode ondular entre amostras densas e inventar uma curva
+            // mais fechada que a da guia; a cúbica pelos mesmos pontos (mesma tolerância) não ondula.
+            // Só troca quando a curva de sempre seria recusada, para a guia que já varria não mudar.
+            if (raio < alcance) {
+                const size_t n = spine.size() / 3;
+                TColgp_Array1OfPnt arr(1, int(n));
+                for (size_t i = 0; i < n; ++i) arr.SetValue(int(i) + 1, P3(spine, i));
+                GeomAPI_PointsToBSpline cub(arr, 3, 3, GeomAbs_C2, 1e-4);
+                if (cub.IsDone()) {
+                    const double r3 = raio_minimo(cub.Curve());
+                    if (r3 > raio) {
+                        raio = r3;
+                        c = cub.Curve();
+                    }
+                }
+            }
             if (raio < alcance) {
                 char m[200];
                 std::snprintf(m, sizeof m, "varredura: a guia faz uma curva de raio %.3g mm, menor que o alcance do perfil (%.3g mm), e o sólido se dobraria sobre si mesmo; suavize a guia ou reduza o perfil", raio, alcance);
@@ -390,7 +407,8 @@ std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> s
         }
         // O caminho de sempre vem primeiro: guia que já varria mantém as mesmas faces.
         // Sem a proteção de `protegido`, essa tentativa numa guia suave pode derrubar o processo.
-        if ((kViolacaoProtegida || c.IsNull()) && varre(spine_wire(spine), face.s, t, out)) return wrap(out);
+        const TopoDS_Wire guia = c.IsNull() ? spine_wire(spine) : BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(c).Edge()).Wire();
+        if ((kViolacaoProtegida || c.IsNull()) && varre(guia, face.s, t, out)) return wrap(out);
         if (c.IsNull()) throw std::runtime_error("varredura: o resultado saiu inválido; confira se o perfil cabe nos cantos da guia");
         // O Frenet corrigido amostra a torção da guia com poucos passos por aresta e, numa curva longa,
         // a lei salta dezenas de graus entre vizinhos: a aproximação não acompanha. O triedro discreto

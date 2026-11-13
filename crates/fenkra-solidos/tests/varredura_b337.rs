@@ -106,7 +106,9 @@ fn sorteio_de_guias_termina_em_tubo_certo_ou_erro_nomeado() {
     println!("bons {bons}, cantos {cantos}, dobra {dobra}, desistiu {desistiu}, tombou {tombou}");
     assert_eq!(desistiu, 0, "guia sem dobra precisa varrer");
     assert_eq!(tombou, 0, "guia com cantos sorteada precisa girar a seção (B350)");
-    assert!(bons >= 60, "a maioria das guias sorteadas é suave e sem dobra: {bons}");
+    // antes da cúbica eram 77 de 120: a aproximação de grau alto ondulava e a checagem recusava por
+    // dobra guias com raio de sobra (o portão por raio discreto acima pega isso)
+    assert!(bons >= 100, "a maioria das guias sorteadas é suave e sem dobra: {bons}");
 }
 
 /// O perfil só dobra no plano da curva: a altura de uma parede erguida sobre a guia não conta.

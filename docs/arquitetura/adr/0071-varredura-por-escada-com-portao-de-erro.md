@@ -44,3 +44,13 @@ nas superfícies muito onduladas ele chegou a 1,5 vez o valor que a malha da mes
 Guia que falhava passa a varrer com mais faces do que uma guia que passa de primeira. Parte das nervuras
 de chapa sorteadas agora dá erro de dobra em vez de um sólido com parede sobreposta: 21 de 30, num sorteio
 de curvas fechadas de propósito.
+
+## Revisão (B337, 13/11/2026): recusa por dobra falsa
+O portão de dobra mede o raio da B-spline que aproxima a guia, e a aproximação de grau até 8 ondulava entre
+amostras densas: inventava curvas de 0,1 a 0,3 mm onde a guia tinha 2 mm de raio. No sorteio de 120 guias, 31
+eram recusadas por dobra sem dobra de verdade. Quando a curva de sempre seria recusada, o kernel refaz a
+aproximação cúbica pelos mesmos pontos, com a mesma tolerância, e usa a que tiver o raio maior; a guia que
+já varria não muda. Resultado: 108 de 120 varrem com o volume do tubo, e as 12 recusadas têm raio
+discreto (círculo por três amostras vizinhas da própria polilinha) menor que 1,5 vez o braço do perfil. O
+teste confere isso em cada recusa. A nervura de chapa do corpus, recusada antes com 6 mm de largura numa
+curva de raio 5,97 mm, agora sai; com 12 mm segue o erro nomeado. A guia com cantos ficou na ADR 0085 (B350).
