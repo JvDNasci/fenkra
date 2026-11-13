@@ -15,6 +15,7 @@ mod fbx;
 pub(crate) mod corpo;
 mod gltf;
 mod ifc;
+mod ifc_extrusao;
 mod nos3d;
 mod ponte;
 mod usd;

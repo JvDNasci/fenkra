@@ -383,6 +383,14 @@ impl Leitura<'_> {
             "IFCTRIANGULATEDFACESET" => self.faces_trianguladas(&a),
             "IFCPOLYGONALFACESET" => self.faces_poligonais(&a),
             "IFCFACETEDBREP" | "IFCFACETEDBREPWITHVOIDS" => a.first().cloned().and_then(|c| self.casca(&c)),
+            // B211: a extrusão de perfil vira malha; perfil que não se lê fica no relatório
+            "IFCEXTRUDEDAREASOLID" => {
+                let m = self.extrusao(&a);
+                if m.is_none() {
+                    self.c.ignorar("sólido paramétrico sem malha pronta", 1);
+                }
+                m
+            }
             "IFCSHELLBASEDSURFACEMODEL" | "IFCFACEBASEDSURFACEMODEL" => {
                 let mut junta = Malha::default();
                 for s in a.first().map(V::lista).unwrap_or_default().to_vec() {
@@ -407,6 +415,69 @@ impl Leitura<'_> {
         let i = self.c.malhas.len() - 1;
         self.feitas.insert(id, vec![i]);
         Ok(vec![(i, IDENTIDADE)])
+    }
+
+    /// `IfcAxis2Placement2D`: origem e direção do X no plano do perfil.
+    fn lugar_2d(&self, v: &V) -> ([f64; 2], [f64; 2]) {
+        let Some((_, a)) = self.entidade(v) else { return ([0.; 2], [1., 0.]) };
+        let o = a.first().and_then(|p| self.ponto(p)).unwrap_or([0.; 3]);
+        let x = a.get(1).and_then(|p| self.direcao(p)).and_then(normalizado).unwrap_or([1., 0., 0.]);
+        ([o[0], o[1]], [x[0], x[1]])
+    }
+
+    /// Pontos de uma curva fechada de perfil: `IfcPolyline` ou `IfcIndexedPolyCurve` (arcos viram retas
+    /// entre os pontos, e o relatório conta).
+    fn curva_2d(&mut self, v: &V) -> Option<Vec<[f64; 2]>> {
+        let (tipo, a) = self.entidade(v)?.clone();
+        match tipo.as_str() {
+            "IFCPOLYLINE" => Some(a.first()?.lista().iter().filter_map(|p| self.ponto(p)).map(|p| [p[0], p[1]]).collect()),
+            "IFCINDEXEDPOLYCURVE" => {
+                let (_, lista) = self.entidade(a.first()?)?;
+                let pts: Vec<[f64; 2]> = lista.first()?.lista().iter().map(V::numeros).filter(|c| c.len() >= 2).map(|c| [c[0], c[1]]).collect();
+                let arcos = a.get(1).map(|s| s.lista().iter().filter(|x| matches!(x, V::Tipado(_))).count()).unwrap_or(0);
+                let tem_arco = format!("{:?}", a.get(1)).contains("ARC");
+                if tem_arco {
+                    self.c.ignorar("aresta curva", arcos.max(1));
+                }
+                Some(pts)
+            }
+            _ => None,
+        }
+    }
+
+    /// Contorno de fora de um perfil, já no plano XY do sólido.
+    fn perfil(&mut self, v: &V) -> Option<Vec<[f64; 2]>> {
+        let (tipo, a) = self.entidade(v)?.clone();
+        let no_lugar = |l: ([f64; 2], [f64; 2]), p: [f64; 2]| [l.0[0] + l.1[0] * p[0] - l.1[1] * p[1], l.0[1] + l.1[1] * p[0] + l.1[0] * p[1]];
+        match tipo.as_str() {
+            "IFCRECTANGLEPROFILEDEF" => {
+                let l = a.get(2).map(|p| self.lugar_2d(p)).unwrap_or(([0.; 2], [1., 0.]));
+                let (x, y) = (a.get(3)?.numero()? / 2., a.get(4)?.numero()? / 2.);
+                Some([[-x, -y], [x, -y], [x, y], [-x, y]].map(|p| no_lugar(l, p)).to_vec())
+            }
+            "IFCCIRCLEPROFILEDEF" => {
+                let l = a.get(2).map(|p| self.lugar_2d(p)).unwrap_or(([0.; 2], [1., 0.]));
+                let r = a.get(3)?.numero()?;
+                let n = super::ifc_extrusao::LADOS_CIRCULO;
+                Some((0..n).map(|i| (i as f64) * std::f64::consts::TAU / n as f64).map(|t| no_lugar(l, [r * t.cos(), r * t.sin()])).collect())
+            }
+            "IFCARBITRARYCLOSEDPROFILEDEF" => self.curva_2d(a.get(2)?),
+            "IFCARBITRARYPROFILEDEFWITHVOIDS" => {
+                let furos = a.get(3).map(|l| l.lista().len()).unwrap_or(0);
+                self.c.ignorar("furo em face", furos);
+                self.curva_2d(a.get(2)?)
+            }
+            _ => None,
+        }
+    }
+
+    /// `IfcExtrudedAreaSolid`: perfil, lugar do sólido, direção da extrusão e profundidade.
+    fn extrusao(&mut self, a: &[V]) -> Option<Malha> {
+        let contorno = self.perfil(a.first()?)?;
+        let lugar = a.get(1).filter(|p| **p != V::Nulo).map(|p| self.eixos(p)).unwrap_or(IDENTIDADE);
+        let dir = a.get(2).and_then(|p| self.direcao(p)).unwrap_or([0., 0., 1.]);
+        let prof = a.get(3)?.numero()?;
+        super::ifc_extrusao::extrudar(&contorno, dir, prof, &lugar)
     }
 
     /// `IfcCartesianTransformationOperator3D`: eixo 1, eixo 2, origem, escala, eixo 3.
@@ -703,11 +774,39 @@ mod testes {
     }
 
     #[test]
-    fn extrusao_fica_de_fora_e_o_relatorio_conta() {
+    fn extrusao_sem_perfil_fica_de_fora_e_o_relatorio_conta() {
         let t = "DATA;\n#1=IFCSIUNIT(*,.LENGTHUNIT.,$,.METRE.);\n#2=IFCEXTRUDEDAREASOLID($,$,$,1.);\n#3=IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#2));\n#4=IFCPRODUCTDEFINITIONSHAPE($,$,(#3));\n#5=IFCLOCALPLACEMENT($,$);\n#6=IFCWALL('g',$,'Parede',$,$,#5,#4,$,$);\nENDSEC;";
         let c = ler(t.as_bytes()).unwrap();
         assert!(c.malhas.is_empty());
         assert_eq!(c.ignorados.get("sólido paramétrico sem malha pronta"), Some(&1));
+    }
+
+    /// Parede de 4 m × 0,2 m × 3 m por retângulo e pilar redondo de raio 0,15 m e 3 m de altura,
+    /// em milímetros, como os programas de edificação gravam.
+    #[test]
+    fn extrusao_de_retangulo_e_circulo_vira_malha_fechada_no_lugar() {
+        let t = "DATA;\n#1=IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.);\n\
+#10=IFCCARTESIANPOINT((2000.,100.));\n#11=IFCAXIS2PLACEMENT2D(#10,$);\n#12=IFCRECTANGLEPROFILEDEF(.AREA.,$,#11,4000.,200.);\n\
+#13=IFCCARTESIANPOINT((0.,0.,0.));\n#14=IFCAXIS2PLACEMENT3D(#13,$,$);\n#15=IFCDIRECTION((0.,0.,1.));\n\
+#16=IFCEXTRUDEDAREASOLID(#12,#14,#15,3000.);\n#17=IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#16));\n#18=IFCPRODUCTDEFINITIONSHAPE($,$,(#17));\n\
+#19=IFCLOCALPLACEMENT($,#14);\n#20=IFCWALL('g',$,'Parede',$,$,#19,#18,$,$);\n\
+#30=IFCCIRCLEPROFILEDEF(.AREA.,$,$,150.);\n#31=IFCEXTRUDEDAREASOLID(#30,$,#15,3000.);\n#32=IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#31));\n\
+#33=IFCPRODUCTDEFINITIONSHAPE($,$,(#32));\n#34=IFCCARTESIANPOINT((6000.,0.,0.));\n#35=IFCAXIS2PLACEMENT3D(#34,$,$);\n#36=IFCLOCALPLACEMENT($,#35);\n\
+#37=IFCCOLUMN('h',$,'Pilar',$,$,#36,#33,$,$);\nENDSEC;";
+        let c = ler(t.as_bytes()).unwrap();
+        assert!(c.ignorados.is_empty(), "{:?}", c.ignorados);
+        let malhas = c.no_lugar();
+        assert_eq!(malhas.len(), 2);
+        let parede = malhas.iter().find(|m| m.nome == "Parede").unwrap().soldada();
+        assert!(parede.fechada());
+        assert!((parede.volume() - 4000. * 200. * 3000.).abs() < 1., "{}", parede.volume());
+        let pilar = malhas.iter().find(|m| m.nome == "Pilar").unwrap().soldada();
+        assert!(pilar.fechada());
+        // polígono de 64 lados: área = n/2 · r² · sen(2π/n)
+        let area = 32. * 150f64.powi(2) * (std::f64::consts::TAU / 64.).sin();
+        assert!((pilar.volume() - area * 3000.).abs() < 1., "{}", pilar.volume());
+        let x_min = pilar.pos.iter().map(|p| p[0]).fold(f64::MAX, f64::min);
+        assert!((x_min - 5850.).abs() < 1e-6, "o pilar fica no lugar dele: {x_min}");
     }
 
     #[test]
