@@ -11,9 +11,11 @@
 
 mod amf;
 mod collada;
+mod fbx;
 pub(crate) mod corpo;
 mod gltf;
 mod ifc;
+mod ifc_extrusao;
 mod nos3d;
 mod ponte;
 mod usd;
@@ -63,6 +65,7 @@ pub(crate) fn ler_cena(formato: Formato, caminho: &Path) -> Result<Cena, ErroCon
         Formato::X3d => x3d::ler(&bytes),
         Formato::Collada => collada::ler(&bytes),
         Formato::Ifc => ifc::ler(&bytes),
+        Formato::Fbx => fbx::ler(&bytes),
         _ => Err(ErroConv::Formato(format!("o Fenkra grava {} mas não lê", formato.nome()))),
     }?;
     if cena.nome.is_empty() {
@@ -114,6 +117,21 @@ fn erro(formato: &str, motivo: impl std::fmt::Display) -> ErroConv {
     ErroConv::Leitura(format!("{formato}: {motivo}"))
 }
 
+/// Arquivo FBX de prova feito do modelo, para a sonda conferir a leitura de um formato que só se lê.
+pub(crate) fn amostra_fbx(modelo: &ModeloNeutro, caminho: &Path, o: &OpcoesExportar) -> Result<(), ErroConv> {
+    escrever(caminho, &fbx::amostra_binaria(&ponte::de_modelo(modelo, o)?, true))
+}
+
+/// O conteúdo é FBX binário? (assinatura no começo)
+pub(crate) fn fbx_binario(b: &[u8]) -> bool {
+    fbx::e_binario(b)
+}
+
+/// O conteúdo é FBX em texto?
+pub(crate) fn fbx_texto(b: &[u8]) -> bool {
+    fbx::e_texto(b)
+}
+
 /// Provedor dos formatos de malha, em Rust puro: nenhum deles precisa do kernel para ser lido.
 pub struct ProvedorMalha;
 
@@ -134,6 +152,7 @@ impl Provedor for ProvedorMalha {
             Formato::Tmf | Formato::Amf | Formato::Gltf | Formato::Glb | Formato::Vrml | Formato::X3d | Formato::Collada => Capacidades { cor: true, montagem: true, unidade: true, ..base },
             Formato::Usda | Formato::Usdz => Capacidades { ler: false, cor: true, montagem: true, unidade: true, ..base },
             Formato::Ifc => Capacidades { cor: true, unidade: true, ..base },
+            Formato::Fbx => Capacidades { gravar: false, cor: true, montagem: true, unidade: true, ..base },
             _ => Capacidades::default(),
         }
     }

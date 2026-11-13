@@ -58,6 +58,37 @@ pub(crate) fn medidas_do_resultado(r: &RecomputeResult, doc: &Document) -> Medid
     m
 }
 
+/// Tabela das regras do perfil: limite, gravidade e momentos. Devolve o perfil mudado, se mudou; quem
+/// grava ([`fenkra_project::Project::definir_perfil_qualidade`]) recusa o que o acesso não permite.
+fn editar_regras(ui: &mut egui::Ui, perfil: &Perfil, sel: u64) -> Option<Perfil> {
+    let mut novo = perfil.clone();
+    egui::Grid::new(("grade_regras_qualidade", sel)).num_columns(3).striped(true).show(ui, |ui| {
+        for l in &mut novo.regras {
+            ui.label(tr(l.regra.rotulo()));
+            let passo = (l.limite * 0.01).max(1.);
+            ui.add(crate::ui_ext::dv(&mut l.limite).range(0.0..=1.0e9).speed(passo).rotulo(tr(l.regra.rotulo())));
+            egui::ComboBox::from_id_salt(("gravidade_regra", sel, l.regra.chave())).selected_text(tr(l.gravidade.rotulo())).show_ui(ui, |ui| {
+                for g in [Gravidade::Informa, Gravidade::Avisa, Gravidade::Bloqueia] {
+                    ui.selectable_value(&mut l.gravidade, g, tr(g.rotulo()));
+                }
+            });
+            ui.end_row();
+        }
+    });
+    ui.label(RichText::new(tr("Quando roda")).strong());
+    for m in Momento::TODOS {
+        let mut liga = novo.momentos.contains(&m);
+        if ui.checkbox(&mut liga, tr(m.rotulo())).changed() {
+            if liga {
+                novo.momentos.push(m);
+            } else {
+                novo.momentos.retain(|x| *x != m);
+            }
+        }
+    }
+    (novo != *perfil).then_some(novo)
+}
+
 fn cor_gravidade(ui: &egui::Ui, g: Gravidade) -> egui::Color32 {
     match g {
         Gravidade::Bloqueia => ui.visuals().error_fg_color,
@@ -113,7 +144,7 @@ impl App {
             }
         });
         cab.response.on_hover_text(tr("Mede o peso e a saúde da peça e compara com o perfil do projeto. Roda ao liberar a revisão."));
-        egui::CollapsingHeader::new(tr("Detalhes da qualidade")).id_salt(("qualidade", sel)).show(ui, |ui| {
+        egui::CollapsingHeader::new(tr("Detalhes da qualidade")).id_salt(("qualidade", sel)).default_open(std::env::var("FENKRA_DEMO_SECOES").is_ok()).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(tr("Perfil"));
                 let mut novo: Option<Perfil> = None;
@@ -137,6 +168,15 @@ impl App {
                 if travado != perfil.travado {
                     let mut n = perfil.clone();
                     n.travado = travado;
+                    if let Err(e) = self.project.as_mut().unwrap().definir_perfil_qualidade(n) {
+                        self.toast(e.to_string(), true);
+                    }
+                }
+            });
+            // B305: cada regra com limite e gravidade; no perfil travado, só mais rígido (o projeto confere)
+            egui::CollapsingHeader::new(tr("Regras do perfil")).id_salt(("regras_qualidade", sel)).default_open(std::env::var("FENKRA_DEMO_SECOES").is_ok()).show(ui, |ui| {
+                ui.label(RichText::new(tr(if perfil.travado && acesso != Acesso::Administrador { "Perfil travado: cada mudança só pode deixar a regra mais rígida (limite menor ou gravidade maior)." } else { "Perfil livre: quem tem acesso ao projeto ajusta os limites." })).weak().small());
+                if let Some(n) = editar_regras(ui, &perfil, sel) {
                     if let Err(e) = self.project.as_mut().unwrap().definir_perfil_qualidade(n) {
                         self.toast(e.to_string(), true);
                     }

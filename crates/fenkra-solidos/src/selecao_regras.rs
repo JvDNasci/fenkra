@@ -235,3 +235,36 @@ pub fn expandir_arestas(corpo: &Shape, escolhidas: &[[f64; 3]], regras: &[RegraA
     }
     Ok(saida)
 }
+
+/// Refaz as regras gravadas em comandos de face (B95: casca, saída e edição direta). Cada semente
+/// em `escolhidas` (pontos já resolvidos sobre `corpo`) cresce pela regra sobre a malha atual: faces
+/// tangentes ou concêntricas. As faces novas entram depois das escolhidas, sem repetir, pelo ponto
+/// sobre a face que o kernel dá. A regra de cadeia não vale para faces: fica só a semente.
+pub fn expandir_faces(corpo: &Shape, escolhidas: &[[f64; 3]], regras: &[RegraAresta]) -> Result<Vec<[f64; 3]>, String> {
+    if regras.is_empty() {
+        return Ok(escolhidas.to_vec());
+    }
+    let diag = corpo.bbox().map(|(a, b)| norma(sub(b, a))).unwrap_or(100.).max(1e-3);
+    let m = corpo.mesh_angle(diag * 1e-3, 0.3).map_err(|e| e.0)?;
+    let mut saida = escolhidas.to_vec();
+    // índice da face de cada ponto já na lista, para não repetir a mesma face por outro ponto
+    let mut ja: Vec<usize> = escolhidas.iter().filter_map(|p| corpo.face_index(*p, 1.0).ok().flatten()).collect();
+    for r in regras {
+        let Some(&semente) = escolhidas.get(r.semente) else { continue };
+        let Some(f0) = corpo.face_index(semente, 1.0).map_err(|e| e.0)? else { continue };
+        let novas = match r.regra {
+            RegraSelecao::Tangentes => faces_tangentes(&m, f0),
+            RegraSelecao::Concentricas => faces_concentricas(&m, f0),
+            RegraSelecao::Cadeia => vec![],
+        };
+        for f in novas {
+            if ja.contains(&f) {
+                continue;
+            }
+            let Some(info) = m.face_info.get(f) else { continue };
+            ja.push(f);
+            saida.push(info.point);
+        }
+    }
+    Ok(saida)
+}

@@ -269,6 +269,76 @@ mod testes_caixas {
     }
 }
 
+/// Ao criar sketch (B59): planos oferecidos antes das faces. Se o ponteiro está sobre um plano
+/// visível, ele vence a face da peça na frente; senão `None` e vale a seleção normal.
+/// O plano vale mesmo atrás da peça: ele é desenhado translúcido por cima dela.
+pub fn plano_primeiro(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: Rect, pos: Pos2, f: &Filter) -> Option<Pick> {
+    let (o, d) = cam.ray(rect, pos);
+    let ref_ok = |id: Id| doc.reference(id).is_some_and(|x| doc.ref_shown(x) != f.hidden_env);
+    let size = plane_size(r);
+    let mut best: Option<(f32, PlaneRef)> = None;
+    for pl in &r.planes {
+        let vis = match pl.id {
+            Some(id) => ref_ok(id),
+            None => doc.origin_visible && !f.hidden_env,
+        };
+        if !vis {
+            continue;
+        }
+        let fr = &pl.frame;
+        let n = Vec3::from(fr.normal.map(|x| x as f32));
+        let po = Vec3::from(fr.origin.map(|x| x as f32));
+        let den = d.dot(n);
+        if den.abs() < 1e-6 {
+            continue;
+        }
+        let t = (po - o).dot(n) / den;
+        if t <= 0. {
+            continue;
+        }
+        let hit = o + d * t - po;
+        let (x, y) = (Vec3::from(fr.x.map(|v| v as f32)), Vec3::from(fr.y().map(|v| v as f32)));
+        let h = size * if pl.id.is_some() { 0.45 } else { 0.5 };
+        if hit.dot(x).abs() <= h && hit.dot(y).abs() <= h && best.is_none_or(|(bt, _)| t < bt) {
+            let pr = match pl.id {
+                Some(id) => PlaneRef::Datum(id),
+                None => PlaneRef::Origin(match pl.name.as_str() {
+                    "XY" => OriginPlane::XY,
+                    "XZ" => OriginPlane::XZ,
+                    _ => OriginPlane::YZ,
+                }),
+            };
+            best = Some((t, pr));
+        }
+    }
+    best.map(|(_, p)| Pick::Plane(p))
+}
+
+#[cfg(test)]
+mod testes_plano_primeiro {
+    use super::*;
+
+    #[test]
+    fn plano_vence_a_face_da_frente_so_quando_pedido() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // caixa de 10 em cima do plano XY, vista de cima: o raio pega o topo da caixa antes do plano
+        let mut d = Document::new("t");
+        d.add_feature(fenkra_core::FeatureKind::Primitive(fenkra_core::Primitive { kind: fenkra_core::PrimKind::Caixa, plane: PlaneRef::Origin(OriginPlane::XY), a: "10".into(), b: "10".into(), c: "10".into(), d: "0".into(), op: fenkra_core::BoolOp::Add }));
+        let r = fenkra_solidos::recompute(&d);
+        let mut cam = Camera { dist: 200., ..Default::default() };
+        cam.set_view(0., std::f32::consts::FRAC_PI_2 - 0.01);
+        let rect = Rect::from_min_size(Pos2::ZERO, egui::vec2(800., 600.));
+        let f = Filter { faces: true, edges: false, vertices: false, planes: true, hidden_env: false, exclude_sketch: None, fantasma: None };
+        let c = cam.project(rect, Vec3::new(2., 2., 10.)).expect("o topo aparece na tela");
+        assert!(matches!(pick(&r, &d, &cam, rect, c, &f), Some(Pick::Face { .. })), "a seleção normal pega a face");
+        assert!(matches!(plano_primeiro(&r, &d, &cam, rect, c, &f), Some(Pick::Plane(PlaneRef::Origin(OriginPlane::XY)))), "ao criar sketch o plano vem antes");
+        // fora do quadrado dos planos não há plano a oferecer
+        assert!(plano_primeiro(&r, &d, &cam, rect, Pos2::new(1., 1.), &f).is_none());
+    }
+}
+
 /// O raio passa a menos de `folga` da caixa?
 pub fn raio_na_caixa(o: Vec3, d: Vec3, caixa: &fenkra_montagem::lod::Caixa, folga: f32) -> bool {
     let (mut t0, mut t1) = (f32::MIN, f32::MAX);

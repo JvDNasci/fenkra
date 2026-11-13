@@ -1131,13 +1131,14 @@ pub fn barra_fixa(app: &mut App, ui: &mut egui::Ui) {
         _ => return,
     };
     let mut acao = None;
-    command_bar(ui, editando, &mut acao);
+    command_bar(ui, editando, crate::continuar::pode(app), &mut acao);
     aplicar_acao(app, acao, sel);
 }
 
 fn aplicar_acao(app: &mut App, sess_act: Option<u8>, sel: Sel) {
     match (sess_act, sel) {
         (Some(0), _) if app.session.is_some() => app.conclude_session(),
+        (Some(4), _) => crate::continuar::aplicar_e_continuar(app),
         (Some(0), _) => app.sel = Sel::None,
         (Some(1), _) => app.cancel_session(),
         // excluir: comando novo some (como cancelar); existente pede confirmação dos dependentes
@@ -1155,11 +1156,20 @@ fn aplicar_acao(app: &mut App, sess_act: Option<u8>, sel: Sel) {
 }
 
 /// Barra do comando aberto: Concluir (Enter), Cancelar (Esc, só em edição) e Excluir.
-fn command_bar(ui: &mut egui::Ui, editing: bool, act: &mut Option<u8>) {
+fn command_bar(ui: &mut egui::Ui, editing: bool, continuar: bool, act: &mut Option<u8>) {
     egui::Frame::NONE.fill(ui.visuals().faint_bg_color).inner_margin(6.).corner_radius(6.).show(ui, |ui| {
-        ui.horizontal(|ui| {
+        ui.horizontal_wrapped(|ui| {
             if ui.add(egui::Button::new(RichText::new(tr("✔ Concluir")).strong()).min_size(egui::vec2(100., 28.))).on_hover_text(tr("Enter")).clicked() {
                 *act = Some(0);
+            }
+            // B20: repete o comando com os mesmos valores para a próxima escolha
+            if continuar
+                && ui
+                    .add(egui::Button::new(tr("↻ Aplicar e continuar")).min_size(egui::vec2(90., 28.)))
+                    .on_hover_text(tr("Conclui este comando e abre outro igual, com os mesmos valores, para a próxima escolha.  Ctrl+Enter"))
+                    .clicked()
+            {
+                *act = Some(4);
             }
             if editing && ui.add(egui::Button::new(tr("✖ Cancelar")).min_size(egui::vec2(90., 28.))).on_hover_text(tr("Esc")).clicked() {
                 *act = Some(1);

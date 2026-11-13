@@ -494,7 +494,7 @@ fn casca_aberta_em_cima_muda_espessura_e_volta() {
     precisa_kernel!();
     let (mut d, _, _) = caixa_cotada();
     param(&mut d, "t", "2");
-    d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[20., 15., 20.]], thickness: s("t"), outward: false, face_keys: vec![], closed: false }));
+    d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[20., 15., 20.]], thickness: s("t"), outward: false, face_keys: vec![], closed: false, regras: vec![] }));
     let e = |t: f64| prisma(24000. - (40. - 2. * t) * (30. - 2. * t) * (20. - t), [40., 30., 20.]);
     ciclo("casca", &mut d, "t", "3", &e(2.), &e(3.));
 }
@@ -513,7 +513,7 @@ fn saida_de_face_inclina_a_lateral_pelo_plano_neutro() {
     precisa_kernel!();
     let (mut d, _, _) = caixa_cotada();
     param(&mut d, "ad", "5");
-    d.add_feature(FeatureKind::Draft(Draft { faces: vec![[40., 15., 10.]], neutral: XY, angle: s("ad"), reverse: false, face_keys: vec![] }));
+    d.add_feature(FeatureKind::Draft(Draft { faces: vec![[40., 15., 10.]], neutral: XY, angle: s("ad"), reverse: false, face_keys: vec![], regras: vec![] }));
     // a face x=40 gira em torno de z=0: a cunha acrescentada ou tirada vale ½·H²·tan(a)·W
     let cunha = |a: f64| 0.5 * 400. * a.to_radians().tan() * 30.;
     for ang in [5., 8.] {
@@ -876,14 +876,14 @@ fn invalido_chanfro_maior_que_a_face() {
 #[test]
 fn invalido_casca_mais_grossa_que_o_corpo() {
     precisa_kernel!();
-    let (r, id) = com(|_| FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[20., 15., 20.]], thickness: s("30"), outward: false, face_keys: vec![], closed: false }));
+    let (r, id) = com(|_| FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[20., 15., 20.]], thickness: s("30"), outward: false, face_keys: vec![], closed: false, regras: vec![] }));
     erro(&r, id);
 }
 
 #[test]
 fn invalido_casca_com_face_que_nao_existe() {
     precisa_kernel!();
-    let (r, id) = com(|_| FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[500., 500., 500.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }));
+    let (r, id) = com(|_| FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[500., 500., 500.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false, regras: vec![] }));
     erro(&r, id);
 }
 

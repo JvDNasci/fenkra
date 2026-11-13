@@ -445,7 +445,7 @@ mod tests {
     }
 
     fn casca() -> FeatureKind {
-        FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false })
+        FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false, regras: vec![] })
     }
 
     /// Casca, espessura e rosca esperam a face; depois do clique o campo some e o contador sobe.
@@ -517,7 +517,7 @@ mod tests {
     /// Saída: faces primeiro, depois o plano neutro, que o clique em face plana preenche pelos campos vazios.
     #[test]
     fn saida_pede_faces_e_depois_o_plano_neutro() {
-        let mut k = FeatureKind::Draft(Draft { faces: vec![], neutral: crate::slots::plane(), angle: s("3"), reverse: false, face_keys: vec![] });
+        let mut k = FeatureKind::Draft(Draft { faces: vec![], neutral: crate::slots::plane(), angle: s("3"), reverse: false, face_keys: vec![], regras: vec![] });
         assert_eq!(campo_ativo(&k), Some(Espera::Face));
         assert!(!espera_plano_neutro(&k), "sem faces o clique vai para a lista de faces");
         crate::feat_ui::add_face(&mut k, [20., 0., 10.]);

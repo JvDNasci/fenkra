@@ -473,6 +473,8 @@ pub struct Settings {
     pub show_labels: bool,
     /// dica simples: só nome e frase, sem animação nem passo a passo (B377)
     pub dica_simples: bool,
+    /// B60: atraso da primeira camada da dica, em milissegundos
+    pub atraso_dica_ms: u32,
     // cotagem (usado pelo sketch e pelo desenho)
     pub dim_standard: String,
     pub dim_decimals: u8,
@@ -628,6 +630,7 @@ impl Default for Settings {
             icon_size: 30.,
             show_labels: true,
             dica_simples: false,
+            atraso_dica_ms: crate::ajuda_f1::ATRASO_PADRAO_MS,
             dim_standard: "ABNT NBR 10126".into(),
             dim_decimals: 2,
             dim_text_height: 3.5,

@@ -73,6 +73,7 @@ pub const CLASSIFICACAO: &[(&str, Classe)] = &[
     ("icon_size", Interface),
     ("show_labels", Interface),
     ("dica_simples", Interface),
+    ("atraso_dica_ms", Interface),
     ("dim_standard", Documento),
     ("dim_decimals", Documento),
     ("dim_text_height", Documento),

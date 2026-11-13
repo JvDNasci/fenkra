@@ -123,6 +123,47 @@ impl App {
                 self.sent_doc = None;
                 self.start_session(f, false, None);
             }
+            // B95: saída de 3° gravada pela regra "tangentes" a partir de uma parede: os cantos
+            // arredondados entram sozinhos, com o painel aberto mostrando a regra
+            "saida_regra" => {
+                let mut d = Document::new("Regra de faces");
+                let mut sk = fenkra_core::SketchData::default();
+                let mut al = || d.alloc();
+                sk.add_rect(&mut al, [-20., -15.], [20., 15.], false);
+                let s = d.add_feature(FeatureKind::Sketch(fenkra_core::Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: sk }));
+                d.add_feature(FeatureKind::Extrude(fenkra_core::Extrude { sketch: s, op: fenkra_core::BoolOp::Add, extent: fenkra_core::Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+                d.add_feature(FeatureKind::Fillet(fenkra_core::EdgeOp { value: "6".into(), edges: EdgeSel::Edges(vec![[20., 15., 10.], [-20., 15., 10.], [-20., -15., 10.], [20., -15., 10.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: EdgeExtra::default() }));
+                let f = d.add_feature(FeatureKind::Draft(fenkra_core::Draft { faces: vec![[0., -15., 10.]], neutral: PlaneRef::Origin(OriginPlane::XY), angle: "8".into(), reverse: false, face_keys: vec![], regras: vec![fenkra_core::RegraAresta { semente: 0, regra: fenkra_core::RegraSelecao::Tangentes }] }));
+                self.open.doc = d;
+                self.sent_doc = None;
+                self.start_session(f, false, None);
+            }
+            // B20: furo novo aberto, com o botão Aplicar e continuar na barra do comando
+            "aplicar_continuar" => {
+                let mut d = Document::new("Aplicar e continuar");
+                let mut sk = fenkra_core::SketchData::default();
+                let mut al = || d.alloc();
+                sk.add_rect(&mut al, [-20., -15.], [20., 15.], false);
+                let s = d.add_feature(FeatureKind::Sketch(fenkra_core::Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: sk }));
+                d.add_feature(FeatureKind::Extrude(fenkra_core::Extrude { sketch: s, op: fenkra_core::BoolOp::Add, extent: fenkra_core::Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+                let snap = d.clone();
+                let f = d.add_feature(FeatureKind::Fillet(fenkra_core::EdgeOp { value: "3".into(), edges: EdgeSel::Edges(vec![[0., -15., 20.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: EdgeExtra::default() }));
+                self.open.doc = d;
+                self.sent_doc = None;
+                self.start_session(f, true, Some(snap));
+            }
+            // B24: "Selecionados → nova pasta" aplicado a dois pontos, escolhendo como pai a pasta
+            // de geometria que já existe: a pasta nova aparece dentro dela, com os dois
+            "nova_pasta" => {
+                let d = &mut self.open.doc;
+                let p1 = d.add_geometry(RefKind::PointCoords { x: "10".into(), y: "0".into(), z: "20".into(), frame: None });
+                let p2 = d.add_geometry(RefKind::PointCoords { x: "30".into(), y: "0".into(), z: "20".into(), frame: None });
+                let pai = d.folders.iter().find(|f| f.kind == fenkra_core::FolderKind::Geometria).map(|f| f.id);
+                if let Ok(n) = d.agrupar_em_pasta(&[p1, p2], pai, "Selecionados") {
+                    self.sel = Sel::Folder(n);
+                }
+                self.scene_dirty = true;
+            }
             // B24: ponto definido no plano YZ, selecionado: as setas do referencial dele aparecem no 3D
             "ponto_referencial" => {
                 let p = self.open.doc.add_geometry(RefKind::PointCoords { x: "20".into(), y: "20".into(), z: "30".into(), frame: Some(PlaneRef::Origin(OriginPlane::YZ)) });
@@ -174,6 +215,19 @@ impl App {
                 }
             }
             "roda_editor" => crate::roda::ui::pedir_abrir(ctx),
+            // B60: a ajuda do comando que o F1 abre, para a primeira entrada com passo a passo
+            "ajuda_f1" => {
+                if let Some(i) = crate::ajuda_cmd::catalogo().iter().find(|i| i.name.contains("Filete") && !i.advanced.is_empty()) {
+                    crate::ajuda_f1::abrir(ctx, i.icon);
+                }
+            }
+            // B59: modo Scan ligado olhando o primeiro comando sólido da peça
+            "scan" => {
+                crate::scan::alternar(self);
+                if let Some(f) = self.open.doc.features.iter().find(|f| !self.open.doc.is_free(f) && crate::feat_ui::is_shape(&f.kind)) {
+                    self.sel = Sel::Feature(f.id);
+                }
+            }
             "tabela" => {
                 let s = |x: &str| x.to_string();
                 let d = &mut self.open.doc;

@@ -286,6 +286,8 @@ pub struct App {
     roda: crate::roda::Roda,
     /// novo sketch esperando o clique no plano/face
     pub sketch_wait_plane: bool,
+    /// B59: modo Scan ligado, com a posição da barra de fim de peça a que ele volta
+    pub scan_volta: Option<usize>,
     /// árvore aberta ao lado do painel do comando
     /// área sob a barra superior, onde a viewport e os painéis ficam
     pub area_util: Rect,
@@ -499,6 +501,7 @@ impl App {
             pmi_pending: None,
             pmi_focus: None,
             sketch_wait_plane: false,
+            scan_volta: None,
             area_util: Rect::NOTHING,
             arvore: crate::tree_ui::VistaArvore::default(),
             arvore_com_roda: false,
@@ -1594,6 +1597,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         if crate::asm_ui::salvar_peca_pendente(self) {
             return;
         }
+        // o Scan só olha: o arquivo grava a peça na posição de antes dele
+        crate::scan::sair(self);
         if self.open.doc.retrocedida() {
             self.toast(tr("Peça salva retrocedida: os comandos depois do objeto em trabalho ficam inativos até você voltar ao fim."), false);
         }
@@ -2453,6 +2458,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let faces = self.picked_faces();
         let edge_keys = self.picked_edge_keys();
         let face_keys = self.picked_face_keys();
+        // B95: faces escolhidas por regra (tangentes, concêntricas) gravam só a semente e a regra
+        let (faces_r, keys_r, regras_f) = crate::selecao_regras::faces_com_regra(&self.picks, &faces, &face_keys);
         let seed = match c {
             Cmd::Rib | Cmd::Slot | Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints => self.seed(true),
             Cmd::StMember | Cmd::StPlate | Cmd::StGusset => self.seed(true),
@@ -2835,13 +2842,14 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 w.picking_b = !w.faces.is_empty();
                 Sel::Feature(d.add_feature(FeatureKind::StructWeld(w)))
             }
-            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone(), closed: false }))),
-            Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: face_keys.clone() }))),
+            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: faces_r.clone(), thickness: s("2"), outward: false, face_keys: keys_r.clone(), closed: false, regras: regras_f.clone() }))),
+            Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces_r.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: keys_r.clone(), regras: regras_f.clone() }))),
             Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2"), face_keys: face_keys.clone(), remove: false }))),
             Cmd::DirectEdit(i) => {
                 let mut e = fenkra_core::DirectEdit::novo(fenkra_core::OpDireta::ALL[i as usize % fenkra_core::OpDireta::ALL.len()]);
-                e.faces = faces.clone();
-                e.face_keys = face_keys.clone();
+                e.faces = faces_r.clone();
+                e.face_keys = keys_r.clone();
+                e.regras = regras_f.clone();
                 Sel::Feature(d.add_feature(FeatureKind::DirectEdit(e)))
             }
             Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None, start: String::new(), face_key: None }))),
@@ -7435,11 +7443,31 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if ui.small_button(tr("⟳ Atualizar")).on_hover_text(tr("recalcula o que mudou (F5)")).clicked() {
                     self.send_recompute(false);
                 }
-                if let Some(nome) = self.open.doc.objeto_em_trabalho().map(|id| self.open.doc.name_of(id)).filter(|_| crate::barra_estado::mostra_historico(self.sem_peca_em_edicao())) {
+                // no Scan o objeto em trabalho é o de antes dele, não o comando que se está olhando
+                let em_trabalho = match self.scan_volta {
+                    Some(v) => {
+                        let d = &self.open.doc;
+                        d.features[..v.min(d.features.len())].iter().rev().find(|f| !d.is_free(f)).map(|f| f.id)
+                    }
+                    None => self.open.doc.objeto_em_trabalho(),
+                };
+                if let Some(nome) = em_trabalho.map(|id| self.open.doc.name_of(id)).filter(|_| crate::barra_estado::mostra_historico(self.sem_peca_em_edicao())) {
                     ui.separator();
                     ui.label(RichText::new(format!("{}: {nome}", tr("Em trabalho"))).small());
                 }
-                if self.open.doc.retrocedida() && ui.small_button(tr("Voltar ao fim da peça")).clicked() {
+                // B59: modo Scan, percorre o histórico sem mudar o objeto em trabalho
+                if crate::barra_estado::mostra_historico(self.sem_peca_em_edicao()) {
+                    let ligado = self.scan_volta.is_some();
+                    if ui.add(egui::Button::new(RichText::new(tr("🔍 Scan")).small()).selected(ligado)).on_hover_text(tr("Scan: escolha comandos na árvore (clique ou setas) para ver a peça como estava em cada um. O objeto em trabalho não muda; ao desligar, a peça volta.")).clicked() {
+                        crate::scan::alternar(self);
+                    }
+                    if ligado {
+                        if let Some(n) = self.open.doc.rollback.checked_sub(1).and_then(|i| self.open.doc.features.get(i)).map(|f| f.name.clone()) {
+                            ui.label(RichText::new(format!("{} {n}", tr("Scan ligado: vendo a peça até"))).small().color(ui.visuals().warn_fg_color));
+                        }
+                    }
+                }
+                if self.scan_volta.is_none() && self.open.doc.retrocedida() && ui.small_button(tr("Voltar ao fim da peça")).clicked() {
                     self.open.doc.voltar_ao_fim_da_peca();
                 }
                 if ui.small_button(tr("⟲ Reconstruir")).on_hover_text(tr("reconstrói tudo do zero, sem cache (Ctrl+F5)")).clicked() {
@@ -7879,7 +7907,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                             ui.painter().text(h + egui::vec2(14., 18.), egui::Align2::LEFT_TOP, format!("{i}/{n}  {}", tr("Alt + roda: selecionar outro")), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
                         }
                         let caixas = self.asm.as_ref().filter(|_| self.in_asm()).map(|s| s.caixas.as_slice());
-                        outro.or_else(|| crate::picking::pick_com_caixas(r, doc, &cam, rect, h, &filt, caixas))
+                        // B59: ao criar sketch, planos vêm antes das faces
+                        let plano = if self.sketch_wait_plane { crate::picking::plano_primeiro(r, doc, &cam, rect, h, &filt) } else { None };
+                        outro.or(plano).or_else(|| crate::picking::pick_com_caixas(r, doc, &cam, rect, h, &filt, caixas))
                     }
                     _ => {
                         self.selecao_ciclo.reiniciar();
@@ -8851,6 +8881,8 @@ impl eframe::App for App {
         crate::desempenho::marca("pre_atalhos");
         crate::ui_ext::definir_modo_roda(crate::ui_ext::ModoRoda::de_u8(self.settings.wheel_mode));
         crate::dica_anim::definir(self.settings.dica_simples, self.settings.acessibilidade.reduzir_movimento);
+        crate::ajuda_f1::definir_atraso(ctx, self.settings.atraso_dica_ms);
+        crate::ajuda_f1::janela(ctx);
         // cores salvas: preferências ↔ paleta usada pelos painéis
         {
             let mut dirty = crate::palette::DIRTY.lock().unwrap();
@@ -9002,7 +9034,10 @@ impl eframe::App for App {
             }
         }
         if self.session.is_some() && !ctx.egui_wants_keyboard_input() {
-            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.command) && crate::continuar::pode(self) {
+                // B20: Ctrl+Enter = aplicar e continuar
+                crate::continuar::aplicar_e_continuar(self);
+            } else if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                 self.conclude_session();
             } else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.cancel_session();
@@ -9346,6 +9381,7 @@ impl eframe::App for App {
                 }
             }
         }
+        crate::scan::quadro(self);
         if let Some(id) = self.begin_sketch_pending.take() {
             self.begin_sketch(id);
         }
@@ -9843,6 +9879,7 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 ui.add(crate::ui_ext::slider(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
                 ui.checkbox(&mut s.show_labels, tr("mostrar o nome embaixo dos ícones"));
                 ui.checkbox(&mut s.dica_simples, tr("dicas simples (sem animação nem passo a passo)")).on_hover_text(tr("A dica mostra só o nome e a frase do comando. Desligada, parar o mouse sobre um botão mostra também a animação e o passo a passo."));
+                ui.add(crate::ui_ext::slider(&mut s.atraso_dica_ms, 100..=3000).text(tr("atraso das dicas (ms)"))).on_hover_text(tr("Quanto o mouse fica parado sobre um botão antes da dica aparecer. A animação e o passo a passo vêm 0,7 s depois."));
                 crate::teclado::resumo_ui(ui);
                 ui.separator();
                 ui.label(RichText::new(tr("Seções da árvore")).strong());

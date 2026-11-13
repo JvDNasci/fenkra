@@ -3644,6 +3644,10 @@ pub struct Shell {
     /// B06: esvazia sem abrir nenhuma face (cavidade interna fechada)
     #[serde(default)]
     pub closed: bool,
+    /// B95: seleção por intenção gravada (tangentes, concêntricas). Cada regra parte de uma face de
+    /// `faces` (a semente) e é refeita a cada recompute: faces que a mudança do modelo criar entram sozinhas.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub regras: Vec<RegraAresta>,
 }
 
 /// Ângulo de saída nas faces escolhidas, a partir de um plano neutro (puxa pela normal dele).
@@ -3656,6 +3660,10 @@ pub struct Draft {
     /// referência v2 de cada face (paralelo a `faces`; `None` = só o ponto)
     #[serde(default)]
     pub face_keys: Vec<Option<FaceKey>>,
+    /// B95: seleção por intenção gravada (tangentes, concêntricas). Cada regra parte de uma face de
+    /// `faces` (a semente) e é refeita a cada recompute: faces que a mudança do modelo criar entram sozinhas.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub regras: Vec<RegraAresta>,
 }
 
 /// Espessura: acrescenta (positivo) ou tira (negativo) material das faces escolhidas.

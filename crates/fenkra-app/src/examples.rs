@@ -65,7 +65,7 @@ fn caixa() -> Document {
     data.add_slot(&mut al, [-30., 0.], [30., 0.], 25.);
     let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
     d.add_feature(ext(sk, "35"));
-    d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 35.]], thickness: s("2.5"), outward: false, face_keys: vec![], closed: false }));
+    d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 35.]], thickness: s("2.5"), outward: false, face_keys: vec![], closed: false, regras: vec![] }));
     d
 }
 

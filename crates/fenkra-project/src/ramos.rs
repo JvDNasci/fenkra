@@ -99,6 +99,18 @@ struct Cofre {
     proximo_seq: u64,
     #[serde(default)]
     ramos: Vec<Ramo>,
+    /// cópias derivadas (fork) e de onde nasceram
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    derivados: Vec<Derivado>,
+}
+
+/// Cópia derivada de um documento (fork): documento próprio no projeto, com a base de onde nasceu.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct Derivado {
+    doc_id: u64,
+    de: u64,
+    base_hash: String,
+    seq: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -524,6 +536,146 @@ impl Project {
         mesclar_documentos(&base, &nossa, &deles, escolhas)
     }
 
+    /// O que a principal andou desde que o ramo nasceu ou foi atualizado pela última vez: quem trabalha
+    /// no ramo continua vendo a linha principal sem sair dele.
+    pub fn principal_desde_o_ramo(&self, id: u64, nome: &str) -> PResult<ComparacaoDocs> {
+        let r = self.ramo(id, nome)?;
+        Ok(comparar_documentos(&self.load_version(&r.base_hash)?, &self.load_version(&self.hash_principal(id)?)?))
+    }
+
+    /// Prévia de trazer a principal para dentro do ramo (sem gravar). Aqui `Nossa` é o ramo e `Deles`
+    /// é a principal de hoje; conflito só onde os dois mexeram no mesmo campo.
+    pub fn previa_atualizar_ramo(&self, id: u64, nome: &str, escolhas: &HashMap<String, Lado>) -> PResult<Mescla> {
+        let r = self.ramo(id, nome)?;
+        let base = self.load_version(&r.base_hash)?;
+        let ramo = self.load_version(&r.ponta_hash)?;
+        let principal = self.load_version(&self.hash_principal(id)?)?;
+        mesclar_documentos(&base, &ramo, &principal, escolhas)
+    }
+
+    /// Traz a principal de hoje para dentro do ramo: mesclagem de 3 vias com a base antiga, o
+    /// resultado vira a ponta nova do ramo e a base passa a ser a principal de agora. A principal não
+    /// muda. Conflito sem escolha recusa; o resultado passa pela mesma conferência da mesclagem.
+    pub fn atualizar_ramo_com_principal(&mut self, id: u64, nome: &str, escolhas: &HashMap<String, Lado>, verificar: Verificador) -> PResult<Mescla> {
+        self.pode_gravar()?;
+        let ramo = self.ramo(id, nome)?;
+        if ramo.estado != EstadoRamo::Aberto {
+            return Err(ProjectError::Recusado(format!("o ramo '{nome}' não está aberto")));
+        }
+        let hash_principal = self.hash_principal(id)?;
+        if hash_principal == ramo.base_hash {
+            return Err(ProjectError::Recusado("a principal não andou desde que o ramo nasceu".into()));
+        }
+        let mut mescla = self.previa_atualizar_ramo(id, nome, escolhas)?;
+        let sem_escolha: Vec<String> = mescla.conflitos.iter().filter(|c| !escolhas.contains_key(&c.chave)).map(|c| format!("{} (ramo: {}, principal: {})", c.rotulo, c.nossa, c.deles)).collect();
+        if !sem_escolha.is_empty() {
+            return Err(ProjectError::Recusado(format!("conflitos sem resolver: {}", sem_escolha.join("; "))));
+        }
+        let mut problemas = problemas_estruturais(&mescla.documento);
+        problemas.extend(verificar(&mescla.documento));
+        if !problemas.is_empty() {
+            return Err(ProjectError::Conferencia(problemas.join("; ")));
+        }
+        // a faixa de ids do ramo continua reservada: o próximo id nunca volta para trás
+        let alvo = ramo.seq * FAIXA_IDS;
+        if mescla.documento.peek_id() < alvo {
+            let falta = alvo - mescla.documento.peek_id();
+            mescla.documento.reserve_ids(falta);
+        }
+        let hash = self.gravar_conteudo(&mescla.documento)?;
+        let autor = self.autor.clone();
+        let mut cofre = self.cofre();
+        if let Some(r) = cofre.ramos.iter_mut().find(|r| r.doc_id == id && r.nome == nome) {
+            r.base_hash = hash_principal;
+            r.ponta_hash = hash.clone();
+            r.atualizado = now();
+            r.versoes.push(Version { hash: hash.clone(), time: now(), note: "principal trazida para o ramo".into(), author: autor, comment: String::new(), restored_from: None, estado: String::new() });
+            if let Some(p) = &mut r.pedido {
+                if p.estado == EstadoPedido::Aprovado {
+                    p.estado = EstadoPedido::Aberto;
+                    p.motivo = "o ramo mudou depois da aprovação".into();
+                }
+            }
+        }
+        self.gravar_cofre(&cofre)?;
+        self.evento_ramo(TipoEvento::Ramo, id, PRINCIPAL, nome, &format!("principal trazida para o ramo ({} conflito(s) resolvido(s))", mescla.conflitos.len()))?;
+        Ok(mescla)
+    }
+
+    /// Cópia derivada (fork): um documento novo no projeto, nascido da principal de hoje, que segue
+    /// a vida própria. Ele guarda de onde veio e volta ao original como ramo em
+    /// [`Self::trazer_derivado_como_ramo`].
+    pub fn derivar_documento(&mut self, id: u64, nome: &str) -> PResult<u64> {
+        self.pode_gravar()?;
+        let nome = nome.trim();
+        if nome.is_empty() {
+            return Err(ProjectError::Recusado("dê um nome à cópia derivada".into()));
+        }
+        let base_hash = self.hash_principal(id)?;
+        let mut doc = self.load_version(&base_hash)?;
+        doc.name = nome.to_string();
+        // a cópia é outro documento: ganha número de peça próprio
+        doc.props.pn.clear();
+        let mut cofre = self.cofre();
+        cofre.proximo_seq += 1;
+        let seq = cofre.proximo_seq;
+        let alvo = seq * FAIXA_IDS;
+        if doc.peek_id() < alvo {
+            doc.reserve_ids(alvo - doc.peek_id());
+        }
+        self.gravar_cofre(&cofre)?;
+        let novo = self.add_document(doc)?;
+        let mut cofre = self.cofre();
+        cofre.derivados.push(Derivado { doc_id: novo, de: id, base_hash, seq });
+        self.gravar_cofre(&cofre)?;
+        self.evento_ramo(TipoEvento::Ramo, id, PRINCIPAL, &format!("derivado {novo}"), &format!("cópia derivada '{nome}'"))?;
+        Ok(novo)
+    }
+
+    /// De qual documento esta cópia derivada nasceu, se for uma.
+    pub fn origem_do_derivado(&self, id: u64) -> Option<u64> {
+        self.cofre().derivados.iter().find(|d| d.doc_id == id).map(|d| d.de)
+    }
+
+    /// Traz a principal da cópia derivada de volta ao original como um ramo dele, com a base certa
+    /// (a versão de onde a cópia nasceu): daí segue o fluxo normal de pedido, revisão e mesclagem.
+    pub fn trazer_derivado_como_ramo(&mut self, derivado: u64, nome: &str) -> PResult<Ramo> {
+        self.pode_gravar()?;
+        let d = self.cofre().derivados.into_iter().find(|d| d.doc_id == derivado).ok_or_else(|| ProjectError::Recusado("o documento não é uma cópia derivada".into()))?;
+        let nome = nome.trim();
+        if nome.is_empty() || nome.eq_ignore_ascii_case(PRINCIPAL) || nome.contains(['/', '\\']) {
+            return Err(ProjectError::Recusado(format!("nome de ramo inválido: '{nome}'")));
+        }
+        let mut cofre = self.cofre();
+        if cofre.ramos.iter().any(|r| r.doc_id == d.de && r.nome == nome && r.estado == EstadoRamo::Aberto) {
+            return Err(ProjectError::Recusado(format!("já existe um ramo aberto chamado '{nome}'")));
+        }
+        let mut doc = self.load(derivado)?;
+        // o nome e o número de peça são do original; o resto vem da cópia
+        let base = self.load_version(&d.base_hash)?;
+        doc.name = base.name;
+        doc.props.pn = base.props.pn;
+        let ponta_hash = self.gravar_conteudo(&doc)?;
+        let t = now();
+        let ramo = Ramo {
+            doc_id: d.de,
+            nome: nome.into(),
+            autor: self.autor.clone(),
+            criado: t,
+            atualizado: t,
+            estado: EstadoRamo::Aberto,
+            base_hash: d.base_hash,
+            ponta_hash: ponta_hash.clone(),
+            seq: d.seq,
+            versoes: vec![Version { hash: ponta_hash, time: t, note: format!("trazido da cópia derivada {derivado}"), author: self.autor.clone(), comment: String::new(), restored_from: None, estado: String::new() }],
+            pedido: None,
+        };
+        cofre.ramos.push(ramo.clone());
+        self.gravar_cofre(&cofre)?;
+        self.evento_ramo(TipoEvento::Ramo, d.de, &format!("derivado {derivado}"), nome, "cópia derivada trazida como ramo")?;
+        Ok(ramo)
+    }
+
     /// Features que cada ramo aberto mexeu e que outro ramo, ou a própria principal, também mexeu:
     /// o aviso aparece antes do conflito.
     pub fn avisos_de_sobreposicao(&self, id: u64) -> PResult<Vec<AvisoSobreposicao>> {
@@ -888,6 +1040,79 @@ mod tests {
         assert_eq!(c.features.len(), 2);
         assert!(p.criar_ramo(id, "principal").is_err());
         assert!(p.criar_ramo(id, "a").is_err());
+        let _ = std::fs::remove_dir_all(raiz);
+    }
+
+    #[test]
+    fn ramo_traz_a_principal_e_continua_vendo_o_que_ela_mudou() {
+        let (mut p, id, raiz) = projeto("atualizar");
+        let d0 = p.load(id).unwrap();
+        let (x, y) = (d0.features[0].id, d0.features[1].id);
+        p.criar_ramo(id, "r").unwrap();
+        assert!(p.atualizar_ramo_com_principal(id, "r", &HashMap::new(), &sem_problema).is_err(), "nada a trazer");
+        let mut dr = p.carregar_ramo(id, "r").unwrap();
+        lado_a(&mut dr, x, "41");
+        p.salvar_no_ramo(id, "r", &dr, "").unwrap();
+        let mut dp = p.load(id).unwrap();
+        lado_a(&mut dp, y, "55");
+        p.save(id, &dp, "principal andou").unwrap();
+        // o ramo vê o que a principal mudou
+        let c = p.principal_desde_o_ramo(id, "r").unwrap();
+        assert_eq!(c.features.iter().map(|m| m.id).collect::<Vec<_>>(), vec![y.0]);
+        let m = p.atualizar_ramo_com_principal(id, "r", &HashMap::new(), &sem_problema).unwrap();
+        assert!(m.limpa());
+        let dr = p.carregar_ramo(id, "r").unwrap();
+        assert_eq!((valor_a(&dr, x).as_str(), valor_a(&dr, y).as_str()), ("41", "55"));
+        // a principal não mudou e o ramo já está em dia
+        assert_eq!(valor_a(&p.load(id).unwrap(), x), "40");
+        assert!(p.principal_desde_o_ramo(id, "r").unwrap().features.is_empty());
+        // ids novos do ramo continuam na faixa dele
+        let mut dr = p.carregar_ramo(id, "r").unwrap();
+        let nova = caixa(&mut dr, "3");
+        assert!(nova.0 >= FAIXA_IDS, "id {nova:?} fora da faixa do ramo");
+        let _ = std::fs::remove_dir_all(raiz);
+    }
+
+    #[test]
+    fn atualizar_o_ramo_com_conflito_exige_escolha() {
+        let (mut p, id, raiz) = projeto("atualizar_conflito");
+        let x = p.load(id).unwrap().features[0].id;
+        p.criar_ramo(id, "r").unwrap();
+        let mut dr = p.carregar_ramo(id, "r").unwrap();
+        lado_a(&mut dr, x, "99");
+        p.salvar_no_ramo(id, "r", &dr, "").unwrap();
+        let mut dp = p.load(id).unwrap();
+        lado_a(&mut dp, x, "41");
+        p.save(id, &dp, "").unwrap();
+        assert!(p.atualizar_ramo_com_principal(id, "r", &HashMap::new(), &sem_problema).is_err());
+        let chave = p.previa_atualizar_ramo(id, "r", &HashMap::new()).unwrap().conflitos[0].chave.clone();
+        // Nossa = o ramo: a pessoa fica com o próprio valor
+        p.atualizar_ramo_com_principal(id, "r", &HashMap::from([(chave, Lado::Nossa)]), &sem_problema).unwrap();
+        assert_eq!(valor_a(&p.carregar_ramo(id, "r").unwrap(), x), "99");
+        let _ = std::fs::remove_dir_all(raiz);
+    }
+
+    #[test]
+    fn copia_derivada_volta_ao_original_como_ramo_e_mescla() {
+        let (mut p, id, raiz) = projeto("derivada");
+        let x = p.load(id).unwrap().features[0].id;
+        let filho = p.derivar_documento(id, "Placa variante").unwrap();
+        assert_eq!(p.origem_do_derivado(filho), Some(id));
+        assert_eq!(p.load(filho).unwrap().name, "Placa variante");
+        let mut df = p.load(filho).unwrap();
+        lado_a(&mut df, x, "48");
+        p.save(filho, &df, "variante").unwrap();
+        // o original não vê a cópia
+        assert_eq!(valor_a(&p.load(id).unwrap(), x), "40");
+        p.trazer_derivado_como_ramo(filho, "variante").unwrap();
+        p.papeis = vec!["aprovador".into()];
+        p.pedir_mesclagem(id, "variante", "trazer a variante").unwrap();
+        p.revisar_pedido(id, "variante", true, "", &sem_problema).unwrap();
+        p.mesclar_ramo(id, "variante", &HashMap::new(), &sem_problema).unwrap();
+        let d = p.load(id).unwrap();
+        assert_eq!(valor_a(&d, x), "48");
+        assert_eq!(d.name, "Placa", "o original mantém o nome");
+        assert!(p.trazer_derivado_como_ramo(id, "x").is_err(), "o original não é cópia derivada");
         let _ = std::fs::remove_dir_all(raiz);
     }
 }

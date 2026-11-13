@@ -2,7 +2,7 @@
 //! Edição direta de faces (B33): mexer no corpo pelas faces, sem refazer o histórico. É o que torna
 //! útil um corpo vindo de STEP, que chega sem sketch nem comandos.
 
-use crate::doc::FaceKey;
+use crate::doc::{FaceKey, RegraAresta};
 use serde::{Deserialize, Serialize};
 
 /// O que se faz com as faces escolhidas.
@@ -43,10 +43,14 @@ pub struct DirectEdit {
     pub value: String,
     /// Mover: deslocamento X, Y e Z (mm)
     pub delta: [String; 3],
+    /// B95: seleção por intenção gravada (tangentes, concêntricas). Cada regra parte de uma face de
+    /// `faces` (a semente) e é refeita a cada recompute: faces que a mudança do modelo criar entram sozinhas.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub regras: Vec<RegraAresta>,
 }
 
 impl DirectEdit {
     pub fn novo(op: OpDireta) -> Self {
-        DirectEdit { op, faces: vec![], face_keys: vec![], value: "1".into(), delta: ["0".into(), "0".into(), "5".into()] }
+        DirectEdit { op, faces: vec![], face_keys: vec![], value: "1".into(), delta: ["0".into(), "0".into(), "5".into()], regras: vec![] }
     }
 }

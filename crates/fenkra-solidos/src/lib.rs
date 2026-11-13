@@ -4688,6 +4688,8 @@ impl Ctx<'_> {
                     }
                 }
                 let pts = self.resolve_faces("casca", f, b, owners, roles, &sh.faces, &sh.face_keys)?;
+                // B95: regra de seleção gravada (tangentes, concêntricas) refeita no corpo atual
+                let pts = selecao_regras::expandir_faces(b, &pts, &sh.regras)?;
                 let (s, out) = if sh.espessuras.is_empty() {
                     b.shell_tagged(&pts, t, sh.outward, &tags_for(owners)).map_err(k)?
                 } else {
@@ -4711,6 +4713,7 @@ impl Ctx<'_> {
                 let pull = if d.reverse { neutral.normal.map(|x| -x) } else { neutral.normal };
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
                 let pts = self.resolve_faces("ângulo de saída", f, b, owners, roles, &d.faces, &d.face_keys)?;
+                let pts = selecao_regras::expandir_faces(b, &pts, &d.regras)?;
                 let (s, out) = b.draft_tagged(&pts, pull, a, &neutral, &tags_for(owners)).map_err(k)?;
                 let body = remap_body(s, owners, roles, &out, f.id);
                 self.bodies.insert(f.target, body);
@@ -9923,13 +9926,13 @@ mod tests {
 
         // casca abrindo o topo
         let mut d = caixa();
-        d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![], closed: false }));
+        d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![], closed: false, regras: vec![] }));
         let v = vol(&d);
         assert!(v < v0 * 0.5 && v > 0., "casca {v}");
 
         // ângulo de saída numa face lateral
         let mut d = caixa();
-        d.add_feature(FeatureKind::Draft(Draft { faces: vec![[20., 0., 10.]], neutral: PlaneRef::Origin(OriginPlane::XY), angle: "5".into(), reverse: false, face_keys: vec![] }));
+        d.add_feature(FeatureKind::Draft(Draft { faces: vec![[20., 0., 10.]], neutral: PlaneRef::Origin(OriginPlane::XY), angle: "5".into(), reverse: false, face_keys: vec![], regras: vec![] }));
         assert!(!near(vol(&d), v0, 1e-6), "saída sem efeito");
 
         // espessura +5 no topo
@@ -10248,7 +10251,7 @@ mod tests {
         // o mesmo vale para as faces de casca, ângulo de saída e espessura
         let (mut d, caixa, _, _) = caixa_com_bolso(5.);
         let falsa = FaceKey { owner: caixa, role: 77, kind: 0, normal_or_axis: [0., 0., 1.], area: 1. };
-        let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(falsa)], closed: false }));
+        let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(falsa)], closed: false, regras: vec![] }));
         let r = recompute(&d);
         assert!(matches!(&r.status[&sh], Status::Error(m) if m.starts_with("referência perdida:") && m.contains("casca")), "{:?}", r.status[&sh]);
     }
@@ -10300,7 +10303,7 @@ mod tests {
         let topo = (0..b.face_role.len()).find(|i| b.face_owner[*i] == caixa && b.face_role[*i] == 1).expect("tampa final");
         let key = b.face_key(topo).unwrap();
         assert_eq!(key.normal_or_axis, [0., 0., 1.]);
-        let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(key)], closed: false }));
+        let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![Some(key)], closed: false, regras: vec![] }));
         let r = recompute(&d);
         assert_eq!(r.status[&sh], Status::Ok, "{:?}", r.status[&sh]);
         // a caixa fica mais alta: o ponto clicado (z = 20) já não está na face de cima, a chave sim
@@ -10315,7 +10318,7 @@ mod tests {
         let mut d = Document::new("t");
         let base = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [-20., -15.], [20., 15.]);
         d.add_feature(ext(base, BoolOp::Add, "20"));
-        let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![], closed: false }));
+        let sh = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: "2".into(), outward: false, face_keys: vec![], closed: false, regras: vec![] }));
         let r = recompute(&d);
         assert_eq!(r.status[&sh], Status::Ok);
         assert!(matches!(r.promoted.get(&sh), Some(Promoted::Faces(k)) if k.len() == 1 && k[0].is_some()));

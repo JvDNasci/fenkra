@@ -1,4 +1,4 @@
-# ADR 0086: Varredura em guia com cantos gira a seção com junta de esquadria (B350)
+# ADR 0087: Varredura em guia com cantos gira a seção com junta de esquadria (B350)
 
 - **Status:** aceita
 - **Data:** 2026-11-12

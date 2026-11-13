@@ -26,6 +26,7 @@ impl Ctx<'_> {
         let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para editar")?;
         let tags = tags_for(owners);
         let pts = self.resolve_faces("edição direta", f, b, owners, roles, &d.faces, &d.face_keys)?;
+        let pts = crate::selecao_regras::expandir_faces(b, &pts, &d.regras)?;
         let vol0 = b.mass().volume;
         let (s, out) = match d.op {
             OpDireta::Apagar => b.defeature_tagged(&pts, &tags).map_err(k)?,

@@ -589,12 +589,14 @@ pub fn hover_help_cmd(ui: &egui::Ui, resp: egui::Response, icon: &str, title: &s
     let shift = ui.input(|i| i.modifiers.shift);
     // dica simples (B377): só nome e frase, sem animação nem passo a passo
     let simples = crate::dica_anim::simples();
-    let estagio2 = !simples && (now - start >= crate::ajuda_cmd::ESTAGIO_2 || shift) && !advanced.is_empty();
+    // B60: F1 com o mouse em cima abre a ajuda do comando (terceira camada)
+    crate::ajuda_f1::talvez_abrir(ui.ctx(), icon);
+    let estagio2 = !simples && (now - start >= crate::ajuda_f1::estagio_2() || shift) && !advanced.is_empty();
     if !simples && !advanced.is_empty() && !estagio2 {
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
     }
     let atalho = crate::ajuda_cmd::atalho_do_comando(ui.ctx(), icon);
-    let t = if shift { now - start } else { now - start - crate::ajuda_cmd::ESTAGIO_2 };
+    let t = if shift { now - start } else { now - start - crate::ajuda_f1::estagio_2() };
     resp.on_hover_ui(|ui| conteudo_dica(ui, icon, title, brief, advanced, atalho.as_deref(), estagio2.then_some(t), simples))
 }
 
@@ -622,6 +624,9 @@ pub fn conteudo_dica(ui: &mut egui::Ui, icon: &str, title: &str, brief: &str, ad
             ui.add_space(4.);
         }
         crate::ajuda_cmd::mini_fluxo(ui, advanced);
+        if !icon.is_empty() {
+            ui.label(egui::RichText::new(tr("(F1: ajuda do comando)")).small().weak());
+        }
     } else if !advanced.is_empty() && !simples {
         ui.label(egui::RichText::new(tr("(mantenha o mouse para ver o passo a passo)")).small().weak());
     }
