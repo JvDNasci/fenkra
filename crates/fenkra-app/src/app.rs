@@ -8861,6 +8861,8 @@ impl eframe::App for App {
             crate::desempenho::esperar_limite(self.settings.limite_quadros);
         }
         let _quadro = crate::desempenho::quadro_guardado();
+        // B259: parede, CPU da thread e ociosidade da máquina nesta passada (com FENKRA_MEDIR_QUADROS)
+        let _medida = crate::medir_quadros::inicio();
         crate::desempenho::aplicar_vsync(frame, self.settings.vsync);
         crate::desempenho::contar_quadro(root.ctx(), self.settings.contador_fps);
         crate::desempenho::fechar_se_acabou(root.ctx());
