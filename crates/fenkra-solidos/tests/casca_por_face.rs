@@ -16,7 +16,7 @@ fn caixa(lista: Vec<EspessuraFace>) -> (Document, Id) {
     let mut d = Document::new("t");
     let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [60., 40.]);
     d.add_feature(ext(sk, BoolOp::Add, "30"));
-    let id = d.add_feature(FeatureKind::Shell(Shell { espessuras: lista, faces: vec![[30., 20., 30.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }));
+    let id = d.add_feature(FeatureKind::Shell(Shell { espessuras: lista, faces: vec![[30., 20., 30.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false, regras: vec![] }));
     (d, id)
 }
 

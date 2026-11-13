@@ -256,7 +256,7 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
         "escareado_casca" => {
             caixa_simples(doc);
             furo_escareado(doc, Extent::Blind(s("12")));
-            DemoPrevia::Comando(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[20., 15., 20.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false }))
+            DemoPrevia::Comando(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[20., 15., 20.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false, regras: vec![] }))
         }
         // B288 e B89: um término por lado
         "dois_lados" => {

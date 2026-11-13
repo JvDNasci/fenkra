@@ -85,7 +85,7 @@ fn medida_chanfro() {
 #[test]
 fn medida_casca() {
     let mut d = placa(6, 4);
-    let id = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }));
+    let id = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false, regras: vec![] }));
     mede("casca", d, id, "2", "2.2");
 }
 
@@ -125,7 +125,7 @@ fn medida_grande_filete_chanfro_casca() {
         let (id, a, b) = match k {
             0 => (d.add_feature(FeatureKind::Fillet(op)), "0.5", "0.6"),
             1 => (d.add_feature(FeatureKind::Chamfer(op)), "0.5", "0.6"),
-            _ => (d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false })), "2", "2.2"),
+            _ => (d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false, regras: vec![] })), "2", "2.2"),
         };
         mede(nome, d, id, a, b);
     }
@@ -223,7 +223,7 @@ fn casca_leve_recua_a_espessura_e_abre_a_face_escolhida() {
     let mut d = Document::new("c");
     let sk = sk_rect(&mut d, XY, [-30., -20.], [30., 20.]);
     d.add_feature(ext(sk, BoolOp::Add, "20"));
-    let id = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false }));
+    let id = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false, regras: vec![] }));
     let (leve, final_) = leve_e_final(&d, id);
     assert!(perto(volume_total(&leve), 60. * 40. * 20.));
     let v = leve.previas.iter().find(|p| p.feature == id).expect("prévia");

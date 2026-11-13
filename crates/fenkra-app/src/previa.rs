@@ -409,7 +409,7 @@ pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
         "reforco" => FeatureKind::StructGusset(StructGusset::novo([0., 0., 700.], "80", "6", "10")),
         "casca" => {
             caixa(doc);
-            FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 30.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false })
+            FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 30.]], thickness: s("3"), outward: false, face_keys: vec![], closed: false, regras: vec![] })
         }
         "espessura" => {
             caixa(doc);
@@ -718,7 +718,7 @@ mod tests {
         let mut d = caixa();
         let antes = recompute(&d);
         let base = corpos_base(Some(&antes));
-        let casca = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }));
+        let casca = d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false, regras: vec![] }));
         let r = recompute(&d);
         assert!(valido(r.status.get(&casca)), "{:?}", r.status.get(&casca));
         let v = r.bodies[0].mass.volume;
@@ -787,7 +787,7 @@ mod tests {
             let op = EdgeOp { value: s("2"), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() };
             casos.push((nome, d, if modo { FeatureKind::Fillet(op) } else { FeatureKind::Chamfer(op) }, ENTRA, false));
         }
-        casos.push(("casca", caixa(), FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false }), ENTRA, false));
+        casos.push(("casca", caixa(), FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s("2"), outward: false, face_keys: vec![], closed: false, regras: vec![] }), ENTRA, false));
         for (nome, mut d, kind, cor, sobe) in casos {
             let antes = recompute(&d);
             let base = corpos_base(Some(&antes));
@@ -884,7 +884,7 @@ mod tests {
             let op = EdgeOp { value: s(valor), edges: EdgeSel::Edges(vec![[0., -20., 20.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() };
             if chanfro { FeatureKind::Chamfer(op) } else { FeatureKind::Fillet(op) }
         };
-        let casca = |t: &str| FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s(t), outward: false, face_keys: vec![], closed: false });
+        let casca = |t: &str| FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[0., 0., 20.]], thickness: s(t), outward: false, face_keys: vec![], closed: false, regras: vec![] });
         let mut casos: Vec<(&str, Document, FeatureKind, FeatureKind)> = vec![];
         {
             let (mut d, topo) = caixa_com_tampa();
@@ -948,7 +948,7 @@ mod tests {
         let sk = Id(1);
         assert!(retira(&extrusao(sk, BoolOp::Cut, false, "5")));
         assert!(!retira(&extrusao(sk, BoolOp::Add, false, "5")));
-        assert!(!retira(&FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false })));
+        assert!(!retira(&FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false, regras: vec![] })));
         assert!(retira(&FeatureKind::Thickness(Thickness { faces: vec![], value: s("2"), face_keys: vec![], remove: true })));
     }
 
@@ -973,7 +973,7 @@ mod tests {
         let (_, texto) = rotulo_do_plano(&d, &r, espelho).expect("rótulo");
         assert!(texto.contains("espelho") && texto.contains("20 mm"), "{texto}");
         // saída: o neutro tem cor própria
-        let saida = d.add_feature(FeatureKind::Draft(Draft { faces: vec![[20., 0., 10.]], neutral: PlaneRef::Origin(OriginPlane::XY), angle: s("3"), reverse: false, face_keys: vec![] }));
+        let saida = d.add_feature(FeatureKind::Draft(Draft { faces: vec![[20., 0., 10.]], neutral: PlaneRef::Origin(OriginPlane::XY), angle: s("3"), reverse: false, face_keys: vec![], regras: vec![] }));
         let r = recompute(&d);
         let mut c = Scene::default();
         plano_referenciado(&d, &r, &Fantasma { id: saida, cor: [10, 20, 30], entrada: [0; 3], erro: [0; 3], retirada: [0; 3], ferramenta: [0; 3], neutro: [160, 170, 180], antes: &base }, &mut c);

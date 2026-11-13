@@ -54,6 +54,18 @@ impl Regra {
     }
 }
 
+/// Faces da seleção atual como o comando de face as grava (B95: casca, saída, edição direta). Se a
+/// seleção é a que uma regra de faces (tangentes, concêntricas) acabou de produzir, fica só a face
+/// semente e a regra, refeita a cada recálculo; senão, a lista explícita sem regra.
+pub fn faces_com_regra(picks: &[crate::picking::Pick], faces: &[[f64; 3]], keys: &[Option<fenkra_core::FaceKey>]) -> (Vec<[f64; 3]>, Vec<Option<fenkra_core::FaceKey>>, Vec<fenkra_core::RegraAresta>) {
+    let de_face = matches!(picks.first(), Some(crate::picking::Pick::Face { .. }));
+    let regra = regra_da_selecao(picks).filter(|r| matches!(r, Regra::Tangentes | Regra::Concentricas)).and_then(|r| r.gravada());
+    match regra {
+        Some(g) if de_face && !faces.is_empty() => (faces[..1].to_vec(), keys.iter().take(1).cloned().collect(), vec![fenkra_core::RegraAresta { semente: 0, regra: g }]),
+        _ => (faces.to_vec(), keys.to_vec(), vec![]),
+    }
+}
+
 /// Nome da regra gravada, para o painel do comando.
 pub fn nome_gravada(r: fenkra_core::RegraSelecao) -> &'static str {
     match r {
@@ -61,6 +73,36 @@ pub fn nome_gravada(r: fenkra_core::RegraSelecao) -> &'static str {
         fenkra_core::RegraSelecao::Cadeia => "cadeia",
         fenkra_core::RegraSelecao::Concentricas => "concêntricas",
     }
+}
+
+/// Linha do painel dos comandos de face com a regra gravada (B95) e o botão de soltá-la.
+pub fn regra_faces_ui(ui: &mut eframe::egui::Ui, regras: &mut Vec<fenkra_core::RegraAresta>, faces: &[[f64; 3]]) {
+    use crate::i18n::tr;
+    let Some(r) = regras.first().copied() else { return };
+    let mut soltar = false;
+    ui.horizontal_wrapped(|ui| {
+        ui.label(eframe::egui::RichText::new(format!("{}: {} {} {}", tr("Regra gravada"), tr(nome_gravada(r.regra)), tr("a partir da face"), faces.get(r.semente).map(|p| crate::app::p3(p, 1)).unwrap_or_default())).small())
+            .on_hover_text(tr("A cada recálculo a regra é refeita a partir da face semente: faces que a mudança do modelo criar entram sozinhas."));
+        soltar = ui.small_button(tr("Soltar a regra")).on_hover_text(tr("Deixa só as faces da lista, sem refazer a regra.")).clicked();
+    });
+    if soltar {
+        regras.clear();
+    }
+}
+
+/// Mantém as regras ligadas à mesma face semente quando a lista muda no painel (B95): a semente
+/// que saiu da lista leva a regra junto; as outras seguem o novo índice.
+pub fn acompanhar_sementes(regras: &mut Vec<fenkra_core::RegraAresta>, antes: &[[f64; 3]], depois: &[[f64; 3]]) {
+    regras.retain_mut(|r| {
+        let Some(p) = antes.get(r.semente) else { return false };
+        match depois.iter().position(|q| q == p) {
+            Some(i) => {
+                r.semente = i;
+                true
+            }
+            None => false,
+        }
+    });
 }
 
 thread_local! {
@@ -166,6 +208,9 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("A cada recálculo a regra é refeita a partir da aresta semente: arestas que a mudança do modelo criar ou mover entram sozinhas.", "On every recompute the rule is redone from the seed edge: edges created or moved by a model change come in by themselves."),
     ("Soltar a regra", "Drop the rule"),
     ("Deixa só as arestas da lista, sem refazer a regra.", "Keeps only the listed edges, without redoing the rule."),
+    ("a partir da face", "from face"),
+    ("A cada recálculo a regra é refeita a partir da face semente: faces que a mudança do modelo criar entram sozinhas.", "On every recompute the rule is redone from the seed face: faces created by a model change come in by themselves."),
+    ("Deixa só as faces da lista, sem refazer a regra.", "Keeps only the listed faces, without redoing the rule."),
 ];
 
 #[cfg(test)]

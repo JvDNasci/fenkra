@@ -2453,6 +2453,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let faces = self.picked_faces();
         let edge_keys = self.picked_edge_keys();
         let face_keys = self.picked_face_keys();
+        // B95: faces escolhidas por regra (tangentes, concêntricas) gravam só a semente e a regra
+        let (faces_r, keys_r, regras_f) = crate::selecao_regras::faces_com_regra(&self.picks, &faces, &face_keys);
         let seed = match c {
             Cmd::Rib | Cmd::Slot | Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints => self.seed(true),
             Cmd::StMember | Cmd::StPlate | Cmd::StGusset => self.seed(true),
@@ -2835,13 +2837,14 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 w.picking_b = !w.faces.is_empty();
                 Sel::Feature(d.add_feature(FeatureKind::StructWeld(w)))
             }
-            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: faces.clone(), thickness: s("2"), outward: false, face_keys: face_keys.clone(), closed: false }))),
-            Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: face_keys.clone() }))),
+            Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: faces_r.clone(), thickness: s("2"), outward: false, face_keys: keys_r.clone(), closed: false, regras: regras_f.clone() }))),
+            Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces_r.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: keys_r.clone(), regras: regras_f.clone() }))),
             Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2"), face_keys: face_keys.clone(), remove: false }))),
             Cmd::DirectEdit(i) => {
                 let mut e = fenkra_core::DirectEdit::novo(fenkra_core::OpDireta::ALL[i as usize % fenkra_core::OpDireta::ALL.len()]);
-                e.faces = faces.clone();
-                e.face_keys = face_keys.clone();
+                e.faces = faces_r.clone();
+                e.face_keys = keys_r.clone();
+                e.regras = regras_f.clone();
                 Sel::Feature(d.add_feature(FeatureKind::DirectEdit(e)))
             }
             Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None, start: String::new(), face_key: None }))),
