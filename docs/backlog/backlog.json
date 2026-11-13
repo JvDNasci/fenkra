@@ -3284,7 +3284,7 @@
    "tokens_k": 350,
    "teste": "Auto + Visual",
    "area": "PMI 3D",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -4472,7 +4472,7 @@
    "tokens_k": 350,
    "teste": "Auto",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -5464,7 +5464,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -6025,7 +6025,7 @@
    "tokens_k": 250,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.2
   },
   {
