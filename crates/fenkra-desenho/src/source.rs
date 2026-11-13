@@ -819,10 +819,12 @@ impl Models {
                     } else {
                         // B102: o código e o material são os da configuração do componente; configuração
                         // que a peça não tem mostra o motivo no lugar do código
-                        match self.parts.get_config(&r.path, false, &r.config) {
-                            Ok(p) => {
-                                let pr = &p.doc.props;
-                                (pr.pn.clone(), if pr.description.is_empty() { p.doc.name.clone() } else { pr.description.clone() }, pr.material.clone())
+                        // B393: só o documento; calcular as peças aqui travava a interface (20 s no kart)
+                        let doc = self.parts.documento(&r.path).cloned().and_then(|d| if r.config.is_empty() { Ok(d) } else { d.com_configuracao(&r.config).map_err(|e| e.to_string()) });
+                        match doc {
+                            Ok(doc) => {
+                                let pr = &doc.props;
+                                (pr.pn.clone(), if pr.description.is_empty() { doc.name.clone() } else { pr.description.clone() }, pr.material.clone())
                             }
                             Err(e) if !r.config.is_empty() => (format!("⚠ {e}"), r.name.clone(), String::new()),
                             Err(_) => (String::new(), r.name.clone(), String::new()),
@@ -838,8 +840,8 @@ impl Models {
             (TableKind::CutList, Model::Asm(a)) => {
                 let mut acc: Vec<(String, f64, usize, usize)> = vec![];
                 for r in fenkra_montagem::bom::bom(a, dir.as_deref(), fenkra_montagem::bom::BomLevel::Pecas) {
-                    let Ok(p) = self.parts.get(&r.path, false) else { continue };
-                    for c in fenkra_solidos::cut_list(&p.doc) {
+                    let Ok(doc) = self.parts.documento(&r.path) else { continue };
+                    for c in fenkra_solidos::cut_list(doc) {
                         let n = c.count * r.qty as usize;
                         match acc.iter_mut().find(|x| x.0 == c.designation && (x.1 - c.length).abs() < 0.05) {
                             Some(x) => {
@@ -1182,4 +1184,35 @@ fn concluir(h: Hlr, linhas: fenkra_kernel::KResult<Vec<(Vec<V2>, u8)>>) -> Proj 
     out.lines.extend(explosao.iter().map(|l| (l.iter().map(|p| axes.project(*p)).collect(), 7u8)));
     out.bounds();
     out
+}
+
+#[cfg(test)]
+mod testes_lista {
+    use super::*;
+    use crate::{Format, Table, TableKind};
+
+    /// B393: a lista de peças de uma montagem só lê os documentos. Antes ela calculava cada peça
+    /// (comandos e malha) na thread da interface, e o desenho do kart ficava parado uns 20 s.
+    #[test]
+    fn lista_de_pecas_da_montagem_nao_calcula_as_pecas() {
+        let dir = std::env::temp_dir().join(format!("fenkra_lista_sem_calculo_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut peca = fenkra_solidos::example_document();
+        peca.props.pn = "PN-77".into();
+        std::fs::write(dir.join("placa.fkp"), peca.to_json()).unwrap();
+        let mut a = Assembly::new("raiz");
+        for k in 0..2 {
+            a.add_component(&format!("P{k}"), fenkra_montagem::NodeKind::Part { path: "placa.fkp".into() }, Default::default(), None);
+        }
+        std::fs::write(dir.join("raiz.fka"), a.to_json()).unwrap();
+        let src = Source { path: "raiz.fka".into(), display_state: String::new(), hidden: vec![] };
+        let mut d = Drawing::new("t", Format::A3);
+        let s = d.sheets[0].id;
+        let t = Table { id: d.alloc(), sheet: s, kind: TableKind::Bom, source: src, pos: [0., 0.], level: Default::default(), cfg: Default::default() };
+        let mut m = Models::new(Some(dir.clone()));
+        let dados = m.table(&t, &d);
+        assert!(dados.rows.iter().any(|r| r.iter().any(|c| c == "PN-77")), "{:?}", dados.rows);
+        assert!(m.parts.tirar_recem().is_empty(), "a lista não pode calcular peça");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }
