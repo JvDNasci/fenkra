@@ -2,6 +2,7 @@
 //! A sessão de trabalho: uma peça aberta e a lista fechada de comandos sobre ela.
 
 use crate::checador::{self, Tolerancias};
+use crate::montagem::{Formas, Montagem};
 use crate::filho;
 use crate::pasta::Pasta;
 use crate::registro::{ler_comandos, Registro};
@@ -15,7 +16,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 /// Todos os comandos que existem. Nada fora desta lista roda, e nenhum deles interpreta código.
-pub const COMANDOS: [&str; 29] = [
+pub const COMANDOS: [&str; 37] = [
     "versao",
     "comandos",
     "nova_peca",
@@ -45,10 +46,18 @@ pub const COMANDOS: [&str; 29] = [
     "selecionar",
     "biblioteca",
     "verificar",
+    "definir_chapa",
+    "nova_montagem",
+    "inserir_componente",
+    "restringir",
+    "mover_componente",
+    "montagem",
+    "bom",
+    "salvar_montagem",
 ];
 
 /// Os que mudam o modelo: são estes que entram no registro e que `reproduzir` aceita.
-pub const COMANDOS_DE_MODELO: [&str; 11] = [
+pub const COMANDOS_DE_MODELO: [&str; 16] = [
     "nova_peca",
     "definir_parametro",
     "criar_plano",
@@ -60,6 +69,11 @@ pub const COMANDOS_DE_MODELO: [&str; 11] = [
     "desfazer",
     "abrir",
     "adicionar",
+    "definir_chapa",
+    "nova_montagem",
+    "inserir_componente",
+    "restringir",
+    "mover_componente",
 ];
 
 const LEITURA_PECA: [&str; 2] = ["fkx", "fkp"];
@@ -93,12 +107,16 @@ pub struct Sessao {
     isolamento: Isolamento,
     modelo: Option<Modelo>,
     calculado: Option<Calculado>,
-    /// estado anterior a cada comando, para `desfazer`
-    historico: Vec<Option<Modelo>>,
+    /// estado anterior a cada comando, para `desfazer`: a peça e a montagem
+    historico: Vec<(Option<Modelo>, Option<Montagem>)>,
     /// liga o artefato da sequência de comandos
     registrar: bool,
     registro: Option<Registro>,
     ultima_comparacao: Option<Value>,
+    /// montagem em edição (B420), ao lado da peça
+    montagem: Option<Montagem>,
+    /// forma de cada peça usada na montagem, por arquivo
+    formas: Formas,
 }
 
 fn arquivo_de(peca: &Peca) -> Arquivo {
@@ -167,6 +185,8 @@ impl Sessao {
             registrar: false,
             registro: None,
             ultima_comparacao: None,
+            montagem: None,
+            formas: Formas::default(),
         }
     }
 
@@ -206,7 +226,7 @@ impl Sessao {
             "versao" => Ok(
                 json!({ "api": API_VERSAO, "programa": env!("CARGO_PKG_VERSION"), "kernel": fenkra_kernel::AVAILABLE }),
             ),
-            "comandos" => Ok(json!({ "comandos": COMANDOS })),
+            "comandos" => Ok(json!({ "comandos": COMANDOS.as_slice() })),
             "nova_peca" => self.nova_peca(args),
             "abrir" => self.abrir(args),
             "salvar" => self.salvar(args),
@@ -216,6 +236,24 @@ impl Sessao {
             "parametros" => self.parametros(),
             "definir_parametro" => self.definir_parametro(args),
             "criar_plano" => self.criar_plano(args),
+            "definir_chapa" => self.definir_chapa(args),
+            "nova_montagem" => self.nova_montagem(args),
+            "inserir_componente" => self.inserir_componente(args),
+            "restringir" => self.mudar_montagem(|m, f| m.restringir(f, args)),
+            "mover_componente" => self.mudar_montagem(|m, _| m.mover(args)),
+            "montagem" => {
+                let formas = &self.formas;
+                self.montagem.as_ref().map(|m| m.estado(formas)).ok_or_else(|| ErroApi::novo("sem_montagem", "nenhuma montagem em edição; use `nova_montagem`"))
+            }
+            "bom" => {
+                let raiz = self.pasta.raiz().to_path_buf();
+                let formas = &self.formas;
+                match &self.montagem {
+                    Some(m) => m.bom(&raiz, args, formas),
+                    None => Err(ErroApi::novo("sem_montagem", "nenhuma montagem em edição; use `nova_montagem`")),
+                }
+            }
+            "salvar_montagem" => self.salvar_montagem(args),
             "criar_esboco" => self.adicionar("esboco", "esboco", "Esboço", args),
             "extrudar" => self.adicionar("extrusao", "extrusao", "Extrusão", args),
             "furar" => self.adicionar(
@@ -266,7 +304,7 @@ impl Sessao {
     // ------------------------------------------------------------------ modelo
 
     fn trocar(&mut self, novo: Modelo) {
-        self.historico.push(self.modelo.take());
+        self.historico.push((self.modelo.take(), self.montagem.clone()));
         self.modelo = Some(novo);
         self.calculado = None;
     }
@@ -317,6 +355,7 @@ impl Sessao {
             referencias: vec![],
             arvore: vec![],
             ativos: None,
+            chapa: None,
         }));
         Ok(json!({ "nome": nome }))
     }
@@ -602,16 +641,116 @@ impl Sessao {
         Ok(json!({ "id": id }))
     }
 
+    /// Liga a chapa na peça ou muda os parâmetros dela (B420). Só os campos informados mudam; a
+    /// primeira vez parte de 2 mm, raio 2 e fator K 0,44. `planificada` mostra a peça desdobrada.
+    fn definir_chapa(&mut self, args: &Value) -> Result<Value, ErroApi> {
+        let mut peca = self.peca()?.clone();
+        let mut chapa = match &peca.chapa {
+            Some(c) => serde_json::to_value(c).map_err(|e| ErroApi::novo("arvore", e.to_string()))?,
+            None => json!({ "espessura": "2", "raio": "2", "fator_k": "0.44" }),
+        };
+        for (k, v) in args.as_object().into_iter().flatten() {
+            chapa[k] = match v {
+                Value::Number(n) if k != "planificada" => json!(n.to_string()),
+                _ => v.clone(),
+            };
+        }
+        peca.chapa = Some(serde_json::from_value(chapa.clone()).map_err(|e| ErroApi::argumento(format!("chapa: {e}")))?);
+        let v = serde_json::to_value(arquivo_de(&peca)).map_err(|e| ErroApi::novo("arvore", e.to_string()))?;
+        let nova = validar(&v)?;
+        arvore::ler_peca(&nova).map_err(|e| ErroApi::novo("arvore", e.to_string()))?;
+        let chapa = serde_json::to_value(&nova.chapa).unwrap_or_default();
+        self.trocar(Modelo::Arvore(nova));
+        let r = self.recalcular()?;
+        Ok(json!({ "chapa": chapa, "status": r["status"], "volume": r["volume"], "caixa": r["caixa"] }))
+    }
+
     fn desfazer(&mut self) -> Result<Value, ErroApi> {
         let anterior = self
             .historico
             .pop()
             .ok_or_else(|| ErroApi::novo("sem_historico", "nada para desfazer"))?;
-        self.modelo = anterior;
+        (self.modelo, self.montagem) = anterior;
         self.calculado = None;
-        Ok(
-            json!({ "itens": self.modelo.as_ref().map_or(0, |m| if let Modelo::Arvore(p) = m { p.arvore.len() } else { 0 }) }),
-        )
+        let mut v = json!({ "itens": self.modelo.as_ref().map_or(0, |m| if let Modelo::Arvore(p) = m { p.arvore.len() } else { 0 }) });
+        if let Some(m) = &self.montagem {
+            v["componentes"] = json!(m.asm.nodes.len());
+            v["restricoes"] = json!(m.asm.mates.len());
+        }
+        Ok(v)
+    }
+
+    // ------------------------------------------------------------------ montagem
+
+    fn montagem_mut(&mut self) -> Result<&mut Montagem, ErroApi> {
+        self.montagem.as_mut().ok_or_else(|| ErroApi::novo("sem_montagem", "nenhuma montagem em edição; use `nova_montagem`"))
+    }
+
+    /// Guarda a montagem atual no histórico antes de mudar: `desfazer` volta peça e montagem juntas.
+    fn guardar_montagem(&mut self) -> Result<Montagem, ErroApi> {
+        let m = self.montagem_mut()?.clone();
+        self.historico.push((self.modelo.clone(), Some(m.clone())));
+        Ok(m)
+    }
+
+    fn nova_montagem(&mut self, args: &Value) -> Result<Value, ErroApi> {
+        let nome = args["nome"].as_str().unwrap_or("Montagem").to_string();
+        self.historico.push((self.modelo.clone(), self.montagem.take()));
+        self.montagem = Some(Montagem::nova(&nome));
+        Ok(json!({ "nome": nome }))
+    }
+
+    fn inserir_componente(&mut self, args: &Value) -> Result<Value, ErroApi> {
+        let arquivo = texto(args, "arquivo")?;
+        // a montagem gravada aponta para o arquivo, e o aplicativo abre componente em .fkp
+        if !arquivo.to_ascii_lowercase().ends_with(".fkp") {
+            return Err(ErroApi::novo("formato", "componente é uma peça .fkp da pasta do projeto: grave a peça com salvar_peca em .fkp antes de inserir"));
+        }
+        let mut m = self.guardar_montagem()?;
+        // lida de novo a cada inserção: a peça pode ter sido regravada desde a última
+        let forma = self.forma_do_arquivo(&arquivo).inspect_err(|_| {
+            self.historico.pop();
+        })?;
+        self.formas.0.insert(arquivo.clone(), forma);
+        let r = m.inserir(args, &arquivo).inspect_err(|_| {
+            self.historico.pop();
+        })?;
+        self.montagem = Some(m);
+        Ok(r)
+    }
+
+    /// Roda uma mudança na montagem; se falhar, nada muda e o histórico não cresce.
+    fn mudar_montagem(&mut self, f: impl FnOnce(&mut Montagem, &Formas) -> Result<Value, ErroApi>) -> Result<Value, ErroApi> {
+        let mut m = self.guardar_montagem()?;
+        match f(&mut m, &self.formas) {
+            Ok(v) => {
+                self.montagem = Some(m);
+                Ok(v)
+            }
+            Err(e) => {
+                self.historico.pop();
+                Err(e)
+            }
+        }
+    }
+
+    fn salvar_montagem(&mut self, args: &Value) -> Result<Value, ErroApi> {
+        let arquivo = texto(args, "arquivo")?;
+        let sobrescrever = args["sobrescrever"].as_bool().unwrap_or(false);
+        let raiz = self.pasta.raiz().to_path_buf();
+        let m = self.montagem_mut()?;
+        let mut asm = m.asm.clone();
+        asm.assign_items(Some(&raiz));
+        let (conteudo, fora) = if arquivo.to_ascii_lowercase().ends_with(".fkx") {
+            // o formato aberto leva componentes e posições; restrições ficam listadas em `fora`
+            let a = arvore::exportar_montagem(&asm, &raiz)?;
+            let fora = a.fora.clone();
+            (serde_json::to_string_pretty(&a).map_err(|e| ErroApi::novo("gravacao", e.to_string()))?, fora)
+        } else {
+            (asm.to_json(), vec![])
+        };
+        self.pasta.gravar(&arquivo, &["fka", "fkx"], sobrescrever, |p| std::fs::write(p, &conteudo).map_err(|e| ErroApi::novo("gravacao", e.to_string())))?;
+        Ok(json!({ "arquivo": arquivo, "fora": fora }))
     }
 
     // ------------------------------------------------------------------ cálculo e medidas
@@ -886,6 +1025,9 @@ fn rotulo_do_tipo(tipo: &str) -> String {
     match tipo {
         "revolucao" => "Revolução".into(),
         "padrao" => "Padrão".into(),
+        "parede_chapa" => "Parede".into(),
+        "placa_extremidade" => "Placa".into(),
+        "reforco" => "Reforço".into(),
         "esboco" => "Esboço".into(),
         "extrusao" => "Extrusão".into(),
         _ => {

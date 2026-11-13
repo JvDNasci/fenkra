@@ -58,7 +58,14 @@ do cliente.
 | `reconhecer_features` | Furos, filetes e chanfros inferidos da geometria da peça em edição |
 | `verificar` | Requisitos da peça (B418), declarados nela ou passados na chamada: massa, furos, folga, interferência, caixa e propagação de parâmetro, com resultado por requisito |
 | `consultar_biblioteca` | Famílias de fixadores, tamanhos, medidas e faixa do furo de passagem |
-| `listar_comandos` | Descoberta: filtra as ferramentas por palavra e diz o que ainda não passa pelo servidor (montagem, chapa metálica, estrutural) |
+| `definir_chapa` | Liga a chapa metálica na peça ou muda espessura, raio, fator K, compensação e alívios; `planificada` mede e mostra a peça desdobrada |
+| `criar_parede_chapa`, `criar_aba`, `criar_bainha`, `dobrar_chapa` | Chapa metálica, geradas do esquema: parede a partir de esboço fechado, aba e bainha numa aresta (ponto sobre ela, de `selecionar`), dobra por linha |
+| `criar_membro`, `criar_placa_extremidade`, `criar_reforco` | Estrutural, geradas do esquema: perfis sobre as retas de um esboço ou de referência, com tratamento de canto; placa na ponta; reforço no encontro de dois membros |
+| `nova_montagem`, `inserir_componente` | Montagem ao lado da peça; componentes são peças `.fkp` da pasta (grave com `salvar_peca`), e o primeiro entra fixo |
+| `restringir`, `mover_componente` | Coincidente, contato, distância, ângulo, paralela e perpendicular entre faces (ponto sobre elas no mundo), planos ou eixos da origem da peça; mover reaplica as restrições |
+| `ver_montagem`, `lista_de_pecas` | Posição, graus de liberdade, volume e caixa de cada componente e do conjunto; lista de peças por nível |
+| `salvar_montagem` | Grava `.fka`, que o aplicativo abre com as restrições, ou `.fkx` (componentes e posições) |
+| `listar_comandos` | Descoberta: filtra as ferramentas por palavra e diz o que ainda não passa pelo servidor (juntas e mecanismos, comandos avançados de chapa, solda e regras de canto do estrutural) |
 
 Os campos seguem o [formato da árvore](../formatos/arvore.md), e as respostas seguem o
 [contrato JSON](../formatos/api-json.md).
@@ -74,7 +81,8 @@ Os campos seguem o [formato da árvore](../formatos/arvore.md), e as respostas s
 ## O que fica na pasta
 
 Cada sessão guarda seus comandos em `comandos/sessao-NNN.jsonl`, e a sessão seguinte usa o próximo número. Esse
-arquivo é o artefato: a conversa com o modelo muda, a sequência não. Para refazer a peça sem agente:
+arquivo é o artefato: a conversa com o modelo muda, a sequência não. Os comandos da montagem entram nele também,
+e `desfazer` volta peça e montagem juntas. Para refazer a peça sem agente:
 
 ```bash
 fenkra-cli --pasta projeto reproduzir comandos/sessao-001.jsonl --saida peca.fkx
@@ -95,6 +103,7 @@ Atende clientes com aperto de mão `initialize` (2024-11-05 a 2025-11-25) e pedi
 
 ## O que esperar
 
-Peças prismáticas com furos, bolsos e filetes são o caso bom. Peça orgânica ou montagem grande não é. O teste
+Peças prismáticas com furos, bolsos e filetes são o caso bom, e também suporte de chapa, quadro de perfis e
+montagem de poucas peças com restrições de posição. Peça orgânica, montagem grande ou mecanismo não é. O teste
 automático reconstrói as peças com um agente de roteiro, não com um modelo: ele prova que as ferramentas bastam, não
 que um modelo específico dê conta.

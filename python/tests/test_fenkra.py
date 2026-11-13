@@ -108,6 +108,25 @@ class Api(unittest.TestCase):
             Fenkra(self.pasta)
         self.assertEqual(e.exception.codigo, "programa_ausente")
 
+    def test_chapa_e_montagem(self):
+        with Fenkra(self.pasta) as f:
+            f.nova_peca("Chapa")
+            f.definir_chapa(espessura="2", raio="2", fator_k="0.44")
+            esboco = f.criar_esboco("XY", **{k: RETANGULO[k] for k in ("pontos", "curvas")})
+            self.assertEqual(f.adicionar("parede_chapa", esboco=esboco["id"])["status"], "ok")
+            aba = f.adicionar("aba", aresta=[40, 15, 2], comprimento="10", angulo="90")
+            self.assertEqual(aba["status"], "ok")
+            self.assertGreater(aba["volume"], 40 * 30 * 2)
+            f.salvar("chapa.fkp")
+            f.nova_montagem("Conjunto")
+            f.inserir_componente("chapa.fkp")
+            f.inserir_componente("chapa.fkp", origem=[0, 0, 50])
+            r = f.restringir("contato", {"componente": "c1", "plano": "XY"}, {"componente": "c2", "plano": "XY"})
+            self.assertEqual(r["status"], "ok")
+            self.assertEqual(f.bom()["linhas"][0]["quantidade"], 2)
+            f.salvar_montagem("conjunto.fka")
+            self.assertTrue((self.pasta / "conjunto.fka").is_file())
+
     def test_versao(self):
         with Fenkra(self.pasta) as f:
             self.assertEqual(f.chamar("versao")["api"], API_VERSAO)

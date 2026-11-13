@@ -10,11 +10,12 @@ use serde_json::{json, Value};
 
 pub const NOME: &str = "listar_comandos";
 
-/// O que o formato aberto ainda não descreve: fica no aplicativo.
+/// O que ainda não passa pelo servidor: fica no aplicativo. Montagem, chapa e estrutural entraram
+/// (B420); daqui só sai o que falta dentro de cada uma.
 const FORA: [(&str, &str); 3] = [
-    ("montagem", "restrições e juntas entre peças: monte no aplicativo, a partir das peças salvas aqui"),
-    ("chapa metálica", "parede, aba, dobra e planificação ainda não estão no formato da árvore"),
-    ("estrutural", "perfis sobre esqueleto e cortes entre membros ainda não estão no formato da árvore"),
+    ("juntas e mecanismos", "juntas com movimento, engrenagens, subconjuntos e repetição de componentes: a montagem daqui tem peças, restrições de posição, movimento e lista de peças"),
+    ("chapa: comandos avançados", "aba por perfil ou por superfície, recorte, estampo, veneziana, furo flangeado, fechamento e alívio de canto, desdobrar parcial: daqui saem parede, aba, bainha, dobra por linha e planificação"),
+    ("estrutural: solda e regras de canto", "cordão de solda, dobra de tubo no nó e regra própria por canto: daqui saem membro, placa de extremidade e reforço"),
 ];
 
 fn propria() -> Value {
@@ -94,7 +95,14 @@ mod testes {
         assert!(r["ferramentas"].as_array().unwrap().iter().any(|t| t["nome"] == "consultar_biblioteca"), "{r}");
         let r = listar(&json!({})).unwrap();
         assert_eq!(r["quantidade"].as_u64().unwrap() as usize, todas().len());
-        assert!(r["fora_deste_servidor"].as_array().unwrap().iter().any(|f| f["area"] == "chapa metálica"));
+        // montagem, chapa e estrutural passam pelo servidor: não aparecem mais como fora
+        for area in ["montagem", "chapa metálica", "estrutural"] {
+            assert!(!r["fora_deste_servidor"].as_array().unwrap().iter().any(|f| f["area"] == area), "{area}: {r}");
+        }
+        for (busca, nome) in [("aba", "criar_aba"), ("chapa", "definir_chapa"), ("membro", "criar_membro"), ("montagem", "inserir_componente"), ("restrição", "restringir"), ("lista de peças", "lista_de_pecas")] {
+            let r = listar(&json!({ "busca": busca })).unwrap();
+            assert!(r["ferramentas"].as_array().unwrap().iter().any(|t| t["nome"] == nome), "{busca} → {nome}: {r}");
+        }
     }
 
     #[test]

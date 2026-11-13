@@ -999,3 +999,270 @@ fn casca_abre_a_face_escolhida_por_lado() {
     let (e, erro) = c.tentar("criar_casca", json!({ "tipo": "padrao", "faces": [], "espessura": 2 }));
     assert!(erro, "tipo trocado passou: {e}");
 }
+
+// ------------------------------------------------------------------ chapa, estrutural e montagem (B420)
+
+fn caixa_de(v: &Value) -> ([f64; 3], [f64; 3]) {
+    (xyz(&v["caixa"]["min"]), xyz(&v["caixa"]["max"]))
+}
+
+fn caixa_do_documento(d: &Document) -> ([f64; 3], [f64; 3]) {
+    final_shape(d).and_then(|s| s.bbox()).expect("a referência tem sólido")
+}
+
+fn volume_do_documento(d: &Document) -> f64 {
+    let r = fenkra_solidos::recompute(d);
+    for f in &d.features {
+        assert_eq!(r.status[&f.id], fenkra_solidos::Status::Ok, "referência: {}", f.name);
+    }
+    r.bodies.iter().map(|b| b.mass.volume).sum()
+}
+
+fn confere_com_referencia(r: &Value, d: &Document, tol: f64, rotulo: &str) {
+    let v = r["volume"].as_f64().unwrap();
+    let alvo = volume_do_documento(d);
+    assert!((v - alvo).abs() < tol, "{rotulo}: volume {v} contra {alvo}");
+    let ((lo, hi), (a, b)) = (caixa_de(r), caixa_do_documento(d));
+    for i in 0..3 {
+        assert!((lo[i] - a[i]).abs() < 1e-3 && (hi[i] - b[i]).abs() < 1e-3, "{rotulo}: caixa {lo:?} {hi:?} contra {a:?} {b:?}");
+    }
+}
+
+/// Refaz o registro da sessão sem servidor e mede de novo com o comando dado.
+fn refeito(pasta: &Path, c: &mut Cliente, comando: &str) -> Value {
+    let arquivo = c.recurso("fenkra://comandos")["arquivo"].as_str().unwrap().to_string();
+    let mut s = Sessao::nova(Pasta::nova(pasta).unwrap(), Isolamento::Local);
+    s.executar("reproduzir", &json!({ "arquivo": arquivo })).unwrap();
+    s.executar(comando, &json!({})).unwrap()
+}
+
+/// B420: chapa pelo servidor real. Parede, aba e bainha geradas do esquema, conferidas contra o mesmo
+/// documento montado em código, dobrada e planificada; a sequência refeita dá a mesma peça.
+#[test]
+fn chapa_pelo_servidor_dobrada_e_planificada() {
+    precisa_kernel!();
+    let pasta = pasta_limpa("chapa");
+    let mut c = Cliente::iniciar(&pasta, false);
+    c.chamar("nova_peca", json!({ "nome": "suporte" }));
+    let (pontos, curvas) = retangulo(0., 0., 100., 50.);
+    c.chamar("criar_esboco", json!({ "id": "base", "plano": "XY", "pontos": pontos, "curvas": curvas }));
+    let ch = c.chamar("definir_chapa", json!({ "espessura": 2, "raio": 2, "fator_k": 0.44 }));
+    assert_eq!(ch["chapa"]["espessura"], "2", "{ch}");
+    let r = c.chamar("criar_parede_chapa", json!({ "esboco": "base" }));
+    assert_eq!(r["status"], "ok", "{r}");
+    assert!((r["volume"].as_f64().unwrap() - 10000.).abs() < 1e-3, "{r}");
+    let s = c.chamar("selecionar", json!({ "lado": "direita" }));
+    let meio = s["pontos"].as_array().unwrap().iter().find(|p| (p[2].as_f64().unwrap() - 2.).abs() < 1e-6).cloned().expect("aresta de cima da borda direita");
+    let r = c.chamar("criar_aba", json!({ "aresta": meio, "comprimento": 10, "angulo": 90 }));
+    assert_eq!(r["status"], "ok", "{r}");
+    // chapa + dobra de 90° (anel de raios 2 e 4) + perna reta de 10, na largura de 50
+    let dobra = std::f64::consts::FRAC_PI_4 * (16. - 4.) * 50.;
+    assert!((r["volume"].as_f64().unwrap() - (10000. + dobra + 1000.)).abs() < 2., "{r}");
+    let r = c.chamar("criar_bainha", json!({ "aresta": [0, 25, 2], "comprimento": 6, "folga": 0 }));
+    assert_eq!(r["status"], "ok", "{r}");
+    let dobrada = c.chamar("recalcular", json!({}));
+    assert_eq!(dobrada["status"], "ok", "{dobrada}");
+
+    // a mesma peça em código
+    let mut d = Document::new("suporte");
+    d.sheet = Some(SheetParams { thickness: "2".into(), radius: "2".into(), k: "0.44".into(), ..Default::default() });
+    let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [100., 50.]);
+    d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+    let ponto = |p: &Value| [p[0].as_f64().unwrap(), p[1].as_f64().unwrap(), p[2].as_f64().unwrap()];
+    d.add_feature(FeatureKind::SmFlange(SmFlange { edge: ponto(&meio), length: "10".into(), angle: "90".into(), radius: None, off1: "0".into(), off2: "0".into(), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
+    d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 25., 2.], length: "6".into(), gap: "0".into(), flip: false, kind: 0, edge_key: None }));
+    confere_com_referencia(&dobrada, &d, 1e-3, "dobrada");
+
+    // planificada: o mesmo material no plano
+    let p = c.chamar("definir_chapa", json!({ "planificada": true }));
+    assert_eq!(p["status"], "ok", "{p}");
+    assert_eq!(p["chapa"]["espessura"], "2", "só o campo pedido muda: {p}");
+    let (_, hi) = caixa_de(&p);
+    assert!((hi[2] - 2.).abs() < 1e-3, "planificada: {p}");
+    let (vd, vp) = (dobrada["volume"].as_f64().unwrap(), p["volume"].as_f64().unwrap());
+    assert!((vd - vp).abs() / vd < 0.01, "dobrada {vd}, planificada {vp}");
+    d.sheet.as_mut().unwrap().flat = true;
+    confere_com_referencia(&p, &d, 1e-3, "planificada");
+    let arvore = c.recurso("fenkra://arvore");
+    assert_eq!(arvore["pecas"][0]["chapa"]["planificada"], true, "{arvore}");
+    // o registro refaz a peça igual, planificada inclusive
+    let m = c.chamar("medir", json!({}));
+    assert_eq!(refeito(&pasta, &mut c, "medir")["massa"], m["massa"]);
+}
+
+/// B420: estrutural pelo servidor real. Membros em meia-esquadria sobre as retas de um esboço, placa
+/// na ponta e reforço no canto, conferidos contra o mesmo quadro montado em código.
+#[test]
+fn estrutural_pelo_servidor_membro_placa_e_reforco() {
+    precisa_kernel!();
+    let pasta = pasta_limpa("estrutural");
+    let mut c = Cliente::iniciar(&pasta, false);
+    c.chamar("nova_peca", json!({ "nome": "quadro" }));
+    // esqueleto em L no plano XZ: x do esboço é X, y é Z
+    let e = c.chamar("criar_esboco", json!({
+        "id": "esqueleto", "plano": "XZ",
+        "pontos": [{ "id": "o", "x": 0, "y": 0 }, { "id": "t", "x": 0, "y": 500 }, { "id": "d", "x": 400, "y": 0 }],
+        "curvas": [{ "id": "pilar", "geometria": { "tipo": "reta", "a": "o", "b": "t" } }, { "id": "viga", "geometria": { "tipo": "reta", "a": "o", "b": "d" } }],
+    }));
+    assert_eq!(e["status"], "ok", "{e}");
+    let d = c.chamar("listar_comandos", json!({ "busca": "membro" }));
+    assert!(d["ferramentas"].as_array().unwrap().iter().any(|t| t["nome"] == "criar_membro"), "{d}");
+    let r = c.chamar("criar_membro", json!({
+        "caminhos": [{ "esboco": "esqueleto", "curva": "pilar" }, { "esboco": "esqueleto", "curva": "viga" }],
+        "secao": "tubo_quadrado", "cotas": [40, 3], "canto": "meia_esquadria", "designacao": "40x3",
+    }));
+    assert_eq!(r["status"], "ok", "{r}");
+    let v_tubos = r["volume"].as_f64().unwrap();
+    // dois tubos 40 x 3 (900 mm de linha), com a meia-esquadria trocando material de lugar no canto
+    let secao = 40. * 40. - 34. * 34.;
+    assert!((v_tubos - secao * 900.).abs() / (secao * 900.) < 0.05, "{r}");
+    let r = c.chamar("criar_placa_extremidade", json!({ "em": [0, 0, 500], "espessura": 8, "sobra": 5 }));
+    assert_eq!(r["status"], "ok", "{r}");
+    assert!((r["volume"].as_f64().unwrap() - v_tubos - 50. * 50. * 8.).abs() < 1., "placa 50 x 50 x 8: {r}");
+    let r = c.chamar("criar_reforco", json!({ "em": [0, 0, 0], "aba": 60, "espessura": 6, "chanfro": 10 }));
+    assert_eq!(r["status"], "ok", "{r}");
+    let quadro = c.chamar("recalcular", json!({}));
+    assert_eq!(quadro["status"], "ok", "{quadro}");
+    let (lo, hi) = caixa_de(&quadro);
+    assert!(hi[2] > 507. && hi[0] > 399. && lo[2] < -19., "{quadro}");
+
+    // o mesmo quadro em código, sobre retas de referência
+    let mut d = Document::new("quadro");
+    let reta = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: "0".into(), end: "0".into() }));
+    let (p, v) = (reta(&mut d, [0., 0., 0.], [0., 0., 500.]), reta(&mut d, [0., 0., 0.], [400., 0., 0.]));
+    d.add_feature(FeatureKind::StructMember(StructMember {
+        paths: vec![p, v],
+        family: String::new(),
+        designation: "40x3".into(),
+        kind: SectionKind::TuboQuadrado,
+        dims: vec!["40".into(), "3".into()],
+        anchor: 0,
+        angle: "0".into(),
+        off_x: "0".into(),
+        off_y: "0".into(),
+        ext1: "0".into(),
+        ext2: "0".into(),
+        corner: CornerMode::MeiaEsquadria,
+        gap: "0".into(),
+        joints: vec![],
+        material: String::new(),
+        mirror: false,
+    }));
+    d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 500.], "8", "5")));
+    d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 0.], "60", "6", "10")));
+    confere_com_referencia(&quadro, &d, 1., "quadro");
+
+    let arvore = c.recurso("fenkra://arvore");
+    let tipos: Vec<&str> = arvore["pecas"][0]["arvore"].as_array().unwrap().iter().map(|i| i["comando"]["tipo"].as_str().unwrap()).collect();
+    assert_eq!(tipos, ["esboco", "membro", "placa_extremidade", "reforco"]);
+    let m = c.chamar("medir", json!({}));
+    assert_eq!(refeito(&pasta, &mut c, "medir")["massa"], m["massa"]);
+}
+
+fn componente<'a>(estado: &'a Value, id: &str) -> &'a Value {
+    estado["componentes"].as_array().unwrap().iter().find(|c| c["id"] == id).unwrap_or_else(|| panic!("{id}: {estado}"))
+}
+
+/// B420: montagem pelo servidor real. Duas peças salvas na pasta, um pino repetido, contato e eixo
+/// coincidente, movimento que a restrição desfaz, lista de peças, gravação e repetição pelo registro.
+#[test]
+fn montagem_pelo_servidor_restricao_movimento_e_lista_de_pecas() {
+    precisa_kernel!();
+    let pasta = pasta_limpa("montagem");
+    let mut c = Cliente::iniciar(&pasta, false);
+    // as peças: bloco 40 x 30 x 20 e pino Ø10 x 30
+    c.chamar("nova_peca", json!({ "nome": "bloco" }));
+    let (pontos, curvas) = retangulo(-20., -15., 20., 15.);
+    c.chamar("criar_esboco", json!({ "id": "base", "plano": "XY", "pontos": pontos, "curvas": curvas }));
+    c.chamar("extrudar", json!({ "esboco": "base", "operacao": "unir", "termino": { "tipo": "cego", "distancia": "20" } }));
+    c.chamar("salvar_peca", json!({ "arquivo": "bloco.fkp" }));
+    c.chamar("nova_peca", json!({ "nome": "pino" }));
+    let r = c.chamar("criar_primitiva", json!({ "forma": "cilindro", "plano": "XY", "a": 5, "b": 30, "c": 0, "d": 0, "operacao": "unir" }));
+    assert_eq!(r["status"], "ok", "{r}");
+    c.chamar("salvar_peca", json!({ "arquivo": "pino.fkp" }));
+
+    let (e, erro) = c.tentar("inserir_componente", json!({ "arquivo": "bloco.fkp" }));
+    assert!(erro && e["codigo"] == "sem_montagem", "{e}");
+    c.chamar("nova_montagem", json!({ "nome": "conjunto" }));
+    let (e, erro) = c.tentar("inserir_componente", json!({ "arquivo": "bloco.fkx" }));
+    assert!(erro && e["codigo"] == "formato", "{e}");
+    let b = c.chamar("inserir_componente", json!({ "arquivo": "bloco.fkp" }));
+    assert_eq!((b["id"].as_str(), b["fixo"].as_bool()), (Some("c1"), Some(true)), "{b}");
+    let p = c.chamar("inserir_componente", json!({ "id": "pino", "arquivo": "pino.fkp", "origem": [100, 0, 0] }));
+    assert_eq!(p["fixo"], false, "{p}");
+    c.chamar("inserir_componente", json!({ "id": "solto", "arquivo": "pino.fkp", "origem": [200, 50, 0] }));
+
+    // os pontos das faces saem da caixa de cada componente, como faria quem só lê as respostas
+    let estado = c.chamar("ver_montagem", json!({}));
+    let (lo, hi) = caixa_de(componente(&estado, "pino"));
+    let (cx, cy, raio) = ((lo[0] + hi[0]) / 2., (lo[1] + hi[1]) / 2., (hi[0] - lo[0]) / 2.);
+    assert!((raio - 5.).abs() < 1e-3, "{estado}");
+    let (_, topo) = caixa_de(componente(&estado, "c1"));
+    let r = c.chamar("restringir", json!({ "tipo": "contato", "a": { "componente": "c1", "face": [0, 0, topo[2]] }, "b": { "componente": "pino", "face": [cx, cy, lo[2]] } }));
+    assert_eq!((r["status"].as_str(), r["convergiu"].as_bool()), (Some("ok"), Some(true)), "{r}");
+    // o contato subiu o pino: a face lateral se lê na posição nova; na antiga, o ponto não toca a peça
+    let (e, erro) = c.tentar("restringir", json!({ "tipo": "coincidente", "a": { "componente": "c1", "eixo": "Z" }, "b": { "componente": "pino", "face": [cx + raio, cy, (lo[2] + hi[2]) / 2.] } }));
+    assert!(erro && e["codigo"] == "face", "{e}");
+    let estado = c.chamar("ver_montagem", json!({}));
+    let (lo, hi) = caixa_de(componente(&estado, "pino"));
+    assert!((lo[2] - topo[2]).abs() < 1e-6, "{estado}");
+    let (cx, cy) = ((lo[0] + hi[0]) / 2., (lo[1] + hi[1]) / 2.);
+    let r = c.chamar("restringir", json!({ "tipo": "coincidente", "a": { "componente": "c1", "eixo": "Z" }, "b": { "componente": "pino", "face": [cx + raio, cy, (lo[2] + hi[2]) / 2.] } }));
+    assert_eq!(r["status"], "ok", "{r}");
+    let (e, erro) = c.tentar("restringir", json!({ "tipo": "paralela", "a": { "componente": "c1", "ponto": [0, 0, 0] }, "b": { "componente": "solto", "eixo": "Z" } }));
+    assert!(erro && e["codigo"] == "restricao", "{e}");
+
+    let estado = c.chamar("ver_montagem", json!({}));
+    let pino = componente(&estado, "pino");
+    let o = xyz(&pino["origem"]);
+    assert!(o[0].abs() < 1e-6 && o[1].abs() < 1e-6 && (o[2] - 20.).abs() < 1e-6, "o pino sobe no topo do bloco, no eixo: {pino}");
+    assert_eq!(pino["graus_de_liberdade"], 1, "sobra o giro em torno do eixo: {pino}");
+    assert_eq!(componente(&estado, "solto")["graus_de_liberdade"], 6, "{estado}");
+
+    // mover o pino preso: o solucionador traz de volta; mover o solto: ele fica onde foi posto
+    let r = c.chamar("mover_componente", json!({ "componente": "pino", "deslocar": [10, 0, 0] }));
+    let o = xyz(&r["origem"]);
+    assert!(o[0].abs() < 1e-6 && (o[2] - 20.).abs() < 1e-6, "a restrição segura o pino: {r}");
+    let r = c.chamar("mover_componente", json!({ "componente": "solto", "origem": [0, 100, -30], "girar": { "eixo": "X", "angulo": 90 } }));
+    assert!((xyz(&r["origem"])[2] + 30.).abs() < 1e-6, "{r}");
+    let estado = c.chamar("ver_montagem", json!({}));
+    let pi = std::f64::consts::PI;
+    let v_esperado = 40. * 30. * 20. + 2. * pi * 25. * 30.;
+    assert!((estado["volume"].as_f64().unwrap() - v_esperado).abs() < 1., "{estado}");
+    let (lo, hi) = caixa_de(&estado);
+    // bloco de z 0 a 20, pino de 20 a 50; o solto deitado em Y, de y 70 a 100, centrado em z = -30
+    let esperado = ([-20., -15., -35.], [20., 100., 50.]);
+    for i in 0..3 {
+        assert!((lo[i] - esperado.0[i]).abs() < 1e-3 && (hi[i] - esperado.1[i]).abs() < 1e-3, "caixa {lo:?} {hi:?}: {estado}");
+    }
+
+    // desfazer volta o último movimento
+    let u = c.chamar("desfazer", json!({}));
+    assert_eq!(u["componentes"], 3, "{u}");
+    let estado = c.chamar("ver_montagem", json!({}));
+    assert!((xyz(&componente(&estado, "solto")["origem"])[0] - 200.).abs() < 1e-6, "{estado}");
+    c.chamar("mover_componente", json!({ "componente": "solto", "origem": [0, 100, -30], "girar": { "eixo": "X", "angulo": 90 } }));
+
+    let bom = c.chamar("lista_de_pecas", json!({}));
+    let linhas = bom["linhas"].as_array().unwrap();
+    let qtd = |arq: &str| linhas.iter().find(|l| l["arquivo"] == arq).map(|l| l["quantidade"].as_u64().unwrap());
+    assert_eq!((qtd("bloco.fkp"), qtd("pino.fkp"), bom["pecas"].as_u64()), (Some(1), Some(2), Some(3)), "{bom}");
+    assert!((linhas.iter().find(|l| l["arquivo"] == "pino.fkp").unwrap()["volume_unitario"].as_f64().unwrap() - pi * 25. * 30.).abs() < 0.1, "{bom}");
+
+    c.chamar("salvar_montagem", json!({ "arquivo": "conjunto.fka" }));
+    let asm = fenkra_montagem::Assembly::from_json(&std::fs::read_to_string(pasta.join("conjunto.fka")).unwrap()).unwrap();
+    assert_eq!((asm.nodes.len(), asm.mates.len()), (3, 2));
+    let (e, erro) = c.tentar("salvar_montagem", json!({ "arquivo": "conjunto.fka" }));
+    assert!(erro && e["codigo"] == "ja_existe", "{e}");
+    let aberta = c.chamar("salvar_montagem", json!({ "arquivo": "conjunto.fkx" }));
+    assert!(aberta["fora"].as_array().unwrap().iter().any(|f| f.as_str().unwrap().contains("restrições")), "{aberta}");
+
+    // o registro refaz a montagem igual, sem servidor
+    let refeita = refeito(&pasta, &mut c, "montagem");
+    assert_eq!(refeita["volume"], estado_final(&mut c)["volume"]);
+    assert_eq!(refeita["caixa"], estado_final(&mut c)["caixa"]);
+}
+
+fn estado_final(c: &mut Cliente) -> Value {
+    c.chamar("ver_montagem", json!({}))
+}

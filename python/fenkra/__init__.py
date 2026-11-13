@@ -132,6 +132,35 @@ class Fenkra:
     def desfazer(self):
         return self.chamar("desfazer")
 
+    def adicionar(self, tipo, **campos):
+        """Qualquer comando do formato da árvore pelo tipo: revolucao, aba, membro, reforco..."""
+        return self.chamar("adicionar", tipo=tipo, **campos)
+
+    def definir_chapa(self, **campos):
+        return self.chamar("definir_chapa", **campos)
+
+    # montagem
+    def nova_montagem(self, nome="Montagem"):
+        return self.chamar("nova_montagem", nome=nome)
+
+    def inserir_componente(self, arquivo, **campos):
+        return self.chamar("inserir_componente", arquivo=arquivo, **campos)
+
+    def restringir(self, tipo, a, b, **campos):
+        return self.chamar("restringir", tipo=tipo, a=a, b=b, **campos)
+
+    def mover_componente(self, componente, **campos):
+        return self.chamar("mover_componente", componente=componente, **campos)
+
+    def montagem(self):
+        return self.chamar("montagem")
+
+    def bom(self, nivel="topo"):
+        return self.chamar("bom", nivel=nivel)
+
+    def salvar_montagem(self, arquivo, sobrescrever=False):
+        return self.chamar("salvar_montagem", arquivo=arquivo, sobrescrever=sobrescrever)
+
     # consulta
     def recalcular(self):
         return self.chamar("recalcular")

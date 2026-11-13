@@ -370,7 +370,95 @@ fn e_biblioteca() -> Value {
     )
 }
 
-pub const FERRAMENTAS: [Ferramenta; 23] = [
+fn e_chapa() -> Value {
+    objeto(
+        json!({
+            "espessura": valor("mm"), "raio": valor("raio interno de dobra padrão, mm"), "fator_k": valor("posição da linha neutra: 0 face interna, 0,5 meio"),
+            "planificada": { "type": "boolean", "description": "true mostra e mede a peça desdobrada" },
+            "material": { "type": "string" },
+            "metodo": { "enum": ["fator_k", "deducao", "tolerancia"], "description": "compensação da dobra; com deducao ou tolerancia, informe `compensacao` (mm a 90°)" },
+            "compensacao": valor("dedução ou tolerância de dobra a 90°, mm"),
+            "alivio": valor("largura padrão do alívio de dobra"), "alivio_forma": { "enum": ["retangular", "redondo", "rasgo"] },
+            "canto": valor("tamanho padrão do alívio de canto"),
+        }),
+        &[],
+    )
+}
+
+fn componente_ref(descricao: &str) -> Value {
+    json!({
+        "type": "object", "description": descricao,
+        "properties": {
+            "componente": { "type": "string", "description": "id do componente" },
+            "face": { "type": "array", "items": { "type": "number" }, "description": "ponto [x, y, z] no mundo sobre a face, na posição atual do componente: face plana vira plano, cilíndrica vira eixo" },
+            "plano": { "enum": ["XY", "XZ", "YZ"], "description": "plano da origem da peça" },
+            "eixo": { "enum": ["X", "Y", "Z"], "description": "eixo da origem da peça" },
+            "ponto": { "type": "array", "items": { "type": "number" }, "description": "ponto [x, y, z] no mundo, preso ao componente" },
+        },
+        "required": ["componente"],
+    })
+}
+
+fn matriz() -> Value {
+    json!({ "type": "array", "description": "rotação 3 × 3, linha a linha: as linhas são os eixos X, Y e Z da peça no mundo" })
+}
+
+fn e_inserir() -> Value {
+    objeto(
+        juntar(
+            identificacao(),
+            json!({
+                "arquivo": { "type": "string", "description": "peça .fkp da pasta do projeto (grave com salvar_peca)" },
+                "origem": { "type": "array", "items": { "type": "number" }, "description": "posição [x, y, z] da origem da peça; padrão 0" },
+                "rotacao": matriz(),
+                "fixo": { "type": "boolean", "description": "fixo não se move; padrão: só o primeiro componente" },
+            }),
+        ),
+        &["arquivo"],
+    )
+}
+
+fn e_restringir() -> Value {
+    objeto(
+        json!({
+            "id": { "type": "string" },
+            "tipo": { "enum": ["coincidente", "contato", "distancia", "angulo", "paralela", "perpendicular"], "description": "contato: faces de frente uma para a outra; coincidente: mesmo plano, eixo ou ponto" },
+            "a": componente_ref("elemento do primeiro componente"), "b": componente_ref("elemento do segundo componente"),
+            "valor": valor("distância em mm ou ângulo em graus"),
+            "invertida": { "type": "boolean", "description": "coincidente com as normais opostas" },
+            "alinhamento": { "enum": ["mesmo", "oposto", "livre"], "description": "sentido das normais em distância, ângulo e paralela" },
+            "lado_invertido": { "type": "boolean", "description": "mede a distância do outro lado da normal de a" },
+        }),
+        &["tipo", "a", "b"],
+    )
+}
+
+fn e_mover() -> Value {
+    objeto(
+        json!({
+            "componente": { "type": "string" },
+            "origem": { "type": "array", "items": { "type": "number" }, "description": "posição absoluta da origem da peça" },
+            "rotacao": matriz(),
+            "deslocar": { "type": "array", "items": { "type": "number" }, "description": "translação relativa [dx, dy, dz]" },
+            "girar": { "type": "object", "description": "{eixo: X, Y, Z ou [x, y, z], angulo em graus, centro?: [x, y, z]}; centro padrão é a origem da peça" },
+        }),
+        &["componente"],
+    )
+}
+
+fn e_bom() -> Value {
+    objeto(json!({ "nivel": { "enum": ["topo", "pecas", "estruturada"], "description": "padrão topo" } }), &[])
+}
+
+fn e_salvar_montagem() -> Value {
+    arquivo_e_sobrescrever("caminho .fka (montagem que o aplicativo abre) ou .fkx (formato aberto: componentes e posições, sem restrições) relativo à pasta do projeto")
+}
+
+fn t_chapa(a: &Value) -> Result<Value, ErroApi> {
+    cotas_em_texto(a, &["espessura", "raio", "fator_k", "compensacao", "alivio", "canto"])
+}
+
+pub const FERRAMENTAS: [Ferramenta; 31] = [
     Ferramenta { nome: "consultar_step", titulo: "Consultar STEP", descricao: "Lista caixa envolvente, massa, faces, arestas, planos, cilindros e furos de um STEP do projeto. Os planos trazem a normal para fora, as arestas trazem a fórmula, e os furos já vêm agrupados. Exige o aceite --liberar-step.", comando: "topologia", le_step: true, somente_leitura: true, esquema: e_consultar, traduzir: t_consultar },
     edicao("nova_peca", "Nova peça", "Começa uma peça vazia.", "nova_peca", e_nova, igual),
     edicao("abrir_peca", "Abrir peça", "Abre uma peça .fkx ou .fkp do projeto.", "abrir", e_abrir, igual),
@@ -394,4 +482,12 @@ pub const FERRAMENTAS: [Ferramenta; 23] = [
     leitura("verificar", "Verificar requisitos", "Confere os requisitos da peça, um resultado por requisito com o que foi medido: massa, furos, folga e interferência entre corpos, caixa máxima e se um parâmetro trocado chega na forma. Serve de critério quando não há STEP alvo. Não muda a peça.", "verificar", e_verificar, igual),
     leitura("consultar_biblioteca", "Consultar biblioteca de normas", "Famílias de fixadores normalizados, tamanhos, medidas e a faixa do furo de passagem. Use antes de furar para um parafuso.", "biblioteca", e_biblioteca, igual),
     edicao("exportar_step", "Exportar STEP", "Grava o sólido em STEP. Nunca troca um arquivo que existe sem `sobrescrever`.", "exportar", e_exportar, igual),
+    edicao("definir_chapa", "Definir chapa", "Liga a chapa metálica na peça ou muda espessura, raio de dobra, fator K e compensação. Só os campos informados mudam; a primeira vez parte de 2 mm, raio 2 e K 0,44. Com `planificada` verdadeiro a peça é medida e mostrada desdobrada. Depois use criar_parede_chapa, criar_aba, criar_bainha e dobrar_chapa.", "definir_chapa", e_chapa, t_chapa),
+    edicao("nova_montagem", "Nova montagem", "Começa uma montagem vazia, ao lado da peça em edição. Peças entram por inserir_componente a partir de arquivos .fkp da pasta.", "nova_montagem", e_nova, igual),
+    edicao("inserir_componente", "Inserir componente", "Põe uma peça .fkp da pasta na montagem, na posição dada. A primeira entra fixa. Devolve o id do componente.", "inserir_componente", e_inserir, igual),
+    edicao("restringir", "Restringir componentes", "Restrição entre dois componentes: coincidente, contato, distância, ângulo, paralela ou perpendicular. Cada elemento é uma face (ponto sobre ela no mundo), um plano ou eixo da origem da peça, ou um ponto. Resolve na hora e devolve os graus de liberdade que sobram e o que falhou.", "restringir", e_restringir, igual),
+    edicao("mover_componente", "Mover componente", "Muda a posição de um componente (absoluta, deslocamento ou giro) e resolve as restrições de novo: o que está preso volta ao lugar.", "mover_componente", e_mover, igual),
+    leitura("ver_montagem", "Estado da montagem", "Componentes com posição, graus de liberdade, volume e caixa de cada um; restrições com o que falhou; volume e caixa do conjunto.", "montagem", sem_args, igual),
+    leitura("lista_de_pecas", "Lista de peças", "Lista de peças (BOM) da montagem: item, nome, quantidade, arquivo, PN e volume unitário, no nível topo, pecas (todos os níveis somados) ou estruturada.", "bom", e_bom, igual),
+    edicao("salvar_montagem", "Salvar montagem", "Grava a montagem em .fka, que o aplicativo abre com as restrições, ou em .fkx. Nunca troca um arquivo que existe sem `sobrescrever`.", "salvar_montagem", e_salvar_montagem, igual),
 ];

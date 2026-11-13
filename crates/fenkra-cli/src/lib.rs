@@ -17,6 +17,7 @@ pub mod pasta;
 mod registro;
 pub mod saida;
 pub mod selecao;
+pub(crate) mod montagem;
 mod sessao;
 pub mod features;
 pub mod topologia;
@@ -72,6 +73,10 @@ pub fn sugestao_do_codigo(codigo: &str) -> &'static str {
         "queda" => "O leitor travou ao abrir o arquivo; ele foi isolado e a sessão segue. Tente um arquivo menor ou exporte de novo da origem.",
         "tempo" => "A leitura passou do tempo limite. Tente um arquivo menor ou simplifique a peça de origem.",
         "step_bloqueado" => "Ler STEP depende do aceite da pessoa: peça que ela inicie o servidor com --liberar-step. Não tente contornar.",
+        "sem_montagem" => "Não há montagem em edição. Crie uma com nova_montagem e insira peças salvas na pasta com inserir_componente.",
+        "componente" => "O componente citado não existe. Use o id devolvido por inserir_componente; a lista está em montagem.",
+        "face" => "Nenhuma face do componente passa por esse ponto. Use um ponto sobre a face na posição atual do componente (montagem traz a caixa de cada um), ou plano ou eixo da origem da peça.",
+        "restricao" => "A restrição não se aplica a esse par de elementos. Ângulo, paralela e perpendicular pedem planos ou eixos; troque o elemento ou o tipo.",
         _ => "Releia a mensagem, confira os argumentos e a árvore da peça e tente de novo; se persistir, recalcule e leia o relatório.",
     }
 }

@@ -66,6 +66,18 @@ Um comando que entra na árvore mas falha no cálculo não é erro da chamada: a
 | `comparar` | `alvo`, `arquivo` (ausente: a peça aberta), `tolerancias` | ver abaixo |
 | `reproduzir` | `arquivo` (`.jsonl`) | `comandos` |
 | `registro` | | `arquivo`, `comandos` |
+| `adicionar` | `tipo` (qualquer `comando.tipo` do [`.fkx`](arvore.md): `revolucao`, `casca`, `primitiva`, `padrao`, `espelho`, `parede_chapa`, `aba`, `bainha`, `dobra`, `membro`, `placa_extremidade`, `reforco`...), os campos dele, `id`, `nome` | `id`, `status`, `mensagem`, `volume` |
+| `selecionar` | `alvo` (`arestas`, `faces`), `lado`, `extrema`, `tipo`, `raio`, `perto`, `quantas` | `quantidade`, `pontos` |
+| `biblioteca` | `busca`, `familia`, `tamanho`, `furo` | famílias ou tamanhos com medidas |
+| `verificar` | `requisitos` | `ok`, `falhas`, `resultados` |
+| `definir_chapa` | campos de `chapa` no `.fkx` (`espessura`, `raio`, `fator_k`, `planificada`, `material`, `metodo`, `compensacao`, `alivio`, `alivio_forma`, `canto`); só os informados mudam | `chapa`, `status`, `volume`, `caixa` |
+| `nova_montagem` | `nome` | `nome` |
+| `inserir_componente` | `arquivo` (`.fkp`), `id`, `nome`, `origem`, `rotacao` (3 × 3, linha a linha), `fixo` | `id`, `nome`, `arquivo`, `fixo` |
+| `restringir` | `tipo` (`coincidente`, `contato`, `distancia`, `angulo`, `paralela`, `perpendicular`), `a` e `b` (`componente` com `face`, `plano`, `eixo` ou `ponto`), `valor`, `invertida`, `alinhamento`, `lado_invertido`, `id` | `id`, `status`, `convergiu`, `residuo`, `graus_de_liberdade`, `falhas` |
+| `mover_componente` | `componente`, `origem`, `rotacao`, `deslocar`, `girar` (`eixo`, `angulo`, `centro`) | `origem`, `rotacao`, `fixo` e o relatório do solucionador |
+| `montagem` | | `componentes` (posição, graus de liberdade, volume, caixa), `restricoes`, `solucao`, `volume`, `caixa` |
+| `bom` | `nivel` (`topo`, `pecas`, `estruturada`) | `linhas` (`item`, `nome`, `quantidade`, `arquivo`, `pn`, `volume_unitario`), `itens`, `pecas` |
+| `salvar_montagem` | `arquivo` (`.fka`, `.fkx`), `sobrescrever` | `arquivo`, `fora` |
 
 ## Topologia
 

@@ -1331,6 +1331,7 @@ dependencies = [
  "fenkra-conversor",
  "fenkra-core",
  "fenkra-kernel",
+ "fenkra-montagem",
  "fenkra-pacote",
  "fenkra-project",
  "fenkra-solidos",
@@ -1410,6 +1411,7 @@ dependencies = [
  "fenkra-cli",
  "fenkra-core",
  "fenkra-kernel",
+ "fenkra-montagem",
  "fenkra-solidos",
  "serde_json",
 ]
