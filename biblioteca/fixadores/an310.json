@@ -1,0 +1,96 @@
+{
+ "id": "an310",
+ "nome": "Porca castelo aeronáutica AN310",
+ "norma": "AN 310 (NASM310, domínio público)",
+ "revisao": "sem revisão conferida (dados de distribuidor e FLIS)",
+ "versao": 1,
+ "gerador": "porca",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Pegasus Auto Racing — tabela AN310 (chave, altura máxima, altura até o rasgo)",
+   "url": "https://www.pegasusautoracing.com/productselection.asp?Product=AN310"
+  },
+  {
+   "rotulo": "Panther Builders Manual (Spencer Aircraft) — tabelas de porcas AN310, AN315, MS21042 (altura máxima e chave)",
+   "url": "https://www.flywithspa.com/docs/pbm/toc453317740.html"
+  },
+  {
+   "rotulo": "Military Fasteners — fichas AN310-3 a AN310-8 (altura e entre faces em faixa, dados FLIS)",
+   "url": "https://military-fasteners.com/catalog/pdf/AN310-3"
+  }
+ ],
+ "campos": [
+  "s",
+  "m"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "AN310-3",
+   "original": "#10-32 UNF",
+   "d_nominal": 4.826,
+   "valores": {
+    "s": 9.525,
+    "m": 6.35
+   },
+   "confirmado_por": 2,
+   "nota": "Rosca UNF classe 3B; rasgos para contrapino no topo, não modelados (a altura é a total). Chave 3/8 pol, altura máxima 0.250 pol. Chave e altura máxima conferidas em duas fontes. Military Fasteners: altura 0,234 a 0,266, faces 0,365 a 0,377."
+  },
+  {
+   "designacao": "AN310-4",
+   "original": "1/4-28 UNF",
+   "d_nominal": 6.35,
+   "valores": {
+    "s": 11.112,
+    "m": 7.144
+   },
+   "confirmado_por": 2,
+   "nota": "Rosca UNF classe 3B; rasgos para contrapino no topo, não modelados (a altura é a total). Chave 7/16 pol, altura máxima 0.281 pol. Chave e altura máxima conferidas em duas fontes. Military Fasteners: altura 0,265 a 0,297, faces 0,428 a 0,440."
+  },
+  {
+   "designacao": "AN310-5",
+   "original": "5/16-24 UNF",
+   "d_nominal": 7.938,
+   "valores": {
+    "s": 12.7,
+    "m": 8.334
+   },
+   "confirmado_por": 2,
+   "nota": "Rosca UNF classe 3B; rasgos para contrapino no topo, não modelados (a altura é a total). Chave 1/2 pol, altura máxima 0.328 pol. Chave e altura máxima conferidas em duas fontes. Military Fasteners: altura 0,312 a 0,344, faces 0,490 a 0,502."
+  },
+  {
+   "designacao": "AN310-6",
+   "original": "3/8-24 UNF",
+   "d_nominal": 9.525,
+   "valores": {
+    "s": 14.287,
+    "m": 10.319
+   },
+   "confirmado_por": 2,
+   "nota": "Rosca UNF classe 3B; rasgos para contrapino no topo, não modelados (a altura é a total). Chave 9/16 pol, altura máxima 0.406 pol. Chave e altura máxima conferidas em duas fontes. Military Fasteners (AN310C6, mesma cota): altura 0,391 a 0,422, faces 0,553 a 0,565."
+  },
+  {
+   "designacao": "AN310-7",
+   "original": "7/16-20 UNF",
+   "d_nominal": 11.112,
+   "valores": {
+    "s": 15.875,
+    "m": 11.509
+   },
+   "confirmado_por": 2,
+   "nota": "Rosca UNF classe 3B; rasgos para contrapino no topo, não modelados (a altura é a total). Chave 5/8 pol, altura máxima 0.453 pol. Pegasus e Military Fasteners (altura 0,437 a 0,469, faces 0,614 a 0,627) concordam; o manual da Panther não lista o -7."
+  },
+  {
+   "designacao": "AN310-8",
+   "original": "1/2-20 UNF",
+   "d_nominal": 12.7,
+   "valores": {
+    "s": 19.05,
+    "m": 14.287
+   },
+   "confirmado_por": 2,
+   "nota": "Rosca UNF classe 3B; rasgos para contrapino no topo, não modelados (a altura é a total). Chave 3/4 pol, altura máxima 0.562 pol. Chave e altura máxima conferidas em duas fontes. Military Fasteners: altura 0,546 a 0,578, faces 0,738 a 0,752."
+  }
+ ]
+}

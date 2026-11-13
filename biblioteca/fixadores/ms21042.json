@@ -1,0 +1,70 @@
+{
+ "id": "ms21042",
+ "nome": "Porca autotravante metálica de sextavado reduzido MS21042",
+ "norma": "MS 21042 (domínio público)",
+ "revisao": "sem revisão conferida (dados de distribuidor e FLIS)",
+ "versao": 1,
+ "gerador": "porca",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Panther Builders Manual (Spencer Aircraft) — tabelas de porcas AN310, AN315, MS21042 (altura máxima e chave)",
+   "url": "https://www.flywithspa.com/docs/pbm/toc453317740.html"
+  },
+  {
+   "rotulo": "Military Fasteners — fichas MS21042L3 a MS21042L6 (altura e entre faces em faixa, dados FLIS)",
+   "url": "https://military-fasteners.com/catalog/pdf/MS21042L3"
+  }
+ ],
+ "campos": [
+  "s",
+  "m"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "MS21042L3",
+   "original": "#10-32 UNF",
+   "d_nominal": 4.826,
+   "valores": {
+    "s": 6.35,
+    "m": 4.762
+   },
+   "confirmado_por": 2,
+   "nota": "Sextavado reduzido (chave menor que a da AN315 do mesmo tamanho), trava toda metálica; a face de arruela não é modelada. Chave 1/4 pol, altura máxima 0.188 pol. Military Fasteners: altura 0,154 a 0,188, faces 0,243 a 0,252."
+  },
+  {
+   "designacao": "MS21042L4",
+   "original": "1/4-28 UNF",
+   "d_nominal": 6.35,
+   "valores": {
+    "s": 7.938,
+    "m": 5.556
+   },
+   "confirmado_por": 2,
+   "nota": "Sextavado reduzido (chave menor que a da AN315 do mesmo tamanho), trava toda metálica; a face de arruela não é modelada. Chave 5/16 pol, altura máxima 0.219 pol. Military Fasteners: altura 0,204 a 0,219, faces 0,304 a 0,316."
+  },
+  {
+   "designacao": "MS21042L5",
+   "original": "5/16-24 UNF",
+   "d_nominal": 7.938,
+   "valores": {
+    "s": 9.525,
+    "m": 6.747
+   },
+   "confirmado_por": 2,
+   "nota": "Sextavado reduzido (chave menor que a da AN315 do mesmo tamanho), trava toda metálica; a face de arruela não é modelada. Chave 3/8 pol, altura máxima 0.266 pol. Military Fasteners: altura 0,251 a 0,266, faces 0,367 a 0,378."
+  },
+  {
+   "designacao": "MS21042L6",
+   "original": "3/8-24 UNF",
+   "d_nominal": 9.525,
+   "valores": {
+    "s": 11.112,
+    "m": 7.163
+   },
+   "confirmado_por": 2,
+   "nota": "Sextavado reduzido (chave menor que a da AN315 do mesmo tamanho), trava toda metálica; a face de arruela não é modelada. Chave 7/16 pol, altura máxima 0.282 pol. Military Fasteners: altura 0,267 a 0,282, faces 0,43 a 0,44."
+  }
+ ]
+}

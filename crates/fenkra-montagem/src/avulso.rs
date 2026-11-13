@@ -199,6 +199,10 @@ pub fn pose(f: &FuroAlvo, inverter: bool) -> Result<(V3, V3), String> {
 /// cabe na profundidade.
 pub fn comprimento_sugerido(fam: &Familia, t: &Tamanho, f: &FuroAlvo) -> Option<f64> {
     let serie = fam.comprimentos_de(t);
+    // rebite: a espessura atravessada é a pega; L = pega + 1,5·d (a sobra vira a cabeça de fechamento)
+    if fam.tipo == fenkra_solidos::biblioteca::TipoFixador::Rebite {
+        return fenkra_solidos::biblioteca::rebite_pela_pega(fam, t, f.espessura).or(serie.last().copied());
+    }
     let passo = t.valor("P").unwrap_or(0.);
     if !f.rosca.is_empty() && !f.passante {
         return serie.iter().copied().filter(|l| *l <= f.espessura + 1e-9).last().or(serie.first().copied());
@@ -258,6 +262,10 @@ fn arquivo_copia(dir: &Path, fam: &Familia, t: &Tamanho, l: Option<f64>) -> Resu
 
 /// Comprimento de um parafuso que não está num furo: o da série mais perto de quatro diâmetros.
 pub fn comprimento_livre(fam: &Familia, t: &Tamanho) -> Option<f64> {
+    if fam.tipo == fenkra_solidos::biblioteca::TipoFixador::Rebite {
+        // rebite solto: o L que fecha uma pilha de um diâmetro
+        return fenkra_solidos::biblioteca::rebite_pela_pega(fam, t, t.diametro_nominal().unwrap_or(0.)).or(fam.comprimentos_de(t).last().copied());
+    }
     mais_proximo(&fam.comprimentos_de(t), 4. * t.diametro_nominal().unwrap_or(0.))
 }
 
@@ -265,7 +273,7 @@ pub fn comprimento_livre(fam: &Familia, t: &Tamanho) -> Option<f64> {
 /// o comprimento pedido vale o da série mais próximo; sem pedido, `sugerido`, e sem sugestão o da série
 /// mais perto de quatro diâmetros. Porca e arruela não têm comprimento.
 fn peca_do_item(dir: &Path, fam: &Familia, t: &Tamanho, pedido: Option<f64>, sugerido: Option<f64>, modo: ModoInsercao) -> Result<(String, String, Option<f64>), String> {
-    let comprimento = if fam.tipo.e_parafuso() {
+    let comprimento = if fam.tipo.atravessa_furo() {
         let serie = fam.comprimentos_de(t);
         let alvo = pedido.or(sugerido).or_else(|| comprimento_livre(fam, t)).ok_or("tamanho sem série de comprimentos")?;
         Some(mais_proximo(&serie, alvo).ok_or("tamanho sem série de comprimentos")?)
@@ -343,7 +351,7 @@ pub fn inserir_livre(asm: &mut Assembly, dir: &Path, lib: &Biblioteca, familia: 
     let (pl, eixo) = match onde {
         PosicaoLivre::Ponto { ponto, normal } => {
             let u = unit(normal).map(|x| -x);
-            (posicao_do_item(fam.tipo.e_parafuso(), ponto, u), u)
+            (posicao_do_item(fam.tipo.atravessa_furo(), ponto, u), u)
         }
         PosicaoLivre::Solto { origem } => (Placement { origin: if primeira { [0.; 3] } else { origem }, ..Default::default() }, [0., 0., 1.]),
     };
@@ -376,7 +384,7 @@ pub fn inserir_avulso(asm: &mut Assembly, dir: &Path, lib: &Biblioteca, p: &Para
     };
     let baixo = u.map(|x| -x);
     // parafuso: Z = -u (cabeça para fora, corpo para dentro); porca e arruela: Z = u (corpo para fora da peça)
-    let pl = posicao_do_item(fam.tipo.e_parafuso(), entrada, u);
+    let pl = posicao_do_item(fam.tipo.atravessa_furo(), entrada, u);
     let comp = asm.add_component(&nome, NodeKind::Part { path: arquivo.clone() }, pl, Some(grupo));
     let antes: Vec<Id> = asm.mates.iter().map(|m| m.id).collect();
     let eixo = (entrada, baixo);
@@ -422,6 +430,32 @@ mod tests {
         // comprimento sugerido: 10 + 2 passos = 12 → L12 ou o próximo da série
         let l = comprimento_sugerido(fam, fam.tamanho("M6").unwrap(), f).unwrap();
         assert!(l >= 12. && fam.comprimentos_de(fam.tamanho("M6").unwrap()).contains(&l), "{l}");
+    }
+
+    #[test]
+    fn rebite_no_furo_tira_o_comprimento_da_pega() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // B43/B63: chapa de 2 mm com furo de Ø3,2 (rebite de 1/8"): L >= 2 + 1,5 × 3,175 = 6,76 → traço -5 (7,94)
+        let dir = pasta("avulso_rebite");
+        let (mut a, _) = montagem(&dir, 2., 3.2);
+        let furos = furos_do_mundo(&a, Some(&dir), &mut PartCache::default(), &[]);
+        let [f] = &furos[..] else { panic!("{furos:?}") };
+        let fam = biblioteca::familia("an470").unwrap();
+        let ok: Vec<&str> = tamanhos_que_casam(fam, f).iter().map(|t| t.designacao.as_str()).collect();
+        assert_eq!(ok, ["AN470-4"]);
+        let l = comprimento_sugerido(fam, fam.tamanho("AN470-4").unwrap(), f).unwrap();
+        assert!((l - 5. / 16. * 25.4).abs() < 1e-3, "{l}");
+        let r = inserir_avulso(&mut a, &dir, biblioteca::publica(), &param(f.clone(), "an470", "AN470-4")).unwrap();
+        assert!(r.comprimento.is_some_and(|c| (c - l).abs() < 1e-9));
+        // entra como parafuso (cabeça para fora, corpo para dentro), não como porca
+        let pl = a.node(r.comp).unwrap().placement;
+        let (entrada, u) = pose(f, false).unwrap();
+        let (como_parafuso, como_porca) = (posicao_do_item(true, entrada, u), posicao_do_item(false, entrada, u));
+        let z = pl.dir([0., 0., 1.]);
+        let (zp, zn) = (como_parafuso.dir([0., 0., 1.]), como_porca.dir([0., 0., 1.]));
+        assert!((0..3).all(|i| (z[i] - zp[i]).abs() < 1e-9) && (0..3).any(|i| (z[i] - zn[i]).abs() > 1e-3), "{z:?}");
     }
 
     /// Placa 40 x 40 x 10 com um furo de Ø6,6 feito por corte de cilindro (sem comando de furo) e um

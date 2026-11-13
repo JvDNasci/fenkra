@@ -1,0 +1,184 @@
+{
+ "id": "an470",
+ "nome": "Rebite sólido de cabeça universal AN470",
+ "norma": "AN 470 (MS20470, domínio público)",
+ "revisao": "MS20470 / MS20426 (substitutas com as mesmas cotas)",
+ "versao": 1,
+ "gerador": "rebite_universal",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Hanson Rivet — tabelas MS20470 e MS20426 (corpo, cabeça e altura)",
+   "url": "https://www.hansonrivet.com/rivets/solid-rivets/aerospace-solid-rivets/"
+  },
+  {
+   "rotulo": "Military Fasteners — fichas MS20470AD3-4 a MS20470AD8-10 (cabeça e corpo em faixa, dados FLIS)",
+   "url": "https://military-fasteners.com/catalog/pdf/MS20470AD3-4"
+  },
+  {
+   "rotulo": "EAA — Setting or Driving Solid Rivets (sobra de 1,5 diâmetro além da pilha)",
+   "url": "https://eaa.org/eaa/news-and-publications/eaa-news-and-aviation-news/bits-and-pieces-newsletter/09-2015-setting-or-driving-solid-rivets"
+  },
+  {
+   "rotulo": "Aircraft Systems Tech — rebite sólido: comprimento = pega + 1,5 diâmetro",
+   "url": "https://aircraftsystemstech.com/2018/12/solid-shank-rivet-aircraft-structural.html"
+  }
+ ],
+ "campos": [
+  "dk",
+  "k"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "AN470-3",
+   "original": "3/32 pol",
+   "d_nominal": 2.381,
+   "valores": {
+    "dk": 4.75,
+    "k": 1.143
+   },
+   "confirmado_por": 2,
+   "nota": "O traço do diâmetro conta 1/32 pol e o do comprimento, 1/16 pol (AN470AD4-6: Ø 1/8, L 3/8). L medido sob a cabeça; L = pega + 1,5 d, arredondado para cima na série. Cabeça modelada como calota esférica dk × k. Cabeça 0,178 a 0,196 e altura 0,040 a 0,050 pol nas duas fontes.",
+   "comprimentos": [
+    3.175,
+    4.762,
+    6.35,
+    7.938,
+    9.525,
+    11.112,
+    12.7,
+    14.287,
+    15.875,
+    17.462,
+    19.05,
+    20.637,
+    22.225,
+    23.812,
+    25.4
+   ],
+   "furo_min": 2.381,
+   "furo_max": 2.489
+  },
+  {
+   "designacao": "AN470-4",
+   "original": "1/8 pol",
+   "d_nominal": 3.175,
+   "valores": {
+    "dk": 6.35,
+    "k": 1.499
+   },
+   "confirmado_por": 2,
+   "nota": "O traço do diâmetro conta 1/32 pol e o do comprimento, 1/16 pol (AN470AD4-6: Ø 1/8, L 3/8). L medido sob a cabeça; L = pega + 1,5 d, arredondado para cima na série. Cabeça modelada como calota esférica dk × k. Cabeça 0,238 a 0,262 e altura 0,054 a 0,064 pol nas duas fontes.",
+   "comprimentos": [
+    3.175,
+    4.762,
+    6.35,
+    7.938,
+    9.525,
+    11.112,
+    12.7,
+    14.287,
+    15.875,
+    17.462,
+    19.05,
+    20.637,
+    22.225,
+    23.812,
+    25.4
+   ],
+   "furo_min": 3.175,
+   "furo_max": 3.277
+  },
+  {
+   "designacao": "AN470-5",
+   "original": "5/32 pol",
+   "d_nominal": 3.969,
+   "valores": {
+    "dk": 7.925,
+    "k": 1.829
+   },
+   "confirmado_por": 2,
+   "nota": "O traço do diâmetro conta 1/32 pol e o do comprimento, 1/16 pol (AN470AD4-6: Ø 1/8, L 3/8). L medido sob a cabeça; L = pega + 1,5 d, arredondado para cima na série. Cabeça modelada como calota esférica dk × k. Cabeça 0,296 a 0,328 e altura 0,067 a 0,077 pol nas duas fontes.",
+   "comprimentos": [
+    3.175,
+    4.762,
+    6.35,
+    7.938,
+    9.525,
+    11.112,
+    12.7,
+    14.287,
+    15.875,
+    17.462,
+    19.05,
+    20.637,
+    22.225,
+    23.812,
+    25.4
+   ],
+   "furo_min": 3.969,
+   "furo_max": 4.089
+  },
+  {
+   "designacao": "AN470-6",
+   "original": "3/16 pol",
+   "d_nominal": 4.762,
+   "valores": {
+    "dk": 9.525,
+    "k": 2.159
+   },
+   "confirmado_por": 2,
+   "nota": "O traço do diâmetro conta 1/32 pol e o do comprimento, 1/16 pol (AN470AD4-6: Ø 1/8, L 3/8). L medido sob a cabeça; L = pega + 1,5 d, arredondado para cima na série. Cabeça modelada como calota esférica dk × k. Cabeça 0,356 a 0,394 e altura 0,080 a 0,090 pol nas duas fontes.",
+   "comprimentos": [
+    3.175,
+    4.762,
+    6.35,
+    7.938,
+    9.525,
+    11.112,
+    12.7,
+    14.287,
+    15.875,
+    17.462,
+    19.05,
+    20.637,
+    22.225,
+    23.812,
+    25.4
+   ],
+   "furo_min": 4.762,
+   "furo_max": 4.851
+  },
+  {
+   "designacao": "AN470-8",
+   "original": "1/4 pol",
+   "d_nominal": 6.35,
+   "valores": {
+    "dk": 12.7,
+    "k": 2.845
+   },
+   "confirmado_por": 2,
+   "nota": "O traço do diâmetro conta 1/32 pol e o do comprimento, 1/16 pol (AN470AD4-6: Ø 1/8, L 3/8). L medido sob a cabeça; L = pega + 1,5 d, arredondado para cima na série. Cabeça modelada como calota esférica dk × k. Cabeça 0,475 a 0,525 e altura 0,107 a 0,117 pol nas duas fontes.",
+   "comprimentos": [
+    3.175,
+    4.762,
+    6.35,
+    7.938,
+    9.525,
+    11.112,
+    12.7,
+    14.287,
+    15.875,
+    17.462,
+    19.05,
+    20.637,
+    22.225,
+    23.812,
+    25.4
+   ],
+   "furo_min": 6.35,
+   "furo_max": 6.528
+  }
+ ]
+}
