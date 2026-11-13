@@ -6,7 +6,9 @@
 //! Passos separados por `;`, em pontos da janela: `clique:x,y`, `arrasto:x0,y0,x1,y1` (aperta, move em
 //! passos e solta) e `segura:x0,y0,x1,y1` (igual, mas deixa o botão apertado, para capturar a sombra do
 //! encaixe ou um redimensionamento em andamento) e `rolar:x,y,dy` (roda do mouse sobre o ponto, `dy` em
-//! pontos; negativo desce o conteúdo) e `pairar:x,y` (leva o ponteiro ao ponto e para, para a dica aparecer). Começam 4 s depois da abertura.
+//! pontos; negativo desce o conteúdo) e `pairar:x,y` (leva o ponteiro ao ponto e para, para a dica aparecer),
+//! `ctrl:x,y` e `shift:x,y` (clique com o modificador apertado) e `tecla:F2` (aperta e solta a tecla, pelo
+//! nome do egui). Começam 4 s depois da abertura.
 
 use eframe::egui::{self, Event, PointerButton, Pos2};
 use std::collections::VecDeque;
@@ -22,6 +24,10 @@ enum Passo {
     Rolar(Pos2, f32),
     /// só leva o ponteiro ao ponto e para ali, para a dica do botão aparecer
     Pairar(Pos2),
+    /// clique com Ctrl ou Shift apertado (B368: seleção como nas peças)
+    CliqueCom(Pos2, egui::Modifiers),
+    /// tecla solta (B368: F2 renomeia; Esc, Enter, Tab)
+    Tecla(egui::Key),
 }
 
 fn ler(t: &str) -> Option<Vec<Passo>> {
@@ -30,11 +36,16 @@ fn ler(t: &str) -> Option<Vec<Passo>> {
 
 fn ler_passo(t: &str) -> Option<Passo> {
     let (nome, resto) = t.trim().split_once(':')?;
+    if nome == "tecla" {
+        return egui::Key::from_name(resto.trim()).map(Passo::Tecla);
+    }
     let n: Vec<f32> = resto.split(',').map(|x| x.trim().parse().ok()).collect::<Option<_>>()?;
     match (nome, n.as_slice()) {
         ("clique", [x, y]) => Some(Passo::Clique(egui::pos2(*x, *y))),
         ("arrasto", [a, b, c, d]) => Some(Passo::Arrasto(egui::pos2(*a, *b), egui::pos2(*c, *d), true)),
         ("pairar", [x, y]) => Some(Passo::Pairar(egui::pos2(*x, *y))),
+        ("ctrl", [x, y]) => Some(Passo::CliqueCom(egui::pos2(*x, *y), egui::Modifiers::COMMAND)),
+        ("shift", [x, y]) => Some(Passo::CliqueCom(egui::pos2(*x, *y), egui::Modifiers::SHIFT)),
         ("rolar", [x, y, dy]) => Some(Passo::Rolar(egui::pos2(*x, *y), *dy)),
         ("segura", [a, b, c, d]) => Some(Passo::Arrasto(egui::pos2(*a, *b), egui::pos2(*c, *d), false)),
         _ => None,
@@ -45,6 +56,14 @@ fn quadros(p: Passo) -> VecDeque<Vec<Event>> {
     let botao = |pos, pressed| Event::PointerButton { pos, button: PointerButton::Primary, pressed, modifiers: Default::default() };
     match p {
         Passo::Pairar(q) => [vec![Event::PointerMoved(q)], vec![]].into(),
+        Passo::CliqueCom(q, m) => {
+            let b = |pressed| Event::PointerButton { pos: q, button: PointerButton::Primary, pressed, modifiers: m };
+            [vec![Event::PointerMoved(q), Event::ModifiersChanged(m)], vec![b(true)], vec![b(false)], vec![Event::ModifiersChanged(Default::default())], vec![]].into()
+        }
+        Passo::Tecla(k) => {
+            let e = |pressed| Event::Key { key: k, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+            [vec![e(true)], vec![e(false)], vec![]].into()
+        }
         Passo::Clique(q) => [vec![Event::PointerMoved(q)], vec![botao(q, true)], vec![botao(q, false)], vec![]].into(),
         Passo::Rolar(q, dy) => {
             let roda = Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: egui::vec2(0., dy), modifiers: Default::default(), phase: egui::TouchPhase::Move, source: egui::MouseWheelSource::Unknown };
@@ -100,6 +119,9 @@ mod testes {
         assert_eq!(ler("rolar:5,6,-300").unwrap()[0], Passo::Rolar(egui::pos2(5., 6.), -300.));
         assert_eq!(ler("pairar:7,8").unwrap()[0], Passo::Pairar(egui::pos2(7., 8.)));
         assert!(ler("clique:1").is_none() && ler("pulo:1,2").is_none());
+        assert_eq!(ler("tecla:F2").unwrap()[0], Passo::Tecla(egui::Key::F2));
+        assert_eq!(ler("ctrl:3,4").unwrap()[0], Passo::CliqueCom(egui::pos2(3., 4.), egui::Modifiers::COMMAND));
+        assert!(ler("tecla:Nada").is_none());
     }
 
     #[test]
