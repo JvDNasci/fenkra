@@ -56,6 +56,17 @@ fn volume_da_malha(s: &Shape) -> f64 {
     soma.abs()
 }
 
+/// Menor raio do círculo que passa por três pontos vizinhos da polilinha.
+fn raio_discreto(p: &[[f64; 3]]) -> f64 {
+    p.windows(3)
+        .map(|q| {
+            let (a, b, c) = (geo3d::dist(q[0], q[1]), geo3d::dist(q[1], q[2]), geo3d::dist(q[0], q[2]));
+            let area2 = geo3d::norm(fenkra_kernel::cross(geo3d::sub(q[1], q[0]), geo3d::sub(q[2], q[0])));
+            if area2 < 1e-15 { f64::INFINITY } else { a * b * c / (2. * area2) }
+        })
+        .fold(f64::INFINITY, f64::min)
+}
+
 /// Tubo de seção constante sem dobra: volume = área × comprimento da guia (teorema de Pappus).
 #[test]
 fn sorteio_de_guias_termina_em_tubo_certo_ou_erro_nomeado() {
@@ -63,30 +74,41 @@ fn sorteio_de_guias_termina_em_tubo_certo_ou_erro_nomeado() {
         return;
     }
     let mut g = Sorteio(7);
-    let (mut bons, mut cantos, mut dobra, mut desistiu) = (0, 0, 0, 0);
+    let (mut bons, mut cantos, mut dobra, mut desistiu, mut tombou) = (0, 0, 0, 0, 0);
     for i in 0..120 {
         let a = [1., 3., 3., 6., 12.][i % 5];
         let p = guia_sorteada(&mut g, a);
         match perfil(&p, 1.).sweep(&p, 0) {
             Ok(s) => {
                 assert!(s.is_valid(), "caso {i}: forma inválida passou calada");
+                // com cantos, a seção gira com junta de esquadria (B350): o volume é o mesmo do tubo
                 if tem_cantos(&p) {
-                    cantos += 1; // a seção não gira nos cantos: o recompute avisa (ver o teste abaixo)
-                    continue;
+                    cantos += 1;
                 }
                 let (vm, esperado) = (volume_da_malha(&s), PI * comprimento(&p));
                 // a malha é inscrita: com deflexão 0,02 num raio 1 ela perde perto de 3% por corda
                 assert!((vm / esperado - 1.).abs() < 0.05, "caso {i}: volume da malha {vm:.1}, esperado {esperado:.1}");
                 bons += 1;
             }
-            Err(e) if e.0.contains("dobraria") => dobra += 1,
+            Err(e) if e.0.contains("dobraria") => {
+                // a recusa por dobra tem de ser da guia, não da aproximação do kernel: o menor raio do
+                // círculo por três amostras vizinhas da própria polilinha fica abaixo do braço do perfil
+                // (com folga para a amostra, que corta a curva mais apertada entre dois pontos)
+                let r = raio_discreto(&p);
+                assert!(r < 1.5, "caso {i}: recusada por dobra, mas a guia tem raio {r:.2} mm para um perfil de 1 mm");
+                dobra += 1
+            }
             Err(e) if e.0.contains("guia suave") => desistiu += 1,
+            Err(e) if e.0.contains("girar nos cantos") => tombou += 1,
             Err(e) => panic!("caso {i}: erro sem nome: {}", e.0),
         }
     }
-    println!("bons {bons}, cantos {cantos}, dobra {dobra}, desistiu {desistiu}");
+    println!("bons {bons}, cantos {cantos}, dobra {dobra}, desistiu {desistiu}, tombou {tombou}");
     assert_eq!(desistiu, 0, "guia sem dobra precisa varrer");
-    assert!(bons >= 60, "a maioria das guias sorteadas é suave e sem dobra: {bons}");
+    assert_eq!(tombou, 0, "guia com cantos sorteada precisa girar a seção (B350)");
+    // antes da cúbica eram 77 de 120: a aproximação de grau alto ondulava e a checagem recusava por
+    // dobra guias com raio de sobra (o portão por raio discreto acima pega isso)
+    assert!(bons >= 100, "a maioria das guias sorteadas é suave e sem dobra: {bons}");
 }
 
 /// O perfil só dobra no plano da curva: a altura de uma parede erguida sobre a guia não conta.
@@ -119,9 +141,9 @@ fn curva_mais_fechada_que_o_perfil_da_erro_nomeado() {
     assert!(perfil(&p, 1.).sweep(&p, 0).is_ok(), "o perfil de raio 1 cabe nessa curva");
 }
 
-/// Enquanto a varredura com cantos não gira a seção, o resultado não pode sair sem aviso.
+/// A seção gira nos cantos (B350): nem a guia com cantos nem a suave levam o aviso de cantos.
 #[test]
-fn guia_com_cantos_avisa_e_guia_suave_nao() {
+fn guia_com_cantos_e_guia_suave_saem_sem_aviso_de_cantos() {
     if !kernel_disponivel() {
         return;
     }
@@ -133,7 +155,7 @@ fn guia_com_cantos_avisa_e_guia_suave_nao() {
         recompute(&d).status[&id].clone()
     };
     let l = status(vec![[0., 0., 0.], [50., 0., 0.], [50., 50., 0.]], |points| RefKind::Polyline { points, closed: false });
-    assert!(matches!(&l, Status::Warning(m) if m.contains("cantos")), "{l:?}");
+    assert_eq!(l, Status::Ok, "{l:?}");
     let suave = status(vec![[0., 0., 0.], [20., 5., 0.], [40., -5., 0.], [60., 0., 0.]], |points| RefKind::Spline { points, closed: false, tangents: vec![] });
     assert!(!matches!(&suave, Status::Warning(m) if m.contains("cantos")) && !matches!(suave, Status::Error(_)), "{suave:?}");
 }

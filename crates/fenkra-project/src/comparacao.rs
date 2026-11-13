@@ -243,13 +243,15 @@ pub struct MetaVersao {
     pub nota: String,
     /// letra da revisão liberada com este conteúdo, se houver
     pub revisao: Option<String>,
+    /// estado do ciclo de vida em que a versão ficou ao ser gravada (vazio nas versões antigas)
+    pub estado: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ComparacaoVersoes {
     pub antes: MetaVersao,
     pub depois: MetaVersao,
-    /// diferenças entre os metadados (quem, quando, comentário, revisão)
+    /// diferenças entre os metadados (quem, quando, comentário, estado, revisão)
     pub metadados: Vec<Detalhe>,
     pub modelo: ComparacaoDocs,
     /// os dois lados têm o mesmo conteúdo (restauração, por exemplo)
@@ -268,6 +270,7 @@ impl Project {
             comentario: v.comment.clone(),
             nota: v.note.clone(),
             revisao: e.revisions.iter().find(|r| r.hash == v.hash).map(|r| r.label.clone()),
+            estado: v.estado.clone(),
         })
     }
 
@@ -286,6 +289,7 @@ impl Project {
         campo("data", ma.tempo.to_string(), mb.tempo.to_string());
         campo("nota", vazio(&ma.nota), vazio(&mb.nota));
         campo("comentário", vazio(&ma.comentario), vazio(&mb.comentario));
+        campo("estado", vazio(&ma.estado), vazio(&mb.estado));
         campo("revisão", vazio(ma.revisao.as_deref().unwrap_or("")), vazio(mb.revisao.as_deref().unwrap_or("")));
         let modelo = comparar_documentos(&da, &db);
         Ok(ComparacaoVersoes { mesmo_conteudo: ma.hash == mb.hash, antes: ma, depois: mb, metadados, modelo })
@@ -404,6 +408,8 @@ mod tests {
         assert!(c.metadados.iter().any(|m| m.campo == "autor" && m.depois == "beto"), "{:?}", c.metadados);
         assert!(c.metadados.iter().any(|m| m.campo == "comentário" && m.depois == "furo maior por folga"));
         assert!(c.metadados.iter().any(|m| m.campo == "revisão" && m.depois == "A"));
+        // B214: o estado em que cada versão ficou ao ser gravada
+        assert!(!c.antes.estado.is_empty() && !c.depois.estado.is_empty(), "{:?} {:?}", c.antes, c.depois);
         assert!(c.modelo.features.iter().any(|f| f.detalhes.iter().any(|x| x.antes == "40" && x.depois == "60")));
 
         // restaurar a v1 cria a v3 com o mesmo conteúdo: sem diferença de modelo
@@ -412,6 +418,37 @@ mod tests {
         assert!(c.mesmo_conteudo && c.modelo.e_igual());
         assert!(matches!(p.comparar_versoes(id, 1, 9), Err(ProjectError::NotFound)));
         assert!(matches!(p.comparar_versoes(id, 0, 1), Err(ProjectError::NotFound)));
+        let _ = std::fs::remove_dir_all(raiz);
+    }
+
+    /// B214: cada versão guarda o estado em que ficou ao ser gravada, e a comparação aponta a troca.
+    #[test]
+    fn comparacao_de_versoes_mostra_o_estado_de_cada_uma() {
+        let raiz = tmp("estado_versao");
+        let mut p = Project::create(&raiz, "T").unwrap();
+        let mut d = Document::new("Placa");
+        let id_f = caixa(&mut d, "40");
+        let id = p.add_document(d.clone()).unwrap();
+        d.props.pn = p.entry(id).unwrap().pn.clone();
+        p.transicionar(id, crate::DocState::Obsoleto, "substituída").unwrap();
+        if let FeatureKind::Primitive(pr) = &mut d.features.iter_mut().find(|f| f.id == id_f).unwrap().kind {
+            pr.a = "50".into();
+        }
+        match p.save_comentado(id, &d, "editado", "") {
+            Ok(()) => {
+                let c = p.comparar_versoes(id, 1, 2).unwrap();
+                assert_eq!(c.antes.estado, "Em trabalho");
+                assert_eq!(c.depois.estado, p.entry(id).unwrap().state.label());
+                if c.antes.estado != c.depois.estado {
+                    assert!(c.metadados.iter().any(|m| m.campo == "estado" && m.antes == "Em trabalho"), "{:?}", c.metadados);
+                }
+            }
+            // obsoleto não aceita versão nova: a v1 continua com o estado dela
+            Err(_) => assert_eq!(p.meta_da_versao(id, 1).unwrap().estado, "Em trabalho"),
+        }
+        // versão gravada antes do campo existir: estado vazio, mostrado como "(vazio)" e sem quebrar
+        let v: crate::Version = serde_json::from_str(r#"{"hash": "x", "time": 1, "note": ""}"#).unwrap();
+        assert!(v.estado.is_empty());
         let _ = std::fs::remove_dir_all(raiz);
     }
 

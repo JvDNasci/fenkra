@@ -195,6 +195,7 @@ pub fn relatorio_massa(doc: &Document) -> RelatorioMassa {
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);

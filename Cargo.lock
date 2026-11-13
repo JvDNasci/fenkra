@@ -1332,6 +1332,7 @@ dependencies = [
  "fenkra-core",
  "fenkra-kernel",
  "fenkra-pacote",
+ "fenkra-project",
  "fenkra-solidos",
  "png 0.17.16",
  "serde_json",

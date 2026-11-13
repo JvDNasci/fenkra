@@ -468,7 +468,7 @@ impl Project {
             base_hash,
             ponta_hash: ponta_hash.clone(),
             seq,
-            versoes: vec![Version { hash: ponta_hash.clone(), time: t, note: "ramo criado".into(), author: self.autor.clone(), comment: String::new(), restored_from: None }],
+            versoes: vec![Version { hash: ponta_hash.clone(), time: t, note: "ramo criado".into(), author: self.autor.clone(), comment: String::new(), restored_from: None, estado: String::new() }],
             pedido: None,
         };
         cofre.ramos.push(ramo.clone());
@@ -497,7 +497,7 @@ impl Project {
         }
         r.ponta_hash = hash.clone();
         r.atualizado = now();
-        r.versoes.push(Version { hash: hash.clone(), time: now(), note: nota.into(), author: autor, comment: String::new(), restored_from: None });
+        r.versoes.push(Version { hash: hash.clone(), time: now(), note: nota.into(), author: autor, comment: String::new(), restored_from: None, estado: String::new() });
         // mudou depois de pedido/aprovação: o pedido volta a ser aberto para nova revisão
         if let Some(p) = &mut r.pedido {
             if p.estado == EstadoPedido::Aprovado && p.hash_ponta != hash {

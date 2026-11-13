@@ -93,7 +93,7 @@ fn rosca_com_inicio_deslocado_e_fora_da_face() {
         let mut d = Document::new("eixo");
         let sk = sk_circulos(&mut d, PlaneRef::Origin(OriginPlane::XY), &[([0., 0.], 5.)]);
         d.add_feature(ext(sk, BoolOp::Add, "30"));
-        let th = d.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "8".into(), modeled: true, end: None, start: start.into() }));
+        let th = d.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "8".into(), modeled: true, end: None, start: start.into(), face_key: None }));
         (d, th)
     };
     let (sem, _) = {

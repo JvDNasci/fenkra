@@ -267,7 +267,7 @@ fn comando_rosca_tem_a_mesma_previa_leve() {
     let topo = d.add_offset_plane(XY, "20");
     d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Datum(topo), a: s("5"), b: s("20"), c: s("0"), d: s("0"), op: BoolOp::Add }));
     let sem = volume_total(&recompute(&d));
-    let id = d.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 30.], spec: s("M10x1.5"), length: s("15"), modeled: true, end: None, start: s("0") }));
+    let id = d.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 30.], spec: s("M10x1.5"), length: s("15"), modeled: true, end: None, start: s("0"), face_key: None }));
     let mut cache = Cache::default();
     cache.leve = Some(id);
     let leve = recompute_cached(&d, &mut cache);
@@ -291,7 +291,7 @@ fn comando_rosca_interna_no_comprimento_inteiro_do_furo() {
         h.thread = None;
     });
     let sem = volume_total(&recompute(&d));
-    let id = d.add_feature(FeatureKind::Thread(Thread { face: [3.4, 0., 18.], spec: s("M8x1.25"), length: s("30"), modeled: true, end: None, start: s("0") }));
+    let id = d.add_feature(FeatureKind::Thread(Thread { face: [3.4, 0., 18.], spec: s("M8x1.25"), length: s("30"), modeled: true, end: None, start: s("0"), face_key: None }));
     let r = recompute(&d);
     let tirado = sem - volume_total(&r);
     assert!(tirado > 50., "rosca interna da face inteira tirou só {tirado} mm³ ({:?})", r.status[&id]);
@@ -310,7 +310,7 @@ fn comando_rosca_externa_comprida_remove_material_e_fica_valida() {
     let topo = d.add_offset_plane(XY, "10");
     d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Datum(topo), a: s("5"), b: s("40"), c: s("0"), d: s("0"), op: BoolOp::Add }));
     let sem = volume_total(&recompute(&d));
-    let id = d.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 30.], spec: s("M10x1.5"), length: s("40"), modeled: true, end: None, start: s("0") }));
+    let id = d.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 30.], spec: s("M10x1.5"), length: s("40"), modeled: true, end: None, start: s("0"), face_key: None }));
     let r = recompute(&d);
     assert!(matches!(r.status[&id], Status::Ok | Status::Warning(_)), "{:?}", r.status[&id]);
     // 36 mm de filete a ~3,3 mm³ por mm

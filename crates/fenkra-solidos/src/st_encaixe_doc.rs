@@ -106,6 +106,7 @@ pub fn encaixes_da_estrutura(doc: &Document, opc: &Opcoes) -> Vec<MembroComEncai
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
     let lines = cx.all_member_lines();
     // (linha cortada, índice da ponta) -> hospedeiros e a folga do canto

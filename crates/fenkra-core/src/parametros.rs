@@ -373,14 +373,14 @@ mod tests {
         }
         let v2 = Document::from_json(&d.to_json()).unwrap();
         assert_eq!(v2, d);
-        assert_eq!(v2.format_version, 2);
+        assert_eq!(v2.format_version, crate::formato::Tipo::Peca.versao_atual());
         let mut j: serde_json::Value = serde_json::from_str(&d.to_json()).unwrap();
         j["format_version"] = 1.into();
         for k in ["tipo", "exibir", "opcoes"] {
             j["params"][0].as_object_mut().unwrap().remove(k);
         }
         let v1 = Document::from_json(&j.to_string()).unwrap();
-        assert_eq!(v1.format_version, 2, "a cadeia leva o arquivo à versão atual");
+        assert_eq!(v1.format_version, crate::formato::Tipo::Peca.versao_atual(), "a cadeia leva o arquivo à versão atual");
         assert_eq!(v1.params[0].tipo, ParamTipo::Numero);
         assert_eq!(v1.params[0].exibir, UnidadeComp::Mm);
         assert!(!v1.formato_futuro());

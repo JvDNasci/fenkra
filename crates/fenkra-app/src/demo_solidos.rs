@@ -72,6 +72,20 @@ fn varredura(doc: &mut Document, modo: SweepMode) -> DemoPrevia {
     DemoPrevia::Comando(FeatureKind::Sweep(Sweep { sketch: sk, spine: CurveRef::Ref(guia), mode: modo, op: BoolOp::Add, thin: None }))
 }
 
+/// B350: guia em U com cantos vivos e um tubo de raio 4: a seção gira em cada canto (esquadria).
+fn varredura_cantos(doc: &mut Document) -> DemoPrevia {
+    *doc = Document::new("Varredura em cantos");
+    let pontos = [[0., 0., 0.], [60., 0., 0.], [60., 50., 0.], [0., 50., 30.]].into_iter().map(PointRef::Fixed).collect();
+    let guia = doc.add_geometry(RefKind::Polyline { points: pontos, closed: false });
+    let sk = sketch(doc, PlaneRef::Origin(OriginPlane::YZ), &|data, al| {
+        let c = data.add_point(&mut &mut *al, 0., 0.);
+        data.add_curve(&mut &mut *al, Curve::Circle { c, r: 6. }, false);
+        let c2 = data.add_point(&mut &mut *al, 0., 0.);
+        data.add_curve(&mut &mut *al, Curve::Circle { c: c2, r: 4. }, false);
+    });
+    DemoPrevia::Comando(FeatureKind::Sweep(Sweep { sketch: sk, spine: CurveRef::Ref(guia), mode: SweepMode::Corrigido, op: BoolOp::Add, thin: None }))
+}
+
 /// Dois corpos em coletores separados: a caixa e uma ferramenta alta que a atravessa.
 fn dois_corpos(d: &mut Document) -> (Id, Id) {
     *d = Document::new("Booleana");
@@ -307,6 +321,7 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
         "varredura_sem_torcao" => varredura(doc, SweepMode::Corrigido),
         "varredura_torcao" => varredura(doc, SweepMode::Frenet),
         "varredura_fixa" => varredura(doc, SweepMode::Fixo),
+        "varredura_cantos" => varredura_cantos(doc),
         _ => return None,
     })
 }

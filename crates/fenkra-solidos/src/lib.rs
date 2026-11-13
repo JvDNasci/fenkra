@@ -771,6 +771,8 @@ struct Ctx<'a> {
     sketches: HashMap<Id, (Frame, Arc<EvalSketch>)>,
     /// referências v2 que o comando em execução calculou para pontos sem chave (promoção)
     promoted: RefCell<Option<Promoted>>,
+    /// B350: a varredura do comando em execução não girou nos cantos e saiu com orientação fixa
+    aviso_cantos: RefCell<Option<String>>,
     /// sólido gerado por cada comando (base para filete/chanfro por comando)
     status: HashMap<Id, Status>,
     /// ferramenta e operação de cada comando de forma (para padrões e espelho)
@@ -2983,7 +2985,7 @@ impl Ctx<'_> {
         } else {
             let fr = Frame { origin: g.start, x: g.x, normal: g.z };
             let face = Shape::face(&fr, &loops).map_err(k)?;
-            face.sweep(&g.pts, 0).map_err(k)
+            self.varrer(&face, &g.pts, 0)
         }
     }
 
@@ -3028,6 +3030,19 @@ impl Ctx<'_> {
         match why {
             refs::Lost::None => format!("referência perdida: {what} '{}' — {who} não existe mais; escolha de novo no comando", f.name),
             refs::Lost::Ambiguous(n) => format!("referência perdida: {what} '{}' — {who} tem {n} candidatas; escolha de novo no comando", f.name),
+        }
+    }
+
+    /// Varredura com a seção girando nos cantos (B350). Se o kernel não consegue girar sem tombar a
+    /// seção, refaz com orientação fixa (a forma de antes) e deixa o aviso para o status do comando.
+    fn varrer(&self, face: &Shape, pts: &[[f64; 3]], mode: u8) -> Result<Shape, String> {
+        match face.sweep(pts, mode) {
+            Err(e) if e.0.contains("girar nos cantos") => {
+                let s = face.sweep(pts, 1).map_err(|e| e.0)?;
+                *self.aviso_cantos.borrow_mut() = Some(AVISO_CANTOS_TOMBOU.into());
+                Ok(s)
+            }
+            r => r.map_err(|e| e.0),
         }
     }
 
@@ -3184,7 +3199,7 @@ impl Ctx<'_> {
             let fr = Frame { origin: pts[0], x: geo3d::any_perp(z), normal: z };
             let face = Shape::face(&fr, &[vec![fenkra_kernel::Seg2::Circle([0., 0.], r)]]).map_err(k)?;
             let straight = pts.len() == 2;
-            let tube = if straight { face.extrude(z, geo3d::dist(pts[0], pts[1]), 0.).map_err(k)? } else { face.sweep(&pts, 0).map_err(k)? };
+            let tube = if straight { face.extrude(z, geo3d::dist(pts[0], pts[1]), 0.).map_err(k)? } else { self.varrer(&face, &pts, 0)? };
             tubes = if tubes.is_null() { tube } else { tubes.boolean(&tube, Bool::Fuse).map_err(k)? };
         }
         if tubes.is_null() {
@@ -4549,14 +4564,18 @@ impl Ctx<'_> {
                     SweepMode::Fixo => 1,
                     SweepMode::Frenet => 2,
                 };
-                let tool = face.sweep(&spine.pts, mode).map_err(k)?;
+                let tool = self.varrer(&face, &spine.pts, mode)?;
                 self.apply(f.target, tool, w.op, f.id)?;
                 let mut avisos: Vec<String> = vec![];
                 if !sk.open.is_empty() {
                     avisos.push(format!("{} perfil(is) aberto(s) do sketch foram descartados: só contornos fechados varrem", sk.open.len()));
                 }
                 if guia_com_cantos(&spine.pts) {
-                    avisos.push(AVISO_GUIA_COM_CANTOS.into());
+                    if w.mode == SweepMode::Fixo {
+                        avisos.push(AVISO_CANTOS_FIXO.into());
+                    } else if self.aviso_cantos.borrow().is_none() && self.doc.migracoes.iter().any(|m| m == fenkra_core::formato::MIGRACAO_CANTOS_VARREDURA) {
+                        avisos.push(AVISO_CANTOS_MIGRADO.into());
+                    }
                 }
                 // B301: o perfil deve estar normal à curva no início; o ângulo fora disso entra no aviso
                 if let Some(desvio) = varredura_desvio(&frame.normal, &spine.pts) {
@@ -5048,8 +5067,8 @@ impl Ctx<'_> {
                             };
                             let ydir = fenkra_kernel::cross(sec.normal, sec.x);
                             let s = if geo3d::dot(ydir, p) >= 0. { 1. } else { -1. };
-                            let outer = Shape::face(&sec, &[trap(w + 2. * sp.t, w * 0.4 + 2. * sp.t, s * (depth + sp.t))]).map_err(k)?.sweep(spine, 0).map_err(k)?;
-                            let inner = Shape::face(&sec, &[trap(w, w * 0.4, s * depth)]).map_err(k)?.sweep(spine, 0).map_err(k)?;
+                            let outer = self.varrer(&Shape::face(&sec, &[trap(w + 2. * sp.t, w * 0.4 + 2. * sp.t, s * (depth + sp.t))]).map_err(k)?, spine, 0)?;
+                            let inner = self.varrer(&Shape::face(&sec, &[trap(w, w * 0.4, s * depth)]).map_err(k)?, spine, 0)?;
                             self.apply(f.target, outer, BoolOp::Add, f.id)?;
                             self.apply(f.target, inner, BoolOp::Cut, f.id)?;
                         }
@@ -5064,7 +5083,8 @@ impl Ctx<'_> {
                             self.tools.remove(&f.id);
                             return Err(e);
                         }
-                        Ok(chains.iter().any(|c| guia_com_cantos(c)).then(|| AVISO_GUIA_COM_CANTOS.to_string()))
+                        let migrado = self.doc.migracoes.iter().any(|m| m == fenkra_core::formato::MIGRACAO_CANTOS_VARREDURA);
+                        Ok((migrado && chains.iter().any(|c| guia_com_cantos(c))).then(|| AVISO_CANTOS_MIGRADO.to_string()))
                     }
                     // circular nos pontos: tronco de cone revolvido
                     2 => {
@@ -5890,8 +5910,10 @@ impl Ctx<'_> {
             }
             FeatureKind::Thread(t) => {
                 let spec = hardware::thread(&t.spec).ok_or_else(|| format!("rosca '{}' não encontrada na tabela de normas", t.spec))?;
-                let b = self.body(f.target).ok_or("não há corpo para roscar")?;
-                let cyl = b.cylinder_at(t.face).map_err(k)?;
+                let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para roscar")?;
+                // B15: a face pela chave v2 (o ponto só vale a até 1 mm, e é promovido)
+                let face = self.resolve_faces("rosca", f, b, owners, roles, &[t.face], std::slice::from_ref(&t.face_key))?[0];
+                let cyl = b.cylinder_at(face).map_err(k)?;
                 // B05: o início pode andar ao longo do eixo; o que sobra da face limita o comprimento
                 let start = if t.start.trim().is_empty() { 0. } else { ev(&t.start, &self.vars, "início da rosca")? };
                 if start < 0. || start >= cyl.h1 - cyl.h0 {
@@ -6059,6 +6081,7 @@ impl Ctx<'_> {
                         x.edges = EdgeSel::Edges(mids.iter().map(|q| self.map_point(*q, from, to)).collect());
                         // as chaves valem para o corpo como ele está, não para o levado entre dobrado e planificado
                         x.keys = vec![];
+                        x.extra.face_keys = vec![];
                         mapped = x;
                         &mapped
                     }
@@ -6068,14 +6091,20 @@ impl Ctx<'_> {
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
                 let tags = tags_for(owners);
                 let chamfer = matches!(f.kind, FeatureKind::Chamfer(_));
+                // B15: as faces do filete face-face e do completo pela chave v2, com o ponto como reserva
+                let quem = if chamfer { "chanfro" } else { "filete" };
                 match &o.mode {
                     EdgeMode::FaceFace(a, c) => {
+                        let p = self.resolve_faces(quem, f, b, owners, roles, &[*a, *c], &o.extra.face_keys)?;
+                        let (a, c) = (&p[0], &p[1]);
                         let (s, out) = b.face_face_fillet_tagged(*a, *c, v, &tags).map_err(k)?;
                         let body = remap_body(s, owners, roles, &out, f.id);
                         self.bodies.insert(f.target, body);
                         return Ok(None);
                     }
                     EdgeMode::FullRound { mid, a, b: c } => {
+                        let p = self.resolve_faces(quem, f, b, owners, roles, &[*mid, *a, *c], &o.extra.face_keys)?;
+                        let (mid, a, c) = (&p[0], &p[1], &p[2]);
                         let (fa, fc) = (b.face_props(*a).map_err(k)?, b.face_props(*c).map_err(k)?);
                         if fa.kind != 0 || fc.kind != 0 {
                             return Err("o filete completo precisa de duas faces laterais planas".into());
@@ -6182,8 +6211,8 @@ impl Ctx<'_> {
     }
 }
 
-/// A guia vira trechos retos no kernel (mesmo critério de `guia_suave`, em `features.inc`). Nesse caso a
-/// seção não gira nos cantos: cada trecho sai como um prisma inclinado, e o sólido é aprovado (B337).
+/// A guia vira trechos retos no kernel (mesmo critério de `guia_suave`, em `features.inc`). Desde a B350
+/// a seção gira em cada canto com junta de esquadria; só a orientação fixa segue sem girar.
 fn guia_com_cantos(pts: &[[f64; 3]]) -> bool {
     pts.windows(3).any(|q| match (geo3d::unit(geo3d::sub(q[1], q[0])), geo3d::unit(geo3d::sub(q[2], q[1]))) {
         (Some(a), Some(b)) => geo3d::dot(a, b).clamp(-1., 1.).acos() > 0.35,
@@ -6191,7 +6220,9 @@ fn guia_com_cantos(pts: &[[f64; 3]]) -> bool {
     })
 }
 
-const AVISO_GUIA_COM_CANTOS: &str = "a guia tem cantos e a seção não gira neles: depois de cada canto o perfil segue inclinado e o volume fica menor que o de um tubo; use uma guia suave";
+const AVISO_CANTOS_FIXO: &str = "orientação fixa numa guia com cantos: a seção não gira neles e segue inclinada depois de cada canto; use o modo corrigido para a seção acompanhar a guia";
+const AVISO_CANTOS_TOMBOU: &str = "a seção não conseguiu girar nos cantos da guia sem tombar e saiu com orientação fixa (sem girar): arredonde os cantos ou alinhe o perfil à guia";
+const AVISO_CANTOS_MIGRADO: &str = "a seção agora gira nos cantos da guia (B350): o volume deste comando mudou em relação ao arquivo gravado por uma versão anterior; confira e salve";
 
 /// Ângulo (graus) entre a normal do plano do perfil e a tangente da guia no primeiro trecho (B301).
 fn varredura_desvio(normal: &[f64; 3], pts: &[[f64; 3]]) -> Option<f64> {
@@ -6280,6 +6311,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
 
     // 1º: sketches livres (pastas de geometria, sem linha do tempo); 2º: comandos dos coletores em ordem
@@ -6470,10 +6502,17 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 let relatorios_before = cx.relatorios_forma.len();
                 let resolvidas_before = cx.formas_resolvidas.len();
                 *cx.promoted.borrow_mut() = None;
+                *cx.aviso_cantos.borrow_mut() = None;
                 let st = match cx.run(f) {
                     Ok(None) => Status::Ok,
                     Ok(Some(w)) => Status::Warning(w),
                     Err(e) => Status::Error(e),
+                };
+                // B350: varredura interna (membro, tubo do filete, nervura) que não girou nos cantos avisa
+                let st = match (st, cx.aviso_cantos.borrow_mut().take()) {
+                    (Status::Ok, Some(a)) => Status::Warning(a),
+                    (Status::Warning(w), Some(a)) if !w.contains(&a) => Status::Warning(format!("{w}; {a}")),
+                    (st, _) => st,
                 };
                 // B413: o status ok não vê sólido inválido; confere os corpos que o comando mexeu. Com um
                 // comando aberto para edição (prévia a cada tecla) a conferência espera: a conferência do
@@ -6808,6 +6847,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
             };
             for f in doc.active_features().map(|(_, f)| f) {
                 let _ = cx.run(f);
@@ -6848,6 +6888,7 @@ pub fn surface_brep(doc: &Document, id: Id) -> Option<String> {
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
@@ -7324,6 +7365,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
     let stock = ev(doc.props.stock_length.trim(), &cx.vars, "").ok().filter(|v| *v > 0.);
     let bars_of = |len: f64| stock.map(|s| (len / s).ceil().max(1.) as usize).unwrap_or(1);
@@ -7434,6 +7476,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
     let lines = cx.all_member_lines();
     let mut out = vec![];
@@ -7474,6 +7517,7 @@ pub fn member_corners(doc: &Document) -> Vec<st_cantos::Canto> {
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
     let lines = cx.all_member_lines();
     let perfil = |id: Id| match doc.feature(id).map(|f| &f.kind) {
@@ -7535,6 +7579,7 @@ pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
     let nan = [f64::NAN; 3];
     let ends: Vec<(V3, V3)> = paths.iter().map(|p| cx.curve(p, 0).map(|c| (c.start(), c.end())).unwrap_or((nan, nan))).collect();
@@ -7822,6 +7867,7 @@ pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, pres
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
@@ -7886,6 +7932,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
@@ -9622,7 +9669,7 @@ mod tests {
         let mut d = caixa();
         let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
         d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Datum(top), a: "5".into(), b: "10".into(), c: "0".into(), d: "0".into(), op: BoolOp::Add }));
-        let th = |end: Option<Extent>| Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "4".into(), modeled: true, end, start: String::new() };
+        let th = |end: Option<Extent>| Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "4".into(), modeled: true, end, start: String::new(), face_key: None };
         let mut a = d.clone();
         a.add_feature(FeatureKind::Thread(th(None)));
         let mut b = d.clone();
@@ -9906,7 +9953,7 @@ mod tests {
         assert!(near(vol(&d), v0 + std::f64::consts::PI * 250., 1e-3));
         // rosca externa modelada no cilindro (M10)
         let mut e = d.clone();
-        e.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "8".into(), modeled: true, end: None, start: String::new() }));
+        e.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "8".into(), modeled: true, end: None, start: String::new(), face_key: None }));
         let vt = vol(&e);
         assert!(vt < vol(&d) - 1., "rosca externa {vt}");
 

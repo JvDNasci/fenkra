@@ -59,7 +59,7 @@ pub fn montar(caso: &str) -> Option<(Document, FeatureKind)> {
         }
         "rosca" => {
             d.add_feature(primitivo(PrimKind::Cilindro, "6", "40", "0"));
-            FeatureKind::Thread(Thread { face: [6., 0., 20.], spec: s("M10x1.5"), length: s("4"), modeled: false, end: None, start: s("6") })
+            FeatureKind::Thread(Thread { face: [6., 0., 20.], spec: s("M10x1.5"), length: s("4"), modeled: false, end: None, start: s("6"), face_key: None })
         }
         "prim_caixa" => primitivo(PrimKind::Caixa, "20", "20", "10"),
         "prim_cilindro" => primitivo(PrimKind::Cilindro, "6", "40", "0"),

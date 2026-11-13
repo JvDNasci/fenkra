@@ -221,6 +221,119 @@ void confere_cantos(const TopoDS_Shape& perfil, rust::Slice<const double> spine)
     }
 }
 
+// Um laço do perfil varrido pela polilinha com junta de esquadria: em cada canto a seção gira com a
+// guia e as paredes dos dois trechos se encontram no plano bissetor, como um tubo cortado a meia-esquadria.
+// `MakePipe` faz um tubo por trecho com o triedro do trecho anterior e, numa reta, o Frenet não tem
+// normal: a seção seguia sem girar e o volume do segundo trecho sumia (L: metade, U: zero).
+// Guia plana: a binormal fica presa à normal do plano. Guia 3D: Frenet corrigido, depois o discreto.
+TopoDS_Shape laco_com_cantos(const TopoDS_Wire& guia, const TopoDS_Wire& laco, const gp_Dir* binormal, int tentativa) {
+    BRepOffsetAPI_MakePipeShell mk(guia);
+    if (binormal) mk.SetMode(*binormal);
+    else if (tentativa == 0) mk.SetMode(Standard_False);
+    else mk.SetDiscreteMode();
+    mk.SetTransitionMode(BRepBuilderAPI_RightCorner);
+    mk.Add(laco, Standard_False, Standard_False);
+    mk.Build();
+    if (!mk.IsDone() || !mk.MakeSolid()) return TopoDS_Shape();
+    return mk.Shape();
+}
+
+double volume_de(const TopoDS_Shape& s) {
+    GProp_GProps p;
+    BRepGProp::VolumeProperties(s, p);
+    return p.Mass();
+}
+
+// Guia com cantos em trechos: entre dois cantos vivos, um trecho de mais de dois pontos vira uma B-spline
+// (é uma curva suave amostrada) e um de dois pontos fica reto. Assim só os cantos de verdade levam
+// junta de esquadria; uma polilinha densa com um canto só não vira centenas de juntas.
+TopoDS_Wire guia_em_trechos(const std::vector<gp_Pnt>& p) {
+    std::vector<size_t> corte{0};
+    for (size_t i = 1; i + 1 < p.size(); ++i)
+        if (gp_Vec(p[i - 1], p[i]).Angle(gp_Vec(p[i], p[i + 1])) > 0.35) corte.push_back(i);
+    corte.push_back(p.size() - 1);
+    BRepBuilderAPI_MakeWire w;
+    for (size_t k = 0; k + 1 < corte.size(); ++k) {
+        const size_t a = corte[k], b = corte[k + 1];
+        if (b - a == 1) {
+            w.Add(BRepBuilderAPI_MakeEdge(p[a], p[b]).Edge());
+            continue;
+        }
+        TColgp_Array1OfPnt arr(1, int(b - a + 1));
+        for (size_t i = a; i <= b; ++i) arr.SetValue(int(i - a) + 1, p[i]);
+        GeomAPI_PointsToBSpline bs(arr, 3, 3, GeomAbs_C2, 1e-4);  // cúbica: não ondula entre amostras densas
+        w.Add(BRepBuilderAPI_MakeEdge(bs.Curve()).Edge());
+    }
+    if (!w.IsDone()) throw std::runtime_error("curva guia inválida");
+    return w.Wire();
+}
+
+// Varredura na guia com cantos: o laço de fora e os furos do perfil, cada um com junta de esquadria;
+// os furos saem do sólido de fora. Aceita só sólido válido e com volume coerente: a junta de esquadria
+// conserva área × comprimento da guia, a menos de 2 c tan(t/2) por canto de ângulo t, com c a distância
+// do centro do perfil à guia. Fora disso a seção tombou no caminho e o kernel aprovaria o sólido.
+bool varre_cantos(rust::Slice<const double> spine, const TopoDS_Shape& perfil, TopoDS_Shape& out) {
+    std::vector<gp_Pnt> p;
+    for (size_t i = 0; i < spine.size() / 3; ++i)
+        if (p.empty() || p.back().Distance(P3(spine, i)) > 1e-9) p.push_back(P3(spine, i));
+    if (p.size() < 3) return false;
+    GProp_GProps gp;
+    BRepGProp::SurfaceProperties(perfil, gp);
+    // perfil inclinado em relação ao primeiro trecho: o volume conta só a área projetada na normal dele
+    double area = std::abs(gp.Mass());
+    for (TopExp_Explorer e(perfil, TopAbs_FACE); e.More(); e.Next()) {
+        Handle(Geom_Plane) pl = Handle(Geom_Plane)::DownCast(BRep_Tool::Surface(TopoDS::Face(e.Current())));
+        if (!pl.IsNull()) area *= std::abs(pl->Axis().Direction().Dot(gp_Dir(gp_Vec(p[0], p[1]))));
+        break;
+    }
+    const double c = gp.CentreOfMass().Distance(p[0]);
+    double comp = 0, folga = 0;
+    for (size_t i = 0; i + 1 < p.size(); ++i) comp += p[i].Distance(p[i + 1]);
+    for (size_t i = 1; i + 1 < p.size(); ++i) {
+        const double t = gp_Vec(p[i - 1], p[i]).Angle(gp_Vec(p[i], p[i + 1]));
+        if (t > 0.35) folga += 2 * c * std::tan(t / 2);
+    }
+    const double esperado = area * comp, tolerancia = area * folga + 2e-3 * esperado;
+    TColgp_Array1OfPnt arr(1, int(p.size()));
+    for (size_t i = 0; i < p.size(); ++i) arr.SetValue(int(i) + 1, p[i]);
+    GProp_PEquation eq(arr, 1e-6);
+    std::optional<gp_Dir> normal;
+    if (eq.IsPlanar()) normal = eq.Plane().Axis().Direction();
+    TopoDS_Face face;
+    for (TopExp_Explorer e(perfil, TopAbs_FACE); e.More(); e.Next()) {
+        face = TopoDS::Face(e.Current());
+        break;
+    }
+    if (face.IsNull()) return false;
+    const TopoDS_Wire guia = guia_em_trechos(p);
+    for (int tentativa = 0; tentativa < (normal ? 1 : 2); ++tentativa) {
+        bool ok = false;
+        try {
+            protegido("", [&] {
+                const TopoDS_Wire fora = BRepTools::OuterWire(face);
+                TopoDS_Shape s = laco_com_cantos(guia, fora, normal ? &*normal : nullptr, tentativa);
+                if (s.IsNull()) return;
+                if (volume_de(s) < 0) s.Reverse();
+                for (TopExp_Explorer e(face, TopAbs_WIRE); e.More(); e.Next()) {
+                    const TopoDS_Wire w = TopoDS::Wire(e.Current());
+                    if (w.IsSame(fora)) continue;
+                    TopoDS_Shape furo = laco_com_cantos(guia, w, normal ? &*normal : nullptr, tentativa);
+                    if (furo.IsNull()) return;
+                    if (volume_de(furo) < 0) furo.Reverse();
+                    s = BRepAlgoAPI_Cut(s, furo).Shape();
+                }
+                if (s.IsNull() || std::abs(volume_de(s) - esperado) > tolerancia || !BRepCheck_Analyzer(s).IsValid()) return;
+                out = s;
+                ok = true;
+            });
+        } catch (const std::runtime_error&) {
+        } catch (const Standard_Failure&) {
+        }
+        if (ok) return true;
+    }
+    return false;
+}
+
 }  // namespace
 
 std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> spine, uint8_t mode) {
@@ -229,7 +342,24 @@ std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> s
         if (!c.IsNull()) {
             // Curva mais fechada que o braço do perfil: a parede passa por cima dela mesma. O kernel
             // aprova esse sólido, e nenhum triedro corrige, porque o defeito está na geometria pedida.
-            const double raio = raio_minimo(c), alcance = alcance_do_perfil(face.s, c->StartPoint(), c->Poles());
+            double raio = raio_minimo(c);
+            const double alcance = alcance_do_perfil(face.s, c->StartPoint(), c->Poles());
+            // B337: a aproximação de grau alto pode ondular entre amostras densas e inventar uma curva
+            // mais fechada que a da guia; a cúbica pelos mesmos pontos (mesma tolerância) não ondula.
+            // Só troca quando a curva de sempre seria recusada, para a guia que já varria não mudar.
+            if (raio < alcance) {
+                const size_t n = spine.size() / 3;
+                TColgp_Array1OfPnt arr(1, int(n));
+                for (size_t i = 0; i < n; ++i) arr.SetValue(int(i) + 1, P3(spine, i));
+                GeomAPI_PointsToBSpline cub(arr, 3, 3, GeomAbs_C2, 1e-4);
+                if (cub.IsDone()) {
+                    const double r3 = raio_minimo(cub.Curve());
+                    if (r3 > raio) {
+                        raio = r3;
+                        c = cub.Curve();
+                    }
+                }
+            }
             if (raio < alcance) {
                 char m[200];
                 std::snprintf(m, sizeof m, "varredura: a guia faz uma curva de raio %.3g mm, menor que o alcance do perfil (%.3g mm), e o sólido se dobraria sobre si mesmo; suavize a guia ou reduza o perfil", raio, alcance);
@@ -240,9 +370,45 @@ std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> s
         }
         const GeomFill_Trihedron t = mode == 1 ? GeomFill_IsFixed : mode == 2 ? GeomFill_IsFrenet : GeomFill_IsCorrectedFrenet;
         TopoDS_Shape out;
+        // Guia com cantos (B350): a seção gira em cada canto. Orientação fixa pedida pela pessoa segue
+        // sem girar, pelo caminho de sempre.
+        // guia de dois pontos (reta) também chega aqui sem curva suave: só canto de verdade vai à esquadria
+        bool tem_canto = false;
+        for (size_t i = 1; i + 1 < spine.size() / 3; ++i) {
+            const gp_Vec a(P3(spine, i - 1), P3(spine, i)), b(P3(spine, i), P3(spine, i + 1));
+            if (a.Magnitude() > 1e-9 && b.Magnitude() > 1e-9 && a.Angle(b) > 0.35) tem_canto = true;
+        }
+        if (c.IsNull() && tem_canto && mode != 1) {
+            if (varre_cantos(spine, face.s, out)) return wrap(out);
+            // Polilinha densa (amostra de uma curva apertada) em que a esquadria não fecha: a curva suave
+            // pelos mesmos pontos, com o mesmo portão de dobra e a mesma escada da guia suave.
+            // (só polilinha densa: numa de poucos pontos os cantos são de verdade e arredondá-los mudaria a peça)
+            const size_t n = spine.size() / 3;
+            if (n >= 24) {
+                TColgp_Array1OfPnt arr(1, int(n));
+                for (size_t i = 0; i < n; ++i) arr.SetValue(int(i) + 1, P3(spine, i));
+                GeomAPI_PointsToBSpline bs(arr, 3, 3, GeomAbs_C2, 1e-4);  // cúbica: não ondula entre amostras densas
+                if (bs.IsDone()) {
+                    Handle(Geom_BSplineCurve) cs = bs.Curve();
+                    const double raio = raio_minimo(cs), alcance = alcance_do_perfil(face.s, cs->StartPoint(), cs->Poles());
+                    if (raio < alcance) {
+                        char m[200];
+                        std::snprintf(m, sizeof m, "varredura: a guia faz uma curva de raio %.3g mm, menor que o alcance do perfil (%.3g mm), e o sólido se dobraria sobre si mesmo; suavize a guia ou reduza o perfil", raio, alcance);
+                        throw std::runtime_error(m);
+                    }
+                    for (int k : {1, 4, 8, 16}) {
+                        falhar_se_cancelado();
+                        if (varre(guia_dividida(cs, k), face.s, mode == 2 ? GeomFill_IsFrenet : GeomFill_IsDiscreteTrihedron, out)) return wrap(out);
+                    }
+                }
+            }
+            // o caminho antigo daria um sólido aprovado com a seção tombada: melhor o erro nomeado
+            throw std::runtime_error("varredura: a seção não conseguiu girar nos cantos da guia sem tombar; arredonde os cantos ou use a orientação fixa");
+        }
         // O caminho de sempre vem primeiro: guia que já varria mantém as mesmas faces.
         // Sem a proteção de `protegido`, essa tentativa numa guia suave pode derrubar o processo.
-        if ((kViolacaoProtegida || c.IsNull()) && varre(spine_wire(spine), face.s, t, out)) return wrap(out);
+        const TopoDS_Wire guia = c.IsNull() ? spine_wire(spine) : BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(c).Edge()).Wire();
+        if ((kViolacaoProtegida || c.IsNull()) && varre(guia, face.s, t, out)) return wrap(out);
         if (c.IsNull()) throw std::runtime_error("varredura: o resultado saiu inválido; confira se o perfil cabe nos cantos da guia");
         // O Frenet corrigido amostra a torção da guia com poucos passos por aresta e, numa curva longa,
         // a lei salta dezenas de graus entre vizinhos: a aproximação não acompanha. O triedro discreto

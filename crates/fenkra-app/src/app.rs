@@ -583,6 +583,12 @@ impl App {
         // desenvolvimento: FENKRA_DEMO_PROJETO=1 abre um projeto de exemplo; =comparar já mostra a comparação
         if let Ok(modo) = std::env::var("FENKRA_DEMO_PROJETO") {
             app.demo_projeto(modo == "comparar");
+            // B214: `versoes` abre a janela Comparar versões (v1 ↔ v2), com o estado de cada versão
+            if modo == "versoes" {
+                if let Some(id) = app.project_sel {
+                    app.abrir_comparacao(&cc.egui_ctx, id, 1, 2);
+                }
+            }
         }
         // desenvolvimento: FENKRA_DEMO_DESEMPENHO=1 abre as configurações na seção Desempenho, com o contador ligado
         if std::env::var("FENKRA_DEMO_DESEMPENHO").is_ok() {
@@ -2126,6 +2132,13 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 (FeatureKind::Draft(d), Promoted::Faces(k)) if d.faces.len() == k.len() => d.face_keys = k.clone(),
                 (FeatureKind::Thickness(t), Promoted::Faces(k)) if t.faces.len() == k.len() => t.face_keys = k.clone(),
                 (FeatureKind::DirectEdit(t), Promoted::Faces(k)) if t.faces.len() == k.len() => t.face_keys = k.clone(),
+                // B15: rosca (uma face) e filete face-face (duas) ou completo (três)
+                (FeatureKind::Thread(t), Promoted::Faces(k)) if k.len() == 1 => t.face_key = k[0].clone(),
+                (FeatureKind::Fillet(o), Promoted::Faces(k))
+                    if matches!((&o.mode, k.len()), (fenkra_core::EdgeMode::FaceFace(..), 2) | (fenkra_core::EdgeMode::FullRound { .. }, 3)) =>
+                {
+                    o.extra.face_keys = k.clone()
+                }
                 _ => {}
             }
         }
@@ -2831,7 +2844,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 e.face_keys = face_keys.clone();
                 Sel::Feature(d.add_feature(FeatureKind::DirectEdit(e)))
             }
-            Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None, start: String::new() }))),
+            Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None, start: String::new(), face_key: None }))),
             Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints | Cmd::Mirror => {
                 let sources: Vec<Id> = match sel_now {
                     Sel::Feature(id) if d.feature(id).is_some_and(|f| crate::feat_ui::is_shape(&f.kind)) => vec![id],
@@ -7600,15 +7613,44 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 self.mouse3d.iniciar(&ctx);
                 self.mouse3d.drenar();
                 let mov = self.settings.mouse3d.processar(self.mouse3d.bruto());
-                if !mov.parado() {
-                    vp.stop_anim();
-                    vp.navegou();
-                    crate::mouse3d::aplicar_na_camera(&mut vp.camera, &mov, ctx.input(|i| i.stable_dt));
-                    ctx.request_repaint();
+                // na montagem, com uma peça escolhida, o aparelho move a peça (um desfazer por gesto)
+                let peca = if self.settings.mouse3d.mover_peca { self.asm.as_ref().and_then(|st| st.sel) } else { None };
+                let dt = ctx.input(|i| i.stable_dt);
+                match (peca, crate::mouse3d::movimento_da_peca(&vp.camera, &mov, dt)) {
+                    (Some(id), Some((t, w))) => {
+                        let st = self.asm.as_mut().unwrap();
+                        if let Some(pl) = st.asm.node(id).map(|n| n.placement) {
+                            if !self.mouse3d.movendo_peca {
+                                st.push_undo();
+                                self.mouse3d.movendo_peca = true;
+                            }
+                            if let Some(n) = st.asm.node_mut(id) {
+                                n.placement = pl.moved(t, w, pl.origin);
+                            }
+                            if st.respect {
+                                st.solve();
+                            }
+                            st.dirty = true;
+                            ctx.request_repaint();
+                        }
+                    }
+                    _ if !mov.parado() => {
+                        self.mouse3d.movendo_peca = false;
+                        vp.stop_anim();
+                        vp.navegou();
+                        crate::mouse3d::aplicar_na_camera(&mut vp.camera, &mov, dt);
+                        ctx.request_repaint();
+                    }
+                    _ => self.mouse3d.movendo_peca = false,
                 }
                 for b in self.mouse3d.botoes_novos() {
-                    if !self.settings.mouse3d.acao_do_botao(b).aplicar(&mut vp.camera) {
-                        self.fit_pending = true;
+                    match crate::mouse3d::disparo_do_botao(&self.settings.mouse3d, b) {
+                        crate::mouse3d::Disparo::Comando(a) => self.mouse3d.acoes.push(a),
+                        crate::mouse3d::Disparo::Vista(v) => {
+                            if !v.aplicar(&mut vp.camera) {
+                                self.fit_pending = true;
+                            }
+                        }
                     }
                 }
             }
@@ -9163,6 +9205,10 @@ impl eframe::App for App {
         self.about_window(ctx);
         self.curso_quadro(ctx, area);
         if let Some(a) = self.busca_cmd.ui(ctx) {
+            self.act(a);
+        }
+        // B322: comandos ligados aos botões do mouse 3D
+        for a in std::mem::take(&mut self.mouse3d.acoes) {
             self.act(a);
         }
         self.view_menu_window(ctx);

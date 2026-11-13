@@ -309,6 +309,7 @@ pub fn passos_planificados(doc: &Document) -> Vec<PassoPlanificado> {
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
     let mut out = vec![];
     for f in d.active_features().map(|(_, f)| f) {
