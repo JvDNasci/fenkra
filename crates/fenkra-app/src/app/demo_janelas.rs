@@ -158,6 +158,22 @@ impl App {
                 self.sent_doc = None;
                 self.start_session(f, false, None);
             }
+            // B95: espessura de 2 mm gravada pela regra "tangentes" a partir de uma parede: os cantos
+            // arredondados engrossam juntos, com o painel aberto mostrando a regra
+            "espessura_regra" => {
+                let mut d = Document::new("Regra de faces");
+                let mut sk = fenkra_core::SketchData::default();
+                let mut al = || d.alloc();
+                sk.add_rect(&mut al, [-20., -15.], [20., 15.], false);
+                let s = d.add_feature(FeatureKind::Sketch(fenkra_core::Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: sk }));
+                d.add_feature(FeatureKind::Extrude(fenkra_core::Extrude { sketch: s, op: fenkra_core::BoolOp::Add, extent: fenkra_core::Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+                d.add_feature(FeatureKind::Fillet(fenkra_core::EdgeOp { value: "6".into(), edges: EdgeSel::Edges(vec![[20., 15., 10.], [-20., 15., 10.], [-20., -15., 10.], [20., -15., 10.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: EdgeExtra::default() }));
+                let f = d.add_feature(FeatureKind::Thickness(fenkra_core::Thickness { faces: vec![[0., -15., 10.]], value: "2".into(), face_keys: vec![], remove: false, regras: vec![fenkra_core::RegraAresta { semente: 0, regra: fenkra_core::RegraSelecao::Tangentes }] }));
+                self.open.doc = d;
+                self.sent_doc = None;
+                self.request_recompute();
+                self.start_session(f, false, None);
+            }
             // B20: furo novo aberto, com o botão Aplicar e continuar na barra do comando
             "aplicar_continuar" => {
                 let mut d = Document::new("Aplicar e continuar");

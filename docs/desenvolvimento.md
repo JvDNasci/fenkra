@@ -109,6 +109,7 @@ preferências do usuário.
 | `FENKRA_DEMO_JANELA=nova_pasta` | (B24) dois pontos novos agrupados por "Selecionados → nova pasta" dentro da pasta de geometria que já existe (use com `FENKRA_DEMO_EXEMPLO=0`) |
 | `FENKRA_DEMO_JANELA=filete_regra` | (B95) caixa de cantos arredondados com um filete que grava a regra "tangentes" a partir de uma aresta de cima, com o painel do filete aberto |
 | `FENKRA_DEMO_JANELA=saida_regra` | (B95) saída de 8° gravada pela regra "tangentes" a partir de uma parede da caixa de cantos arredondados; painel aberto com a regra e "Soltar a regra" |
+| `FENKRA_DEMO_JANELA=espessura_regra` | (B95) espessura de 2 mm gravada pela regra "tangentes" a partir de uma parede da caixa de cantos arredondados: paredes e cantos engrossam juntos; painel aberto com a regra |
 | `FENKRA_DEMO_JANELA=aplicar_continuar` | (B20) filete novo aberto, com "Aplicar e continuar" na barra do comando |
 | `FENKRA_DEMO_JANELA=ajuda_f1` | (B60) a janela Ajuda do comando que o F1 abre sobre o botão, aqui a do Filete |
 | `FENKRA_DEMO_JANELA=reparo_candidatas` | (B15) casca com a face perdida (ponto 3 mm acima do topo) e o Assistente de reparo aberto, com as candidatas numeradas no 3D (use com `FENKRA_DEMO_EXEMPLO=0`) |

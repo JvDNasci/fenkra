@@ -3677,6 +3677,10 @@ pub struct Thickness {
     /// B07: remove material em vez de acrescentar (o valor é sempre a distância positiva)
     #[serde(default)]
     pub remove: bool,
+    /// B95: seleção por intenção gravada (tangentes, concêntricas). Cada regra parte de uma face de
+    /// `faces` (a semente) e é refeita a cada recompute: faces que a mudança do modelo criar entram sozinhas.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub regras: Vec<RegraAresta>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]

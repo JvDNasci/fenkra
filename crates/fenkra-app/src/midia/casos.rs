@@ -55,7 +55,7 @@ pub fn montar(caso: &str) -> Option<(Document, FeatureKind)> {
         }
         "espessura" => {
             caixa(&mut d);
-            FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 30.]], value: s("0"), face_keys: vec![], remove: false })
+            FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 30.]], value: s("0"), face_keys: vec![], remove: false, regras: vec![] })
         }
         "rosca" => {
             d.add_feature(primitivo(PrimKind::Cilindro, "6", "40", "0"));

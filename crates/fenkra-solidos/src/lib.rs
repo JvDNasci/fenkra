@@ -4752,6 +4752,8 @@ impl Ctx<'_> {
                 }
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
                 let pts = self.resolve_faces("espessura", f, b, owners, roles, &t.faces, &t.face_keys)?;
+                // B95: regra gravada (tangentes, concêntricas) refeita no corpo atual
+                let pts = selecao_regras::expandir_faces(b, &pts, &t.regras)?;
                 let tool = b.faces_offset_tool(&pts, v).map_err(k)?;
                 self.apply(f.target, tool, if v > 0. { BoolOp::Add } else { BoolOp::Cut }, f.id)?;
                 Ok(None)
@@ -9962,7 +9964,7 @@ mod tests {
 
         // espessura +5 no topo
         let mut d = caixa();
-        d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 20.]], value: "5".into(), face_keys: vec![], remove: false }));
+        d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 20.]], value: "5".into(), face_keys: vec![], remove: false, regras: vec![] }));
         assert!(near(vol(&d), v0 + 6000., 1e-6));
 
         // padrão linear de um bolso 4×4×5: 3 cópias ao longo de X

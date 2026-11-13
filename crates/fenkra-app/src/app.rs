@@ -2851,7 +2851,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
             Cmd::Shell => Sel::Feature(d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: faces_r.clone(), thickness: s("2"), outward: false, face_keys: keys_r.clone(), closed: false, regras: regras_f.clone() }))),
             Cmd::Draft => Sel::Feature(d.add_feature(FeatureKind::Draft(Draft { faces: faces_r.clone(), neutral: opt_plane, angle: s("3"), reverse: false, face_keys: keys_r.clone(), regras: regras_f.clone() }))),
-            Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces.clone(), value: s("2"), face_keys: face_keys.clone(), remove: false }))),
+            Cmd::Thickness => Sel::Feature(d.add_feature(FeatureKind::Thickness(Thickness { faces: faces_r.clone(), value: s("2"), face_keys: keys_r.clone(), remove: false, regras: regras_f.clone() }))),
             Cmd::DirectEdit(i) => {
                 let mut e = fenkra_core::DirectEdit::novo(fenkra_core::OpDireta::ALL[i as usize % fenkra_core::OpDireta::ALL.len()]);
                 e.faces = faces_r.clone();
