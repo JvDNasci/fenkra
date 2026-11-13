@@ -1,0 +1,39 @@
+{
+ "id": "terminal_rotular_ilustrativo",
+ "nome": "Terminal rotular macho (medidas ilustrativas, não normativas)",
+ "norma": "Fenkra ilustrativo (terminal rotular)",
+ "revisao": "2026",
+ "versao": 1,
+ "gerador": "terminal_rotular",
+ "nivel": "A",
+ "licenca": "LGPL-2.1-or-later (valores próprios do Fenkra)",
+ "ilustrativo": true,
+ "fontes": [
+  {
+   "rotulo": "Regulamento técnico internacional de karting: os braços da direção levam terminal rotular nas pontas (só a existência da peça; nenhuma medida vem daqui)",
+   "url": "https://www.fiakarting.com/sites/default/files/2026-01/6.0%20RT2025_Clean%20Web_1.2_16.12.2025_2.pdf",
+   "pagina": "art. 4.5.3"
+  }
+ ],
+ "campos": ["dk", "C1", "dE", "B", "h", "dh", "l1"],
+ "tamanhos": [
+  {
+   "designacao": "M6",
+   "valores": { "dk": 20, "C1": 8, "dE": 13, "B": 9, "h": 30, "dh": 7, "l1": 16 },
+   "confirmado_por": 0,
+   "nota": "ILUSTRATIVO: valores escolhidos pelo Fenkra para dar forma coerente ao terminal do kart (B397), sem fonte. Furo da esfera e rosca M6. Espessura da carcaça C1 e diâmetro da haste dh são fictícios. Meça a peça comprada antes de fabricar."
+  },
+  {
+   "designacao": "M8",
+   "valores": { "dk": 24, "C1": 10, "dE": 16, "B": 12, "h": 36, "dh": 9.5, "l1": 20 },
+   "confirmado_por": 0,
+   "nota": "ILUSTRATIVO: valores escolhidos pelo Fenkra para dar forma coerente ao terminal do kart (B397), sem fonte. Furo da esfera e rosca M8. Espessura da carcaça C1 e diâmetro da haste dh são fictícios. Meça a peça comprada antes de fabricar."
+  },
+  {
+   "designacao": "M10",
+   "valores": { "dk": 28, "C1": 12, "dE": 19, "B": 14, "h": 43, "dh": 11.5, "l1": 24 },
+   "confirmado_por": 0,
+   "nota": "ILUSTRATIVO: valores escolhidos pelo Fenkra para dar forma coerente ao terminal do kart (B397), sem fonte. Furo da esfera e rosca M10. Espessura da carcaça C1 e diâmetro da haste dh são fictícios. Meça a peça comprada antes de fabricar."
+  }
+ ]
+}

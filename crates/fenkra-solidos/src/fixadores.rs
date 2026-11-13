@@ -98,6 +98,7 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
         "patim_linear" => crate::guias::corpo_patim(&mut m, fam, t)?,
         "porca_esferas" => crate::guias::corpo_porca_esferas(&mut m, fam, t)?,
         "fuso_esferas" => crate::guias::corpo_fuso(&mut m, fam, t, l)?,
+        "terminal_rotular" => crate::terminal_rotular::corpo(&mut m, fam, t)?,
         "rebite_universal" | "rebite_escareado" => crate::rebites::corpo(&mut m, fam, t, l)?,
         g => return Err(format!("{}: gerador '{g}' sem geometria", fam.id)),
     }
@@ -152,6 +153,8 @@ fn publicacoes(m: &mut Montador, fam: &Familia) -> Result<(), String> {
         (_, TipoFixador::PatimLinear) => ("H", "H1"),
         (_, TipoFixador::PorcaEsferas) => ("-L", "0"),
         (_, TipoFixador::FusoEsferas) => ("L", "0"),
+        // terminal rotular: da ponta da rosca ao centro da esfera
+        (_, TipoFixador::TerminalRotular) => ("-h", "0"),
     };
     let ponto0 = PointRef::Origin;
     m.publicar("Eixo", RefKind::LineDir { point: ponto0, dir: AxisRef::Origin(OriginAxis::Z), start: inicio.into(), end: fim.into() });

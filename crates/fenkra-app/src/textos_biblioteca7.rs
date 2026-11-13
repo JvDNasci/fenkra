@@ -45,4 +45,15 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("comprimento do corpo de aço", "steel body length"),
     ("comprimento total do bloco", "total block length"),
     ("profundidade da rosca", "thread depth"),
+    // terminal rotular (B397)
+    ("Terminal rotular", "Rod end"),
+    ("diâmetro externo da carcaça", "housing outer diameter"),
+    ("espessura da carcaça (ilustrativa)", "housing thickness (illustrative)"),
+    ("diâmetro da esfera", "ball diameter"),
+    ("largura da esfera", "ball width"),
+    ("do centro da esfera ao fim da rosca", "from ball center to thread end"),
+    ("diâmetro da haste (ilustrativo)", "shank diameter (illustrative)"),
+    ("comprimento da rosca", "thread length"),
+    ("Medidas ilustrativas: escolhidas pelo Fenkra para a peça ter forma coerente, sem norma nem catálogo. Meça a peça comprada antes de fabricar.", "Illustrative dimensions: chosen by Fenkra so the part has a consistent shape, with no standard or catalog behind them. Measure the purchased part before manufacturing."),
+    ("⚠ Medidas ilustrativas", "⚠ Illustrative dimensions"),
 ];
