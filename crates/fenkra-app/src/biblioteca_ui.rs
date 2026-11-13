@@ -489,7 +489,7 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
                 ui.horizontal(|ui| {
                     ui.label(tr(if trilho { "Comprimento do trilho" } else { "Curso da haste" }));
                     let mut c = est.comprimento.unwrap_or_else(|| serie.iter().copied().find(|c| *c >= 100.).unwrap_or(lo));
-                    let r = ui.add(egui::DragValue::new(&mut c).range(lo..=hi).suffix(" mm"));
+                    let r = ui.add(crate::ui_ext::dv(&mut c).range(lo..=hi).suffix(" mm"));
                     egui::ComboBox::from_id_salt("biblioteca_curso").selected_text(tr("Padrão")).show_ui(ui, |ui| {
                         for l in &serie {
                             if ui.selectable_label(est.comprimento == Some(*l), fmt(*l)).clicked() {
