@@ -50,3 +50,17 @@ booleanas sobre o corpo inteiro:
 - Ficam sem prévia leve (continuam completos): filete em modos especiais (variável, face a face, completo,
   assimétrico), varredura, loft, chapa e estrutural. Varredura e loft medidos custam dezenas de ms; chapa e
   estrutural não foram medidos nesta entrega.
+
+## Complemento (B356, modos especiais, chapa e estrutural)
+
+- Filete e chanfro em todos os modos. Variável, assimétrico, duas distâncias e distância com ângulo
+  desenham a linha de tangência no maior valor. Face a face e completo guardam os pontos das faces
+  clicadas (`PreviaViz::pares`) e a interface acha na malha a aresta comum a elas.
+- Chapa: a zona do comando, a caixa dos pontos de referência crescida pela medida principal. As abas
+  usam a polilinha inteira da aresta (`Shape::edge_at`, consulta de topologia, sem construir nada).
+- Estrutural: cada trecho reto do membro é a caixa orientada da seção ao longo da guia, nos eixos do
+  `member_shape`; chapa de ligação, mão-francesa e solda mostram a zona.
+- Chapa e estrutural só ficam leves como último comando ativo (`previa_leve::cobre_no`): os comandos
+  seguintes leem faces que a prévia não cria. A mesma regra vale na assinatura do comando e do corpo,
+  senão a malha velha do corpo seria reaproveitada num cálculo completo.
+- Fica sem prévia leve o desdobrar parcial, que não cria material.

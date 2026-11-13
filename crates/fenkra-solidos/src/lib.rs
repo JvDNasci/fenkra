@@ -3548,8 +3548,11 @@ impl Ctx<'_> {
                 tool = tool.boolean(&half_space(end, m, big)?, Bool::Cut).map_err(k)?;
             }
         }
+        // B356: aba aberta para edição: a ferramenta e a linha de dobra (para as alças) sim, a colisão
+        // e a booleana com o corpo não
+        let leve = self.leve_dentro(f);
         // bainha (colide = false) aperta a chapa de propósito: só a aba comum é validada
-        if colide && !p.flat {
+        if colide && !p.flat && !leve {
             // abas vizinhas: a aba nova só encosta na chapa pela aresta; volume comum é colisão
             if let Some(msg) = chapa::colisao(&b, &tool, info.ends, p.off1, p.off2)? {
                 return Err(msg);
@@ -3583,6 +3586,10 @@ impl Ctx<'_> {
         // a lateral da aresta escolhida precisa ser a espessura da chapa (senão não é parede de chapa)
         if let Some(msg) = chapa::valida_lateral(info.thickness, p.t) {
             return Err(msg);
+        }
+        if leve {
+            self.previa_da_ferramenta(f, &tool);
+            return Ok(None);
         }
         self.apply(f.target, tool, BoolOp::Add, f.id)?;
         Ok(None)
@@ -4944,6 +4951,8 @@ impl Ctx<'_> {
                 let mut cur = b0;
                 let mut centers: Vec<V3> = vec![];
                 let mut own: Vec<SheetMap> = vec![];
+                // B356: aberta para edição, a dobra registra as linhas (as alças leem) sem girar a chapa
+                let leve = self.leve_dentro(f);
                 for (p, q) in lines.iter() {
                     let (mut p, mut q) = (*p, *q);
                     let c_orig = geo3d::lerp(p, q, 0.5);
@@ -4956,7 +4965,7 @@ impl Ctx<'_> {
                             }
                         }
                     }
-                    let (shape, mut map) = self.bend_line(&cur, p, q, ang, r, kloc, sp.t, bd.flip, bd.down, delta, !sp.flat)?;
+                    let (shape, mut map) = self.bend_line(&cur, p, q, ang, r, kloc, sp.t, bd.flip, bd.down, delta, !sp.flat && !leve)?;
                     centers.push(c_orig);
                     if let Some(sh) = shape {
                         cur = sh;
@@ -4978,7 +4987,10 @@ impl Ctx<'_> {
                     }
                     self.sheet_maps.push(map);
                 }
-                if sp.flat {
+                if leve {
+                    let pts: Vec<V3> = lines.iter().flat_map(|(p, q)| [*p, *q]).collect();
+                    self.previa_da_dobra(f, &pts, r + sp.t);
+                } else if sp.flat {
                     notes.insert(0, "planificada: dobra desfeita".into());
                 } else {
                     self.bodies.insert(f.target, fresh_body(cur, f.id));
@@ -6407,7 +6419,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         f.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
         let mut parts: Vec<String> = vec![js.clone(), vars_sig(&js, &cx.vars), format!("t{}", cx.body_sig.get(&f.target).copied().unwrap_or(0)), format!("{:?}", cx.last_sheet)];
         // rosca modelada em edição: o resultado leve não pode ser confundido com o completo
-        if cache.leve == Some(f.id) && (rosca_furo::modelada(&f.kind) || previa_leve::cobre(&f.kind)) {
+        if cache.leve == Some(f.id) && (rosca_furo::modelada(&f.kind) || previa_leve::cobre_no(doc, f)) {
             parts.push("leve".into());
         }
         // desdobrar parcial: a mesma aba muda de resultado quando outro comando a desdobra
@@ -6585,7 +6597,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
             // prévia leve (B356): o corpo passou intacto, então a assinatura dele não depende dos campos do
             // comando; assim a malha em cache vale enquanto a pessoa edita, e o resultado leve continua
             // distinto do final para os comandos de depois
-            let leve = cache.leve == Some(f.id) && previa_leve::cobre(&f.kind);
+            let leve = cache.leve == Some(f.id) && previa_leve::cobre_no(doc, f);
             for b in &touched {
                 let nova = if leve { cx.body_sig.get(b).copied().unwrap_or(0).wrapping_mul(1_000_003).wrapping_add(0x1EE) } else { sig };
                 cx.body_sig.insert(*b, nova);
