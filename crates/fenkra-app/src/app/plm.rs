@@ -274,7 +274,7 @@ impl App {
         self.toast(tr("Calculando a sobreposição…"), false);
     }
 
-    fn abrir_comparacao(&mut self, ctx: &egui::Context, id: u64, a: usize, b: usize) {
+    pub(super) fn abrir_comparacao(&mut self, ctx: &egui::Context, id: u64, a: usize, b: usize) {
         match self.project.as_ref().unwrap().comparar_versoes(id, a, b) {
             Ok(resultado) => ctx.data_mut(|d| {
                 d.insert_temp(id_comparacao(), Some(ComparacaoUi { id, a, b, resultado }));
@@ -294,7 +294,8 @@ impl App {
                 ui.add(egui::Image::new(crate::icons::get("comparar_versoes")).fit_to_exact_size(egui::vec2(20., 20.)));
                 for m in [&c.antes, &c.depois] {
                     let rev = m.revisao.as_ref().map(|r| format!(" · Rev {r}")).unwrap_or_default();
-                    ui.label(RichText::new(format!("{}{}", m.rotulo, rev)).strong());
+                    let estado = if m.estado.is_empty() { String::new() } else { format!(" · {}", tr(&m.estado)) };
+                    ui.label(RichText::new(format!("{}{}{}", m.rotulo, rev, estado)).strong());
                 }
             });
             if c.mesmo_conteudo {

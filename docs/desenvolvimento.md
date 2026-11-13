@@ -164,7 +164,7 @@ preferências do usuário.
 | `FENKRA_DEMO_GOMOS=1` | L de tubo redondo com corte simples em quatro gomos (B326); com `FENKRA_EDITAR=Membro` abre o painel do nó |
 | `FENKRA_DEMO_SOLDA=<cosmetico\|solido\|intermitente>` | tubo contra placa com o cordão de filete (B285) |
 | `FENKRA_DEMO_ESTADO=<nome>` | força o estado na barra: `sem`, `liberada`, `editado`, `leitura` ou `conflito` |
-| `FENKRA_DEMO_PROJETO=1` | abre um projeto de exemplo com o painel à vista; `comparar` já mostra a comparação com a revisão |
+| `FENKRA_DEMO_PROJETO=1` | abre um projeto de exemplo com o painel à vista; `comparar` já mostra a comparação com a revisão; `versoes` (B214) abre a janela Comparar versões v1 ↔ v2, com o estado e os metadados de cada versão |
 | `FENKRA_DEMO_SECAO=1` | liga o corte de seção na prévia da casca |
 | `FENKRA_DEMO_ARQUIVO=<caminho>` | abre esse `.fkp`, `.fka` ou `.fkd` ao iniciar |
 | `FENKRA_DEMO_APARENCIA=preto\|branco\|<RRGGBB>` | pinta a peça aberta com essa cor (B425), para conferir o contraste dela com o fundo; combine com `FENKRA_DEMO_TEMA` |

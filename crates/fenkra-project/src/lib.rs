@@ -101,6 +101,9 @@ pub struct Version {
     /// versão antiga: a restauração é uma versão nova, o histórico nunca é reescrito.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub restored_from: Option<usize>,
+    /// estado do ciclo de vida em que a versão ficou ao ser gravada (B214); vazio nas versões de antes
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub estado: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -504,11 +507,16 @@ impl Project {
         let mut estado_antes_edicao = None;
         let nova = e.versions.last().map(|v| v.hash != hash).unwrap_or(true);
         if nova {
-            e.versions.push(Version { hash: hash.clone(), time: now(), note: note.into(), author: autor, comment: comentario.into(), restored_from: None });
+            e.versions.push(Version { hash: hash.clone(), time: now(), note: note.into(), author: autor, comment: comentario.into(), restored_from: None, estado: String::new() });
             if matches!(e.state, DocState::Liberado | DocState::EmAprovacao) {
                 estado_antes_edicao = Some(e.state);
                 e.state = DocState::EmTrabalho;
                 volta_a_trabalho = true;
+            }
+            // B214: o estado em que a versão ficou, para a comparação de versões mostrar
+            let estado = e.state.label().to_string();
+            if let Some(v) = e.versions.last_mut() {
+                v.estado = estado;
             }
         }
         self.save_index()?;
@@ -555,12 +563,16 @@ impl Project {
             author: autor,
             comment: motivo.into(),
             restored_from: Some(numero),
+            estado: String::new(),
         });
         let antes_estado = e.state;
         if matches!(e.state, DocState::Liberado | DocState::EmAprovacao) && e.dirty_since_release() {
             e.state = DocState::EmTrabalho;
         }
         let depois_estado = e.state;
+        if let Some(v) = e.versions.last_mut() {
+            v.estado = depois_estado.label().to_string();
+        }
         self.save_index()?;
         self.registrar(diario::TipoEvento::Restauracao, id, &format!("v{numero}"), hash, motivo)?;
         if antes_estado != depois_estado {
@@ -1204,7 +1216,7 @@ mod tests {
     fn versao_manual(p: &mut Project, id: u64, nome: &str, json: &str) {
         std::fs::write(p.root.join(VERSIONS).join(format!("{nome}.fkp")), json).unwrap();
         let e = p.entry_mut(id).unwrap();
-        e.versions.push(Version { hash: nome.into(), time: now(), note: "manual".into(), author: String::new(), comment: String::new(), restored_from: None });
+        e.versions.push(Version { hash: nome.into(), time: now(), note: "manual".into(), author: String::new(), comment: String::new(), restored_from: None, estado: String::new() });
     }
 
     #[test]

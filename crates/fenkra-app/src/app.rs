@@ -583,6 +583,12 @@ impl App {
         // desenvolvimento: FENKRA_DEMO_PROJETO=1 abre um projeto de exemplo; =comparar já mostra a comparação
         if let Ok(modo) = std::env::var("FENKRA_DEMO_PROJETO") {
             app.demo_projeto(modo == "comparar");
+            // B214: `versoes` abre a janela Comparar versões (v1 ↔ v2), com o estado de cada versão
+            if modo == "versoes" {
+                if let Some(id) = app.project_sel {
+                    app.abrir_comparacao(&cc.egui_ctx, id, 1, 2);
+                }
+            }
         }
         // desenvolvimento: FENKRA_DEMO_DESEMPENHO=1 abre as configurações na seção Desempenho, com o contador ligado
         if std::env::var("FENKRA_DEMO_DESEMPENHO").is_ok() {

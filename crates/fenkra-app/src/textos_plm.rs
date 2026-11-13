@@ -71,6 +71,8 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("nota", "note"),
     ("comentário", "comment"),
     ("revisão", "revision"),
+    // B214: estado em que cada versão ficou ao ser gravada
+    ("estado", "state"),
     // B130: ramos e mesclagem
     ("Trabalho salvo no ramo", "Work saved in branch"),
     ("Ramos", "Branches"),
