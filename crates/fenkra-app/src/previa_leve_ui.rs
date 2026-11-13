@@ -7,7 +7,9 @@
 //!   a superfície nova encosta na face (o chanfro usa a distância; o filete, `r / tan(a / 2)`, com `a`
 //!   o ângulo entre as faces);
 //! - casca: a caixa da cavidade, recuada da caixa do corpo pela espessura;
-//! - padrão e espelho: a caixa da ferramenta em cada instância.
+//! - padrão e espelho: a caixa da ferramenta em cada instância;
+//! - filete face a face e completo: as linhas de tangência na aresta comum às faces clicadas;
+//! - chapa e estrutural: a zona de cada comando e cada membro como a caixa da seção ao longo da guia.
 //!
 //! Sem malha nova e sem buffer novo na placa de vídeo; a geometria real só nasce ao concluir.
 
@@ -44,15 +46,21 @@ fn ponto(p: [f64; 3]) -> [f32; 3] {
 
 /// As linhas de tangência do filete ou do chanfro nas duas faces de cada aresta afetada.
 fn linhas_de_borda(v: &PreviaViz, m: &Mesh, col: [f32; 4], dst: &mut Vec<LineVertex>) {
-    if v.valor <= 0. || (v.arestas.is_empty() && !v.todas) {
+    if v.valor <= 0. || (v.arestas.is_empty() && v.pares.is_empty() && !v.todas) {
         return;
     }
     let nseg = m.edges.len() / 6;
-    let edges: Vec<usize> = if v.todas {
+    let mut edges: Vec<usize> = if v.todas {
         (0..m.edge_ranges.len()).filter(|e| m.edge_smooth.get(*e).is_none_or(|x| *x == 0)).collect()
     } else {
         v.arestas.iter().filter_map(|p| crate::entradas::aresta_perto(m, *p)).filter(|(_, d)| *d < SOBRE_A_ARESTA).map(|(e, _)| e).collect()
     };
+    // face a face e completo: as arestas entre as duas faces clicadas
+    for [pa, pb] in &v.pares {
+        let face = |p: [f64; 3]| crate::picking::face_e_distancia(m, p).filter(|x| x.1 < SOBRE_A_ARESTA).map(|x| x.0 as u32);
+        let (Some(fa), Some(fb)) = (face(*pa), face(*pb)) else { continue };
+        edges.extend(m.edge_faces.iter().enumerate().filter(|(_, ff)| (ff[0] == fa && ff[1] == fb) || (ff[0] == fb && ff[1] == fa)).map(|(e, _)| e));
+    }
     for e in edges {
         let Some(&[fa, fb]) = m.edge_faces.get(e) else { continue };
         let s0 = m.edge_ranges[e] as usize;
@@ -112,7 +120,7 @@ mod testes {
     }
 
     fn viz(valor: f64, chanfro: bool) -> PreviaViz {
-        PreviaViz { feature: fenkra_core::Id(1), arestas: vec![[5., 0., 0.]], valor, chanfro, todas: false, caixas: vec![] }
+        PreviaViz { feature: fenkra_core::Id(1), arestas: vec![[5., 0., 0.]], valor, chanfro, todas: false, caixas: vec![], pares: vec![] }
     }
 
     #[test]
@@ -130,6 +138,22 @@ mod testes {
         let mut dst = vec![];
         linhas_de_borda(&viz(3., true), &malha_de_quina(), [1.; 4], &mut dst);
         assert!(dst.iter().take(2).all(|p| (p.pos[1] - 3.).abs() < 1e-4));
+    }
+
+    /// Face a face: a aresta sai das duas faces clicadas (malha com os dois triângulos das faces).
+    #[test]
+    fn face_a_face_acha_a_aresta_entre_as_faces_clicadas() {
+        let mut m = malha_de_quina();
+        m.positions = vec![0., 0., 0., 10., 0., 0., 10., 10., 0., 0., 0., 10., 10., 0., 10.];
+        m.normals = vec![0.; 15];
+        m.indices = vec![0, 1, 2, 0, 4, 1, 0, 3, 4];
+        m.face_ranges = vec![0, 3];
+        let mut v = viz(2., false);
+        v.arestas.clear();
+        v.pares = vec![[[6., 2., 0.], [6., 0., 4.]]];
+        let mut dst = vec![];
+        linhas_de_borda(&v, &m, [1.; 4], &mut dst);
+        assert_eq!(dst.len(), 4, "a aresta comum às faces clicadas, uma linha em cada face");
     }
 
     #[test]

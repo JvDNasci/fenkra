@@ -8848,6 +8848,8 @@ fn setup_fonts(_ctx: &egui::Context) {
 impl eframe::App for App {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
         crate::paineis_demo::eventos(raw);
+        // B185: com a anotação armada, o Tab troca a variante da medida em vez de passar o foco
+        crate::pmi_ui::segurar_tab(_ctx, self.pmi_pending.is_some(), raw);
         if let Some(g) = self.sketch.as_mut().and_then(|e| e.gesto.as_mut()) {
             g.eventos(raw);
         }
@@ -8859,6 +8861,8 @@ impl eframe::App for App {
             crate::desempenho::esperar_limite(self.settings.limite_quadros);
         }
         let _quadro = crate::desempenho::quadro_guardado();
+        // B259: parede, CPU da thread e ociosidade da máquina nesta passada (com FENKRA_MEDIR_QUADROS)
+        let _medida = crate::medir_quadros::inicio();
         crate::desempenho::aplicar_vsync(frame, self.settings.vsync);
         crate::desempenho::contar_quadro(root.ctx(), self.settings.contador_fps);
         crate::desempenho::fechar_se_acabou(root.ctx());
@@ -9616,6 +9620,8 @@ fn recent_row(ui: &mut egui::Ui, path: &str, icon: &str, kind: &str, pv: Option<
     let dir = p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
     let w = ui.available_width();
     let (r, resp) = ui.allocate_exact_size(egui::vec2(w, 46.), egui::Sense::click());
+    // B321: anel de foco quando o Tab chega aqui
+    let resp = crate::teclado::anel(ui, resp);
     let hot = ui.ctx().animate_bool(egui::Id::unique(("recent_hot", path)), resp.hovered());
     let v = ui.visuals();
     let bg = v.faint_bg_color.lerp_to_gamma(accent, 0.18 * hot);
@@ -9653,6 +9659,8 @@ fn recent_row(ui: &mut egui::Ui, path: &str, icon: &str, kind: &str, pv: Option<
 fn example_card(ui: &mut egui::Ui, key: &str, name: &str, desc: &str, bench: crate::settings::Bench, pv: Option<&crate::examples::Preview>, spin: f32, appear: f32, accent: Color32) -> egui::Response {
     let size = egui::vec2(220., 212.);
     let (r0, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+    // B321: anel de foco quando o Tab chega aqui
+    let resp = crate::teclado::anel(ui, resp);
     let hot = ui.ctx().animate_bool(egui::Id::unique(("card_hot", key)), resp.hovered());
     let lift = 5. * hot + 16. * (1. - appear);
     let r = r0.translate(egui::vec2(0., -lift + 5.));
@@ -10093,6 +10101,8 @@ fn bench_tab(ui: &mut egui::Ui, active: bool, text: &str, enabled: bool) -> egui
     let g = ui.painter().layout_no_wrap(text.to_string(), font, col);
     let size = g.size() + egui::vec2(18., 6.);
     let (r, resp) = ui.allocate_exact_size(size, if enabled { egui::Sense::click() } else { egui::Sense::hover() });
+    // B321: anel de foco quando o Tab chega aqui
+    let resp = crate::teclado::anel(ui, resp);
     let p = ui.painter();
     if active {
         p.rect_filled(r, egui::CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 }, Color32::from_rgba_unmultiplied(70, 140, 240, 50));

@@ -661,6 +661,8 @@ fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
 /// colado no alto e parecia solto. A área de clique continua a altura inteira do botão.
 fn seta_da_familia(ui: &mut egui::Ui, size: f32) -> egui::Response {
     let (area, resp) = ui.allocate_exact_size(egui::vec2(12., size + 6.), egui::Sense::click());
+    // B321: anel de foco quando o Tab chega aqui
+    let resp = crate::teclado::anel(ui, resp);
     let v = ui.visuals();
     if resp.hovered() {
         ui.painter().rect_filled(area.shrink2(egui::vec2(1., 3.)), 4., v.widgets.hovered.weak_bg_fill);

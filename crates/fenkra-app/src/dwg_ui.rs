@@ -919,7 +919,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                     painter.rect_filled(r, 3., ui.visuals().window_fill);
                     painter.rect_stroke(r, 3., Stroke::new(1.5, err), egui::StrokeKind::Inside);
                     painter.galley(r.min + Vec2::new(5., 3.), g, err);
-                    if ui.interact(r, ui.scope_id().with(("reatribuir", id.0)), egui::Sense::click()).clicked() {
+                    if crate::teclado::anel(ui, ui.interact(r, ui.scope_id().with(("reatribuir", id.0)), egui::Sense::click())).clicked() {
                         st.reassign = Some((id, bad[0]));
                     }
                 }
@@ -1208,7 +1208,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             let active = *id == st.sheet;
             painter.rect_filled(r, 4., if active { Color32::WHITE } else { Color32::from_gray(200) });
             painter.galley(r.min + Vec2::new(7., 3.), g, Color32::BLACK);
-            if ui.interact(r, ui.scope_id().with(("aba_folha", id.0)), egui::Sense::click()).clicked() {
+            if crate::teclado::anel(ui, ui.interact(r, ui.scope_id().with(("aba_folha", id.0)), egui::Sense::click())).clicked() {
                 st.sheet = *id;
                 st.sel = None;
                 st.invalidate();

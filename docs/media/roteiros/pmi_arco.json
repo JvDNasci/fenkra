@@ -1,0 +1,42 @@
+{
+  "versao": 1,
+  "comando": "pmi_arco",
+  "caso": "pmi_arco",
+  "tema": "Escuro",
+  "camera": [
+    -35,
+    32,
+    320,
+    -60,
+    -55,
+    2
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    690,
+    305,
+    360,
+    220
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/0/offset/0",
+      "de": 2,
+      "ate": 12,
+      "t0": 0.3,
+      "t1": 2.4
+    },
+    {
+      "campo": "/0/offset/1",
+      "de": -2,
+      "ate": -12,
+      "t0": 0.3,
+      "t1": 2.4
+    }
+  ]
+}

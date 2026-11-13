@@ -148,6 +148,8 @@ pub fn lado_maior(kind: SectionKind, dims: &[f64]) -> Option<f64> {
 /// mesma escala, os tamanhos aparecem na proporção real uns dos outros. Devolve a resposta (clique).
 pub fn miniatura(ui: &mut egui::Ui, kind: SectionKind, dims: &[f64], escala_mm: f64, lado_px: f32, marcada: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(lado_px, lado_px), egui::Sense::click());
+    // B321: anel de foco quando o Tab chega aqui
+    let resp = crate::teclado::anel(ui, resp);
     let fundo = if marcada { ui.visuals().selection.bg_fill } else { ui.visuals().faint_bg_color };
     ui.painter().rect_filled(rect, 3., fundo);
     ui.painter().rect_stroke(rect, 3., Stroke::new(if marcada { 2. } else { 1. }, if marcada { crate::theme::accent(ui.visuals()) } else { ui.visuals().widgets.noninteractive.bg_stroke.color }), egui::StrokeKind::Inside);

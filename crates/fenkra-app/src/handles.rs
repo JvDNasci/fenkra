@@ -499,7 +499,7 @@ pub(crate) fn tag(ui: &mut egui::Ui, rect: Rect, at: egui::Pos2, text: String, f
     painter.rect_filled(r, 3., ui.visuals().extreme_bg_color);
     painter.rect_stroke(r, 3., Stroke::new(1., fg), egui::StrokeKind::Inside);
     painter.galley(r.min + egui::vec2(4., 2.), g, fg);
-    ui.interact(r, egui::Id::unique(salt), egui::Sense::click())
+    crate::teclado::anel(ui, ui.interact(r, egui::Id::unique(salt), egui::Sense::click()))
 }
 
 /// Contorno do preenchimento no 3D: bola em cada ponta aberta, folga em mm (fica como "ok" quando a

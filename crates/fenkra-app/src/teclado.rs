@@ -129,6 +129,13 @@ pub fn anel_de_foco(ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect) {
     }
 }
 
+/// Anel de foco no retângulo da própria resposta e a resposta de volta, para encadear depois de
+/// `allocate_exact_size` ou `ui.interact` em botões, abas, miniaturas e alças desenhados à mão.
+pub fn anel(ui: &egui::Ui, resp: egui::Response) -> egui::Response {
+    anel_de_foco(ui, &resp, resp.rect);
+    resp
+}
+
 /// Linhas do resumo das teclas, para as Preferências e o mapa de atalhos.
 pub const RESUMO: [(&str, &str); 6] = [
     ("Tab / Shift+Tab", "passa o foco por botões e campos; Enter ou Espaço aciona"),
@@ -195,6 +202,52 @@ mod tests {
         assert_eq!(vizinho_na_arvore(&d, Some(b), -1), Some(a));
         assert_eq!(passo_da_arvore(Teclas { alt: true, baixo: true, ..Default::default() }), Some(1));
         assert_eq!(passo_da_arvore(Teclas { baixo: true, ..Default::default() }), None);
+    }
+
+    /// Roda um quadro com a caixinha da árvore e um botão desenhado à mão; devolve as formas pintadas
+    /// e quem ficou com o foco.
+    fn quadro(ctx: &egui::Context, eventos: Vec<egui::Event>) -> (Vec<egui::epaint::ClippedShape>, [bool; 2]) {
+        let raw = egui::RawInput { events: eventos, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400., 300.))), ..Default::default() };
+        let mut foco = [false; 2];
+        let mut out = ctx.run_ui(raw, |ui| {
+            egui::CentralPanel::default().show_inside(ui, |ui| {
+                let a = crate::tree_ui::caixa(ui, true);
+                let (_, b) = ui.allocate_exact_size(egui::vec2(30., 20.), egui::Sense::click());
+                let b = anel(ui, b);
+                foco = [a.has_focus(), b.has_focus()];
+            });
+        });
+        // sem placa de vídeo no teste: as texturas do quadro são descartadas
+        out.textures_delta.clear();
+        (out.shapes, foco)
+    }
+
+    fn tab() -> Vec<egui::Event> {
+        let e = |pressed| egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed, repeat: false, modifiers: Default::default() };
+        vec![e(true), e(false)]
+    }
+
+    /// Traços com a cor e a largura do anel (a cor do traço de seleção do tema, 2 px).
+    fn aneis(ctx: &egui::Context, formas: &[egui::epaint::ClippedShape]) -> usize {
+        let cor = ctx.global_style().visuals.selection.stroke.color;
+        formas.iter().filter(|c| matches!(&c.shape, egui::Shape::Rect(r) if r.stroke.color == cor && r.stroke.width >= 2.)).count()
+    }
+
+    #[test]
+    fn tab_leva_o_foco_aos_botoes_desenhados_e_pinta_o_anel() {
+        let ctx = egui::Context::default();
+        let (f, foco) = quadro(&ctx, vec![]);
+        assert_eq!(foco, [false, false]);
+        assert_eq!(aneis(&ctx, &f), 0, "sem foco não há anel");
+        // o Tab vale no quadro seguinte ao que o lê
+        quadro(&ctx, tab());
+        let (f, foco) = quadro(&ctx, vec![]);
+        assert_eq!(foco, [true, false], "primeiro Tab: a caixinha da árvore");
+        assert_eq!(aneis(&ctx, &f), 1);
+        quadro(&ctx, tab());
+        let (f, foco) = quadro(&ctx, vec![]);
+        assert_eq!(foco, [false, true], "segundo Tab: o botão desenhado à mão");
+        assert_eq!(aneis(&ctx, &f), 1);
     }
 
     #[test]

@@ -328,6 +328,8 @@ fn azulejo(ui: &mut egui::Ui, app_prev: &crate::examples::PreviewCache, arquivo:
 /// Desenha o quadrinho. `previa`: `None` não é peça; `Some(None)` a miniatura ainda não chegou.
 fn azulejo_com(ui: &mut egui::Ui, previa: Option<Option<Arc<crate::examples::Preview>>>, nome: String, dica: &str, escolhido: bool) -> egui::Response {
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(LADO, LADO + 20.), Sense::click());
+    // B321: anel de foco quando o Tab chega aqui
+    let resp = crate::teclado::anel(ui, resp);
     let v = ui.visuals().clone();
     let quadro = Rect::from_min_size(rect.min, egui::vec2(LADO, LADO));
     let fundo = if resp.hovered() || escolhido { v.widgets.hovered.weak_bg_fill } else { v.extreme_bg_color };

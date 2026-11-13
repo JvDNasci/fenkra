@@ -133,6 +133,8 @@ fn dir_menu(ui: &mut egui::Ui, dir: &mut Dir) {
         egui::Grid::new("dwg_dir_menu").spacing(Vec2::new(4., 4.)).show(ui, |ui| {
             for (i, d) in Dir::ALL.iter().enumerate() {
                 let (r, resp) = ui.allocate_exact_size(Vec2::new(104., 62.), egui::Sense::click());
+                // B321: anel de foco quando o Tab chega aqui
+                let resp = crate::teclado::anel(ui, resp);
                 if *d == *dir {
                     ui.painter().rect_filled(r, 4., ui.visuals().selection.bg_fill.gamma_multiply(0.5));
                 } else if resp.hovered() {

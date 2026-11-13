@@ -1267,7 +1267,7 @@ pub fn candidatos_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Ca
                     painter.text(a + egui::vec2(12., -12.), egui::Align2::LEFT_BOTTOM, format!("{} · {nome}", c.rotulo), egui::FontId::proportional(12.), acento);
                 }
                 let area = Rect::from_two_pos(a, b).expand(11.);
-                let r = ui.interact(area, egui::Id::unique(("candidato", i)), Sense::click());
+                let r = crate::teclado::anel(ui, ui.interact(area, egui::Id::unique(("candidato", i)), Sense::click()));
                 if r.clicked() {
                     alternar = Some(c.chave.clone());
                 }

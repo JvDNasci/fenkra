@@ -756,7 +756,10 @@ impl Models {
         // a exata vai um processo por vista; sem o executável, uma depois da outra aqui
         let cancelar = ctl.bandeira();
         let processos = if desvio.is_none() { crate::hlr_processos::exatas(&vistas, Some(&*cancelar)) } else { None };
-        let mut linhas = processos.unwrap_or_else(|| fenkra_kernel::hlr_varias(&vistas, desvio)).into_iter();
+        // B393: a prévia sai do mapa de profundidade (ADR 0088): a malha da forma é feita uma vez
+        // (o malhador já usa várias threads) e cada vista é projetada numa thread, sem OpenCASCADE
+        let rapida = desvio.map(|d| linhas_rapidas(&hlrs, d / DESVIO_DA_PREVIA * DESVIO_DA_RAPIDA));
+        let mut linhas = processos.or(rapida).unwrap_or_else(|| fenkra_kernel::hlr_varias(&vistas, desvio)).into_iter();
         drop(vistas);
         if medir {
             eprintln!("[desenho] lote de {} ({}): preparar+carga {:?}, linhas {:?}", l.pedidos.len(), if l.previa { "prévia" } else { "exata" }, t_hlr - t0, t_hlr.elapsed());
@@ -1142,6 +1145,10 @@ pub fn clip_circle(pl: &[V2], c: V2, r: f64) -> Vec<Vec<V2>> {
 
 /// Desvio da malha da prévia, como fração do tamanho da vista (o dobro da maior medida).
 const DESVIO_DA_PREVIA: f64 = 0.0004;
+/// Desvio da malha da prévia pelo mapa de profundidade, em fração do maior lado (B393). O ângulo da
+/// malha (0,35 rad) já deixa cada furo com 18 lados ou mais; o desvio linear maior só tira triângulos
+/// das superfícies grandes e curvas, que eram a maior parte do tempo da prévia no kart.
+const DESVIO_DA_RAPIDA: f64 = 0.0015;
 
 /// Uma vista preparada: pronta ou esperando as linhas ocultas.
 enum Etapa {
@@ -1159,6 +1166,40 @@ struct Hlr {
     bends: Vec<fenkra_solidos::BendLine>,
     explosao: Vec<Vec<V3>>,
     tamanho: f64,
+}
+
+/// Linhas da prévia pelo mapa de profundidade (B393, `hlr_rapida`): uma malha por forma distinta,
+/// uma thread por vista.
+fn linhas_rapidas(hlrs: &[&Hlr], desvio: f64) -> Vec<fenkra_kernel::KResult<Vec<(Vec<V2>, u8)>>> {
+    let mut malhas: Vec<(usize, fenkra_kernel::KResult<fenkra_kernel::Mesh>)> = vec![];
+    let mut de_quem: Vec<usize> = vec![];
+    for (i, h) in hlrs.iter().enumerate() {
+        match malhas.iter().position(|(j, _)| hlrs[*j].alvo.mesma(&h.alvo)) {
+            Some(k) => de_quem.push(k),
+            None => {
+                de_quem.push(malhas.len());
+                let t = std::time::Instant::now();
+                malhas.push((i, h.alvo.mesh(desvio)));
+                if std::env::var_os("FENKRA_MEDIR_DESENHO").is_some() {
+                    eprintln!("[desenho] malha da prévia: {:?}, {} triângulos", t.elapsed(), malhas.last().and_then(|m| m.1.as_ref().ok()).map_or(0, |m| m.indices.len() / 3));
+                }
+            }
+        }
+    }
+    std::thread::scope(|s| {
+        let tarefas: Vec<_> = hlrs
+            .iter()
+            .zip(&de_quem)
+            .map(|(h, k)| {
+                let (m, axes, ocultas) = (&malhas[*k].1, &h.axes, h.hidden);
+                s.spawn(move || match m {
+                    Ok(m) => Ok(crate::hlr_rapida::projetar(m, axes, ocultas, crate::hlr_rapida::RESOLUCAO)),
+                    Err(e) => Err(e.clone()),
+                })
+            })
+            .collect();
+        tarefas.into_iter().map(|t| t.join().unwrap_or_else(|_| Err(fenkra_kernel::KernelError("projeção da vista falhou".into())))).collect()
+    })
 }
 
 /// Termina a vista com as linhas ocultas: tangentes, linhas de dobra e de explosão, limites.

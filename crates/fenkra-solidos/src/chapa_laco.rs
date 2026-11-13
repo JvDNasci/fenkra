@@ -206,7 +206,10 @@ impl Ctx<'_> {
             let len = geo3d::dist(info.ends[0], info.ends[1]);
             let start = if geo3d::dot(y, info.out) > 0. { geo3d::sub(info.ends[0], geo3d::mul(info.out, trim)) } else { info.ends[0] };
             let strip = Shape::box_tool(geo3d::add(start, geo3d::mul(info.normal, 0.01)), x, z, [len, trim, p.t + 0.02]).map_err(k)?;
-            self.apply(f.target, strip, BoolOp::Cut, f.id)?;
+            // B356: na prévia leve o corpo passa intacto
+            if !self.leve_dentro(f) {
+                self.apply(f.target, strip, BoolOp::Cut, f.id)?;
+            }
             edge = geo3d::sub(e0, geo3d::mul(info.out, trim));
             if p.flat != from {
                 edge = self.map_point(edge, p.flat, from);
@@ -214,7 +217,7 @@ impl Ctx<'_> {
         }
         self.miter_next = fl.miter;
         let out = self.sheet_tool(f, edge, from, p, true)?;
-        if let (Some(w), Some(info)) = (relief, self.last_sheet) {
+        if let (Some(w), Some(info), false) = (relief, self.last_sheet, self.leve_dentro(f)) {
             // alívio de canto: corte retangular atrás da dobra em cada ponta recuada
             let depth = p.r + p.t;
             let e = geo3d::unit(geo3d::sub(info.ends[1], info.ends[0])).ok_or("aresta nula")?;

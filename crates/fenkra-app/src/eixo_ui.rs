@@ -101,6 +101,7 @@ fn retangulo_do_recurso(p: &ParamEixo, rec: &RecursoEixo, trecho: Rect) -> Optio
 pub fn perfil_lateral(ui: &mut egui::Ui, g: &mut GearsUi) {
     let w = ui.available_width().min(520.);
     let (resp, painter) = ui.allocate_painter(egui::vec2(w, 120.), egui::Sense::click());
+    let resp = crate::teclado::anel(ui, resp);
     let v = ui.visuals().clone();
     painter.rect_filled(resp.rect, 4., v.extreme_bg_color);
     let rects = retangulos_do_perfil(&g.eixo, resp.rect);
