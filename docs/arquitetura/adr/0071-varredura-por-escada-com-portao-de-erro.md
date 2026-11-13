@@ -53,4 +53,4 @@ aproximação cúbica pelos mesmos pontos, com a mesma tolerância, e usa a que 
 já varria não muda. Resultado: 108 de 120 varrem com o volume do tubo, e as 12 recusadas têm raio
 discreto (círculo por três amostras vizinhas da própria polilinha) menor que 1,5 vez o braço do perfil. O
 teste confere isso em cada recusa. A nervura de chapa do corpus, recusada antes com 6 mm de largura numa
-curva de raio 5,97 mm, agora sai; com 12 mm segue o erro nomeado. A guia com cantos ficou na ADR 0086 (B350).
+curva de raio 5,97 mm, agora sai; com 12 mm segue o erro nomeado. A guia com cantos ficou na ADR 0087 (B350).
