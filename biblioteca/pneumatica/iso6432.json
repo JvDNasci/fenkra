@@ -1,0 +1,215 @@
+{
+ "id": "iso6432",
+ "nome": "Minicilindro pneumático ISO 6432",
+ "norma": "ISO 6432",
+ "revisao": "1985",
+ "versao": 1,
+ "gerador": "cilindro_redondo",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "ISO 6432:1985 — amostra pública da norma (tabelas 1 a 5: AM, KK, BE, WF, XC, EW)",
+   "url": "https://cdn.standards.iteh.ai/samples/12787/ad920c8be66c48459ea0cce473c8c365/ISO-6432-1985.pdf"
+  },
+  {
+   "rotulo": "Mindman (revenda Tech-Con) — minicilindro ISO 6432 série MCMI, tabela de dimensões Ø8 a Ø25",
+   "url": "https://shop.tech-con.pl/media/catalog/product/pdf/MCMI.pdf"
+  },
+  {
+   "rotulo": "Metalwork — minicilindros ISO 6432 Ø8 a Ø25, tabela de dimensões",
+   "url": "https://docs.pneumatiek.nl/pdf/metalwork/cilinder/rondcilinder_iso6432_metal_work.pdf"
+  }
+ ],
+ "campos": [
+  "MM",
+  "KK",
+  "P",
+  "AM",
+  "BE",
+  "WF",
+  "XC",
+  "EW",
+  "CD",
+  "D"
+ ],
+ "tamanhos": [
+  {
+   "comprimentos": [
+    10,
+    25,
+    40,
+    50,
+    80,
+    100
+   ],
+   "designacao": "Ø8",
+   "d_nominal": 8,
+   "valores": {
+    "MM": 4,
+    "KK": 4,
+    "P": 0.7,
+    "AM": 12,
+    "BE": 12,
+    "WF": 16,
+    "XC": 64,
+    "EW": 8,
+    "CD": 4,
+    "D": 16.7
+   },
+   "confirmado_por": 2,
+   "nota": "AM 12, KK M4 (passo 0.7), rosca do nariz BE M12x1.25, WF 16, XC 64 (do pino do olhal traseiro ao ombro da haste) e EW 8: a norma (tabelas 1, 3 e 4) e os catálogos MCMI e Metalwork concordam. Haste MM 4 e pino CD 4: MCMI e Metalwork concordam (a norma não fixa). D é o tubo de cada fabricante (MCMI 15, Metalwork 16,7; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante MCMI, até o máximo recomendado pela Metalwork; o curso é livre entre o menor e o maior. Modelo simplificado: olhal traseiro maciço sem o furo do pino, tubo, nariz roscado BE, haste e rosca da ponta; o parâmetro s move a haste."
+  },
+  {
+   "comprimentos": [
+    10,
+    25,
+    40,
+    50,
+    80,
+    100
+   ],
+   "designacao": "Ø10",
+   "d_nominal": 10,
+   "valores": {
+    "MM": 4,
+    "KK": 4,
+    "P": 0.7,
+    "AM": 12,
+    "BE": 12,
+    "WF": 16,
+    "XC": 64,
+    "EW": 8,
+    "CD": 4,
+    "D": 16.7
+   },
+   "confirmado_por": 2,
+   "nota": "AM 12, KK M4 (passo 0.7), rosca do nariz BE M12x1.25, WF 16, XC 64 (do pino do olhal traseiro ao ombro da haste) e EW 8: a norma (tabelas 1, 3 e 4) e os catálogos MCMI e Metalwork concordam. Haste MM 4 e pino CD 4: MCMI e Metalwork concordam (a norma não fixa). D é o tubo de cada fabricante (MCMI 15, Metalwork 16,7; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante MCMI, até o máximo recomendado pela Metalwork; o curso é livre entre o menor e o maior. Modelo simplificado: olhal traseiro maciço sem o furo do pino, tubo, nariz roscado BE, haste e rosca da ponta; o parâmetro s move a haste."
+  },
+  {
+   "comprimentos": [
+    10,
+    25,
+    40,
+    50,
+    80,
+    100,
+    125,
+    160,
+    200
+   ],
+   "designacao": "Ø12",
+   "d_nominal": 12,
+   "valores": {
+    "MM": 6,
+    "KK": 6,
+    "P": 1,
+    "AM": 16,
+    "BE": 16,
+    "WF": 22,
+    "XC": 75,
+    "EW": 12,
+    "CD": 6,
+    "D": 20
+   },
+   "confirmado_por": 2,
+   "nota": "AM 16, KK M6 (passo 1), rosca do nariz BE M16x1.5, WF 22, XC 75 (do pino do olhal traseiro ao ombro da haste) e EW 12: a norma (tabelas 1, 3 e 4) e os catálogos MCMI e Metalwork concordam. Haste MM 6 e pino CD 6: MCMI e Metalwork concordam (a norma não fixa). D é o tubo de cada fabricante (MCMI 20, Metalwork 19; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante MCMI, até o máximo recomendado pela Metalwork; o curso é livre entre o menor e o maior. Modelo simplificado: olhal traseiro maciço sem o furo do pino, tubo, nariz roscado BE, haste e rosca da ponta; o parâmetro s move a haste."
+  },
+  {
+   "comprimentos": [
+    15,
+    25,
+    50,
+    75,
+    100,
+    125,
+    150,
+    200
+   ],
+   "designacao": "Ø16",
+   "d_nominal": 16,
+   "valores": {
+    "MM": 6,
+    "KK": 6,
+    "P": 1,
+    "AM": 16,
+    "BE": 16,
+    "WF": 22,
+    "XC": 82,
+    "EW": 12,
+    "CD": 6,
+    "D": 20
+   },
+   "confirmado_por": 2,
+   "nota": "AM 16, KK M6 (passo 1), rosca do nariz BE M16x1.5, WF 22, XC 82 (do pino do olhal traseiro ao ombro da haste) e EW 12: a norma (tabelas 1, 3 e 4) e os catálogos MCMI e Metalwork concordam. Haste MM 6 e pino CD 6: MCMI e Metalwork concordam (a norma não fixa). D é o tubo de cada fabricante (MCMI 20, Metalwork 19,7; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante MCMI, até o máximo recomendado pela Metalwork; o curso é livre entre o menor e o maior. Modelo simplificado: olhal traseiro maciço sem o furo do pino, tubo, nariz roscado BE, haste e rosca da ponta; o parâmetro s move a haste."
+  },
+  {
+   "comprimentos": [
+    15,
+    25,
+    50,
+    75,
+    100,
+    125,
+    150,
+    200,
+    250,
+    300,
+    350,
+    400,
+    450,
+    500
+   ],
+   "designacao": "Ø20",
+   "d_nominal": 20,
+   "valores": {
+    "MM": 8,
+    "KK": 8,
+    "P": 1.25,
+    "AM": 20,
+    "BE": 22,
+    "WF": 24,
+    "XC": 95,
+    "EW": 16,
+    "CD": 8,
+    "D": 27.9
+   },
+   "confirmado_por": 2,
+   "nota": "AM 20, KK M8 (passo 1.25), rosca do nariz BE M22x1.5, WF 24, XC 95 (do pino do olhal traseiro ao ombro da haste) e EW 16: a norma (tabelas 1, 3 e 4) e os catálogos MCMI e Metalwork concordam. Haste MM 8 e pino CD 8: MCMI e Metalwork concordam (a norma não fixa). D é o tubo de cada fabricante (MCMI 27, Metalwork 27,9; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante MCMI, até o máximo recomendado pela Metalwork; o curso é livre entre o menor e o maior. Modelo simplificado: olhal traseiro maciço sem o furo do pino, tubo, nariz roscado BE, haste e rosca da ponta; o parâmetro s move a haste."
+  },
+  {
+   "comprimentos": [
+    15,
+    25,
+    50,
+    75,
+    100,
+    125,
+    150,
+    200,
+    250,
+    300,
+    350,
+    400,
+    450,
+    500
+   ],
+   "designacao": "Ø25",
+   "d_nominal": 25,
+   "valores": {
+    "MM": 10,
+    "KK": 10,
+    "P": 1.25,
+    "AM": 22,
+    "BE": 22,
+    "WF": 28,
+    "XC": 104,
+    "EW": 16,
+    "CD": 8,
+    "D": 33
+   },
+   "confirmado_por": 2,
+   "nota": "AM 22, KK M10x1.25 (passo 1.25), rosca do nariz BE M22x1.5, WF 28, XC 104 (do pino do olhal traseiro ao ombro da haste) e EW 16: a norma (tabelas 1, 3 e 4) e os catálogos MCMI e Metalwork concordam. Haste MM 10 e pino CD 8: MCMI e Metalwork concordam (a norma não fixa). D é o tubo de cada fabricante (MCMI 27, Metalwork 33; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante MCMI, até o máximo recomendado pela Metalwork; o curso é livre entre o menor e o maior. Modelo simplificado: olhal traseiro maciço sem o furo do pino, tubo, nariz roscado BE, haste e rosca da ponta; o parâmetro s move a haste."
+  }
+ ]
+}

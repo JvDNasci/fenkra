@@ -1,0 +1,178 @@
+{
+ "id": "an426",
+ "nome": "Rebite sólido de cabeça escareada 100° AN426",
+ "norma": "AN 426 (MS20426, domínio público)",
+ "revisao": "MS20470 / MS20426 (substitutas com as mesmas cotas)",
+ "versao": 1,
+ "gerador": "rebite_escareado",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Hanson Rivet — tabelas MS20470 e MS20426 (corpo, cabeça e altura)",
+   "url": "https://www.hansonrivet.com/rivets/solid-rivets/aerospace-solid-rivets/"
+  },
+  {
+   "rotulo": "Military Fasteners — fichas MS20426AD3-4 a MS20426AD8-16 (cabeça e corpo em faixa, dados FLIS)",
+   "url": "https://military-fasteners.com/catalog/pdf/MS20426AD3-4"
+  },
+  {
+   "rotulo": "EAA — Setting or Driving Solid Rivets (sobra de 1,5 diâmetro além da pilha)",
+   "url": "https://eaa.org/eaa/news-and-publications/eaa-news-and-aviation-news/bits-and-pieces-newsletter/09-2015-setting-or-driving-solid-rivets"
+  },
+  {
+   "rotulo": "Aircraft Systems Tech — rebite sólido: comprimento = pega + 1,5 diâmetro",
+   "url": "https://aircraftsystemstech.com/2018/12/solid-shank-rivet-aircraft-structural.html"
+  }
+ ],
+ "campos": [
+  "dk"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "AN426-3",
+   "original": "3/32 pol",
+   "d_nominal": 2.381,
+   "valores": {
+    "dk": 4.547
+   },
+   "confirmado_por": 2,
+   "nota": "Cone de 100°: a altura da cabeça sai de dk e d, k = (dk − d) / 2 / tan 50°. L conta a cabeça (rebite rente); L = pega + 1,5 d, arredondado para cima na série. Cabeça 0,175 a 0,183 pol nas duas fontes; altura de referência 0,036 (Hanson).",
+   "comprimentos": [
+    3.175,
+    4.762,
+    6.35,
+    7.938,
+    9.525,
+    11.112,
+    12.7,
+    14.287,
+    15.875,
+    17.462,
+    19.05,
+    20.637,
+    22.225,
+    23.812,
+    25.4
+   ],
+   "furo_min": 2.381,
+   "furo_max": 2.489
+  },
+  {
+   "designacao": "AN426-4",
+   "original": "1/8 pol",
+   "d_nominal": 3.175,
+   "valores": {
+    "dk": 5.715
+   },
+   "confirmado_por": 2,
+   "nota": "Cone de 100°: a altura da cabeça sai de dk e d, k = (dk − d) / 2 / tan 50°. L conta a cabeça (rebite rente); L = pega + 1,5 d, arredondado para cima na série. Cabeça 0,221 a 0,229 pol nas duas fontes; altura de referência 0,042 (Hanson).",
+   "comprimentos": [
+    3.175,
+    4.762,
+    6.35,
+    7.938,
+    9.525,
+    11.112,
+    12.7,
+    14.287,
+    15.875,
+    17.462,
+    19.05,
+    20.637,
+    22.225,
+    23.812,
+    25.4
+   ],
+   "furo_min": 3.175,
+   "furo_max": 3.277
+  },
+  {
+   "designacao": "AN426-5",
+   "original": "5/32 pol",
+   "d_nominal": 3.969,
+   "valores": {
+    "dk": 7.264
+   },
+   "confirmado_por": 2,
+   "nota": "Cone de 100°: a altura da cabeça sai de dk e d, k = (dk − d) / 2 / tan 50°. L conta a cabeça (rebite rente); L = pega + 1,5 d, arredondado para cima na série. Cabeça 0,282 a 0,290 pol nas duas fontes; altura de referência 0,055 (Hanson).",
+   "comprimentos": [
+    3.175,
+    4.762,
+    6.35,
+    7.938,
+    9.525,
+    11.112,
+    12.7,
+    14.287,
+    15.875,
+    17.462,
+    19.05,
+    20.637,
+    22.225,
+    23.812,
+    25.4
+   ],
+   "furo_min": 3.969,
+   "furo_max": 4.089
+  },
+  {
+   "designacao": "AN426-6",
+   "original": "3/16 pol",
+   "d_nominal": 4.762,
+   "valores": {
+    "dk": 8.966
+   },
+   "confirmado_por": 2,
+   "nota": "Cone de 100°: a altura da cabeça sai de dk e d, k = (dk − d) / 2 / tan 50°. L conta a cabeça (rebite rente); L = pega + 1,5 d, arredondado para cima na série. Cabeça 0,349 a 0,357 pol nas duas fontes; altura de referência 0,070 (Hanson).",
+   "comprimentos": [
+    3.175,
+    4.762,
+    6.35,
+    7.938,
+    9.525,
+    11.112,
+    12.7,
+    14.287,
+    15.875,
+    17.462,
+    19.05,
+    20.637,
+    22.225,
+    23.812,
+    25.4
+   ],
+   "furo_min": 4.762,
+   "furo_max": 4.851
+  },
+  {
+   "designacao": "AN426-8",
+   "original": "1/4 pol",
+   "d_nominal": 6.35,
+   "valores": {
+    "dk": 12.09
+   },
+   "confirmado_por": 2,
+   "nota": "Cone de 100°: a altura da cabeça sai de dk e d, k = (dk − d) / 2 / tan 50°. L conta a cabeça (rebite rente); L = pega + 1,5 d, arredondado para cima na série. Cabeça 0,472 a 0,480 pol nas duas fontes; altura de referência 0,095 (Hanson).",
+   "comprimentos": [
+    3.175,
+    4.762,
+    6.35,
+    7.938,
+    9.525,
+    11.112,
+    12.7,
+    14.287,
+    15.875,
+    17.462,
+    19.05,
+    20.637,
+    22.225,
+    23.812,
+    25.4
+   ],
+   "furo_min": 6.35,
+   "furo_max": 6.528
+  }
+ ]
+}

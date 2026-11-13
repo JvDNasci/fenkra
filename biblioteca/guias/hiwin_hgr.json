@@ -3,7 +3,7 @@
  "nome": "Trilho de guia linear de esferas, série HGR (montagem por cima)",
  "norma": "Hiwin HG (série de fabricante)",
  "revisao": "GW-10-1-EN-1701",
- "versao": 1,
+ "versao": 2,
  "gerador": "trilho_linear",
  "tipo": "trilho_linear",
  "nivel": "C",
@@ -17,45 +17,149 @@
   {
    "rotulo": "Bearing Boys — folhas de dados dos trilhos HGR15R a HGR35R",
    "url": "https://www.bearingboys.co.uk/uploads/HGR15R1000C.pdf"
+  },
+  {
+   "rotulo": "LM76 — catálogo da série HG (tabelas de bloco e trilho HGH/HGR)",
+   "url": "https://www.lm76.com/HG-Series-Catalog_opt.pdf"
   }
  ],
- "campos": ["WR", "HR", "D", "h", "dh", "P"],
- "comprimentos": [100, 160, 200, 250, 300, 400, 500, 600, 800, 1000, 1200, 1500, 2000, 3000, 4000],
+ "campos": [
+  "WR",
+  "HR",
+  "D",
+  "h",
+  "dh",
+  "P"
+ ],
+ "comprimentos": [
+  100,
+  160,
+  200,
+  250,
+  300,
+  400,
+  500,
+  600,
+  800,
+  1000,
+  1200,
+  1500,
+  2000,
+  3000,
+  4000
+ ],
  "tamanhos": [
   {
    "designacao": "HGR15R",
    "d_nominal": 15,
-   "valores": {"WR": 15, "HR": 15, "D": 7.5, "h": 5.3, "dh": 4.5, "P": 60},
+   "valores": {
+    "WR": 15,
+    "HR": 15,
+    "D": 7.5,
+    "h": 5.3,
+    "dh": 4.5,
+    "P": 60
+   },
    "confirmado_por": 2,
    "nota": "WR, HR, D, h, d (aqui dh) e P: catálogo Hiwin e folha da Bearing Boys concordam. Parafuso do trilho M4×16. O comprimento é livre até 4000 mm; os furos começam a P/2 da ponta. Modelo simplificado: perfil retangular sem as pistas, com os furos escareados."
   },
   {
    "designacao": "HGR20R",
    "d_nominal": 20,
-   "valores": {"WR": 20, "HR": 17.5, "D": 9.5, "h": 8.5, "dh": 6, "P": 60},
+   "valores": {
+    "WR": 20,
+    "HR": 17.5,
+    "D": 9.5,
+    "h": 8.5,
+    "dh": 6,
+    "P": 60
+   },
    "confirmado_por": 2,
    "nota": "WR, HR, D, h, d (aqui dh) e P: catálogo Hiwin e folha da Bearing Boys concordam. Parafuso do trilho M5×16. O comprimento é livre até 4000 mm; os furos começam a P/2 da ponta. Modelo simplificado: perfil retangular sem as pistas, com os furos escareados."
   },
   {
    "designacao": "HGR25R",
    "d_nominal": 23,
-   "valores": {"WR": 23, "HR": 22, "D": 11, "h": 9, "dh": 7, "P": 60},
+   "valores": {
+    "WR": 23,
+    "HR": 22,
+    "D": 11,
+    "h": 9,
+    "dh": 7,
+    "P": 60
+   },
    "confirmado_por": 2,
    "nota": "WR, HR, D, h, d (aqui dh) e P: catálogo Hiwin e folha da Bearing Boys concordam. Parafuso do trilho M6×20. O comprimento é livre até 4000 mm; os furos começam a P/2 da ponta. Modelo simplificado: perfil retangular sem as pistas, com os furos escareados."
   },
   {
    "designacao": "HGR30R",
    "d_nominal": 28,
-   "valores": {"WR": 28, "HR": 26, "D": 14, "h": 12, "dh": 9, "P": 80},
+   "valores": {
+    "WR": 28,
+    "HR": 26,
+    "D": 14,
+    "h": 12,
+    "dh": 9,
+    "P": 80
+   },
    "confirmado_por": 2,
    "nota": "WR, HR, D, h, d (aqui dh) e P: catálogo Hiwin e folha da Bearing Boys concordam. Parafuso do trilho M8×25. O comprimento é livre até 4000 mm; os furos começam a P/2 da ponta. Modelo simplificado: perfil retangular sem as pistas, com os furos escareados."
   },
   {
    "designacao": "HGR35R",
    "d_nominal": 34,
-   "valores": {"WR": 34, "HR": 29, "D": 14, "h": 12, "dh": 9, "P": 80},
+   "valores": {
+    "WR": 34,
+    "HR": 29,
+    "D": 14,
+    "h": 12,
+    "dh": 9,
+    "P": 80
+   },
    "confirmado_por": 2,
    "nota": "WR, HR, D, h, d (aqui dh) e P: catálogo Hiwin e folha da Bearing Boys concordam. Parafuso do trilho M8×25. O comprimento é livre até 4000 mm; os furos começam a P/2 da ponta. Modelo simplificado: perfil retangular sem as pistas, com os furos escareados."
+  },
+  {
+   "designacao": "HGR45R",
+   "d_nominal": 45,
+   "valores": {
+    "WR": 45,
+    "HR": 38,
+    "D": 20,
+    "h": 17,
+    "dh": 14,
+    "P": 105
+   },
+   "confirmado_por": 2,
+   "nota": "WR, HR, D, h, d (aqui dh) e P: catálogo Hiwin (tabela 3.9) e catálogo HG da LM76 concordam. Parafuso do trilho M12×35. O comprimento é livre até 4000 mm; os furos começam a P/2 da ponta. Modelo simplificado: perfil retangular sem as pistas, com os furos escareados."
+  },
+  {
+   "designacao": "HGR55R",
+   "d_nominal": 53,
+   "valores": {
+    "WR": 53,
+    "HR": 44,
+    "D": 23,
+    "h": 20,
+    "dh": 16,
+    "P": 120
+   },
+   "confirmado_por": 2,
+   "nota": "WR, HR, D, h, d (aqui dh) e P: catálogo Hiwin (tabela 3.9) e catálogo HG da LM76 concordam. Parafuso do trilho M14×45. O comprimento é livre até 4000 mm; os furos começam a P/2 da ponta. Modelo simplificado: perfil retangular sem as pistas, com os furos escareados."
+  },
+  {
+   "designacao": "HGR65R",
+   "d_nominal": 63,
+   "valores": {
+    "WR": 63,
+    "HR": 53,
+    "D": 26,
+    "h": 22,
+    "dh": 18,
+    "P": 150
+   },
+   "confirmado_por": 2,
+   "nota": "WR, HR, D, h, d (aqui dh) e P: catálogo Hiwin (tabela 3.9) e catálogo HG da LM76 concordam. Parafuso do trilho M16×50. O comprimento é livre até 4000 mm; os furos começam a P/2 da ponta. Modelo simplificado: perfil retangular sem as pistas, com os furos escareados."
   }
  ]
 }

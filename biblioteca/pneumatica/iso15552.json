@@ -3,7 +3,7 @@
  "nome": "Cilindro pneumático ISO 15552",
  "norma": "ISO 15552",
  "revisao": "2018",
- "versao": 1,
+ "versao": 2,
  "gerador": "cilindro_pneumatico",
  "tipo": "cilindro_pneumatico",
  "nivel": "C",
@@ -16,6 +16,14 @@
   {
    "rotulo": "Airwork — cilindros ISO 15552 séries CF e CG (catálogo 2021, dimensões e cursos padrão)",
    "url": "https://www.salhydro.fi/files/PDF/CF_CG_iso_15552_pneumatic_cylinders_2021.pdf"
+  },
+  {
+   "rotulo": "Tameson — tabela de dimensões dos cilindros ISO 15552 (Ø32 a Ø320)",
+   "url": "https://storage.tameson.com/asset/Products/Manuals/EN/cylinders-15552.pdf"
+  },
+  {
+   "rotulo": "AVS Danmark (API) — cilindros ISO 15552 Ø160 a Ø320, tipo AMT (dimensões padrão)",
+   "url": "https://avsdanmark.dk/wp-content/uploads/2021/08/5_API_iso-15552_AMT_AVS-Danmark.pdf"
   }
  ],
  "campos": [
@@ -157,6 +165,96 @@
    },
    "confirmado_por": 2,
    "nota": "Haste MM, rosca KK M20x1.5, TG, WH, ressalto B, AM, L8 (ZJ = L8 + WH = 189 mm), rosca RT M10 e conexão G1/2: Metalwork e Airwork concordam. E é o perfil de cada fabricante (Metalwork 111 mm, Airwork 113 mm; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante Airwork; o curso é livre entre o menor e o maior. Modelo simplificado: corpo quadrado maciço, ressalto, haste e rosca da ponta; sem tubo, êmbolo nem amortecimento."
+  },
+  {
+   "designacao": "Ø125",
+   "d_nominal": 125,
+   "valores": {
+    "MM": 32,
+    "KK": 27,
+    "P": 2,
+    "TG": 110,
+    "WH": 65,
+    "B": 60,
+    "AM": 54,
+    "L8": 160,
+    "RT": 12,
+    "E": 140
+   },
+   "confirmado_por": 2,
+   "nota": "Haste MM 32, rosca KK M27x2, TG 110, WH 65, ressalto B 60, AM 54, L8 160 (ZJ = L8 + WH = 225 mm), rosca RT M12: Metalwork e Tameson concordam. E é o perfil de cada fabricante (Metalwork 135, Tameson 140; a norma só limita o máximo): o modelo usa o maior. Curso livre entre o menor e o maior da série. Modelo simplificado: corpo quadrado maciço, ressalto, haste e rosca da ponta; sem tubo, êmbolo nem amortecimento."
+  },
+  {
+   "designacao": "Ø160",
+   "d_nominal": 160,
+   "valores": {
+    "MM": 40,
+    "KK": 36,
+    "P": 2,
+    "TG": 140,
+    "WH": 80,
+    "B": 65,
+    "AM": 72,
+    "L8": 180,
+    "RT": 16,
+    "E": 180
+   },
+   "confirmado_por": 2,
+   "nota": "Haste MM 40, rosca KK M36x2, TG 140, WH 80, ressalto B 65, AM 72, L8 180 (ZJ = L8 + WH = 260 mm), rosca RT M16: Tameson e AVS (API) concordam. E é o perfil de cada fabricante (180 nas duas; a norma só limita o máximo): o modelo usa o maior. Curso livre entre o menor e o maior da série. Modelo simplificado: corpo quadrado maciço, ressalto, haste e rosca da ponta; sem tubo, êmbolo nem amortecimento."
+  },
+  {
+   "designacao": "Ø200",
+   "d_nominal": 200,
+   "valores": {
+    "MM": 40,
+    "KK": 36,
+    "P": 2,
+    "TG": 175,
+    "WH": 95,
+    "B": 75,
+    "AM": 72,
+    "L8": 180,
+    "RT": 16,
+    "E": 220
+   },
+   "confirmado_por": 2,
+   "nota": "Haste MM 40, rosca KK M36x2, TG 175, WH 95, ressalto B 75, AM 72, L8 180 (ZJ = L8 + WH = 275 mm), rosca RT M16: Tameson e AVS (API) concordam. E é o perfil de cada fabricante (220 nas duas; a norma só limita o máximo): o modelo usa o maior. Curso livre entre o menor e o maior da série. Modelo simplificado: corpo quadrado maciço, ressalto, haste e rosca da ponta; sem tubo, êmbolo nem amortecimento."
+  },
+  {
+   "designacao": "Ø250",
+   "d_nominal": 250,
+   "valores": {
+    "MM": 50,
+    "KK": 42,
+    "P": 2,
+    "TG": 220,
+    "WH": 105,
+    "B": 90,
+    "AM": 84,
+    "L8": 200,
+    "RT": 20,
+    "E": 270
+   },
+   "confirmado_por": 2,
+   "nota": "Haste MM 50, rosca KK M42x2, TG 220, WH 105, ressalto B 90, AM 84, L8 200 (ZJ = L8 + WH = 305 mm), rosca RT M20: Tameson e AVS (API) concordam. E é o perfil de cada fabricante (270 nas duas; a norma só limita o máximo): o modelo usa o maior. Curso livre entre o menor e o maior da série. Modelo simplificado: corpo quadrado maciço, ressalto, haste e rosca da ponta; sem tubo, êmbolo nem amortecimento."
+  },
+  {
+   "designacao": "Ø320",
+   "d_nominal": 320,
+   "valores": {
+    "MM": 63,
+    "KK": 48,
+    "P": 2,
+    "TG": 270,
+    "WH": 120,
+    "B": 110,
+    "AM": 96,
+    "L8": 220,
+    "RT": 24,
+    "E": 350
+   },
+   "confirmado_por": 2,
+   "nota": "Haste MM 63, rosca KK M48x2, TG 270, WH 120, ressalto B 110, AM 96, L8 220 (ZJ = L8 + WH = 340 mm), rosca RT M24: Tameson e AVS (API) concordam. E é o perfil de cada fabricante (350 nas duas; a norma só limita o máximo): o modelo usa o maior. Curso livre entre o menor e o maior da série. Modelo simplificado: corpo quadrado maciço, ressalto, haste e rosca da ponta; sem tubo, êmbolo nem amortecimento."
   }
  ]
 }

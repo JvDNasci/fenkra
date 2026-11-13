@@ -1,0 +1,183 @@
+{
+ "id": "din69051_fuso",
+ "nome": "Fuso de esferas laminado (eixo)",
+ "norma": "DIN 69051-5",
+ "revisao": "11-2002 (retirada; substituída pela DIN ISO 3408-2)",
+ "versao": 1,
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "fasten.it — DIN 69051-5 (porca simples com flange, tabela por diâmetro e passo)",
+   "url": "https://fasten.it/norms/norm/din_69051_5"
+  },
+  {
+   "rotulo": "Albeco — porca SU com flange pela DIN 69051, para fuso laminado (tabela de dimensões)",
+   "url": "https://www.albeco.com.pl/data/catalogueb/su.pdf"
+  }
+ ],
+ "gerador": "fuso_esferas",
+ "campos": [
+  "P",
+  "esfera"
+ ],
+ "comprimentos": [
+  100,
+  150,
+  200,
+  250,
+  300,
+  400,
+  500,
+  600,
+  800,
+  1000,
+  1200,
+  1500,
+  2000,
+  2500,
+  3000
+ ],
+ "tamanhos": [
+  {
+   "designacao": "16x5",
+   "d_nominal": 16,
+   "valores": {
+    "P": 5,
+    "esfera": 3.175
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 16 e passo 5 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø16, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "16x10",
+   "d_nominal": 16,
+   "valores": {
+    "P": 10,
+    "esfera": 3.175
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 16 e passo 10 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø16, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "20x5",
+   "d_nominal": 20,
+   "valores": {
+    "P": 5,
+    "esfera": 3.175
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 20 e passo 5 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø20, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "25x5",
+   "d_nominal": 25,
+   "valores": {
+    "P": 5,
+    "esfera": 3.175
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 25 e passo 5 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø25, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "25x10",
+   "d_nominal": 25,
+   "valores": {
+    "P": 10,
+    "esfera": 4.762
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 25 e passo 10 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø25, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "32x5",
+   "d_nominal": 32,
+   "valores": {
+    "P": 5,
+    "esfera": 3.175
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 32 e passo 5 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø32, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "32x10",
+   "d_nominal": 32,
+   "valores": {
+    "P": 10,
+    "esfera": 6.35
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 32 e passo 10 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø32, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "40x5",
+   "d_nominal": 40,
+   "valores": {
+    "P": 5,
+    "esfera": 3.175
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 40 e passo 5 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø40, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "40x10",
+   "d_nominal": 40,
+   "valores": {
+    "P": 10,
+    "esfera": 6.35
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 40 e passo 10 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø40, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "50x10",
+   "d_nominal": 50,
+   "valores": {
+    "P": 10,
+    "esfera": 6.35
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 50 e passo 10 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø50, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "63x10",
+   "d_nominal": 63,
+   "valores": {
+    "P": 10,
+    "esfera": 6.35
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 63 e passo 10 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø63, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "63x20",
+   "d_nominal": 63,
+   "valores": {
+    "P": 20,
+    "esfera": 9.525
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 63 e passo 20 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø63, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "80x10",
+   "d_nominal": 80,
+   "valores": {
+    "P": 10,
+    "esfera": 6.35
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 80 e passo 10 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø80, sem a rosca de esferas nem as pontas usinadas."
+  },
+  {
+   "designacao": "80x20",
+   "d_nominal": 80,
+   "valores": {
+    "P": 20,
+    "esfera": 9.525
+   },
+   "confirmado_por": 2,
+   "nota": "Diâmetro nominal 80 e passo 20 da série DIN 69051-5 (fasten.it e Albeco). Comprimento livre; modelo: eixo liso Ø80, sem a rosca de esferas nem as pontas usinadas."
+  }
+ ]
+}

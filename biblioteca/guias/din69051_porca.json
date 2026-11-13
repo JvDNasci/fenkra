@@ -1,0 +1,271 @@
+{
+ "id": "din69051_porca",
+ "nome": "Porca de esferas com flange, simples",
+ "norma": "DIN 69051-5",
+ "revisao": "11-2002 (retirada; substituída pela DIN ISO 3408-2)",
+ "versao": 1,
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "fasten.it — DIN 69051-5 (porca simples com flange, tabela por diâmetro e passo)",
+   "url": "https://fasten.it/norms/norm/din_69051_5"
+  },
+  {
+   "rotulo": "Albeco — porca SU com flange pela DIN 69051, para fuso laminado (tabela de dimensões)",
+   "url": "https://www.albeco.com.pl/data/catalogueb/su.pdf"
+  }
+ ],
+ "gerador": "porca_esferas",
+ "campos": [
+  "P",
+  "esfera",
+  "D",
+  "A",
+  "B",
+  "L",
+  "W",
+  "H",
+  "X"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "16x5",
+   "d_nominal": 16,
+   "valores": {
+    "P": 5,
+    "esfera": 3.175,
+    "D": 28,
+    "A": 48,
+    "B": 10,
+    "L": 50,
+    "W": 38,
+    "H": 40,
+    "X": 5.5
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø16, passo 5, esferas Ø3.175. Corpo D 28, flange A 48 × B 10 com duas faces a H 40, furos Ø5.5 no círculo W 38, comprimento L 50: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "16x10",
+   "d_nominal": 16,
+   "valores": {
+    "P": 10,
+    "esfera": 3.175,
+    "D": 28,
+    "A": 48,
+    "B": 10,
+    "L": 57,
+    "W": 38,
+    "H": 40,
+    "X": 5.5
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø16, passo 10, esferas Ø3.175. Corpo D 28, flange A 48 × B 10 com duas faces a H 40, furos Ø5.5 no círculo W 38, comprimento L 57: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "20x5",
+   "d_nominal": 20,
+   "valores": {
+    "P": 5,
+    "esfera": 3.175,
+    "D": 36,
+    "A": 58,
+    "B": 10,
+    "L": 51,
+    "W": 47,
+    "H": 44,
+    "X": 6.6
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø20, passo 5, esferas Ø3.175. Corpo D 36, flange A 58 × B 10 com duas faces a H 44, furos Ø6.6 no círculo W 47, comprimento L 51: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "25x5",
+   "d_nominal": 25,
+   "valores": {
+    "P": 5,
+    "esfera": 3.175,
+    "D": 40,
+    "A": 62,
+    "B": 10,
+    "L": 51,
+    "W": 51,
+    "H": 48,
+    "X": 6.6
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø25, passo 5, esferas Ø3.175. Corpo D 40, flange A 62 × B 10 com duas faces a H 48, furos Ø6.6 no círculo W 51, comprimento L 51: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "25x10",
+   "d_nominal": 25,
+   "valores": {
+    "P": 10,
+    "esfera": 4.762,
+    "D": 40,
+    "A": 62,
+    "B": 12,
+    "L": 85,
+    "W": 51,
+    "H": 48,
+    "X": 6.6
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø25, passo 10, esferas Ø4.762. Corpo D 40, flange A 62 × B 12 com duas faces a H 48, furos Ø6.6 no círculo W 51, comprimento L 85: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "32x5",
+   "d_nominal": 32,
+   "valores": {
+    "P": 5,
+    "esfera": 3.175,
+    "D": 50,
+    "A": 80,
+    "B": 12,
+    "L": 52,
+    "W": 65,
+    "H": 62,
+    "X": 9
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø32, passo 5, esferas Ø3.175. Corpo D 50, flange A 80 × B 12 com duas faces a H 62, furos Ø9 no círculo W 65, comprimento L 52: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "32x10",
+   "d_nominal": 32,
+   "valores": {
+    "P": 10,
+    "esfera": 6.35,
+    "D": 50,
+    "A": 80,
+    "B": 12,
+    "L": 90,
+    "W": 65,
+    "H": 62,
+    "X": 9
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø32, passo 10, esferas Ø6.35. Corpo D 50, flange A 80 × B 12 com duas faces a H 62, furos Ø9 no círculo W 65, comprimento L 90: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "40x5",
+   "d_nominal": 40,
+   "valores": {
+    "P": 5,
+    "esfera": 3.175,
+    "D": 63,
+    "A": 93,
+    "B": 14,
+    "L": 55,
+    "W": 78,
+    "H": 70,
+    "X": 9
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø40, passo 5, esferas Ø3.175. Corpo D 63, flange A 93 × B 14 com duas faces a H 70, furos Ø9 no círculo W 78, comprimento L 55: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "40x10",
+   "d_nominal": 40,
+   "valores": {
+    "P": 10,
+    "esfera": 6.35,
+    "D": 63,
+    "A": 93,
+    "B": 14,
+    "L": 93,
+    "W": 78,
+    "H": 70,
+    "X": 9
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø40, passo 10, esferas Ø6.35. Corpo D 63, flange A 93 × B 14 com duas faces a H 70, furos Ø9 no círculo W 78, comprimento L 93: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "50x10",
+   "d_nominal": 50,
+   "valores": {
+    "P": 10,
+    "esfera": 6.35,
+    "D": 75,
+    "A": 110,
+    "B": 16,
+    "L": 93,
+    "W": 93,
+    "H": 85,
+    "X": 11
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø50, passo 10, esferas Ø6.35. Corpo D 75, flange A 110 × B 16 com duas faces a H 85, furos Ø11 no círculo W 93, comprimento L 93: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "63x10",
+   "d_nominal": 63,
+   "valores": {
+    "P": 10,
+    "esfera": 6.35,
+    "D": 90,
+    "A": 125,
+    "B": 18,
+    "L": 98,
+    "W": 108,
+    "H": 95,
+    "X": 11
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø63, passo 10, esferas Ø6.35. Corpo D 90, flange A 125 × B 18 com duas faces a H 95, furos Ø11 no círculo W 108, comprimento L 98: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "63x20",
+   "d_nominal": 63,
+   "valores": {
+    "P": 20,
+    "esfera": 9.525,
+    "D": 95,
+    "A": 135,
+    "B": 20,
+    "L": 149,
+    "W": 115,
+    "H": 100,
+    "X": 13.5
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø63, passo 20, esferas Ø9.525. Corpo D 95, flange A 135 × B 20 com duas faces a H 100, furos Ø13.5 no círculo W 115, comprimento L 149: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "80x10",
+   "d_nominal": 80,
+   "valores": {
+    "P": 10,
+    "esfera": 6.35,
+    "D": 105,
+    "A": 145,
+    "B": 20,
+    "L": 98,
+    "W": 125,
+    "H": 110,
+    "X": 13.5
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø80, passo 10, esferas Ø6.35. Corpo D 105, flange A 145 × B 20 com duas faces a H 110, furos Ø13.5 no círculo W 125, comprimento L 98: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  },
+  {
+   "designacao": "80x20",
+   "d_nominal": 80,
+   "valores": {
+    "P": 20,
+    "esfera": 9.525,
+    "D": 125,
+    "A": 165,
+    "B": 25,
+    "L": 154,
+    "W": 145,
+    "H": 130,
+    "X": 13.5
+   },
+   "confirmado_por": 2,
+   "nota": "Fuso Ø80, passo 20, esferas Ø9.525. Corpo D 125, flange A 165 × B 25 com duas faces a H 130, furos Ø13.5 no círculo W 145, comprimento L 154: a tabela da DIN 69051-5 (edição 11-2002, retirada e substituída pela DIN ISO 3408-2) no fasten.it e a porca SU da Albeco concordam. Modelo simplificado: corpo, flange com as duas faces e o furo do fuso; sem os furos do flange nem o retorno das esferas."
+  }
+ ]
+}

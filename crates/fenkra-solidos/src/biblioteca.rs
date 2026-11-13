@@ -51,6 +51,14 @@ pub enum TipoFixador {
     CilindroPneumatico,
     /// trilho de guia linear por série de fabricante; o comprimento é o do trilho
     TrilhoLinear,
+    /// rebite sólido (AN470, AN426); o comprimento L sai da pega: L = pega + 1,5·d, na série
+    Rebite,
+    /// patim (bloco) de guia linear, que corre sobre o trilho do mesmo tamanho
+    PatimLinear,
+    /// porca de esferas com flange (DIN 69051-5)
+    PorcaEsferas,
+    /// fuso de esferas (o eixo); o comprimento é o do fuso
+    FusoEsferas,
 }
 
 /// Geradores de geometria nomeados. Uma família escolhe o gerador pelo nome (`"gerador"` no JSON);
@@ -64,7 +72,13 @@ pub const GERADORES: &[(&str, TipoFixador)] = &[
     ("parafuso_cruz", TipoFixador::ParafusoCruz),
     ("prisioneiro", TipoFixador::Prisioneiro),
     ("cilindro_pneumatico", TipoFixador::CilindroPneumatico),
+    ("cilindro_redondo", TipoFixador::CilindroPneumatico),
     ("trilho_linear", TipoFixador::TrilhoLinear),
+    ("rebite_universal", TipoFixador::Rebite),
+    ("rebite_escareado", TipoFixador::Rebite),
+    ("patim_linear", TipoFixador::PatimLinear),
+    ("porca_esferas", TipoFixador::PorcaEsferas),
+    ("fuso_esferas", TipoFixador::FusoEsferas),
     // geradores de forma própria sobre um tipo já existente: o tipo diz como a montagem usa a peça
     ("parafuso_escareado", TipoFixador::ParafusoAllen),
     ("parafuso_ombro", TipoFixador::ParafusoAllen),
@@ -77,6 +91,10 @@ pub fn campos_do_gerador(gerador: &str) -> &'static [&'static str] {
         "parafuso_ombro" => &["dr", "b"],
         "porca_flangeada" => &["dc", "c"],
         "prisioneiro" => &["b", "bm"],
+        "rebite_universal" => &["k"],
+        // perfil quadrado com tirantes (ISO 15552) ou tubo redondo com olhal (ISO 6432)
+        "cilindro_pneumatico" => &["TG", "WH", "B", "L8", "RT", "E"],
+        "cilindro_redondo" => &["BE", "WF", "XC", "EW", "CD", "D"],
         _ => &[],
     }
 }
@@ -93,6 +111,10 @@ impl TipoFixador {
             TipoFixador::Prisioneiro => "Prisioneiro",
             TipoFixador::CilindroPneumatico => "Cilindro pneumático",
             TipoFixador::TrilhoLinear => "Trilho de guia linear",
+            TipoFixador::Rebite => "Rebite",
+            TipoFixador::PatimLinear => "Patim de guia linear",
+            TipoFixador::PorcaEsferas => "Porca de esferas",
+            TipoFixador::FusoEsferas => "Fuso de esferas",
         }
     }
 
@@ -104,7 +126,13 @@ impl TipoFixador {
     /// Tipos cuja peça muda de comprimento pela escolha da pessoa: o L do parafuso ou o curso do
     /// cilindro, sempre dentro da série da família.
     pub fn usa_comprimento(self) -> bool {
-        self.e_parafuso() || matches!(self, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear)
+        self.e_parafuso() || matches!(self, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::Rebite | TipoFixador::FusoEsferas)
+    }
+
+    /// Entra no furo como parafuso: corpo para dentro, cabeça para fora e L pela espessura (o rebite
+    /// também, com o L pela pega).
+    pub fn atravessa_furo(self) -> bool {
+        self.e_parafuso() || self == TipoFixador::Rebite
     }
 
     pub fn e_parafuso(self) -> bool {
@@ -123,8 +151,12 @@ impl TipoFixador {
             TipoFixador::Rolamento => &["D", "B"],
             TipoFixador::ParafusoCruz => &["P", "dk", "k"],
             TipoFixador::Prisioneiro => &["P"],
-            TipoFixador::CilindroPneumatico => &["MM", "KK", "TG", "WH", "B", "AM", "L8", "RT", "E"],
+            TipoFixador::CilindroPneumatico => &["MM", "KK", "AM"],
             TipoFixador::TrilhoLinear => &["WR", "HR", "D", "h", "dh", "P"],
+            TipoFixador::Rebite => &["dk"],
+            TipoFixador::PatimLinear => &["H", "H1", "W", "B", "C", "L", "M", "prof", "WR", "HR"],
+            TipoFixador::PorcaEsferas => &["P", "D", "A", "B", "L", "H"],
+            TipoFixador::FusoEsferas => &["P"],
         }
     }
 }
@@ -530,6 +562,11 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso7379.json", include_str!("../../../biblioteca/fixadores/iso7379.json")),
     ("asme_b18_3.json", include_str!("../../../biblioteca/fixadores/asme_b18_3.json")),
     ("an3.json", include_str!("../../../biblioteca/fixadores/an3.json")),
+    ("an310.json", include_str!("../../../biblioteca/fixadores/an310.json")),
+    ("an315.json", include_str!("../../../biblioteca/fixadores/an315.json")),
+    ("ms21042.json", include_str!("../../../biblioteca/fixadores/ms21042.json")),
+    ("an470.json", include_str!("../../../biblioteca/fixadores/an470.json")),
+    ("an426.json", include_str!("../../../biblioteca/fixadores/an426.json")),
     ("iso15_60.json", include_str!("../../../biblioteca/rolamentos/iso15_60.json")),
     ("iso15_62.json", include_str!("../../../biblioteca/rolamentos/iso15_62.json")),
     ("iso15_63.json", include_str!("../../../biblioteca/rolamentos/iso15_63.json")),
@@ -540,7 +577,12 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso15_nu2.json", include_str!("../../../biblioteca/rolamentos/iso15_nu2.json")),
     ("iso355_302.json", include_str!("../../../biblioteca/rolamentos/iso355_302.json")),
     ("iso15552.json", include_str!("../../../biblioteca/pneumatica/iso15552.json")),
+    ("iso6432.json", include_str!("../../../biblioteca/pneumatica/iso6432.json")),
+    ("iso6432_mr3.json", include_str!("../../../biblioteca/pneumatica/iso6432_mr3.json")),
     ("hiwin_hgr.json", include_str!("../../../biblioteca/guias/hiwin_hgr.json")),
+    ("hiwin_hgh.json", include_str!("../../../biblioteca/guias/hiwin_hgh.json")),
+    ("din69051_porca.json", include_str!("../../../biblioteca/guias/din69051_porca.json")),
+    ("din69051_fuso.json", include_str!("../../../biblioteca/guias/din69051_fuso.json")),
 ];
 
 /// A biblioteca pública embutida. Os arquivos são validados nos testes; aqui um arquivo inválido
@@ -557,6 +599,17 @@ pub fn familias() -> &'static [Familia] {
 
 pub fn familia(id: &str) -> Option<&'static Familia> {
     publica().familia(id)
+}
+
+/// Sobra do rebite sólido além da pilha, em diâmetros: é o material que forma a cabeça de fechamento.
+pub const SOBRA_REBITE: f64 = 1.5;
+
+/// Comprimento L de um rebite para a pega `pega` (espessura da pilha, mm): o menor da série do tamanho
+/// com `L >= pega + 1,5·d`. `None` quando a pega pede mais que o maior da série.
+pub fn rebite_pela_pega(fam: &Familia, t: &Tamanho, pega: f64) -> Option<f64> {
+    let d = t.diametro_nominal()?;
+    let alvo = pega + SOBRA_REBITE * d;
+    fam.comprimentos_de(t).into_iter().find(|l| *l >= alvo - 1e-6)
 }
 
 /// Tamanho de uma família pela designação ("M6").
@@ -687,7 +740,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 32);
+        assert_eq!(b.familias.len(), 42);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -803,8 +856,23 @@ mod tests {
     fn parafusos_aeronauticos_an3_a_an6_pela_pega() {
         // B43: AN3 a AN6, pega e comprimento conferidos em duas tabelas; b = L − pega é constante por tamanho
         let f = familia("an3").unwrap();
-        assert_eq!(f.tamanhos.iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["AN3", "AN4", "AN5", "AN6"]);
+        assert_eq!(f.tamanhos.iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["AN3", "AN4", "AN5", "AN6", "AN7", "AN8"]);
         let pol = 25.4;
+        // AN7 e AN8 (B43): AN7-12A com L 1 11/32" dentro de 1,328 a 1,375 e b = 21/32" (Military
+        // Fasteners); chave 5/8" e 3/4" (Hi-Line) dentro da faixa entre faces
+        let an7 = tamanho("an3", "7/16-20 UNF").unwrap();
+        assert!((an7.valor("b").unwrap() - 21. / 32. * pol).abs() < 1e-3 && (an7.valor("P").unwrap() - pol / 20.).abs() < 1e-3);
+        assert!(an7.comprimentos.iter().any(|l| (1.328..=1.375).contains(&(l / pol))));
+        assert!((0.615..=0.627).contains(&(an7.valor("s").unwrap() / pol)) && (0.615..=0.627).contains(&(5. / 8.)));
+        let an8 = tamanho("an3", "AN8").unwrap();
+        assert!((an8.valor("b").unwrap() - 25. / 32. * pol).abs() < 1e-3);
+        // AN8-12: pega de 9/16" (L 1 11/32" − 25/32")
+        assert!(an8.comprimentos.iter().any(|l| (l / pol - 25. / 32. - 9. / 16.).abs() < 1e-3));
+        assert!((0.740..=0.752).contains(&(an8.valor("s").unwrap() / pol)));
+        // a altura da cabeça de AN7 e AN8 só tem uma fonte gratuita: fica marcada e PENDENTE
+        for t in [an7, an8] {
+            assert!(t.confirmado_por == 1 && t.nota.as_deref().is_some_and(|n| n.contains("PENDENTE")), "{}", t.designacao);
+        }
         let an3 = tamanho("an3", "AN3").unwrap();
         assert!((an3.valor("P").unwrap() - pol / 32.).abs() < 1e-3 && (an3.valor("b").unwrap() - 13. / 32. * pol).abs() < 1e-3);
         assert!((an3.diametro_nominal().unwrap() - 0.19 * pol).abs() < 1e-3);
@@ -824,6 +892,37 @@ mod tests {
             assert!(s > 1.4 * d && k > 0.3 * d && k < 0.8 * d, "{}", t.designacao);
             assert!(t.comprimentos.iter().all(|l| *l > t.valor("b").unwrap()), "{}: pega positiva em todo traço", t.designacao);
         }
+    }
+
+    #[test]
+    fn porcas_aeronauticas_an310_an315_ms21042() {
+        // B43: chave e altura máxima conferidas em duas fontes (o que tem uma só diz PENDENTE)
+        let pol = 25.4;
+        for id in ["an310", "an315", "ms21042"] {
+            let f = familia(id).unwrap();
+            assert_eq!((f.tipo, f.gerador.as_str(), f.nivel.as_str()), (TipoFixador::Porca, "porca", "C"));
+            assert!(f.fontes.len() >= 2, "{id}");
+            for t in &f.tamanhos {
+                let pendente = t.nota.as_deref().is_some_and(|n| n.contains("PENDENTE"));
+                assert!(t.confirmado_por >= 2 || pendente, "{id} {}", t.designacao);
+                assert!(t.valor("s").unwrap() > t.diametro_nominal().unwrap(), "{id} {}", t.designacao);
+            }
+        }
+        // AN310-6: chave 9/16" e altura 13/32"; AN310-7: 5/8" e 29/64" (Pegasus e Military Fasteners)
+        let t = tamanho("an310", "AN310-6").unwrap();
+        assert!((t.valor("s").unwrap() - 9. / 16. * pol).abs() < 1e-3 && (t.valor("m").unwrap() - 13. / 32. * pol).abs() < 1e-3);
+        assert!((tamanho("an310", "AN310-7").unwrap().valor("m").unwrap() / pol - 29. / 64.).abs() < 1e-4);
+        // a castelo é mais alta que a sextavada simples do mesmo tamanho; a MS21042 tem chave reduzida
+        for n in 3..=6 {
+            let (c, h, r) = (tamanho("an310", &format!("AN310-{n}")).unwrap(), tamanho("an315", &format!("AN315-{n}R")).unwrap(), tamanho("ms21042", &format!("MS21042L{n}")).unwrap());
+            assert!(c.valor("m") > h.valor("m") && r.valor("s") < h.valor("s"), "-{n}");
+            assert_eq!(c.diametro_nominal(), r.diametro_nominal());
+        }
+        // achada pela rosca
+        assert_eq!(tamanho("ms21042", "1/4-28 UNF").unwrap().designacao, "MS21042L4");
+        // só -6 e -7 da AN315 ficam com uma fonte
+        let pend: Vec<_> = familia("an315").unwrap().tamanhos.iter().filter(|t| t.confirmado_por < 2).map(|t| t.designacao.as_str()).collect();
+        assert_eq!(pend, ["AN315-6R", "AN315-7R"]);
     }
 
     /// B44: séries finas 68, 69 e 160, contato angular 72, rolos cilíndricos NU2 e cônicos 302,
@@ -1044,7 +1143,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 33);
+        assert_eq!(m.familias.len(), 43);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

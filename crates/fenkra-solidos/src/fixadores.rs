@@ -43,21 +43,23 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
     let d = t.diametro_nominal().ok_or_else(|| format!("{}: designação inválida {}", fam.id, t.designacao))?;
     let curta = fam.norma.split(" (").next().unwrap_or(&fam.norma).to_string();
 
-    let (desc, comp) = if matches!(fam.tipo, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear) {
+    let (desc, comp) = if matches!(fam.tipo, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::FusoEsferas) {
         // o comprimento é o curso do cilindro ou o comprimento do trilho: livre entre o menor e o
         // maior da série; sem pedido, 100 mm ou o primeiro acima disso
         let serie = fam.comprimentos_de(t);
         let (minimo, maximo) = fam.limites_de_comprimento(t).ok_or("sem comprimentos para o tamanho")?;
         let c = comprimento.or_else(|| serie.iter().copied().find(|c| *c >= 100.)).or(serie.last().copied()).ok_or("sem comprimentos para o tamanho")?;
-        let nome = if fam.tipo == TipoFixador::TrilhoLinear { "comprimento" } else { "curso" };
+        let nome = if fam.tipo == TipoFixador::CilindroPneumatico { "curso" } else { "comprimento" };
         if !c.is_finite() || c < minimo || c > maximo {
             return Err(format!("{} {}: {nome} {c} fora de {} a {} mm", curta, t.designacao, minimo, maximo));
         }
         (format!("{curta} {}x{c}", t.designacao), Some(c))
-    } else if fam.tipo.e_parafuso() {
+    } else if fam.tipo.e_parafuso() || fam.tipo == TipoFixador::Rebite {
         let (minimo, maximo) = fam.limites_de_comprimento(t).ok_or("sem comprimentos para o tamanho")?;
         let l = match comprimento {
             Some(l) => l,
+            // rebite sem pedido: o L que fecha uma pilha de um diâmetro
+            None if fam.tipo == TipoFixador::Rebite => biblioteca::rebite_pela_pega(fam, t, d).or(fam.comprimentos_de(t).last().copied()).ok_or("sem comprimentos para o tamanho")?,
             None => {
                 let serie = fam.comprimentos_de(t);
                 serie.iter().copied().find(|l| *l >= 4. * d).or(serie.last().copied()).ok_or("sem comprimentos para o tamanho")?
@@ -91,7 +93,12 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
             crate::rolamentos::corpo(&mut m)?;
         }
         "cilindro_pneumatico" => crate::pneumatica::corpo(&mut m, fam, t, l)?,
+        "cilindro_redondo" => crate::pneumatica::corpo_redondo(&mut m, fam, t, l)?,
         "trilho_linear" => crate::guias::corpo(&mut m, fam, t, l)?,
+        "patim_linear" => crate::guias::corpo_patim(&mut m, fam, t)?,
+        "porca_esferas" => crate::guias::corpo_porca_esferas(&mut m, fam, t)?,
+        "fuso_esferas" => crate::guias::corpo_fuso(&mut m, fam, t, l)?,
+        "rebite_universal" | "rebite_escareado" => crate::rebites::corpo(&mut m, fam, t, l)?,
         g => return Err(format!("{}: gerador '{g}' sem geometria", fam.id)),
     }
     propriedades(&mut m.doc, fam, t);
@@ -127,7 +134,10 @@ fn propriedades(doc: &mut Document, fam: &Familia, t: &Tamanho) {
 fn publicacoes(m: &mut Montador, fam: &Familia) -> Result<(), String> {
     let (inicio, fim) = match (fam.gerador.as_str(), fam.tipo) {
         // o escareado fica todo abaixo da face (cabeça rente); o ombro tem a rosca depois do ombro
-        ("parafuso_escareado", _) => ("-L", "0"),
+        ("parafuso_escareado" | "rebite_escareado", _) => ("-L", "0"),
+        // minicilindro: do olhal traseiro (pino em z = 0) à ponta da haste
+        ("cilindro_redondo", _) => ("XC+curso*s+AM", "-CD"),
+        (_, TipoFixador::Rebite) => ("-L", "k"),
         ("parafuso_ombro", _) => ("-L-b", "k"),
         ("prisioneiro", _) => ("-L", "bm"),
         (_, TipoFixador::ParafusoAllen | TipoFixador::ParafusoSextavado | TipoFixador::ParafusoCruz | TipoFixador::Prisioneiro) => ("-L", "k"),
@@ -138,6 +148,10 @@ fn publicacoes(m: &mut Montador, fam: &Familia) -> Result<(), String> {
         (_, TipoFixador::CilindroPneumatico) => ("L8+WH+curso*s+AM", "0"),
         // o trilho apoia pela base; o eixo publicado é a normal da base, no meio do trilho
         (_, TipoFixador::TrilhoLinear) => ("HR", "0"),
+        // o patim apoia a mesa pelo topo; a porca, pela face do flange; o fuso fica de z = 0 a L
+        (_, TipoFixador::PatimLinear) => ("H", "H1"),
+        (_, TipoFixador::PorcaEsferas) => ("-L", "0"),
+        (_, TipoFixador::FusoEsferas) => ("L", "0"),
     };
     let ponto0 = PointRef::Origin;
     m.publicar("Eixo", RefKind::LineDir { point: ponto0, dir: AxisRef::Origin(OriginAxis::Z), start: inicio.into(), end: fim.into() });
@@ -694,7 +708,7 @@ mod tests {
                 let (v, _, hi) = medir(&doc);
                 assert!(v > 0. && hi[2] >= -1e-6, "{} {}", f.id, t.designacao);
                 // e todo comprimento da série do tamanho
-                for l in f.comprimentos_de(t).into_iter().filter(|_| f.tipo.e_parafuso()) {
+                for l in f.comprimentos_de(t).into_iter().filter(|_| f.tipo.atravessa_furo()) {
                     let doc = fixador_documento(&f.id, &t.designacao, Some(l)).unwrap_or_else(|e| panic!("{} {} L{l}: {e}", f.id, t.designacao));
                     let (v, lo, _) = medir(&doc);
                     // o parafuso de ombro tem a rosca b depois do ombro de comprimento L

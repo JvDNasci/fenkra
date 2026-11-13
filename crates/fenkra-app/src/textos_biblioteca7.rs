@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//! Traduções dos prendedores aeronáuticos (B43, B63) e da biblioteca da leva s9: rebites e pega.
+//! Tabela própria para não disputar `i18n.rs`.
+
+pub static TEXTOS: &[(&str, &str)] = &[
+    ("Rebite", "Rivet"),
+    ("Abaulada", "Domed"),
+    ("pega", "grip"),
+    (
+        "Espessura total das chapas que o rebite une. O comprimento é a pega mais 1,5 diâmetro, arredondado para cima na série de 1/16 pol.",
+        "Total thickness of the sheets the rivet joins. The length is the grip plus 1.5 diameters, rounded up to the 1/16 in series.",
+    ),
+    ("A pega é a espessura que o furo atravessa.", "The grip is the thickness the hole goes through."),
+    ("Pega grossa demais para a série", "Grip too thick for the series"),
+    ("rosca do nariz dianteiro", "front nose thread"),
+    ("da face dianteira ao ombro da haste", "front face to rod shoulder"),
+    ("do pino do olhal ao ombro da haste", "eye pin to rod shoulder"),
+    ("largura do olhal traseiro", "rear eye width"),
+    ("diâmetro do pino do olhal", "eye pin diameter"),
+    ("diâmetro do tubo", "barrel diameter"),
+    ("Minicilindro pneumático ISO 6432", "ISO 6432 mini pneumatic cylinder"),
+    ("Patim de guia linear", "Linear guide block"),
+    ("Porca de esferas", "Ball screw nut"),
+    ("Fuso de esferas", "Ball screw"),
+    ("Comprimento do fuso", "Screw length"),
+    (
+        "Comprimento do fuso em mm, livre entre o menor e o maior da série. A porca de esferas do mesmo diâmetro e passo é um item à parte.",
+        "Screw length in mm, free between the smallest and the largest of the series. The ball nut of the same diameter and lead is a separate item.",
+    ),
+    ("passo do fuso", "screw lead"),
+    ("diâmetro das esferas", "ball diameter"),
+    ("diâmetro do corpo", "body diameter"),
+    ("diâmetro do flange", "flange diameter"),
+    ("espessura do flange", "flange thickness"),
+    ("comprimento da porca", "nut length"),
+    ("círculo dos furos do flange", "flange bolt circle"),
+    ("distância entre as faces do flange", "distance across flange flats"),
+    ("diâmetro dos furos do flange", "flange hole diameter"),
+    ("altura da base do trilho ao topo do bloco", "rail base to block top height"),
+    ("folga da base do trilho ao bloco", "rail base to block clearance"),
+    ("da lateral do trilho à do bloco", "rail side to block side"),
+    ("largura do bloco", "block width"),
+    ("distância transversal dos furos", "transverse hole spacing"),
+    ("distância longitudinal dos furos", "longitudinal hole spacing"),
+    ("comprimento do corpo de aço", "steel body length"),
+    ("comprimento total do bloco", "total block length"),
+    ("profundidade da rosca", "thread depth"),
+];

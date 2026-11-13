@@ -217,6 +217,8 @@ pub struct Estado {
     pub tamanho: Option<String>,
     /// comprimento pedido; `None` deixa o furo escolher (o menor da série que atravessa)
     pub comprimento: Option<f64>,
+    /// rebite: espessura da pilha pedida (mm); o L sai dela (pega + 1,5·d, na série)
+    pub pega: Option<f64>,
     pub prefs: Preferencias,
     prefs_lidas: bool,
     pub yaw: f32,
@@ -246,6 +248,7 @@ impl Default for Estado {
             familia: None,
             tamanho: None,
             comprimento: None,
+            pega: None,
             prefs: Preferencias::default(),
             prefs_lidas: false,
             yaw: -0.6,
@@ -481,13 +484,14 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
     });
     // curso do cilindro ou comprimento do trilho: livre entre o menor e o maior da série, com os
     // valores usuais no menu
-    if matches!(fam.tipo, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear) {
-        let trilho = fam.tipo == TipoFixador::TrilhoLinear;
+    if matches!(fam.tipo, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::FusoEsferas) {
+        let trilho = fam.tipo != TipoFixador::CilindroPneumatico;
+        let fuso = fam.tipo == TipoFixador::FusoEsferas;
         if let Some(t) = est.tamanho.as_deref().and_then(|t| fam.tamanho(t)) {
             let serie = fam.comprimentos_de(t);
             if let (Some(&lo), Some(&hi)) = (serie.first(), serie.last()) {
                 ui.horizontal(|ui| {
-                    ui.label(tr(if trilho { "Comprimento do trilho" } else { "Curso da haste" }));
+                    ui.label(tr(if fuso { "Comprimento do fuso" } else if trilho { "Comprimento do trilho" } else { "Curso da haste" }));
                     let mut c = est.comprimento.unwrap_or_else(|| serie.iter().copied().find(|c| *c >= 100.).unwrap_or(lo));
                     let r = ui.add(crate::ui_ext::dv(&mut c).range(lo..=hi).suffix(" mm"));
                     egui::ComboBox::from_id_salt("biblioteca_curso").selected_text(tr("Padrão")).show_ui(ui, |ui| {
@@ -501,7 +505,9 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
                     r
                 })
                 .inner
-                .on_hover_text(tr(if trilho {
+                .on_hover_text(tr(if fuso {
+                    "Comprimento do fuso em mm, livre entre o menor e o maior da série. A porca de esferas do mesmo diâmetro e passo é um item à parte."
+                } else if trilho {
                     "Comprimento do trilho em mm, livre até o máximo do fabricante. Os furos ficam no passo P, com a mesma sobra nas duas pontas."
                 } else {
                     "Curso da haste em mm. A norma não fixa o curso: o menu traz os cursos padrão do fabricante, e qualquer valor entre o menor e o maior vale."
@@ -525,6 +531,28 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
             })
             .response
             .on_hover_text(tr("Só existem os comprimentos que a norma publica para o tamanho. “Pelo furo” escolhe o menor que atravessa a espessura."));
+        }
+    }
+    // rebite: a pessoa dá a pega (espessura da pilha) e o L sai dela; "Pelo furo" deixa a espessura do furo mandar
+    if fam.tipo == TipoFixador::Rebite {
+        if let Some(t) = est.tamanho.as_deref().and_then(|t| fam.tamanho(t)) {
+            let d = t.diametro_nominal().unwrap_or(0.);
+            ui.horizontal(|ui| {
+                ui.label(tr("Pega"));
+                let mut pelo_furo = est.pega.is_none();
+                let mut pega = est.pega.unwrap_or(d);
+                ui.add_enabled_ui(!pelo_furo, |ui| ui.add(crate::ui_ext::dv(&mut pega).range(0.1..=60.).suffix(" mm")))
+                    .inner
+                    .on_hover_text(tr("Espessura total das chapas que o rebite une. O comprimento é a pega mais 1,5 diâmetro, arredondado para cima na série de 1/16 pol."));
+                ui.checkbox(&mut pelo_furo, tr("Pelo furo")).on_hover_text(tr("A pega é a espessura que o furo atravessa."));
+                est.pega = if pelo_furo { None } else { Some(pega) };
+                est.comprimento = est.pega.and_then(|g| biblioteca::rebite_pela_pega(fam, t, g));
+                match (est.pega, est.comprimento) {
+                    (Some(_), Some(l)) => ui.label(RichText::new(format!("L {}", fmt(l))).small()),
+                    (Some(_), None) => ui.label(RichText::new(tr("Pega grossa demais para a série")).small().color(crate::theme::st_warn())),
+                    _ => ui.label(""),
+                };
+            });
         }
     }
     // tabela: uma linha por tamanho
@@ -710,6 +738,36 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
                 notas.push((format!("b {}", fmt(b)), 6.));
             }
         }
+        TipoFixador::Rebite => {
+            // vista lateral: cabeça (calota ou cone de 100°) e corpo; no escareado o L conta a cabeça
+            let escareada = ficha.cabeca == catalogo::Cabeca::Escareada;
+            let dk = valor("dk").unwrap_or(d * 2.);
+            let k = valor("k").unwrap_or_else(|| fenkra_solidos::rebites::altura_escareada(dk, d));
+            let ls = comprimento.or(l.comprimentos.iter().copied().find(|x| *x >= 2.5 * d)).unwrap_or(d * 3.);
+            let total = if escareada { ls } else { k + ls };
+            let esc = ((rect.height() - 40.) / total as f32).min((rect.width() * 0.5 - 20.) / dk as f32);
+            let cx = rect.left() + 70.;
+            let topo = rect.top() + 14.;
+            let (hw, hh, sw) = (dk as f32 * esc, k as f32 * esc, d as f32 * esc);
+            let pts: Vec<Pos2> = if escareada {
+                vec![Pos2::new(cx - hw / 2., topo), Pos2::new(cx + hw / 2., topo), Pos2::new(cx + sw / 2., topo + hh), Pos2::new(cx - sw / 2., topo + hh)]
+            } else {
+                // calota: arco de -hw/2 a hw/2 com flecha hh
+                (0..=16).map(|i| {
+                    let x = -1. + i as f32 / 8.;
+                    Pos2::new(cx + x * hw / 2., topo + hh * x * x)
+                }).collect()
+            };
+            p.add(egui::Shape::closed_line(pts, traco));
+            let haste = Rect::from_min_size(Pos2::new(cx - sw / 2., topo + hh), egui::vec2(sw, (total - k) as f32 * esc));
+            p.rect_stroke(haste, 0., traco, egui::StrokeKind::Middle);
+            p.line_segment([Pos2::new(cx, topo - 6.), Pos2::new(cx, haste.bottom() + 6.)], fino);
+            notas.push((format!("dk {}", fmt(dk)), 0.));
+            notas.push((format!("k {}", fmt(k)), 1.));
+            notas.push((format!("d {}", fmt(d)), 2.));
+            notas.push((format!("L {}", fmt(ls)), 3.));
+            notas.push((format!("{} {}", tr("pega"), fmt(ls - fenkra_solidos::biblioteca::SOBRA_REBITE * d)), 4.));
+        }
         TipoFixador::Porca => {
             let (s, m) = (valor("s").unwrap_or(d * 1.6), valor("m").unwrap_or(d * 0.8));
             let esc = ((rect.height() - 40.) / m as f32).min((rect.width() * 0.5 - 20.) / e(s) as f32);
@@ -740,6 +798,26 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
             notas.push((format!("d {}", fmt(d)), 0.));
             notas.push((format!("D {}", fmt(dd)), 1.));
             notas.push((format!("B {}", fmt(b)), 2.));
+        }
+        TipoFixador::CilindroPneumatico if valor("XC").is_some() => {
+            // minicilindro ISO 6432 de lado: olhal EW, tubo D, nariz BE, haste MM até XC e a rosca KK por AM
+            let v = |s: &str, padrao: f64| valor(s).unwrap_or(padrao);
+            let (xc, wf, cd, ew, dd, be, mm, kk, am) = (v("XC", d * 6.), v("WF", d * 2.), v("CD", d * 0.5), v("EW", d), v("D", d * 1.6), v("BE", d * 1.2), v("MM", d * 0.4), v("KK", d * 0.4), v("AM", d * 1.2));
+            let curso = comprimento.or(l.comprimentos.iter().copied().find(|c| *c >= 50.)).unwrap_or(50.);
+            let total = cd + xc + am;
+            let esc = (160. / total as f32).min(60. / dd as f32);
+            let x0 = rect.left() + 8.;
+            let cy = rect.top() + 60.;
+            let caixa = |za: f64, zb: f64, alt: f64| Rect::from_two_pos(Pos2::new(x0 + (za + cd) as f32 * esc, cy - alt as f32 * esc / 2.), Pos2::new(x0 + (zb + cd) as f32 * esc, cy + alt as f32 * esc / 2.));
+            p.rect_stroke(caixa(-cd, cd, ew), 1., traco, egui::StrokeKind::Middle);
+            p.rect_stroke(caixa(cd, xc - wf, dd), 2., traco, egui::StrokeKind::Middle);
+            p.rect_stroke(caixa(xc - wf, xc - wf / 2., be), 0., fino, egui::StrokeKind::Middle);
+            p.rect_stroke(caixa(xc - wf, xc, mm), 0., traco, egui::StrokeKind::Middle);
+            p.rect_stroke(caixa(xc, xc + am, kk), 0., traco, egui::StrokeKind::Middle);
+            p.line_segment([Pos2::new(x0 - 4., cy), Pos2::new(x0 + total as f32 * esc + 6., cy)], fino);
+            notas.push((format!("Ø {}", fmt(d)), 0.));
+            notas.push((format!("XC {}", fmt(xc)), 1.));
+            notas.push((format!("{} {}", tr("curso"), fmt(curso)), 2.));
         }
         TipoFixador::CilindroPneumatico => {
             // vista lateral: corpo E × L8, ressalto B, haste MM até WH + curso e a rosca KK por AM
@@ -772,6 +850,53 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
             p.rect_stroke(Rect::from_two_pos(Pos2::new(cx - x(dd), base - alt(hr)), Pos2::new(cx + x(dd), base - alt(hr - h))), 0., fino, egui::StrokeKind::Middle);
             p.rect_stroke(Rect::from_two_pos(Pos2::new(cx - x(dh), base - alt(hr - h)), Pos2::new(cx + x(dh), base)), 0., fino, egui::StrokeKind::Middle);
             notas.push((format!("L {}", fmt(comprimento.unwrap_or(100.))), 0.));
+        }
+        TipoFixador::PatimLinear => {
+            // vista de frente: bloco W de H1 a H abraçando o trilho WR × HR
+            let v = |s: &str, padrao: f64| valor(s).unwrap_or(padrao);
+            let (w, h, h1, wr, hr) = (v("W", d * 2.), v("H", d * 2.), v("H1", d * 0.3), v("WR", d), v("HR", d));
+            let esc = (110. / w as f32).min(110. / h as f32);
+            let cx = rect.left() + 62.;
+            let base = rect.top() + 130.;
+            let x = |m: f64| m as f32 * esc / 2.;
+            let alt = |m: f64| m as f32 * esc;
+            let pts = vec![
+                Pos2::new(cx - x(w), base - alt(h)), Pos2::new(cx + x(w), base - alt(h)), Pos2::new(cx + x(w), base - alt(h1)), Pos2::new(cx + x(wr), base - alt(h1)),
+                Pos2::new(cx + x(wr), base - alt(hr)), Pos2::new(cx - x(wr), base - alt(hr)), Pos2::new(cx - x(wr), base - alt(h1)), Pos2::new(cx - x(w), base - alt(h1)),
+            ];
+            p.add(egui::Shape::closed_line(pts, traco));
+            p.rect_stroke(Rect::from_two_pos(Pos2::new(cx - x(wr), base - alt(hr)), Pos2::new(cx + x(wr), base)), 0., fino, egui::StrokeKind::Middle);
+            notas.push((format!("W {}", fmt(w)), 0.));
+            notas.push((format!("H {}", fmt(h)), 1.));
+            notas.push((format!("L {}", fmt(v("L", d * 3.))), 2.));
+        }
+        TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas => {
+            // vista lateral: fuso Ø d; na porca, corpo D × L com o flange A × B na face de apoio
+            let v = |s: &str, padrao: f64| valor(s).unwrap_or(padrao);
+            let porca = ficha.tipo == TipoFixador::PorcaEsferas;
+            let (dd, a, b, ln) = (v("D", d * 1.8), v("A", d * 3.), v("B", d * 0.5), v("L", d * 3.));
+            let total = if porca { ln } else { comprimento.unwrap_or(d * 8.) };
+            let altura_max = if porca { a } else { d };
+            let esc = (160. / total as f32).min(80. / altura_max as f32);
+            let x0 = rect.left() + 8.;
+            let cy = rect.top() + 60.;
+            let caixa = |za: f64, zb: f64, alt: f64| Rect::from_two_pos(Pos2::new(x0 + za as f32 * esc, cy - alt as f32 * esc / 2.), Pos2::new(x0 + zb as f32 * esc, cy + alt as f32 * esc / 2.));
+            if porca {
+                p.rect_stroke(caixa(0., b, a), 0., traco, egui::StrokeKind::Middle);
+                p.rect_stroke(caixa(b, ln, dd), 1., traco, egui::StrokeKind::Middle);
+                p.rect_stroke(caixa(0., ln, d), 0., fino, egui::StrokeKind::Middle);
+                notas.push((format!("D {}", fmt(dd)), 0.));
+                notas.push((format!("A {}", fmt(a)), 1.));
+                notas.push((format!("L {}", fmt(ln)), 2.));
+            } else {
+                p.rect_stroke(caixa(0., total, d), 0., traco, egui::StrokeKind::Middle);
+                notas.push((format!("Ø {}", fmt(d)), 0.));
+                notas.push((format!("L {}", fmt(total)), 1.));
+            }
+            p.line_segment([Pos2::new(x0 - 4., cy), Pos2::new(x0 + total as f32 * esc + 6., cy)], fino);
+            if let Some(pp) = valor("P") {
+                notas.push((format!("P {}", fmt(pp)), 3.));
+            }
         }
         TipoFixador::Arruela => {
             let (d1, d2, h) = (valor("d1").unwrap_or(d), valor("d2").unwrap_or(d * 2.), valor("h").unwrap_or(d * 0.2));
@@ -872,7 +997,7 @@ fn quadro_da_insercao(st: &mut crate::asm_ui::AsmState, est: &mut Estado, ui: &m
     let painter = ui.painter_at(rect);
     let acento = crate::theme::accent(&ctx.global_style().visuals);
     let aviso_cor = crate::theme::st_warn();
-    let parafuso = fam.tipo.e_parafuso();
+    let parafuso = fam.tipo.atravessa_furo();
     // comprimento do que se desenha: o pedido, ou o que o furo pede
     let comp = if parafuso { est.comprimento.or_else(|| melhor.as_ref().and_then(|m| avulso::comprimento_sugerido(fam, t, m.1))).or_else(|| fam.comprimentos_de(t).first().copied()) } else { None };
     let malha = malha_do_item(&fam.id, &t.designacao, comp);
@@ -977,7 +1102,7 @@ fn d3(v: Vec3) -> fenkra_montagem::V3 {
 
 /// Comprimento do parafuso fora de furo: o pedido, ou o da série mais perto de quatro diâmetros.
 fn comprimento_fora_do_furo(est: &Estado, fam: &Familia, t: &biblioteca::Tamanho) -> Option<f64> {
-    if !fam.tipo.e_parafuso() {
+    if !fam.tipo.atravessa_furo() {
         return None;
     }
     est.comprimento.or_else(|| avulso::comprimento_livre(fam, t))
@@ -1061,7 +1186,7 @@ fn quadro_livre(st: &mut crate::asm_ui::AsmState, est: &mut Estado, ui: &mut egu
         return None;
     };
     let (o, d) = cam.ray(rect, pos);
-    let parafuso = fam.tipo.e_parafuso();
+    let parafuso = fam.tipo.atravessa_furo();
     let comp = comprimento_fora_do_furo(est, fam, t);
     let malha = malha_do_item(&fam.id, &t.designacao, comp);
     let painter = ui.painter_at(rect);
@@ -1229,13 +1354,19 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
         }
         // `biblioteca_ficha_<id>`: a ficha da família aberta no tamanho do meio e esse item solto na
         // montagem (B51, B398). `biblioteca_b51` larga as famílias novas lado a lado.
-        n if n.starts_with("biblioteca_ficha_") || n == "biblioteca_b51" || n == "biblioteca_b44" || n == "biblioteca_b46" => {
+        n if n.starts_with("biblioteca_ficha_") || n == "biblioteca_b51" || n == "biblioteca_b44" || n == "biblioteca_b46" || n == "biblioteca_b43" || n == "biblioteca_b45" || n == "biblioteca_b46b" => {
             let lib = biblioteca::publica();
             let ids: Vec<&str> = match n.strip_prefix("biblioteca_ficha_") {
                 Some(id) => vec![id],
                 // B44 e B45: rolamentos novos e o cilindro ISO 15552, com a ficha do cilindro aberta
                 None if n == "biblioteca_b44" => vec!["iso15552", "iso15_68", "iso15_69", "iso15_160", "iso15_72", "iso15_nu2", "iso355_302"],
                 None if n == "biblioteca_b46" => vec!["hiwin_hgr"],
+                // B46 (s9): patim HGH, trilho grande e porca e fuso de esferas, com a ficha do patim aberta
+                None if n == "biblioteca_b46b" => vec!["hiwin_hgh", "hiwin_hgr", "din69051_porca", "din69051_fuso"],
+                // B43: rebites, porcas e parafuso aeronáuticos, com a ficha do rebite universal aberta
+                // B45: minicilindro ISO 6432 e os ISO 15552 grandes, com a ficha do minicilindro aberta
+                None if n == "biblioteca_b45" => vec!["iso6432", "iso15552"],
+                None if n == "biblioteca_b43" => vec!["an470", "an426", "an310", "an315", "ms21042", "an3"],
                 None => vec!["iso10642", "iso7045", "iso7379", "din938", "din6923", "din6798a", "din25201", "asme_b18_3"],
             };
             let meio = |id: &str| lib.familia(id).and_then(|f| f.tamanhos.get(f.tamanhos.len() / 2)).map(|t| t.designacao.clone());
@@ -1246,7 +1377,9 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
             if let Some(dir) = st.dir() {
                 for (i, id) in ids.iter().enumerate() {
                     if let Some(t) = meio(id) {
-                        let origem = [i as f64 * 40. + 20., -70., 40.];
+                        // itens grandes (cilindro de 100, trilho) pedem mais espaço entre si
+                        let passo = if n == "biblioteca_b45" || n == "biblioteca_b46b" { 150. } else { 40. };
+                        let origem = [i as f64 * passo + 20., -70., 40.];
                         let _ = avulso::inserir_livre(&mut st.asm, &dir, lib, id, &t, None, est.modo, PosicaoLivre::Solto { origem }, None);
                     }
                 }
