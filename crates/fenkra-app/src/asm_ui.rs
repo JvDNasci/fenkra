@@ -1559,10 +1559,24 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
         })
         .inner
         .on_hover_text(tr("clique: propriedades e parâmetros da montagem"));
-    // desenvolvimento: FENKRA_DEMO_FLEX=1 abre o painel do primeiro subconjunto
-    if st.sel.is_none() && !st.props && std::env::var_os("FENKRA_DEMO_FLEX").is_some() {
-        st.sel = st.asm.nodes.iter().find(|n| matches!(n.kind, NodeKind::SubAssembly { .. })).map(|n| n.id);
-        st.props = st.sel.is_some();
+    // desenvolvimento: FENKRA_DEMO_FLEX=1 abre o painel do primeiro subconjunto; `<nome>,<valor>` abre o
+    // subconjunto cujo nome contém `<nome>` e põe a primeira junta dele no valor (B422)
+    if st.sel.is_none() && !st.props {
+        if let Ok(v) = std::env::var("FENKRA_DEMO_FLEX") {
+            let (nome, valor) = v.split_once(',').map_or((v.as_str(), None), |(n, x)| (n, x.trim().parse::<f64>().ok()));
+            let sub = |n: &fenkra_montagem::Node| matches!(n.kind, NodeKind::SubAssembly { .. });
+            st.sel = st.asm.nodes.iter().find(|n| sub(n) && (nome == "1" || n.name.contains(nome))).map(|n| n.id);
+            st.props = st.sel.is_some();
+            if let (Some(comp), Some(valor)) = (st.sel, valor) {
+                let dir = st.dir();
+                let caminho = st.asm.node(comp).and_then(|n| if let NodeKind::SubAssembly { path } = &n.kind { Some(fenkra_montagem::load::full_path(dir.as_deref(), path)) } else { None });
+                let juntas = caminho.and_then(|f| std::fs::read_to_string(f).ok()).and_then(|t| Assembly::from_json(&t).ok()).map_or_else(Vec::new, |s| fenkra_montagem::flexivel::juntas(&s));
+                if let Some(j) = juntas.first() {
+                    st.asm.definir_flex(comp, j.id, j.grau, Some(valor));
+                    st.dirty = true;
+                }
+            }
+        }
     }
     // desenvolvimento: FENKRA_DEMO_PARAM=1 abre os parâmetros da montagem com o primeiro valor
     // publicado por uma peça já ligado (B409)
