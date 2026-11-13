@@ -43,13 +43,13 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
     let d = t.diametro_nominal().ok_or_else(|| format!("{}: designação inválida {}", fam.id, t.designacao))?;
     let curta = fam.norma.split(" (").next().unwrap_or(&fam.norma).to_string();
 
-    let (desc, comp) = if matches!(fam.tipo, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear) {
+    let (desc, comp) = if matches!(fam.tipo, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::FusoEsferas) {
         // o comprimento é o curso do cilindro ou o comprimento do trilho: livre entre o menor e o
         // maior da série; sem pedido, 100 mm ou o primeiro acima disso
         let serie = fam.comprimentos_de(t);
         let (minimo, maximo) = fam.limites_de_comprimento(t).ok_or("sem comprimentos para o tamanho")?;
         let c = comprimento.or_else(|| serie.iter().copied().find(|c| *c >= 100.)).or(serie.last().copied()).ok_or("sem comprimentos para o tamanho")?;
-        let nome = if fam.tipo == TipoFixador::TrilhoLinear { "comprimento" } else { "curso" };
+        let nome = if fam.tipo == TipoFixador::CilindroPneumatico { "curso" } else { "comprimento" };
         if !c.is_finite() || c < minimo || c > maximo {
             return Err(format!("{} {}: {nome} {c} fora de {} a {} mm", curta, t.designacao, minimo, maximo));
         }
@@ -95,6 +95,9 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
         "cilindro_pneumatico" => crate::pneumatica::corpo(&mut m, fam, t, l)?,
         "cilindro_redondo" => crate::pneumatica::corpo_redondo(&mut m, fam, t, l)?,
         "trilho_linear" => crate::guias::corpo(&mut m, fam, t, l)?,
+        "patim_linear" => crate::guias::corpo_patim(&mut m, fam, t)?,
+        "porca_esferas" => crate::guias::corpo_porca_esferas(&mut m, fam, t)?,
+        "fuso_esferas" => crate::guias::corpo_fuso(&mut m, fam, t, l)?,
         "rebite_universal" | "rebite_escareado" => crate::rebites::corpo(&mut m, fam, t, l)?,
         g => return Err(format!("{}: gerador '{g}' sem geometria", fam.id)),
     }
@@ -145,6 +148,10 @@ fn publicacoes(m: &mut Montador, fam: &Familia) -> Result<(), String> {
         (_, TipoFixador::CilindroPneumatico) => ("L8+WH+curso*s+AM", "0"),
         // o trilho apoia pela base; o eixo publicado é a normal da base, no meio do trilho
         (_, TipoFixador::TrilhoLinear) => ("HR", "0"),
+        // o patim apoia a mesa pelo topo; a porca, pela face do flange; o fuso fica de z = 0 a L
+        (_, TipoFixador::PatimLinear) => ("H", "H1"),
+        (_, TipoFixador::PorcaEsferas) => ("-L", "0"),
+        (_, TipoFixador::FusoEsferas) => ("L", "0"),
     };
     let ponto0 = PointRef::Origin;
     m.publicar("Eixo", RefKind::LineDir { point: ponto0, dir: AxisRef::Origin(OriginAxis::Z), start: inicio.into(), end: fim.into() });

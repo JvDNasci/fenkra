@@ -53,6 +53,12 @@ pub enum TipoFixador {
     TrilhoLinear,
     /// rebite sólido (AN470, AN426); o comprimento L sai da pega: L = pega + 1,5·d, na série
     Rebite,
+    /// patim (bloco) de guia linear, que corre sobre o trilho do mesmo tamanho
+    PatimLinear,
+    /// porca de esferas com flange (DIN 69051-5)
+    PorcaEsferas,
+    /// fuso de esferas (o eixo); o comprimento é o do fuso
+    FusoEsferas,
 }
 
 /// Geradores de geometria nomeados. Uma família escolhe o gerador pelo nome (`"gerador"` no JSON);
@@ -70,6 +76,9 @@ pub const GERADORES: &[(&str, TipoFixador)] = &[
     ("trilho_linear", TipoFixador::TrilhoLinear),
     ("rebite_universal", TipoFixador::Rebite),
     ("rebite_escareado", TipoFixador::Rebite),
+    ("patim_linear", TipoFixador::PatimLinear),
+    ("porca_esferas", TipoFixador::PorcaEsferas),
+    ("fuso_esferas", TipoFixador::FusoEsferas),
     // geradores de forma própria sobre um tipo já existente: o tipo diz como a montagem usa a peça
     ("parafuso_escareado", TipoFixador::ParafusoAllen),
     ("parafuso_ombro", TipoFixador::ParafusoAllen),
@@ -103,6 +112,9 @@ impl TipoFixador {
             TipoFixador::CilindroPneumatico => "Cilindro pneumático",
             TipoFixador::TrilhoLinear => "Trilho de guia linear",
             TipoFixador::Rebite => "Rebite",
+            TipoFixador::PatimLinear => "Patim de guia linear",
+            TipoFixador::PorcaEsferas => "Porca de esferas",
+            TipoFixador::FusoEsferas => "Fuso de esferas",
         }
     }
 
@@ -114,7 +126,7 @@ impl TipoFixador {
     /// Tipos cuja peça muda de comprimento pela escolha da pessoa: o L do parafuso ou o curso do
     /// cilindro, sempre dentro da série da família.
     pub fn usa_comprimento(self) -> bool {
-        self.e_parafuso() || matches!(self, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::Rebite)
+        self.e_parafuso() || matches!(self, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::Rebite | TipoFixador::FusoEsferas)
     }
 
     /// Entra no furo como parafuso: corpo para dentro, cabeça para fora e L pela espessura (o rebite
@@ -142,6 +154,9 @@ impl TipoFixador {
             TipoFixador::CilindroPneumatico => &["MM", "KK", "AM"],
             TipoFixador::TrilhoLinear => &["WR", "HR", "D", "h", "dh", "P"],
             TipoFixador::Rebite => &["dk"],
+            TipoFixador::PatimLinear => &["H", "H1", "W", "B", "C", "L", "M", "prof", "WR", "HR"],
+            TipoFixador::PorcaEsferas => &["P", "D", "A", "B", "L", "H"],
+            TipoFixador::FusoEsferas => &["P"],
         }
     }
 }
@@ -565,6 +580,9 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso6432.json", include_str!("../../../biblioteca/pneumatica/iso6432.json")),
     ("iso6432_mr3.json", include_str!("../../../biblioteca/pneumatica/iso6432_mr3.json")),
     ("hiwin_hgr.json", include_str!("../../../biblioteca/guias/hiwin_hgr.json")),
+    ("hiwin_hgh.json", include_str!("../../../biblioteca/guias/hiwin_hgh.json")),
+    ("din69051_porca.json", include_str!("../../../biblioteca/guias/din69051_porca.json")),
+    ("din69051_fuso.json", include_str!("../../../biblioteca/guias/din69051_fuso.json")),
 ];
 
 /// A biblioteca pública embutida. Os arquivos são validados nos testes; aqui um arquivo inválido
@@ -722,7 +740,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 39);
+        assert_eq!(b.familias.len(), 42);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -1125,7 +1143,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 40);
+        assert_eq!(m.familias.len(), 43);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

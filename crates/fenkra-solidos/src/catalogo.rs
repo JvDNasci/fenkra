@@ -71,6 +71,7 @@ pub fn cabeca_de(f: &Familia) -> Cabeca {
         TipoFixador::ParafusoSextavado => Cabeca::Sextavada,
         TipoFixador::ParafusoCruz => Cabeca::Panela,
         TipoFixador::Rebite => Cabeca::Abaulada,
+        TipoFixador::PatimLinear | TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas => Cabeca::Nenhuma,
         TipoFixador::Porca | TipoFixador::Arruela | TipoFixador::Rolamento | TipoFixador::Prisioneiro | TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear => Cabeca::Nenhuma,
     }
 }
@@ -78,7 +79,7 @@ pub fn cabeca_de(f: &Familia) -> Cabeca {
 /// Polegada quando a designação do tamanho não é métrica ("1/4-20 UNC", "#10-32", "-06").
 pub fn sistema_de(f: &Familia) -> Sistema {
     // rolamento se designa pela série ("6005"), mas as medidas são em milímetros
-    if matches!(f.tipo, TipoFixador::Rolamento | TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear) {
+    if matches!(f.tipo, TipoFixador::Rolamento | TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::PatimLinear | TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas) {
         return Sistema::Metrico;
     }
     // "M" seguido de algarismo: "MS21042L3" é polegada, embora comece com M
@@ -246,6 +247,9 @@ fn ordem_do_tipo(t: TipoFixador) -> u8 {
         TipoFixador::CilindroPneumatico => 7,
         TipoFixador::TrilhoLinear => 8,
         TipoFixador::Rebite => 9,
+        TipoFixador::PatimLinear => 10,
+        TipoFixador::PorcaEsferas => 11,
+        TipoFixador::FusoEsferas => 12,
     }
 }
 
@@ -261,6 +265,27 @@ pub struct Cota {
 pub fn nome_da_cota(tipo: TipoFixador, simbolo: &str) -> &'static str {
     match (tipo, simbolo) {
         (TipoFixador::TrilhoLinear, "P") => "passo entre os furos",
+        (TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas, "P") => "passo do fuso",
+        (TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas, "esfera") => "diâmetro das esferas",
+        (TipoFixador::PorcaEsferas, "D") => "diâmetro do corpo",
+        (TipoFixador::PorcaEsferas, "A") => "diâmetro do flange",
+        (TipoFixador::PorcaEsferas, "B") => "espessura do flange",
+        (TipoFixador::PorcaEsferas, "L") => "comprimento da porca",
+        (TipoFixador::PorcaEsferas, "W") => "círculo dos furos do flange",
+        (TipoFixador::PorcaEsferas, "H") => "distância entre as faces do flange",
+        (TipoFixador::PorcaEsferas, "X") => "diâmetro dos furos do flange",
+        (TipoFixador::PatimLinear, "H") => "altura da base do trilho ao topo do bloco",
+        (TipoFixador::PatimLinear, "H1") => "folga da base do trilho ao bloco",
+        (TipoFixador::PatimLinear, "N") => "da lateral do trilho à do bloco",
+        (TipoFixador::PatimLinear, "W") => "largura do bloco",
+        (TipoFixador::PatimLinear, "B") => "distância transversal dos furos",
+        (TipoFixador::PatimLinear, "C") => "distância longitudinal dos furos",
+        (TipoFixador::PatimLinear, "L1") => "comprimento do corpo de aço",
+        (TipoFixador::PatimLinear, "L") => "comprimento total do bloco",
+        (TipoFixador::PatimLinear, "M") => "rosca dos furos de fixação",
+        (TipoFixador::PatimLinear, "prof") => "profundidade da rosca",
+        (TipoFixador::PatimLinear, "WR") => "largura do trilho",
+        (TipoFixador::PatimLinear, "HR") => "altura do trilho",
         (_, "P") => "passo da rosca",
         (_, "dk") => "diâmetro da cabeça",
         (TipoFixador::ParafusoAllen | TipoFixador::ParafusoSextavado | TipoFixador::ParafusoCruz | TipoFixador::Rebite, "k") => "altura da cabeça",
@@ -483,7 +508,7 @@ mod testes {
     #[test]
     fn busca_ignora_acento_caixa_e_acha_pela_norma_e_pela_classe() {
         // 5 métricas, as aeronáuticas AN310, AN315 e MS21042 e a do nariz do minicilindro
-        assert_eq!(achar("PORCA").len(), 9);
+        assert_eq!(achar("PORCA").len(), 10, "e a porca de esferas");
         assert_eq!(achar("iso 4762").len(), 1);
         assert!(achar("8.8").iter().any(|(i, _)| i == "iso4762"));
         assert!(achar("inoxidavel").is_empty(), "nenhuma família é inox hoje");
@@ -506,7 +531,8 @@ mod testes {
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Panela), ..Default::default() }), 1);
         // 5 porcas, 4 arruelas, 2 prisioneiros e os rolamentos (60, 62, 63, 68, 69, 160, 72, NU2 e 302) o cilindro ISO 15552 e o trilho HGR
         // e as três porcas aeronáuticas, o minicilindro ISO 6432 e a porca do nariz dele
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 27);
+        // e o patim, a porca e o fuso de esferas (B46)
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 30);
         assert_eq!(f(Filtro { material: Some("Aço".into()), ..Default::default() }), familias().len());
         assert_eq!(f(Filtro { material: Some("Aço inoxidável".into()), ..Default::default() }), 0);
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 4);
