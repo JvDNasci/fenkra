@@ -7,11 +7,31 @@
   "limite_bytes": 153600,
   "midias": [
     {
+      "id": "arestas_selecionar",
+      "hash_roteiro": "6c562c194bea0c64",
+      "gif": "saida/arestas_selecionar.gif",
+      "bytes_gif": 75955,
+      "hash_gif": "6eefef38b298ccd0",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
       "id": "casca",
       "hash_roteiro": "cbf1dda3907c455f",
       "gif": "saida/casca.gif",
       "bytes_gif": 106933,
       "hash_gif": "97bf20dba6fcba36",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "chanfro",
+      "hash_roteiro": "488ef9129e0f1286",
+      "gif": "saida/chanfro.gif",
+      "bytes_gif": 80349,
+      "hash_gif": "ce5c2a929c686e51",
       "quadros": 36,
       "largura": 360,
       "altura": 220
@@ -32,6 +52,26 @@
       "gif": "saida/extrusao.gif",
       "bytes_gif": 81292,
       "hash_gif": "f1ad304ca4fbc580",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "furo_simples",
+      "hash_roteiro": "d2de6db6c7ad5611",
+      "gif": "saida/furo_simples.gif",
+      "bytes_gif": 12540,
+      "hash_gif": "90cbc5c0216dd8a8",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "padrao_linear",
+      "hash_roteiro": "1adabf8f2f68dbe4",
+      "gif": "saida/padrao_linear.gif",
+      "bytes_gif": 76827,
+      "hash_gif": "48128af9af24690a",
       "quadros": 36,
       "largura": 360,
       "altura": 220
@@ -77,6 +117,16 @@
       "altura": 220
     },
     {
+      "id": "recorte",
+      "hash_roteiro": "8f504e095c50d9b9",
+      "gif": "saida/recorte.gif",
+      "bytes_gif": 40332,
+      "hash_gif": "c3e756aa987a972b",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
       "id": "reforco",
       "hash_roteiro": "869356d02550625b",
       "gif": "saida/reforco.gif",
@@ -103,6 +153,16 @@
       "bytes_gif": 25989,
       "hash_gif": "5243b271b240eb9e",
       "quadros": 24,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "saida",
+      "hash_roteiro": "c814e52a01c80f0a",
+      "gif": "saida/saida.gif",
+      "bytes_gif": 32484,
+      "hash_gif": "012ed3bb016e933f",
+      "quadros": 36,
       "largura": 360,
       "altura": 220
     }

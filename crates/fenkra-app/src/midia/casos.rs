@@ -5,7 +5,7 @@
 use fenkra_core::*;
 
 /// Nomes dos casos, na ordem em que a esteira gera as mídias.
-pub const CASOS: [&str; 10] = ["extrusao", "revolucao", "casca", "espessura", "rosca", "prim_caixa", "prim_cilindro", "prim_esfera", "prim_cone", "reforco"];
+pub const CASOS: [&str; 16] = ["extrusao", "revolucao", "casca", "espessura", "rosca", "prim_caixa", "prim_cilindro", "prim_esfera", "prim_cone", "reforco", "filete", "chanfro", "furo", "saida", "recorte", "padrao_linear"];
 
 fn s(x: &str) -> String {
     x.to_string()
@@ -74,6 +74,66 @@ pub fn montar(caso: &str) -> Option<(Document, FeatureKind)> {
                 data.add_curve(&mut &mut *al, fenkra_core::sketch::Curve::Line { a, b }, false);
             });
             FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("2"), depth: s("5"), reverse: true, to_body: false, side: 1 })
+        }
+        // B60: mídias dos comandos de sólidos que faltavam, todas sobre a mesma caixa 60 x 40 x 30
+        "filete" | "chanfro" => {
+            caixa(&mut d);
+            let op = EdgeOp { value: s("1"), edges: EdgeSel::Edges(vec![[0., 20., 30.], [0., -20., 30.], [30., 0., 30.], [-30., 0., 30.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() };
+            if caso == "filete" {
+                FeatureKind::Fillet(op)
+            } else {
+                FeatureKind::Chamfer(op)
+            }
+        }
+        "furo" => {
+            caixa(&mut d);
+            // centro num sketch do topo: com ponto 3D solto o furo espera o clique e não mostra a prévia
+            let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30");
+            let centro = sketch(&mut d, PlaneRef::Datum(topo), &|data, al| {
+                let p = data.add_point(&mut &mut *al, 0., 0.);
+                data.add_curve(&mut &mut *al, fenkra_core::sketch::Curve::Point { p }, false);
+            });
+            FeatureKind::Hole(Hole {
+                sketch: centro,
+                kind: HoleKind::Simples,
+                diameter: s("4"),
+                depth: Extent::Blind(s("20")),
+                thread: None,
+                thread_modeled: false,
+                standard: None,
+                points: vec![],
+                dir: None,
+                reverse: true,
+                tip: None,
+                taper: s("0"),
+                left_hand: false,
+                extra: Default::default(),
+            })
+        }
+        "saida" => {
+            caixa(&mut d);
+            FeatureKind::Draft(Draft { faces: vec![[0., -20., 15.]], neutral: PlaneRef::Origin(OriginPlane::XY), angle: s("1"), reverse: false, face_keys: vec![], regras: vec![] })
+        }
+        "recorte" => {
+            caixa(&mut d);
+            let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30");
+            let sk = sketch(&mut d, PlaneRef::Datum(topo), &|data, al| {
+                data.add_rect(&mut &mut *al, [-12., -10.], [12., 10.], false);
+            });
+            FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Cut, extent: Extent::Blind(s("2")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() })
+        }
+        "padrao_linear" => {
+            caixa(&mut d);
+            let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30");
+            let sk = sketch(&mut d, PlaneRef::Datum(topo), &|data, al| {
+                data.add_rect(&mut &mut *al, [-26., -4.], [-20., 4.], false);
+            });
+            let ressalto = d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("6")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
+            FeatureKind::Pattern(Pattern {
+                kind: PatternKind::Linear { dir: AxisRef::Origin(OriginAxis::X), count: s("4"), spacing: s("8"), dir2: None, count2: s("1"), spacing2: s("10"), total: false },
+                sources: vec![ressalto],
+                skip: vec![],
+            })
         }
         _ => return None,
     };
