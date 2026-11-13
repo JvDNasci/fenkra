@@ -40,12 +40,17 @@ migração do programa, a mesma dos outros arquivos do Fenkra.
 
 ## Peça
 
-`id`, `nome`, `arvore` (obrigatórios), `parametros`, `corpos`, `referencias` e `ativos`.
+`id`, `nome`, `arvore` (obrigatórios), `parametros`, `corpos`, `referencias`, `ativos` e `chapa`.
 
 - **`parametros`:** `nome`, `expressao`, `grandeza` (`comprimento`, `angulo`, `numero`) e `comentario`. O nome
   começa com letra ou `_` e só tem letras ASCII, números e `_`.
 - **`corpos`:** `id`, `nome`, `cor` (`[r, g, b]`, de 0 a 255). Sem corpos, tudo vai para um corpo só.
 - **`ativos`:** quantos itens da árvore estão ativos, contando do início. Ausente, todos.
+- **`chapa`:** presente, a peça é de chapa metálica. `espessura`, `raio` (interno de dobra) e `fator_k`
+  (obrigatórios); `planificada` (a peça é calculada desdobrada), `material`, `metodo` (`fator_k`, `deducao` ou
+  `tolerancia`, as duas últimas a 90° com o valor em `compensacao`), `alivio` e `alivio_forma` (`retangular`,
+  `redondo`, `rasgo`) padrão das abas, e `canto`, o alívio de canto padrão. Quem grava leva os valores já
+  resolvidos: estilo de chapa não vai para o arquivo.
 
 ## Planos, eixos e pontos
 
@@ -54,6 +59,7 @@ migração do programa, a mesma dos outros arquivos do Fenkra.
 | Plano | `"XY"`, `"XZ"`, `"YZ"` ou `{"referencia": id}` |
 | Eixo | `"X"`, `"Y"`, `"Z"`, `{"esboco": id, "curva": id}`, `{"referencia": id}`, `{"origem": xyz, "direcao": xyz}`, `{"face": xyz}`, `{"aresta": xyz}`, `{"planos": [plano, plano]}` |
 | Ponto | `[x, y, z]`, `{"referencia": id}`, `{"esboco": id, "ponto": id}` |
+| Curva | `"X"`, `"Y"`, `"Z"`, `{"referencia": id}` (reta de referência), `{"esboco": id, "curva": id}` ou `{"pontos": [xyz, ...]}`, polilinha fixa que não segue o modelo |
 
 ## Referências
 
@@ -65,6 +71,7 @@ Cada uma tem `id`, `nome` e `definicao`, com `tipo`:
 | `plano_fixo` | `origem`, `x`, `normal`. Fica parado: não segue nenhuma face |
 | `ponto` | `x`, `y`, `z` (expressões), `sistema` (plano, opcional) |
 | `reta` | `ponto`, `direcao` (eixo), `inicio`, `fim` |
+| `reta_pontos` | `a`, `b` (pontos); `inicio`, `fim`, prolongamento além de cada ponta |
 
 ## Itens da árvore
 
@@ -86,6 +93,13 @@ A ordem da lista é a ordem do histórico. Cada item tem `id`, `nome`, `comando`
 | `primitiva` | `forma`, `plano`, `a`, `b`, `c`, `d`, `operacao` |
 | `padrao` | `forma`; `fontes` (ids; vazio repete o corpo), `pular` (pares `[i, j]`) |
 | `espelho` | `plano`; `fontes` |
+| `parede_chapa` | `esboco` (perfil fechado); `inverter`, `deslocamento`, `meio`. Pede `chapa` na peça |
+| `aba` | `aresta` (ponto sobre uma aresta reta da chapa), `comprimento`, `angulo`; `raio`, `recuo1`, `recuo2`, `inverter`, `alivio`, `alivio_forma`, `lado` (`dobra_fora`, `material_fora`, `material_dentro`), `meia_esquadria` |
+| `bainha` | `aresta`, `comprimento`; `folga` (0 esmaga), `inverter`, `forma` (`fechada`, `gota`, `enrolada`) |
+| `dobra` | `a`, `b` (pontos da linha sobre a face), `angulo`; `raio`, `inverter` (o outro lado gira), `para_baixo`, `esboco` (cada reta dele vira uma dobra), `posicao` (`centro`, `inicio`, `fim`, `vertice_externo`) |
+| `membro` | `caminhos` (curvas), `secao`, `cotas`; `familia`, `designacao`, `ancoragem` (0 a 9), `angulo`, `deslocamento_x`, `deslocamento_y`, `prolongamento1`, `prolongamento2`, `canto` (`nenhum`, `meia_esquadria`, `aparar`, `encaixe`), `folga`, `material`, `espelhar` |
+| `placa_extremidade` | `em` (ponto na face da ponta do membro), `espessura`, `sobra`; `lado` (`externo`, `interno`), `recuo`, `sobra_em` (`mm` ou `parede`), `furos` (`diametro`, `borda`) |
+| `reforco` | `em` (ponto perto do encontro de dois membros), `aba`, `espessura`; `chanfro`, `aba2`, `trocar`, `lado` (`dois_lados`, `interno`, `externo`), `posicao` (`inicio`, `meio`, `fim`), `afastamento`, `repeticao` (`nenhuma`, `quantidade`, `espacamento`), `quantidade`, `espacamento` |
 
 - `fina` é `{"espessura": expr, "lado": 0}`, com lado 0, 1 ou 2 (simétrica).
 - `forma` do furo tem `tipo`: `simples`, `rebaixado` (`diametro`, `profundidade`), `escareado` (`diametro`,
@@ -95,6 +109,12 @@ A ordem da lista é a ordem do histórico. Cada item tem `id`, `nome`, `comando`
   `toro` (raio maior, raio menor), `cunha` (X, Y, Z, X do topo), `prisma` (lados, raio, altura).
 - `forma` do padrão tem `tipo`: `linear` (`direcao`, `quantidade`, `espacamento`; `direcao2`, `quantidade2`,
   `espacamento2`, `total`) ou `circular` (`eixo`, `quantidade`, `angulo`).
+- `secao` do membro e a ordem das `cotas`: `tubo_quadrado` (lado, parede), `tubo_retangular` (largura, altura,
+  parede), `tubo_redondo` (diâmetro, parede), `perfil_i`, `perfil_u` e `perfil_t` (altura, aba, alma, mesa),
+  `cantoneira` (aba a, aba b, espessura), `barra_chata` (largura, espessura), `barra_redonda` (diâmetro),
+  `barra_quadrada` (lado). `ancoragem` 0 é o centro da seção, 1 a 8 os pontos da caixa dela e 9 o centróide.
+- Aba, bainha, placa e reforço apontam para a geometria por ponto, como o filete: o ponto vale no corpo
+  daquele passo.
 
 ### Faces e arestas
 
@@ -178,10 +198,14 @@ e `cor`. Posições valem no sistema da montagem. Restrições entre peças não
 
 ## O que a versão 1 não leva
 
-Varredura, multi-seções, chapa, superfícies, estrutural e outros comandos fora da tabela; término até superfície;
+Varredura, multi-seções, superfícies e outros comandos fora da tabela; na chapa, aba por perfil, curva ou
+superfície, recorte, estampo, veneziana, furo flangeado, cantos, desdobrar parcial, parede a partir de
+superfície e ordem de dobra escolhida à mão; no estrutural, solda, dobra de tubo no nó, regra própria por canto
+e reforço de contorno livre; término até superfície;
 início deslocado e segundo término de extrusão; furo com pontos 3D, direção própria, conicidade ou rosca modelada;
 filete variável e chanfro de duas medidas; padrão por pontos; geometria externa de esboço; parâmetros que não são
 número; posição do texto das cotas; acabamento e textura; pastas; PMI; restrições de montagem.
 
 Ao gravar, o Fenkra lista cada comando desses, e quem dependia dele, no campo `fora` e no aviso da tela. O plano
-de uma face vira `plano_fixo`, na posição gravada no documento, e deixa de seguir a face.
+de uma face vira `plano_fixo`, na posição gravada no documento, e deixa de seguir a face. Do mesmo jeito, a
+aresta do modelo que guia um membro vira `{"pontos": [...]}`.

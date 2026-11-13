@@ -5,8 +5,66 @@
 
 use super::*;
 use fenkra_core::sketch::{Constraint, Curve, Kind};
-use fenkra_core::{AxisRef, BoolOp, Document, EdgeMode, EdgeProp, EdgeSel, Extent, ExtrudeEnds, Feature, FeatureKind, HoleKind, Id, OriginAxis, OriginPlane, Parameter, PatternKind, PlaneRef, PointRef, PrimKind, RefKind, Sketch, Unit};
+use fenkra_core::{AxisRef, BoolOp, CornerMode, CurveRef, Document, EdgeMode, EdgeProp, EdgeSel, Extent, ExtrudeEnds, Feature, FeatureKind, GussetPos, GussetProfile, GussetRepeat, GussetSide, HoleKind, Id, MarginMode, OriginAxis, OriginPlane, Parameter, PatternKind, PlaneRef, PlateSide, PointRef, PrimKind, RefKind, SectionKind, Sketch, Unit};
 use std::collections::HashSet;
+
+/// Vazio no documento é "0" no arquivo, onde as expressões não podem ser vazias.
+fn com_zero(s: &str) -> String {
+    if s.trim().is_empty() {
+        "0".into()
+    } else {
+        s.to_string()
+    }
+}
+
+/// Opcional que o documento guarda como texto vazio fica ausente no arquivo.
+fn preenchido(s: &Option<String>) -> Option<String> {
+    s.as_ref().filter(|t| !t.trim().is_empty()).cloned()
+}
+
+fn forma_alivio(k: u8) -> FormaAlivio {
+    match k {
+        1 => FormaAlivio::Redondo,
+        2 => FormaAlivio::Rasgo,
+        _ => FormaAlivio::Retangular,
+    }
+}
+
+fn secao(k: SectionKind) -> Secao {
+    match k {
+        SectionKind::TuboQuadrado => Secao::TuboQuadrado,
+        SectionKind::TuboRetangular => Secao::TuboRetangular,
+        SectionKind::TuboRedondo => Secao::TuboRedondo,
+        SectionKind::PerfilI => Secao::PerfilI,
+        SectionKind::PerfilU => Secao::PerfilU,
+        SectionKind::Cantoneira => Secao::Cantoneira,
+        SectionKind::BarraChata => Secao::BarraChata,
+        SectionKind::BarraRedonda => Secao::BarraRedonda,
+        SectionKind::BarraQuadrada => Secao::BarraQuadrada,
+        SectionKind::PerfilT => Secao::PerfilT,
+    }
+}
+
+/// Parâmetros efetivos da chapa: o estilo resolve antes, e o arquivo leva só os valores.
+fn chapa(doc: &Document) -> Option<Chapa> {
+    let s = doc.sheet.as_ref()?.efetivo(&doc.sheet_styles);
+    Some(Chapa {
+        espessura: com_zero(&s.thickness),
+        raio: com_zero(&s.radius),
+        fator_k: com_zero(&s.k),
+        planificada: s.flat,
+        material: s.material.clone(),
+        metodo: match s.method {
+            1 => MetodoDobra::Deducao,
+            2 => MetodoDobra::Tolerancia,
+            _ => MetodoDobra::FatorK,
+        },
+        compensacao: s.allowance.clone(),
+        alivio: s.relief.clone(),
+        alivio_forma: forma_alivio(s.relief_kind),
+        canto: s.corner.clone(),
+    })
+}
 
 /// O que não coube no arquivo.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -112,7 +170,21 @@ impl Tradutor {
             RefKind::FacePlane { origin, x, normal, .. } => Definicao::PlanoFixo { origem: *origin, x: *x, normal: *normal },
             RefKind::PointCoords { x, y, z, frame } => Definicao::Ponto { x: x.clone(), y: y.clone(), z: z.clone(), sistema: frame.as_ref().map(|f| self.plano(f)).transpose()? },
             RefKind::LineDir { point, dir, start, end } => Definicao::Reta { ponto: self.ponto(point)?, direcao: self.eixo(dir)?, inicio: start.clone(), fim: end.clone() },
+            RefKind::LinePoints { a, b, start, end } => Definicao::RetaPontos { a: self.ponto(a)?, b: self.ponto(b)?, inicio: com_zero(start), fim: com_zero(end) },
             _ => return Err("referência sem equivalente na versão 1".into()),
+        })
+    }
+
+    fn curva(&self, c: &CurveRef) -> Traducao<Curva> {
+        Ok(match c {
+            CurveRef::Axis(OriginAxis::X) => Curva::Origem(EixoOrigem::X),
+            CurveRef::Axis(OriginAxis::Y) => Curva::Origem(EixoOrigem::Y),
+            CurveRef::Axis(OriginAxis::Z) => Curva::Origem(EixoOrigem::Z),
+            CurveRef::Ref(i) => Curva::Referencia { referencia: self.exige(*i)? },
+            CurveRef::SketchLine { sketch, entity } => Curva::DeEsboco { esboco: self.exige(*sketch)?, curva: id(*entity) },
+            CurveRef::SketchCurve { sketch, curve } => Curva::DeEsboco { esboco: self.exige(*sketch)?, curva: id(*curve) },
+            CurveRef::Edge(p) | CurveRef::BodyEdge { pts: p, .. } => Curva::Pontos { pontos: p.clone() },
+            CurveRef::Segment { .. } => return Err("trecho de polilinha não existe na versão 1".into()),
         })
     }
 
@@ -197,6 +269,128 @@ impl Tradutor {
                 Comando::Padrao(Padrao { forma, fontes: self.fontes(&p.sources)?, pular: p.skip.iter().map(|(i, j)| [*i, *j]).collect() })
             }
             FeatureKind::Mirror(m) => Comando::Espelho { plano: self.plano(&m.plane)?, fontes: self.fontes(&m.sources)? },
+            FeatureKind::SmWall(w) => {
+                if w.surface.is_some() {
+                    return Err("parede de chapa a partir de superfície não existe na versão 1".into());
+                }
+                Comando::ParedeChapa { esboco: self.exige(w.sketch)?, inverter: w.reverse, deslocamento: com_zero(&w.offset), meio: w.mid }
+            }
+            FeatureKind::SmFlange(f) => Comando::Aba {
+                aresta: f.edge,
+                comprimento: f.length.clone(),
+                angulo: f.angle.clone(),
+                raio: preenchido(&f.radius),
+                recuo1: com_zero(&f.off1),
+                recuo2: com_zero(&f.off2),
+                inverter: f.flip,
+                alivio: preenchido(&f.relief),
+                alivio_forma: forma_alivio(f.relief_kind),
+                lado: match f.side {
+                    1 => LadoAba::MaterialFora,
+                    2 => LadoAba::MaterialDentro,
+                    _ => LadoAba::DobraFora,
+                },
+                meia_esquadria: f.miter,
+            },
+            FeatureKind::SmHem(h) => Comando::Bainha {
+                aresta: h.edge,
+                comprimento: h.length.clone(),
+                folga: com_zero(&h.gap),
+                inverter: h.flip,
+                forma: match h.kind {
+                    1 => FormaBainha::Gota,
+                    2 => FormaBainha::Enrolada,
+                    _ => FormaBainha::Fechada,
+                },
+            },
+            FeatureKind::SmBend(b) => Comando::Dobra {
+                a: b.a,
+                b: b.b,
+                angulo: b.angle.clone(),
+                raio: preenchido(&b.radius),
+                inverter: b.flip,
+                para_baixo: b.down,
+                esboco: b.sketch.map(|s| self.exige(s)).transpose()?,
+                posicao: match b.position {
+                    1 => PosicaoDobra::Inicio,
+                    2 => PosicaoDobra::Fim,
+                    3 => PosicaoDobra::VerticeExterno,
+                    _ => PosicaoDobra::Centro,
+                },
+            },
+            FeatureKind::StructMember(m) => {
+                if !m.joints.is_empty() || m.corner == CornerMode::Dobra {
+                    return Err("membro com regra própria de canto ou dobra de tubo no nó não existe na versão 1".into());
+                }
+                Comando::Membro(Box::new(Membro {
+                    caminhos: m.paths.iter().map(|c| self.curva(c)).collect::<Traducao<_>>()?,
+                    secao: secao(m.kind),
+                    cotas: m.dims.clone(),
+                    familia: m.family.clone(),
+                    designacao: m.designation.clone(),
+                    ancoragem: m.anchor,
+                    angulo: com_zero(&m.angle),
+                    deslocamento_x: com_zero(&m.off_x),
+                    deslocamento_y: com_zero(&m.off_y),
+                    prolongamento1: com_zero(&m.ext1),
+                    prolongamento2: com_zero(&m.ext2),
+                    canto: match m.corner {
+                        CornerMode::Nenhum => Canto::Nenhum,
+                        CornerMode::Aparar => Canto::Aparar,
+                        CornerMode::Encaixe => Canto::Encaixe,
+                        CornerMode::MeiaEsquadria | CornerMode::Dobra => Canto::MeiaEsquadria,
+                    },
+                    folga: com_zero(&m.gap),
+                    material: m.material.clone(),
+                    espelhar: m.mirror,
+                }))
+            }
+            FeatureKind::StructPlate(p) => Comando::PlacaExtremidade {
+                em: p.at,
+                espessura: p.thickness.clone(),
+                sobra: p.margin.clone(),
+                lado: match p.side {
+                    PlateSide::Externo => LadoPlaca::Externo,
+                    PlateSide::Interno => LadoPlaca::Interno,
+                },
+                recuo: com_zero(&p.recess),
+                sobra_em: match p.margin_mode {
+                    MarginMode::Valor => SobraEm::Mm,
+                    MarginMode::RazaoParede => SobraEm::Parede,
+                },
+                furos: p.holes.as_ref().map(|h| FurosPlaca { diametro: h.diameter.clone(), borda: h.edge.clone() }),
+            },
+            FeatureKind::StructGusset(g) => {
+                if g.profile == GussetProfile::Poligonal {
+                    return Err("reforço de contorno livre não existe na versão 1".into());
+                }
+                Comando::Reforco {
+                    em: g.at,
+                    aba: g.leg.clone(),
+                    espessura: g.thickness.clone(),
+                    chanfro: com_zero(&g.chamfer),
+                    aba2: g.leg2.clone(),
+                    trocar: g.swap,
+                    lado: match g.side {
+                        GussetSide::DoisLados => LadoReforco::DoisLados,
+                        GussetSide::Interno => LadoReforco::Interno,
+                        GussetSide::Externo => LadoReforco::Externo,
+                    },
+                    posicao: match g.position {
+                        GussetPos::Inicio => PosicaoReforco::Inicio,
+                        GussetPos::Meio => PosicaoReforco::Meio,
+                        GussetPos::Fim => PosicaoReforco::Fim,
+                    },
+                    afastamento: com_zero(&g.offset),
+                    repeticao: match g.repeat {
+                        GussetRepeat::Nenhuma => RepeticaoReforco::Nenhuma,
+                        GussetRepeat::Quantidade => RepeticaoReforco::Quantidade,
+                        GussetRepeat::Espacamento => RepeticaoReforco::Espacamento,
+                    },
+                    quantidade: g.count.clone(),
+                    espacamento: g.spacing.clone(),
+                }
+            }
             _ => return Err("comando sem equivalente na versão 1".into()),
         })
     }
@@ -343,7 +537,10 @@ pub fn exportar_peca(doc: &Document) -> Exportado {
     arvore.sort_by_key(|(i, _)| *i);
     let ativos = (doc.rollback < doc.features.len()).then(|| arvore.iter().filter(|(i, _)| *i < doc.rollback).count());
     let corpos = doc.collectors.iter().map(|c| Corpo { id: id(c.id), nome: c.name.clone(), cor: Some(c.color) }).collect();
-    let peca = Peca { id: doc_id(doc), nome: doc.name.clone(), parametros: doc.params.iter().filter_map(parametro).collect(), corpos, referencias, arvore: arvore.into_iter().map(|(_, it)| it).collect(), ativos };
+    if doc.sheet.as_ref().is_some_and(|s| !s.ordem_dobras.is_empty()) {
+        fora.push(Fora { nome: "Chapa".into(), motivo: "ordem de dobra escolhida à mão não existe na versão 1; vale a ordem do mapa".into() });
+    }
+    let peca = Peca { id: doc_id(doc), nome: doc.name.clone(), parametros: doc.params.iter().filter_map(parametro).collect(), corpos, referencias, arvore: arvore.into_iter().map(|(_, it)| it).collect(), ativos, chapa: chapa(doc) };
     Exportado { peca, fora }
 }
 

@@ -32,8 +32,35 @@
         "corpos": { "type": "array", "items": { "$ref": "#/$defs/corpo" } },
         "referencias": { "type": "array", "items": { "$ref": "#/$defs/referencia" } },
         "arvore": { "type": "array", "items": { "$ref": "#/$defs/item" } },
-        "ativos": { "type": "integer", "minimum": 0 }
+        "ativos": { "type": "integer", "minimum": 0 },
+        "chapa": { "$ref": "#/$defs/chapa" }
       }
+    },
+    "chapa": {
+      "type": "object",
+      "required": ["espessura", "raio", "fator_k"],
+      "additionalProperties": false,
+      "properties": {
+        "espessura": { "$ref": "#/$defs/expressao" },
+        "raio": { "$ref": "#/$defs/expressao" },
+        "fator_k": { "$ref": "#/$defs/expressao" },
+        "planificada": { "type": "boolean" },
+        "material": { "type": "string" },
+        "metodo": { "enum": ["fator_k", "deducao", "tolerancia"] },
+        "compensacao": { "type": "string" },
+        "alivio": { "type": "string" },
+        "alivio_forma": { "$ref": "#/$defs/forma_alivio" },
+        "canto": { "type": "string" }
+      }
+    },
+    "forma_alivio": { "enum": ["retangular", "redondo", "rasgo"] },
+    "curva": {
+      "oneOf": [
+        { "enum": ["X", "Y", "Z"] },
+        { "type": "object", "required": ["referencia"], "additionalProperties": false, "properties": { "referencia": { "$ref": "#/$defs/id" } } },
+        { "type": "object", "required": ["esboco", "curva"], "additionalProperties": false, "properties": { "esboco": { "$ref": "#/$defs/id" }, "curva": { "$ref": "#/$defs/id" } } },
+        { "type": "object", "required": ["pontos"], "additionalProperties": false, "properties": { "pontos": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/xyz" } } } }
+      ]
     },
     "parametro": {
       "type": "object",
@@ -97,7 +124,8 @@
             { "type": "object", "required": ["tipo", "base", "deslocamento"], "additionalProperties": false, "properties": { "tipo": { "const": "plano_deslocado" }, "base": { "$ref": "#/$defs/plano" }, "deslocamento": { "$ref": "#/$defs/expressao" } } },
             { "type": "object", "required": ["tipo", "origem", "x", "normal"], "additionalProperties": false, "properties": { "tipo": { "const": "plano_fixo" }, "origem": { "$ref": "#/$defs/xyz" }, "x": { "$ref": "#/$defs/xyz" }, "normal": { "$ref": "#/$defs/xyz" } } },
             { "type": "object", "required": ["tipo", "x", "y", "z"], "additionalProperties": false, "properties": { "tipo": { "const": "ponto" }, "x": { "$ref": "#/$defs/expressao" }, "y": { "$ref": "#/$defs/expressao" }, "z": { "$ref": "#/$defs/expressao" }, "sistema": { "$ref": "#/$defs/plano" } } },
-            { "type": "object", "required": ["tipo", "ponto", "direcao", "inicio", "fim"], "additionalProperties": false, "properties": { "tipo": { "const": "reta" }, "ponto": { "$ref": "#/$defs/ponto" }, "direcao": { "$ref": "#/$defs/eixo" }, "inicio": { "$ref": "#/$defs/expressao" }, "fim": { "$ref": "#/$defs/expressao" } } }
+            { "type": "object", "required": ["tipo", "ponto", "direcao", "inicio", "fim"], "additionalProperties": false, "properties": { "tipo": { "const": "reta" }, "ponto": { "$ref": "#/$defs/ponto" }, "direcao": { "$ref": "#/$defs/eixo" }, "inicio": { "$ref": "#/$defs/expressao" }, "fim": { "$ref": "#/$defs/expressao" } } },
+            { "type": "object", "required": ["tipo", "a", "b"], "additionalProperties": false, "properties": { "tipo": { "const": "reta_pontos" }, "a": { "$ref": "#/$defs/ponto" }, "b": { "$ref": "#/$defs/ponto" }, "inicio": { "$ref": "#/$defs/expressao" }, "fim": { "$ref": "#/$defs/expressao" } } }
           ]
         }
       }
@@ -268,7 +296,125 @@
             "pular": { "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "integer", "minimum": 0 } } }
           }
         },
-        { "type": "object", "required": ["tipo", "plano"], "additionalProperties": false, "properties": { "tipo": { "const": "espelho" }, "plano": { "$ref": "#/$defs/plano" }, "fontes": { "$ref": "#/$defs/ids" } } }
+        { "type": "object", "required": ["tipo", "plano"], "additionalProperties": false, "properties": { "tipo": { "const": "espelho" }, "plano": { "$ref": "#/$defs/plano" }, "fontes": { "$ref": "#/$defs/ids" } } },
+        {
+          "type": "object",
+          "required": ["tipo", "esboco"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "parede_chapa" },
+            "esboco": { "$ref": "#/$defs/id" },
+            "inverter": { "type": "boolean" },
+            "deslocamento": { "$ref": "#/$defs/expressao" },
+            "meio": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["tipo", "aresta", "comprimento", "angulo"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "aba" },
+            "aresta": { "$ref": "#/$defs/xyz" },
+            "comprimento": { "$ref": "#/$defs/expressao" },
+            "angulo": { "$ref": "#/$defs/expressao" },
+            "raio": { "$ref": "#/$defs/expressao" },
+            "recuo1": { "$ref": "#/$defs/expressao" },
+            "recuo2": { "$ref": "#/$defs/expressao" },
+            "inverter": { "type": "boolean" },
+            "alivio": { "$ref": "#/$defs/expressao" },
+            "alivio_forma": { "$ref": "#/$defs/forma_alivio" },
+            "lado": { "enum": ["dobra_fora", "material_fora", "material_dentro"] },
+            "meia_esquadria": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["tipo", "aresta", "comprimento"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "bainha" },
+            "aresta": { "$ref": "#/$defs/xyz" },
+            "comprimento": { "$ref": "#/$defs/expressao" },
+            "folga": { "$ref": "#/$defs/expressao" },
+            "inverter": { "type": "boolean" },
+            "forma": { "enum": ["fechada", "gota", "enrolada"] }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["tipo", "a", "b", "angulo"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "dobra" },
+            "a": { "$ref": "#/$defs/xyz" },
+            "b": { "$ref": "#/$defs/xyz" },
+            "angulo": { "$ref": "#/$defs/expressao" },
+            "raio": { "$ref": "#/$defs/expressao" },
+            "inverter": { "type": "boolean" },
+            "para_baixo": { "type": "boolean" },
+            "esboco": { "$ref": "#/$defs/id" },
+            "posicao": { "enum": ["centro", "inicio", "fim", "vertice_externo"] }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["tipo", "caminhos", "secao", "cotas"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "membro" },
+            "caminhos": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/curva" } },
+            "secao": { "enum": ["tubo_quadrado", "tubo_retangular", "tubo_redondo", "perfil_i", "perfil_u", "cantoneira", "barra_chata", "barra_redonda", "barra_quadrada", "perfil_t"] },
+            "cotas": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/expressao" } },
+            "familia": { "type": "string" },
+            "designacao": { "type": "string" },
+            "ancoragem": { "type": "integer", "minimum": 0, "maximum": 9 },
+            "angulo": { "$ref": "#/$defs/expressao" },
+            "deslocamento_x": { "$ref": "#/$defs/expressao" },
+            "deslocamento_y": { "$ref": "#/$defs/expressao" },
+            "prolongamento1": { "$ref": "#/$defs/expressao" },
+            "prolongamento2": { "$ref": "#/$defs/expressao" },
+            "canto": { "enum": ["nenhum", "meia_esquadria", "aparar", "encaixe"] },
+            "folga": { "$ref": "#/$defs/expressao" },
+            "material": { "type": "string" },
+            "espelhar": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["tipo", "em", "espessura", "sobra"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "placa_extremidade" },
+            "em": { "$ref": "#/$defs/xyz" },
+            "espessura": { "$ref": "#/$defs/expressao" },
+            "sobra": { "$ref": "#/$defs/expressao" },
+            "lado": { "enum": ["externo", "interno"] },
+            "recuo": { "$ref": "#/$defs/expressao" },
+            "sobra_em": { "enum": ["mm", "parede"] },
+            "furos": { "type": "object", "required": ["diametro", "borda"], "additionalProperties": false, "properties": { "diametro": { "$ref": "#/$defs/expressao" }, "borda": { "$ref": "#/$defs/expressao" } } }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["tipo", "em", "aba", "espessura"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "reforco" },
+            "em": { "$ref": "#/$defs/xyz" },
+            "aba": { "$ref": "#/$defs/expressao" },
+            "espessura": { "$ref": "#/$defs/expressao" },
+            "chanfro": { "$ref": "#/$defs/expressao" },
+            "aba2": { "type": "string" },
+            "trocar": { "type": "boolean" },
+            "lado": { "enum": ["dois_lados", "interno", "externo"] },
+            "posicao": { "enum": ["inicio", "meio", "fim"] },
+            "afastamento": { "$ref": "#/$defs/expressao" },
+            "repeticao": { "enum": ["nenhuma", "quantidade", "espacamento"] },
+            "quantidade": { "type": "string" },
+            "espacamento": { "type": "string" }
+          }
+        }
       ]
     },
     "esboco": {

@@ -6,7 +6,7 @@ use super::*;
 use crate::ErroConv;
 use fenkra_core::formato::{aviso_futuro, preparar, Tipo};
 use fenkra_core::sketch::{Constraint, Curve, Kind, SkCurve, SkPoint, SketchPos, SplineTan};
-use fenkra_core::{Appearance, AxisRef, BoolOp, Document, EdgeMode, EdgeOp, EdgeSel, Extent, Extrude, Feature, FeatureKind, Finish, Hole, HoleKind, Id, Mirror, OriginAxis, OriginPlane, Pattern, PatternKind, PlaneRef, PointRef, PrimKind, Primitive, RefElement, RefKind, Revolve, Shell, Sketch, SketchData, Unit};
+use fenkra_core::{Appearance, AxisRef, BoolOp, CornerMode, CurveRef, Document, EdgeMode, EdgeOp, EdgeSel, Extent, Extrude, Feature, FeatureKind, Finish, GussetPos, GussetProfile, GussetRepeat, GussetSide, Hole, HoleKind, Id, MarginMode, Mirror, OriginAxis, OriginPlane, Pattern, PatternKind, PlaneRef, PlateHoles, PlateSide, PointRef, PrimKind, Primitive, RefElement, RefKind, Revolve, SectionKind, SheetParams, Shell, Sketch, SketchData, SmBend, SmFlange, SmHem, SmWall, StructGusset, StructMember, StructPlate, Unit};
 use std::collections::HashMap;
 
 /// Documento remontado e o que a reancoragem achou.
@@ -107,6 +107,18 @@ impl<'a> Tabela<'a> {
             Definicao::PlanoFixo { origem, x, normal } => RefKind::FacePlane { origin: *origem, x: *x, normal: *normal, owner: None, key: None },
             Definicao::Ponto { x, y, z, sistema } => RefKind::PointCoords { x: x.clone(), y: y.clone(), z: z.clone(), frame: sistema.as_ref().map(|s| self.plano(s)).transpose()? },
             Definicao::Reta { ponto, direcao, inicio, fim } => RefKind::LineDir { point: self.ponto(ponto)?, dir: self.eixo(direcao)?, start: inicio.clone(), end: fim.clone() },
+            Definicao::RetaPontos { a, b, inicio, fim } => RefKind::LinePoints { a: self.ponto(a)?, b: self.ponto(b)?, start: inicio.clone(), end: fim.clone() },
+        })
+    }
+
+    fn curva(&self, c: &Curva) -> Result<CurveRef, ErroConv> {
+        Ok(match c {
+            Curva::Origem(EixoOrigem::X) => CurveRef::Axis(OriginAxis::X),
+            Curva::Origem(EixoOrigem::Y) => CurveRef::Axis(OriginAxis::Y),
+            Curva::Origem(EixoOrigem::Z) => CurveRef::Axis(OriginAxis::Z),
+            Curva::Referencia { referencia } => CurveRef::Ref(self.achar(referencia)?),
+            Curva::DeEsboco { esboco, curva } => CurveRef::SketchCurve { sketch: self.achar(esboco)?, curve: self.do_esboco(esboco, curva)? },
+            Curva::Pontos { pontos } => CurveRef::Edge(pontos.clone()),
         })
     }
 
@@ -263,6 +275,101 @@ impl<'a> Tabela<'a> {
                 FeatureKind::Pattern(Pattern { kind, sources: self.fontes(&p.fontes)?, skip: p.pular.iter().map(|q| (q[0], q[1])).collect() })
             }
             Comando::Espelho { plano, fontes } => FeatureKind::Mirror(Mirror { plane: self.plano(plano)?, sources: self.fontes(fontes)? }),
+            Comando::ParedeChapa { esboco, inverter, deslocamento, meio } => {
+                FeatureKind::SmWall(SmWall { sketch: self.achar(esboco)?, reverse: *inverter, offset: sem_zero(deslocamento), mid: *meio, surface: None })
+            }
+            Comando::Aba { aresta, comprimento, angulo, raio, recuo1, recuo2, inverter, alivio, alivio_forma, lado, meia_esquadria } => FeatureKind::SmFlange(SmFlange {
+                edge: *aresta,
+                length: comprimento.clone(),
+                angle: angulo.clone(),
+                radius: raio.clone(),
+                off1: recuo1.clone(),
+                off2: recuo2.clone(),
+                flip: *inverter,
+                relief: alivio.clone(),
+                relief_kind: *alivio_forma as u8,
+                side: *lado as u8,
+                miter: *meia_esquadria,
+                min_gap: true,
+                edge_key: None,
+            }),
+            Comando::Bainha { aresta, comprimento, folga, inverter, forma } => FeatureKind::SmHem(SmHem { edge: *aresta, length: comprimento.clone(), gap: folga.clone(), flip: *inverter, kind: *forma as u8, edge_key: None }),
+            Comando::Dobra { a, b, angulo, raio, inverter, para_baixo, esboco, posicao } => FeatureKind::SmBend(SmBend {
+                a: *a,
+                b: *b,
+                angle: angulo.clone(),
+                radius: raio.clone(),
+                flip: *inverter,
+                down: *para_baixo,
+                sketch: esboco.as_deref().map(|e| self.achar(e)).transpose()?,
+                position: *posicao as u8,
+            }),
+            Comando::Membro(m) => FeatureKind::StructMember(StructMember {
+                paths: m.caminhos.iter().map(|c| self.curva(c)).collect::<Result<_, _>>()?,
+                family: m.familia.clone(),
+                designation: m.designacao.clone(),
+                kind: secao(m.secao),
+                dims: m.cotas.clone(),
+                anchor: m.ancoragem,
+                angle: m.angulo.clone(),
+                off_x: m.deslocamento_x.clone(),
+                off_y: m.deslocamento_y.clone(),
+                ext1: m.prolongamento1.clone(),
+                ext2: m.prolongamento2.clone(),
+                corner: match m.canto {
+                    Canto::Nenhum => CornerMode::Nenhum,
+                    Canto::MeiaEsquadria => CornerMode::MeiaEsquadria,
+                    Canto::Aparar => CornerMode::Aparar,
+                    Canto::Encaixe => CornerMode::Encaixe,
+                },
+                gap: m.folga.clone(),
+                joints: vec![],
+                material: m.material.clone(),
+                mirror: m.espelhar,
+            }),
+            Comando::PlacaExtremidade { em, espessura, sobra, lado, recuo, sobra_em, furos } => FeatureKind::StructPlate(StructPlate {
+                at: *em,
+                thickness: espessura.clone(),
+                margin: sobra.clone(),
+                side: match lado {
+                    LadoPlaca::Externo => PlateSide::Externo,
+                    LadoPlaca::Interno => PlateSide::Interno,
+                },
+                recess: sem_zero(recuo),
+                margin_mode: match sobra_em {
+                    SobraEm::Mm => MarginMode::Valor,
+                    SobraEm::Parede => MarginMode::RazaoParede,
+                },
+                holes: furos.as_ref().map(|f| PlateHoles { diameter: f.diametro.clone(), edge: f.borda.clone() }),
+            }),
+            Comando::Reforco { em, aba, espessura, chanfro, aba2, trocar, lado, posicao, afastamento, repeticao, quantidade, espacamento } => FeatureKind::StructGusset(StructGusset {
+                at: *em,
+                leg: aba.clone(),
+                thickness: espessura.clone(),
+                chamfer: chanfro.clone(),
+                leg2: aba2.clone(),
+                swap: *trocar,
+                profile: GussetProfile::Chanfrado,
+                poly: vec![],
+                side: match lado {
+                    LadoReforco::DoisLados => GussetSide::DoisLados,
+                    LadoReforco::Interno => GussetSide::Interno,
+                    LadoReforco::Externo => GussetSide::Externo,
+                },
+                position: match posicao {
+                    PosicaoReforco::Inicio => GussetPos::Inicio,
+                    PosicaoReforco::Meio => GussetPos::Meio,
+                    PosicaoReforco::Fim => GussetPos::Fim,
+                },
+                offset: sem_zero(afastamento),
+                repeat: match repeticao {
+                    RepeticaoReforco::Nenhuma => GussetRepeat::Nenhuma,
+                    RepeticaoReforco::Quantidade => GussetRepeat::Quantidade,
+                    RepeticaoReforco::Espacamento => GussetRepeat::Espacamento,
+                },
+                count: quantidade.clone(),
+                spacing: espacamento.clone(),
+            }),
         })
     }
 }
@@ -272,6 +379,46 @@ fn operacao(o: Operacao) -> BoolOp {
         Operacao::Unir => BoolOp::Add,
         Operacao::Cortar => BoolOp::Cut,
         Operacao::Intersectar => BoolOp::Intersect,
+    }
+}
+
+/// "0" de quem grava é o vazio do documento: os campos opcionais de afastamento nascem vazios.
+fn sem_zero(s: &str) -> String {
+    if s.trim() == "0" {
+        String::new()
+    } else {
+        s.to_string()
+    }
+}
+
+pub(super) fn secao(s: Secao) -> SectionKind {
+    match s {
+        Secao::TuboQuadrado => SectionKind::TuboQuadrado,
+        Secao::TuboRetangular => SectionKind::TuboRetangular,
+        Secao::TuboRedondo => SectionKind::TuboRedondo,
+        Secao::PerfilI => SectionKind::PerfilI,
+        Secao::PerfilU => SectionKind::PerfilU,
+        Secao::Cantoneira => SectionKind::Cantoneira,
+        Secao::BarraChata => SectionKind::BarraChata,
+        Secao::BarraRedonda => SectionKind::BarraRedonda,
+        Secao::BarraQuadrada => SectionKind::BarraQuadrada,
+        Secao::PerfilT => SectionKind::PerfilT,
+    }
+}
+
+fn chapa(c: &Chapa) -> SheetParams {
+    SheetParams {
+        thickness: c.espessura.clone(),
+        radius: c.raio.clone(),
+        k: c.fator_k.clone(),
+        flat: c.planificada,
+        material: c.material.clone(),
+        method: c.metodo as u8,
+        allowance: c.compensacao.clone(),
+        relief: c.alivio.clone(),
+        relief_kind: c.alivio_forma as u8,
+        corner: c.canto.clone(),
+        ..SheetParams::default()
     }
 }
 
@@ -330,6 +477,7 @@ fn parametros(d: &mut Document, peca: &Peca) -> Result<(), ErroConv> {
 /// Remonta a peça, sem reancorar: serve a quem só quer a árvore.
 fn montar(peca: &Peca) -> Result<Document, ErroConv> {
     let mut d = Document::new(&peca.nome);
+    d.sheet = peca.chapa.as_ref().map(chapa);
     let mut t = Tabela { peca, global: HashMap::new(), esbocos: HashMap::new() };
     corpos(&mut d, &mut t, peca)?;
     parametros(&mut d, peca)?;

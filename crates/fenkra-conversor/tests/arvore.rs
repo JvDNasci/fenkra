@@ -512,3 +512,128 @@ fn componente_que_aponta_para_peca_ou_pai_que_nao_existem_e_recusado() {
     v["montagem"]["componentes"][0]["pai"] = json!("z");
     assert!(remontar(&ler_texto(&texto(v)).unwrap()).err().unwrap().to_string().contains("'z'"));
 }
+
+// ------------------------------------------------------------------ chapa e estrutural (B420)
+
+fn caixa_das_malhas(d: &Document) -> ([f64; 3], [f64; 3]) {
+    caixa_da_malha(&recompute(d))
+}
+
+fn mesma_caixa(a: &Document, b: &Document, nome: &str) {
+    let (la, ha) = caixa_das_malhas(a);
+    let (lb, hb) = caixa_das_malhas(b);
+    for i in 0..3 {
+        assert!((la[i] - lb[i]).abs() < 1e-6 && (ha[i] - hb[i]).abs() < 1e-6, "{nome}: caixa {la:?} {ha:?} virou {lb:?} {hb:?}");
+    }
+}
+
+fn parede(nome: &str) -> Document {
+    let mut d = Document::new(nome);
+    d.sheet = Some(SheetParams { thickness: "1.5".into(), radius: "2".into(), k: "0.4".into(), relief: "2".into(), ..Default::default() });
+    let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [100., 60.]);
+    d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+    d
+}
+
+/// Chapa com parede, aba recuada com alívio redondo e bainha na borda oposta.
+fn chapa_dobrada() -> Document {
+    let mut d = parede("chapa");
+    d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 1.5], length: "20".into(), angle: "90".into(), radius: None, off1: "5".into(), off2: "5".into(), flip: false, relief: Some("2".into()), relief_kind: 1, side: 0, miter: false, min_gap: true, edge_key: None }));
+    d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 30., 1.5], length: "8".into(), gap: "0".into(), flip: false, kind: 0, edge_key: None }));
+    d
+}
+
+/// Chapa plana dobrada a 30° numa linha da face.
+fn chapa_com_dobra() -> Document {
+    let mut d = parede("dobra");
+    d.add_feature(FeatureKind::SmBend(SmBend { a: [50., 0., 1.5], b: [50., 60., 1.5], angle: "30".into(), radius: None, flip: false, down: false, sketch: None, position: 0 }));
+    d
+}
+
+#[test]
+fn chapa_volta_com_volume_caixa_e_planificada() {
+    precisa_kernel!();
+    for d in [chapa_dobrada(), chapa_com_dobra()] {
+        let lida = ida_e_volta(&d);
+        assert_eq!(lida.sheet.as_ref().map(|s| (&s.thickness, &s.radius, &s.k, &s.relief)), d.sheet.as_ref().map(|s| (&s.thickness, &s.radius, &s.k, &s.relief)));
+        igual(&medir(&d), &medir(&lida), &d.name);
+        mesma_caixa(&d, &lida, &d.name);
+        let tipos = |d: &Document| d.features.iter().map(|f| std::mem::discriminant(&f.kind)).collect::<Vec<_>>();
+        assert_eq!(tipos(&lida), tipos(&d));
+        let (_, hi) = caixa_das_malhas(&lida);
+        assert!(hi[2] > 5., "{}: a chapa dobrada sai do plano: {hi:?}", d.name);
+        // planificada pelo arquivo: a chave do formato liga a peça desdobrada
+        let mut plana = d.clone();
+        plana.sheet.as_mut().unwrap().flat = true;
+        let lida = ida_e_volta(&plana);
+        assert!(lida.sheet.as_ref().unwrap().flat);
+        igual(&medir(&plana), &medir(&lida), &d.name);
+        let (_, hi) = caixa_das_malhas(&lida);
+        assert!(hi[2] < 1.5 + 1e-3, "{}: planificada fica no plano: {hi:?}", d.name);
+    }
+}
+
+#[test]
+fn estilo_de_chapa_vai_resolvido_e_ordem_manual_fica_escrita() {
+    let mut d = chapa_dobrada();
+    let x = exportar_peca(&d);
+    assert_eq!(x.fora, vec![]);
+    assert_eq!(x.peca.chapa.as_ref().unwrap().espessura, "1.5");
+    let f = d.features[1].id;
+    d.sheet.as_mut().unwrap().define_ordem(f, 0, 2);
+    let x = exportar_peca(&d);
+    assert_eq!(x.fora.iter().map(|f| f.nome.as_str()).collect::<Vec<_>>(), vec!["Chapa"]);
+}
+
+fn membro(paths: Vec<CurveRef>, kind: SectionKind, dims: &[&str], corner: CornerMode) -> StructMember {
+    StructMember { paths, family: "Tubo".into(), designation: "40x3".into(), kind, dims: dims.iter().map(|d| d.to_string()).collect(), anchor: 0, angle: "0".into(), off_x: "0".into(), off_y: "0".into(), ext1: "0".into(), ext2: "10".into(), corner, gap: "0".into(), joints: vec![], material: String::new(), mirror: false }
+}
+
+fn reta(d: &mut Document, a: [f64; 3], b: [f64; 3]) -> CurveRef {
+    CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: "0".into(), end: "0".into() }))
+}
+
+/// Pórtico em L com tubos em meia-esquadria, uma barra sobre a curva de um esboço, placa e reforço.
+fn quadro() -> Document {
+    let mut d = Document::new("quadro");
+    let a = reta(&mut d, [0., 0., 0.], [0., 0., 500.]);
+    let b = reta(&mut d, [0., 0., 0.], [400., 0., 0.]);
+    d.add_feature(FeatureKind::StructMember(membro(vec![a, b], SectionKind::TuboQuadrado, &["40", "3"], CornerMode::MeiaEsquadria)));
+    let sk = sk_poligono(&mut d, PlaneRef::Origin(OriginPlane::XY), &[[0., 200.], [300., 200.], [300., 260.]]);
+    let curva = match &d.feature(sk).unwrap().kind {
+        FeatureKind::Sketch(s) => s.data.curves[0].id,
+        _ => unreachable!(),
+    };
+    d.add_feature(FeatureKind::StructMember(membro(vec![CurveRef::SketchCurve { sketch: sk, curve: curva }], SectionKind::BarraChata, &["30", "6"], CornerMode::Nenhum)));
+    let mut placa = StructPlate::nova([0., 0., 500.], "8", "5");
+    placa.holes = Some(PlateHoles { diameter: "6".into(), edge: "8".into() });
+    d.add_feature(FeatureKind::StructPlate(placa));
+    d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 0.], "60", "6", "10")));
+    d
+}
+
+#[test]
+fn estrutural_volta_com_volume_caixa_e_os_mesmos_itens() {
+    precisa_kernel!();
+    let d = quadro();
+    let r = recompute(&d);
+    assert!(d.features.iter().all(|f| r.status[&f.id] == Status::Ok), "{:?}", r.status);
+    let lida = ida_e_volta(&d);
+    igual(&medir(&d), &medir(&lida), "quadro");
+    mesma_caixa(&d, &lida, "quadro");
+    let n = |d: &Document| fenkra_solidos::structural_members(d).len();
+    assert_eq!(n(&lida), n(&d), "membros, placa e reforço");
+    // a reta entre dois pontos é referência do formato
+    let x = exportar_peca(&lida);
+    assert!(x.peca.referencias.iter().any(|r| matches!(r.definicao, Definicao::RetaPontos { .. })));
+}
+
+#[test]
+fn canto_com_dobra_de_tubo_fica_de_fora_com_o_motivo() {
+    let mut d = quadro();
+    if let FeatureKind::StructMember(m) = &mut d.features[0].kind {
+        m.corner = CornerMode::Dobra;
+    }
+    let x = exportar_peca(&d);
+    assert!(x.fora.iter().any(|f| f.motivo.contains("dobra de tubo")), "{:?}", x.fora);
+}

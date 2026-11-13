@@ -72,6 +72,219 @@ pub struct Peca {
     /// quantos itens da árvore estão ativos (marcador da linha do tempo); ausente = todos
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ativos: Option<usize>,
+    /// parâmetros de chapa metálica: ausente, a peça não é de chapa (B420)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub chapa: Option<Chapa>,
+}
+
+/// Compensação da dobra na planificação.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MetodoDobra {
+    #[default]
+    FatorK,
+    /// dedução de dobra a 90°
+    Deducao,
+    /// tolerância de dobra a 90°
+    Tolerancia,
+}
+
+/// Forma do alívio de dobra.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FormaAlivio {
+    #[default]
+    Retangular,
+    Redondo,
+    Rasgo,
+}
+
+fn e_padrao<T: Default + PartialEq>(v: &T) -> bool {
+    *v == T::default()
+}
+
+fn e_zero(s: &str) -> bool {
+    s.trim().is_empty() || s.trim() == "0"
+}
+
+/// Parâmetros globais da chapa. Os valores são os efetivos: estilo de chapa não vai para o arquivo.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Chapa {
+    pub espessura: String,
+    /// raio interno de dobra padrão
+    pub raio: String,
+    pub fator_k: String,
+    #[serde(default, skip_serializing_if = "falso")]
+    pub planificada: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub material: String,
+    #[serde(default, skip_serializing_if = "e_padrao")]
+    pub metodo: MetodoDobra,
+    /// dedução ou tolerância a 90°, quando o método não é o fator K
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub compensacao: String,
+    /// largura padrão do alívio de dobra
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub alivio: String,
+    #[serde(default, skip_serializing_if = "e_padrao")]
+    pub alivio_forma: FormaAlivio,
+    /// tamanho padrão do alívio de canto
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub canto: String,
+}
+
+/// Lado do material na aba.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LadoAba {
+    /// a dobra começa na aresta
+    #[default]
+    DobraFora,
+    MaterialFora,
+    MaterialDentro,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FormaBainha {
+    /// fechada, ou aberta pela folga
+    #[default]
+    Fechada,
+    Gota,
+    Enrolada,
+}
+
+/// O que a linha da dobra marca na zona dobrada.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PosicaoDobra {
+    #[default]
+    Centro,
+    Inicio,
+    Fim,
+    VerticeExterno,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Secao {
+    TuboQuadrado,
+    TuboRetangular,
+    TuboRedondo,
+    PerfilI,
+    PerfilU,
+    Cantoneira,
+    BarraChata,
+    BarraRedonda,
+    BarraQuadrada,
+    PerfilT,
+}
+
+/// Canto entre membros. A dobra de tubo no nó depende de regras por canto e fica fora da versão 1.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Canto {
+    Nenhum,
+    #[default]
+    MeiaEsquadria,
+    Aparar,
+    Encaixe,
+}
+
+/// Linha guia de um membro estrutural.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Curva {
+    Origem(EixoOrigem),
+    Referencia { referencia: String },
+    DeEsboco { esboco: String, curva: String },
+    /// polilinha fixa, sem seguir o modelo
+    Pontos { pontos: Vec<[f64; 3]> },
+}
+
+/// Membro estrutural: um perfil ao longo de cada linha guia.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct Membro {
+    pub caminhos: Vec<Curva>,
+    pub secao: Secao,
+    /// cotas da seção, na ordem da tabela da especificação
+    pub cotas: Vec<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub familia: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub designacao: String,
+    /// 0 centro, 1 a 8 a caixa da seção, 9 centróide
+    #[serde(default, skip_serializing_if = "e_padrao")]
+    pub ancoragem: u8,
+    #[serde(default = "zero", skip_serializing_if = "e_zero")]
+    pub angulo: String,
+    #[serde(default = "zero", skip_serializing_if = "e_zero")]
+    pub deslocamento_x: String,
+    #[serde(default = "zero", skip_serializing_if = "e_zero")]
+    pub deslocamento_y: String,
+    #[serde(default = "zero", skip_serializing_if = "e_zero")]
+    pub prolongamento1: String,
+    #[serde(default = "zero", skip_serializing_if = "e_zero")]
+    pub prolongamento2: String,
+    #[serde(default, skip_serializing_if = "e_padrao")]
+    pub canto: Canto,
+    #[serde(default = "zero", skip_serializing_if = "e_zero")]
+    pub folga: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub material: String,
+    #[serde(default, skip_serializing_if = "falso")]
+    pub espelhar: bool,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LadoPlaca {
+    #[default]
+    Externo,
+    Interno,
+}
+
+/// Como a sobra da placa é dada: milímetros ou múltiplo da parede do perfil.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SobraEm {
+    #[default]
+    Mm,
+    Parede,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct FurosPlaca {
+    pub diametro: String,
+    /// do centro do furo à borda da placa
+    pub borda: String,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LadoReforco {
+    #[default]
+    DoisLados,
+    Interno,
+    Externo,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PosicaoReforco {
+    Inicio,
+    #[default]
+    Meio,
+    Fim,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RepeticaoReforco {
+    #[default]
+    Nenhuma,
+    Quantidade,
+    Espacamento,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -172,6 +385,15 @@ pub enum Definicao {
         ponto: Ponto,
         direcao: Eixo,
         inicio: String,
+        fim: String,
+    },
+    /// reta de um ponto a outro, com prolongamento nas pontas
+    RetaPontos {
+        a: Ponto,
+        b: Ponto,
+        #[serde(default = "zero", skip_serializing_if = "e_zero")]
+        inicio: String,
+        #[serde(default = "zero", skip_serializing_if = "e_zero")]
         fim: String,
     },
 }
@@ -369,6 +591,113 @@ pub enum Comando {
         plano: Plano,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         fontes: Vec<String>,
+    },
+    /// chapa: parede base a partir de um perfil fechado
+    ParedeChapa {
+        esboco: String,
+        #[serde(default, skip_serializing_if = "falso")]
+        inverter: bool,
+        #[serde(default = "zero", skip_serializing_if = "e_zero")]
+        deslocamento: String,
+        /// espessura dividida pelos dois lados do plano
+        #[serde(default, skip_serializing_if = "falso")]
+        meio: bool,
+    },
+    /// chapa: aba numa aresta reta (dobra e parede reta)
+    Aba {
+        /// ponto sobre a aresta
+        aresta: [f64; 3],
+        comprimento: String,
+        angulo: String,
+        /// raio interno próprio; ausente, o da chapa
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        raio: Option<String>,
+        #[serde(default = "zero", skip_serializing_if = "e_zero")]
+        recuo1: String,
+        #[serde(default = "zero", skip_serializing_if = "e_zero")]
+        recuo2: String,
+        #[serde(default, skip_serializing_if = "falso")]
+        inverter: bool,
+        /// largura do alívio nas pontas recuadas; ausente, sem alívio
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        alivio: Option<String>,
+        #[serde(default, skip_serializing_if = "e_padrao")]
+        alivio_forma: FormaAlivio,
+        #[serde(default, skip_serializing_if = "e_padrao")]
+        lado: LadoAba,
+        #[serde(default, skip_serializing_if = "falso")]
+        meia_esquadria: bool,
+    },
+    /// chapa: bainha (dobra de 180° na borda)
+    Bainha {
+        aresta: [f64; 3],
+        comprimento: String,
+        #[serde(default = "zero", skip_serializing_if = "e_zero")]
+        folga: String,
+        #[serde(default, skip_serializing_if = "falso")]
+        inverter: bool,
+        #[serde(default, skip_serializing_if = "e_padrao")]
+        forma: FormaBainha,
+    },
+    /// chapa: dobra ao longo da linha a–b da face, ou de cada reta de um esboço
+    Dobra {
+        a: [f64; 3],
+        b: [f64; 3],
+        angulo: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        raio: Option<String>,
+        /// o outro lado da linha é o que gira
+        #[serde(default, skip_serializing_if = "falso")]
+        inverter: bool,
+        #[serde(default, skip_serializing_if = "falso")]
+        para_baixo: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        esboco: Option<String>,
+        #[serde(default, skip_serializing_if = "e_padrao")]
+        posicao: PosicaoDobra,
+    },
+    /// estrutural: perfis ao longo das linhas guia
+    Membro(Box<Membro>),
+    /// estrutural: placa na ponta de um membro
+    PlacaExtremidade {
+        /// ponto na face da ponta
+        em: [f64; 3],
+        espessura: String,
+        sobra: String,
+        #[serde(default, skip_serializing_if = "e_padrao")]
+        lado: LadoPlaca,
+        #[serde(default = "zero", skip_serializing_if = "e_zero")]
+        recuo: String,
+        #[serde(default, skip_serializing_if = "e_padrao")]
+        sobra_em: SobraEm,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        furos: Option<FurosPlaca>,
+    },
+    /// estrutural: reforço entre dois membros
+    Reforco {
+        /// ponto perto do encontro dos dois membros
+        em: [f64; 3],
+        aba: String,
+        espessura: String,
+        #[serde(default = "zero", skip_serializing_if = "e_zero")]
+        chanfro: String,
+        /// segunda aba; vazia, igual à primeira
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        aba2: String,
+        #[serde(default, skip_serializing_if = "falso")]
+        trocar: bool,
+        #[serde(default, skip_serializing_if = "e_padrao")]
+        lado: LadoReforco,
+        #[serde(default, skip_serializing_if = "e_padrao")]
+        posicao: PosicaoReforco,
+        #[serde(default = "zero", skip_serializing_if = "e_zero")]
+        afastamento: String,
+        #[serde(default, skip_serializing_if = "e_padrao")]
+        repeticao: RepeticaoReforco,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        quantidade: String,
+        #[serde(default, skip_serializing_if = "String::is_empty")]
+        espacamento: String,
     },
 }
 
