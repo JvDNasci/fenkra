@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 const ESPERA: f64 = 9.;
 
 pub fn quadro(ctx: &egui::Context, estado: impl FnOnce() -> serde_json::Value) {
+    crate::demo_dica::quadro(ctx);
     let Ok(arquivo) = std::env::var("FENKRA_DEMO_FOTO") else { return };
     static FEITA: AtomicBool = AtomicBool::new(false);
     ctx.request_repaint();
@@ -41,6 +42,7 @@ pub fn quadro(ctx: &egui::Context, estado: impl FnOnce() -> serde_json::Value) {
 /// `FENKRA_DEMO_APARENCIA=preto|branco|<RRGGBB>` pinta a peça aberta com essa cor, para conferir o
 /// contraste dela com o fundo do tema (B425). `FENKRA_DEMO_TEMA` escolhe o tema.
 pub fn aparencia(doc: &mut fenkra_core::Document) {
+    furo(doc);
     let Ok(v) = std::env::var("FENKRA_DEMO_APARENCIA") else { return };
     let cor = match v.as_str() {
         "preto" => [12, 12, 14],
@@ -51,6 +53,23 @@ pub fn aparencia(doc: &mut fenkra_core::Document) {
         }
     };
     doc.appearance = Some(fenkra_core::Appearance { color: cor, finish: fenkra_core::Finish::Acetinado, texture: None });
+}
+
+/// `FENKRA_DEMO_FURO=escareado|contrafurado|simples` troca o tipo dos furos da peça aberta antes de
+/// abri-los com `FENKRA_ABRIR`, para a captura ver os campos do tipo logo abaixo dele (B360).
+fn furo(doc: &mut fenkra_core::Document) {
+    use fenkra_core::{FeatureKind, HoleKind};
+    let Ok(v) = std::env::var("FENKRA_DEMO_FURO") else { return };
+    let tipo = match v.as_str() {
+        "escareado" => HoleKind::Escareado { diameter: "12".into(), angle: "90".into() },
+        "contrafurado" => HoleKind::Contrafurado { diameter: "11".into(), depth: "4".into(), angle: "90".into() },
+        _ => HoleKind::Simples,
+    };
+    for f in doc.features.iter_mut() {
+        if let FeatureKind::Hole(h) = &mut f.kind {
+            h.kind = tipo.clone();
+        }
+    }
 }
 
 /// `FENKRA_DEMO_APRESENTACAO=1` esconde a origem (planos e eixos) da peça aberta, como se prepara uma

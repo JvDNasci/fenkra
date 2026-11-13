@@ -10,4 +10,12 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Troca verde e vermelho por azul e laranja em ok, aviso, erro e na prévia. Todo estado também tem símbolo.", "Swaps green and red for blue and orange in ok, warning, error and the preview. Every state also has a symbol."),
     ("reduzir movimento", "reduce motion"),
     ("A câmera salta em vez de deslizar e a interface não anima transições.", "The camera jumps instead of gliding and the interface does not animate transitions."),
+    // B321: uso por teclado
+    ("Uso por teclado", "Keyboard use"),
+    ("passa o foco por botões e campos; Enter ou Espaço aciona", "moves the focus through buttons and fields; Enter or Space activates"),
+    ("giram a vista; com Shift, movem", "orbit the view; with Shift, pan it"),
+    ("aproximam e afastam a vista", "zoom the view in and out"),
+    ("escolhem o comando anterior ou o seguinte da árvore", "pick the previous or next command in the tree"),
+    ("abre o comando escolhido; com ele aberto, conclui", "opens the picked command; while it is open, finishes it"),
+    ("cancela o comando ou solta o foco", "cancels the command or releases the focus"),
 ];

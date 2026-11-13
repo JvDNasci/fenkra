@@ -123,6 +123,9 @@ preferências do usuário.
 | `FENKRA_DEMO_JANELA=gerenciador` | (B378) o gerenciador Salvar e exportar; com `FENKRA_DEMO_DWG=1` as linhas do desenho ficam ativas |
 | `FENKRA_DEMO_JANELA=peca` | (B408) o painel Propriedades da peça, o mesmo que abre ao clicar no nome da peça no topo da árvore; `FENKRA_DEMO_MATERIAL=<nome>` escolhe o material (um nome fora da tabela mostra o aviso) |
 | `FENKRA_DEMO_SIMULAR=<protanopia\|deuteranopia\|tritanopia>` | com `FENKRA_DEMO_FOTO`, grava a captura como essa visão a veria |
+| `FENKRA_DEMO_DICA=<ícone>` | (B278) desenha fixa a dica em camadas do comando, já na camada 2 (GIF do pacote ou animação do programa) |
+| `FENKRA_DEMO_DICA_CAMPO=<rótulo>` | (B278) desenha fixa a dica do campo numérico: texto próprio, unidade e figura da cota |
+| `FENKRA_DEMO_FURO=<escareado\|contrafurado\|simples>` | (B360) troca o tipo dos furos da peça aberta; com `FENKRA_DEMO_EXEMPLO=0` e `FENKRA_ABRIR=<nome do furo>`, mostra os campos do tipo logo abaixo dele |
 | `FENKRA_DEMO_CHAPA=aba` ou `abaerro` | com `FENKRA_EDITAR=AbaUnificada`, abre o comando de aba unificado (o segundo com valores fora do limite); `FENKRA_DEMO_ABA=<n>` escolhe a aba do painel; `FENKRA_DEMO_MODO=2`, `3` ou `4` troca a aba para o modo curva, perfil ou superfície |
 | `FENKRA_DEMO_CHAPA=canal` | canal em U sem comando de chapa e o Converter em chapa sobre ele (mapa de dobras); com `FENKRA_DEMO_PLANA=1` já aparece desdobrado; `FENKRA_DEMO_CHAPA=canto` com `FENKRA_EDITAR=FechaCanto` mostra a alça da folga do canto |
 | `FENKRA_DEMO_CHAPA=spline` | (B03) dobra por linha numa spline: a parede segue a curva; com `FENKRA_DEMO_PLANA=1`, a planificada com a linha de dobra curva e o rótulo |

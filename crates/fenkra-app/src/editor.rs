@@ -146,7 +146,7 @@ pub(crate) const EXPR_HINT: &str = "Aceita número (vírgula ou ponto), parâmet
 /// Campo de expressão: mostra o valor avaliado ou o erro.
 /// Dica própria do campo (B278): o que faz, faixa e efeito, e a unidade do campo. A dica genérica de
 /// expressão fica como última linha, depois desta.
-fn dica_do_campo(ui: &mut egui::Ui, rotulo_pt: &str, unit: &str) {
+pub(crate) fn dica_do_campo(ui: &mut egui::Ui, rotulo_pt: &str, unit: &str) {
     if let Some(d) = crate::textos_campos::dica(rotulo_pt) {
         ui.label(tr(d));
         if !unit.is_empty() {
@@ -274,7 +274,14 @@ struct TabRun {
     /// B360: altura somada das seções neste quadro (visíveis e escondidas), para decidir no próximo
     /// se o comando é curto (fluxo único) ou longo (abas)
     altura: f32,
+    /// B360: comando que nunca vira abas, por longo que seja (o furo: tipo, os campos do tipo, rosca
+    /// e medida seguem a decisão de cima para baixo; o painel rola)
+    sempre_fluxo: bool,
 }
+
+/// B360: comandos cujo painel fica sempre num fluxo só, pela ordem da decisão. No furo a escolha do
+/// tipo muda o que vem logo abaixo (rebaixo, escareado), e uma aba esconderia essa consequência.
+pub(crate) const SEMPRE_FLUXO: [&str; 1] = ["Furo"];
 
 /// B360: acima desta altura somada das seções o painel vira abas; abaixo de `FLUXO_ATE` volta ao
 /// fluxo único. Entre as duas fica como estava, para o painel não piscar entre os modos.
@@ -314,7 +321,19 @@ pub(crate) fn tabs_begin(ui: &mut egui::Ui, key: impl std::hash::Hash) {
     let active: usize = ui.ctx().data(|d| d.get_temp::<usize>(key.with("ativa"))).unwrap_or(0);
     // desenvolvimento: FENKRA_DEMO_ABA=<n> abre o painel já na aba n (capturas sem mouse)
     let active = std::env::var("FENKRA_DEMO_ABA").ok().and_then(|v| v.parse().ok()).unwrap_or(active);
-    TABS.with(|t| *t.borrow_mut() = Some(TabRun { key, ui_id: ui.scope_id(), prev, titles: vec![], active, tabs: false, hidden: None, card: None, altura: 0. }));
+    TABS.with(|t| *t.borrow_mut() = Some(TabRun { key, ui_id: ui.scope_id(), prev, titles: vec![], active, tabs: false, hidden: None, card: None, altura: 0., sempre_fluxo: false }));
+}
+
+/// `tabs_begin` de um comando da árvore pelo nome do tipo: os de `SEMPRE_FLUXO` nunca ganham abas.
+pub(crate) fn tabs_begin_comando(ui: &mut egui::Ui, tipo: &'static str) {
+    tabs_begin(ui, ("comando", tipo));
+    if SEMPRE_FLUXO.contains(&tipo) {
+        TABS.with(|t| {
+            if let Some(r) = t.borrow_mut().as_mut() {
+                r.sempre_fluxo = true;
+            }
+        });
+    }
 }
 
 /// Fecha a seção atual: volta o cursor (escondida) ou pinta o cartão por baixo (visível).
@@ -342,7 +361,7 @@ fn tab_close(ui: &mut egui::Ui, run: &mut TabRun) {
 pub(crate) fn tabs_end(ui: &mut egui::Ui) {
     let Some(mut run) = TABS.with(|t| t.borrow_mut().take()) else { return };
     tab_close(ui, &mut run);
-    let modo = usa_abas(run.titles.len(), run.altura, run.tabs);
+    let modo = !run.sempre_fluxo && usa_abas(run.titles.len(), run.altura, run.tabs);
     ui.ctx().data_mut(|d| {
         d.insert_temp(run.key, run.titles.clone());
         d.insert_temp(run.key.with("modo_abas"), modo);
@@ -422,7 +441,7 @@ pub(crate) fn section(ui: &mut egui::Ui, title: &str) {
             // primeira seção: abas só no comando longo (B360); o curto mostra tudo num fluxo,
             // na ordem da decisão (elemento, tipo, definição)
             let longo = ui.ctx().data(|d| d.get_temp::<bool>(run.key.with("modo_abas"))).unwrap_or(false);
-            run.tabs = run.prev.len() >= 2 && (longo || std::env::var_os("FENKRA_DEMO_ABA").is_some());
+            run.tabs = !run.sempre_fluxo && run.prev.len() >= 2 && (longo || std::env::var_os("FENKRA_DEMO_ABA").is_some());
             if run.active >= run.prev.len() {
                 run.active = 0;
             }
@@ -1052,7 +1071,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
             if session.map(|s| s.0) == Some(id) {
                 crate::entradas::faixa(ui, id, &kind);
             }
-            tabs_begin(ui, ("comando", kind.type_name()));
+            tabs_begin_comando(ui, kind.type_name());
             feature_ui(ui, &doc_ro, idx, id, &mut kind, &mut target, &vars, doc, &picked, &picked_faces, &seed);
             if let FeatureKind::SmCut(c) = &kind {
                 sm_cut_projecao(ui, doc, id, c.sketch);
@@ -1943,6 +1962,35 @@ mod testes_repouso {
         }
     }
 
+    /// B360: o furo fica num fluxo só mesmo longo: o tipo e, logo abaixo, os campos dele, depois a
+    /// rosca e a medida, sem barra de abas. Um comando qualquer do mesmo tamanho vira abas.
+    #[test]
+    fn furo_longo_continua_num_fluxo_so() {
+        let visiveis = |tipo: &'static str| {
+            let ctx = egui::Context::default();
+            let mut n = 0;
+            for k in 0..6 {
+                let entrada = egui::RawInput { time: Some(k as f64), screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400., 4000.))), ..Default::default() };
+                let mut saida = ctx.run_ui(entrada, |ui| {
+                    tabs_begin_comando(ui, tipo);
+                    n = 0;
+                    for t in ["Tipo do furo", "Rosca", "Medida", "Fundo e corpo", "Centros"] {
+                        section(ui, t);
+                        if ui.is_rect_visible(ui.cursor()) {
+                            n += 1;
+                        }
+                        ui.add_space(300.);
+                    }
+                    tabs_end(ui);
+                });
+                saida.textures_delta.clear();
+            }
+            n
+        };
+        assert_eq!(visiveis("Furo"), 5, "o furo mostra todas as seções em sequência");
+        assert_eq!(visiveis("Chanfro"), 1, "o mesmo tamanho em outro comando vira abas");
+    }
+
     /// B222: com o painel de abas aberto e nada mudando, a barra não agenda mais quadros.
     #[test]
     fn barra_de_abas_em_repouso_nao_pede_quadro() {
@@ -1996,7 +2044,7 @@ mod testes_lados {
                 let ctx = ui.ctx().clone();
                 let s = paineis::mostrar(&ctx, tela, &cfg, posicao, |ui| {
                     egui::ScrollArea::vertical().show(ui, |ui| {
-                        tabs_begin(ui, ("comando", kind.type_name()));
+                        tabs_begin_comando(ui, kind.type_name());
                         feature_ui(ui, doc, idx, id, &mut kind, &mut target, &HashMap::new(), &mut live, &[], &[], &crate::geo_ui::Seed::default());
                         tabs_end(ui);
                     });

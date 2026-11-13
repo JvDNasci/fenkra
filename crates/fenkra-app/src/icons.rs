@@ -539,6 +539,8 @@ pub fn tool_button(ui: &mut egui::Ui, icon: &str, label: &str, size: f32, show_l
     let h = size + 6. + text_h;
     let (rect, resp) = ui.allocate_exact_size(egui::vec2(w, h), egui::Sense::click());
     let resp = hover_help_cmd(ui, resp, icon, label, brief, advanced);
+    // B321: Tab chega ao botão e Enter o aciona; o anel mostra onde está o foco
+    crate::teclado::anel_de_foco(ui, &resp, rect);
     if ui.is_rect_visible(rect) {
         let v = ui.visuals();
         let fill = if selected {
@@ -592,32 +594,37 @@ pub fn hover_help_cmd(ui: &egui::Ui, resp: egui::Response, icon: &str, title: &s
         ui.ctx().request_repaint_after(std::time::Duration::from_millis(250));
     }
     let atalho = crate::ajuda_cmd::atalho_do_comando(ui.ctx(), icon);
-    resp.on_hover_ui(|ui| {
-        ui.set_max_width(320.);
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new(title).strong());
-            if let Some(a) = &atalho {
-                ui.label(egui::RichText::new(format!("[{a}]")).weak().small());
-            }
-        });
-        if !brief.is_empty() && brief != title {
-            ui.label(brief);
+    let t = if shift { now - start } else { now - start - crate::ajuda_cmd::ESTAGIO_2 };
+    resp.on_hover_ui(|ui| conteudo_dica(ui, icon, title, brief, advanced, atalho.as_deref(), estagio2.then_some(t), simples))
+}
+
+/// Corpo da dica em camadas, separado do pairar para a captura (`FENKRA_DEMO_DICA`) desenhar o
+/// mesmo que a pessoa vê. `estagio2` traz o tempo desde que a camada 2 abriu.
+#[allow(clippy::too_many_arguments)]
+pub fn conteudo_dica(ui: &mut egui::Ui, icon: &str, title: &str, brief: &str, advanced: &str, atalho: Option<&str>, estagio2: Option<f64>, simples: bool) {
+    ui.set_max_width(320.);
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(title).strong());
+        if let Some(a) = atalho {
+            ui.label(egui::RichText::new(format!("[{a}]")).weak().small());
         }
-        if estagio2 {
-            ui.separator();
-            let t = if shift { now - start } else { now - start - crate::ajuda_cmd::ESTAGIO_2 };
-            if !icon.is_empty() && crate::midia::exibir::tem(icon) {
-                crate::midia::exibir::desenhar(ui, icon, t.max(0.), 300.);
-            } else if !icon.is_empty() {
-                // sem pacote de mídia: a animação feita pelo próprio programa
-                crate::dica_anim::desenhar(ui, icon, t.max(0.), 300.);
-                ui.add_space(4.);
-            }
-            crate::ajuda_cmd::mini_fluxo(ui, advanced);
-        } else if !advanced.is_empty() && !simples {
-            ui.label(egui::RichText::new(tr("(mantenha o mouse para ver o passo a passo)")).small().weak());
+    });
+    if !brief.is_empty() && brief != title {
+        ui.label(brief);
+    }
+    if let Some(t) = estagio2 {
+        ui.separator();
+        if !icon.is_empty() && crate::midia::exibir::tem(icon) {
+            crate::midia::exibir::desenhar(ui, icon, t.max(0.), 300.);
+        } else if !icon.is_empty() {
+            // sem pacote de mídia: a animação feita pelo próprio programa
+            crate::dica_anim::desenhar(ui, icon, t.max(0.), 300.);
+            ui.add_space(4.);
         }
-    })
+        crate::ajuda_cmd::mini_fluxo(ui, advanced);
+    } else if !advanced.is_empty() && !simples {
+        ui.label(egui::RichText::new(tr("(mantenha o mouse para ver o passo a passo)")).small().weak());
+    }
 }
 
 #[cfg(test)]

@@ -7573,6 +7573,14 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 vp.camera.yaw -= delta.x * 0.008;
                 vp.camera.pitch = (vp.camera.pitch + delta.y * 0.008).clamp(-1.5706, 1.5706);
             }
+            // B321: sem nada em foco, setas giram, Shift+setas movem e Page Up/Down aproximam a vista
+            if self.sketch.is_none() && !ctx.egui_wants_keyboard_input() {
+                if let Some(m) = crate::teclado::movimento(ctx.input(crate::teclado::Teclas::ler)) {
+                    vp.stop_anim();
+                    vp.navegou();
+                    crate::teclado::aplicar(&mut vp.camera, m);
+                }
+            }
             // B17: a roda também vale enquanto uma alça 3D é arrastada (o passo do arrasto segue o zoom)
             let ponteiro_na_vista = ctx.input(|i| i.pointer.latest_pos()).filter(|p| rect.contains(*p));
             let arrastando_alca = ctx.dragged_id().is_some_and(|id| id != resp.id) && ponteiro_na_vista.is_some();
@@ -8938,6 +8946,19 @@ impl eframe::App for App {
         if !typing && self.sketch.is_none() && km.pressed(ctx, K::ViewMenu) {
             self.view_menu = !self.view_menu;
         }
+        // B321: Alt+↑/↓ escolhe o comando vizinho na árvore e Enter abre o escolhido (antes do bloco da
+        // sessão: o Enter que conclui não pode reabrir no mesmo quadro)
+        if !typing && self.session.is_none() && self.sketch.is_none() && !asm_mode && !dwg_mode {
+            let t = ctx.input(crate::teclado::Teclas::ler);
+            let atual = if let Sel::Feature(id) = self.sel { Some(id) } else { None };
+            if let Some(passo) = crate::teclado::passo_da_arvore(t) {
+                if let Some(id) = crate::teclado::vizinho_na_arvore(&self.open.doc, atual, passo) {
+                    self.sel = Sel::Feature(id);
+                }
+            } else if let Some(id) = atual.filter(|_| ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.is_none())) {
+                self.open_pending = Some(id);
+            }
+        }
         if self.session.is_some() && !ctx.egui_wants_keyboard_input() {
             if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                 self.conclude_session();
@@ -9776,6 +9797,7 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 ui.add(crate::ui_ext::slider(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
                 ui.checkbox(&mut s.show_labels, tr("mostrar o nome embaixo dos ícones"));
                 ui.checkbox(&mut s.dica_simples, tr("dicas simples (sem animação nem passo a passo)")).on_hover_text(tr("A dica mostra só o nome e a frase do comando. Desligada, parar o mouse sobre um botão mostra também a animação e o passo a passo."));
+                crate::teclado::resumo_ui(ui);
                 ui.separator();
                 ui.label(RichText::new(tr("Seções da árvore")).strong());
                 ui.horizontal_wrapped(|ui| {
