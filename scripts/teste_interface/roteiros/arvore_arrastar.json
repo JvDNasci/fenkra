@@ -1,0 +1,12 @@
+{
+  "descricao": "Caso 1 do B41: arrastar um recurso para cada tipo de pasta da árvore. Exemplo 'Placa paramétrica' aberto pela tela inicial, janela maximizada em 1920x1080 (área cliente 1920x1009), aviso 'De onde você vem?' fechado e 'Grupos vazios' expandido. Cada arraste tira uma captura com o botão ainda apertado (indicador de soltura) e outra depois de soltar. As coordenadas valem para o estado inicial do exemplo; confira a captura antes de cada passo se a árvore mudou.",
+  "passos": [
+    {"acao": "foto", "nome": "arvore_inicio"},
+    {"acao": "arrastar", "x0": 98, "y0": 539, "x1": 105, "y1": 499, "passos": 25, "segurando": "filete_sobre_furos", "nome": "recurso_sobre_recurso"},
+    {"acao": "arrastar", "x0": 110, "y0": 539, "x1": 140, "y1": 499, "passos": 25, "segurando": "furos_sobre_pasta_de_comandos", "nome": "recurso_na_pasta_de_comandos"},
+    {"acao": "arrastar", "x0": 115, "y0": 439, "x1": 112, "y1": 379, "passos": 25, "segurando": "sketch_sobre_geometria", "nome": "sketch_na_pasta_de_geometria"},
+    {"acao": "arrastar", "x0": 75, "y0": 299, "x1": 80, "y1": 359, "passos": 25, "segurando": "parametro_sobre_parametro", "nome": "parametro_reordenado"},
+    {"acao": "arrastar", "x0": 110, "y0": 399, "x1": 150, "y1": 439, "passos": 25, "segurando": "plano_sobre_corpo", "nome": "plano_no_corpo"},
+    {"acao": "arrastar", "x0": 105, "y0": 539, "x1": 110, "y1": 659, "passos": 30, "segurando": "recurso_sobre_capturas", "nome": "recurso_em_capturas"}
+  ]
+}
