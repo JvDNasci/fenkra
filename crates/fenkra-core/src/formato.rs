@@ -29,8 +29,29 @@ pub enum Tipo {
 }
 
 /// Passos de migração por tipo. O passo `i` leva da versão `i + 1` para a `i + 2`.
-/// A peça está na versão 2 (B101); os demais tipos seguem na 1 e têm cadeia vazia.
-const PASSOS_PECA: &[Passo] = &[peca_v1_para_v2];
+/// A peça está na versão 3 (B350); os demais tipos seguem na 1 e têm cadeia vazia.
+const PASSOS_PECA: &[Passo] = &[peca_v1_para_v2, peca_v2_para_v3];
+
+/// Marca de migração B350 em [`crate::Document::migracoes`].
+pub const MIGRACAO_CANTOS_VARREDURA: &str = "B350";
+
+/// v2 -> v3 (B350): a varredura em guia com cantos passou a girar a seção em cada canto, então a
+/// geometria de uma varredura (ou nervura de chapa) gravada antes muda ao abrir. O passo não mexe nos
+/// comandos: só deixa a marca em `migracoes`, para o recompute avisar em cada comando que mudou.
+/// A marca vale só na sessão: [`crate::Document::to_json`] não a grava.
+fn peca_v2_para_v3(v: &mut Value) {
+    let varre = v.get("features").and_then(Value::as_array).is_some_and(|fs| {
+        fs.iter().any(|f| f.get("kind").and_then(Value::as_object).is_some_and(|k| k.contains_key("Sweep") || k.contains_key("SmStamp")))
+    });
+    if varre {
+        if let Some(o) = v.as_object_mut() {
+            let m = o.entry("migracoes").or_insert(Value::Array(vec![]));
+            if let Some(a) = m.as_array_mut() {
+                a.push(Value::from(MIGRACAO_CANTOS_VARREDURA));
+            }
+        }
+    }
+}
 
 /// v1 -> v2 (B101): parâmetros ganham tipo, unidade de exibição, limites e opções, e comandos ganham
 /// supressão por expressão. Todos os campos novos têm padrão, então o passo só declara os padrões

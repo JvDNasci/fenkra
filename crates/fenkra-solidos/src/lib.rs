@@ -4554,7 +4554,11 @@ impl Ctx<'_> {
                     avisos.push(format!("{} perfil(is) aberto(s) do sketch foram descartados: só contornos fechados varrem", sk.open.len()));
                 }
                 if guia_com_cantos(&spine.pts) {
-                    avisos.push(AVISO_GUIA_COM_CANTOS.into());
+                    if w.mode == SweepMode::Fixo {
+                        avisos.push(AVISO_CANTOS_FIXO.into());
+                    } else if self.doc.migracoes.iter().any(|m| m == fenkra_core::formato::MIGRACAO_CANTOS_VARREDURA) {
+                        avisos.push(AVISO_CANTOS_MIGRADO.into());
+                    }
                 }
                 // B301: o perfil deve estar normal à curva no início; o ângulo fora disso entra no aviso
                 if let Some(desvio) = varredura_desvio(&frame.normal, &spine.pts) {
@@ -5062,7 +5066,8 @@ impl Ctx<'_> {
                             self.tools.remove(&f.id);
                             return Err(e);
                         }
-                        Ok(chains.iter().any(|c| guia_com_cantos(c)).then(|| AVISO_GUIA_COM_CANTOS.to_string()))
+                        let migrado = self.doc.migracoes.iter().any(|m| m == fenkra_core::formato::MIGRACAO_CANTOS_VARREDURA);
+                        Ok((migrado && chains.iter().any(|c| guia_com_cantos(c))).then(|| AVISO_CANTOS_MIGRADO.to_string()))
                     }
                     // circular nos pontos: tronco de cone revolvido
                     2 => {
@@ -6180,8 +6185,8 @@ impl Ctx<'_> {
     }
 }
 
-/// A guia vira trechos retos no kernel (mesmo critério de `guia_suave`, em `features.inc`). Nesse caso a
-/// seção não gira nos cantos: cada trecho sai como um prisma inclinado, e o sólido é aprovado (B337).
+/// A guia vira trechos retos no kernel (mesmo critério de `guia_suave`, em `features.inc`). Desde a B350
+/// a seção gira em cada canto com junta de esquadria; só a orientação fixa segue sem girar.
 fn guia_com_cantos(pts: &[[f64; 3]]) -> bool {
     pts.windows(3).any(|q| match (geo3d::unit(geo3d::sub(q[1], q[0])), geo3d::unit(geo3d::sub(q[2], q[1]))) {
         (Some(a), Some(b)) => geo3d::dot(a, b).clamp(-1., 1.).acos() > 0.35,
@@ -6189,7 +6194,8 @@ fn guia_com_cantos(pts: &[[f64; 3]]) -> bool {
     })
 }
 
-const AVISO_GUIA_COM_CANTOS: &str = "a guia tem cantos e a seção não gira neles: depois de cada canto o perfil segue inclinado e o volume fica menor que o de um tubo; use uma guia suave";
+const AVISO_CANTOS_FIXO: &str = "orientação fixa numa guia com cantos: a seção não gira neles e segue inclinada depois de cada canto; use o modo corrigido para a seção acompanhar a guia";
+const AVISO_CANTOS_MIGRADO: &str = "a seção agora gira nos cantos da guia (B350): o volume deste comando mudou em relação ao arquivo gravado por uma versão anterior; confira e salve";
 
 /// Ângulo (graus) entre a normal do plano do perfil e a tangente da guia no primeiro trecho (B301).
 fn varredura_desvio(normal: &[f64; 3], pts: &[[f64; 3]]) -> Option<f64> {

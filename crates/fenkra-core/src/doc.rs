@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 
 /// Versão de formato que o programa grava; vem da cadeia de migração em [`crate::formato`].
-pub const FORMAT_VERSION: u32 = 2;
+pub const FORMAT_VERSION: u32 = 3;
 
 /// Identidade estável de qualquer objeto do documento (RF-NUC-020).
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize, PartialOrd, Ord)]
@@ -4195,6 +4195,10 @@ pub struct Document {
     /// requisitos que a peça declara e `verificar` confere (B418)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub requisitos: Vec<crate::requisitos::Requisito>,
+    /// Migrações aplicadas ao abrir um arquivo antigo que mudam a geometria (ex.: `"B350"`): o
+    /// recompute avisa nos comandos afetados. Só vale na sessão; não é gravado.
+    #[serde(default, skip_serializing)]
+    pub migracoes: Vec<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -4251,6 +4255,7 @@ impl Document {
             rollback: 0,
             atualizacao: ModoAtualizacao::Automatica,
             requisitos: vec![],
+            migracoes: vec![],
             origem: None,
             malhas: Default::default(),
         };
