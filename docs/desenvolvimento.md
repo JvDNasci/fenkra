@@ -172,6 +172,7 @@ preferências do usuário.
 | `FENKRA_DEMO_APRESENTACAO=1` | esconde a origem (planos e eixos) da peça aberta, para a captura sair limpa (B430) |
 | `FENKRA_DEMO_VERIFICAR=1` | abre o painel Verificar requisitos com um requisito de cada tipo (se a peça não declarar nenhum) e já confere (B418) |
 | `FENKRA_SEM_CACHE_FORMA=1` | desliga o cache em disco da conversão da forma livre, para medir ou capturar o progresso (B426); `FENKRA_CACHE_FORMA=<pasta>` troca a pasta do cache |
+| `FENKRA_DEMO_PARAM=1` | na montagem aberta, abre os parâmetros da montagem com o primeiro valor publicado por uma peça já ligado (B409): linha travada com a origem e o botão Soltar |
 | `FENKRA_DEMO_FLEX=1` | na montagem, abre o painel do primeiro subconjunto, com o mecanismo dele (B422) |
 | `FENKRA_ABRIR=<nome ou arquivo>`, `FENKRA_BANCADA=sup` | com um nome, abre o comando ou a anotação com esse nome na peça aberta; com o caminho de um `.fkp`, `.fka` ou `.fkd`, abre o arquivo (B390). `FENKRA_BANCADA=sup` abre a bancada de Superfícies |
 | `FENKRA_EN=1` | interface em inglês |

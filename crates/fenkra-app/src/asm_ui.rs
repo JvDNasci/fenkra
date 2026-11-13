@@ -1564,6 +1564,18 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
         st.sel = st.asm.nodes.iter().find(|n| matches!(n.kind, NodeKind::SubAssembly { .. })).map(|n| n.id);
         st.props = st.sel.is_some();
     }
+    // desenvolvimento: FENKRA_DEMO_PARAM=1 abre os parâmetros da montagem com o primeiro valor
+    // publicado por uma peça já ligado (B409)
+    if !st.props && std::env::var_os("FENKRA_DEMO_PARAM").is_some() {
+        if st.asm.params_ligados.is_empty() {
+            let dir = st.dir();
+            if let Some((a, p, v)) = fenkra_montagem::parametros::disponiveis(&st.asm, dir.as_deref(), &mut st.cache).into_iter().next() {
+                st.asm.importar_parametro(&a, &p, v);
+            }
+        }
+        st.sel = None;
+        st.props = true;
+    }
     if tr_resp.clicked() {
         st.sel = None;
         st.props = true;
