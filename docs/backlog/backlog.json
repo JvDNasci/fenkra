@@ -978,7 +978,7 @@
    "tokens_k": 0,
    "teste": "Manual",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "aguarda você",
    "pct": 0.0
   },
   {
@@ -3572,7 +3572,7 @@
    "tokens_k": 60,
    "teste": "Manual",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "aguarda você",
    "pct": 0.1
   },
   {
@@ -3636,7 +3636,7 @@
    "tokens_k": 40,
    "teste": "Manual",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "aguarda você",
    "pct": 0.0
   },
   {
@@ -3702,7 +3702,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "aguarda você",
    "pct": 0.3
   },
   {
@@ -4600,7 +4600,7 @@
    "tokens_k": 80,
    "teste": "Auto",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "aguarda você",
    "pct": 0.1
   },
   {
@@ -4920,7 +4920,7 @@
    "tokens_k": 350,
    "teste": "Auto",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "aguarda você",
    "pct": 0.3
   },
   {
@@ -5096,7 +5096,7 @@
    "tokens_k": 250,
    "teste": "Auto + Visual",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "aguarda você",
    "pct": 0.2
   },
   {
@@ -5352,7 +5352,7 @@
    "tokens_k": 200,
    "teste": "Visual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "aguarda você",
    "pct": 0.2
   },
   {
@@ -5576,7 +5576,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
-   "status": "em andamento",
+   "status": "aguarda você",
    "pct": 0.3
   },
   {
@@ -5592,7 +5592,7 @@
    "tokens_k": 150,
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
-   "status": "em andamento",
+   "status": "aguarda você",
    "pct": 0.1
   },
   {
@@ -5656,7 +5656,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
-   "status": "em andamento",
+   "status": "aguarda você",
    "pct": 0.3
   },
   {
@@ -5993,7 +5993,7 @@
    "tokens_k": 60,
    "teste": "Auto",
    "area": "Biblioteca de normas",
-   "status": "em andamento",
+   "status": "aguarda você",
    "pct": 0.1
   },
   {
@@ -6281,7 +6281,7 @@
    "tokens_k": 250,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "aguarda você",
    "pct": 0.2
   },
   {
@@ -6649,7 +6649,7 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
-   "status": "em andamento",
+   "status": "aguarda você",
    "pct": 0.1
   },
   {
@@ -6681,7 +6681,7 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
-   "status": "a fazer",
+   "status": "aguarda você",
    "pct": 0.1
   },
   {

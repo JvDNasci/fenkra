@@ -7,19 +7,19 @@
 :root{
   --paper:#f3f5f7; --sheet:#ffffff; --ink:#16202b; --muted:#5b6774; --line:#d6dce3; --soft:#e9edf1;
   --accent:#d2551e; --accent-ink:#ffffff; --blue:#1f5fa8;
-  --ok:#1d7a46; --ok-bg:#e3f3ea; --part:#9a6400; --part-bg:#fbf0d9; --no:#b3261e; --no-bg:#fbe5e3;
+  --ok:#1d7a46; --ok-bg:#e3f3ea; --part:#9a6400; --part-bg:#fbf0d9; --no:#b3261e; --no-bg:#fbe5e3; --val:#3d5bb8; --val-bg:#e4e9f8;
   --p0:#b3261e; --p1:#d2551e; --p2:#1f5fa8; --p3:#5b6774;
   --display:'Archivo', 'Segoe UI', system-ui, sans-serif; --body:'Source Sans 3', 'Segoe UI', system-ui, sans-serif; --mono:'JetBrains Mono', ui-monospace, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --paper:#11161c; --sheet:#18202a; --ink:#e6ebf0; --muted:#97a3b0; --line:#2b3644; --soft:#202a36;
   --accent:#f0794a; --accent-ink:#1a0d06; --blue:#7fb0e8;
-  --ok:#6fd39b; --ok-bg:#16301f; --part:#f1c46b; --part-bg:#33290f; --no:#f19189; --no-bg:#3a1916;
+  --ok:#6fd39b; --ok-bg:#16301f; --part:#f1c46b; --part-bg:#33290f; --no:#f19189; --no-bg:#3a1916; --val:#9db2f2; --val-bg:#1c2440;
   --p0:#f19189; --p1:#f0794a; --p2:#7fb0e8; --p3:#97a3b0; color-scheme:dark}}
 :root[data-theme="dark"]{
   --paper:#11161c; --sheet:#18202a; --ink:#e6ebf0; --muted:#97a3b0; --line:#2b3644; --soft:#202a36;
   --accent:#f0794a; --accent-ink:#1a0d06; --blue:#7fb0e8;
-  --ok:#6fd39b; --ok-bg:#16301f; --part:#f1c46b; --part-bg:#33290f; --no:#f19189; --no-bg:#3a1916;
+  --ok:#6fd39b; --ok-bg:#16301f; --part:#f1c46b; --part-bg:#33290f; --no:#f19189; --no-bg:#3a1916; --val:#9db2f2; --val-bg:#1c2440;
   --p0:#f19189; --p1:#f0794a; --p2:#7fb0e8; --p3:#97a3b0; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.45;margin:0}
@@ -62,7 +62,7 @@ button.chip:hover{background:color-mix(in srgb,var(--blue) 12%,transparent)}
 .prio.P0{background:var(--p0)} .prio.P1{background:var(--p1)} .prio.P2{background:var(--p2)} .prio.P3{background:var(--p3)}
 .foot{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center;justify-content:space-between;margin-top:8px;font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
 .state{padding:1px 7px;border-radius:10px;background:var(--soft);color:var(--muted)}
-.state.feito{background:var(--ok-bg);color:var(--ok)} .state.andamento{background:var(--part-bg);color:var(--part)}
+.state.feito{background:var(--ok-bg);color:var(--ok)} .state.andamento{background:var(--part-bg);color:var(--part)} .state.valida{background:var(--val-bg);color:var(--val)}
 .tok{display:flex;align-items:center;gap:6px}
 .tok i{display:inline-block;height:6px;background:var(--accent);border-radius:3px;min-width:2px}
 .empty{color:var(--muted);font-size:14px;padding:8px 4px}
@@ -98,7 +98,7 @@ tr.det td{background:var(--soft);font-size:14px}
 .ctl-num span{font-size:13px;color:var(--muted)}
 .ctl-bar{display:flex;height:12px;background:var(--soft);overflow:hidden}
 .ctl-bar i{display:block;height:100%}
-.ctl-bar .f{background:var(--ok)}.ctl-bar .a{background:var(--part)}.ctl-bar .n{background:var(--no)}
+.ctl-bar .f{background:var(--ok)}.ctl-bar .a{background:var(--part)}.ctl-bar .n{background:var(--no)}.ctl-bar .v{background:var(--val)}
 .ctl-leg{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted)}
 .ctl-leg i{display:inline-block;width:10px;height:10px;margin-right:5px}
 .ctl-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px}
@@ -129,6 +129,7 @@ tr.det td{background:var(--soft);font-size:14px}
       <label for="f-area">Área</label><select id="f-area"></select>
       <label for="f-prio">Prioridade</label><select id="f-prio"><option value="">todas</option><option>P0</option><option>P1</option><option>P2</option><option>P3</option></select>
       <label for="f-teste">Teste</label><select id="f-teste"><option value="">todos</option><option>Auto</option><option>Visual</option><option>Manual</option></select>
+      <label for="f-estado">Estado</label><select id="f-estado"><option value="">todos</option><option value="feito">feito</option><option value="em andamento">parcial</option><option value="aguarda você">aguarda você</option><option value="a fazer">a fazer</option></select>
       <input type="search" id="f-busca" placeholder="Buscar no backlog (ex.: rosca, DR-20, CHP-03)" aria-label="Buscar no backlog">
     </div>
     <div class="waves" id="waves"></div>
@@ -174,10 +175,11 @@ $('#stamp').innerHTML = [
 const areas = [...new Set(BACKLOG.itens.map(b => b.area))].sort();
 $('#f-area').innerHTML = '<option value="">todas</option>' + areas.map(a => `<option>${esc(a)}</option>`).join('');
 const maxTok = Math.max(...BACKLOG.itens.map(b => b.tokens_k));
-function stateClass(s){ return s === 'feito' ? 'feito' : s === 'em andamento' ? 'andamento' : '' }
+function stateClass(s){ return s === 'feito' ? 'feito' : s === 'em andamento' ? 'andamento' : s === 'aguarda você' ? 'valida' : '' }
+const ESTADO_TXT = {'feito': 'feito', 'em andamento': 'parcial', 'aguarda você': 'aguarda você', 'a fazer': 'a fazer'};
 function barraCtl(l){
   const t = l.length || 1, n = s => l.filter(b => b.status === s).length;
-  return `<div class="ctl-bar" role="img" aria-label="${n('feito')} feitos, ${n('em andamento')} parciais, ${n('a fazer')} a fazer"><i class="f" style="width:${100 * n('feito') / t}%"></i><i class="a" style="width:${100 * n('em andamento') / t}%"></i><i class="n" style="width:${100 * n('a fazer') / t}%"></i></div>`;
+  return `<div class="ctl-bar" role="img" aria-label="${n('feito')} feitos, ${n('em andamento')} parciais, ${n('aguarda você')} aguardando você, ${n('a fazer')} a fazer"><i class="f" style="width:${100 * n('feito') / t}%"></i><i class="a" style="width:${100 * n('em andamento') / t}%"></i><i class="v" style="width:${100 * n('aguarda você') / t}%"></i><i class="n" style="width:${100 * n('a fazer') / t}%"></i></div>`;
 }
 function linhaCtl(nome, l){
   const f = l.filter(b => b.status === 'feito').length;
@@ -195,26 +197,29 @@ function renderControle(){
       <div><b>${pct}%</b><span>dos itens feitos</span></div>
       <div><b>${abertos.length}</b><span>itens abertos</span></div>
       <div><b>${it.filter(b => b.status === 'em andamento').length}</b><span>parciais</span></div>
+      <div><b>${it.filter(b => b.status === 'aguarda você').length}</b><span>aguardam sua validação</span></div>
+      <div><b>${it.filter(b => b.status === 'a fazer').length}</b><span>a fazer</span></div>
       <div><b>${p0.length}</b><span>abertos P0</span></div>
       <div><b>${fmt(soma(abertos))}</b><span>tokens estimados restantes</span></div>
     </div>
     ${barraCtl(it)}
-    <div class="ctl-leg"><span><i style="background:var(--ok)"></i>feito</span><span><i style="background:var(--part)"></i>parcial</span><span><i style="background:var(--no)"></i>a fazer</span></div>
+    <div class="ctl-leg"><span><i style="background:var(--ok)"></i>feito</span><span><i style="background:var(--part)"></i>parcial</span><span><i style="background:var(--val)"></i>aguarda você</span><span><i style="background:var(--no)"></i>a fazer</span></div>
     <div class="ctl-cols">
       <div><h3>Por onda</h3>${Object.entries(BACKLOG.ondas).map(([o]) => linhaCtl('Onda ' + o, it.filter(b => String(b.onda) === o))).join('')}</div>
       <div><h3>Por bancada, mais abertos primeiro</h3>${porArea.slice(0, 10).map(([a, l]) => linhaCtl(a, l)).join('')}</div>
+      <div><h3>Aguardam sua validação</h3><ul class="ctl-prox">${it.filter(b => b.status === 'aguarda você').map(b => `<li><button data-card="${b.id}"><b>${b.id}</b>${esc(b.titulo)}</button></li>`).join('') || '<li>Nada aguardando você.</li>'}</ul></div>
       <div><h3>Próximos P0</h3><ul class="ctl-prox">${p0.slice(0, 10).map(b => `<li><button data-card="${b.id}"><b>${b.id}</b>${esc(b.titulo)}</button></li>`).join('') || '<li>Nenhum P0 aberto.</li>'}</ul></div>
     </div>`;
   $('#controle').querySelectorAll('[data-card]').forEach(x => x.onclick = () => {
-    ['#f-area', '#f-prio', '#f-teste', '#f-busca'].forEach(q => $(q).value = '');
+    ['#f-area', '#f-prio', '#f-teste', '#f-estado', '#f-busca'].forEach(q => $(q).value = '');
     renderBacklog();
     const c = document.getElementById('card-' + x.dataset.card);
     if (c) { c.scrollIntoView({block: 'center'}); c.focus(); }
   });
 }
 function renderBacklog(){
-  const area = $('#f-area').value, prio = $('#f-prio').value, teste = $('#f-teste').value, q = $('#f-busca').value.trim().toLowerCase();
-  const ok = b => (!area || b.area === area) && (!prio || b.prio === prio) && (!teste || b.teste.includes(teste)) &&
+  const area = $('#f-area').value, prio = $('#f-prio').value, teste = $('#f-teste').value, estado = $('#f-estado').value, q = $('#f-busca').value.trim().toLowerCase();
+  const ok = b => (!area || b.area === area) && (!prio || b.prio === prio) && (!estado || b.status === estado) && (!teste || b.teste.includes(teste)) &&
     (!q || [b.id, b.titulo, b.oque, b.area, ...b.origem, ...b.catalogo].join(' ').toLowerCase().includes(q));
   $('#waves').innerHTML = Object.entries(BACKLOG.ondas).map(([o, w]) => {
     const itens = BACKLOG.itens.filter(b => String(b.onda) === o).sort((a, b) => a.prio.localeCompare(b.prio) || a.id.localeCompare(b.id));
@@ -231,11 +236,11 @@ function renderBacklog(){
             ${b.origem.map(x => `<span class="chip">${esc(x)}</span>`).join('')}
             ${b.catalogo.map(x => `<button class="chip" data-feat="${x}" title="${esc(featById[x]?.nome)}">${x}</button>`).join('')}</div>
           <div class="foot"><span class="tok"><i style="width:${Math.round(60 * b.tokens_k / maxTok)}px"></i>${b.tokens_k} k · ${String(b.pct).replace('.', ',')}%</span>
-            <span>${esc(b.teste)}</span><span class="state ${stateClass(b.status)}">${esc(b.status)}</span></div>
+            <span>${esc(b.teste)}</span><span class="state ${stateClass(b.status)}">${esc(ESTADO_TXT[b.status] || b.status)}</span></div>
         </article>`).join('') || '<div class="empty">Nenhum item com esses filtros.</div>'}</div></div>`;
   }).join('');
 }
-['#f-area', '#f-prio', '#f-teste'].forEach(s => $(s).addEventListener('change', renderBacklog));
+['#f-area', '#f-prio', '#f-teste', '#f-estado'].forEach(s => $(s).addEventListener('change', renderBacklog));
 $('#f-busca').addEventListener('input', renderBacklog);
 
 // ---------- comparador
@@ -301,7 +306,7 @@ $('#waves').addEventListener('click', ev => {
   document.querySelector(`tr.feat[data-id="${f.id}"]`)?.focus();
 });
 function irParaCard(id){
-  $('#f-area').value = ''; $('#f-prio').value = ''; $('#f-teste').value = ''; $('#f-busca').value = '';
+  $('#f-area').value = ''; $('#f-prio').value = ''; $('#f-teste').value = ''; $('#f-estado').value = ''; $('#f-busca').value = '';
   renderBacklog(); aba('backlog');
   const el = document.getElementById('card-' + id);
   if (el) { el.scrollIntoView({block: 'center'}); el.focus(); }
