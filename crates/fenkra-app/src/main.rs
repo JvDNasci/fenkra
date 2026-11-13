@@ -191,6 +191,8 @@ mod st_placas_ui;
 mod st_solda_ui;
 mod biblioteca_ui;
 mod reparo_ui;
+#[cfg(test)]
+mod checklist_solidos;
 mod textos_montagem;
 mod textos_montagem3;
 mod textos_montagem4;

@@ -44,4 +44,5 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("candidatas no 3D:", "candidates in 3D:"),
     ("Usar esta candidata: o comando passa a apontar para ela (a mais provável é a 1).", "Use this candidate: the command now points to it (the most likely is number 1)."),
     ("clique para usar esta candidata", "click to use this candidate"),
+    ("Face-face", "Face to face"),
 ];
