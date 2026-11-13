@@ -8,6 +8,7 @@ publish.workspace = true
 
 [dependencies]
 fenkra-core = { path = "../fenkra-core" }
+fenkra-desenho = { path = "../fenkra-desenho" }
 fenkra-dxf = { path = "../fenkra-dxf" }
 fenkra-kernel = { path = "../fenkra-kernel" }
 fenkra-malha = { path = "../fenkra-malha" }

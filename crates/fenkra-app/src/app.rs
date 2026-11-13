@@ -28,6 +28,7 @@ mod demo_janelas;
 mod painel_peca;
 mod demo_pmi;
 mod demo_estrutural;
+mod demo_folha2d;
 mod estado_doc;
 mod exportar;
 mod visualizacao;
@@ -941,6 +942,8 @@ impl App {
         }
         // desenvolvimento: FENKRA_DEMO_GOMOS e FENKRA_DEMO_SOLDA (casos da bancada Estrutural)
         app.demo_estrutural();
+        // desenvolvimento: FENKRA_DEMO_FOLHA2D=<arquivo|1> abre um DXF, DWG ou SVG como desenho (B211)
+        app.demo_folha2d();
         // desenvolvimento: FENKRA_EDITAR=<nome> abre esse comando como ambiente ao iniciar (depois das peças de demonstração)
         if let Ok(name) = std::env::var("FENKRA_EDITAR") {
             if let Some(id) = app.open.doc.features.iter().find(|f| f.name == name).map(|f| f.id) {

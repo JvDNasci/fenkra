@@ -10,6 +10,7 @@ pub mod arvore;
 mod conjunto;
 mod documento;
 mod dxf;
+pub mod folha;
 mod formato;
 mod importar;
 pub mod impressao;

@@ -142,6 +142,7 @@ mod textos_biblioteca5;
 mod textos_biblioteca6;
 mod textos_biblioteca7;
 mod textos_conversor;
+mod textos_dwg_dxf;
 mod textos_formatos;
 mod textos_visualizacao;
 mod assoc_fkv;
