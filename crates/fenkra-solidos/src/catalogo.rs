@@ -71,7 +71,7 @@ pub fn cabeca_de(f: &Familia) -> Cabeca {
         TipoFixador::ParafusoSextavado => Cabeca::Sextavada,
         TipoFixador::ParafusoCruz => Cabeca::Panela,
         TipoFixador::Rebite => Cabeca::Abaulada,
-        TipoFixador::PatimLinear | TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas => Cabeca::Nenhuma,
+        TipoFixador::PatimLinear | TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas | TipoFixador::TerminalRotular => Cabeca::Nenhuma,
         TipoFixador::Porca | TipoFixador::Arruela | TipoFixador::Rolamento | TipoFixador::Prisioneiro | TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear => Cabeca::Nenhuma,
     }
 }
@@ -79,7 +79,7 @@ pub fn cabeca_de(f: &Familia) -> Cabeca {
 /// Polegada quando a designação do tamanho não é métrica ("1/4-20 UNC", "#10-32", "-06").
 pub fn sistema_de(f: &Familia) -> Sistema {
     // rolamento se designa pela série ("6005"), mas as medidas são em milímetros
-    if matches!(f.tipo, TipoFixador::Rolamento | TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::PatimLinear | TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas) {
+    if matches!(f.tipo, TipoFixador::Rolamento | TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::PatimLinear | TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas | TipoFixador::TerminalRotular) {
         return Sistema::Metrico;
     }
     // "M" seguido de algarismo: "MS21042L3" é polegada, embora comece com M
@@ -250,6 +250,7 @@ fn ordem_do_tipo(t: TipoFixador) -> u8 {
         TipoFixador::PatimLinear => 10,
         TipoFixador::PorcaEsferas => 11,
         TipoFixador::FusoEsferas => 12,
+        TipoFixador::TerminalRotular => 13,
     }
 }
 
@@ -274,6 +275,13 @@ pub fn nome_da_cota(tipo: TipoFixador, simbolo: &str) -> &'static str {
         (TipoFixador::PorcaEsferas, "W") => "círculo dos furos do flange",
         (TipoFixador::PorcaEsferas, "H") => "distância entre as faces do flange",
         (TipoFixador::PorcaEsferas, "X") => "diâmetro dos furos do flange",
+        (TipoFixador::TerminalRotular, "dk") => "diâmetro externo da carcaça",
+        (TipoFixador::TerminalRotular, "C1") => "espessura da carcaça (ilustrativa)",
+        (TipoFixador::TerminalRotular, "dE") => "diâmetro da esfera",
+        (TipoFixador::TerminalRotular, "B") => "largura da esfera",
+        (TipoFixador::TerminalRotular, "h") => "do centro da esfera ao fim da rosca",
+        (TipoFixador::TerminalRotular, "dh") => "diâmetro da haste (ilustrativo)",
+        (TipoFixador::TerminalRotular, "l1") => "comprimento da rosca",
         (TipoFixador::PatimLinear, "H") => "altura da base do trilho ao topo do bloco",
         (TipoFixador::PatimLinear, "H1") => "folga da base do trilho ao bloco",
         (TipoFixador::PatimLinear, "N") => "da lateral do trilho à do bloco",
@@ -531,8 +539,8 @@ mod testes {
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Panela), ..Default::default() }), 1);
         // 5 porcas, 4 arruelas, 2 prisioneiros e os rolamentos (60, 62, 63, 68, 69, 160, 72, NU2 e 302) o cilindro ISO 15552 e o trilho HGR
         // e as três porcas aeronáuticas, o minicilindro ISO 6432 e a porca do nariz dele
-        // e o patim, a porca e o fuso de esferas (B46)
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 30);
+        // e o patim, a porca e o fuso de esferas (B46) e o terminal rotular (B397)
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 31);
         assert_eq!(f(Filtro { material: Some("Aço".into()), ..Default::default() }), familias().len());
         assert_eq!(f(Filtro { material: Some("Aço inoxidável".into()), ..Default::default() }), 0);
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 4);
@@ -546,7 +554,7 @@ mod testes {
         let a = arvore(&todas);
         let total: usize = a.iter().flat_map(|n| &n.tipos).map(|t| t.familias.len()).sum();
         assert_eq!(total, familias().len());
-        assert_eq!(a.iter().map(|n| n.entidade.as_str()).collect::<Vec<_>>(), ["AN", "ASME", "DIN", "Hiwin", "ISO", "MS"]);
+        assert_eq!(a.iter().map(|n| n.entidade.as_str()).collect::<Vec<_>>(), ["AN", "ASME", "DIN", "Fenkra", "Hiwin", "ISO", "MS"]);
         let iso = a.iter().find(|n| n.entidade == "ISO").unwrap();
         assert_eq!(iso.tipos[0].tipo, TipoFixador::ParafusoAllen);
     }

@@ -45,6 +45,7 @@ pub mod catalogo;
 pub mod fixadores;
 pub mod rolamentos;
 pub mod pneumatica;
+pub mod terminal_rotular;
 pub mod rebites;
 pub mod guias;
 pub mod engrenagens;

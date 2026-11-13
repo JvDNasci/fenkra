@@ -140,6 +140,9 @@ mod tests {
             let r = tamanho("hiwin_hgr", &format!("HGR{}R", b.diametro_nominal().unwrap())).unwrap();
             assert_eq!((r.valor("WR"), r.valor("HR")), (Some(v("WR")), Some(v("HR"))), "{}", b.designacao);
         }
+        // B17-dados: L do HGH15CA fica 61,4 (fabricante, LM76 e distribuidor), não 60,5
+        let b15 = tamanho("hiwin_hgh", "HGH15CA").unwrap();
+        assert_eq!((b15.valor("L"), b15.valor("L1")), (Some(61.4), Some(39.4)));
         let b = tamanho("hiwin_hgh", "HGH45HA").unwrap();
         assert_eq!((b.valor("H"), b.valor("W"), b.valor("C"), b.valor("L")), (Some(70.), Some(86.), Some(80.), Some(171.2)));
         // porca DIN 69051-5 32x10: D 50, flange 80 × 12, faces a 62, L 90

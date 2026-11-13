@@ -444,10 +444,16 @@ fn linha_familia(ui: &mut egui::Ui, est: &Estado, f: &Familia, tamanho: Option<&
     let estrela = if est.prefs.e_favorita(&f.id) { "★ " } else { "" };
     let sufixo = tamanho.map(|t| format!(" · {t}")).unwrap_or_default();
     let texto = format!("{estrela}{} · {}{sufixo}", f.norma, tr(f.tipo.rotulo()));
-    if ui.selectable_label(sel, texto).on_hover_text(f.nome.as_str()).clicked() {
+    // família ilustrativa (B397): a dica diz que as medidas não vêm de norma nem de catálogo
+    let dica = if f.ilustrativo { format!("{}
+{}", f.nome, tr(AVISO_ILUSTRATIVO)) } else { f.nome.clone() };
+    if ui.selectable_label(sel, texto).on_hover_text(dica).clicked() {
         *escolha = Some((f.id.clone(), tamanho.map(str::to_string)));
     }
 }
+
+/// Aviso das famílias com medidas ilustrativas (B397), na dica da lista e na ficha.
+const AVISO_ILUSTRATIVO: &str = "Medidas ilustrativas: escolhidas pelo Fenkra para a peça ter forma coerente, sem norma nem catálogo. Meça a peça comprada antes de fabricar.";
 
 fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
     let Some((fam, _)) = est.escolhida() else {
@@ -470,6 +476,9 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
         ui.label(RichText::new(format!("{} · {}", ficha.norma, ficha.revisao)).strong());
     });
     ui.label(RichText::new(&ficha.titulo).small());
+    if fam.ilustrativo {
+        ui.label(RichText::new(tr("⚠ Medidas ilustrativas")).small().color(crate::theme::st_warn())).on_hover_text(tr(AVISO_ILUSTRATIVO));
+    }
     ui.label(RichText::new(format!("{} · {} · {}", tr(ficha.sistema.rotulo()), ficha.material, tr(ficha.cabeca.rotulo()))).small().weak());
     let tamanho_atual = est.tamanho.clone().unwrap_or_default();
     let linha_atual = ficha.linhas.iter().find(|l| l.designacao == tamanho_atual).or(ficha.linhas.first());
@@ -897,6 +906,25 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
             if let Some(pp) = valor("P") {
                 notas.push((format!("P {}", fmt(pp)), 3.));
             }
+        }
+        TipoFixador::TerminalRotular => {
+            // vista de frente: carcaça Ø dk com a esfera e o furo, haste dh e rosca d para baixo
+            let v = |s: &str, padrao: f64| valor(s).unwrap_or(padrao);
+            let (dk, de, h, dh, l1) = (v("dk", d * 3.), v("dE", d * 2.), v("h", d * 4.5), v("dh", d * 1.2), v("l1", d * 2.5));
+            let esc = (110. / (h + dk / 2.) as f32).min(90. / dk as f32);
+            let cx = rect.left() + 55.;
+            let cy = rect.top() + 8. + dk as f32 * esc / 2.;
+            let r = |m: f64| m as f32 * esc / 2.;
+            let alt = |m: f64| m as f32 * esc;
+            p.circle_stroke(Pos2::new(cx, cy), r(dk), traco);
+            p.circle_stroke(Pos2::new(cx, cy), r(de), fino);
+            p.circle_stroke(Pos2::new(cx, cy), r(d), traco);
+            p.rect_stroke(Rect::from_two_pos(Pos2::new(cx - r(dh), cy + r(dk)), Pos2::new(cx + r(dh), cy + alt(h - l1))), 0., traco, egui::StrokeKind::Middle);
+            p.rect_stroke(Rect::from_two_pos(Pos2::new(cx - r(d), cy + alt(h - l1)), Pos2::new(cx + r(d), cy + alt(h))), 0., traco, egui::StrokeKind::Middle);
+            p.line_segment([Pos2::new(cx, cy - r(dk) - 4.), Pos2::new(cx, cy + alt(h) + 6.)], fino);
+            notas.push((format!("d {}", fmt(d)), 0.));
+            notas.push((format!("dk {}", fmt(dk)), 1.));
+            notas.push((format!("h {}", fmt(h)), 2.));
         }
         TipoFixador::Arruela => {
             let (d1, d2, h) = (valor("d1").unwrap_or(d), valor("d2").unwrap_or(d * 2.), valor("h").unwrap_or(d * 0.2));

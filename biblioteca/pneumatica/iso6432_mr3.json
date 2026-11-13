@@ -3,7 +3,7 @@
  "nome": "Porca de fixação do nariz do minicilindro (ISO 6432, montagem MR3)",
  "norma": "ISO 6432",
  "revisao": "1985",
- "versao": 1,
+ "versao": 2,
  "gerador": "porca",
  "nivel": "C",
  "licenca": "CC BY 4.0 (dados)",
@@ -15,6 +15,11 @@
   {
    "rotulo": "Metalwork — minicilindros ISO 6432 Ø8 a Ø25, tabela de dimensões (KW e KV da porca do nariz)",
    "url": "https://docs.pneumatiek.nl/pdf/metalwork/cilinder/rondcilinder_iso6432_metal_work.pdf"
+  },
+  {
+   "rotulo": "Aventics (Emerson) — porcas MR3 para fixação de cilindros, tabela de dimensões BE, KV e KW",
+   "url": "https://www.thepneumaticstore.com/images/pdf/Aventics%20Nuts%20for%20Cylinder%20Mounting%20Catalog.pdf",
+   "pagina": "3"
   }
  ],
  "campos": [
@@ -52,8 +57,8 @@
     "s": 32,
     "m": 11
    },
-   "confirmado_por": 1,
-   "nota": "Porca do nariz BE M22x1,5 dos minicilindros Ø20 e Ø25. Chave KV 32 na norma e na Metalwork. PENDENTE: a altura KW diverge (norma: até 11; Metalwork: 7); o modelo usa o máximo da norma até uma segunda fonte decidir."
+   "confirmado_por": 2,
+   "nota": "Porca do nariz BE M22x1,5 dos minicilindros Ø20 e Ø25. Chave KV 32 na norma e na Metalwork. Altura KW 11 (B17-dados): a norma dá até 11 e a porca de aço inoxidável da Aventics com chave 32 tem 11; a Metalwork (KW 7) e a porca galvanizada da Aventics (KV 30, KW 7) são variantes mais finas. Escolhido 11 porque é o par KV 32 com KW 11 que duas fontes trazem juntos, e cabe no nariz (WF/2 = 12 no Ø20)."
   }
  ]
 }

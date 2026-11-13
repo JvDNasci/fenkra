@@ -757,7 +757,7 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         }
         t.caixa_solta = std::env::var("FENKRA_DEMO_TRANS").is_ok_and(|v| v == "caixa_solta");
         if std::env::var("FENKRA_DEMO_TRANS").is_ok_and(|v| v == "corrente_219") {
-            // B395: a transmissão do kart, pinhão de 11 e coroa de 82 na corrente 219 (largura provisória)
+            // B395: a transmissão do kart, pinhão de 11 e coroa de 82 na corrente 219 (largura interna 4,6 mm, decisão do usuário)
             t.corrente = "219".into();
             t.z1 = 11;
             t.z2 = 82;
