@@ -286,6 +286,8 @@ pub struct App {
     roda: crate::roda::Roda,
     /// novo sketch esperando o clique no plano/face
     pub sketch_wait_plane: bool,
+    /// B59: modo Scan ligado, com a posição da barra de fim de peça a que ele volta
+    pub scan_volta: Option<usize>,
     /// árvore aberta ao lado do painel do comando
     /// área sob a barra superior, onde a viewport e os painéis ficam
     pub area_util: Rect,
@@ -499,6 +501,7 @@ impl App {
             pmi_pending: None,
             pmi_focus: None,
             sketch_wait_plane: false,
+            scan_volta: None,
             area_util: Rect::NOTHING,
             arvore: crate::tree_ui::VistaArvore::default(),
             arvore_com_roda: false,
@@ -1594,6 +1597,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         if crate::asm_ui::salvar_peca_pendente(self) {
             return;
         }
+        // o Scan só olha: o arquivo grava a peça na posição de antes dele
+        crate::scan::sair(self);
         if self.open.doc.retrocedida() {
             self.toast(tr("Peça salva retrocedida: os comandos depois do objeto em trabalho ficam inativos até você voltar ao fim."), false);
         }
@@ -7438,11 +7443,31 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if ui.small_button(tr("⟳ Atualizar")).on_hover_text(tr("recalcula o que mudou (F5)")).clicked() {
                     self.send_recompute(false);
                 }
-                if let Some(nome) = self.open.doc.objeto_em_trabalho().map(|id| self.open.doc.name_of(id)).filter(|_| crate::barra_estado::mostra_historico(self.sem_peca_em_edicao())) {
+                // no Scan o objeto em trabalho é o de antes dele, não o comando que se está olhando
+                let em_trabalho = match self.scan_volta {
+                    Some(v) => {
+                        let d = &self.open.doc;
+                        d.features[..v.min(d.features.len())].iter().rev().find(|f| !d.is_free(f)).map(|f| f.id)
+                    }
+                    None => self.open.doc.objeto_em_trabalho(),
+                };
+                if let Some(nome) = em_trabalho.map(|id| self.open.doc.name_of(id)).filter(|_| crate::barra_estado::mostra_historico(self.sem_peca_em_edicao())) {
                     ui.separator();
                     ui.label(RichText::new(format!("{}: {nome}", tr("Em trabalho"))).small());
                 }
-                if self.open.doc.retrocedida() && ui.small_button(tr("Voltar ao fim da peça")).clicked() {
+                // B59: modo Scan, percorre o histórico sem mudar o objeto em trabalho
+                if crate::barra_estado::mostra_historico(self.sem_peca_em_edicao()) {
+                    let ligado = self.scan_volta.is_some();
+                    if ui.add(egui::Button::new(RichText::new(tr("🔍 Scan")).small()).selected(ligado)).on_hover_text(tr("Scan: escolha comandos na árvore (clique ou setas) para ver a peça como estava em cada um. O objeto em trabalho não muda; ao desligar, a peça volta.")).clicked() {
+                        crate::scan::alternar(self);
+                    }
+                    if ligado {
+                        if let Some(n) = self.open.doc.rollback.checked_sub(1).and_then(|i| self.open.doc.features.get(i)).map(|f| f.name.clone()) {
+                            ui.label(RichText::new(format!("{} {n}", tr("Scan ligado: vendo a peça até"))).small().color(ui.visuals().warn_fg_color));
+                        }
+                    }
+                }
+                if self.scan_volta.is_none() && self.open.doc.retrocedida() && ui.small_button(tr("Voltar ao fim da peça")).clicked() {
                     self.open.doc.voltar_ao_fim_da_peca();
                 }
                 if ui.small_button(tr("⟲ Reconstruir")).on_hover_text(tr("reconstrói tudo do zero, sem cache (Ctrl+F5)")).clicked() {
@@ -7882,7 +7907,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                             ui.painter().text(h + egui::vec2(14., 18.), egui::Align2::LEFT_TOP, format!("{i}/{n}  {}", tr("Alt + roda: selecionar outro")), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), cor);
                         }
                         let caixas = self.asm.as_ref().filter(|_| self.in_asm()).map(|s| s.caixas.as_slice());
-                        outro.or_else(|| crate::picking::pick_com_caixas(r, doc, &cam, rect, h, &filt, caixas))
+                        // B59: ao criar sketch, planos vêm antes das faces
+                        let plano = if self.sketch_wait_plane { crate::picking::plano_primeiro(r, doc, &cam, rect, h, &filt) } else { None };
+                        outro.or(plano).or_else(|| crate::picking::pick_com_caixas(r, doc, &cam, rect, h, &filt, caixas))
                     }
                     _ => {
                         self.selecao_ciclo.reiniciar();
@@ -9352,6 +9379,7 @@ impl eframe::App for App {
                 }
             }
         }
+        crate::scan::quadro(self);
         if let Some(id) = self.begin_sketch_pending.take() {
             self.begin_sketch(id);
         }
