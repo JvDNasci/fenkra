@@ -169,7 +169,7 @@ impl App {
             ui.label(RichText::new(format!("{} ({})", tr("Ramos"), ramos.len())).strong());
         });
         cab.response.on_hover_text(tr("Em vez de travar a peça, cada pessoa trabalha num ramo. A linha principal só recebe um ramo depois de um pedido de mesclagem aprovado."));
-        egui::CollapsingHeader::new(tr("Ramos e mesclagem")).id_salt(("ramos", sel)).default_open(!ramos.is_empty()).show(ui, |ui| {
+        egui::CollapsingHeader::new(tr("Ramos e mesclagem")).id_salt(("ramos", sel)).default_open(!ramos.is_empty() || std::env::var("FENKRA_DEMO_SECOES").is_ok()).show(ui, |ui| {
             // linha principal, sempre presente
             ui.horizontal(|ui| {
                 let na_principal = ativo.is_none();
@@ -224,7 +224,7 @@ impl App {
             }
             ui.add(egui::TextEdit::singleline(&mut st.mensagem).hint_text(tr("Mensagem do pedido de mesclagem")).desired_width(260.));
             ui.add(egui::TextEdit::singleline(&mut st.motivo).hint_text(tr("Motivo da revisão (opcional)")).desired_width(260.));
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.add(egui::TextEdit::singleline(&mut st.novo).hint_text(tr("Nome do novo ramo")).desired_width(160.));
                 let ok = !st.novo.trim().is_empty();
                 if ui.add_enabled(ok, egui::Button::new(tr("Criar ramo"))).on_hover_text(tr("Abre um ramo a partir da versão atual da principal")).clicked() {
