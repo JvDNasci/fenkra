@@ -435,6 +435,7 @@ impl<'a> Ctx<'a> {
             steps: HashMap::new(),
             miter_next: false,
             promoted: RefCell::new(None),
+            aviso_cantos: RefCell::new(None),
         }
     }
 }

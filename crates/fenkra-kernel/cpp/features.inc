@@ -261,7 +261,7 @@ TopoDS_Wire guia_em_trechos(const std::vector<gp_Pnt>& p) {
         }
         TColgp_Array1OfPnt arr(1, int(b - a + 1));
         for (size_t i = a; i <= b; ++i) arr.SetValue(int(i - a) + 1, p[i]);
-        GeomAPI_PointsToBSpline bs(arr, 3, 8, GeomAbs_C2, 1e-4);
+        GeomAPI_PointsToBSpline bs(arr, 3, 3, GeomAbs_C2, 1e-4);  // cúbica: não ondula entre amostras densas
         w.Add(BRepBuilderAPI_MakeEdge(bs.Curve()).Edge());
     }
     if (!w.IsDone()) throw std::runtime_error("curva guia inválida");
@@ -355,15 +355,22 @@ std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> s
         TopoDS_Shape out;
         // Guia com cantos (B350): a seção gira em cada canto. Orientação fixa pedida pela pessoa segue
         // sem girar, pelo caminho de sempre.
-        if (c.IsNull() && mode != 1) {
+        // guia de dois pontos (reta) também chega aqui sem curva suave: só canto de verdade vai à esquadria
+        bool tem_canto = false;
+        for (size_t i = 1; i + 1 < spine.size() / 3; ++i) {
+            const gp_Vec a(P3(spine, i - 1), P3(spine, i)), b(P3(spine, i), P3(spine, i + 1));
+            if (a.Magnitude() > 1e-9 && b.Magnitude() > 1e-9 && a.Angle(b) > 0.35) tem_canto = true;
+        }
+        if (c.IsNull() && tem_canto && mode != 1) {
             if (varre_cantos(spine, face.s, out)) return wrap(out);
             // Polilinha densa (amostra de uma curva apertada) em que a esquadria não fecha: a curva suave
             // pelos mesmos pontos, com o mesmo portão de dobra e a mesma escada da guia suave.
+            // (só polilinha densa: numa de poucos pontos os cantos são de verdade e arredondá-los mudaria a peça)
             const size_t n = spine.size() / 3;
-            if (n > 3) {
+            if (n >= 24) {
                 TColgp_Array1OfPnt arr(1, int(n));
                 for (size_t i = 0; i < n; ++i) arr.SetValue(int(i) + 1, P3(spine, i));
-                GeomAPI_PointsToBSpline bs(arr, 3, 8, GeomAbs_C2, 1e-4);
+                GeomAPI_PointsToBSpline bs(arr, 3, 3, GeomAbs_C2, 1e-4);  // cúbica: não ondula entre amostras densas
                 if (bs.IsDone()) {
                     Handle(Geom_BSplineCurve) cs = bs.Curve();
                     const double raio = raio_minimo(cs), alcance = alcance_do_perfil(face.s, cs->StartPoint(), cs->Poles());

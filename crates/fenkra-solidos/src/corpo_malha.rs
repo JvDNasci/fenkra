@@ -431,6 +431,7 @@ fn com_contexto<R>(doc: &Document, f: impl FnOnce(&Ctx) -> R) -> Option<R> {
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
     for g in doc.active_features().map(|(_, g)| g) {
         let _ = cx.run(g);

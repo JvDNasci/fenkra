@@ -57,6 +57,7 @@ pub fn member_frames(doc: &Document, id: Id) -> Vec<MemberFrame> {
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     };
     let Ok(geo) = cx.members(m) else { return vec![] };
     let num = |e: &str| ev(e, &cx.vars, "").unwrap_or(0.);

@@ -170,6 +170,7 @@ fn contexto_vazio<'a>(doc: &'a Document, vars: Vars) -> Ctx<'a> {
         steps: HashMap::new(),
         miter_next: false,
         promoted: RefCell::new(None),
+        aviso_cantos: RefCell::new(None),
     }
 }
 

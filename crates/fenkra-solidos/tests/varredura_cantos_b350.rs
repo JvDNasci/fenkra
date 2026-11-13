@@ -61,6 +61,20 @@ fn guia_em_u_e_guia_3d_seguem_a_secao() {
     confere_tubo("suave", &[[0., 0., 0.], [50., 0., 0.], [93.3, 25., 0.]], &[2.]);
 }
 
+/// Guia reta de dois pontos não tem canto: segue pelo caminho de sempre (não pela esquadria).
+#[test]
+fn guia_reta_de_dois_pontos_continua_varrendo() {
+    if !kernel_disponivel() {
+        return;
+    }
+    confere_tubo("reta", &[[0., 0., 0.], [60., 0., 0.]], &[2.]);
+    for modo in [0u8, 1, 2] {
+        let p = [[0., 0., 0.], [0., 0., 40.]];
+        let s = perfil(&p, &[3.]).sweep(&p, modo).unwrap_or_else(|e| panic!("modo {modo}: {}", e.0));
+        assert!((s.mass().volume - PI * 9. * 40.).abs() < 0.05, "modo {modo}: {}", s.mass().volume);
+    }
+}
+
 #[test]
 fn perfil_com_furo_vira_tubo_oco_nos_cantos() {
     if !kernel_disponivel() {
@@ -139,4 +153,25 @@ fn arquivo_antigo_migra_e_avisa_uma_vez() {
     let mut j: serde_json::Value = serde_json::from_str(&Document::new("vazia").to_json()).unwrap();
     j["format_version"] = 2.into();
     assert!(Document::from_json(&j.to_string()).unwrap().migracoes.is_empty());
+}
+
+/// Zigue-zague 3D com o perfil fora do centro e inclinado: se a esquadria não fecha, o comando não cai
+/// em erro nem sai calado; refaz com orientação fixa e avisa.
+#[test]
+fn quando_a_esquadria_nao_fecha_o_comando_avisa_e_segue() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let mut d = Document::new("zigue");
+    let pts: Vec<[f64; 3]> = (0..14).map(|i| [10. * i as f64, if i % 3 == 0 { 0.9 } else { -0.4 }, if i % 2 == 0 { 0. } else { 10. }]).collect();
+    let g = d.add_geometry(RefKind::Polyline { points: pts.into_iter().map(PointRef::Fixed).collect(), closed: false });
+    let perfil = sk_circulos(&mut d, PlaneRef::Origin(OriginPlane::YZ), &[([0., 0.], 1.)]);
+    let id = d.add_feature(FeatureKind::Sweep(Sweep { sketch: perfil, spine: CurveRef::Ref(g), mode: SweepMode::Corrigido, op: BoolOp::Add, thin: None }));
+    let r = recompute(&d);
+    match &r.status[&id] {
+        Status::Ok => {}
+        Status::Warning(m) => assert!(m.contains("orientação fixa") || m.contains("normal"), "{m}"),
+        outro => panic!("{outro:?}"),
+    }
+    assert!(volume_total(&r) > 0.);
 }
