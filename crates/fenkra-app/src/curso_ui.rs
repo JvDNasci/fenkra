@@ -57,7 +57,7 @@ impl CursoUi {
             self.base_mudou = None;
             return vec![];
         };
-        let agora: Vec<(u64, String)> = doc.features.iter().filter(|f| !f.suppressed && curso::etiqueta(&f.kind) == etq).map(|f| (f.id.0, serde_json::to_string(&f.kind).unwrap_or_default())).collect();
+        let agora = curso::valores_da_etiqueta(doc, etq);
         match &self.base_mudou {
             Some((aula, passo, antes)) if *aula == a.id && *passo == i => {
                 let mudou = antes.iter().any(|(id, x)| agora.iter().any(|(j, y)| j == id && y != x));
@@ -791,6 +791,47 @@ mod testes {
         let alt = st.alterados(&s, &d);
         assert_eq!(alt, vec!["extrusao"]);
         s.curso.sincronizar(a, &Contexto { alterados: &alt, ..Contexto::so_documento(&d) });
+        assert!(s.curso.concluida(a));
+    }
+
+    /// B323: "ajuste os pontos da curva" fica verde quando um ponto da spline sai do lugar, sem
+    /// "já fiz"; criar outra coisa não conta.
+    #[test]
+    fn ajustar_a_curva_cumpre_o_passo_sozinho() {
+        use fenkra_core::{PointRef, RefKind};
+        let mut st = CursoUi::default();
+        let mut s = Settings::default();
+        let a = curso::aula("sup_curvas").unwrap();
+        st.abrir_aula(a, &mut s);
+        let mut d = fenkra_core::Document::new("curvas");
+        let pts = vec![PointRef::Fixed([0., 0., 0.]), PointRef::Fixed([40., 20., 0.]), PointRef::Fixed([80., 0., 0.])];
+        let sp = d.add_geometry(RefKind::Spline { points: pts, closed: false, tangents: vec![] });
+        s.curso.sincronizar(a, &Contexto::so_documento(&d));
+        assert_eq!(s.curso.proximo_passo(a), Some(1), "a spline cumpre o primeiro passo");
+        assert!(st.alterados(&s, &d).is_empty(), "o primeiro quadro só guarda");
+        d.add_offset_plane(fenkra_core::PlaneRef::Origin(fenkra_core::OriginPlane::XY), "10");
+        assert!(st.alterados(&s, &d).is_empty(), "plano novo não é ajuste da curva");
+        let r = d.references.iter_mut().find(|r| r.id == sp).unwrap();
+        if let RefKind::Spline { points, .. } = &mut r.kind {
+            points[1] = PointRef::Fixed([40., 12., 0.]);
+        }
+        let alt = st.alterados(&s, &d);
+        assert_eq!(alt, vec!["curva"]);
+        s.curso.sincronizar(a, &Contexto { alterados: &alt, ..Contexto::so_documento(&d) });
+        assert!(s.curso.concluida(a));
+    }
+
+    /// B323: "mova uma peça" fica verde com o gesto que o manipulador da montagem anota.
+    #[test]
+    fn mover_a_peca_cumpre_o_passo_sozinho() {
+        let mut s = Settings::default();
+        let a = curso::aula("mon_verificar").unwrap();
+        let d = fenkra_core::Document::new("conjunto");
+        let usados = ["rest_interferencia"];
+        s.curso.sincronizar(a, &Contexto { usados: &usados, ..Contexto::so_documento(&d) });
+        assert_eq!(s.curso.proximo_passo(a), Some(1));
+        let usados = ["rest_interferencia", curso::MOVER_PECA];
+        s.curso.sincronizar(a, &Contexto { usados: &usados, ..Contexto::so_documento(&d) });
         assert!(s.curso.concluida(a));
     }
 

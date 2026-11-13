@@ -82,6 +82,10 @@ pub enum Cond {
 /// Gestos da vista que a aula de câmera reconhece (B297). Quem navega anota; o curso lê no quadro.
 pub const GESTOS: [&str; 5] = ["girar", "mover_vista", "zoom", "vista_cubo", "selecionar"];
 
+/// B323: gesto da montagem, anotado quando o manipulador solta uma peça movida ou aplica um valor
+/// digitado. A aula de verificação o lê para saber que a pessoa moveu uma peça.
+pub const MOVER_PECA: &str = "mover_peca";
+
 static ANOTADOS: std::sync::Mutex<Vec<&'static str>> = std::sync::Mutex::new(Vec::new());
 
 /// Anota um gesto da vista (uma vez por sessão; repetir não custa nada).
@@ -179,7 +183,7 @@ pub const AULAS: &[Aula] = &[
     // ---- Superfícies
     a("sup_curvas", "Curvas guia", "Curvas bem feitas são a base de toda superfície limpa.", Superficies, Intermediario, None, None, &[
         p("Crie uma curva guia, como uma spline por pontos.", "spline", Referencias(1)),
-        p("Ajuste os pontos até a curva ficar suave, sem ondulação.", "", Manual),
+        p("Ajuste os pontos até a curva ficar suave, sem ondulação.", "", Mudou("curva")),
     ]),
     a("sup_criar", "Superfícies a partir de curvas", "Extrusão, varredura e seções geram superfícies a partir das curvas.", Superficies, Intermediario, Some("Superfícies de exemplo"), None, &[
         p("Crie uma superfície extrudada a partir de uma curva.", "sup_extrudada", NSuperficies(1)),
@@ -228,7 +232,7 @@ pub const AULAS: &[Aula] = &[
     ]),
     a("mon_verificar", "Verificar a montagem", "Antes de documentar, procure peças que se atravessam.", Montagem, Intermediario, Some("Conjunto de exemplo"), None, &[
         p("Rode a verificação de interferências e leia o resultado.", "rest_interferencia", Comando("rest_interferencia")),
-        p("Mova uma peça e confira se as restrições seguram o resto.", "", Manual),
+        p("Mova uma peça e confira se as restrições seguram o resto.", "", Gesto("mover_peca")),
     ]),
     a("mon_documentar", "Documentar a montagem", "Lista de peças e balões saem direto da estrutura da montagem.", Montagem, Intermediario, Some("Conjunto de exemplo"), None, &[
         p("Gere a lista de peças.", "asm_lista", Comando("asm_lista")),
@@ -407,6 +411,21 @@ pub fn etiqueta(k: &FeatureKind) -> &'static str {
     }
 }
 
+/// B323: o que o passo `Mudou(etq)` compara, como (id, texto serializado). Os comandos da árvore
+/// entram pela etiqueta; `"curva"` olha as curvas e pontos de referência (spline, curva por pontos),
+/// que não são comandos da árvore: arrastar um ponto muda o texto dela.
+pub fn valores_da_etiqueta(doc: &Document, etq: &str) -> Vec<(u64, String)> {
+    if etq == "curva" {
+        return doc.references.iter().filter(|r| e_curva_ou_ponto(r)).map(|r| (r.id.0, serde_json::to_string(&r.kind).unwrap_or_default())).collect();
+    }
+    doc.features.iter().filter(|f| !f.suppressed && etiqueta(&f.kind) == etq).map(|f| (f.id.0, serde_json::to_string(&f.kind).unwrap_or_default())).collect()
+}
+
+fn e_curva_ou_ponto(r: &fenkra_core::RefElement) -> bool {
+    let v = variante(r);
+    !v.ends_with("Plane") && !v.starts_with("Surf")
+}
+
 fn quantos(doc: &Document, etq: &str) -> usize {
     doc.features.iter().filter(|f| !f.suppressed && etiqueta(&f.kind) == etq).count()
 }
@@ -422,7 +441,7 @@ fn n_superficies(doc: &Document) -> usize {
 }
 
 fn n_curvas_e_pontos(doc: &Document) -> usize {
-    doc.references.iter().filter(|r| !variante(r).ends_with("Plane") && !variante(r).starts_with("Surf")).count()
+    doc.references.iter().filter(|r| e_curva_ou_ponto(r)).count()
 }
 
 impl Cond {
@@ -810,7 +829,8 @@ mod testes {
     fn so_ficam_manuais_os_passos_sem_rastro_reconhecivel() {
         let manuais: Vec<String> = AULAS.iter().flat_map(|a| a.passos.iter().enumerate().filter(|(_, p)| p.cond == Manual).map(move |(i, _)| format!("{}:{i}", a.id))).collect();
         // olhar, ajustar, conferir ou mover: só a pessoa sabe
-        let esperados = ["sup_curvas:1", "mon_verificar:1"];
+        // B323: ajustar a curva e mover a peça agora se reconhecem sozinhos; não sobra nenhum
+        let esperados: [&str; 0] = [];
         for m in &manuais {
             assert!(esperados.contains(&m.as_str()), "passo manual inesperado: {m}");
         }

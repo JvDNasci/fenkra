@@ -232,6 +232,7 @@ fn aplicar(st: &mut AsmState, id: Id, alvo: Placement, escopo: &[Id]) {
         return;
     }
     st.push_undo();
+    crate::curso::anotar(crate::curso::MOVER_PECA);
     st.asm = copia;
     if st.respect {
         st.solve();
@@ -436,6 +437,8 @@ pub fn desenhar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         st.manip.off = [0.; 3];
         st.manip.eixos_arrasto = None;
         if let (Some(_), Some(snap)) = (st.drag_start.take(), st.snapshot.take()) {
+            // B323: a aula de verificação da montagem reconhece a peça movida
+            crate::curso::anotar(crate::curso::MOVER_PECA);
             st.undo.push(snap);
             st.modified = true;
             if st.respect && !st.asm.mates.is_empty() {
@@ -468,6 +471,16 @@ mod tests {
     fn com_dobradica(st: &mut AsmState, f: Id, m: Id) {
         let (fa, fb) = (JFrame::from_axis([40., 0., 0.], [0., 0., 1.]), JFrame::from_axis([-60., 0., 0.], [0., 0., 1.]));
         st.asm.add_joint(JointKind::Revolute, JRef { comp: f, frame: fa }, JRef { comp: m, frame: fb });
+    }
+
+    /// B323: mover a peça pelo manipulador anota o gesto que a aula de verificação lê.
+    #[test]
+    fn mover_pelo_manipulador_anota_o_gesto_da_aula() {
+        let (mut st, _f, m) = estado();
+        let p = st.asm.node(m).unwrap().placement;
+        aplicar(&mut st, m, Placement { origin: [130., 0., 0.], ..p }, &[]);
+        assert_eq!(st.asm.node(m).unwrap().placement.origin, [130., 0., 0.]);
+        assert!(crate::curso::anotados().contains(&crate::curso::MOVER_PECA));
     }
 
     #[test]
