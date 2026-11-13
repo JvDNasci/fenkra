@@ -182,6 +182,9 @@ mod tests {
         // fixação MR3: cada rosca BE do cilindro tem a sua porca na biblioteca
         let p = familia("iso6432_mr3").unwrap();
         assert_eq!(p.tipo, TipoFixador::Porca);
+        // B17-dados: a porca M22x1,5 fica com chave 32 e altura KW 11 (norma e Aventics), conferida
+        let m22 = p.tamanho("M22x1,5").unwrap();
+        assert_eq!((m22.valor("s"), m22.valor("m"), m22.confirmado_por), (Some(32.), Some(11.), 2));
         for t in &familia("iso6432").unwrap().tamanhos {
             let be = t.valor("BE").unwrap();
             let porca = p.tamanhos.iter().find(|q| q.diametro_nominal() == Some(be)).unwrap_or_else(|| panic!("{}: sem porca M{be}", t.designacao));

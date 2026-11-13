@@ -888,9 +888,11 @@ mod tests {
         // AN8-12: pega de 9/16" (L 1 11/32" − 25/32")
         assert!(an8.comprimentos.iter().any(|l| (l / pol - 25. / 32. - 9. / 16.).abs() < 1e-3));
         assert!((0.740..=0.752).contains(&(an8.valor("s").unwrap() / pol)));
-        // a altura da cabeça de AN7 e AN8 só tem uma fonte gratuita: fica marcada e PENDENTE
+        // B17-dados: a altura da cabeça de AN7 (0,234 a 0,266 pol) e AN8 (0,265 a 0,297 pol) tem duas
+        // fontes (Military Fasteners e Boeing Distribution); o modelo usa o meio da faixa
+        assert!((an7.valor("k").unwrap() - 0.250 * pol).abs() < 1e-3 && (an8.valor("k").unwrap() - 0.281 * pol).abs() < 2e-3);
         for t in [an7, an8] {
-            assert!(t.confirmado_por == 1 && t.nota.as_deref().is_some_and(|n| n.contains("PENDENTE")), "{}", t.designacao);
+            assert!(t.confirmado_por == 2 && t.nota.as_deref().is_some_and(|n| !n.contains("PENDENTE")), "{}", t.designacao);
         }
         let an3 = tamanho("an3", "AN3").unwrap();
         assert!((an3.valor("P").unwrap() - pol / 32.).abs() < 1e-3 && (an3.valor("b").unwrap() - 13. / 32. * pol).abs() < 1e-3);
