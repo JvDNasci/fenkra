@@ -1,0 +1,135 @@
+{
+ "id": "iso355_302",
+ "nome": "Rolamento de rolos cônicos, série 302",
+ "norma": "ISO 355",
+ "revisao": "2019",
+ "versao": 1,
+ "gerador": "rolamento",
+ "tipo": "rolamento",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Partmatch — série 30200 (medidas de contorno)",
+   "url": "https://partmatch.io/bearings/30200"
+  },
+  {
+   "rotulo": "Koyo (JTEKT) — catálogo métrico de rolamentos de rolos cônicos, páginas 364 a 389",
+   "url": "https://aimsindustrial.com.au/cdn/shop/files/Koyo-Tapered-Roller-Bearings-Metric-Catalogue-Cover-and-Pages-364-to-389-Selected-26-Pages.pdf"
+  }
+ ],
+ "campos": [
+  "D",
+  "B"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "30204",
+   "d_nominal": 20,
+   "valores": {
+    "D": 47,
+    "B": 15.25
+   },
+   "confirmado_por": 2,
+   "furo_min": 46.9,
+   "furo_max": 47.1,
+   "nota": "d, D e T: Partmatch e Koyo concordam. Medidas de contorno da ISO 355; o campo B guarda a largura total T (anel interno B = 14 mm e externo C = 12 mm, pelo Koyo). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo (30204JR): C = 27000 N, C0 = 27200 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "30205",
+   "d_nominal": 25,
+   "valores": {
+    "D": 52,
+    "B": 16.25
+   },
+   "confirmado_por": 2,
+   "furo_min": 51.9,
+   "furo_max": 52.1,
+   "nota": "d, D e T: Partmatch e Koyo concordam. Medidas de contorno da ISO 355; o campo B guarda a largura total T (anel interno B = 15 mm e externo C = 13 mm, pelo Koyo). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo (30205JR): C = 31500 N, C0 = 33700 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "30206",
+   "d_nominal": 30,
+   "valores": {
+    "D": 62,
+    "B": 17.25
+   },
+   "confirmado_por": 2,
+   "furo_min": 61.9,
+   "furo_max": 62.1,
+   "nota": "d, D e T: Partmatch e Koyo concordam. Medidas de contorno da ISO 355; o campo B guarda a largura total T (anel interno B = 16 mm e externo C = 14 mm, pelo Koyo). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo (30206JR): C = 41500 N, C0 = 44800 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "30207",
+   "d_nominal": 35,
+   "valores": {
+    "D": 72,
+    "B": 18.25
+   },
+   "confirmado_por": 2,
+   "furo_min": 71.9,
+   "furo_max": 72.1,
+   "nota": "d, D e T: Partmatch e Koyo concordam. Medidas de contorno da ISO 355; o campo B guarda a largura total T (anel interno B = 17 mm e externo C = 15 mm, pelo Koyo). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo (30207JR): C = 55100 N, C0 = 60900 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "30208",
+   "d_nominal": 40,
+   "valores": {
+    "D": 80,
+    "B": 19.75
+   },
+   "confirmado_por": 2,
+   "furo_min": 79.9,
+   "furo_max": 80.1,
+   "nota": "d, D e T: Partmatch e Koyo concordam. Medidas de contorno da ISO 355; o campo B guarda a largura total T (anel interno B = 18 mm e externo C = 16 mm, pelo Koyo). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo (30208JR): C = 62900 N, C0 = 69200 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "30209",
+   "d_nominal": 45,
+   "valores": {
+    "D": 85,
+    "B": 20.75
+   },
+   "confirmado_por": 2,
+   "furo_min": 84.9,
+   "furo_max": 85.1,
+   "nota": "d, D e T: Partmatch e Koyo concordam. Medidas de contorno da ISO 355; o campo B guarda a largura total T (anel interno B = 19 mm e externo C = 16 mm, pelo Koyo). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo (30209JR): C = 67200 N, C0 = 77400 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "30210",
+   "d_nominal": 50,
+   "valores": {
+    "D": 90,
+    "B": 21.75
+   },
+   "confirmado_por": 2,
+   "furo_min": 89.9,
+   "furo_max": 90.1,
+   "nota": "d, D e T: Partmatch e Koyo concordam. Medidas de contorno da ISO 355; o campo B guarda a largura total T (anel interno B = 20 mm e externo C = 17 mm, pelo Koyo). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo (30210JR): C = 76500 N, C0 = 91700 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "30211",
+   "d_nominal": 55,
+   "valores": {
+    "D": 100,
+    "B": 22.75
+   },
+   "confirmado_por": 2,
+   "furo_min": 99.9,
+   "furo_max": 100.1,
+   "nota": "d, D e T: Partmatch e Koyo concordam. Medidas de contorno da ISO 355; o campo B guarda a largura total T (anel interno B = 21 mm e externo C = 18 mm, pelo Koyo). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo (30211JR): C = 94600 N, C0 = 113000 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "30212",
+   "d_nominal": 60,
+   "valores": {
+    "D": 110,
+    "B": 23.75
+   },
+   "confirmado_por": 2,
+   "furo_min": 109.9,
+   "furo_max": 110.1,
+   "nota": "d, D e T: Partmatch e Koyo concordam. Medidas de contorno da ISO 355; o campo B guarda a largura total T (anel interno B = 22 mm e externo C = 19 mm, pelo Koyo). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo (30212JR): C = 106000 N, C0 = 127000 N (vale para o rolamento daquele fabricante)."
+  }
+ ]
+}

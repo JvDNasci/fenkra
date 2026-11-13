@@ -517,6 +517,12 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso15_60.json", include_str!("../../../biblioteca/rolamentos/iso15_60.json")),
     ("iso15_62.json", include_str!("../../../biblioteca/rolamentos/iso15_62.json")),
     ("iso15_63.json", include_str!("../../../biblioteca/rolamentos/iso15_63.json")),
+    ("iso15_68.json", include_str!("../../../biblioteca/rolamentos/iso15_68.json")),
+    ("iso15_69.json", include_str!("../../../biblioteca/rolamentos/iso15_69.json")),
+    ("iso15_160.json", include_str!("../../../biblioteca/rolamentos/iso15_160.json")),
+    ("iso15_72.json", include_str!("../../../biblioteca/rolamentos/iso15_72.json")),
+    ("iso15_nu2.json", include_str!("../../../biblioteca/rolamentos/iso15_nu2.json")),
+    ("iso355_302.json", include_str!("../../../biblioteca/rolamentos/iso355_302.json")),
 ];
 
 /// A biblioteca pública embutida. Os arquivos são validados nos testes; aqui um arquivo inválido
@@ -663,7 +669,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 24);
+        assert_eq!(b.familias.len(), 30);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -792,6 +798,74 @@ mod tests {
             let (s, k, d) = (t.valor("s").unwrap(), t.valor("k").unwrap(), t.diametro_nominal().unwrap());
             assert!(s > 1.4 * d && k > 0.3 * d && k < 0.8 * d, "{}", t.designacao);
             assert!(t.comprimentos.iter().all(|l| *l > t.valor("b").unwrap()), "{}: pega positiva em todo traço", t.designacao);
+        }
+    }
+
+    /// B44: séries finas 68, 69 e 160, contato angular 72, rolos cilíndricos NU2 e cônicos 302,
+    /// todas com duas fontes que concordam e a regra de furo da ISO 15 (código × 5 a partir de 04).
+    #[test]
+    fn series_finas_contato_angular_e_rolos() {
+        let furo = |no: &str| -> f64 {
+            let c: u32 = no[no.len() - 2..].parse().unwrap();
+            match c { 0 => 10., 1 => 12., 2 => 15., 3 => 17., c => 5. * c as f64 }
+        };
+        for (id, n, nome) in [("iso15_68", 12, "série 68"), ("iso15_69", 12, "série 69"), ("iso15_160", 10, "série 160"), ("iso15_72", 19, "contato angular"), ("iso15_nu2", 9, "rolos cilíndricos"), ("iso355_302", 9, "rolos cônicos")] {
+            let f = familia(id).unwrap_or_else(|| panic!("{id}"));
+            assert_eq!((f.tamanhos.len(), f.gerador.as_str(), f.nivel.as_str()), (n, "rolamento", "C"), "{id}");
+            assert!(f.nome.contains(nome) && f.fontes.len() >= 2, "{id}");
+            for t in &f.tamanhos {
+                assert!(t.confirmado_por >= 2 && t.nota.as_deref().unwrap().contains("concordam"), "{id} {}", t.designacao);
+                let num = t.designacao.trim_start_matches("NU");
+                assert_eq!(t.diametro_nominal(), Some(furo(num)), "{id} {}", t.designacao);
+            }
+            for w in f.tamanhos.windows(2) {
+                assert!(w[1].diametro_nominal() > w[0].diametro_nominal() && w[1].valor("D") >= w[0].valor("D"), "{id}");
+            }
+        }
+        let v = |f: &str, n: &str| { let t = tamanho(f, n).unwrap(); (t.diametro_nominal().unwrap(), t.valor("D").unwrap(), t.valor("B").unwrap()) };
+        assert_eq!(v("iso15_68", "6805"), (25., 37., 7.));
+        assert_eq!(v("iso15_69", "6905"), (25., 42., 9.));
+        assert_eq!(v("iso15_160", "16005"), (25., 47., 8.));
+        // no mesmo furo a seção cresce: 68 < 69 < 160 < 60 em D
+        assert!(v("iso15_68", "6805").1 < v("iso15_69", "6905").1 && v("iso15_69", "6905").1 < v("iso15_160", "16005").1);
+        assert_eq!(v("iso15_160", "16005").1, v("iso15_60", "6005").1);
+        // contato angular 72 e rolos NU2 têm o contorno da série 62 de esferas
+        for (a, b, c) in [("7205", "NU205", "6205"), ("7210", "NU210", "6210"), ("7212", "NU212", "6212")] {
+            assert_eq!(v("iso15_72", a), v("iso15_62", c));
+            assert_eq!(v("iso15_nu2", b), v("iso15_62", c));
+        }
+        // cônico: B guarda a largura total T, maior que a do 62 no mesmo furo
+        assert_eq!(v("iso355_302", "30205"), (25., 52., 16.25));
+        assert!(tamanho("iso355_302", "30205").unwrap().nota.as_deref().unwrap().contains("Koyo (30205JR): C = 31500 N, C0 = 33700 N"));
+        assert!(tamanho("iso15_72", "7205").unwrap().nota.as_deref().unwrap().contains("7205B (40°, gaiola usinada): C = 14000 N"));
+        assert!(tamanho("iso15_nu2", "NU205").unwrap().nota.as_deref().unwrap().contains("C = 17700 N, C0 = 15700 N"));
+    }
+
+    /// B44: toda família nova gera um corpo com o contorno da tabela.
+    #[test]
+    fn familias_novas_de_rolamento_geram_o_contorno() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        for (id, n) in [("iso15_68", "6805"), ("iso15_69", "6910"), ("iso15_160", "16008"), ("iso15_72", "7208"), ("iso15_nu2", "NU206"), ("iso355_302", "30207")] {
+            let t = tamanho(id, n).unwrap();
+            let (d, dext, b) = (t.diametro_nominal().unwrap(), t.valor("D").unwrap(), t.valor("B").unwrap());
+            let doc = crate::fixadores::fixador_documento(id, n, None).unwrap();
+            let rc = crate::recompute(&doc);
+            assert!(doc.features.iter().all(|f| rc.status[&f.id] == crate::Status::Ok), "{id} {n}");
+            assert_eq!(rc.bodies.len(), 1, "{id} {n}");
+            let (mut lo, mut hi) = ([f64::MAX; 3], [f64::MIN; 3]);
+            for p in rc.bodies[0].mesh.positions.chunks_exact(3) {
+                for i in 0..3 {
+                    lo[i] = lo[i].min(p[i] as f64);
+                    hi[i] = hi[i].max(p[i] as f64);
+                }
+            }
+            assert!((hi[2] - lo[2] - b).abs() < 1e-3 && (hi[0] - lo[0] - dext).abs() < 0.2, "{id} {n}: caixa {lo:?} {hi:?}");
+            let (d2, d1) = (dext - (dext - d) / 3., d + (dext - d) / 3.);
+            let esperado = std::f64::consts::PI / 4. * ((dext * dext - d2 * d2) * b + (d1 * d1 - d * d) * b + (d2 * d2 - d1 * d1) * b / 2.);
+            let vol = rc.bodies[0].mass.volume;
+            assert!((vol - esperado).abs() / esperado < 0.01, "{id} {n}: volume {vol} contra {esperado}");
         }
     }
 
@@ -945,7 +1019,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 25);
+        assert_eq!(m.familias.len(), 31);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

@@ -1,0 +1,135 @@
+{
+ "id": "iso15_nu2",
+ "nome": "Rolamento de rolos cilíndricos, série NU2",
+ "norma": "ISO 15",
+ "revisao": "2017",
+ "versao": 1,
+ "gerador": "rolamento",
+ "tipo": "rolamento",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Partmatch — série NU200 (medidas de contorno)",
+   "url": "https://partmatch.io/bearings/NU200"
+  },
+  {
+   "rotulo": "Koyo (JTEKT) — catálogo de rolamentos de rolos cilíndricos, páginas 318 a 333",
+   "url": "https://aimsindustrial.com.au/cdn/shop/files/Koyo-Cylindrical-Roller-Bearings-Catalogue-Cover-and-Pages-318-to-333-Selected.pdf"
+  }
+ ],
+ "campos": [
+  "D",
+  "B"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "NU204",
+   "d_nominal": 20,
+   "valores": {
+    "D": 47,
+    "B": 14
+   },
+   "confirmado_por": 2,
+   "furo_min": 46.9,
+   "furo_max": 47.1,
+   "nota": "d, D e B: Partmatch e Koyo concordam. Mesmo contorno da série 62 (série de dimensões 02 da ISO 15). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo: C = 15400 N, C0 = 12700 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "NU205",
+   "d_nominal": 25,
+   "valores": {
+    "D": 52,
+    "B": 15
+   },
+   "confirmado_por": 2,
+   "furo_min": 51.9,
+   "furo_max": 52.1,
+   "nota": "d, D e B: Partmatch e Koyo concordam. Mesmo contorno da série 62 (série de dimensões 02 da ISO 15). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo: C = 17700 N, C0 = 15700 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "NU206",
+   "d_nominal": 30,
+   "valores": {
+    "D": 62,
+    "B": 16
+   },
+   "confirmado_por": 2,
+   "furo_min": 61.9,
+   "furo_max": 62.1,
+   "nota": "d, D e B: Partmatch e Koyo concordam. Mesmo contorno da série 62 (série de dimensões 02 da ISO 15). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo: C = 23500 N, C0 = 21500 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "NU207",
+   "d_nominal": 35,
+   "valores": {
+    "D": 72,
+    "B": 17
+   },
+   "confirmado_por": 2,
+   "furo_min": 71.9,
+   "furo_max": 72.1,
+   "nota": "d, D e B: Partmatch e Koyo concordam. Mesmo contorno da série 62 (série de dimensões 02 da ISO 15). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo: C = 33600 N, C0 = 31500 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "NU208",
+   "d_nominal": 40,
+   "valores": {
+    "D": 80,
+    "B": 18
+   },
+   "confirmado_por": 2,
+   "furo_min": 79.9,
+   "furo_max": 80.1,
+   "nota": "d, D e B: Partmatch e Koyo concordam. Mesmo contorno da série 62 (série de dimensões 02 da ISO 15). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo: C = 43800 N, C0 = 42900 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "NU209",
+   "d_nominal": 45,
+   "valores": {
+    "D": 85,
+    "B": 19
+   },
+   "confirmado_por": 2,
+   "furo_min": 84.9,
+   "furo_max": 85.1,
+   "nota": "d, D e B: Partmatch e Koyo concordam. Mesmo contorno da série 62 (série de dimensões 02 da ISO 15). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo: C = 46100 N, C0 = 46900 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "NU210",
+   "d_nominal": 50,
+   "valores": {
+    "D": 90,
+    "B": 20
+   },
+   "confirmado_por": 2,
+   "furo_min": 89.9,
+   "furo_max": 90.1,
+   "nota": "d, D e B: Partmatch e Koyo concordam. Mesmo contorno da série 62 (série de dimensões 02 da ISO 15). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo: C = 48200 N, C0 = 51000 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "NU211",
+   "d_nominal": 55,
+   "valores": {
+    "D": 100,
+    "B": 21
+   },
+   "confirmado_por": 2,
+   "furo_min": 99.9,
+   "furo_max": 100.1,
+   "nota": "d, D e B: Partmatch e Koyo concordam. Mesmo contorno da série 62 (série de dimensões 02 da ISO 15). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo: C = 58000 N, C0 = 62300 N (vale para o rolamento daquele fabricante)."
+  },
+  {
+   "designacao": "NU212",
+   "d_nominal": 60,
+   "valores": {
+    "D": 110,
+    "B": 22
+   },
+   "confirmado_por": 2,
+   "furo_min": 109.9,
+   "furo_max": 110.1,
+   "nota": "d, D e B: Partmatch e Koyo concordam. Mesmo contorno da série 62 (série de dimensões 02 da ISO 15). O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga citada do fabricante Koyo: C = 71900 N, C0 = 79900 N (vale para o rolamento daquele fabricante)."
+  }
+ ]
+}
