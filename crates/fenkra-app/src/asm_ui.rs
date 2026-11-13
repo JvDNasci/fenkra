@@ -523,12 +523,14 @@ impl AsmState {
     }
 
     fn aplicar(&mut self, c: fenkra_montagem::view::Composta) {
-        self.view_doc = c.doc;
-        self.view = Some(c.result);
+        use crate::medir_quadros::fase;
+        let antigo_doc = std::mem::replace(&mut self.view_doc, c.doc);
+        let antiga = std::mem::replace(&mut self.view, Some(c.result));
         self.instancias = c.instancias;
         self.caixas = c.caixas;
         self.contornos.clear();
-        crate::asm_exibicao::acompanhar(self);
+        fase("fundo_soltar", || drop((antigo_doc, antiga)));
+        fase("fundo_acompanhar", || crate::asm_exibicao::acompanhar(self));
     }
 
     /// Recompõe a vista agora, nesta thread, se preciso. Serve a quem precisa da vista em dia para
@@ -560,24 +562,26 @@ impl AsmState {
         if self.dirty {
             self.dirty = false;
             self.envio_pendente = true;
-            self.sincronizar_furos();
-            mudou |= self.posicoes_ao_vivo();
+            crate::medir_quadros::fase("fundo_furos", || self.sincronizar_furos());
+            mudou |= crate::medir_quadros::fase("fundo_posicoes", || self.posicoes_ao_vivo());
         }
         // arrastar pede composição a cada quadro: cancelar a anterior toda vez não deixaria nenhuma
         // terminar, então um pedido novo só substitui o que está rodando depois do intervalo
         if self.envio_pendente {
             if !self.compondo || self.ultimo_envio.is_none_or(|t| t.elapsed() >= INTERVALO) {
-                self.enviar_pedido(ctx);
+                crate::medir_quadros::fase("fundo_enviar", || self.enviar_pedido(ctx));
             } else {
                 ctx.request_repaint_after(INTERVALO);
             }
         }
-        while let Some(r) = self.fundo.as_ref().and_then(|f| f.receber()) {
+        while let Some(r) = crate::medir_quadros::fase("fundo_receber", || self.fundo.as_ref().and_then(|f| f.receber())) {
             if r.geracao == self.geracao {
                 self.errors = r.erros;
-                for (f, d) in r.documentos {
-                    self.cache.semear_documento(f, d);
-                }
+                crate::medir_quadros::fase("fundo_semear", || {
+                    for (f, d) in r.documentos {
+                        self.cache.semear_documento(f, d);
+                    }
+                });
                 self.aplicar(r.composta);
                 self.compondo = false;
                 mudou = true;
