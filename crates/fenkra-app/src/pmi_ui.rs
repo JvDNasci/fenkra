@@ -1222,14 +1222,16 @@ fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &R
     // texto junto ao cursor: passo do comando, o que foi reconhecido e o plano
     if let Some(q) = hover_pos {
         let step = app.picks.len().min(need.saturating_sub(1)) + 1;
+        // B185: o título do passo segue o texto do tema (branco fixo sumia no fundo claro da dica)
+        let titulo = ui.visuals().strong_text_color();
         let mut lines = if let Some(inf) = &smart_inf {
-            let mut l = vec![(format!("{} — {} {}", tr("Cota"), tr("elementos"), app.picks.len()), Color32::WHITE)];
+            let mut l = vec![(format!("{} — {} {}", tr("Cota"), tr("elementos"), app.picks.len()), titulo)];
             l.extend(crate::pmi_smart::cursor_lines(inf, app.picks.len()));
             l
         } else if is_multi(i) {
-            vec![(format!("{} — {} {}  ·  {}", tr(if i == 13 { "Cadeia de cotas" } else { "Cotas a partir de uma base" }), tr("pontos"), app.picks.len(), tr("Enter conclui")), Color32::WHITE)]
+            vec![(format!("{} — {} {}  ·  {}", tr(if i == 13 { "Cadeia de cotas" } else { "Cotas a partir de uma base" }), tr("pontos"), app.picks.len(), tr("Enter conclui")), titulo)]
         } else {
-            vec![(format!("{} — {} {step}/{need}", tr(kind.label()), tr("passo")), Color32::WHITE)]
+            vec![(format!("{} — {} {step}/{need}", tr(kind.label()), tr("passo")), titulo)]
         };
         if !smart && kind.has_variants() {
             lines.push((format!("{}: {}  ·  {}", tr("Medida"), tr(&kind.variant_label()), tr("Tab alterna")), crate::theme::st_warn()));
