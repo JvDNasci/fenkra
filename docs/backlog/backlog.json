@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 105260,
+ "tokens_total_k": 106690,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 7180,
-   "pct": 6.8
+   "pct": 6.7
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 11.0
+   "pct": 10.9
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 30.7
+   "pct": 30.3
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 22650,
-   "pct": 21.5
+   "pct": 21.2
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 31470,
-   "pct": 29.9
+   "tokens_k": 32900,
+   "pct": 30.8
   }
  },
  "itens": [
@@ -4521,7 +4521,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B263",
@@ -4697,7 +4697,7 @@
    "teste": "Auto + Visual",
    "area": "Sketch",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B274",
@@ -5065,7 +5065,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B297",
@@ -5145,7 +5145,7 @@
    "teste": "Visual",
    "area": "Sólidos",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B302",
@@ -7243,6 +7243,150 @@
    "area": "Chapa metálica",
    "status": "feito",
    "pct": 0.2
+  },
+  {
+   "id": "B433",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Layout: coluna esquerda real, seta árvore/painel e nada flutuando sobre a peça",
+   "oque": "A árvore e o painel do comando passam a ocupar uma coluna à esquerda que reserva espaço (a área 3D encolhe, nada cobre a peça). Ao abrir um comando, o painel toma a coluna e a árvore recolhe numa seta; clicar na seta expande a árvore para escolher entradas e clicar de novo volta. Painéis hoje livres (lista de corte, simulação, BOM, análises, ~14) passam a encaixar à direita ou embaixo; só a janela nativa em outro monitor fica solta. Revoga a premissa de painéis livres do B319 e do ADR 0012 com ADR novo. Base: auditoria visual de 12/11/2026.",
+   "origem": [
+    "USR-LAYOUT"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B434",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Layout: topo fino auxiliar, recursos à direita e navegação embaixo",
+   "oque": "Topo de cerca de 26 px: menu em ícones, abas de bancada como ícones, e à direita propriedades gráficas e versões/PLM. Barras de recursos de sketch e de peça só com ícones à direita (Superfícies com rolagem ou duas colunas). Barra de baixo com navegação (vista, modo de exibição, seleção), indicador de recalculado e o automático. Saem da tela: em trabalho, setas de reconstruir com contador, versão do kernel, próximo passo, dicas de mouse e informações do modelo (vão para Propriedades). Cubo de vistas pequeno no canto do 3D. Migra a configuração de cada usuário.",
+   "origem": [
+    "USR-LAYOUT"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B435",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Painel de comando enxuto: o bloco comum vai para Propriedades",
+   "oque": "Nome do recurso, suprimido, propriedades gráficas, suprimir quando e o quadro de entradas completas saem do painel de cada comando e ficam em Propriedades. O painel mostra só suporte, modo, parâmetros e avançado.",
+   "origem": [
+    "USR-LAYOUT"
+   ],
+   "catalogo": [],
+   "tokens_k": 60,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B436",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Comandos organizados por tipo de operação em cada bancada",
+   "oque": "Regrupar as barras de cada bancada por tipo de operação, com variantes numa seta sob o botão mais usado, conforme o estudo de organização dos comandos (cofre, Conhecimento/Interface): Sólidos em recursos de sketch, acabamento, superfície, transformações, booleanas e referências; Chapa em paredes, dobras, corte e transformações, com parâmetros da chapa primeiro; Estrutural em membros, ligações, solda e saídas; fixadores, engrenagens e cálculo da Montagem vão para a Biblioteca; Desenho em vistas, gerar cotas, cotas, anotações, folha e tabelas. Perfil de layout pronto. Restrições do sketch seguem no botão direito, com um menu pequeno opcional.",
+   "origem": [
+    "USR-LAYOUT"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B437",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Sketch: origem e eixos H/V como alvo e sketch posicionado por referência",
+   "oque": "Todo sketch tem origem e eixos H e V selecionáveis e aceitos em qualquer restrição (coincidente, distância, paralela, horizontal, vertical). A origem é automática pelas referências ou definida pelo usuário: origem da peça, ponto projetado, interseção de duas linhas, ponto médio, centro da face. A orientação segue eixo global, linha, ponto ou plano, com inverter H, inverter V e trocar. Painel B319 com prévia da origem e dos eixos no 3D. Arquivos antigos abrem como origem automática com deslocamento.",
+   "origem": [
+    "USR-LAYOUT"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B438",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Compasso: cubo de vistas que se arrasta para a peça e move por eixo",
+   "oque": "O cubo do canto superior direito vira um compasso: arrastado e solto na peça, gruda por snap numa face, aresta ou eixo e se orienta por ela. Com ele preso, o usuário seleciona peças ou elementos e move ou gira por eixo arrastando, ou digita posição e ângulo em coordenada absoluta ou incremental, referência global ou local. Arrastar de volta, ou um comando, devolve o compasso ao canto. Também gira a vista. Substitui o clicar no eixo e puxar do gizmo atual.",
+   "origem": [
+    "USR-LAYOUT"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Navegação",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B439",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Montagem: ativar peça, editar no contexto e voltar ao produto",
+   "oque": "Regra única de estrutura do produto: inserir novo produto, nova peça ou componente existente; duplo clique numa peça a ativa e troca as barras para a bancada dela, com o resto da montagem visível como contexto; duplo clique no produto raiz (ou botão voltar) volta para a montagem e atualiza. Subprodutos seguem a mesma regra. Hoje esse fluxo está com defeito no Fenkra.",
+   "origem": [
+    "USR-LAYOUT"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B440",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Opções: estilo de controle do mouse, controle visual e menu Janela",
+   "oque": "Nas Opções, escolher o estilo de controle do mouse igual ao dos softwares de modelagem CAD avançados mais usados, sem mudar as prévias e a movimentação 3D atuais. Controle visual organizado (estilo de exibição, esconder/mostrar, espaço de escondidos). Menu Janela com alternar documentos, lado a lado e cascata (depende do B363).",
+   "origem": [
+    "USR-LAYOUT"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B441",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Sugestão do próximo comando no lugar de ferramenta apagada sem aviso",
+   "oque": "Onde um comando não pode rodar (ex.: chapa sem parâmetros), em vez de ficar apagado sem explicação, dizer o motivo e oferecer o passo que falta. Depois de cada comando, sugerir os próximos mais prováveis no fluxo da bancada.",
+   "origem": [
+    "USR-LAYOUT"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
   }
  ]
 }
