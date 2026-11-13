@@ -800,10 +800,10 @@ mod tests {
     }
 
     #[test]
-    fn parafusos_aeronauticos_an3_a_an5_pela_pega() {
-        // B43: AN3 a AN5, pega e comprimento conferidos em duas tabelas; b = L − pega é constante por tamanho
+    fn parafusos_aeronauticos_an3_a_an6_pela_pega() {
+        // B43: AN3 a AN6, pega e comprimento conferidos em duas tabelas; b = L − pega é constante por tamanho
         let f = familia("an3").unwrap();
-        assert_eq!(f.tamanhos.iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["AN3", "AN4", "AN5"]);
+        assert_eq!(f.tamanhos.iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["AN3", "AN4", "AN5", "AN6"]);
         let pol = 25.4;
         let an3 = tamanho("an3", "AN3").unwrap();
         assert!((an3.valor("P").unwrap() - pol / 32.).abs() < 1e-3 && (an3.valor("b").unwrap() - 13. / 32. * pol).abs() < 1e-3);
@@ -812,6 +812,13 @@ mod tests {
         assert!(an3.comprimentos.iter().any(|l| (l - 1.03125 * pol).abs() < 1e-2));
         // achado pela rosca também
         assert_eq!(tamanho("an3", "1/4-28 UNF").unwrap().designacao, "AN4");
+        // AN6 (3/8-24): AN6-12 com L = 1 21/64" e pega 11/16" (b = 41/64"), cabeça de 0,203 a 0,235"
+        let an6 = tamanho("an3", "3/8-24 UNF").unwrap();
+        assert_eq!(an6.designacao, "AN6");
+        assert!((an6.valor("b").unwrap() - 41. / 64. * pol).abs() < 1e-3 && (an6.valor("P").unwrap() - pol / 24.).abs() < 1e-3);
+        assert!(an6.comprimentos.iter().any(|l| (l - (1. + 21. / 64.) * pol).abs() < 1e-2));
+        let k = an6.valor("k").unwrap() / pol;
+        assert!((0.203..=0.235).contains(&k), "{k}");
         for t in &f.tamanhos {
             let (s, k, d) = (t.valor("s").unwrap(), t.valor("k").unwrap(), t.diametro_nominal().unwrap());
             assert!(s > 1.4 * d && k > 0.3 * d && k < 0.8 * d, "{}", t.designacao);

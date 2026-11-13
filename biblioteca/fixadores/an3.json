@@ -1,6 +1,6 @@
 {
  "id": "an3",
- "nome": "Parafuso aeronáutico de cabeça sextavada (AN3 a AN5)",
+ "nome": "Parafuso aeronáutico de cabeça sextavada (AN3 a AN6)",
  "norma": "AN (AN3 a AN20, domínio público, distribuição A)",
  "revisao": "sem revisão conferida (tabela usual de pega)",
  "versao": 1,
@@ -28,6 +28,14 @@
   {
    "rotulo": "McFarlane Aviation — chave de boca dos parafusos AN",
    "url": "https://mcfarlaneaviation.com/products/product/AN6-41A"
+  },
+  {
+   "rotulo": "MW Components — AN6-12A (altura da cabeça, pega, comprimento e rosca)",
+   "url": "https://www.mwcomponents.com/shop/an6-12a"
+  },
+  {
+   "rotulo": "Military Fasteners — ficha AN6-10 (altura da cabeça, entre faces, comprimento roscado)",
+   "url": "https://military-fasteners.com/catalog/pdf/AN6-10"
   }
  ],
  "campos": [
@@ -127,6 +135,35 @@
    ],
    "furo_min": 7.938,
    "furo_max": 9.129
+  },
+  {
+   "designacao": "AN6",
+   "original": "3/8-24 UNF",
+   "d_nominal": 9.525,
+   "valores": {
+    "P": 1.0583,
+    "s": 14.199,
+    "k": 5.563,
+    "b": 16.272
+   },
+   "confirmado_por": 2,
+   "nota": "Rosca 3/8-24 UNF classe 3A. O número do traço (dash number) é o comprimento nominal: o último dígito conta oitavos de polegada e os anteriores, polegadas inteiras; o sufixo A indica haste sem furo para contrapino. Comprimento L sob a cabeça por traço: -5: L 45/64\", -6: L 53/64\", -7: L 61/64\", -10: L 1-5/64\", -11: L 1-13/64\", -12: L 1-21/64\", -13: L 1-29/64\", -14: L 1-37/64\", -15: L 1-45/64\", -16: L 1-53/64\", -17: L 1-61/64\", -20: L 2-5/64\". L e pega: Experimental Aircraft (desconto da pega 41/64\") e a ficha AN6-12A da MW Components (pega 11/16\", L 1-21/64\", rosca 0,64\") concordam; comprimento roscado b = 41/64\" (0,640\" na ficha do Military Fasteners). Cabeça: s entre 0.553 e 0.565 pol (Military Fasteners) e chave de 9/16\" (McFarlane); k entre 0.203 e 0.235 pol (Military Fasteners), com 0,203\" na MW Components, dentro da faixa; o modelo usa o meio da faixa. Medidas em polegada convertidas para mm.",
+   "comprimentos": [
+    17.859,
+    21.034,
+    24.209,
+    27.384,
+    30.559,
+    33.734,
+    36.909,
+    40.084,
+    43.259,
+    46.434,
+    49.609,
+    52.784
+   ],
+   "furo_min": 9.525,
+   "furo_max": 10.954
   }
  ]
 }
