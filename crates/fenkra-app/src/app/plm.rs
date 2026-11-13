@@ -144,7 +144,7 @@ impl App {
             }
         });
         cab.response.on_hover_text(tr("Mede o peso e a saúde da peça e compara com o perfil do projeto. Roda ao liberar a revisão."));
-        egui::CollapsingHeader::new(tr("Detalhes da qualidade")).id_salt(("qualidade", sel)).show(ui, |ui| {
+        egui::CollapsingHeader::new(tr("Detalhes da qualidade")).id_salt(("qualidade", sel)).default_open(std::env::var("FENKRA_DEMO_SECOES").is_ok()).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.label(tr("Perfil"));
                 let mut novo: Option<Perfil> = None;
@@ -174,7 +174,7 @@ impl App {
                 }
             });
             // B305: cada regra com limite e gravidade; no perfil travado, só mais rígido (o projeto confere)
-            egui::CollapsingHeader::new(tr("Regras do perfil")).id_salt(("regras_qualidade", sel)).show(ui, |ui| {
+            egui::CollapsingHeader::new(tr("Regras do perfil")).id_salt(("regras_qualidade", sel)).default_open(std::env::var("FENKRA_DEMO_SECOES").is_ok()).show(ui, |ui| {
                 ui.label(RichText::new(tr(if perfil.travado && acesso != Acesso::Administrador { "Perfil travado: cada mudança só pode deixar a regra mais rígida (limite menor ou gravidade maior)." } else { "Perfil livre: quem tem acesso ao projeto ajusta os limites." })).weak().small());
                 if let Some(n) = editar_regras(ui, &perfil, sel) {
                     if let Err(e) = self.project.as_mut().unwrap().definir_perfil_qualidade(n) {
