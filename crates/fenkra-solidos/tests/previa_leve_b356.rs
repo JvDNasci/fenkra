@@ -319,3 +319,26 @@ fn previa_leve_do_padrao_e_bem_mais_rapida() {
     println!("B356 padrão de 360 instâncias: completo {completo:?}, leve {leve:?}");
     assert!(leve * 5 < completo, "{leve:?} contra {completo:?}");
 }
+
+/// B356: multisseções com o comando aberto não costura os perfis: o corpo fica como estava e a
+/// prévia é a caixa que as seções ocupam; ao concluir, o tronco real tem a mesma caixa.
+#[test]
+fn multissecoes_leve_mostra_a_caixa_das_secoes() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let mut d = Document::new("loft");
+    let alto = d.add_offset_plane(XY, "30");
+    let a = sk_rect(&mut d, XY, [-10., -10.], [10., 10.]);
+    let b = sk_rect(&mut d, PlaneRef::Datum(alto), [-5., -5.], [5., 5.]);
+    let id = d.add_feature(FeatureKind::Loft(Loft { sections: vec![a, b], ruled: true, closed: false, op: BoolOp::Add, torcao: vec![], inicio: Default::default(), fim: Default::default() }));
+    let (leve, final_) = leve_e_final(&d, id);
+    assert!(matches!(leve.status.get(&id), Some(fenkra_solidos::Status::Ok)), "{:?}", leve.status.get(&id));
+    assert!(volume_total(&leve) < 1e-6, "a prévia não costura nada");
+    let v = leve.previas.iter().find(|p| p.feature == id).expect("prévia");
+    let (lo, hi) = caixa_dos_cantos(&v.caixas[0]);
+    assert!(perto(lo[0], -10.) && perto(hi[0], 10.) && perto(lo[2], 0.) && perto(hi[2], 30.), "{lo:?} {hi:?}");
+    let tronco = 30. / 3. * (400. + 100. + 200.);
+    assert!((volume_total(&final_) - tronco).abs() < 1., "{} contra {tronco}", volume_total(&final_));
+    assert!(final_.previas.is_empty());
+}

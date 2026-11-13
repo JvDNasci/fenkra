@@ -36,6 +36,9 @@ pub fn cobre(k: &FeatureKind) -> bool {
     match k {
         FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => matches!(o.mode, EdgeMode::Constant),
         FeatureKind::Shell(_) | FeatureKind::Pattern(_) | FeatureKind::Mirror(_) => true,
+        // B356: varredura e multisseções varrem ou costuram perfis com o kernel e fazem a booleana com
+        // o corpo; a prévia leve mostra só a caixa que os perfis e o caminho ocupam
+        FeatureKind::Sweep(_) | FeatureKind::Loft(_) => true,
         _ => false,
     }
 }
@@ -53,6 +56,19 @@ pub fn cantos_da_caixa(lo: V3, hi: V3) -> [V3; 8] {
         [hi[0], hi[1], hi[2]],
         [lo[0], hi[1], hi[2]],
     ]
+}
+
+/// Caixa alinhada aos eixos que envolve os pontos (`None` sem pontos).
+pub fn caixa_dos_pontos(pts: &[V3]) -> Option<[V3; 8]> {
+    let p0 = *pts.first()?;
+    let (mut lo, mut hi) = (p0, p0);
+    for p in pts {
+        for i in 0..3 {
+            lo[i] = lo[i].min(p[i]);
+            hi[i] = hi[i].max(p[i]);
+        }
+    }
+    Some(cantos_da_caixa(lo, hi))
 }
 
 /// As doze arestas de uma caixa, como pares de índices de `cantos_da_caixa`.
@@ -150,10 +166,36 @@ impl Ctx<'_> {
                 let pl = self.plane(&m.plane, 0)?;
                 self.caixas_replicadas(&m.sources, &[Xform::Mirror(pl.origin, pl.normal)], &mut viz, f.target)?;
             }
+            FeatureKind::Sweep(w) => {
+                let mut pts = self.pontos_do_sketch(w.sketch).ok_or("escolha o perfil da varredura")?;
+                match &w.spine {
+                    fenkra_core::CurveRef::SketchLine { sketch, .. } | fenkra_core::CurveRef::SketchCurve { sketch, .. } => pts.extend(self.pontos_do_sketch(*sketch).unwrap_or_default()),
+                    fenkra_core::CurveRef::Edge(p) | fenkra_core::CurveRef::BodyEdge { pts: p, .. } => pts.extend(p.iter().copied()),
+                    // curva de referência: o caminho exato só sai do kernel; a caixa fica com o perfil
+                    _ => {}
+                }
+                viz.caixas.push(caixa_dos_pontos(&pts).ok_or("perfil vazio")?);
+            }
+            FeatureKind::Loft(l) => {
+                if l.sections.len() < 2 {
+                    return Ok(Some("escolha pelo menos duas seções — até lá nada é aplicado".into()));
+                }
+                let mut pts = vec![];
+                for s in &l.sections {
+                    pts.extend(self.pontos_do_sketch(*s).ok_or_else(|| format!("a seção '{}' não está disponível", self.doc.name_of(*s)))?);
+                }
+                viz.caixas.push(caixa_dos_pontos(&pts).ok_or("seções vazias")?);
+            }
             _ => return Ok(None),
         }
         self.previas.push(viz);
         Ok(None)
+    }
+
+    /// Pontos do desenho de um sketch já avaliado, no espaço (sem kernel).
+    fn pontos_do_sketch(&self, id: Id) -> Option<Vec<V3>> {
+        let (fr, es) = self.sketches.get(&id)?;
+        Some(es.viz.iter().filter(|(cons, _)| !cons).flat_map(|(_, l)| l.iter().map(|q| fr.point(q[0], q[1]))).collect())
     }
 
     /// Caixa da ferramenta de cada comando de origem, levada por cada transformação.
