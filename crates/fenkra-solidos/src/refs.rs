@@ -47,6 +47,7 @@ pub fn role_name(role: i32) -> String {
     match role {
         0 => "tampa inicial".into(),
         1 => "tampa final".into(),
+        r if r >= crate::papeis::PAPEL_FURO => crate::papeis::nome_furo(r).unwrap_or_default(),
         r if r >= 2 => format!("lateral {}", r - 1),
         _ => "sem papel".into(),
     }
@@ -209,4 +210,97 @@ pub fn edge_near(v: &View, p: [f64; 3], tol: f64) -> Option<usize> {
         .map(|e| (e, dist(v.topo.edge_mids[e], p)))
         .min_by(|a, b| a.1.total_cmp(&b.1))?;
     (d <= tol).then_some(e)
+}
+
+/// Arestas criadas pelo comando `id` (`EdgeSel::CreatedBy`, ADR 0010 fase 2): as que ficam entre duas
+/// faces dele. Quando o comando deu papéis às faces, as duas faces precisam ter papel conhecido: uma
+/// face dele sem papel veio de um caminho que perdeu o histórico (a booleana que não devolveu a origem
+/// marca a face como do comando) e a aresta dela não é garantidamente obra dele. Comando sem papel
+/// nenhum (ferramenta que o kernel não rotula) segue só pelo dono, como antes.
+pub fn arestas_criadas(v: &View, id: Id) -> Vec<usize> {
+    let n = v.faces();
+    let mine = |f: u32| f != NO_FACE && (f as usize) < n && v.owners[f as usize] == id;
+    let com_papel = (0..n).any(|j| v.owners[j] == id && v.roles[j] >= 0);
+    let conta = |f: u32| !com_papel || v.roles[f as usize] >= 0;
+    (0..v.topo.edge_faces.len().min(v.topo.edge_mids.len()))
+        .filter(|e| {
+            let [a, b] = v.topo.edge_faces[*e];
+            mine(a) && mine(b) && conta(a) && conta(b)
+        })
+        .collect()
+}
+
+/// Candidatas de uma face perdida, para o assistente de reparo mostrar no 3D: as do mesmo dono e
+/// papel (ambígua) ou, se nenhuma, as de mesmo tipo mais perto do último ponto conhecido.
+pub fn candidatas_face(v: &View, key: Option<&FaceKey>, hint: [f64; 3], max: usize) -> Vec<usize> {
+    let n = v.faces();
+    let mut c: Vec<usize> = match key {
+        Some(k) => (0..n).filter(|j| v.is(*j, k)).collect(),
+        None => vec![],
+    };
+    if c.is_empty() {
+        c = (0..n).filter(|j| key.is_none_or(|k| kind_of(v.topo.faces[*j].kind) == k.kind)).collect();
+    }
+    c.sort_by(|a, b| dist(v.topo.faces[*a].point, hint).total_cmp(&dist(v.topo.faces[*b].point, hint)));
+    c.truncate(max);
+    c
+}
+
+/// Candidatas de uma aresta perdida: as entre as faces da chave (ambígua) ou as mais perto do ponto.
+pub fn candidatas_aresta(v: &View, key: Option<&EdgeKey>, hint: [f64; 3], max: usize) -> Vec<usize> {
+    let real = |e: usize| v.topo.edge_faces[e] != [NO_FACE, NO_FACE];
+    let total = v.topo.edge_faces.len().min(v.topo.edge_mids.len());
+    let mut c: Vec<usize> = match key {
+        Some(k) => (0..total)
+            .filter(|e| {
+                let [p, q] = v.topo.edge_faces[*e];
+                p != NO_FACE && q != NO_FACE && ((v.is(p as usize, &k.a) && v.is(q as usize, &k.b)) || (v.is(p as usize, &k.b) && v.is(q as usize, &k.a)))
+            })
+            .collect(),
+        None => vec![],
+    };
+    if c.is_empty() {
+        c = (0..total).filter(|e| real(*e)).collect();
+    }
+    c.sort_by(|a, b| dist(v.topo.edge_mids[*a], hint).total_cmp(&dist(v.topo.edge_mids[*b], hint)));
+    c.truncate(max);
+    c
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fenkra_kernel::FaceInfo;
+
+    fn topo(n: usize, arestas: &[[u32; 2]]) -> Topology {
+        let f = FaceInfo { kind: 0, dir: [0., 0., 1.], area: 1., point: [0.; 3] };
+        Topology { faces: vec![f; n], edge_mids: (0..arestas.len()).map(|i| [i as f64, 0., 0.]).collect(), edge_faces: arestas.to_vec() }
+    }
+
+    #[test]
+    fn criadas_pelo_comando_seguem_os_papeis() {
+        // faces 0..2 do comando 7 (tampa e duas laterais), 3 da base, 4 do comando 7 sem papel
+        let t = topo(5, &[[0, 1], [0, 2], [1, 2], [1, 3], [2, 4], [4, 0]]);
+        let owners = [Id(7), Id(7), Id(7), Id(1), Id(7)];
+        let roles = [1, 2, 3, 0, -1];
+        let v = View { topo: &t, owners: &owners, roles: &roles };
+        // a aresta com a base fica de fora (já existia); as da face sem papel também
+        assert_eq!(arestas_criadas(&v, Id(7)), vec![0, 1, 2]);
+        // sem papel nenhum: só o dono decide, como antes
+        let sem = [-1; 5];
+        let v = View { topo: &t, owners: &owners, roles: &sem };
+        assert_eq!(arestas_criadas(&v, Id(7)), vec![0, 1, 2, 4, 5]);
+    }
+
+    #[test]
+    fn candidatas_da_aresta_ambigua_sao_as_do_par_de_faces() {
+        let t = topo(4, &[[0, 1], [0, 2], [1, 2], [0, 1]]);
+        let owners = [Id(7); 4];
+        let roles = [0, 2, 3, 1];
+        let v = View { topo: &t, owners: &owners, roles: &roles };
+        let k = EdgeKey { a: v.face_key(0).unwrap(), b: v.face_key(1).unwrap() };
+        // duas arestas entre a tampa e a lateral 1: as duas são candidatas, a mais perto primeiro
+        assert_eq!(candidatas_aresta(&v, Some(&k), [3., 0., 0.], 5), vec![3, 0]);
+        assert_eq!(candidatas_aresta(&v, None, [2.1, 0., 0.], 2), vec![2, 3]);
+    }
 }

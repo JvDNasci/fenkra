@@ -413,7 +413,7 @@ pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
         }
         "espessura" => {
             caixa(doc);
-            FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 30.]], value: s("8"), face_keys: vec![], remove: false })
+            FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 30.]], value: s("8"), face_keys: vec![], remove: false, regras: vec![] })
         }
         "rosca" => {
             doc.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Origin(OriginPlane::XY), a: s("6"), b: s("40"), c: s("0"), d: s("0"), op: BoolOp::Add }));
@@ -949,7 +949,7 @@ mod tests {
         assert!(retira(&extrusao(sk, BoolOp::Cut, false, "5")));
         assert!(!retira(&extrusao(sk, BoolOp::Add, false, "5")));
         assert!(!retira(&FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![], thickness: s("2"), outward: false, face_keys: vec![], closed: false, regras: vec![] })));
-        assert!(retira(&FeatureKind::Thickness(Thickness { faces: vec![], value: s("2"), face_keys: vec![], remove: true })));
+        assert!(retira(&FeatureKind::Thickness(Thickness { faces: vec![], value: s("2"), face_keys: vec![], remove: true, regras: vec![] })));
     }
 
     /// B275: o plano do espelho, o neutro da saída e a base da primitiva usam o mesmo retângulo
@@ -1054,7 +1054,7 @@ mod tests {
         let mut d = caixa();
         let antes = recompute(&d);
         let base = corpos_base(Some(&antes));
-        let e = d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 20.]], value: s("5"), face_keys: vec![], remove: false }));
+        let e = d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[0., 0., 20.]], value: s("5"), face_keys: vec![], remove: false, regras: vec![] }));
         let r = recompute(&d);
         assert!(valido(r.status.get(&e)), "{:?}", r.status.get(&e));
         assert!((r.bodies[0].mass.volume - 40. * 40. * 25.).abs() < 1., "{}", r.bodies[0].mass.volume);

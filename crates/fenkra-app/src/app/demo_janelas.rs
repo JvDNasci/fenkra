@@ -2,7 +2,8 @@
 //! Desenvolvimento: `FENKRA_DEMO_JANELA=<nome>` abre, no segundo quadro, uma janela ou painel que só o
 //! mouse abriria, para a captura (`FENKRA_DEMO_FOTO`). Nomes: `salvar_como`, `empacotar`, `reparar`,
 //! `liberar` (combine com `FENKRA_DEMO_PROJETO=1`), `resumo` (com `FENKRA_DEMO_EST=1`), `roda`, `roda_editor`,
-//! `ramos` (com `FENKRA_DEMO_PROJETO=1`: ramo em conflito e janela de mesclagem), `tabela` (parâmetros com a tabela de projeto preenchida).
+//! `ramos` (com `FENKRA_DEMO_PROJETO=1`: ramo em conflito e janela de mesclagem), `tabela` (parâmetros com a tabela de projeto preenchida), `reparo_candidatas` (assistente de
+//! reparo com as candidatas da face perdida numeradas no 3D).
 
 use super::*;
 
@@ -41,6 +42,31 @@ impl App {
                 }
             }
             "ramos" => self.demo_abrir_mescla(ctx),
+            // B59: dois cliques em ◀ na barra de status: o objeto em trabalho volta dois comandos
+            "passo_a_passo" => {
+                self.open.doc.passo_em_trabalho(fenkra_core::PassoTrabalho::Anterior);
+                self.open.doc.passo_em_trabalho(fenkra_core::PassoTrabalho::Anterior);
+                self.request_recompute();
+            }
+            // B15: casca com a face perdida e o assistente de reparo aberto, candidatas numeradas no 3D
+            "reparo_candidatas" => {
+                let mut d = Document::new("Reparo");
+                let mut data = fenkra_core::SketchData::default();
+                let mut n = 9_700_000u64;
+                let mut al = || {
+                    n += 1;
+                    Id(n)
+                };
+                data.add_rect(&mut &mut al, [-20., -15.], [20., 15.], false);
+                let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+                d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
+                // o ponto ficou 3 mm acima do topo (o topo baixou depois do clique)
+                d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[6., 4., 23.]], thickness: "1.5".into(), outward: false, face_keys: vec![None], closed: false, regras: vec![] }));
+                self.open.doc = d;
+                self.sent_doc = None;
+                self.request_recompute();
+                self.wizard_open = true;
+            }
             "resumo" => crate::st_montagem_ui::abrir(self),
             "roda" => {
                 let r = ctx.content_rect();
@@ -136,6 +162,22 @@ impl App {
                 let f = d.add_feature(FeatureKind::Draft(fenkra_core::Draft { faces: vec![[0., -15., 10.]], neutral: PlaneRef::Origin(OriginPlane::XY), angle: "8".into(), reverse: false, face_keys: vec![], regras: vec![fenkra_core::RegraAresta { semente: 0, regra: fenkra_core::RegraSelecao::Tangentes }] }));
                 self.open.doc = d;
                 self.sent_doc = None;
+                self.start_session(f, false, None);
+            }
+            // B95: espessura de 2 mm gravada pela regra "tangentes" a partir de uma parede: os cantos
+            // arredondados engrossam juntos, com o painel aberto mostrando a regra
+            "espessura_regra" => {
+                let mut d = Document::new("Regra de faces");
+                let mut sk = fenkra_core::SketchData::default();
+                let mut al = || d.alloc();
+                sk.add_rect(&mut al, [-20., -15.], [20., 15.], false);
+                let s = d.add_feature(FeatureKind::Sketch(fenkra_core::Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: sk }));
+                d.add_feature(FeatureKind::Extrude(fenkra_core::Extrude { sketch: s, op: fenkra_core::BoolOp::Add, extent: fenkra_core::Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+                d.add_feature(FeatureKind::Fillet(fenkra_core::EdgeOp { value: "6".into(), edges: EdgeSel::Edges(vec![[20., 15., 10.], [-20., 15., 10.], [-20., -15., 10.], [20., -15., 10.]]), mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: EdgeExtra::default() }));
+                let f = d.add_feature(FeatureKind::Thickness(fenkra_core::Thickness { faces: vec![[0., -15., 10.]], value: "2".into(), face_keys: vec![], remove: false, regras: vec![fenkra_core::RegraAresta { semente: 0, regra: fenkra_core::RegraSelecao::Tangentes }] }));
+                self.open.doc = d;
+                self.sent_doc = None;
+                self.request_recompute();
                 self.start_session(f, false, None);
             }
             // B20: furo novo aberto, com o botão Aplicar e continuar na barra do comando

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! B95: faces escolhidas por regra (tangentes, concêntricas) gravadas na casca, na saída e na edição
-//! direta, e refeitas no recompute: a regra acompanha o modelo, a lista fixa não.
+//! B95: faces escolhidas por regra (tangentes, concêntricas) gravadas na casca, na saída, na espessura
+//! e na edição direta, e refeitas no recompute: a regra acompanha o modelo, a lista fixa não.
 
 mod common;
 
@@ -168,4 +168,36 @@ fn arquivo_antigo_sem_regra_abre() {
     assert!(sh.regras.is_empty());
     let novo = serde_json::to_string(&sh).unwrap();
     assert!(!novo.contains("regras"), "lista vazia não é gravada: {novo}");
+}
+
+#[test]
+fn espessura_por_tangentes_engrossa_paredes_e_cantos() {
+    if !kernel_disponivel() {
+        return;
+    }
+    // bloco 40 x 40 x 20 de cantos verticais arredondados (r = 5); 1 mm na parede y = 0
+    let base = |regras: Vec<RegraAresta>| {
+        let mut d = Document::new("t");
+        let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [40., 40.]);
+        d.add_feature(ext(sk, BoolOp::Add, "20"));
+        d.add_feature(filete("5", vec![[0., 0., 10.], [40., 0., 10.], [0., 40., 10.], [40., 40., 10.]], vec![]));
+        let id = d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[20., 0., 10.]], value: s("1"), face_keys: vec![], remove: false, regras }));
+        (d, id)
+    };
+    let (d, id) = base(vec![]);
+    let r = recompute(&d);
+    ok(&r, id);
+    let v_fil = 40. * 40. * 20. - 4. * (1. - std::f64::consts::PI / 4.) * 25. * 20.;
+    let so = r.bodies[0].mass.volume - v_fil;
+    assert!((so - 30. * 20.).abs() < 30., "só a parede plana de 30 mm: {so}");
+    // pela regra: o contorno inteiro (4 paredes e 4 cantos) engrossa 1 mm
+    let (d, id) = base(vec![TANG]);
+    let r = recompute(&d);
+    ok(&r, id);
+    let dv = r.bodies[0].mass.volume - v_fil;
+    let perimetro = 4. * 30. + 2. * std::f64::consts::PI * 5.;
+    let esperado = (perimetro + std::f64::consts::PI) * 20.; // a coroa dos cantos cresce com r + 1
+    assert!((dv - esperado).abs() < esperado * 0.1, "variação {dv}, esperado ≈ {esperado}");
+    let (lo, hi) = caixa_da_malha(&r);
+    assert!((hi[0] - lo[0] - 42.).abs() < 0.01 && (hi[1] - lo[1] - 42.).abs() < 0.01, "{lo:?} {hi:?}");
 }

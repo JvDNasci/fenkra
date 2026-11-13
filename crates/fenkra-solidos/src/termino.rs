@@ -65,12 +65,22 @@ impl Ctx<'_> {
 
     /// Ferramenta de um lado da extrusão e o papel de cada face (só nas extrusões simples).
     pub(crate) fn tool_lado(&self, l: &LadoExtrusao, extent: &Extent, offset: f64) -> Result<(Shape, Option<Vec<i32>>), String> {
-        let k = |e: KernelError| e.0;
-        let LadoExtrusao { face, origin, dir, size, taper, target, op } = *l;
         if offset.abs() > 1e-12 && !campos_do_termino(extent).deslocamento {
             return Err(format!("o deslocamento do término não vale com o término '{}': só em passante, até o próximo, até o último, até plano e até superfície", extent_name(extent)));
         }
         let mut roles = None;
+        let tool = self.tool_lado_sem_papel(l, extent, offset, &mut roles)?;
+        // B15: término que o kernel não rotula (até plano, até superfície, até o próximo, saída):
+        // papéis pela geometria; na dúvida, sem papéis
+        if roles.is_none() {
+            roles = crate::papeis::por_perfil(&tool, l.face, crate::papeis::Fim::Resto).filter(|r| r.len() == tool.face_count() as usize);
+        }
+        Ok((tool, roles))
+    }
+
+    fn tool_lado_sem_papel(&self, l: &LadoExtrusao, extent: &Extent, offset: f64, roles: &mut Option<Vec<i32>>) -> Result<Shape, String> {
+        let k = |e: KernelError| e.0;
+        let LadoExtrusao { face, origin, dir, size, taper, target, op } = *l;
         let tool = match extent {
             Extent::UpTo(p) => {
                 let alvo = self.plane(p, 0)?;
@@ -97,12 +107,12 @@ impl Ctx<'_> {
                     return Err("o deslocamento recua o término para antes do início da extrusão".into());
                 }
                 let (t, r) = face.extrude_roles(dir, len, 0.).map_err(k)?;
-                roles = Some(r);
+                *roles = Some(r);
                 t
             }
             Extent::UpToNext if offset.abs() > 1e-12 => {
                 let body = self.body(target).ok_or("'até o próximo' precisa de um corpo no coletor")?;
-                return self.ate_o_proximo_deslocado(l, body, offset).map(|t| (t, None));
+                return self.ate_o_proximo_deslocado(l, body, offset);
             }
             Extent::UpToNext if op == BoolOp::Add => {
                 let body = self.body(target).ok_or("'até o próximo' precisa de um corpo no coletor")?;
@@ -114,7 +124,7 @@ impl Ctx<'_> {
                     return Err("o deslocamento recua o término para antes do início da extrusão".into());
                 }
                 let (t, r) = face.extrude_roles(dir, len, 0.).map_err(k)?;
-                roles = Some(r);
+                *roles = Some(r);
                 t
             }
             _ => {
@@ -131,12 +141,12 @@ impl Ctx<'_> {
                 } else {
                     let (front, back) = self.extent(extent, target)?;
                     let (t, r) = face.extrude_roles(dir, front, back).map_err(k)?;
-                    roles = Some(r);
+                    *roles = Some(r);
                     t
                 }
             }
         };
-        Ok((tool, roles))
+        Ok(tool)
     }
 
     /// Superfície de parada deslocada `offset` mm na direção da extrusão (positivo avança além do alvo).
@@ -201,9 +211,17 @@ impl Ctx<'_> {
                 return Err("o ângulo de saída vale só com um único término cego".into());
             }
             let lado2 = LadoExtrusao { face, origin, dir: neg(dir), size, taper: 0., target, op: e.op };
-            let (t2, _) = self.tool_lado(&lado2, e2, off2)?;
+            let (t2, r2) = self.tool_lado(&lado2, e2, off2)?;
+            // B15: o composto lista as faces do lado 1 e depois as do lado 2
+            let n1 = tool.face_count() as usize;
             tool = tool.compound(&t2);
-            roles = None;
+            roles = match (roles, r2) {
+                (Some(mut a), Some(b)) if a.len() == n1 && a.len() + b.len() == tool.face_count() as usize => {
+                    a.extend(b);
+                    Some(a)
+                }
+                _ => None,
+            };
         }
         Ok((tool, roles))
     }

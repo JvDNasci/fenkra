@@ -67,6 +67,11 @@ pub fn existe(nome: &str) -> bool {
     modelo(nome).is_some()
 }
 
+/// Texto do SVG da família nova (com as cores ainda por pintar), para conferir desenhos repetidos.
+pub fn modelo_texto(nome: &str) -> Option<&'static str> {
+    modelo(nome)
+}
+
 /// Ícone pelo nome, nas cores do tema atual. Sem desenho novo, cai no ícone antigo.
 pub fn get(name: &str) -> ImageSource<'static> {
     PINTADOS.with_borrow_mut(|p| {

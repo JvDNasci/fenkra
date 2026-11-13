@@ -639,19 +639,62 @@ std::unique_ptr<Shape> draft_t(const Shape& s, rust::Slice<const double> pts, do
     });
 }
 
+// Normal externa no meio de uma face (pela orientação dela no corpo).
+static bool normal_no_meio(const TopoDS_Face& f, gp_Pnt& meio, gp_Vec& n) {
+    BRepAdaptor_Surface su(f);
+    double u0, u1, v0, v1;
+    BRepTools::UVBounds(f, u0, u1, v0, v1);
+    gp_Vec du, dv;
+    su.D1((u0 + u1) / 2, (v0 + v1) / 2, meio, du, dv);
+    n = du.Crossed(dv);
+    if (n.Magnitude() < 1e-12) return false;
+    n.Normalize();
+    if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
+    return true;
+}
+
 std::unique_ptr<Shape> faces_offset_tool(const Shape& s, rust::Slice<const double> pts, double value) {
     return guard("espessura de faces", [&] {
+        const std::vector<TopoDS_Face> faces = faces_near(s.s, pts);
+        bool curva = false;
+        for (auto& f : faces) curva |= BRepAdaptor_Surface(f).GetType() != GeomAbs_Plane;
         TopoDS_Compound c;
         BRep_Builder bb;
         bb.MakeCompound(c);
-        for (auto& f : faces_near(s.s, pts)) {
-            BRepAdaptor_Surface su(f);
-            if (su.GetType() != GeomAbs_Plane) throw std::runtime_error("espessura nesta versão só em faces planas");
-            gp_Dir n = su.Plane().Axis().Direction();
-            if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
-            bb.Add(c, BRepPrimAPI_MakePrism(f, gp_Vec(n) * value).Shape());
+        if (!curva) {
+            for (auto& f : faces) {
+                gp_Dir n = BRepAdaptor_Surface(f).Plane().Axis().Direction();
+                if (f.Orientation() == TopAbs_REVERSED) n.Reverse();
+                bb.Add(c, BRepPrimAPI_MakePrism(f, gp_Vec(n) * value).Shape());
+            }
+            return wrap(c);
         }
-        return wrap(c);
+        // B95: com face curva (o canto arredondado que a regra de tangentes traz), as faces escolhidas
+        // viram uma casca só (elas dividem as arestas no corpo) deslocada pela normal de uma vez. Uma casca
+        // por face, lado a lado, deixava emendas que a união com o corpo não fecha (sólido inválido).
+        // O ponto de prova (meio da primeira face levado meia distância pela normal externa) tem de cair
+        // dentro do resultado; senão o sentido saiu trocado e refaz com o sinal oposto. Volume negativo
+        // (orientação invertida) é virado, ou a união com o corpo dá lixo.
+        TopoDS_Shell sh;
+        bb.MakeShell(sh);
+        for (auto& f : faces) bb.Add(sh, f);
+        gp_Pnt meio;
+        gp_Vec nf;
+        if (faces.empty() || !normal_no_meio(faces[0], meio, nf)) throw std::runtime_error("face curva sem normal no meio: escolha outra face");
+        const gp_Pnt prova = meio.Translated(nf * (value / 2));
+        for (double sinal : {1.0, -1.0}) {
+            BRepOffsetAPI_MakeThickSolid mk;
+            mk.MakeThickSolidBySimple(sh, sinal * value);
+            mk.Build();
+            if (!mk.IsDone() || mk.Shape().IsNull()) continue;
+            TopoDS_Shape t = mk.Shape();
+            GProp_GProps g;
+            BRepGProp::VolumeProperties(t, g);
+            if (g.Mass() < 0) t.Reverse();
+            BRepClass3d_SolidClassifier cl(t, prova, 1e-6);
+            if (cl.State() == TopAbs_IN && BRepCheck_Analyzer(t).IsValid()) return wrap(t);
+        }
+        throw std::runtime_error("a espessura não coube nas faces curvas escolhidas: reduza a distância ou escolha faces ligadas");
     });
 }
 
