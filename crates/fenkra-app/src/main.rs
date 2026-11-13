@@ -37,6 +37,7 @@ mod analise_janela;
 mod textos_analise;
 mod selecao;
 mod selecao_regras;
+mod textos_ger8;
 mod alca_estado;
 mod viewcube;
 mod sketch_ui;

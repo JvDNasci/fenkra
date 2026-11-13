@@ -14,6 +14,12 @@ use std::collections::HashMap;
 /// - referências: nenhuma referência perdida;
 /// - volume: todo corpo sólido com volume finito e positivo.
 pub(crate) fn verificar_recalculo(doc: &Document) -> Vec<String> {
+    conferir(doc, None)
+}
+
+/// A mesma conferência e, com `perfil`, o checador de qualidade (B305) no momento "ao criar revisão":
+/// regra que bloqueia barra a aprovação e a mesclagem; aviso e informação não barram.
+pub(crate) fn conferir(doc: &Document, perfil: Option<&fenkra_project::qualidade_modelo::Perfil>) -> Vec<String> {
     use fenkra_solidos::erro::ErrorKind;
     use fenkra_solidos::Status;
     let r = fenkra_solidos::recompute(doc);
@@ -35,6 +41,13 @@ pub(crate) fn verificar_recalculo(doc: &Document) -> Vec<String> {
     for b in &r.bodies {
         if !b.mass.volume.is_finite() || (b.faces > 0 && b.mass.volume <= 0.) {
             p.push(format!("corpo sem volume válido ({:.3})", b.mass.volume));
+        }
+    }
+    if let Some(perfil) = perfil {
+        let m = super::plm::medidas_do_resultado(&r, doc);
+        let rel = fenkra_project::qualidade_modelo::avaliar(perfil, &m, fenkra_project::qualidade_modelo::Momento::Revisar, &[]);
+        if rel.bloqueia() {
+            p.push(format!("checador de qualidade: {}", rel.resumo_bloqueios()));
         }
     }
     p
@@ -83,6 +96,12 @@ enum AcaoRamo {
     Recusar(String),
     Mesclar(String),
     Descartar(String),
+    /// traz a principal de hoje para dentro do ramo
+    Trazer(String),
+    /// cópia derivada (fork) do documento
+    Derivar(String),
+    /// leva a cópia derivada de volta ao original como ramo
+    Levar(String),
 }
 
 impl App {
@@ -138,6 +157,9 @@ impl App {
         let ramos: Vec<Ramo> = p.ramos(sel).into_iter().filter(|r| r.estado == EstadoRamo::Aberto).collect();
         let avisos = p.avisos_de_sobreposicao(sel).unwrap_or_default();
         let aprovador = p.papeis.iter().any(|x| x == "aprovador");
+        // quanto a principal andou desde cada ramo: quem está no ramo continua vendo a linha principal
+        let andou: HashMap<String, usize> = ramos.iter().map(|r| (r.nome.clone(), p.principal_desde_o_ramo(sel, &r.nome).map(|c| c.total()).unwrap_or(0))).collect();
+        let origem = p.origem_do_derivado(sel);
         let ativo = if self.open.entry == Some(sel) { self.open.ramo.clone() } else { None };
         let mut st: RamosUi = ui.ctx().data(|d| d.get_temp(egui::Id::new(("ramos_ui", sel)))).unwrap_or_default();
         let mut acao: Option<AcaoRamo> = None;
@@ -167,6 +189,13 @@ impl App {
                     }
                     if !aqui && ui.small_button(tr("Trocar")).on_hover_text(tr("Abre o ramo para editar; a principal não muda")).clicked() {
                         acao = Some(AcaoRamo::Trocar(r.nome.clone()));
+                    }
+                    let n = andou.get(&r.nome).copied().unwrap_or(0);
+                    if n > 0 {
+                        ui.label(RichText::new(format!("{} {n}", tr("principal andou:"))).small().color(ui.visuals().warn_fg_color));
+                        if ui.small_button(tr("Trazer a principal")).on_hover_text(tr("Traz para o ramo o que a principal mudou. Onde os dois mexeram no mesmo valor, fica o do ramo; a principal não muda.")).clicked() {
+                            acao = Some(AcaoRamo::Trazer(r.nome.clone()));
+                        }
                     }
                     let estado = r.pedido.as_ref().map(|x| x.estado);
                     if estado != Some(EstadoPedido::Aberto) && estado != Some(EstadoPedido::Aprovado) && ui.small_button(tr("Pedir mesclagem")).on_hover_text(tr("Pede a entrada deste ramo na linha principal, com a mensagem abaixo")).clicked() {
@@ -201,7 +230,19 @@ impl App {
                 if ui.add_enabled(ok, egui::Button::new(tr("Criar ramo"))).on_hover_text(tr("Abre um ramo a partir da versão atual da principal")).clicked() {
                     acao = Some(AcaoRamo::Criar(st.novo.trim().to_string()));
                 }
+                if ui.add_enabled(ok, egui::Button::new(tr("Cópia derivada"))).on_hover_text(tr("Cria um documento novo a partir da principal, com vida própria; depois ele pode voltar ao original como ramo")).clicked() {
+                    acao = Some(AcaoRamo::Derivar(st.novo.trim().to_string()));
+                }
             });
+            if let Some(o) = origem {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(RichText::new(format!("{} #{o}", tr("Cópia derivada de"))).small());
+                    let ok = !st.novo.trim().is_empty();
+                    if ui.add_enabled(ok, egui::Button::new(tr("Levar ao original como ramo")).small()).on_hover_text(tr("A principal desta cópia vira um ramo do original, com o nome acima; daí segue o pedido de mesclagem")).clicked() {
+                        acao = Some(AcaoRamo::Levar(st.novo.trim().to_string()));
+                    }
+                });
+            }
         });
 
         if let Some(a) = acao {
@@ -221,6 +262,7 @@ impl App {
             }
         }
         let Some(p) = self.project.as_mut() else { return };
+        let perfil = p.perfil_qualidade();
         let r: Result<String, String> = match acao {
             AcaoRamo::Criar(nome) => {
                 let r = p.criar_ramo(sel, &nome).map(|_| format!("{} '{nome}'", tr("Ramo criado"))).map_err(|e| e.to_string());
@@ -245,11 +287,42 @@ impl App {
                 let msg = if st.mensagem.trim().is_empty() { format!("{} {nome}", tr("Mesclar")) } else { st.mensagem.trim().to_string() };
                 p.pedir_mesclagem(sel, &nome, &msg).map(|_| tr("Pedido de mesclagem enviado").to_string()).map_err(|e| e.to_string())
             }
-            AcaoRamo::Aprovar(nome) => p.revisar_pedido(sel, &nome, true, st.motivo.trim(), &verificar_recalculo).map(|_| tr("Pedido aprovado: o resultado recalcula sem erro").to_string()).map_err(|e| e.to_string()),
+            AcaoRamo::Aprovar(nome) => p.revisar_pedido(sel, &nome, true, st.motivo.trim(), &|d: &Document| conferir(d, Some(&perfil))).map(|_| tr("Pedido aprovado: o resultado recalcula sem erro").to_string()).map_err(|e| e.to_string()),
             AcaoRamo::Recusar(nome) => p.revisar_pedido(sel, &nome, false, st.motivo.trim(), &verificar_recalculo).map(|_| tr("Pedido recusado").to_string()).map_err(|e| e.to_string()),
             AcaoRamo::Mesclar(nome) => {
                 ctx.data_mut(|d| d.insert_temp(id_mescla(), Some(MesclaUi { id: sel, nome, escolhas: HashMap::new() })));
                 return;
+            }
+            AcaoRamo::Trazer(nome) => {
+                // onde os dois mexeram no mesmo valor, quem está no ramo fica com o próprio trabalho
+                let escolhas: HashMap<String, Lado> = p.previa_atualizar_ramo(sel, &nome, &HashMap::new()).map(|m| m.conflitos.into_iter().map(|c| (c.chave, Lado::Nossa)).collect()).unwrap_or_default();
+                let r = p.atualizar_ramo_com_principal(sel, &nome, &escolhas, &|d: &Document| conferir(d, None));
+                match r {
+                    Ok(m) => {
+                        if self.open.entry == Some(sel) && self.open.ramo.as_deref() == Some(nome.as_str()) {
+                            if let Ok(d) = self.project.as_ref().unwrap().carregar_ramo(sel, &nome) {
+                                self.load_doc(d, Some(sel), None);
+                                self.open.ramo = Some(nome.clone());
+                            }
+                        }
+                        Ok(format!("{} '{nome}' ({} {})", tr("Principal trazida para o ramo"), m.conflitos.len(), tr("conflito(s) ficaram com o ramo")))
+                    }
+                    Err(e) => Err(e.to_string()),
+                }
+            }
+            AcaoRamo::Derivar(nome) => {
+                let r = p.derivar_documento(sel, &nome).map(|_| format!("{} '{nome}'", tr("Cópia derivada criada"))).map_err(|e| e.to_string());
+                if r.is_ok() {
+                    st.novo.clear();
+                }
+                r
+            }
+            AcaoRamo::Levar(nome) => {
+                let r = p.trazer_derivado_como_ramo(sel, &nome).map(|_| format!("{} '{nome}'", tr("Levada ao original como ramo"))).map_err(|e| e.to_string());
+                if r.is_ok() {
+                    st.novo.clear();
+                }
+                r
             }
             AcaoRamo::Descartar(nome) => {
                 let r = p.descartar_ramo(sel, &nome).map(|_| format!("{} '{nome}'", tr("Ramo descartado"))).map_err(|e| e.to_string());
@@ -352,7 +425,8 @@ impl App {
         }
         if confirmar {
             let (id, nome, escolhas) = (st.id, st.nome.clone(), st.escolhas.clone());
-            let r = self.project.as_mut().unwrap().mesclar_ramo(id, &nome, &escolhas, &verificar_recalculo);
+            let perfil = self.project.as_ref().unwrap().perfil_qualidade();
+            let r = self.project.as_mut().unwrap().mesclar_ramo(id, &nome, &escolhas, &|d: &Document| conferir(d, Some(&perfil)));
             match r {
                 Ok(_) => {
                     self.toast(format!("{} '{nome}'", tr("Ramo mesclado na principal")), false);
@@ -422,5 +496,24 @@ mod tests {
         caixa(&mut ruim, "0");
         let p = verificar_recalculo(&ruim);
         assert!(!p.is_empty(), "caixa de largura zero não pode passar");
+    }
+
+    #[test]
+    fn checador_de_qualidade_barra_a_aprovacao_no_perfil_rigido() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_project::qualidade_modelo::{Gravidade, Perfil, Regra};
+        let mut d = Document::new("q");
+        caixa(&mut d, "40");
+        assert!(conferir(&d, Some(&Perfil::padrao())).is_empty(), "{:?}", conferir(&d, Some(&Perfil::padrao())));
+        // perfil que só aceita 2 faces e bloqueia: a caixa (6 faces) é barrada
+        let mut duro = Perfil::padrao();
+        if let Some(l) = duro.regras.iter_mut().find(|l| l.regra == Regra::Faces) {
+            l.limite = 2.;
+            l.gravidade = Gravidade::Bloqueia;
+        }
+        let p = conferir(&d, Some(&duro));
+        assert!(p.iter().any(|x| x.contains("checador de qualidade")), "{p:?}");
     }
 }
