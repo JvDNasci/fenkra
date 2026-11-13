@@ -768,6 +768,18 @@ fn linha_de_comando_devolve_o_contrato_estavel() {
     let (c, v) = cli(&d, &["comparar", "c.step", "b.fkx"]);
     assert_eq!(c, 0, "{v}");
     assert_eq!(v["resultado"]["aprovado"], false, "{v}");
+    assert!(v["resultado"]["arvore"].is_null(), "alvo STEP não tem árvore: {v}");
+    // B214: alvo que é documento do Fenkra também é comparado pela árvore, com o comparador das versões
+    let (c, v) = cli(&d, &["comparar", "c.fkx", "b.fkx"]);
+    assert_eq!(c, 0, "{v}");
+    let arvore = &v["resultado"]["arvore"];
+    assert_eq!(arvore["igual"], false, "{v}");
+    let params = arvore["itens"].as_array().unwrap().iter().find(|i| i["chave"] == "migracao_parametros").expect("item de parâmetros");
+    assert_eq!(params["ok"], false, "{v}");
+    assert!(params["detalhe"].as_str().unwrap().contains("80") && params["detalhe"].as_str().unwrap().contains("40"), "{v}");
+    let (c, v) = cli(&d, &["comparar", "b.fkx", "b.fkx"]);
+    assert_eq!(c, 0, "{v}");
+    assert_eq!(v["resultado"]["arvore"]["igual"], true, "{v}");
 
     // erro: código 1, JSON com `erro`, e nada sobrescrito
     let (c, v) = cli(&d, &["exportar", "c.fkx", "c.step"]);

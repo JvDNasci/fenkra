@@ -793,14 +793,46 @@ impl Sessao {
             self.ultima_comparacao = Some(r.clone());
             return Ok(r);
         }
-        let alvo: Resumo = topologia::analisar(&self.forma_do_arquivo(&texto(args, "alvo")?)?)?;
+        let arquivo_alvo = texto(args, "alvo")?;
+        let alvo: Resumo = topologia::analisar(&self.forma_do_arquivo(&arquivo_alvo)?)?;
         let forma = match args["arquivo"].as_str() {
             Some(a) => self.forma_do_arquivo(a)?,
             None => self.forma()?,
         };
-        let r = checador::comparar(&alvo, &topologia::analisar(&forma)?, &t);
+        let mut r = checador::comparar(&alvo, &topologia::analisar(&forma)?, &t);
+        // B214: alvo que é um documento do Fenkra (não STEP) também é comparado pela árvore, com o
+        // mesmo comparador do histórico de versões: diz qual feature, parâmetro ou propriedade divergiu
+        if let Some(arvore) = self.comparar_arvores(&arquivo_alvo, args["arquivo"].as_str())? {
+            r["arvore"] = arvore;
+        }
         self.ultima_comparacao = Some(r.clone());
         Ok(r)
+    }
+
+    /// Diff por feature entre o documento alvo e o montado (B214). `None` quando o alvo é STEP: aí só
+    /// há geometria para comparar.
+    fn comparar_arvores(&mut self, alvo: &str, arquivo: Option<&str>) -> Result<Option<Value>, ErroApi> {
+        let m = alvo.to_ascii_lowercase();
+        if m.ends_with(".step") || m.ends_with(".stp") {
+            return Ok(None);
+        }
+        let doc_de = |a: &str| -> Result<Document, ErroApi> {
+            let mut s = Sessao::nova(self.pasta.clone(), Isolamento::Local);
+            s.abrir(&json!({ "arquivo": a }))?;
+            Ok(s.calcular()?.doc.clone())
+        };
+        let doc_alvo = doc_de(alvo)?;
+        let doc_modelo = match arquivo {
+            Some(a) => doc_de(a)?,
+            None => self.calcular()?.doc.clone(),
+        };
+        let c = fenkra_project::comparacao::comparar_documentos(&doc_alvo, &doc_modelo);
+        let itens: Vec<Value> = c
+            .como_conferencia()
+            .into_iter()
+            .map(|i| json!({ "chave": i.chave, "rotulo": i.rotulo, "ok": i.estado == fenkra_project::estados::EstadoItem::Ok, "detalhe": i.detalhe }))
+            .collect();
+        Ok(Some(json!({ "igual": c.e_igual(), "itens": itens })))
     }
 
     /// Refaz um registro nesta sessão. Só os comandos que mudam o modelo são aceitos: o arquivo é dado,
