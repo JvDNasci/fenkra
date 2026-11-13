@@ -38,6 +38,7 @@ mod textos_analise;
 mod selecao;
 mod selecao_regras;
 mod continuar;
+mod ajuda_f1;
 mod scan;
 mod textos_ger8;
 mod alca_estado;

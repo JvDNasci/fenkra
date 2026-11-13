@@ -102,6 +102,15 @@ pub fn inserir(v: &mut Vec<String>, icone: &str, pos: usize) {
 
 /// Janela do editor: contexto, setores em ordem (arrastar para reordenar), catálogo para arrastar,
 /// restaurar, exportar e importar.
+/// Catálogo do editor da roda: todos os comandos, ou os que a busca do Ctrl+K acha (B60).
+pub fn catalogo_filtrado(busca: &str) -> Vec<crate::toolbar::Item> {
+    if busca.trim().is_empty() {
+        crate::ajuda_cmd::comandos()
+    } else {
+        crate::ajuda_cmd::buscar(busca, 60)
+    }
+}
+
 pub fn editor(ctx: &egui::Context, cfg: &mut Config) {
     let aberto_id = egui::Id::new("roda_editor_aberto");
     if !ctx.data(|d| d.get_temp::<bool>(aberto_id)).unwrap_or(false) {
@@ -169,8 +178,13 @@ pub fn editor(ctx: &egui::Context, cfg: &mut Config) {
             }
             // catálogo
             cols[1].label(RichText::new(tr("Catálogo de comandos")).strong());
+            // B60: a mesma busca do Ctrl+K, com sinônimos em português e inglês
+            let id_busca = egui::Id::new("roda_busca_catalogo");
+            let mut busca: String = cols[1].ctx().data(|d| d.get_temp(id_busca)).unwrap_or_default();
+            cols[1].add(egui::TextEdit::singleline(&mut busca).hint_text(tr("Buscar no catálogo (nome ou sinônimo, PT/EN)")).desired_width(f32::INFINITY));
+            cols[1].ctx().data_mut(|d| d.insert_temp(id_busca, busca.clone()));
             egui::ScrollArea::vertical().id_salt("roda_catalogo").max_height(300.).show(&mut cols[1], |ui| {
-                for it in crate::ajuda_cmd::comandos() {
+                for it in catalogo_filtrado(&busca) {
                     ui.dnd_drag_source(egui::Id::new(("roda_cat", it.icon)), (usize::MAX, it.icon.to_owned()), |ui| {
                         ui.horizontal(|ui| {
                             ui.add(egui::Image::new(crate::icons::get(it.icon)).fit_to_exact_size(egui::vec2(18., 18.)));
@@ -222,6 +236,13 @@ mod testes {
 
     fn v(s: &[&str]) -> Vec<String> {
         s.iter().map(|x| (*x).to_owned()).collect()
+    }
+
+    #[test]
+    fn catalogo_do_editor_acha_por_sinonimo_em_ingles() {
+        assert_eq!(catalogo_filtrado("").len(), crate::ajuda_cmd::comandos().len());
+        let f = catalogo_filtrado("fillet");
+        assert!(f.iter().any(|i| i.name.contains("Filete")), "{:?}", f.iter().map(|i| i.name).collect::<Vec<_>>());
     }
 
     #[test]

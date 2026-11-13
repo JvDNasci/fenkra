@@ -8881,6 +8881,8 @@ impl eframe::App for App {
         crate::desempenho::marca("pre_atalhos");
         crate::ui_ext::definir_modo_roda(crate::ui_ext::ModoRoda::de_u8(self.settings.wheel_mode));
         crate::dica_anim::definir(self.settings.dica_simples, self.settings.acessibilidade.reduzir_movimento);
+        crate::ajuda_f1::definir_atraso(ctx, self.settings.atraso_dica_ms);
+        crate::ajuda_f1::janela(ctx);
         // cores salvas: preferências ↔ paleta usada pelos painéis
         {
             let mut dirty = crate::palette::DIRTY.lock().unwrap();
@@ -9877,6 +9879,7 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 ui.add(crate::ui_ext::slider(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
                 ui.checkbox(&mut s.show_labels, tr("mostrar o nome embaixo dos ícones"));
                 ui.checkbox(&mut s.dica_simples, tr("dicas simples (sem animação nem passo a passo)")).on_hover_text(tr("A dica mostra só o nome e a frase do comando. Desligada, parar o mouse sobre um botão mostra também a animação e o passo a passo."));
+                ui.add(crate::ui_ext::slider(&mut s.atraso_dica_ms, 100..=3000).text(tr("atraso das dicas (ms)"))).on_hover_text(tr("Quanto o mouse fica parado sobre um botão antes da dica aparecer. A animação e o passo a passo vêm 0,7 s depois."));
                 crate::teclado::resumo_ui(ui);
                 ui.separator();
                 ui.label(RichText::new(tr("Seções da árvore")).strong());
