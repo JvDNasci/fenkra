@@ -2126,6 +2126,13 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 (FeatureKind::Draft(d), Promoted::Faces(k)) if d.faces.len() == k.len() => d.face_keys = k.clone(),
                 (FeatureKind::Thickness(t), Promoted::Faces(k)) if t.faces.len() == k.len() => t.face_keys = k.clone(),
                 (FeatureKind::DirectEdit(t), Promoted::Faces(k)) if t.faces.len() == k.len() => t.face_keys = k.clone(),
+                // B15: rosca (uma face) e filete face-face (duas) ou completo (três)
+                (FeatureKind::Thread(t), Promoted::Faces(k)) if k.len() == 1 => t.face_key = k[0].clone(),
+                (FeatureKind::Fillet(o), Promoted::Faces(k))
+                    if matches!((&o.mode, k.len()), (fenkra_core::EdgeMode::FaceFace(..), 2) | (fenkra_core::EdgeMode::FullRound { .. }, 3)) =>
+                {
+                    o.extra.face_keys = k.clone()
+                }
                 _ => {}
             }
         }
@@ -2831,7 +2838,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 e.face_keys = face_keys.clone();
                 Sel::Feature(d.add_feature(FeatureKind::DirectEdit(e)))
             }
-            Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None, start: String::new() }))),
+            Cmd::Thread => Sel::Feature(d.add_feature(FeatureKind::Thread(Thread { face: faces.last().copied().unwrap_or([0.; 3]), spec: s("M10x1.5"), length: s("15"), modeled: false, end: None, start: String::new(), face_key: None }))),
             Cmd::PatternLinear | Cmd::PatternCircular | Cmd::PatternPoints | Cmd::Mirror => {
                 let sources: Vec<Id> = match sel_now {
                     Sel::Feature(id) if d.feature(id).is_some_and(|f| crate::feat_ui::is_shape(&f.kind)) => vec![id],

@@ -61,3 +61,9 @@ promovida para v2 no primeiro recompute bem-sucedido.
   sem promoção. `SurfEdgeFillet` fica fora da chave porque superfície de referência não tem dono por face; ali vale o ponto a até
   0,1 mm e fora disso é referência perdida. `which` de Interseção e Contorno vira âncora espacial no primeiro cálculo, e número
   fora da lista é erro, nunca "a última".
+- **Fase 2, rosca e filetes por face (B15, 13/11/2026):** `Thread.face_key` e `EdgeExtra.face_keys` (face-face: a, b;
+  completo: meio, a, b) guardam a chave ao lado do ponto. O recompute resolve pela chave com `resolve_faces` (o ponto sozinho vale
+  a até 1 mm) e promove o ponto antigo no primeiro cálculo; o app grava a promoção e, ao trocar a face clicada, a chave anda junto
+  com o ponto (a face nova fica sem chave até o próximo cálculo). Falta da fase 2: papéis no kernel para varredura, loft, extrusão
+  até plano e furos; `EdgeSel::CreatedBy` por papéis; candidatos no 3D no reparo; troca de `PointRef/AxisRef::Fixed` por
+  geometria de origem.

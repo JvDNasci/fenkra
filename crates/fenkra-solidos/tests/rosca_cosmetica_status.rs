@@ -13,7 +13,7 @@ fn eixo(spec: &str, raio: f64) -> (Document, Id) {
     let mut d = Document::new("eixo");
     let sk = sk_circulos(&mut d, PlaneRef::Origin(OriginPlane::XY), &[([0., 0.], raio)]);
     d.add_feature(ext(sk, BoolOp::Add, "60"));
-    let th = d.add_feature(FeatureKind::Thread(Thread { face: [raio, 0., 30.], spec: spec.into(), length: "40".into(), modeled: false, end: None, start: String::new() }));
+    let th = d.add_feature(FeatureKind::Thread(Thread { face: [raio, 0., 30.], spec: spec.into(), length: "40".into(), modeled: false, end: None, start: String::new(), face_key: None }));
     (d, th)
 }
 
@@ -76,7 +76,7 @@ fn rosca_cosmetica_em_furo_na_medida_da_broca_fica_ok() {
     d.add_feature(ext(sk, BoolOp::Add, "40"));
     let f = sk_circulos(&mut d, PlaneRef::Origin(OriginPlane::XY), &[([0., 0.], 10.5)]);
     d.add_feature(FeatureKind::Extrude(Extrude { sketch: f, op: BoolOp::Cut, extent: Extent::ThroughAll, reverse: true, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
-    let th = d.add_feature(FeatureKind::Thread(Thread { face: [10.5, 0., 20.], spec: "M24x3".into(), length: "30".into(), modeled: false, end: None, start: String::new() }));
+    let th = d.add_feature(FeatureKind::Thread(Thread { face: [10.5, 0., 20.], spec: "M24x3".into(), length: "30".into(), modeled: false, end: None, start: String::new(), face_key: None }));
     let r = recompute(&d);
     assert_eq!(r.status[&th], Status::Ok);
     assert!(r.roscas.iter().any(|x| x.feature == th && x.interna));

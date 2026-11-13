@@ -3756,6 +3756,9 @@ pub struct Thread {
     /// B05: deslocamento do início da rosca ao longo do eixo, a partir da borda da face (vazio = 0)
     #[serde(default)]
     pub start: String,
+    /// B15: referência v2 da face (dono + papel + assinatura); `face` fica como reserva
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face_key: Option<FaceKey>,
 }
 
 /// Sketch: plano + geometria livre com restrições (ver [`crate::sketch`]).
@@ -4025,6 +4028,10 @@ pub struct EdgeExtra {
     /// semente) e é refeita a cada recompute: a cadeia que cresceu no modelo entra no filete sozinha.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub regras: Vec<RegraAresta>,
+    /// B15: referência v2 das faces de `EdgeMode::FaceFace` (a, b) e `EdgeMode::FullRound` (meio, a, b),
+    /// na mesma ordem dos pontos; vazio ou `None` = só o ponto (promovido no primeiro cálculo)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub face_keys: Vec<Option<FaceKey>>,
 }
 
 /// Como uma seleção de arestas cresce a partir da semente (B95).

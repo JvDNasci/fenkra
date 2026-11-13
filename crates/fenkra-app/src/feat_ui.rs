@@ -36,7 +36,11 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         FeatureKind::Draft(d) => d.faces.push(p),
         FeatureKind::Thickness(t) => t.faces.push(p),
         FeatureKind::DirectEdit(d) => d.faces.push(p),
-        FeatureKind::Thread(t) => t.face = p,
+        FeatureKind::Thread(t) => {
+            t.face = p;
+            // face nova: a chave v2 é refeita pelo próximo cálculo (promoção)
+            t.face_key = None;
+        }
         // B255: o clique na face da ponta grava o ponto dela; o recálculo acha a ponta que a tem
         FeatureKind::StructPlate(pl) => pl.at = p,
         FeatureKind::StructWeld(w) => w.adicionar(p, None),
@@ -55,18 +59,30 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         FeatureKind::SmArcSlot(c) => c.center = p,
         FeatureKind::SmSurfFlange(c) => c.face = p,
         // face-face: as duas últimas faces clicadas; completo: meio, lado 1, lado 2 (na ordem do clique)
-        FeatureKind::Fillet(o) => match &mut o.mode {
-            EdgeMode::FaceFace(a, b) => {
-                *a = *b;
-                *b = p;
+        // as chaves v2 andam junto com os pontos; a da face nova vem do próximo cálculo (promoção)
+        FeatureKind::Fillet(o) => {
+            let n = match &mut o.mode {
+                EdgeMode::FaceFace(a, b) => {
+                    *a = *b;
+                    *b = p;
+                    2
+                }
+                EdgeMode::FullRound { mid, a, b } => {
+                    *mid = *a;
+                    *a = *b;
+                    *b = p;
+                    3
+                }
+                _ => 0,
+            };
+            if n > 0 {
+                let mut k = std::mem::take(&mut o.extra.face_keys);
+                k.resize(n, None);
+                k.remove(0);
+                k.push(None);
+                o.extra.face_keys = k;
             }
-            EdgeMode::FullRound { mid, a, b } => {
-                *mid = *a;
-                *a = *b;
-                *b = p;
-            }
-            _ => {}
-        },
+        }
         _ => {}
     }
 }

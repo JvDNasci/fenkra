@@ -5908,8 +5908,10 @@ impl Ctx<'_> {
             }
             FeatureKind::Thread(t) => {
                 let spec = hardware::thread(&t.spec).ok_or_else(|| format!("rosca '{}' não encontrada na tabela de normas", t.spec))?;
-                let b = self.body(f.target).ok_or("não há corpo para roscar")?;
-                let cyl = b.cylinder_at(t.face).map_err(k)?;
+                let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para roscar")?;
+                // B15: a face pela chave v2 (o ponto só vale a até 1 mm, e é promovido)
+                let face = self.resolve_faces("rosca", f, b, owners, roles, &[t.face], std::slice::from_ref(&t.face_key))?[0];
+                let cyl = b.cylinder_at(face).map_err(k)?;
                 // B05: o início pode andar ao longo do eixo; o que sobra da face limita o comprimento
                 let start = if t.start.trim().is_empty() { 0. } else { ev(&t.start, &self.vars, "início da rosca")? };
                 if start < 0. || start >= cyl.h1 - cyl.h0 {
@@ -6077,6 +6079,7 @@ impl Ctx<'_> {
                         x.edges = EdgeSel::Edges(mids.iter().map(|q| self.map_point(*q, from, to)).collect());
                         // as chaves valem para o corpo como ele está, não para o levado entre dobrado e planificado
                         x.keys = vec![];
+                        x.extra.face_keys = vec![];
                         mapped = x;
                         &mapped
                     }
@@ -6086,14 +6089,20 @@ impl Ctx<'_> {
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para aplicar")?;
                 let tags = tags_for(owners);
                 let chamfer = matches!(f.kind, FeatureKind::Chamfer(_));
+                // B15: as faces do filete face-face e do completo pela chave v2, com o ponto como reserva
+                let quem = if chamfer { "chanfro" } else { "filete" };
                 match &o.mode {
                     EdgeMode::FaceFace(a, c) => {
+                        let p = self.resolve_faces(quem, f, b, owners, roles, &[*a, *c], &o.extra.face_keys)?;
+                        let (a, c) = (&p[0], &p[1]);
                         let (s, out) = b.face_face_fillet_tagged(*a, *c, v, &tags).map_err(k)?;
                         let body = remap_body(s, owners, roles, &out, f.id);
                         self.bodies.insert(f.target, body);
                         return Ok(None);
                     }
                     EdgeMode::FullRound { mid, a, b: c } => {
+                        let p = self.resolve_faces(quem, f, b, owners, roles, &[*mid, *a, *c], &o.extra.face_keys)?;
+                        let (mid, a, c) = (&p[0], &p[1], &p[2]);
                         let (fa, fc) = (b.face_props(*a).map_err(k)?, b.face_props(*c).map_err(k)?);
                         if fa.kind != 0 || fc.kind != 0 {
                             return Err("o filete completo precisa de duas faces laterais planas".into());
@@ -9658,7 +9667,7 @@ mod tests {
         let mut d = caixa();
         let top = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "20");
         d.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Datum(top), a: "5".into(), b: "10".into(), c: "0".into(), d: "0".into(), op: BoolOp::Add }));
-        let th = |end: Option<Extent>| Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "4".into(), modeled: true, end, start: String::new() };
+        let th = |end: Option<Extent>| Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "4".into(), modeled: true, end, start: String::new(), face_key: None };
         let mut a = d.clone();
         a.add_feature(FeatureKind::Thread(th(None)));
         let mut b = d.clone();
@@ -9942,7 +9951,7 @@ mod tests {
         assert!(near(vol(&d), v0 + std::f64::consts::PI * 250., 1e-3));
         // rosca externa modelada no cilindro (M10)
         let mut e = d.clone();
-        e.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "8".into(), modeled: true, end: None, start: String::new() }));
+        e.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 25.], spec: "M10x1.5".into(), length: "8".into(), modeled: true, end: None, start: String::new(), face_key: None }));
         let vt = vol(&e);
         assert!(vt < vol(&d) - 1., "rosca externa {vt}");
 

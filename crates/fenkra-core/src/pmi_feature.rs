@@ -389,7 +389,7 @@ mod tests {
         assert_eq!(callout(&d, f, false).unwrap().text, "2× R3");
         let ch = d.add_feature(FeatureKind::Chamfer(EdgeOp { value: "2".into(), edges: EdgeSel::AllOfBody, mode: EdgeMode::Constant, prop: Default::default(), keys: vec![], extra: Default::default() }));
         assert_eq!(callout(&d, ch, false).unwrap().text, "C2");
-        let th = d.add_feature(FeatureKind::Thread(Thread { face: [0.; 3], spec: "M8x1.25".into(), length: "16".into(), modeled: false, end: None, start: String::new() }));
+        let th = d.add_feature(FeatureKind::Thread(Thread { face: [0.; 3], spec: "M8x1.25".into(), length: "16".into(), modeled: false, end: None, start: String::new(), face_key: None }));
         assert_eq!(callout(&d, th, false).unwrap().text, "M8×1,25-6g ▽16");
         assert_eq!(callout(&d, Id(9999), false), None);
     }

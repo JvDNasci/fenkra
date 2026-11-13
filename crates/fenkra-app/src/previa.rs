@@ -417,7 +417,7 @@ pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
         }
         "rosca" => {
             doc.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Cilindro, plane: PlaneRef::Origin(OriginPlane::XY), a: s("6"), b: s("40"), c: s("0"), d: s("0"), op: BoolOp::Add }));
-            FeatureKind::Thread(Thread { face: [6., 0., 20.], spec: s("M10x1.5"), length: s("20"), modeled: false, end: None, start: s("6") })
+            FeatureKind::Thread(Thread { face: [6., 0., 20.], spec: s("M10x1.5"), length: s("20"), modeled: false, end: None, start: s("6"), face_key: None })
         }
         "nervura" => {
             caixa(doc);
@@ -1011,7 +1011,7 @@ mod tests {
         let antes = recompute(&d);
         assert!(valido(antes.status.get(&pr)), "{:?}", antes.status.get(&pr));
         let base = corpos_base(Some(&antes));
-        let th = d.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 15.], spec: s("M12x1.75"), length: s("10"), modeled: false, end: None, start: s("4") }));
+        let th = d.add_feature(FeatureKind::Thread(Thread { face: [5., 0., 15.], spec: s("M12x1.75"), length: s("10"), modeled: false, end: None, start: s("4"), face_key: None }));
         let r = recompute(&d);
         assert!(matches!(r.status.get(&th), Some(Status::Warning(w)) if w.contains('≠')), "{:?}", r.status.get(&th));
         let c = cena(&d, &r, th, &base);

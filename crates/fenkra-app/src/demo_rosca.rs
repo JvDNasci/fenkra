@@ -70,7 +70,7 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
             let topo = bloco(doc);
             let a = pontos(doc, topo, &[0.]);
             doc.add_feature(FeatureKind::Hole(Hole { thread: None, diameter: s("6.8"), ..furo(a, escareado(), Extent::Blind(s("20")), false, false) }));
-            Some(DemoPrevia::Comando(FeatureKind::Thread(Thread { face: [3.4, 0., 18.], spec: s("M8x1.25"), length: s("14"), modeled: true, end: None, start: s("0") })))
+            Some(DemoPrevia::Comando(FeatureKind::Thread(Thread { face: [3.4, 0., 18.], spec: s("M8x1.25"), length: s("14"), modeled: true, end: None, start: s("0"), face_key: None })))
         }
         // B373: furo M16x2 cego, rosca modelada com chanfro de entrada e início a 120°; com
         // `FENKRA_DEMO_CONCLUIR=1` o sulco real aparece e a câmera olha de perto a boca do furo

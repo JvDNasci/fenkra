@@ -463,7 +463,7 @@ mod tests {
         crate::feat_ui::add_face(&mut k, [0., 0., 20.]);
         assert_eq!(campo_ativo(&k), None);
 
-        let mut k = FeatureKind::Thread(Thread { face: [0.; 3], spec: s("M10x1.5"), length: s("20"), modeled: false, end: None, start: s("0") });
+        let mut k = FeatureKind::Thread(Thread { face: [0.; 3], spec: s("M10x1.5"), length: s("20"), modeled: false, end: None, start: s("0"), face_key: None });
         assert_eq!(campo_ativo(&k), Some(Espera::Face));
         crate::feat_ui::add_face(&mut k, [6., 0., 10.]);
         assert_eq!(campo_ativo(&k), None);
