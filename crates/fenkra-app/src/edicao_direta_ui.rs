@@ -46,11 +46,11 @@ pub fn painel(ui: &mut egui::Ui, e: &mut DirectEdit, vars: &Vars, picked: &[[f64
         OpDireta::Apagar => {}
     }
     ui.label(RichText::new(tr(dica(e.op))).weak().small());
+    crate::selecao_regras::regra_faces_ui(ui, &mut e.regras, &e.faces);
     let before = e.faces.clone();
     crate::feat_ui::faces_ui(ui, &mut e.faces, picked);
     e.face_keys = carry_keys(&before, &e.face_keys, &e.faces);
     crate::selecao_regras::acompanhar_sementes(&mut e.regras, &before, &e.faces);
-    crate::selecao_regras::regra_faces_ui(ui, &mut e.regras, &e.faces);
 }
 
 #[cfg(test)]

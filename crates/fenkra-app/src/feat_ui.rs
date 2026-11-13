@@ -347,11 +347,11 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             if s.closed {
                 ui.label(RichText::new(tr("Sem face aberta: o corpo vira uma casca com a cavidade fechada por dentro.")).weak().small());
             } else {
+                crate::selecao_regras::regra_faces_ui(ui, &mut s.regras, &s.faces);
                 let before = s.faces.clone();
                 faces_ui(ui, &mut s.faces, picked_faces);
                 s.face_keys = carry_keys(&before, &s.face_keys, &s.faces);
                 crate::selecao_regras::acompanhar_sementes(&mut s.regras, &before, &s.faces);
-                crate::selecao_regras::regra_faces_ui(ui, &mut s.regras, &s.faces);
                 ui.label(RichText::new(tr("As faces escolhidas ficam abertas; o resto vira parede com a espessura.")).weak().small());
                 ui.label(RichText::new(tr("Espessura por face")).strong());
                 let mut tirar = None;
@@ -384,11 +384,11 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 plane_combo(ui, "dr_pl", doc, &mut d.neutral, None);
             });
             crate::editor::check(ui, &mut d.reverse, "inverter a direção de extração");
+            crate::selecao_regras::regra_faces_ui(ui, &mut d.regras, &d.faces);
             let before = d.faces.clone();
             faces_ui(ui, &mut d.faces, picked_faces);
             d.face_keys = carry_keys(&before, &d.face_keys, &d.faces);
             crate::selecao_regras::acompanhar_sementes(&mut d.regras, &before, &d.faces);
-            crate::selecao_regras::regra_faces_ui(ui, &mut d.regras, &d.faces);
             ui.label(RichText::new(tr("Inclina as faces a partir do plano neutro; a extração segue a normal dele.")).weak().small());
         }
         FeatureKind::Thickness(t) => {
