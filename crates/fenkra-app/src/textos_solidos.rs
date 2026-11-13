@@ -41,4 +41,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Clique para pular esta instância", "Click to skip this instance"),
     ("clique para furar aqui", "click to drill here"),
     ("Esta seta aponta para a face que recebe a primeira medida. Clique para trocar de face.", "This arrow points to the face that gets the first measure. Click to swap faces."),
+    ("candidatas no 3D:", "candidates in 3D:"),
+    ("Usar esta candidata: o comando passa a apontar para ela (a mais provável é a 1).", "Use this candidate: the command now points to it (the most likely is number 1)."),
+    ("clique para usar esta candidata", "click to use this candidate"),
 ];

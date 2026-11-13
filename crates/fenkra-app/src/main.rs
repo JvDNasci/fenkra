@@ -190,6 +190,7 @@ mod st_painel;
 mod st_placas_ui;
 mod st_solda_ui;
 mod biblioteca_ui;
+mod reparo_ui;
 mod textos_montagem;
 mod textos_montagem3;
 mod textos_montagem4;

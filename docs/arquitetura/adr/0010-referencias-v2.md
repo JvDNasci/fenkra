@@ -67,3 +67,18 @@ promovida para v2 no primeiro recompute bem-sucedido.
   com o ponto (a face nova fica sem chave até o próximo cálculo). Falta da fase 2: papéis no kernel para varredura, loft, extrusão
   até plano e furos; `EdgeSel::CreatedBy` por papéis; candidatos no 3D no reparo; troca de `PointRef/AxisRef::Fixed` por
   geometria de origem.
+- **Fase 2, papéis que faltavam (B15, 13/11/2026):** a varredura (tubo por trecho com junta de esquadria), o loft, a extrusão
+  até plano, até superfície, até o próximo e com saída, e os furos passam a dar papel às faces (`papeis.rs`). O papel sai da
+  geometria do resultado, com a convenção da extrusão: tampa inicial é a face no plano do perfil que encosta nas arestas dele,
+  lateral `2 + i` é a outra face da aresta `i`, tampa final é a que encosta na última seção (loft), a plana restante com a área
+  da tampa inicial (varredura) ou o que sobra sem encostar na tampa inicial (extrusões); o trecho seguinte de uma lateral numa
+  guia com cantos herda o papel pela junta. Na dúvida (aresta do perfil que some, face com dois papéis) a ferramenta fica sem
+  papéis e a referência segue pelo ponto. Furos têm papéis próprios a partir de 1000 (`1000 + 16 × furo + parte`: parede,
+  parede da cabeça, escareado, ponta, boca, fundo, assento). O lado 2 da extrusão soma os papéis dos dois lados.
+  `EdgeSel::CreatedBy` vale pelas arestas entre faces do comando e, quando o comando tem papéis, só entre faces de papel
+  conhecido (`refs::arestas_criadas`). O assistente de reparo mostra as candidatas da face ou aresta perdida numeradas no 3D
+  (mesmo dono e papel quando é ambígua; as mais perto do último ponto quando sumiu); o clique troca o ponto e a chave é refeita
+  no cálculo seguinte (`reparo.rs`, `reparo_ui.rs`). O centro fixo do furo sobre uma face com papel vira `PointRef::OnFace`, e a
+  direção fixa que coincide com uma aresta reta (mesmo sentido) ou com a normal de uma face plana vira `AxisRef::Edge` ou
+  `AxisRef::Face` (`Promoted::Furo`, `fixos.rs`); coordenada fora da peça continua fixa, porque pode ter sido digitada de
+  propósito. Com isso a fase 2 fecha; o histórico completo do OCCT (alternativa 2) segue como evolução.

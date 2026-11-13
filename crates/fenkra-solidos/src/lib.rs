@@ -65,6 +65,9 @@ pub mod chaveta_rasgos;
 pub mod calculo_projeto;
 pub mod profile;
 pub mod refs;
+pub mod papeis;
+pub mod reparo;
+mod fixos;
 pub mod chapa;
 pub mod massa;
 pub mod termino;
@@ -693,6 +696,8 @@ pub enum Promoted {
     Edges(Vec<Option<EdgeKey>>),
     /// `face_keys` de Shell, Draft e Thickness
     Faces(Vec<Option<FaceKey>>),
+    /// B15: centros (`Hole.points`, todos, na mesma ordem) e direção do furo que deixaram de ser fixos
+    Furo { pontos: Vec<PointRef>, dir: Option<AxisRef> },
 }
 
 pub struct RecomputeResult {
@@ -4369,6 +4374,15 @@ impl Ctx<'_> {
                         }
                     }
                 }
+                // B15: centro e direção fixos clicados na peça passam a seguir a face ou a aresta de origem
+                if let Some((b, owners, roles)) = self.body_owned(f.target) {
+                    let pontos: Vec<Option<PointRef>> = h.points.iter().map(|p| fixos::ponto(b, owners, roles, p)).collect();
+                    let dir = h.dir.as_ref().and_then(|a| fixos::eixo(b, owners, roles, a));
+                    if dir.is_some() || pontos.iter().any(Option::is_some) {
+                        let pontos = pontos.into_iter().zip(&h.points).map(|(n, p)| n.unwrap_or_else(|| p.clone())).collect();
+                        *self.promoted.borrow_mut() = Some(Promoted::Furo { pontos, dir });
+                    }
+                }
                 let shape = match &h.kind {
                     HoleKind::Simples => HoleShape::Simple,
                     HoleKind::Rebaixado { diameter, depth } => HoleShape::Counterbore {
@@ -4460,7 +4474,9 @@ impl Ctx<'_> {
                         tool = tool.compound(&t2);
                     }
                 }
-                self.apply(f.target, tool, BoolOp::Cut, f.id)?;
+                // B15: parede, cabeça, ponta e fundo de cada furo como papéis
+                let papeis = papeis::furos(&tool, &seats, d, &depths).filter(|r| r.len() == tool.face_count() as usize);
+                self.apply_roles(f.target, tool, BoolOp::Cut, f.id, papeis)?;
                 let Some(t) = &h.thread else { return Ok(None) };
                 // B351: onde a rosca fica em cada furo. Cosmética e prévia leve só registram a posição
                 // (linhas e textura); o sulco helicoidal só é construído ao concluir
@@ -4567,7 +4583,9 @@ impl Ctx<'_> {
                     SweepMode::Frenet => 2,
                 };
                 let tool = self.varrer(&face, &spine.pts, mode)?;
-                self.apply(f.target, tool, w.op, f.id)?;
+                // B15: tampas e laterais da varredura pela geometria (o tubo por trecho não guarda o histórico)
+                let papeis = papeis::por_perfil(&tool, &face, papeis::Fim::MesmaArea).filter(|r| r.len() == tool.face_count() as usize);
+                self.apply_roles(f.target, tool, w.op, f.id, papeis)?;
                 let mut avisos: Vec<String> = vec![];
                 if !sk.open.is_empty() {
                     avisos.push(format!("{} perfil(is) aberto(s) do sketch foram descartados: só contornos fechados varrem", sk.open.len()));
@@ -4644,11 +4662,17 @@ impl Ctx<'_> {
                     }
                 }
                 let mut comp = Shape::empty();
+                let (primeira, ultima) = (faces.first().cloned(), faces.last().cloned());
                 for face in faces {
                     comp = if comp.is_null() { face } else { comp.compound(&face) };
                 }
                 let tool = comp.loft(l.ruled, l.closed, !l.torcao.iter().any(|t| *t != 0)).map_err(k)?;
-                self.apply(f.target, tool, l.op, f.id)?;
+                // B15: tampa inicial na primeira seção, final na última, laterais pelas arestas da primeira
+                let papeis = match (&primeira, &ultima) {
+                    (Some(a), Some(b)) if !l.closed => papeis::por_perfil(&tool, a, papeis::Fim::Perfil(b)).filter(|r| r.len() == tool.face_count() as usize),
+                    _ => None,
+                };
+                self.apply_roles(f.target, tool, l.op, f.id, papeis)?;
                 Ok((!dropped.is_empty()).then(|| format!("contornos descartados: {}", dropped.join("; "))))
             }
             FeatureKind::Primitive(pr) => {
@@ -6130,8 +6154,9 @@ impl Ctx<'_> {
                     // entre uma face dele e uma de outro comando já existia na peça)
                     EdgeSel::CreatedBy(id) => {
                         let topo = b.topology().map_err(k)?;
-                        let mine = |fc: u32| fc != fenkra_kernel::NO_FACE && owners.get(fc as usize) == Some(id);
-                        let mids: Vec<[f64; 3]> = (0..topo.edge_faces.len().min(topo.edge_mids.len())).filter(|e| mine(topo.edge_faces[*e][0]) && mine(topo.edge_faces[*e][1])).map(|e| topo.edge_mids[e]).collect();
+                        // B15: pelo dono e, quando o comando tem papéis, só entre faces de papel conhecido
+                        let v = refs::View { topo: &topo, owners, roles };
+                        let mids: Vec<[f64; 3]> = refs::arestas_criadas(&v, *id).into_iter().map(|e| topo.edge_mids[e]).collect();
                         if mids.is_empty() {
                             return Err(format!("'{}' não criou nenhuma aresta que sobre no corpo — escolha as arestas na viewport", self.doc.name_of(*id)));
                         }

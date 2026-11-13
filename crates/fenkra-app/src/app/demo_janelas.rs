@@ -2,7 +2,8 @@
 //! Desenvolvimento: `FENKRA_DEMO_JANELA=<nome>` abre, no segundo quadro, uma janela ou painel que só o
 //! mouse abriria, para a captura (`FENKRA_DEMO_FOTO`). Nomes: `salvar_como`, `empacotar`, `reparar`,
 //! `liberar` (combine com `FENKRA_DEMO_PROJETO=1`), `resumo` (com `FENKRA_DEMO_EST=1`), `roda`, `roda_editor`,
-//! `ramos` (com `FENKRA_DEMO_PROJETO=1`: ramo em conflito e janela de mesclagem), `tabela` (parâmetros com a tabela de projeto preenchida).
+//! `ramos` (com `FENKRA_DEMO_PROJETO=1`: ramo em conflito e janela de mesclagem), `tabela` (parâmetros com a tabela de projeto preenchida), `reparo_candidatas` (assistente de
+//! reparo com as candidatas da face perdida numeradas no 3D).
 
 use super::*;
 
@@ -41,6 +42,25 @@ impl App {
                 }
             }
             "ramos" => self.demo_abrir_mescla(ctx),
+            // B15: casca com a face perdida e o assistente de reparo aberto, candidatas numeradas no 3D
+            "reparo_candidatas" => {
+                let mut d = Document::new("Reparo");
+                let mut data = fenkra_core::SketchData::default();
+                let mut n = 9_700_000u64;
+                let mut al = || {
+                    n += 1;
+                    Id(n)
+                };
+                data.add_rect(&mut &mut al, [-20., -15.], [20., 15.], false);
+                let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+                d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("20".into()), reverse: false, taper: "0".into(), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
+                // o ponto ficou 3 mm acima do topo (o topo baixou depois do clique)
+                d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[6., 4., 23.]], thickness: "1.5".into(), outward: false, face_keys: vec![None], closed: false, regras: vec![] }));
+                self.open.doc = d;
+                self.sent_doc = None;
+                self.request_recompute();
+                self.wizard_open = true;
+            }
             "resumo" => crate::st_montagem_ui::abrir(self),
             "roda" => {
                 let r = ctx.content_rect();

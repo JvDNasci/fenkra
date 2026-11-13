@@ -332,7 +332,7 @@ pub struct App {
     /// início da varredura visual da árvore após um cálculo (comando a comando)
     sweep_t0: f64,
     /// assistente de referências quebradas
-    wizard_open: bool,
+    pub(crate) wizard_open: bool,
     errors_prev: usize,
     /// link sendo religado pelo assistente (a janela de importação vira "religar")
     relink_ext: Option<Id>,
@@ -2143,6 +2143,13 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     if matches!((&o.mode, k.len()), (fenkra_core::EdgeMode::FaceFace(..), 2) | (fenkra_core::EdgeMode::FullRound { .. }, 3)) =>
                 {
                     o.extra.face_keys = k.clone()
+                }
+                // B15: centro e direção fixos do furo passam a seguir a face ou a aresta clicada
+                (FeatureKind::Hole(h), Promoted::Furo { pontos, dir }) if pontos.len() == h.points.len() => {
+                    h.points = pontos.clone();
+                    if let Some(d) = dir {
+                        h.dir = Some(d.clone());
+                    }
                 }
                 _ => {}
             }
@@ -4790,6 +4797,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         if !self.wizard_open {
             return;
         }
+        // B15: referências perdidas com as candidatas no 3D
+        let lacunas = crate::reparo_ui::lacunas(self);
+        let mut escolha_reparo = None;
         let Some(r) = &self.result else { return };
         let doc = &self.open.doc;
         let mut errs: Vec<(Id, String, String, bool)> = vec![];
@@ -4832,6 +4842,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                             });
                             ui.label(RichText::new(&d.causa).small());
                             ui.label(RichText::new(format!("💡 {}", tr(d.sugestao))).small().color(crate::theme::accent(ui.visuals())));
+                            if let Some((_, l)) = lacunas.iter().find(|(x, _)| x == id) {
+                                crate::reparo_ui::linhas(ui, *id, l, &mut escolha_reparo);
+                            }
                             ui.horizontal(|ui| {
                                 // o botão da ação certa vem primeiro e em destaque
                                 let (rotulo, dica) = match d.acao {
@@ -4864,6 +4877,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
             Some((id, _)) => self.ask_delete(id),
             None => {}
+        }
+        if let Some((id, l, i)) = escolha_reparo {
+            crate::reparo_ui::aplicar(self, id, &l, i);
         }
         if !open {
             self.wizard_open = false;
@@ -8146,6 +8162,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 crate::transmissao_ui::overlay(self, ui, rect, &cam);
                 crate::eixo_ui::alcas(self, ui, rect, &cam);
                 crate::biblioteca_ui::candidatos_overlay(self, ui, rect, &cam);
+                crate::reparo_ui::overlay(self, ui, rect, &cam);
                 crate::biblioteca_ui::overlay(self, ui, rect, &cam);
                 crate::asm_inserir::overlay(self, ui, rect, &cam);
                 crate::asm_repeticao::overlay(self, ui, rect, &cam);
