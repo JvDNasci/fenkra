@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! B393: linhas ocultas por mapa de profundidade, em segundos no conjunto do kart (ADR 0088).
+//! B393: linhas ocultas por mapa de profundidade, em segundos no conjunto do kart (ADR 0089).
 //!
 //! Como funciona: a malha da forma (a mesma do sombreado, com as arestas do B-Rep já discretizadas
 //! pelo kernel) é projetada na direção da vista e rasterizada num mapa de profundidade: em cada

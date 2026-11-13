@@ -9,7 +9,7 @@
 //!
 //! B393: as vistas pedidas no mesmo quadro vão juntas, num lote: a montagem é carregada uma vez e
 //! as linhas ocultas de cada vista rodam numa thread própria (`fenkra_kernel::hlr_varias`). Cada
-//! lote passa por duas etapas: a prévia, pelo mapa de profundidade com as arestas exatas (ADR 0088,
+//! lote passa por duas etapas: a prévia, pelo mapa de profundidade com as arestas exatas (ADR 0089,
 //! `hlr_rapida`, segundos), e a exata, que a substitui quando chega. O corte não tem prévia: a peça cortada seria refeita duas vezes.
 //!
 //! Regras:

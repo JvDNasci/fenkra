@@ -756,7 +756,7 @@ impl Models {
         // a exata vai um processo por vista; sem o executável, uma depois da outra aqui
         let cancelar = ctl.bandeira();
         let processos = if desvio.is_none() { crate::hlr_processos::exatas(&vistas, Some(&*cancelar)) } else { None };
-        // B393: a prévia sai do mapa de profundidade (ADR 0088): a malha da forma é feita uma vez
+        // B393: a prévia sai do mapa de profundidade (ADR 0089): a malha da forma é feita uma vez
         // (o malhador já usa várias threads) e cada vista é projetada numa thread, sem OpenCASCADE
         let rapida = desvio.map(|d| linhas_rapidas(&hlrs, d / DESVIO_DA_PREVIA * DESVIO_DA_RAPIDA));
         let mut linhas = processos.or(rapida).unwrap_or_else(|| fenkra_kernel::hlr_varias(&vistas, desvio)).into_iter();
