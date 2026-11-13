@@ -1,13 +1,20 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Desenvolvimento: casos do PMI 3D para captura sem mouse (`FENKRA_DEMO_FOTO`). Cada caso monta as
 //! anotações na placa de exemplo (`FENKRA_DEMO_PMI=<caso>`) e seleciona a que mostra a alça ou o aviso:
-//! `angulo` (ângulo entre planos, com a alça do arco), `chamada` e `chamada_cruza` (nota de três pontas e dois vértices, limpa e com o caminho cruzado), `perfil` (texto deitado visto de perfil) e `alcas` (raio e nota com a alça de posição).
+//! `cmd_<n>` (comando de anotação n armado, para a prévia com os cliques de `FENKRA_DEMO_PAINEL`), `angulo` (ângulo entre planos, com a alça do arco), `chamada` e `chamada_cruza` (nota de três pontas e dois vértices, limpa e com o caminho cruzado), `perfil` (texto deitado visto de perfil) e `alcas` (raio e nota com a alça de posição).
 
 use super::*;
 use fenkra_core::pmi::*;
 
 impl App {
     pub(super) fn demo_pmi_caso(&mut self, modo: &str) {
+        // B185: `cmd_<n>` arma o comando de anotação n como o botão faria, sem anotações na placa; os
+        // cliques no modelo vêm de `FENKRA_DEMO_PAINEL`, pelo caminho do mouse
+        if let Some(n) = modo.strip_prefix("cmd_").and_then(|n| n.parse::<u8>().ok()) {
+            self.open.doc.pmi.clear();
+            crate::pmi_ui::command(self, n);
+            return;
+        }
         if !matches!(modo, "angulo" | "chamada" | "chamada_cruza" | "perfil" | "alcas" | "setas" | "setas_painel" | "cordao" | "capturas" | "sobrepostas" | "consultor" | "empilhamento") {
             return;
         }

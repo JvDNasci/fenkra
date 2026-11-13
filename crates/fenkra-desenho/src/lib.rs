@@ -25,6 +25,7 @@ pub mod ocupacao;
 pub mod opcoes;
 pub mod fundo;
 pub mod hlr_processos;
+pub(crate) mod hlr_disco;
 pub mod setas_nota;
 pub mod simbolos;
 pub mod solda_cordao;

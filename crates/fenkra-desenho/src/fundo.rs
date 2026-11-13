@@ -152,7 +152,8 @@ impl Fundo {
             let vale = self.andamento.as_ref().is_some_and(|(l, _, _)| rs.len() == l.len() && rs.iter().zip(l).all(|(r, (p, _))| r.id == p.id));
             let Some((lote, previa, _)) = self.andamento.take_if(|_| vale) else { continue };
             for (r, (p, k)) in rs.into_iter().zip(lote) {
-                if previa {
+                // a prévia que já veio exata (do disco, B393) não volta à fila
+                if previa && (r.proj.previa || r.proj.error.is_some()) {
                     let mut exata = p.clone();
                     exata.sem_previa = true;
                     // pedida de novo enquanto a prévia rodava: vale o pedido novo

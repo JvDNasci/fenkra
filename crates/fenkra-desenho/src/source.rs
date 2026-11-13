@@ -317,6 +317,8 @@ impl Models {
         let mut all = Shape::empty();
         let mut pieces: Vec<Shape> = vec![];
         let mut piece_names: Vec<String> = vec![];
+        // B393: as formas de todas as peças de uma vez (disco e várias threads), antes do laço
+        self.parts.preparar_formas(&fenkra_montagem::load::arquivos_das_pecas(&shown_asm, dir.as_deref()));
         // progresso: um passo por componente e mais um para a projeção
         if let Some(c) = &self.controle {
             c.definir_total(shown_asm.nodes.len() as u32 + 1);
@@ -730,10 +732,24 @@ impl Models {
             self.proj.clear();
             return None;
         }
+        // B393: linhas exatas já guardadas no disco (mesma vista, mesmos arquivos, mesmo programa)
+        let chaves: Vec<Option<String>> = l
+            .pedidos
+            .iter()
+            .zip(&etapas)
+            .map(|(p, e)| match e {
+                Etapa::Hlr(_) => {
+                    let arquivos = self.load(&p.vista.source).files.clone();
+                    crate::hlr_disco::chave(&p.vista, p.mae.as_ref(), &arquivos)
+                }
+                Etapa::Pronta(_) => None,
+            })
+            .collect();
+        let mut do_disco: Vec<Option<crate::hlr_disco::Linhas>> = chaves.iter().map(|k| k.as_deref().and_then(crate::hlr_disco::ler)).collect();
         // as linhas ocultas contam como um passo a mais na barra
         ctl.somar_total(1);
         let t_hlr = std::time::Instant::now();
-        let hlrs: Vec<&Hlr> = etapas.iter().filter_map(|e| if let Etapa::Hlr(h) = e { Some(&**h) } else { None }).collect();
+        let hlrs: Vec<&Hlr> = etapas.iter().zip(&do_disco).filter_map(|(e, d)| if let (Etapa::Hlr(h), None) = (e, d) { Some(&**h) } else { None }).collect();
         let vistas: Vec<_> = hlrs.iter().map(|h| fenkra_kernel::VistaHlr { forma: &h.alvo, para: h.axes.toward, x: h.axes.x, ocultas: h.hidden, prioridade_baixa: true }).collect();
         // desvio da malha da prévia: fino o bastante para os furos da folha saírem redondos
         let desvio = l.previa.then(|| hlrs.iter().map(|h| h.tamanho).fold(0., f64::max) * DESVIO_DA_PREVIA);
@@ -747,12 +763,22 @@ impl Models {
         }
         ctl.avancar();
         let mut out = vec![];
-        for (p, e) in l.pedidos.iter().zip(etapas) {
-            let mut proj = match e {
-                Etapa::Pronta(p) => p,
-                Etapa::Hlr(h) => concluir(*h, linhas.next().unwrap_or_else(|| Err(fenkra_kernel::KernelError("sem resultado".into())))),
+        for (i, (p, e)) in l.pedidos.iter().zip(etapas).enumerate() {
+            let guardada = do_disco[i].take();
+            let veio_do_disco = guardada.is_some();
+            let mut proj = match (e, guardada) {
+                (Etapa::Pronta(p), _) => p,
+                (Etapa::Hlr(h), Some(g)) => concluir(*h, Ok(g)),
+                (Etapa::Hlr(h), None) => {
+                    let r = linhas.next().unwrap_or_else(|| Err(fenkra_kernel::KernelError("sem resultado".into())));
+                    if let (false, Ok(v), Some(k)) = (l.previa, &r, &chaves[i]) {
+                        crate::hlr_disco::gravar(k, v);
+                    }
+                    concluir(*h, r)
+                }
             };
-            proj.previa = l.previa && proj.error.is_none();
+            // a exata do disco já é a definitiva: não há prévia a refinar
+            proj.previa = l.previa && proj.error.is_none() && !veio_do_disco;
             let fonte = self.fonte_de(&p.vista.source);
             let guardado = self.volumes.get(&fonte).copied();
             let (arquivos, volume, nomes) = {
@@ -793,10 +819,12 @@ impl Models {
                     } else {
                         // B102: o código e o material são os da configuração do componente; configuração
                         // que a peça não tem mostra o motivo no lugar do código
-                        match self.parts.get_config(&r.path, false, &r.config) {
-                            Ok(p) => {
-                                let pr = &p.doc.props;
-                                (pr.pn.clone(), if pr.description.is_empty() { p.doc.name.clone() } else { pr.description.clone() }, pr.material.clone())
+                        // B393: só o documento; calcular as peças aqui travava a interface (20 s no kart)
+                        let doc = self.parts.documento(&r.path).cloned().and_then(|d| if r.config.is_empty() { Ok(d) } else { d.com_configuracao(&r.config).map_err(|e| e.to_string()) });
+                        match doc {
+                            Ok(doc) => {
+                                let pr = &doc.props;
+                                (pr.pn.clone(), if pr.description.is_empty() { doc.name.clone() } else { pr.description.clone() }, pr.material.clone())
                             }
                             Err(e) if !r.config.is_empty() => (format!("⚠ {e}"), r.name.clone(), String::new()),
                             Err(_) => (String::new(), r.name.clone(), String::new()),
@@ -812,8 +840,8 @@ impl Models {
             (TableKind::CutList, Model::Asm(a)) => {
                 let mut acc: Vec<(String, f64, usize, usize)> = vec![];
                 for r in fenkra_montagem::bom::bom(a, dir.as_deref(), fenkra_montagem::bom::BomLevel::Pecas) {
-                    let Ok(p) = self.parts.get(&r.path, false) else { continue };
-                    for c in fenkra_solidos::cut_list(&p.doc) {
+                    let Ok(doc) = self.parts.documento(&r.path) else { continue };
+                    for c in fenkra_solidos::cut_list(doc) {
                         let n = c.count * r.qty as usize;
                         match acc.iter_mut().find(|x| x.0 == c.designation && (x.1 - c.length).abs() < 0.05) {
                             Some(x) => {
@@ -1156,4 +1184,35 @@ fn concluir(h: Hlr, linhas: fenkra_kernel::KResult<Vec<(Vec<V2>, u8)>>) -> Proj 
     out.lines.extend(explosao.iter().map(|l| (l.iter().map(|p| axes.project(*p)).collect(), 7u8)));
     out.bounds();
     out
+}
+
+#[cfg(test)]
+mod testes_lista {
+    use super::*;
+    use crate::{Format, Table, TableKind};
+
+    /// B393: a lista de peças de uma montagem só lê os documentos. Antes ela calculava cada peça
+    /// (comandos e malha) na thread da interface, e o desenho do kart ficava parado uns 20 s.
+    #[test]
+    fn lista_de_pecas_da_montagem_nao_calcula_as_pecas() {
+        let dir = std::env::temp_dir().join(format!("fenkra_lista_sem_calculo_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut peca = fenkra_solidos::example_document();
+        peca.props.pn = "PN-77".into();
+        std::fs::write(dir.join("placa.fkp"), peca.to_json()).unwrap();
+        let mut a = Assembly::new("raiz");
+        for k in 0..2 {
+            a.add_component(&format!("P{k}"), fenkra_montagem::NodeKind::Part { path: "placa.fkp".into() }, Default::default(), None);
+        }
+        std::fs::write(dir.join("raiz.fka"), a.to_json()).unwrap();
+        let src = Source { path: "raiz.fka".into(), display_state: String::new(), hidden: vec![] };
+        let mut d = Drawing::new("t", Format::A3);
+        let s = d.sheets[0].id;
+        let t = Table { id: d.alloc(), sheet: s, kind: TableKind::Bom, source: src, pos: [0., 0.], level: Default::default(), cfg: Default::default() };
+        let mut m = Models::new(Some(dir.clone()));
+        let dados = m.table(&t, &d);
+        assert!(dados.rows.iter().any(|r| r.iter().any(|c| c == "PN-77")), "{:?}", dados.rows);
+        assert!(m.parts.tirar_recem().is_empty(), "a lista não pode calcular peça");
+        let _ = std::fs::remove_dir_all(dir);
+    }
 }

@@ -52,6 +52,33 @@ pub struct PartCache {
     pub(crate) subconjuntos: HashMap<(PathBuf, String), (u64, crate::view::ComponenteVisto)>,
 }
 
+/// Arquivos das peças visíveis da montagem, entrando nos subconjuntos (B393: para
+/// [`PartCache::preparar_formas`] calcular todas de uma vez).
+pub fn arquivos_das_pecas(a: &Assembly, dir: Option<&Path>) -> Vec<PathBuf> {
+    fn juntar(a: &Assembly, dir: Option<&Path>, fundo: u32, out: &mut Vec<PathBuf>) {
+        if fundo > 16 {
+            return;
+        }
+        for n in &a.nodes {
+            if !crate::view::shown(a, n.id) {
+                continue;
+            }
+            match &n.kind {
+                NodeKind::Part { path } => out.push(full_path(dir, path)),
+                NodeKind::SubAssembly { path } => {
+                    let fp = full_path(dir, path);
+                    let Some(sub) = std::fs::read_to_string(&fp).ok().and_then(|t| Assembly::from_json(&t).ok()) else { continue };
+                    juntar(&sub, fp.parent(), fundo + 1, out);
+                }
+                NodeKind::Group => {}
+            }
+        }
+    }
+    let mut out = vec![];
+    juntar(a, dir, 0, &mut out);
+    out
+}
+
 /// Caminho completo de um componente (relativo à pasta da montagem ou absoluto).
 pub fn full_path(asm_dir: Option<&Path>, path: &str) -> PathBuf {
     let p = Path::new(path);
@@ -283,19 +310,68 @@ impl PartCache {
                 return Ok(p.shape.clone());
             }
         }
-        let doc = match self.pendentes.get(full) {
-            Some(d) => d.clone(),
+        let (doc, chave) = match self.pendentes.get(full) {
+            Some(d) => (d.clone(), None),
             None => {
                 let txt = std::fs::read_to_string(full).map_err(|e| format!("{}: {e}", full.display()))?;
-                Document::from_json(&txt).map_err(|e| e.to_string())?
+                let doc = Document::from_json(&txt).map_err(|e| e.to_string())?;
+                // B393: a mesma peça, com o mesmo programa, já calculada antes
+                let chave = crate::formas_disco::guardavel(&doc).then(|| crate::formas_disco::chave(&txt));
+                if let Some(sh) = chave.as_deref().and_then(crate::formas_disco::ler) {
+                    self.formas.insert(full.to_path_buf(), (stamp, sh.clone()));
+                    return Ok(sh);
+                }
+                (doc, chave)
             }
         };
         if self.cancelar.as_ref().is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed)) {
             return Err("cancelado".into());
         }
         let sh = fenkra_solidos::final_shape(&doc);
+        if let Some(k) = &chave {
+            crate::formas_disco::gravar(k, sh.as_ref());
+        }
         self.formas.insert(full.to_path_buf(), (stamp, sh.clone()));
         Ok(sh)
+    }
+
+    /// B393: no modo `so_forma`, deixa prontas as formas dessas peças antes de alguém pedir uma por
+    /// uma: lê do disco as já calculadas e calcula as demais em paralelo. Quem vem depois (`forma`)
+    /// acha tudo no cache. Fora do modo `so_forma` não faz nada.
+    pub fn preparar_formas(&mut self, arquivos: &[PathBuf]) {
+        if !self.so_forma {
+            return;
+        }
+        let mut vistos = std::collections::HashSet::new();
+        let mut pedidos = vec![];
+        for full in arquivos {
+            if !vistos.insert(full.clone()) || self.pendentes.contains_key(full) {
+                continue;
+            }
+            let stamp = std::fs::metadata(full).and_then(|m| m.modified()).ok();
+            if self.formas.get(full).is_some_and(|(s, _)| *s == stamp) || self.parts.get(full).is_some_and(|p| p.stamp == stamp && p.shape.is_some()) {
+                continue;
+            }
+            let Ok(texto) = std::fs::read_to_string(full) else { continue };
+            let Ok(doc) = Document::from_json(&texto) else { continue };
+            if crate::formas_disco::guardavel(&doc) {
+                if let Some(sh) = crate::formas_disco::ler(&crate::formas_disco::chave(&texto)) {
+                    self.formas.insert(full.clone(), (stamp, sh));
+                    continue;
+                }
+            }
+            pedidos.push((stamp, crate::formas_disco::Pedido { caminho: full.clone(), texto, doc }));
+        }
+        if pedidos.is_empty() {
+            return;
+        }
+        let stamps: HashMap<PathBuf, Option<SystemTime>> = pedidos.iter().map(|(s, p)| (p.caminho.clone(), *s)).collect();
+        let cancelar = self.cancelar.clone();
+        let feitos = crate::formas_disco::calcular(pedidos.into_iter().map(|x| x.1).collect(), 0, cancelar.as_deref());
+        for (caminho, sh) in feitos {
+            let s = stamps.get(&caminho).copied().flatten();
+            self.formas.insert(caminho, (s, sh));
+        }
     }
 
     /// Esquece uma peça (para recarregar depois de editar).

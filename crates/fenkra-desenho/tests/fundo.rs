@@ -76,6 +76,49 @@ fn vista_de_montagem_sai_da_thread_da_interface_e_chega_igual_a_sincrona() {
     let _ = std::fs::remove_dir_all(dir);
 }
 
+/// B393: reabrir o desenho sem mudar nada traz a vista exata do disco, sem prévia e sem refazer as
+/// linhas ocultas; mudar a peça muda a chave e a vista é refeita.
+#[test]
+fn vista_exata_reaberta_sai_do_disco_e_peca_mudada_refaz() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let (dir, src) = montar("fenkra_desenho_fundo_disco", 2);
+    std::env::set_var("FENKRA_CACHE_FORMAS", dir.join("cache"));
+    let mut d = Drawing::new("t", Format::A3);
+    let s = d.sheets[0].id;
+    let v = d.add_view(s, src.clone(), ViewKind::Standard(Dir::Frente), [100., 100.], 1.);
+    let mut m = Models::new(Some(dir.clone()));
+    m.ativar_fundo(|| {});
+    let (primeira, viu_previa) = esperar_exata(&mut m, &d, v);
+    assert!(viu_previa && primeira.error.is_none());
+    let guardadas = || std::fs::read_dir(dir.join("cache")).map_or(0, |r| r.filter(|e| e.as_ref().is_ok_and(|e| e.path().extension().is_some_and(|x| x == "fkl"))).count());
+    // (outros testes do mesmo processo podem gravar na mesma pasta: a variável vale para todos)
+    let antes = guardadas();
+    assert!(antes >= 1, "a exata foi para o disco");
+
+    // desenho reaberto: outro Models, mesmos arquivos
+    let mut m2 = Models::new(Some(dir.clone()));
+    m2.ativar_fundo(|| {});
+    let (segunda, viu_previa) = esperar_exata(&mut m2, &d, v);
+    assert!(!viu_previa, "do disco a vista já chega exata");
+    assert_eq!(segunda.lines, primeira.lines);
+    assert!((segunda.hi[0] - primeira.hi[0]).abs() < 1e-9 && (segunda.lo[1] - primeira.lo[1]).abs() < 1e-9);
+
+    // a peça muda: outra chave, a vista é refeita (prévia e exata de novo)
+    let mut doc = fenkra_solidos::example_document();
+    doc.params[0].expr = "150".into();
+    std::thread::sleep(Duration::from_millis(30));
+    std::fs::write(dir.join("placa.fkp"), doc.to_json()).unwrap();
+    let mut m3 = Models::new(Some(dir.clone()));
+    m3.ativar_fundo(|| {});
+    let (terceira, viu_previa) = esperar_exata(&mut m3, &d, v);
+    assert!(viu_previa, "peça mudada não pode sair do disco");
+    assert!((terceira.hi[0] - terceira.lo[0]) > (primeira.hi[0] - primeira.lo[0]) + 1., "a placa cresceu");
+    assert!(guardadas() > antes, "a vista nova também foi para o disco");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 #[test]
 fn vistas_do_mesmo_quadro_vao_num_lote_e_cancelar_deixa_as_vistas_paradas_sem_recalcular_a_cada_quadro() {
     if !fenkra_kernel::AVAILABLE {
