@@ -181,3 +181,76 @@ fn fases_da_carga_do_conjunto_do_kart() {
     let _ = full_path(Some(&dir), "");
     println!("pecas diretas={n} calcular+posicionar={t_peca:?} juntar={t_junta:?}");
 }
+
+/// B393: carga das formas do kart em paralelo e, depois, do disco. Confere, peça a peça, que o
+/// cálculo em threads dá o mesmo volume e a mesma caixa da sequencial (o recálculo dos comandos não
+/// pode ter estado global escondido) e mede as cargas.
+#[test]
+#[ignore]
+fn carga_do_kart_em_paralelo_e_do_disco() {
+    use fenkra_montagem::formas_disco::{self, Pedido};
+    use fenkra_montagem::load::arquivos_das_pecas;
+    use fenkra_montagem::Assembly;
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../validacao/kart/modelo");
+    let cache = std::env::temp_dir().join(format!("fenkra_medir_kart_formas_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&cache);
+    std::env::set_var("FENKRA_CACHE_FORMAS", &cache);
+    let a = Assembly::from_json(&std::fs::read_to_string(dir.join("KART.fka")).unwrap()).unwrap();
+    let mut arquivos = arquivos_das_pecas(&a, Some(&dir));
+    arquivos.sort();
+    arquivos.dedup();
+    let pedidos = || -> Vec<Pedido> {
+        arquivos
+            .iter()
+            .map(|f| {
+                let texto = std::fs::read_to_string(f).unwrap();
+                let doc = fenkra_core::Document::from_json(&texto).unwrap();
+                Pedido { caminho: f.clone(), texto, doc }
+            })
+            .collect()
+    };
+    let medida = |s: &Option<fenkra_kernel::Shape>| s.as_ref().map(|s| (s.mass().volume, s.bbox().unwrap()));
+    if std::env::var_os("FENKRA_MEDIR_SEQ").is_some() {
+        std::env::set_var("FENKRA_SEM_CACHE_FORMAS", "1");
+        let t = Instant::now();
+        let seq = formas_disco::calcular(pedidos(), 1, None);
+        let t_seq = t.elapsed();
+        let t = Instant::now();
+        let par = formas_disco::calcular(pedidos(), 0, None);
+        let t_par = t.elapsed();
+        std::env::remove_var("FENKRA_SEM_CACHE_FORMAS");
+        assert_eq!(seq.len(), par.len());
+        for ((f, a), (g, b)) in seq.iter().zip(&par) {
+            assert_eq!(f, g);
+            match (medida(a), medida(b)) {
+                (Some((va, (la, ha))), Some((vb, (lb, hb)))) => {
+                    assert!((va - vb).abs() <= 1e-6 * va.abs().max(1.), "{}: volume {va} x {vb}", f.display());
+                    for k in 0..3 {
+                        assert!((la[k] - lb[k]).abs() < 1e-6 && (ha[k] - hb[k]).abs() < 1e-6, "{}: caixa", f.display());
+                    }
+                }
+                (None, None) => {}
+                (x, y) => panic!("{}: {x:?} x {y:?}", f.display()),
+            }
+        }
+        println!("pecas={} sequencial={t_seq:?} paralelo={t_par:?} (mesmos volumes e caixas)", arquivos.len());
+    }
+
+    let src = Source { path: "KART.fka".into(), display_state: String::new(), hidden: vec![] };
+    let t = Instant::now();
+    let mut m = Models::new(Some(dir.clone()));
+    let l = m.load(&src);
+    assert!(l.error.is_none(), "{:?}", l.error);
+    let v1 = l.shape.as_ref().unwrap().mass().volume;
+    println!("carga fria (peças em paralelo, gravadas no disco): {:?}", t.elapsed());
+    let t = Instant::now();
+    let mut m = Models::new(Some(dir));
+    let l = m.load(&src);
+    let v2 = l.shape.as_ref().unwrap().mass().volume;
+    println!("carga com as formas no disco: {:?}", t.elapsed());
+    assert!((v1 - v2).abs() <= 1e-6 * v1, "{v1} {v2}");
+    let _ = std::fs::remove_dir_all(&cache);
+}

@@ -317,6 +317,8 @@ impl Models {
         let mut all = Shape::empty();
         let mut pieces: Vec<Shape> = vec![];
         let mut piece_names: Vec<String> = vec![];
+        // B393: as formas de todas as peças de uma vez (disco e várias threads), antes do laço
+        self.parts.preparar_formas(&fenkra_montagem::load::arquivos_das_pecas(&shown_asm, dir.as_deref()));
         // progresso: um passo por componente e mais um para a projeção
         if let Some(c) = &self.controle {
             c.definir_total(shown_asm.nodes.len() as u32 + 1);
@@ -730,10 +732,24 @@ impl Models {
             self.proj.clear();
             return None;
         }
+        // B393: linhas exatas já guardadas no disco (mesma vista, mesmos arquivos, mesmo programa)
+        let chaves: Vec<Option<String>> = l
+            .pedidos
+            .iter()
+            .zip(&etapas)
+            .map(|(p, e)| match e {
+                Etapa::Hlr(_) => {
+                    let arquivos = self.load(&p.vista.source).files.clone();
+                    crate::hlr_disco::chave(&p.vista, p.mae.as_ref(), &arquivos)
+                }
+                Etapa::Pronta(_) => None,
+            })
+            .collect();
+        let mut do_disco: Vec<Option<crate::hlr_disco::Linhas>> = chaves.iter().map(|k| k.as_deref().and_then(crate::hlr_disco::ler)).collect();
         // as linhas ocultas contam como um passo a mais na barra
         ctl.somar_total(1);
         let t_hlr = std::time::Instant::now();
-        let hlrs: Vec<&Hlr> = etapas.iter().filter_map(|e| if let Etapa::Hlr(h) = e { Some(&**h) } else { None }).collect();
+        let hlrs: Vec<&Hlr> = etapas.iter().zip(&do_disco).filter_map(|(e, d)| if let (Etapa::Hlr(h), None) = (e, d) { Some(&**h) } else { None }).collect();
         let vistas: Vec<_> = hlrs.iter().map(|h| fenkra_kernel::VistaHlr { forma: &h.alvo, para: h.axes.toward, x: h.axes.x, ocultas: h.hidden, prioridade_baixa: true }).collect();
         // desvio da malha da prévia: fino o bastante para os furos da folha saírem redondos
         let desvio = l.previa.then(|| hlrs.iter().map(|h| h.tamanho).fold(0., f64::max) * DESVIO_DA_PREVIA);
@@ -747,12 +763,22 @@ impl Models {
         }
         ctl.avancar();
         let mut out = vec![];
-        for (p, e) in l.pedidos.iter().zip(etapas) {
-            let mut proj = match e {
-                Etapa::Pronta(p) => p,
-                Etapa::Hlr(h) => concluir(*h, linhas.next().unwrap_or_else(|| Err(fenkra_kernel::KernelError("sem resultado".into())))),
+        for (i, (p, e)) in l.pedidos.iter().zip(etapas).enumerate() {
+            let guardada = do_disco[i].take();
+            let veio_do_disco = guardada.is_some();
+            let mut proj = match (e, guardada) {
+                (Etapa::Pronta(p), _) => p,
+                (Etapa::Hlr(h), Some(g)) => concluir(*h, Ok(g)),
+                (Etapa::Hlr(h), None) => {
+                    let r = linhas.next().unwrap_or_else(|| Err(fenkra_kernel::KernelError("sem resultado".into())));
+                    if let (false, Ok(v), Some(k)) = (l.previa, &r, &chaves[i]) {
+                        crate::hlr_disco::gravar(k, v);
+                    }
+                    concluir(*h, r)
+                }
             };
-            proj.previa = l.previa && proj.error.is_none();
+            // a exata do disco já é a definitiva: não há prévia a refinar
+            proj.previa = l.previa && proj.error.is_none() && !veio_do_disco;
             let fonte = self.fonte_de(&p.vista.source);
             let guardado = self.volumes.get(&fonte).copied();
             let (arquivos, volume, nomes) = {

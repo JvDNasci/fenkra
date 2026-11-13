@@ -91,6 +91,7 @@ preferências do usuário.
 | `FENKRA_DEMO_ASM=perdida` | restrição cuja face sumiu da peça, já selecionada: ⚠ na árvore, selo PERDIDA e o botão Reancorar |
 | `FENKRA_MEDIR_QUADROS=<arquivo.csv>` | grava o tempo de CPU de cada quadro, as fases pesadas e os bytes na placa (B125, B259) |
 | `FENKRA_MEDIR_QUADROS=<arquivo.csv>` (B347) | além do acima, grava o intervalo entre quadros (`intervalo_ms`), o total da interface (`ui_total_ms`) e cada etapa do quadro (`etapa_<nome>_ms`: `pre_*`, `top`, `paineis`, `viewport`, `vp_*`, `cena`...); a etapa que passar de 2 ou 3 ms num app parado é a suspeita |
+| `FENKRA_SEM_CACHE_FORMAS=1` / `FENKRA_CACHE_FORMAS=<pasta>` | (B393, ADR 0085) desliga as formas das peças e as linhas das vistas de montagem guardadas em disco (`%LOCALAPPDATA%\Fenkra\formas`), ou troca a pasta delas |
 | `FENKRA_DEMO_GIRAR=<graus por quadro>` | gira a câmera sozinha a cada quadro, como um arrasto contínuo, para medir o quadro em movimento (use com `FENKRA_MEDIR_QUADROS`) |
 | `FENKRA_MEDIR_FIM=<n>` | fecha o programa depois de n quadros |
 | `FENKRA_MEDIR_GPU=1` | com `FENKRA_MEDIR_QUADROS`, espera a placa depois da viewport e grava `gpu_vp_ms` (tira o paralelismo entre CPU e placa, então o tempo de quadro medido sobe) |

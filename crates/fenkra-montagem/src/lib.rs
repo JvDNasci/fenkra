@@ -19,6 +19,7 @@ pub mod engrenagens;
 pub mod estrutura;
 pub mod conjuntos;
 pub mod fixadores;
+pub mod formas_disco;
 pub mod furos;
 pub mod geometria;
 pub mod insercao;
