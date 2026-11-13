@@ -479,13 +479,15 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
             });
         }
     });
-    // curso do cilindro: livre entre o menor e o maior da série, com os cursos padrão no menu
-    if fam.tipo == TipoFixador::CilindroPneumatico {
+    // curso do cilindro ou comprimento do trilho: livre entre o menor e o maior da série, com os
+    // valores usuais no menu
+    if matches!(fam.tipo, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear) {
+        let trilho = fam.tipo == TipoFixador::TrilhoLinear;
         if let Some(t) = est.tamanho.as_deref().and_then(|t| fam.tamanho(t)) {
             let serie = fam.comprimentos_de(t);
             if let (Some(&lo), Some(&hi)) = (serie.first(), serie.last()) {
                 ui.horizontal(|ui| {
-                    ui.label(tr("Curso da haste"));
+                    ui.label(tr(if trilho { "Comprimento do trilho" } else { "Curso da haste" }));
                     let mut c = est.comprimento.unwrap_or_else(|| serie.iter().copied().find(|c| *c >= 100.).unwrap_or(lo));
                     let r = ui.add(egui::DragValue::new(&mut c).range(lo..=hi).suffix(" mm"));
                     egui::ComboBox::from_id_salt("biblioteca_curso").selected_text(tr("Padrão")).show_ui(ui, |ui| {
@@ -499,7 +501,11 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
                     r
                 })
                 .inner
-                .on_hover_text(tr("Curso da haste em mm. A norma não fixa o curso: o menu traz os cursos padrão do fabricante, e qualquer valor entre o menor e o maior vale."));
+                .on_hover_text(tr(if trilho {
+                    "Comprimento do trilho em mm, livre até o máximo do fabricante. Os furos ficam no passo P, com a mesma sobra nas duas pontas."
+                } else {
+                    "Curso da haste em mm. A norma não fixa o curso: o menu traz os cursos padrão do fabricante, e qualquer valor entre o menor e o maior vale."
+                }));
             }
         }
     }
@@ -752,6 +758,20 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
             p.line_segment([Pos2::new(x0 - 4., cy), Pos2::new(x0 + total as f32 * esc + 6., cy)], fino);
             notas.push((format!("Ø {}", fmt(d)), 0.));
             notas.push((format!("{} {}", tr("curso"), fmt(curso)), 1.));
+        }
+        TipoFixador::TrilhoLinear => {
+            // corte do trilho: perfil WR × HR com um furo escareado D × h e o passante dh
+            let v = |s: &str, padrao: f64| valor(s).unwrap_or(padrao);
+            let (wr, hr, dd, h, dh) = (v("WR", d), v("HR", d), v("D", d * 0.5), v("h", d * 0.35), v("dh", d * 0.3));
+            let esc = (100. / wr as f32).min(110. / hr as f32);
+            let cx = rect.left() + 60.;
+            let base = rect.top() + 130.;
+            let x = |m: f64| m as f32 * esc / 2.;
+            let alt = |m: f64| m as f32 * esc;
+            p.rect_stroke(Rect::from_two_pos(Pos2::new(cx - x(wr), base - alt(hr)), Pos2::new(cx + x(wr), base)), 0., traco, egui::StrokeKind::Middle);
+            p.rect_stroke(Rect::from_two_pos(Pos2::new(cx - x(dd), base - alt(hr)), Pos2::new(cx + x(dd), base - alt(hr - h))), 0., fino, egui::StrokeKind::Middle);
+            p.rect_stroke(Rect::from_two_pos(Pos2::new(cx - x(dh), base - alt(hr - h)), Pos2::new(cx + x(dh), base)), 0., fino, egui::StrokeKind::Middle);
+            notas.push((format!("L {}", fmt(comprimento.unwrap_or(100.))), 0.));
         }
         TipoFixador::Arruela => {
             let (d1, d2, h) = (valor("d1").unwrap_or(d), valor("d2").unwrap_or(d * 2.), valor("h").unwrap_or(d * 0.2));
@@ -1209,12 +1229,13 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
         }
         // `biblioteca_ficha_<id>`: a ficha da família aberta no tamanho do meio e esse item solto na
         // montagem (B51, B398). `biblioteca_b51` larga as famílias novas lado a lado.
-        n if n.starts_with("biblioteca_ficha_") || n == "biblioteca_b51" || n == "biblioteca_b44" => {
+        n if n.starts_with("biblioteca_ficha_") || n == "biblioteca_b51" || n == "biblioteca_b44" || n == "biblioteca_b46" => {
             let lib = biblioteca::publica();
             let ids: Vec<&str> = match n.strip_prefix("biblioteca_ficha_") {
                 Some(id) => vec![id],
                 // B44 e B45: rolamentos novos e o cilindro ISO 15552, com a ficha do cilindro aberta
                 None if n == "biblioteca_b44" => vec!["iso15552", "iso15_68", "iso15_69", "iso15_160", "iso15_72", "iso15_nu2", "iso355_302"],
+                None if n == "biblioteca_b46" => vec!["hiwin_hgr"],
                 None => vec!["iso10642", "iso7045", "iso7379", "din938", "din6923", "din6798a", "din25201", "asme_b18_3"],
             };
             let meio = |id: &str| lib.familia(id).and_then(|f| f.tamanhos.get(f.tamanhos.len() / 2)).map(|t| t.designacao.clone());

@@ -49,6 +49,8 @@ pub enum TipoFixador {
     Prisioneiro,
     /// cilindro pneumático pelas medidas de interface (ISO 15552); o comprimento é o curso
     CilindroPneumatico,
+    /// trilho de guia linear por série de fabricante; o comprimento é o do trilho
+    TrilhoLinear,
 }
 
 /// Geradores de geometria nomeados. Uma família escolhe o gerador pelo nome (`"gerador"` no JSON);
@@ -62,6 +64,7 @@ pub const GERADORES: &[(&str, TipoFixador)] = &[
     ("parafuso_cruz", TipoFixador::ParafusoCruz),
     ("prisioneiro", TipoFixador::Prisioneiro),
     ("cilindro_pneumatico", TipoFixador::CilindroPneumatico),
+    ("trilho_linear", TipoFixador::TrilhoLinear),
     // geradores de forma própria sobre um tipo já existente: o tipo diz como a montagem usa a peça
     ("parafuso_escareado", TipoFixador::ParafusoAllen),
     ("parafuso_ombro", TipoFixador::ParafusoAllen),
@@ -89,6 +92,7 @@ impl TipoFixador {
             TipoFixador::ParafusoCruz => "Parafuso de cabeça com cruz",
             TipoFixador::Prisioneiro => "Prisioneiro",
             TipoFixador::CilindroPneumatico => "Cilindro pneumático",
+            TipoFixador::TrilhoLinear => "Trilho de guia linear",
         }
     }
 
@@ -100,7 +104,7 @@ impl TipoFixador {
     /// Tipos cuja peça muda de comprimento pela escolha da pessoa: o L do parafuso ou o curso do
     /// cilindro, sempre dentro da série da família.
     pub fn usa_comprimento(self) -> bool {
-        self.e_parafuso() || self == TipoFixador::CilindroPneumatico
+        self.e_parafuso() || matches!(self, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear)
     }
 
     pub fn e_parafuso(self) -> bool {
@@ -120,6 +124,7 @@ impl TipoFixador {
             TipoFixador::ParafusoCruz => &["P", "dk", "k"],
             TipoFixador::Prisioneiro => &["P"],
             TipoFixador::CilindroPneumatico => &["MM", "KK", "TG", "WH", "B", "AM", "L8", "RT", "E"],
+            TipoFixador::TrilhoLinear => &["WR", "HR", "D", "h", "dh", "P"],
         }
     }
 }
@@ -535,6 +540,7 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso15_nu2.json", include_str!("../../../biblioteca/rolamentos/iso15_nu2.json")),
     ("iso355_302.json", include_str!("../../../biblioteca/rolamentos/iso355_302.json")),
     ("iso15552.json", include_str!("../../../biblioteca/pneumatica/iso15552.json")),
+    ("hiwin_hgr.json", include_str!("../../../biblioteca/guias/hiwin_hgr.json")),
 ];
 
 /// A biblioteca pública embutida. Os arquivos são validados nos testes; aqui um arquivo inválido
@@ -681,7 +687,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 31);
+        assert_eq!(b.familias.len(), 32);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -1031,7 +1037,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 32);
+        assert_eq!(m.familias.len(), 33);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);
