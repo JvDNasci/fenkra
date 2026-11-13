@@ -93,6 +93,7 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
             crate::rolamentos::corpo(&mut m)?;
         }
         "cilindro_pneumatico" => crate::pneumatica::corpo(&mut m, fam, t, l)?,
+        "cilindro_redondo" => crate::pneumatica::corpo_redondo(&mut m, fam, t, l)?,
         "trilho_linear" => crate::guias::corpo(&mut m, fam, t, l)?,
         "rebite_universal" | "rebite_escareado" => crate::rebites::corpo(&mut m, fam, t, l)?,
         g => return Err(format!("{}: gerador '{g}' sem geometria", fam.id)),
@@ -131,6 +132,8 @@ fn publicacoes(m: &mut Montador, fam: &Familia) -> Result<(), String> {
     let (inicio, fim) = match (fam.gerador.as_str(), fam.tipo) {
         // o escareado fica todo abaixo da face (cabeça rente); o ombro tem a rosca depois do ombro
         ("parafuso_escareado" | "rebite_escareado", _) => ("-L", "0"),
+        // minicilindro: do olhal traseiro (pino em z = 0) à ponta da haste
+        ("cilindro_redondo", _) => ("XC+curso*s+AM", "-CD"),
         (_, TipoFixador::Rebite) => ("-L", "k"),
         ("parafuso_ombro", _) => ("-L-b", "k"),
         ("prisioneiro", _) => ("-L", "bm"),

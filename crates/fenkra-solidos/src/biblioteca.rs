@@ -66,6 +66,7 @@ pub const GERADORES: &[(&str, TipoFixador)] = &[
     ("parafuso_cruz", TipoFixador::ParafusoCruz),
     ("prisioneiro", TipoFixador::Prisioneiro),
     ("cilindro_pneumatico", TipoFixador::CilindroPneumatico),
+    ("cilindro_redondo", TipoFixador::CilindroPneumatico),
     ("trilho_linear", TipoFixador::TrilhoLinear),
     ("rebite_universal", TipoFixador::Rebite),
     ("rebite_escareado", TipoFixador::Rebite),
@@ -82,6 +83,9 @@ pub fn campos_do_gerador(gerador: &str) -> &'static [&'static str] {
         "porca_flangeada" => &["dc", "c"],
         "prisioneiro" => &["b", "bm"],
         "rebite_universal" => &["k"],
+        // perfil quadrado com tirantes (ISO 15552) ou tubo redondo com olhal (ISO 6432)
+        "cilindro_pneumatico" => &["TG", "WH", "B", "L8", "RT", "E"],
+        "cilindro_redondo" => &["BE", "WF", "XC", "EW", "CD", "D"],
         _ => &[],
     }
 }
@@ -135,7 +139,7 @@ impl TipoFixador {
             TipoFixador::Rolamento => &["D", "B"],
             TipoFixador::ParafusoCruz => &["P", "dk", "k"],
             TipoFixador::Prisioneiro => &["P"],
-            TipoFixador::CilindroPneumatico => &["MM", "KK", "TG", "WH", "B", "AM", "L8", "RT", "E"],
+            TipoFixador::CilindroPneumatico => &["MM", "KK", "AM"],
             TipoFixador::TrilhoLinear => &["WR", "HR", "D", "h", "dh", "P"],
             TipoFixador::Rebite => &["dk"],
         }
@@ -558,6 +562,8 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso15_nu2.json", include_str!("../../../biblioteca/rolamentos/iso15_nu2.json")),
     ("iso355_302.json", include_str!("../../../biblioteca/rolamentos/iso355_302.json")),
     ("iso15552.json", include_str!("../../../biblioteca/pneumatica/iso15552.json")),
+    ("iso6432.json", include_str!("../../../biblioteca/pneumatica/iso6432.json")),
+    ("iso6432_mr3.json", include_str!("../../../biblioteca/pneumatica/iso6432_mr3.json")),
     ("hiwin_hgr.json", include_str!("../../../biblioteca/guias/hiwin_hgr.json")),
 ];
 
@@ -716,7 +722,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 37);
+        assert_eq!(b.familias.len(), 39);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -1119,7 +1125,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 38);
+        assert_eq!(m.familias.len(), 40);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

@@ -13,4 +13,11 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ),
     ("A pega é a espessura que o furo atravessa.", "The grip is the thickness the hole goes through."),
     ("Pega grossa demais para a série", "Grip too thick for the series"),
+    ("rosca do nariz dianteiro", "front nose thread"),
+    ("da face dianteira ao ombro da haste", "front face to rod shoulder"),
+    ("do pino do olhal ao ombro da haste", "eye pin to rod shoulder"),
+    ("largura do olhal traseiro", "rear eye width"),
+    ("diâmetro do pino do olhal", "eye pin diameter"),
+    ("diâmetro do tubo", "barrel diameter"),
+    ("Minicilindro pneumático ISO 6432", "ISO 6432 mini pneumatic cylinder"),
 ];

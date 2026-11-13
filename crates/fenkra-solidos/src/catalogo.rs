@@ -287,6 +287,12 @@ pub fn nome_da_cota(tipo: TipoFixador, simbolo: &str) -> &'static str {
         (TipoFixador::CilindroPneumatico, "L8") => "comprimento do corpo",
         (TipoFixador::CilindroPneumatico, "RT") => "rosca dos furos de fixação",
         (TipoFixador::CilindroPneumatico, "E") => "lado do perfil quadrado",
+        (TipoFixador::CilindroPneumatico, "BE") => "rosca do nariz dianteiro",
+        (TipoFixador::CilindroPneumatico, "WF") => "da face dianteira ao ombro da haste",
+        (TipoFixador::CilindroPneumatico, "XC") => "do pino do olhal ao ombro da haste",
+        (TipoFixador::CilindroPneumatico, "EW") => "largura do olhal traseiro",
+        (TipoFixador::CilindroPneumatico, "CD") => "diâmetro do pino do olhal",
+        (TipoFixador::CilindroPneumatico, "D") => "diâmetro do tubo",
         (TipoFixador::TrilhoLinear, "WR") => "largura do trilho",
         (TipoFixador::TrilhoLinear, "HR") => "altura do trilho",
         (TipoFixador::TrilhoLinear, "D") => "diâmetro do escareado",
@@ -476,8 +482,8 @@ mod testes {
 
     #[test]
     fn busca_ignora_acento_caixa_e_acha_pela_norma_e_pela_classe() {
-        // 5 métricas e as aeronáuticas AN310, AN315 e MS21042
-        assert_eq!(achar("PORCA").len(), 8);
+        // 5 métricas, as aeronáuticas AN310, AN315 e MS21042 e a do nariz do minicilindro
+        assert_eq!(achar("PORCA").len(), 9);
         assert_eq!(achar("iso 4762").len(), 1);
         assert!(achar("8.8").iter().any(|(i, _)| i == "iso4762"));
         assert!(achar("inoxidavel").is_empty(), "nenhuma família é inox hoje");
@@ -499,8 +505,8 @@ mod testes {
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Rebite), ..Default::default() }), 2);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Panela), ..Default::default() }), 1);
         // 5 porcas, 4 arruelas, 2 prisioneiros e os rolamentos (60, 62, 63, 68, 69, 160, 72, NU2 e 302) o cilindro ISO 15552 e o trilho HGR
-        // e as três porcas aeronáuticas
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 25);
+        // e as três porcas aeronáuticas, o minicilindro ISO 6432 e a porca do nariz dele
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 27);
         assert_eq!(f(Filtro { material: Some("Aço".into()), ..Default::default() }), familias().len());
         assert_eq!(f(Filtro { material: Some("Aço inoxidável".into()), ..Default::default() }), 0);
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 4);

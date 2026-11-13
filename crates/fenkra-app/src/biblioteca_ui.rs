@@ -796,6 +796,26 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
             notas.push((format!("D {}", fmt(dd)), 1.));
             notas.push((format!("B {}", fmt(b)), 2.));
         }
+        TipoFixador::CilindroPneumatico if valor("XC").is_some() => {
+            // minicilindro ISO 6432 de lado: olhal EW, tubo D, nariz BE, haste MM até XC e a rosca KK por AM
+            let v = |s: &str, padrao: f64| valor(s).unwrap_or(padrao);
+            let (xc, wf, cd, ew, dd, be, mm, kk, am) = (v("XC", d * 6.), v("WF", d * 2.), v("CD", d * 0.5), v("EW", d), v("D", d * 1.6), v("BE", d * 1.2), v("MM", d * 0.4), v("KK", d * 0.4), v("AM", d * 1.2));
+            let curso = comprimento.or(l.comprimentos.iter().copied().find(|c| *c >= 50.)).unwrap_or(50.);
+            let total = cd + xc + am;
+            let esc = (160. / total as f32).min(60. / dd as f32);
+            let x0 = rect.left() + 8.;
+            let cy = rect.top() + 60.;
+            let caixa = |za: f64, zb: f64, alt: f64| Rect::from_two_pos(Pos2::new(x0 + (za + cd) as f32 * esc, cy - alt as f32 * esc / 2.), Pos2::new(x0 + (zb + cd) as f32 * esc, cy + alt as f32 * esc / 2.));
+            p.rect_stroke(caixa(-cd, cd, ew), 1., traco, egui::StrokeKind::Middle);
+            p.rect_stroke(caixa(cd, xc - wf, dd), 2., traco, egui::StrokeKind::Middle);
+            p.rect_stroke(caixa(xc - wf, xc - wf / 2., be), 0., fino, egui::StrokeKind::Middle);
+            p.rect_stroke(caixa(xc - wf, xc, mm), 0., traco, egui::StrokeKind::Middle);
+            p.rect_stroke(caixa(xc, xc + am, kk), 0., traco, egui::StrokeKind::Middle);
+            p.line_segment([Pos2::new(x0 - 4., cy), Pos2::new(x0 + total as f32 * esc + 6., cy)], fino);
+            notas.push((format!("Ø {}", fmt(d)), 0.));
+            notas.push((format!("XC {}", fmt(xc)), 1.));
+            notas.push((format!("{} {}", tr("curso"), fmt(curso)), 2.));
+        }
         TipoFixador::CilindroPneumatico => {
             // vista lateral: corpo E × L8, ressalto B, haste MM até WH + curso e a rosca KK por AM
             let v = |s: &str, padrao: f64| valor(s).unwrap_or(padrao);
@@ -1284,7 +1304,7 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
         }
         // `biblioteca_ficha_<id>`: a ficha da família aberta no tamanho do meio e esse item solto na
         // montagem (B51, B398). `biblioteca_b51` larga as famílias novas lado a lado.
-        n if n.starts_with("biblioteca_ficha_") || n == "biblioteca_b51" || n == "biblioteca_b44" || n == "biblioteca_b46" || n == "biblioteca_b43" => {
+        n if n.starts_with("biblioteca_ficha_") || n == "biblioteca_b51" || n == "biblioteca_b44" || n == "biblioteca_b46" || n == "biblioteca_b43" || n == "biblioteca_b45" => {
             let lib = biblioteca::publica();
             let ids: Vec<&str> = match n.strip_prefix("biblioteca_ficha_") {
                 Some(id) => vec![id],
@@ -1292,6 +1312,8 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
                 None if n == "biblioteca_b44" => vec!["iso15552", "iso15_68", "iso15_69", "iso15_160", "iso15_72", "iso15_nu2", "iso355_302"],
                 None if n == "biblioteca_b46" => vec!["hiwin_hgr"],
                 // B43: rebites, porcas e parafuso aeronáuticos, com a ficha do rebite universal aberta
+                // B45: minicilindro ISO 6432 e os ISO 15552 grandes, com a ficha do minicilindro aberta
+                None if n == "biblioteca_b45" => vec!["iso6432", "iso15552"],
                 None if n == "biblioteca_b43" => vec!["an470", "an426", "an310", "an315", "ms21042", "an3"],
                 None => vec!["iso10642", "iso7045", "iso7379", "din938", "din6923", "din6798a", "din25201", "asme_b18_3"],
             };

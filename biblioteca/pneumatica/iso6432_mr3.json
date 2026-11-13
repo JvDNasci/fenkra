@@ -1,0 +1,59 @@
+{
+ "id": "iso6432_mr3",
+ "nome": "Porca de fixação do nariz do minicilindro (ISO 6432, montagem MR3)",
+ "norma": "ISO 6432",
+ "revisao": "1985",
+ "versao": 1,
+ "gerador": "porca",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "ISO 6432:1985 — amostra pública da norma, tabela 4 (montagem por nariz roscado MR3: BE, KW, KV)",
+   "url": "https://cdn.standards.iteh.ai/samples/12787/ad920c8be66c48459ea0cce473c8c365/ISO-6432-1985.pdf"
+  },
+  {
+   "rotulo": "Metalwork — minicilindros ISO 6432 Ø8 a Ø25, tabela de dimensões (KW e KV da porca do nariz)",
+   "url": "https://docs.pneumatiek.nl/pdf/metalwork/cilinder/rondcilinder_iso6432_metal_work.pdf"
+  }
+ ],
+ "campos": [
+  "s",
+  "m"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "M12x1,25",
+   "original": "Ø8 e Ø10",
+   "d_nominal": 12,
+   "valores": {
+    "s": 19,
+    "m": 7
+   },
+   "confirmado_por": 2,
+   "nota": "Porca do nariz BE M12x1,25 dos minicilindros Ø8 e Ø10. Chave KV 19 e altura KW 7: a norma (máximos) e a Metalwork concordam."
+  },
+  {
+   "designacao": "M16x1,5",
+   "original": "Ø12 e Ø16",
+   "d_nominal": 16,
+   "valores": {
+    "s": 24,
+    "m": 8
+   },
+   "confirmado_por": 2,
+   "nota": "Porca do nariz BE M16x1,5 dos minicilindros Ø12 e Ø16. Chave KV 24 e altura KW 8: a norma (máximos) e a Metalwork concordam."
+  },
+  {
+   "designacao": "M22x1,5",
+   "original": "Ø20 e Ø25",
+   "d_nominal": 22,
+   "valores": {
+    "s": 32,
+    "m": 11
+   },
+   "confirmado_por": 1,
+   "nota": "Porca do nariz BE M22x1,5 dos minicilindros Ø20 e Ø25. Chave KV 32 na norma e na Metalwork. PENDENTE: a altura KW diverge (norma: até 11; Metalwork: 7); o modelo usa o máximo da norma até uma segunda fonte decidir."
+  }
+ ]
+}
