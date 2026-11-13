@@ -37,6 +37,96 @@
       "altura": 220
     },
     {
+      "id": "pmi_angulo",
+      "hash_roteiro": "690d93cef5003e9d",
+      "gif": "saida/pmi_angulo.gif",
+      "bytes_gif": 17315,
+      "hash_gif": "14c34dc85c0b9285",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pmi_arco",
+      "hash_roteiro": "b0f2498c971db4a6",
+      "gif": "saida/pmi_arco.gif",
+      "bytes_gif": 8342,
+      "hash_gif": "2c5b467ad12f2c2b",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pmi_base",
+      "hash_roteiro": "9c8e041c02cd7984",
+      "gif": "saida/pmi_base.gif",
+      "bytes_gif": 41027,
+      "hash_gif": "aeab298ed99d60a2",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pmi_cadeia",
+      "hash_roteiro": "5153c4604f0b6fa4",
+      "gif": "saida/pmi_cadeia.gif",
+      "bytes_gif": 26684,
+      "hash_gif": "edcadef0f31707cf",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pmi_diametro",
+      "hash_roteiro": "09be67febf2ab382",
+      "gif": "saida/pmi_diametro.gif",
+      "bytes_gif": 13806,
+      "hash_gif": "df87cdff5c51d798",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pmi_feature",
+      "hash_roteiro": "4087985407906f00",
+      "gif": "saida/pmi_feature.gif",
+      "bytes_gif": 9616,
+      "hash_gif": "5e7ab08877a99634",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pmi_linear",
+      "hash_roteiro": "609d02c0e99abd8e",
+      "gif": "saida/pmi_linear.gif",
+      "bytes_gif": 42591,
+      "hash_gif": "df480b3de7a401a8",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pmi_ordenada",
+      "hash_roteiro": "73ef79ff934595da",
+      "gif": "saida/pmi_ordenada.gif",
+      "bytes_gif": 29945,
+      "hash_gif": "b7dcd44322638845",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pmi_raio",
+      "hash_roteiro": "f820a40d2c1f5dc6",
+      "gif": "saida/pmi_raio.gif",
+      "bytes_gif": 12057,
+      "hash_gif": "0c358b00551e9d8c",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
       "id": "prim_caixa",
       "hash_roteiro": "7054d27f8e7beff6",
       "gif": "saida/prim_caixa.gif",

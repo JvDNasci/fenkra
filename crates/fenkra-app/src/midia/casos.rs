@@ -4,6 +4,10 @@
 
 use fenkra_core::*;
 
+/// Casos de cota do PMI 3D (B185): a peça e as anotações já colocadas; o roteiro anima campos da
+/// lista de anotações (`/0/offset/1`, `/0/style/arc_r`).
+pub const CASOS_PMI: [&str; 9] = ["pmi_linear", "pmi_ordenada", "pmi_cadeia", "pmi_base", "pmi_raio", "pmi_diametro", "pmi_feature", "pmi_angulo", "pmi_arco"];
+
 /// Nomes dos casos, na ordem em que a esteira gera as mídias.
 pub const CASOS: [&str; 10] = ["extrusao", "revolucao", "casca", "espessura", "rosca", "prim_caixa", "prim_cilindro", "prim_esfera", "prim_cone", "reforco"];
 
@@ -80,9 +84,73 @@ pub fn montar(caso: &str) -> Option<(Document, FeatureKind)> {
     Some((d, kind))
 }
 
+/// Caixa 60 x 40 x 30 com um furo passante de raio 8 em (10, 0). Devolve o comando do furo.
+fn caixa_com_furo(d: &mut Document) -> Id {
+    caixa(d);
+    // o recorte entra no material a partir do plano do sketch: desenhado no topo, desce os 30 mm
+    let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30");
+    // a mídia mostra só a peça e a cota: plano e origem ficam escondidos
+    if let Some(r) = d.references.iter_mut().find(|r| r.id == topo) {
+        r.visible = false;
+    }
+    d.origin_visible = false;
+    let sk = sketch(d, PlaneRef::Datum(topo), &|data, al| {
+        let c = data.add_point(&mut &mut *al, 10., 0.);
+        data.add_curve(&mut &mut *al, fenkra_core::sketch::Curve::Circle { c, r: 8. }, false);
+    });
+    d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Cut, extent: Extent::Blind(s("30")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() }))
+}
+
+/// Documento de partida e as anotações do caso de cota; `None` se o nome não é de cota.
+pub fn montar_pmi(caso: &str) -> Option<(Document, Vec<fenkra_core::pmi::Pmi>)> {
+    use fenkra_core::pmi::{Pmi, PmiKind};
+    if !CASOS_PMI.contains(&caso) {
+        return None;
+    }
+    let mut d = Document::new("Mídia");
+    let furo = caixa_com_furo(&mut d);
+    let mut nova = |d: &mut Document, kind: PmiKind, anchors: Vec<[f64; 3]>, offset: [f64; 3]| Pmi { id: d.alloc(), name: String::new(), kind, anchors, offset, text: String::new(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: None, style: Default::default(), folder: String::new(), targets: vec![] };
+    // aresta de cima e da frente (y = -20, z = 30), de x = -30 a 30; o texto sai para a frente
+    let frente = |x: f64| [x, -20., 30.];
+    let lista = match caso {
+        "pmi_linear" => vec![nova(&mut d, PmiKind::Linear, vec![frente(-30.), frente(30.)], [30., -4., 0.])],
+        "pmi_ordenada" => vec![nova(&mut d, PmiKind::Ordinate { axis: 0 }, vec![frente(-30.), frente(10.)], [20., -4., 0.])],
+        "pmi_cadeia" => [(-30., -10.), (-10., 10.), (10., 30.)].iter().map(|(a, b)| nova(&mut d, PmiKind::Linear, vec![frente(*a), frente(*b)], [(b - a) / 2., -4., 0.])).collect(),
+        "pmi_base" => [-10., 10., 30.].iter().map(|b| nova(&mut d, PmiKind::Linear, vec![frente(-30.), frente(*b)], [(b + 30.) / 2., -4., 0.])).collect(),
+        "pmi_raio" => vec![nova(&mut d, PmiKind::Radius, vec![[10., 0., 30.], [15.657, -5.657, 30.]], [8., -8., 0.])],
+        "pmi_diametro" => vec![nova(&mut d, PmiKind::Diameter, vec![[10., 0., 30.], [15.657, -5.657, 30.]], [8., -8., 0.])],
+        "pmi_feature" => vec![nova(&mut d, PmiKind::FeatureNote { feature: furo, comp: Id(0) }, vec![[15.657, -5.657, 30.]], [8., -8., 4.])],
+        "pmi_angulo" => {
+            let mut a = nova(&mut d, PmiKind::Angle, vec![[-30., -20., 0.], [30., -20., 0.], [-30., -20., 30.]], [10., 0., 10.]);
+            a.style.arc_r = 6.;
+            vec![a]
+        }
+        "pmi_arco" => vec![nova(&mut d, PmiKind::ArcLength, vec![[10., 0., 30.], [18., 0., 30.], [10., -8., 30.]], [6., -6., 0.])],
+        _ => return None,
+    };
+    Some((d, lista))
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;
+
+    #[test]
+    fn todo_caso_de_cota_monta_a_peca_e_as_anotacoes() {
+        for c in CASOS_PMI {
+            let (d, lista) = montar_pmi(c).unwrap_or_else(|| panic!("{c} não monta"));
+            assert!(!lista.is_empty(), "{c}: sem anotação");
+            for p in &lista {
+                assert_eq!(p.anchors.len(), p.kind.anchors(), "{c}: âncoras");
+            }
+            let r = fenkra_solidos::recompute(&d);
+            assert!(r.status.values().all(|s| !matches!(s, fenkra_solidos::Status::Error(_))), "{c}: {:?}", r.status);
+            // caixa menos o furo passante
+            let v: f64 = r.bodies.iter().map(|b| b.mass.volume).sum();
+            assert!((v - (60. * 40. * 30. - std::f64::consts::PI * 64. * 30.)).abs() < 1., "{c}: volume {v}");
+        }
+        assert!(montar_pmi("casca").is_none() && montar("pmi_linear").is_none());
+    }
 
     #[test]
     fn todo_caso_monta_documento_e_comando() {

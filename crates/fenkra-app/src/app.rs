@@ -8848,6 +8848,8 @@ fn setup_fonts(_ctx: &egui::Context) {
 impl eframe::App for App {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
         crate::paineis_demo::eventos(raw);
+        // B185: com a anotação armada, o Tab troca a variante da medida em vez de passar o foco
+        crate::pmi_ui::segurar_tab(_ctx, self.pmi_pending.is_some(), raw);
         if let Some(g) = self.sketch.as_mut().and_then(|e| e.gesto.as_mut()) {
             g.eventos(raw);
         }

@@ -29,6 +29,8 @@ pub struct Gravador {
     fase: Fase,
     id: Option<Id>,
     base: Option<serde_json::Value>,
+    /// B185: caso de cota; o roteiro anima a lista de anotações em vez de um comando
+    pmi: Option<Vec<fenkra_core::pmi::Pmi>>,
     captura: Arc<Mutex<Option<Arc<egui::ColorImage>>>>,
 }
 
@@ -63,7 +65,7 @@ impl Gravador {
             eprintln!("gravar: {}: {e}", pasta.display());
             std::process::exit(2);
         }
-        Some(Gravador { roteiro: r, pasta, quadro: 0, fase: Fase::Janela(0), id: None, base: None, captura: Default::default() })
+        Some(Gravador { roteiro: r, pasta, quadro: 0, fase: Fase::Janela(0), id: None, base: None, pmi: None, captura: Default::default() })
     }
 }
 
@@ -71,6 +73,17 @@ impl App {
     /// Documento de partida do roteiro (chamado ao criar o app).
     pub(super) fn gravar_preparar(&mut self) {
         let Some(g) = self.gravador.as_ref() else { return };
+        // B185: caso de cota do PMI 3D
+        if let Some((doc, lista)) = casos::montar_pmi(&g.roteiro.caso) {
+            self.load_doc(doc, None, None);
+            self.started = true;
+            self.settings.animacoes = false;
+            if let Some(g) = self.gravador.as_mut() {
+                g.base = serde_json::to_value(&lista).ok();
+                g.pmi = Some(lista);
+            }
+            return;
+        }
         let Some((doc, kind)) = casos::montar(&g.roteiro.caso) else {
             eprintln!("gravar: caso {} desconhecido", g.roteiro.caso);
             std::process::exit(2);
@@ -109,7 +122,12 @@ impl App {
             }
             Fase::Base => {
                 if self.result.is_some() && !self.calculando() {
-                    if let Some(kind) = self.gravar_caso.take() {
+                    if let Some(lista) = g.pmi.take() {
+                        g.id = lista.first().map(|p| p.id);
+                        self.open.doc.pmi = lista;
+                        self.scene_dirty = true;
+                        g.fase = Fase::Aplicar;
+                    } else if let Some(kind) = self.gravar_caso.take() {
                         let snapshot = self.open.doc.clone();
                         let id = self.open.doc.add_feature(kind);
                         self.start_session(id, true, Some(snapshot));
@@ -122,7 +140,26 @@ impl App {
             Fase::Aplicar => {
                 let t = g.roteiro.tempo(g.quadro);
                 let mut mudou = false;
-                if let (Some(id), Some(base)) = (g.id, g.base.clone()) {
+                let cota = casos::montar_pmi(&g.roteiro.caso).is_some();
+                if let (true, Some(base)) = (cota, g.base.clone()) {
+                    let mut v = base;
+                    if let Err(e) = g.roteiro.aplicar(&mut v, t) {
+                        eprintln!("gravar: {e}");
+                        std::process::exit(3);
+                    }
+                    match serde_json::from_value::<Vec<fenkra_core::pmi::Pmi>>(v) {
+                        Ok(lista) => {
+                            if self.open.doc.pmi != lista {
+                                self.open.doc.pmi = lista;
+                                self.scene_dirty = true;
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("gravar: campo do roteiro deixou a anotação inválida: {e}");
+                            std::process::exit(3);
+                        }
+                    }
+                } else if let (Some(id), Some(base)) = (g.id, g.base.clone()) {
                     let mut v = base;
                     if let Err(e) = g.roteiro.aplicar(&mut v, t) {
                         eprintln!("gravar: {e}");
@@ -226,6 +263,17 @@ mod testes {
         for (arq, r) in roteiros {
             let nome = arq.file_stem().unwrap().to_string_lossy().to_string();
             assert_eq!(nome, r.comando, "o arquivo deve se chamar como o comando");
+            // B185: caso de cota; a lista de anotações tem de mudar e continuar válida
+            if let Some((_, lista)) = casos::montar_pmi(&r.caso) {
+                let base = serde_json::to_value(&lista).unwrap();
+                let (mut ini, mut fim) = (base.clone(), base);
+                r.aplicar(&mut ini, 0.).unwrap_or_else(|e| panic!("{nome}: {e}"));
+                r.aplicar(&mut fim, r.duracao).unwrap_or_else(|e| panic!("{nome}: {e}"));
+                let a: Vec<fenkra_core::pmi::Pmi> = serde_json::from_value(ini).unwrap_or_else(|e| panic!("{nome}: {e}"));
+                let b: Vec<fenkra_core::pmi::Pmi> = serde_json::from_value(fim).unwrap_or_else(|e| panic!("{nome}: {e}"));
+                assert_ne!(a, b, "{nome}: o roteiro não move nada");
+                continue;
+            }
             let (_, kind) = casos::montar(&r.caso).unwrap_or_else(|| panic!("{nome}: caso {} desconhecido", r.caso));
             let base = serde_json::to_value(&kind).unwrap();
             let mut ini = base.clone();
@@ -245,7 +293,8 @@ mod testes {
     fn cada_roteiro_recalcula_nos_extremos_e_muda_o_volume() {
         let roteiros = midia::ler_roteiros(&midia::pasta_docs().join("roteiros")).expect("roteiros");
         for (_, r) in roteiros {
-            let (doc0, kind) = casos::montar(&r.caso).unwrap();
+            // as cotas não mudam o sólido (o caso de cota tem teste próprio em `casos`)
+            let Some((doc0, kind)) = casos::montar(&r.caso) else { continue };
             let base = serde_json::to_value(&kind).unwrap();
             let mut vol = vec![];
             for t in [0., r.duracao] {

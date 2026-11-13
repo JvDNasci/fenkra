@@ -54,6 +54,45 @@ fn kind_now(i: u8) -> PmiKind {
     }
 }
 
+/// Tabs guardados para o comando de anotação aberto (B185), tirados da entrada crua por `segurar_tab`.
+static TABS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+/// Algum campo de texto está com o foco do teclado (ali o Tab é do campo)?
+fn texto_em_foco(ctx: &egui::Context) -> bool {
+    ctx.memory(|m| m.focused()).is_some_and(|id| egui::text_edit::TextEditState::load(ctx, id).is_some())
+}
+
+/// Chamado antes de a interface ler a entrada do quadro. Com o comando de anotação aberto e nenhum
+/// campo de texto em foco, o Tab sem modificador é da medida: sai da entrada do egui (que o usaria para
+/// passar o foco aos botões, levando-o ao menu Arquivo) e fica guardado para `pending_preview`.
+/// Causa do defeito: o egui move o foco com o Tab no começo do quadro, antes de qualquer
+/// `consume_key`; depois disso `egui_wants_keyboard_input` fica verdadeiro e o comando nunca via a tecla.
+pub fn segurar_tab(ctx: &egui::Context, armado: bool, raw: &mut egui::RawInput) {
+    if !armado {
+        TABS.store(0, std::sync::atomic::Ordering::Relaxed);
+        return;
+    }
+    if texto_em_foco(ctx) {
+        return;
+    }
+    let mut n = 0;
+    raw.events.retain(|e| match e {
+        egui::Event::Key { key: egui::Key::Tab, pressed, modifiers, .. } if modifiers.is_none() => {
+            n += *pressed as u32;
+            false
+        }
+        _ => true,
+    });
+    if n > 0 {
+        TABS.fetch_add(n, std::sync::atomic::Ordering::Relaxed);
+    }
+}
+
+/// Um Tab guardado para a medida, se houver.
+fn tomar_tab() -> bool {
+    TABS.fetch_update(std::sync::atomic::Ordering::Relaxed, std::sync::atomic::Ordering::Relaxed, |n| n.checked_sub(1)).is_ok()
+}
+
 /// Anotação que está ganhando uma ponta nova (comando 16): o próximo elemento escolhido vira a ponta.
 static PONTA_PARA: std::sync::Mutex<Option<Id>> = std::sync::Mutex::new(None);
 
@@ -1122,7 +1161,8 @@ fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &R
         Some(inf) => inf.variants.len() > 1,
         None => kind_now(i).has_variants(),
     };
-    if !typing && has_var && ui.input_mut(|s| s.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
+    let tab_guardado = !typing && has_var && tomar_tab();
+    if tab_guardado || (!typing && has_var && ui.input_mut(|s| s.consume_key(egui::Modifiers::NONE, egui::Key::Tab))) {
         if smart {
             crate::pmi_smart::tab_next();
         } else {
@@ -1162,6 +1202,8 @@ fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &R
     let (mut cancel, mut pop, mut finish) = (false, false, false);
     if !typing {
         use egui::{Key, Modifiers};
+        // sem variantes, o Tab guardado alterna o texto alinhado
+        let tab_alinha = !has_var && tomar_tab();
         let (space, f, tab, esc, back, enter) = ui.input_mut(|s| {
             // com variantes o Tab já foi para a medida: o texto alinhado passa para a tecla T
             let align_key = if has_var { Key::T } else { Key::Tab };
@@ -1174,7 +1216,7 @@ fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &R
         if f {
             set_pref(|p| p.shift += 1);
         }
-        if tab {
+        if tab || tab_alinha {
             set_pref(|p| p.align = !p.align);
         }
         cancel = esc;
@@ -2800,5 +2842,59 @@ mod tests_b185_b186 {
             conferidos += 1;
         }
         assert!(conferidos > 0, "a placa paramétrica tem furos");
+    }
+}
+
+#[cfg(test)]
+mod testes_tab_b185 {
+    use super::*;
+
+    fn tab(pressed: bool) -> egui::Event {
+        egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed, repeat: false, modifiers: Default::default() }
+    }
+
+    /// Com a anotação armada o Tab sai da entrada do egui (que passaria o foco ao menu) e fica
+    /// guardado para a medida; sem comando, ou com um campo de texto em foco, o Tab é do egui.
+    #[test]
+    fn tab_da_cota_nao_passa_o_foco_e_fica_para_a_medida() {
+        let ctx = egui::Context::default();
+        TABS.store(0, std::sync::atomic::Ordering::Relaxed);
+        let mut raw = egui::RawInput { events: vec![tab(true), tab(false)], ..Default::default() };
+        segurar_tab(&ctx, true, &mut raw);
+        assert!(raw.events.is_empty(), "o egui não vê o Tab");
+        assert!(tomar_tab(), "a medida recebe o Tab");
+        assert!(!tomar_tab(), "um Tab, uma troca");
+        // Shift+Tab continua do egui
+        let shift = egui::Event::Key { key: egui::Key::Tab, physical_key: None, pressed: true, repeat: false, modifiers: egui::Modifiers::SHIFT };
+        let mut raw = egui::RawInput { events: vec![shift], ..Default::default() };
+        segurar_tab(&ctx, true, &mut raw);
+        assert_eq!(raw.events.len(), 1);
+        // sem comando armado, nada muda e o que sobrou é esquecido
+        let mut raw = egui::RawInput { events: vec![tab(true)], ..Default::default() };
+        segurar_tab(&ctx, false, &mut raw);
+        assert_eq!(raw.events.len(), 1);
+        assert!(!tomar_tab());
+    }
+
+    #[test]
+    fn campo_de_texto_em_foco_fica_com_o_tab() {
+        let ctx = egui::Context::default();
+        let mut texto = String::new();
+        let quadro = |ctx: &egui::Context, texto: &mut String| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
+                    let r = ui.add(egui::TextEdit::singleline(texto));
+                    r.request_focus();
+                });
+            });
+            out.textures_delta.clear();
+        };
+        quadro(&ctx, &mut texto);
+        quadro(&ctx, &mut texto);
+        TABS.store(0, std::sync::atomic::Ordering::Relaxed);
+        let mut raw = egui::RawInput { events: vec![tab(true)], ..Default::default() };
+        segurar_tab(&ctx, true, &mut raw);
+        assert_eq!(raw.events.len(), 1, "o Tab é do campo");
+        assert!(!tomar_tab());
     }
 }
