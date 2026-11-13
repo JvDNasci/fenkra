@@ -1,0 +1,171 @@
+{
+ "id": "iso15_68",
+ "nome": "Rolamento rígido de esferas, série 68",
+ "norma": "ISO 15",
+ "revisao": "2017",
+ "versao": 1,
+ "gerador": "rolamento",
+ "tipo": "rolamento",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Nachi — catálogo de rolamentos rígidos de esferas (medidas de contorno das séries 68, 69 e 160)",
+   "url": "https://pibsales.com/wp-content/uploads/2023/06/Nachi-Deep-groove-ball-bearings.pdf"
+  },
+  {
+   "rotulo": "Runsom — tabelas das séries 6800, 6900 e 16000",
+   "url": "https://www.runsom.com/?p=14627"
+  }
+ ],
+ "campos": [
+  "D",
+  "B"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "6800",
+   "d_nominal": 10,
+   "valores": {
+    "D": 19,
+    "B": 5
+   },
+   "confirmado_por": 2,
+   "furo_min": 18.9,
+   "furo_max": 19.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "6801",
+   "d_nominal": 12,
+   "valores": {
+    "D": 21,
+    "B": 5
+   },
+   "confirmado_por": 2,
+   "furo_min": 20.9,
+   "furo_max": 21.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "6802",
+   "d_nominal": 15,
+   "valores": {
+    "D": 24,
+    "B": 5
+   },
+   "confirmado_por": 2,
+   "furo_min": 23.9,
+   "furo_max": 24.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "6803",
+   "d_nominal": 17,
+   "valores": {
+    "D": 26,
+    "B": 5
+   },
+   "confirmado_por": 2,
+   "furo_min": 25.9,
+   "furo_max": 26.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "6804",
+   "d_nominal": 20,
+   "valores": {
+    "D": 32,
+    "B": 7
+   },
+   "confirmado_por": 2,
+   "furo_min": 31.9,
+   "furo_max": 32.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "6805",
+   "d_nominal": 25,
+   "valores": {
+    "D": 37,
+    "B": 7
+   },
+   "confirmado_por": 2,
+   "furo_min": 36.9,
+   "furo_max": 37.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "6806",
+   "d_nominal": 30,
+   "valores": {
+    "D": 42,
+    "B": 7
+   },
+   "confirmado_por": 2,
+   "furo_min": 41.9,
+   "furo_max": 42.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "6807",
+   "d_nominal": 35,
+   "valores": {
+    "D": 47,
+    "B": 7
+   },
+   "confirmado_por": 2,
+   "furo_min": 46.9,
+   "furo_max": 47.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "6808",
+   "d_nominal": 40,
+   "valores": {
+    "D": 52,
+    "B": 7
+   },
+   "confirmado_por": 2,
+   "furo_min": 51.9,
+   "furo_max": 52.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "6809",
+   "d_nominal": 45,
+   "valores": {
+    "D": 58,
+    "B": 7
+   },
+   "confirmado_por": 2,
+   "furo_min": 57.9,
+   "furo_max": 58.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "6810",
+   "d_nominal": 50,
+   "valores": {
+    "D": 65,
+    "B": 7
+   },
+   "confirmado_por": 2,
+   "furo_min": 64.9,
+   "furo_max": 65.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "6817",
+   "d_nominal": 85,
+   "valores": {
+    "D": 110,
+    "B": 13
+   },
+   "confirmado_por": 2,
+   "furo_min": 109.9,
+   "furo_max": 110.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  }
+ ]
+}

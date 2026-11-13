@@ -1,0 +1,147 @@
+{
+ "id": "iso15_160",
+ "nome": "Rolamento rígido de esferas, série 160",
+ "norma": "ISO 15",
+ "revisao": "2017",
+ "versao": 1,
+ "gerador": "rolamento",
+ "tipo": "rolamento",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Nachi — catálogo de rolamentos rígidos de esferas (medidas de contorno das séries 68, 69 e 160)",
+   "url": "https://pibsales.com/wp-content/uploads/2023/06/Nachi-Deep-groove-ball-bearings.pdf"
+  },
+  {
+   "rotulo": "Runsom — tabelas das séries 6800, 6900 e 16000",
+   "url": "https://www.runsom.com/?p=14627"
+  }
+ ],
+ "campos": [
+  "D",
+  "B"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "16002",
+   "d_nominal": 15,
+   "valores": {
+    "D": 32,
+    "B": 8
+   },
+   "confirmado_por": 2,
+   "furo_min": 31.9,
+   "furo_max": 32.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "16003",
+   "d_nominal": 17,
+   "valores": {
+    "D": 35,
+    "B": 8
+   },
+   "confirmado_por": 2,
+   "furo_min": 34.9,
+   "furo_max": 35.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "16004",
+   "d_nominal": 20,
+   "valores": {
+    "D": 42,
+    "B": 8
+   },
+   "confirmado_por": 2,
+   "furo_min": 41.9,
+   "furo_max": 42.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "16005",
+   "d_nominal": 25,
+   "valores": {
+    "D": 47,
+    "B": 8
+   },
+   "confirmado_por": 2,
+   "furo_min": 46.9,
+   "furo_max": 47.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "16006",
+   "d_nominal": 30,
+   "valores": {
+    "D": 55,
+    "B": 9
+   },
+   "confirmado_por": 2,
+   "furo_min": 54.9,
+   "furo_max": 55.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "16007",
+   "d_nominal": 35,
+   "valores": {
+    "D": 62,
+    "B": 9
+   },
+   "confirmado_por": 2,
+   "furo_min": 61.9,
+   "furo_max": 62.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "16008",
+   "d_nominal": 40,
+   "valores": {
+    "D": 68,
+    "B": 9
+   },
+   "confirmado_por": 2,
+   "furo_min": 67.9,
+   "furo_max": 68.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "16009",
+   "d_nominal": 45,
+   "valores": {
+    "D": 75,
+    "B": 10
+   },
+   "confirmado_por": 2,
+   "furo_min": 74.9,
+   "furo_max": 75.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "16010",
+   "d_nominal": 50,
+   "valores": {
+    "D": 80,
+    "B": 10
+   },
+   "confirmado_por": 2,
+   "furo_min": 79.9,
+   "furo_max": 80.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  },
+  {
+   "designacao": "16017",
+   "d_nominal": 85,
+   "valores": {
+    "D": 130,
+    "B": 14
+   },
+   "confirmado_por": 2,
+   "furo_min": 129.9,
+   "furo_max": 130.1,
+   "nota": "d, D e B: Nachi (catálogo) e Runsom concordam. Só as medidas de contorno da ISO 15, iguais em todo fabricante. O modelo é simplificado: anéis e uma faixa no lugar dos corpos rolantes. Capacidade de carga não citada: as duas fontes não a ligam a um fabricante conferido."
+  }
+ ]
+}
