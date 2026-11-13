@@ -16,6 +16,8 @@ pub enum Aba {
     #[default]
     Projeto,
     Verificar,
+    /// eixo escalonado, chaveta e resistência do eixo (B52: cada aba cabe numa rolagem)
+    Eixo,
 }
 
 /// Estado da aba Verificar (fica no `GearsUi`).
@@ -25,6 +27,8 @@ pub struct EstadoVerificar {
     pub entrada: EntradaVerificacao,
     /// última mensagem do relatório salvo
     pub msg: Option<String>,
+    /// entradas da resistência do eixo (aba Eixo)
+    pub eixo: fenkra_solidos::eixos_resistencia::EntradaEixo,
 }
 
 /// Botões das abas no topo da janela.
@@ -32,6 +36,7 @@ pub fn abas(ui: &mut egui::Ui, v: &mut EstadoVerificar) {
     ui.horizontal(|ui| {
         ui.selectable_value(&mut v.aba, Aba::Projeto, RichText::new(tr("Projeto")).strong()).on_hover_text(tr("Define a geometria: tipo, módulo, dentes, ângulos, largura, furo e correção."));
         ui.selectable_value(&mut v.aba, Aba::Verificar, RichText::new(tr("Verificar")).strong()).on_hover_text(tr("Confere a resistência do par para a potência e a rotação dadas, sem mudar a peça."));
+        ui.selectable_value(&mut v.aba, Aba::Eixo, RichText::new(tr("Eixo")).strong()).on_hover_text(tr("Eixo escalonado, recursos de seção, chaveta e resistência do eixo."));
     });
     ui.separator();
 }

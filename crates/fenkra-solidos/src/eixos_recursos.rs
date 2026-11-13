@@ -11,8 +11,9 @@
 //!   torno do eixo (0° = +X, como o rasgo do trecho).
 //! - **Ranhura** e **anel elástico**: anel de largura `largura` e profundidade `profundidade` cortado
 //!   por revolução. O anel não embute a tabela do fabricante: largura e profundidade são dadas.
-//! - **Rosca**: simplificação de volume equivalente, reduz o trecho ao diâmetro primitivo
-//!   `d − 0,6495·P` (perfil básico métrico) ao longo do comprimento; sem filete.
+//! - **Rosca**: quando Ø e passo estão na tabela métrica ISO, vira o comando Rosca com o sulco
+//!   helicoidal modelado (B52), posicionado ao longo da face do trecho; fora da tabela, fica a
+//!   simplificação de volume equivalente, que reduz o trecho ao diâmetro primitivo `d − 0,6495·P`.
 //! - **Furo transversal**: cilindro que atravessa o eixo, perpendicular a ele, na direção `rotacao`.
 
 use crate::biblioteca::chaveta_para_eixo;
@@ -194,12 +195,22 @@ fn corte_anel(m: &mut Montador, nome: &str, r_in: f64, r_out: f64, z0: f64, z1: 
     nomear(m, id, nome);
 }
 
+/// Rosca métrica ISO da tabela com o diâmetro e o passo do recurso.
+pub fn rosca_da_tabela(d: f64, passo: f64) -> Option<&'static crate::hardware::ThreadSpec> {
+    crate::hardware::THREADS.iter().find(|t| t.name.starts_with('M') && (t.major - d).abs() < 1e-6 && (t.pitch - passo).abs() < 1e-6)
+}
+
 /// Documento do eixo com os recursos de seção.
 pub fn eixo_documento_com_recursos(p: &ParamEixo, recursos: &[RecursoEixo]) -> Result<Document, String> {
     validar_recursos(p, recursos)?;
     let doc = crate::eixos::eixo_documento(p)?;
     let mut m = Montador { doc };
-    for (i, rec) in recursos.iter().enumerate() {
+    // a rosca vai primeiro: a face cilíndrica do trecho ainda está inteira (uma ranhura depois a
+    // dividiria e o início da rosca passaria a contar de outra borda)
+    let mut ordem: Vec<usize> = (0..recursos.len()).collect();
+    ordem.sort_by_key(|i| !matches!(recursos[*i].tipo, TipoRecurso::Rosca { .. }));
+    for i in ordem {
+        let rec = &recursos[i];
         let k = i + 1;
         let t = p.trechos[rec.trecho];
         let (z0, z1) = intervalo_z(p, rec).ok_or("trecho inexistente")?;
@@ -218,9 +229,25 @@ pub fn eixo_documento_com_recursos(p: &ParamEixo, recursos: &[RecursoEixo]) -> R
                 let nome = if matches!(rec.tipo, TipoRecurso::Anel { .. }) { "Anel_elastico" } else { "Ranhura" };
                 corte_anel(&mut m, &format!("{nome}_{k}"), raio - profundidade, raio + 1., z0, z1);
             }
-            TipoRecurso::Rosca { passo, .. } => {
-                corte_anel(&mut m, &format!("Rosca_{k}"), raio - FATOR_D2 * passo / 2., raio + 1., z0, z1);
-            }
+            TipoRecurso::Rosca { passo, .. } => match rosca_da_tabela(t.diametro, passo) {
+                // B52: rosca métrica da tabela vira o comando Rosca com o sulco helicoidal de verdade
+                Some(spec) => {
+                    let inicio: f64 = p.trechos[..rec.trecho].iter().map(|t| t.comprimento).sum();
+                    let borda_face = inicio + if rec.trecho == 0 { t.chanfro_fim.max(0.) } else { 0. };
+                    let id = m.doc.add_feature(FeatureKind::Thread(Thread {
+                        face: [-raio, 0., (z0 + z1) / 2.],
+                        spec: spec.name.into(),
+                        length: (z1 - z0).to_string(),
+                        modeled: true,
+                        end: None,
+                        start: (z0 - borda_face).max(0.).to_string(),
+                        face_key: None,
+                    }));
+                    nomear(&mut m, id, &format!("Rosca_{k}"));
+                }
+                // fora da tabela: volume equivalente (reduz ao diâmetro primitivo)
+                None => corte_anel(&mut m, &format!("Rosca_{k}"), raio - FATOR_D2 * passo / 2., raio + 1., z0, z1),
+            },
             TipoRecurso::FuroTransversal { diametro, rotacao } => {
                 let base = plano_girado(&mut m, &format!("Plano_giro_furo_{k}"), rotacao);
                 let mut data = SketchData::default();
@@ -298,20 +325,34 @@ mod tests {
         assert!(perto(medir(&p, &[anel]).0, v, 1e-9));
     }
 
+    /// Ø e passo da tabela: comando Rosca com sulco real no lugar e no comprimento pedidos; o volume
+    /// tirado fica perto do anel até o diâmetro primitivo (o primitivo divide o filete ao meio).
     #[test]
-    fn rosca_reduz_ao_diametro_primitivo() {
+    fn rosca_da_tabela_vira_sulco_helicoidal() {
         if !fenkra_kernel::AVAILABLE {
             return;
         }
         let p = base();
         let (v0, _) = medir(&p, &[]);
-        // M20 passo 2,5 em 15 mm: d2 = 20 − 0,6495·2,5
-        let r = rec(0, Borda::Esquerda, 0., TipoRecurso::Rosca { comprimento: 15., passo: 2.5 });
-        let r_in = 10. - FATOR_D2 * 2.5 / 2.;
-        let esperado = PI * (100. - r_in * r_in) * 15.;
+        let r = rec(0, Borda::Direita, 5., TipoRecurso::Rosca { comprimento: 15., passo: 2.5 });
+        let doc = eixo_documento_com_recursos(&p, &[r]).unwrap();
+        assert!(doc.features.iter().any(|f| matches!(&f.kind, FeatureKind::Thread(t) if t.spec == "M20x2.5" && t.modeled)));
+        let res = recompute(&doc);
+        assert_eq!(res.roscas.len(), 1);
+        let rv = &res.roscas[0];
+        // da direita do trecho 1 (z = 50) recuando 5: rosca de z = 30 a 45
+        let z = [rv.origin[2], rv.origin[2] + rv.dir[2] * rv.len];
+        let (lo, hi) = (z[0].min(z[1]), z[0].max(z[1]));
+        assert!((lo - 30.).abs() < 1e-6 && (hi - 45.).abs() < 1e-6, "{z:?}");
         let (v, _) = medir(&p, &[r]);
-        assert!(perto(v0 - v, esperado, 0.01), "{} contra {esperado}", v0 - v);
+        let r_in = 10. - FATOR_D2 * 2.5 / 2.;
+        let anel = PI * (100. - r_in * r_in) * 15.;
+        assert!(v0 - v > 0.6 * anel && v0 - v < 1.4 * anel, "{} contra {anel}", v0 - v);
         assert_eq!(passo_grosso(20.), Some(2.5));
+        // fora da tabela (Ø25 passo 1,7): segue o volume equivalente
+        let (v1, _) = medir(&p, &[rec(1, Borda::Esquerda, 0., TipoRecurso::Rosca { comprimento: 10., passo: 1.7 })]);
+        let r_in = 12.5 - FATOR_D2 * 1.7 / 2.;
+        assert!(perto(v0 - v1, PI * (12.5 * 12.5 - r_in * r_in) * 10., 0.01));
     }
 
     #[test]

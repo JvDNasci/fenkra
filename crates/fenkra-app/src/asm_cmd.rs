@@ -812,6 +812,8 @@ pub fn demo(st: &mut AsmState, nome: &str) {
             g.p.dentes = 10;
         }
         if nome == "eixo" {
+            // B52: o eixo fica na aba própria, com a resistência embaixo
+            g.verificar.aba = crate::engrenagens_verificar_ui::Aba::Eixo;
             g.eixo_grafico = true;
             g.trecho_sel = Some(1);
             g.recursos = vec![

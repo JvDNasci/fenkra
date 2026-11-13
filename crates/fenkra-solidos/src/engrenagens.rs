@@ -81,6 +81,9 @@ pub struct ParamEngrenagem {
     pub folga_impressao: f64,
     /// usinagens editáveis sobre a peça padronizada (B345): cubo, rebaixo, alívio, parafuso, furo, rasgo
     pub usinagens: Vec<crate::usinagens::Usinagem>,
+    /// acréscimo no raio de topo (mm, só reta e helicoidal): a coroa do sem-fim cresce o dente para a
+    /// garganta cortar a ponta em arco (B52)
+    pub acrescimo_topo: f64,
 }
 
 impl Default for ParamEngrenagem {
@@ -100,6 +103,7 @@ impl Default for ParamEngrenagem {
             espinha_peixe: false,
             folga_impressao: 0.,
             usinagens: vec![],
+            acrescimo_topo: 0.,
         }
     }
 }
@@ -126,7 +130,7 @@ impl ParamEngrenagem {
     /// Chave da peça **padronizada** do catálogo (sem usinagens): é o vínculo gravado na peça.
     pub fn chave(&self) -> String {
         let base = format!("m{}-a{}-b{}-f{}", self.modulo, self.angulo_pressao, self.largura, self.folga_dentes);
-        let rasgo = format!("{}{}{}", if self.rasgo_cubo && self.furo > 0. { "-k" } else { "" }, if self.espinha_peixe && self.tipo == TipoEngrenagem::Helicoidal { "-v" } else { "" }, if self.folga_impressao > 0. && matches!(self.tipo, TipoEngrenagem::Reta | TipoEngrenagem::Helicoidal) { format!("-p{}", self.folga_impressao) } else { String::new() });
+        let rasgo = format!("{}{}{}{}", if self.acrescimo_topo > 0. { format!("-t{}", self.acrescimo_topo) } else { String::new() }, if self.rasgo_cubo && self.furo > 0. { "-k" } else { "" }, if self.espinha_peixe && self.tipo == TipoEngrenagem::Helicoidal { "-v" } else { "" }, if self.folga_impressao > 0. && matches!(self.tipo, TipoEngrenagem::Reta | TipoEngrenagem::Helicoidal) { format!("-p{}", self.folga_impressao) } else { String::new() });
         match self.tipo {
             TipoEngrenagem::Reta => format!("engrenagem-reta-{base}-z{}-x{}-d{}{rasgo}", self.dentes, self.coef_correcao, self.furo),
             TipoEngrenagem::Helicoidal => format!("engrenagem-helicoidal-{base}-z{}-x{}-d{}-h{}{rasgo}", self.dentes, self.coef_correcao, self.furo, self.angulo_helice),
@@ -207,12 +211,12 @@ pub(crate) fn dente_externo(p: &ParamEngrenagem) -> Dente {
     let alfa = (alfa_n.tan() / cb).atan();
     let r = m / cb * p.dentes as f64 / 2.;
     let fi = p.folga_impressao;
-    Dente { r, rb: r * alfa.cos(), ra: r + m * (1. + x), rf: r - m * (1.25 - x) - fi, sp: (m * (PI / 2. + 2. * x * alfa_n.tan()) - p.folga_dentes - fi / 2.) / cb, alfa, z: p.dentes, rho: crate::engrenagens_trocoide::RHO_REFERENCIA * m }
+    Dente { r, rb: r * alfa.cos(), ra: r + m * (1. + x) + p.acrescimo_topo.max(0.), rf: r - m * (1.25 - x) - fi, sp: (m * (PI / 2. + 2. * x * alfa_n.tan()) - p.folga_dentes - fi / 2.) / cb, alfa, z: p.dentes, rho: crate::engrenagens_trocoide::RHO_REFERENCIA * m }
 }
 
 /// Vão da engrenagem interna: topo do vão na raiz da interna (r + 1,25m), fundo no topo dos dentes
 /// (r − m) e largura no primitivo = passo − espessura do dente.
-fn dente_interno(p: &ParamEngrenagem) -> Dente {
+pub(crate) fn dente_interno(p: &ParamEngrenagem) -> Dente {
     let (m, alfa) = (p.modulo, p.angulo_pressao.to_radians());
     let r = m * p.dentes as f64 / 2.;
     Dente { r, rb: r * alfa.cos(), ra: r + 1.25 * m, rf: r - m, sp: PI * m / 2. + p.folga_dentes, alfa, z: p.dentes, rho: 0. }
@@ -279,7 +283,7 @@ impl Dente {
 
     /// Contorno completo com os `z` dentes, no sentido anti-horário: ponto inicial e passos (o último
     /// termina no inicial).
-    fn contorno(&self, flanco: usize) -> Result<([f64; 2], Vec<Passo>), String> {
+    pub(crate) fn contorno(&self, flanco: usize) -> Result<([f64; 2], Vec<Passo>), String> {
         let l = self.limites()?;
         let com_filete = !l.filete.is_empty();
         let abaixo = self.rf < self.rb && !com_filete;
@@ -476,6 +480,7 @@ pub fn engrenagem_documento(p: &ParamEngrenagem) -> Result<Document, String> {
         crate::usinagens::aplicar(&mut m, &crate::usinagens::GeoBase { largura: p.largura, raio_raiz: c.diametro_raiz / 2., furo: p.furo, cubo_proprio: None }, &p.usinagens)?;
     }
     crate::usinagens::registrar_vinculo(&mut m.doc, &p.chave(), &p.usinagens);
+    crate::engrenagens_regen::gravar_gerador(&mut m.doc, p);
     Ok(m.doc)
 }
 
@@ -532,9 +537,33 @@ pub fn contorno_pontos(p: &ParamEngrenagem, por_flanco: usize, por_arco: usize) 
 }
 
 /// Passo máximo de torção entre seções do loft da helicoidal (graus).
-const PASSO_TORCAO: f64 = 4.;
+pub(crate) const PASSO_TORCAO: f64 = 4.;
 /// Máximo de trechos do loft.
-const MAX_TRECHOS: usize = 24;
+pub(crate) const MAX_TRECHOS: usize = 24;
+/// Divisão do loft da helicoidal em seções: quantos trechos e quanto gira cada seção.
+pub(crate) struct Helice {
+    pub(crate) trechos: usize,
+    meio: usize,
+    espinha: bool,
+    /// giro (rad) da seção no fim da parte útil (a largura toda, ou meia na espinha de peixe)
+    giro_total: f64,
+}
+
+impl Helice {
+    pub(crate) fn nova(g: &Dente, beta: f64, largura: f64, espinha: bool) -> Helice {
+        let util = if espinha { largura / 2. } else { largura };
+        let giro_total = util * beta.tan() / g.r;
+        let meio = ((giro_total.abs().to_degrees() / PASSO_TORCAO).ceil() as usize).clamp(1, if espinha { MAX_TRECHOS / 2 } else { MAX_TRECHOS });
+        Helice { trechos: if espinha { 2 * meio } else { meio }, meio, espinha, giro_total }
+    }
+
+    /// Giro da seção `i` (0 a `trechos`).
+    pub(crate) fn giro(&self, i: usize) -> f64 {
+        let frac = if self.espinha { (i.min(self.trechos - i)) as f64 / self.meio as f64 } else { i as f64 / self.trechos as f64 };
+        self.giro_total * frac
+    }
+}
+
 /// Pontos por flanco: mais dentes, menos pontos.
 pub(crate) fn pontos_flanco(z: u32) -> usize {
     if z > 60 {
@@ -589,6 +618,13 @@ impl Montador {
 
     /// Sketch com o contorno (e o círculo externo, se `anel`): `rot` gira o desenho em torno de Z.
     pub(crate) fn sketch_contorno(&mut self, nome: &str, plano: PlaneRef, inicio: [f64; 2], passos: &[Passo], rot: f64, anel: Option<f64>) -> Id {
+        let data = self.dados_contorno(inicio, passos, rot, anel);
+        self.sketch(nome, plano, data)
+    }
+
+    /// Desenho do contorno (com ids do documento), sem criar o comando: a regeneração do perfil
+    /// ([`crate::engrenagens_regen`]) troca só o desenho de um sketch que já existe.
+    pub(crate) fn dados_contorno(&mut self, inicio: [f64; 2], passos: &[Passo], rot: f64, anel: Option<f64>) -> SketchData {
         let (c, s) = (rot.cos(), rot.sin());
         let rotar = |p: [f64; 2]| [p[0] * c - p[1] * s, p[0] * s + p[1] * c];
         let mut data = SketchData::default();
@@ -630,7 +666,7 @@ impl Montador {
                 }
             }
         }
-        self.sketch(nome, plano, data)
+        data
     }
 
     pub(crate) fn sketch(&mut self, nome: &str, plano: PlaneRef, data: SketchData) -> Id {
@@ -678,16 +714,11 @@ impl Montador {
     /// `min(z, b − z) tan β / r`, e cada metade usa a mesma quantidade de trechos.
     fn helicoidal(&mut self, g: &Dente, beta: f64, largura: f64, espinha: bool) -> Result<(), String> {
         let (inicio, passos) = g.contorno(pontos_flanco(g.z))?;
-        let util = if espinha { largura / 2. } else { largura };
-        let torcao = (util * beta.tan() / g.r).abs().to_degrees();
-        let meio = ((torcao / PASSO_TORCAO).ceil() as usize).clamp(1, if espinha { MAX_TRECHOS / 2 } else { MAX_TRECHOS });
-        let trechos = if espinha { 2 * meio } else { meio };
+        let h = Helice::nova(g, beta, largura, espinha);
         let mut secoes = vec![];
-        for i in 0..=trechos {
-            let plano = if i == 0 { PlaneRef::Origin(OriginPlane::XY) } else { self.plano(&format!("Plano_secao_{i}"), &format!("b*{i}/{trechos}"))? };
-            let frac = if espinha { (i.min(trechos - i)) as f64 / meio as f64 } else { i as f64 / trechos as f64 };
-            let rot = util * frac * beta.tan() / g.r;
-            secoes.push(self.sketch_contorno(&format!("Secao_{i}"), plano, inicio, &passos, rot, None));
+        for i in 0..=h.trechos {
+            let plano = if i == 0 { PlaneRef::Origin(OriginPlane::XY) } else { self.plano(&format!("Plano_secao_{i}"), &format!("b*{i}/{}", h.trechos))? };
+            secoes.push(self.sketch_contorno(&format!("Secao_{i}"), plano, inicio, &passos, h.giro(i), None));
         }
         let id = self.doc.add_feature(FeatureKind::Loft(Loft { sections: secoes, ruled: true, closed: false, op: BoolOp::Add, torcao: vec![], inicio: Default::default(), fim: Default::default() }));
         if let Some(f) = self.doc.features.iter_mut().find(|f| f.id == id) {
@@ -698,25 +729,32 @@ impl Montador {
 
     /// Barra com dentes trapezoidais: topo em y = m, raiz em y = −1,25m, fundo em y = −3,75m.
     fn cremalheira(&mut self, p: &ParamEngrenagem) -> Result<(), String> {
-        let (m, l) = (p.modulo, p.comprimento_cremalheira);
-        let passo = PI * m;
-        let n = (l / passo).floor() as usize;
-        let t = p.angulo_pressao.to_radians().tan();
-        let s = passo / 2. - p.folga_dentes;
-        let (yt, yr, yb) = (m, -1.25 * m, -3.75 * m);
-        let (wt, wr) = (s / 2. - m * t, s / 2. + 1.25 * m * t);
-        let c0 = (l - (n as f64 - 1.) * passo) / 2.;
-        let mut passos = vec![Passo::Linha([l, yb]), Passo::Linha([l, yr])];
-        for k in (0..n).rev() {
-            let cx = c0 + k as f64 * passo;
-            passos.extend([[cx + wr, yr], [cx + wt, yt], [cx - wt, yt], [cx - wr, yr]].map(Passo::Linha));
-        }
-        passos.extend([[0., yr], [0., yb]].map(Passo::Linha));
+        let (inicio, passos) = passos_cremalheira(p);
         let xy = PlaneRef::Origin(OriginPlane::XY);
-        let sk = self.sketch_contorno("Perfil_dentes", xy, [0., yb], &passos, 0., None);
+        let sk = self.sketch_contorno("Perfil_dentes", xy, inicio, &passos, 0., None);
         self.extrusao("Barra", sk);
         Ok(())
     }
+}
+
+/// Contorno da cremalheira: ponto inicial e passos (dentes trapezoidais, topo em y = m, raiz em
+/// y = −1,25m, fundo em y = −3,75m).
+pub(crate) fn passos_cremalheira(p: &ParamEngrenagem) -> ([f64; 2], Vec<Passo>) {
+    let (m, l) = (p.modulo, p.comprimento_cremalheira);
+    let passo = PI * m;
+    let n = (l / passo).floor() as usize;
+    let t = p.angulo_pressao.to_radians().tan();
+    let s = passo / 2. - p.folga_dentes;
+    let (yt, yr, yb) = (m, -1.25 * m, -3.75 * m);
+    let (wt, wr) = (s / 2. - m * t, s / 2. + 1.25 * m * t);
+    let c0 = (l - (n as f64 - 1.) * passo) / 2.;
+    let mut passos = vec![Passo::Linha([l, yb]), Passo::Linha([l, yr])];
+    for k in (0..n).rev() {
+        let cx = c0 + k as f64 * passo;
+        passos.extend([[cx + wr, yr], [cx + wt, yt], [cx - wt, yt], [cx - wr, yr]].map(Passo::Linha));
+    }
+    passos.extend([[0., yr], [0., yb]].map(Passo::Linha));
+    ([0., yb], passos)
 }
 
 #[cfg(test)]

@@ -19,7 +19,8 @@
 //! dá, em polar, meia-largura angular `t(r) / (m z1)` com `t(r) = π m / 2 − 2 (r − rp) tan α`. O
 //! sólido é um `loft` reto de seções giradas (até 15° entre seções), com no máximo
 //! [`MAX_SECOES`] seções. A **coroa** do sem-fim é a helicoidal do gerador comum, com módulo normal
-//! `m cos λ` e hélice λ (sem garganta: o contato é pontual na prévia).
+//! `m cos λ` e hélice λ, com a ponta do dente cortada em garganta pelo toro do sem-fim (B52, ver
+//! [`coroa_documento`]).
 
 use crate::engrenagens::{pontos_flanco, polar, Dente, ParamEngrenagem, Passo, TipoEngrenagem};
 use crate::fixadores::Montador;
@@ -327,7 +328,8 @@ fn secoes_do_sem_fim(comprimento: f64, avanco: f64) -> usize {
     (comprimento / avanco * 360. / PASSO_SECAO).ceil() as usize + 1
 }
 
-/// A coroa: helicoidal de módulo normal `m cos λ` e hélice λ (mesma mão do sem-fim), sem garganta.
+/// A coroa: helicoidal de módulo normal `m cos λ` e hélice λ (mesma mão do sem-fim); a garganta é
+/// acrescentada em [`coroa_documento`].
 pub fn coroa_param(p: &ParamSemFim) -> Result<ParamEngrenagem, String> {
     let lam = (PI * p.modulo * p.entradas as f64 / (PI * p.diametro_primitivo)).atan();
     let b = if p.largura_coroa > 0. { p.largura_coroa } else { 0.75 * p.diametro_primitivo };
@@ -343,9 +345,35 @@ pub fn coroa_param(p: &ParamSemFim) -> Result<ParamEngrenagem, String> {
     })
 }
 
+/// Coroa com **garganta** (B52): o dente cresce até o diâmetro externo `d_e2 = d_a2 + m` e a ponta é
+/// cortada por um toro em volta do eixo do sem-fim, de raio `r_g = a − d_a2/2` com centro na
+/// distância entre centros `a`, no plano médio da coroa. No plano médio a ponta fica no diâmetro de
+/// topo `d_a2` (garganta) e sobe em arco até `d_e2` nas faces, abraçando o sem-fim. Se o dente mais
+/// alto ficaria pontiagudo, o acréscimo cai para m/4 e depois para zero (coroa sem garganta).
 pub fn coroa_documento(p: &ParamSemFim) -> Result<Document, String> {
-    calculo_sem_fim(p)?;
-    let mut d = crate::engrenagens::engrenagem_documento(&coroa_param(p)?)?;
+    let c = calculo_sem_fim(p)?;
+    let base = coroa_param(p)?;
+    let ra2 = crate::engrenagens::calculo(&base)?.diametro_externo / 2.;
+    let (mut d, acrescimo) = [0.5, 0.25]
+        .iter()
+        .find_map(|f| crate::engrenagens::engrenagem_documento(&ParamEngrenagem { acrescimo_topo: f * p.modulo, ..base.clone() }).ok().map(|d| (d, f * p.modulo)))
+        .map_or_else(|| crate::engrenagens::engrenagem_documento(&base).map(|d| (d, 0.)), Ok)?;
+    if acrescimo > 0. {
+        let mut m = Montador { doc: d };
+        let r_g = c.distancia_centros - ra2;
+        m.param("rg", &r_g.to_string())?;
+        let mut data = SketchData::default();
+        let mut al = || m.doc.alloc();
+        // perfil no XZ (x = raio, y = z): círculo do toro na distância entre centros, no plano médio
+        let centro = data.add_point(&mut al, c.distancia_centros, c.largura_coroa / 2.);
+        data.add_curve(&mut al, fenkra_core::sketch::Curve::Circle { c: centro, r: r_g }, false);
+        let sk = m.sketch("Perfil_garganta", PlaneRef::Origin(OriginPlane::XZ), data);
+        let id = m.doc.add_feature(FeatureKind::Revolve(Revolve { sketch: sk, axis: AxisRef::Origin(OriginAxis::Z), angle: "360".into(), symmetric: false, op: BoolOp::Cut, thin: None, thin_side: 0, angle2: None }));
+        if let Some(f) = m.doc.features.iter_mut().find(|f| f.id == id) {
+            f.name = "Garganta".into();
+        }
+        d = m.doc;
+    }
     d.props.description = format!("Coroa do sem-fim m{} z{}", p.modulo, p.dentes_coroa);
     Ok(d)
 }
@@ -518,5 +546,33 @@ mod tests {
         assert!(v > PI * 7.5 * 7.5 * 13. - furo && v < PI * 144. * 13. - furo, "{v}");
         let (vc, ..) = medir(&coroa_documento(&p).unwrap());
         assert!(vc > 0.);
+    }
+
+    /// Garganta da coroa: nas faces o dente chega ao diâmetro externo d_a2 + m; no plano médio a
+    /// ponta fica no diâmetro de topo d_a2 (o toro do sem-fim corta o excesso).
+    #[test]
+    fn coroa_tem_garganta() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let p = ParamSemFim::default();
+        let c = calculo_sem_fim(&p).unwrap();
+        let doc = coroa_documento(&p).unwrap();
+        assert!(doc.features.iter().any(|f| f.name == "Garganta"));
+        let (v, lo, hi) = medir(&doc);
+        let base = coroa_param(&p).unwrap();
+        let ra2 = crate::engrenagens::calculo(&base).unwrap().diametro_externo / 2.;
+        let re2 = ra2 + p.modulo / 2.;
+        assert!(lo[2].abs() < 1e-3 && (hi[2] - c.largura_coroa).abs() < 1e-3, "{lo:?} {hi:?}");
+        let raio_max = hi[0].max(hi[1]).max(-lo[0]).max(-lo[1]);
+        assert!(raio_max > ra2 + 0.2 && raio_max < re2 + 0.05, "{raio_max} entre {ra2} e {re2}");
+        // no plano médio nenhum ponto da malha passa do topo d_a2
+        let r = recompute(&doc);
+        let meio = c.largura_coroa / 2.;
+        let maior_no_meio = r.bodies[0].mesh.positions.chunks_exact(3).filter(|q| (q[2] as f64 - meio).abs() < 0.3).map(|q| (q[0] as f64).hypot(q[1] as f64)).fold(0., f64::max);
+        assert!(maior_no_meio < ra2 + 0.05, "{maior_no_meio} > {ra2}");
+        // sem a garganta (dente alto inteiro) o volume é maior
+        let (v_alto, ..) = medir(&crate::engrenagens::engrenagem_documento(&ParamEngrenagem { acrescimo_topo: p.modulo / 2., ..base }).unwrap());
+        assert!(v < v_alto, "{v} {v_alto}");
     }
 }
