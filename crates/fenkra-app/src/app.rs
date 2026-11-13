@@ -9616,6 +9616,8 @@ fn recent_row(ui: &mut egui::Ui, path: &str, icon: &str, kind: &str, pv: Option<
     let dir = p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
     let w = ui.available_width();
     let (r, resp) = ui.allocate_exact_size(egui::vec2(w, 46.), egui::Sense::click());
+    // B321: anel de foco quando o Tab chega aqui
+    let resp = crate::teclado::anel(ui, resp);
     let hot = ui.ctx().animate_bool(egui::Id::unique(("recent_hot", path)), resp.hovered());
     let v = ui.visuals();
     let bg = v.faint_bg_color.lerp_to_gamma(accent, 0.18 * hot);
@@ -9653,6 +9655,8 @@ fn recent_row(ui: &mut egui::Ui, path: &str, icon: &str, kind: &str, pv: Option<
 fn example_card(ui: &mut egui::Ui, key: &str, name: &str, desc: &str, bench: crate::settings::Bench, pv: Option<&crate::examples::Preview>, spin: f32, appear: f32, accent: Color32) -> egui::Response {
     let size = egui::vec2(220., 212.);
     let (r0, resp) = ui.allocate_exact_size(size, egui::Sense::click());
+    // B321: anel de foco quando o Tab chega aqui
+    let resp = crate::teclado::anel(ui, resp);
     let hot = ui.ctx().animate_bool(egui::Id::unique(("card_hot", key)), resp.hovered());
     let lift = 5. * hot + 16. * (1. - appear);
     let r = r0.translate(egui::vec2(0., -lift + 5.));
@@ -10093,6 +10097,8 @@ fn bench_tab(ui: &mut egui::Ui, active: bool, text: &str, enabled: bool) -> egui
     let g = ui.painter().layout_no_wrap(text.to_string(), font, col);
     let size = g.size() + egui::vec2(18., 6.);
     let (r, resp) = ui.allocate_exact_size(size, if enabled { egui::Sense::click() } else { egui::Sense::hover() });
+    // B321: anel de foco quando o Tab chega aqui
+    let resp = crate::teclado::anel(ui, resp);
     let p = ui.painter();
     if active {
         p.rect_filled(r, egui::CornerRadius { nw: 6, ne: 6, sw: 0, se: 0 }, Color32::from_rgba_unmultiplied(70, 140, 240, 50));

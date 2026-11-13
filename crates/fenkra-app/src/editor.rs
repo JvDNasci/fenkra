@@ -394,6 +394,8 @@ fn tab_bar(ui: &mut egui::Ui, run: &mut TabRun) {
                 let i = first + k;
                 let on = i == run.active;
                 let (r, resp) = ui.allocate_exact_size(egui::vec2(cell_w, 26.), egui::Sense::click());
+                // B321: anel de foco quando o Tab chega aqui
+                let resp = crate::teclado::anel(ui, resp);
                 let hot = ui.ctx().animate_bool(egui::Id::unique(("aba_hot", run.key, i)), resp.hovered() || on);
                 let v = ui.visuals();
                 let fill = if on { accent } else { v.faint_bg_color.lerp_to_gamma(accent, 0.25 * hot) };

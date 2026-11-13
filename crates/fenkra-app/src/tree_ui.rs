@@ -240,6 +240,8 @@ pub fn marca_em(ui: &Ui, recuo: f32) {
 pub fn caixa(ui: &mut Ui, aberto: bool) -> Response {
     let h = altura_linha(ui);
     let (r, resp) = ui.allocate_exact_size(egui::vec2(h * 0.72, h), Sense::click());
+    // B321: anel de foco quando o Tab chega aqui
+    let resp = crate::teclado::anel(ui, resp);
     let lado = (h * 0.56).round();
     let q = Rect::from_center_size(r.center(), egui::vec2(lado, lado));
     let cor = if resp.hovered() { theme::accent(ui.visuals()) } else { ui.visuals().text_color().gamma_multiply(0.7) };

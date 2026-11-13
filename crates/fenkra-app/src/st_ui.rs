@@ -493,7 +493,8 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                     } else {
                         ""
                     };
-                    let r = ui.add(egui::Label::new(RichText::new(format!("{}{}", tr(h), seta)).strong()).sense(egui::Sense::click())).on_hover_text(tr("Clique para ordenar"));
+                    let r = ui.add(egui::Label::new(RichText::new(format!("{}{}", tr(h), seta)).strong()).sense(egui::Sense::click()));
+                    let r = crate::teclado::anel(ui, r).on_hover_text(tr("Clique para ordenar"));
                     if r.clicked() {
                         if ui_state.sort == i {
                             ui_state.desc = !ui_state.desc;

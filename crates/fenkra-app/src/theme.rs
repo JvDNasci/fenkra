@@ -445,6 +445,8 @@ pub fn bands() -> Option<(Color32, Color32, Color32)> {
 /// Miniatura do tema (para escolher): faixa da barra, painel, destaque e viewport.
 pub fn swatch(ui: &mut egui::Ui, def: &ThemeDef, selected: bool) -> egui::Response {
     let (r, resp) = ui.allocate_exact_size(egui::vec2(132., 76.), egui::Sense::click());
+    // B321: anel de foco quando o Tab chega aqui
+    let resp = crate::teclado::anel(ui, resp);
     let p = ui.painter();
     let hover = resp.hovered();
     p.rect_filled(r, 8., c(def.panel));

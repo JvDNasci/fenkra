@@ -149,6 +149,8 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
                 for c in &cantos {
                     let sel = app.st_cantos_sel.is_some_and(|p| mesmo_ponto(p, c.ponto));
                     let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 20.), egui::Sense::click());
+                    // B321: anel de foco quando o Tab chega aqui
+                    let resp = crate::teclado::anel(ui, resp);
                     if sel || resp.hovered() {
                         ui.painter().rect_filled(r, 3., ui.visuals().widgets.hovered.weak_bg_fill);
                     }

@@ -449,6 +449,8 @@ enum Icone {
 /// Botão do cabeçalho, desenhado com traços na cor do tema.
 fn botao_janela(ui: &mut egui::Ui, icone: Icone, dica: &str) -> egui::Response {
     let (r, resp) = ui.allocate_exact_size(egui::vec2(BOTAO, BOTAO), Sense::click());
+    // B321: anel de foco quando o Tab chega aqui
+    let resp = crate::teclado::anel(ui, resp);
     if ui.is_rect_visible(r) {
         let visual = ui.style().interact(&resp);
         if resp.hovered() || resp.has_focus() {
