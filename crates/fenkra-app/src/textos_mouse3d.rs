@@ -27,4 +27,9 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("vista frontal", "front view"),
     ("vista superior", "top view"),
     ("vista isométrica", "isometric view"),
+    ("na montagem, mover a peça escolhida", "in an assembly, move the selected part"),
+    ("Com uma peça escolhida na montagem, o aparelho move e gira a peça; sem peça escolhida, move a vista.", "With a part selected in an assembly, the device moves and turns the part; with no part selected, it moves the view."),
+    ("comando", "command"),
+    ("Comandos", "Commands"),
+    ("Ação de vista ou qualquer comando da busca (Ctrl+K).", "A view action or any command from the search (Ctrl+K)."),
 ];

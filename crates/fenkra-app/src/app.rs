@@ -7599,15 +7599,44 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 self.mouse3d.iniciar(&ctx);
                 self.mouse3d.drenar();
                 let mov = self.settings.mouse3d.processar(self.mouse3d.bruto());
-                if !mov.parado() {
-                    vp.stop_anim();
-                    vp.navegou();
-                    crate::mouse3d::aplicar_na_camera(&mut vp.camera, &mov, ctx.input(|i| i.stable_dt));
-                    ctx.request_repaint();
+                // na montagem, com uma peça escolhida, o aparelho move a peça (um desfazer por gesto)
+                let peca = if self.settings.mouse3d.mover_peca { self.asm.as_ref().and_then(|st| st.sel) } else { None };
+                let dt = ctx.input(|i| i.stable_dt);
+                match (peca, crate::mouse3d::movimento_da_peca(&vp.camera, &mov, dt)) {
+                    (Some(id), Some((t, w))) => {
+                        let st = self.asm.as_mut().unwrap();
+                        if let Some(pl) = st.asm.node(id).map(|n| n.placement) {
+                            if !self.mouse3d.movendo_peca {
+                                st.push_undo();
+                                self.mouse3d.movendo_peca = true;
+                            }
+                            if let Some(n) = st.asm.node_mut(id) {
+                                n.placement = pl.moved(t, w, pl.origin);
+                            }
+                            if st.respect {
+                                st.solve();
+                            }
+                            st.dirty = true;
+                            ctx.request_repaint();
+                        }
+                    }
+                    _ if !mov.parado() => {
+                        self.mouse3d.movendo_peca = false;
+                        vp.stop_anim();
+                        vp.navegou();
+                        crate::mouse3d::aplicar_na_camera(&mut vp.camera, &mov, dt);
+                        ctx.request_repaint();
+                    }
+                    _ => self.mouse3d.movendo_peca = false,
                 }
                 for b in self.mouse3d.botoes_novos() {
-                    if !self.settings.mouse3d.acao_do_botao(b).aplicar(&mut vp.camera) {
-                        self.fit_pending = true;
+                    match crate::mouse3d::disparo_do_botao(&self.settings.mouse3d, b) {
+                        crate::mouse3d::Disparo::Comando(a) => self.mouse3d.acoes.push(a),
+                        crate::mouse3d::Disparo::Vista(v) => {
+                            if !v.aplicar(&mut vp.camera) {
+                                self.fit_pending = true;
+                            }
+                        }
                     }
                 }
             }
@@ -9149,6 +9178,10 @@ impl eframe::App for App {
         self.about_window(ctx);
         self.curso_quadro(ctx, area);
         if let Some(a) = self.busca_cmd.ui(ctx) {
+            self.act(a);
+        }
+        // B322: comandos ligados aos botões do mouse 3D
+        for a in std::mem::take(&mut self.mouse3d.acoes) {
             self.act(a);
         }
         self.view_menu_window(ctx);

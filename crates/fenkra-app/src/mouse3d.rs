@@ -88,6 +88,10 @@ pub struct Mouse3dConfig {
     pub zona_morta: f32,
     /// ação de cada botão, pelo número do botão (a lista pode ser menor que o número de botões)
     pub botoes: Vec<Acao>,
+    /// comando de cada botão, pelo ícone do comando (o mesmo da busca Ctrl+K); vazio = vale `botoes`
+    pub comandos: Vec<String>,
+    /// na montagem, com uma peça escolhida, o aparelho move a peça em vez da vista
+    pub mover_peca: bool,
 }
 
 impl Default for Mouse3dConfig {
@@ -100,6 +104,8 @@ impl Default for Mouse3dConfig {
             eixo_dominante: false,
             zona_morta: 0.05,
             botoes: vec![Acao::Enquadrar, Acao::AlternarOrtogonal],
+            comandos: vec![],
+            mover_peca: true,
         }
     }
 }
@@ -159,6 +165,48 @@ impl Mouse3dConfig {
     pub fn acao_do_botao(&self, n: u8) -> Acao {
         self.botoes.get(n as usize).copied().unwrap_or(Acao::Nenhuma)
     }
+
+    /// Ícone do comando ligado ao botão, se houver (tem prioridade sobre a ação de vista).
+    pub fn comando_do_botao(&self, n: u8) -> Option<&str> {
+        self.comandos.get(n as usize).map(String::as_str).filter(|c| !c.trim().is_empty())
+    }
+}
+
+/// O que um botão faz na tela: um comando (a mesma ação da busca Ctrl+K) ou uma ação de vista.
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Disparo {
+    Comando(crate::toolbar::Act),
+    Vista(Acao),
+}
+
+/// Resolve o botão: o comando gravado pelo ícone, achado na lista da busca de comandos; ícone que
+/// não existe mais cai na ação de vista do botão.
+pub fn disparo_do_botao(c: &Mouse3dConfig, n: u8) -> Disparo {
+    if let Some(icone) = c.comando_do_botao(n) {
+        if let Some(i) = crate::ajuda_cmd::comandos().into_iter().find(|i| i.icon == icone) {
+            return Disparo::Comando(i.act);
+        }
+    }
+    Disparo::Vista(c.acao_do_botao(n))
+}
+
+/// Deslocamento da peça na montagem por `dt` segundos, no referencial da vista: x para a direita da
+/// tela, y para dentro dela, z para cima; inclinar para a frente gira em torno do eixo da direita,
+/// inclinar para o lado em torno da direção de olhar e torcer em torno do eixo de cima. A velocidade
+/// máxima atravessa um quarto da vista por segundo e gira 1,2 rad/s. Devolve (translação, vetor de
+/// rotação), prontos para `Placement::moved`.
+pub fn movimento_da_peca(cam: &Camera, m: &Movimento, dt: f32) -> Option<([f64; 3], [f64; 3])> {
+    if m.parado() || !dt.is_finite() || dt <= 0. {
+        return None;
+    }
+    let dt = dt.min(0.1);
+    let [tx, ty, tz, rx, ry, rz] = m.eixos;
+    let (r, u) = cam.basis();
+    let f = u.cross(r);
+    let t = (r * tx + f * ty + u * tz) * (cam.dist * 0.25 * dt);
+    let w = (r * rx + f * ry + u * rz) * (1.2 * dt);
+    let d = |v: Vec3| [v.x as f64, v.y as f64, v.z as f64];
+    Some((d(t), d(w)))
 }
 
 /// Anda a câmera por `dt` segundos com o movimento dado. Translação: x e y deslocam o alvo no plano
@@ -217,6 +265,10 @@ pub struct Mouse3d {
     pub presente: bool,
     fila: Option<std::sync::mpsc::Receiver<Evento>>,
     tentou: bool,
+    /// a peça da montagem está sendo movida pelo aparelho (o desfazer entra uma vez por gesto)
+    pub movendo_peca: bool,
+    /// comandos pedidos pelos botões neste quadro, rodados depois dos painéis
+    pub acoes: Vec<crate::toolbar::Act>,
 }
 
 impl Mouse3d {
@@ -279,16 +331,36 @@ pub fn painel(ui: &mut eframe::egui::Ui, c: &mut Mouse3dConfig) {
             ui.checkbox(&mut c.inverter[i], format!("{} {}", tr("inverter"), tr(nome)));
         }
     });
+    ui.checkbox(&mut c.mover_peca, tr("na montagem, mover a peça escolhida")).on_hover_text(tr("Com uma peça escolhida na montagem, o aparelho move e gira a peça; sem peça escolhida, move a vista."));
+    let todos = crate::ajuda_cmd::comandos();
     for n in 0..c.botoes.len().max(2) {
         if c.botoes.len() <= n {
             c.botoes.resize(n + 1, Acao::Nenhuma);
         }
+        if c.comandos.len() <= n {
+            c.comandos.resize(n + 1, String::new());
+        }
         let atual = c.botoes[n];
-        eframe::egui::ComboBox::from_label(format!("{} {}", tr("botão"), n + 1)).selected_text(tr(atual.nome())).show_ui(ui, |ui| {
+        let cmd = todos.iter().find(|i| i.icon == c.comandos[n]);
+        let rotulo = match cmd {
+            Some(i) => format!("{}: {}", tr("comando"), tr(i.name)),
+            None => tr(atual.nome()).to_string(),
+        };
+        eframe::egui::ComboBox::from_label(format!("{} {}", tr("botão"), n + 1)).selected_text(rotulo).height(320.).show_ui(ui, |ui| {
             for a in Acao::TODAS {
-                ui.selectable_value(&mut c.botoes[n], a, tr(a.nome()));
+                if ui.selectable_label(cmd.is_none() && atual == a, tr(a.nome())).clicked() {
+                    c.botoes[n] = a;
+                    c.comandos[n].clear();
+                }
             }
-        });
+            ui.separator();
+            ui.label(eframe::egui::RichText::new(tr("Comandos")).weak());
+            for i in &todos {
+                if ui.selectable_label(c.comandos[n] == i.icon, tr(i.name)).on_hover_text(tr(i.brief)).clicked() {
+                    c.comandos[n] = i.icon.to_string();
+                }
+            }
+        }).response.on_hover_text(tr("Ação de vista ou qualquer comando da busca (Ctrl+K)."));
     }
 }
 
@@ -405,6 +477,41 @@ mod tests {
         assert!(Acao::AlternarOrtogonal.aplicar(&mut cam) && cam.ortho);
         assert!(Acao::VistaTopo.aplicar(&mut cam) && cam.pitch > 1.5);
         assert!(!Acao::Enquadrar.aplicar(&mut cam), "enquadrar precisa dos limites do modelo");
+    }
+
+    #[test]
+    fn botao_ligado_a_comando_dispara_o_comando_e_icone_sumido_volta_a_vista() {
+        let mut c = Mouse3dConfig::default();
+        let item = crate::ajuda_cmd::comandos().into_iter().find(|i| i.name == "Filete").expect("Filete na busca");
+        c.comandos = vec![String::new(), item.icon.into(), "icone_que_nao_existe".into()];
+        assert_eq!(disparo_do_botao(&c, 0), Disparo::Vista(Acao::Enquadrar));
+        assert_eq!(disparo_do_botao(&c, 1), Disparo::Comando(item.act));
+        assert_eq!(disparo_do_botao(&c, 2), Disparo::Vista(Acao::Nenhuma));
+        let volta: Mouse3dConfig = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
+        assert_eq!(volta.comandos, c.comandos);
+    }
+
+    #[test]
+    fn peca_anda_no_referencial_da_vista() {
+        let mut cam = Camera::default();
+        cam.set_view(-std::f32::consts::FRAC_PI_2, 0.);
+        let (r, u) = cam.basis();
+        let f = u.cross(r);
+        // empurrar para a direita leva a peça para a direita da tela, sem girar
+        let (t, w) = movimento_da_peca(&cam, &Movimento { eixos: [1., 0., 0., 0., 0., 0.] }, 0.05).unwrap();
+        let tv = Vec3::new(t[0] as f32, t[1] as f32, t[2] as f32);
+        assert!(tv.normalize().dot(r) > 0.999 && w == [0.; 3], "{t:?} {w:?}");
+        assert!((tv.length() - cam.dist * 0.25 * 0.05).abs() < 1e-4);
+        // torcer gira em torno do eixo de cima da tela
+        let (t, w) = movimento_da_peca(&cam, &Movimento { eixos: [0., 0., 0., 0., 0., -1.] }, 0.05).unwrap();
+        let wv = Vec3::new(w[0] as f32, w[1] as f32, w[2] as f32);
+        assert!(t == [0.; 3] && wv.normalize().dot(-u) > 0.999 && (wv.length() - 0.06).abs() < 1e-5, "{w:?}");
+        // a peça gira no lugar: o centro dela não sai, os cantos giram em volta
+        let p = fenkra_montagem::Placement { origin: [10., 0., 0.], ..Default::default() };
+        let q = p.moved([0.; 3], w, [10., 0., 0.]);
+        assert!((q.origin[0] - 10.).abs() < 1e-9);
+        let _ = f;
+        assert!(movimento_da_peca(&cam, &Movimento::default(), 0.05).is_none());
     }
 
     #[test]

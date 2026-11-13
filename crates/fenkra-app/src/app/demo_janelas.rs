@@ -130,6 +130,13 @@ impl App {
                 self.scene_dirty = true;
             }
             "daltonico" => self.settings.acessibilidade.paleta_segura = true,
+            // B322: configurações na página de navegação, onde ficam o mouse 3D e os botões dele
+            "config_navegacao" => {
+                self.settings_open = true;
+                self.settings_page = 3;
+                let filete = crate::ajuda_cmd::comandos().into_iter().find(|i| i.name == "Filete").map(|i| i.icon.to_string()).unwrap_or_default();
+                self.settings.mouse3d.comandos = vec![String::new(), filete];
+            }
             // B378: o gerenciador único de salvamento e exportação
             "gerenciador" => self.abrir_gerenciador(),
             // B408: o painel da peça aberto pelo clique na raiz da árvore; `FENKRA_DEMO_MATERIAL=<nome>`
