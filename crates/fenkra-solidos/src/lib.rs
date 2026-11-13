@@ -44,6 +44,7 @@ pub mod biblioteca;
 pub mod catalogo;
 pub mod fixadores;
 pub mod rolamentos;
+pub mod pneumatica;
 pub mod engrenagens;
 pub mod engrenagens_dim;
 pub mod transmissao_calc;

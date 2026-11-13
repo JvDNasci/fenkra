@@ -47,6 +47,8 @@ pub enum TipoFixador {
     ParafusoCruz,
     /// haste roscada nas duas pontas, sem cabeça (DIN 938, 939)
     Prisioneiro,
+    /// cilindro pneumático pelas medidas de interface (ISO 15552); o comprimento é o curso
+    CilindroPneumatico,
 }
 
 /// Geradores de geometria nomeados. Uma família escolhe o gerador pelo nome (`"gerador"` no JSON);
@@ -59,6 +61,7 @@ pub const GERADORES: &[(&str, TipoFixador)] = &[
     ("rolamento", TipoFixador::Rolamento),
     ("parafuso_cruz", TipoFixador::ParafusoCruz),
     ("prisioneiro", TipoFixador::Prisioneiro),
+    ("cilindro_pneumatico", TipoFixador::CilindroPneumatico),
     // geradores de forma própria sobre um tipo já existente: o tipo diz como a montagem usa a peça
     ("parafuso_escareado", TipoFixador::ParafusoAllen),
     ("parafuso_ombro", TipoFixador::ParafusoAllen),
@@ -85,12 +88,19 @@ impl TipoFixador {
             TipoFixador::Rolamento => "Rolamento",
             TipoFixador::ParafusoCruz => "Parafuso de cabeça com cruz",
             TipoFixador::Prisioneiro => "Prisioneiro",
+            TipoFixador::CilindroPneumatico => "Cilindro pneumático",
         }
     }
 
     /// Nome do gerador padrão deste tipo.
     pub fn gerador(self) -> &'static str {
         GERADORES.iter().find(|(_, t)| *t == self).map(|(n, _)| *n).unwrap_or("")
+    }
+
+    /// Tipos cuja peça muda de comprimento pela escolha da pessoa: o L do parafuso ou o curso do
+    /// cilindro, sempre dentro da série da família.
+    pub fn usa_comprimento(self) -> bool {
+        self.e_parafuso() || self == TipoFixador::CilindroPneumatico
     }
 
     pub fn e_parafuso(self) -> bool {
@@ -109,6 +119,7 @@ impl TipoFixador {
             TipoFixador::Rolamento => &["D", "B"],
             TipoFixador::ParafusoCruz => &["P", "dk", "k"],
             TipoFixador::Prisioneiro => &["P"],
+            TipoFixador::CilindroPneumatico => &["MM", "KK", "TG", "WH", "B", "AM", "L8", "RT", "E"],
         }
     }
 }
@@ -424,10 +435,10 @@ impl Familia {
         if !self.comprimentos.is_empty() && !crescente(&self.comprimentos) {
             return er("comprimentos devem ser positivos e crescentes");
         }
-        if self.tipo.e_parafuso() {
+        if self.tipo.usa_comprimento() {
             for t in &self.tamanhos {
                 if self.comprimentos_de(t).is_empty() {
-                    return er(&format!("{}: parafuso sem série de comprimentos", t.designacao));
+                    return er(&format!("{}: {} sem série de comprimentos", t.designacao, self.tipo.rotulo()));
                 }
             }
         }
@@ -523,6 +534,7 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso15_72.json", include_str!("../../../biblioteca/rolamentos/iso15_72.json")),
     ("iso15_nu2.json", include_str!("../../../biblioteca/rolamentos/iso15_nu2.json")),
     ("iso355_302.json", include_str!("../../../biblioteca/rolamentos/iso355_302.json")),
+    ("iso15552.json", include_str!("../../../biblioteca/pneumatica/iso15552.json")),
 ];
 
 /// A biblioteca pública embutida. Os arquivos são validados nos testes; aqui um arquivo inválido
@@ -669,7 +681,7 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 30);
+        assert_eq!(b.familias.len(), 31);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -1019,7 +1031,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 31);
+        assert_eq!(m.familias.len(), 32);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

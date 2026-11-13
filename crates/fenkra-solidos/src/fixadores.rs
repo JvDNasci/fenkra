@@ -43,7 +43,17 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
     let d = t.diametro_nominal().ok_or_else(|| format!("{}: designação inválida {}", fam.id, t.designacao))?;
     let curta = fam.norma.split(" (").next().unwrap_or(&fam.norma).to_string();
 
-    let (desc, comp) = if fam.tipo.e_parafuso() {
+    let (desc, comp) = if fam.tipo == TipoFixador::CilindroPneumatico {
+        // o comprimento é o curso: livre entre o menor e o maior da série; sem pedido, 100 mm ou o
+        // primeiro acima disso
+        let serie = fam.comprimentos_de(t);
+        let (minimo, maximo) = fam.limites_de_comprimento(t).ok_or("sem cursos para o tamanho")?;
+        let c = comprimento.or_else(|| serie.iter().copied().find(|c| *c >= 100.)).or(serie.last().copied()).ok_or("sem cursos para o tamanho")?;
+        if !c.is_finite() || c < minimo || c > maximo {
+            return Err(format!("{} {}: curso {c} fora de {} a {} mm", curta, t.designacao, minimo, maximo));
+        }
+        (format!("{curta} {}x{c}", t.designacao), Some(c))
+    } else if fam.tipo.e_parafuso() {
         let (minimo, maximo) = fam.limites_de_comprimento(t).ok_or("sem comprimentos para o tamanho")?;
         let l = match comprimento {
             Some(l) => l,
@@ -79,6 +89,7 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
             m.param("B", &medida(fam, t, "B")?.to_string())?;
             crate::rolamentos::corpo(&mut m)?;
         }
+        "cilindro_pneumatico" => crate::pneumatica::corpo(&mut m, fam, t, l)?,
         g => return Err(format!("{}: gerador '{g}' sem geometria", fam.id)),
     }
     propriedades(&mut m.doc, fam, t);
@@ -121,11 +132,13 @@ fn publicacoes(m: &mut Montador, fam: &Familia) -> Result<(), String> {
         (_, TipoFixador::Porca) => ("-m", "0"),
         (_, TipoFixador::Arruela) => ("-h", "0"),
         (_, TipoFixador::Rolamento) => ("-B", "0"),
+        // a face traseira apoia; a haste sai para +Z e a ponta segue o curso e a posição s
+        (_, TipoFixador::CilindroPneumatico) => ("L8+WH+curso*s+AM", "0"),
     };
     let ponto0 = PointRef::Origin;
     m.publicar("Eixo", RefKind::LineDir { point: ponto0, dir: AxisRef::Origin(OriginAxis::Z), start: inicio.into(), end: fim.into() });
     m.publicar("Plano_apoio", RefKind::OffsetPlane { base: PlaneRef::Origin(OriginPlane::XY), offset: "0".into() });
-    if fam.tipo.e_parafuso() {
+    if fam.tipo.usa_comprimento() {
         m.publicar("Ponta", RefKind::PointCoords { x: "0".into(), y: "0".into(), z: inicio.into(), frame: None });
     }
     if fam.gerador == "parafuso_ombro" {

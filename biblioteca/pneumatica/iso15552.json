@@ -1,0 +1,162 @@
+{
+ "id": "iso15552",
+ "nome": "Cilindro pneumático ISO 15552",
+ "norma": "ISO 15552",
+ "revisao": "2018",
+ "versao": 1,
+ "gerador": "cilindro_pneumatico",
+ "tipo": "cilindro_pneumatico",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Metalwork — cilindro de perfil tipo A ISO 15552 (tabela de dimensões)",
+   "url": "https://docs.pneumatiek.nl/pdf/metalwork/cilinder/profielcilinder_type_a_iso15552.pdf"
+  },
+  {
+   "rotulo": "Airwork — cilindros ISO 15552 séries CF e CG (catálogo 2021, dimensões e cursos padrão)",
+   "url": "https://www.salhydro.fi/files/PDF/CF_CG_iso_15552_pneumatic_cylinders_2021.pdf"
+  }
+ ],
+ "campos": [
+  "MM",
+  "KK",
+  "P",
+  "TG",
+  "WH",
+  "B",
+  "AM",
+  "L8",
+  "RT",
+  "E"
+ ],
+ "comprimentos": [
+  25,
+  50,
+  80,
+  100,
+  125,
+  160,
+  200,
+  250,
+  320,
+  350,
+  400,
+  500,
+  600,
+  700,
+  800,
+  900,
+  1000
+ ],
+ "tamanhos": [
+  {
+   "designacao": "Ø32",
+   "d_nominal": 32,
+   "valores": {
+    "MM": 12,
+    "KK": 10,
+    "P": 1.25,
+    "TG": 32.5,
+    "WH": 26,
+    "B": 30,
+    "AM": 22,
+    "L8": 94,
+    "RT": 6,
+    "E": 46.5
+   },
+   "confirmado_por": 2,
+   "nota": "Haste MM, rosca KK M10x1.25, TG, WH, ressalto B, AM, L8 (ZJ = L8 + WH = 120 mm), rosca RT M6 e conexão G1/8: Metalwork e Airwork concordam. E é o perfil de cada fabricante (Metalwork 46 mm, Airwork 46.5 mm; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante Airwork; o curso é livre entre o menor e o maior. Modelo simplificado: corpo quadrado maciço, ressalto, haste e rosca da ponta; sem tubo, êmbolo nem amortecimento."
+  },
+  {
+   "designacao": "Ø40",
+   "d_nominal": 40,
+   "valores": {
+    "MM": 16,
+    "KK": 12,
+    "P": 1.25,
+    "TG": 38,
+    "WH": 30,
+    "B": 35,
+    "AM": 24,
+    "L8": 105,
+    "RT": 6,
+    "E": 54
+   },
+   "confirmado_por": 2,
+   "nota": "Haste MM, rosca KK M12x1.25, TG, WH, ressalto B, AM, L8 (ZJ = L8 + WH = 135 mm), rosca RT M6 e conexão G1/4: Metalwork e Airwork concordam. E é o perfil de cada fabricante (Metalwork 54 mm, Airwork 54 mm; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante Airwork; o curso é livre entre o menor e o maior. Modelo simplificado: corpo quadrado maciço, ressalto, haste e rosca da ponta; sem tubo, êmbolo nem amortecimento."
+  },
+  {
+   "designacao": "Ø50",
+   "d_nominal": 50,
+   "valores": {
+    "MM": 20,
+    "KK": 16,
+    "P": 1.5,
+    "TG": 46.5,
+    "WH": 37,
+    "B": 40,
+    "AM": 32,
+    "L8": 106,
+    "RT": 8,
+    "E": 65
+   },
+   "confirmado_por": 2,
+   "nota": "Haste MM, rosca KK M16x1.5, TG, WH, ressalto B, AM, L8 (ZJ = L8 + WH = 143 mm), rosca RT M8 e conexão G1/4: Metalwork e Airwork concordam. E é o perfil de cada fabricante (Metalwork 64.5 mm, Airwork 65 mm; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante Airwork; o curso é livre entre o menor e o maior. Modelo simplificado: corpo quadrado maciço, ressalto, haste e rosca da ponta; sem tubo, êmbolo nem amortecimento."
+  },
+  {
+   "designacao": "Ø63",
+   "d_nominal": 63,
+   "valores": {
+    "MM": 20,
+    "KK": 16,
+    "P": 1.5,
+    "TG": 56.5,
+    "WH": 37,
+    "B": 45,
+    "AM": 32,
+    "L8": 121,
+    "RT": 8,
+    "E": 76
+   },
+   "confirmado_por": 2,
+   "nota": "Haste MM, rosca KK M16x1.5, TG, WH, ressalto B, AM, L8 (ZJ = L8 + WH = 158 mm), rosca RT M8 e conexão G3/8: Metalwork e Airwork concordam. E é o perfil de cada fabricante (Metalwork 75.5 mm, Airwork 76 mm; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante Airwork; o curso é livre entre o menor e o maior. Modelo simplificado: corpo quadrado maciço, ressalto, haste e rosca da ponta; sem tubo, êmbolo nem amortecimento."
+  },
+  {
+   "designacao": "Ø80",
+   "d_nominal": 80,
+   "valores": {
+    "MM": 25,
+    "KK": 20,
+    "P": 1.5,
+    "TG": 72,
+    "WH": 46,
+    "B": 45,
+    "AM": 40,
+    "L8": 128,
+    "RT": 10,
+    "E": 95
+   },
+   "confirmado_por": 2,
+   "nota": "Haste MM, rosca KK M20x1.5, TG, WH, ressalto B, AM, L8 (ZJ = L8 + WH = 174 mm), rosca RT M10 e conexão G3/8: Metalwork e Airwork concordam. E é o perfil de cada fabricante (Metalwork 94 mm, Airwork 95 mm; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante Airwork; o curso é livre entre o menor e o maior. Modelo simplificado: corpo quadrado maciço, ressalto, haste e rosca da ponta; sem tubo, êmbolo nem amortecimento."
+  },
+  {
+   "designacao": "Ø100",
+   "d_nominal": 100,
+   "valores": {
+    "MM": 25,
+    "KK": 20,
+    "P": 1.5,
+    "TG": 89,
+    "WH": 51,
+    "B": 55,
+    "AM": 40,
+    "L8": 138,
+    "RT": 10,
+    "E": 113
+   },
+   "confirmado_por": 2,
+   "nota": "Haste MM, rosca KK M20x1.5, TG, WH, ressalto B, AM, L8 (ZJ = L8 + WH = 189 mm), rosca RT M10 e conexão G1/2: Metalwork e Airwork concordam. E é o perfil de cada fabricante (Metalwork 111 mm, Airwork 113 mm; a norma só limita o máximo): o modelo usa o maior. Cursos padrão da camada de fabricante Airwork; o curso é livre entre o menor e o maior. Modelo simplificado: corpo quadrado maciço, ressalto, haste e rosca da ponta; sem tubo, êmbolo nem amortecimento."
+  }
+ ]
+}

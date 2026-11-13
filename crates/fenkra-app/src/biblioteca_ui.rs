@@ -479,6 +479,30 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
             });
         }
     });
+    // curso do cilindro: livre entre o menor e o maior da série, com os cursos padrão no menu
+    if fam.tipo == TipoFixador::CilindroPneumatico {
+        if let Some(t) = est.tamanho.as_deref().and_then(|t| fam.tamanho(t)) {
+            let serie = fam.comprimentos_de(t);
+            if let (Some(&lo), Some(&hi)) = (serie.first(), serie.last()) {
+                ui.horizontal(|ui| {
+                    ui.label(tr("Curso da haste"));
+                    let mut c = est.comprimento.unwrap_or_else(|| serie.iter().copied().find(|c| *c >= 100.).unwrap_or(lo));
+                    let r = ui.add(egui::DragValue::new(&mut c).range(lo..=hi).suffix(" mm"));
+                    egui::ComboBox::from_id_salt("biblioteca_curso").selected_text(tr("Padrão")).show_ui(ui, |ui| {
+                        for l in &serie {
+                            if ui.selectable_label(est.comprimento == Some(*l), fmt(*l)).clicked() {
+                                c = *l;
+                            }
+                        }
+                    });
+                    est.comprimento = Some(c);
+                    r
+                })
+                .inner
+                .on_hover_text(tr("Curso da haste em mm. A norma não fixa o curso: o menu traz os cursos padrão do fabricante, e qualquer valor entre o menor e o maior vale."));
+            }
+        }
+    }
     // comprimento
     if fam.tipo.e_parafuso() {
         if let Some(t) = est.tamanho.as_deref().and_then(|t| fam.tamanho(t)) {
@@ -583,7 +607,7 @@ fn previa_3d(ui: &mut egui::Ui, rect: Rect, resp: &egui::Response, est: &mut Est
     let p = ui.painter_at(rect);
     p.rect_filled(rect, 6., ui.visuals().extreme_bg_color);
     p.rect_stroke(rect, 6., Stroke::new(1., ui.visuals().widgets.noninteractive.bg_stroke.color), egui::StrokeKind::Inside);
-    let Some(m) = malha_do_item(&fam.id, tamanho, if fam.tipo.e_parafuso() { est.comprimento } else { None }) else {
+    let Some(m) = malha_do_item(&fam.id, tamanho, if fam.tipo.usa_comprimento() { est.comprimento } else { None }) else {
         p.text(rect.center(), egui::Align2::CENTER_CENTER, tr("sem prévia"), egui::FontId::proportional(12.), ui.visuals().weak_text_color());
         return;
     };
@@ -606,7 +630,9 @@ fn previa_3d(ui: &mut egui::Ui, rect: Rect, resp: &egui::Response, est: &mut Est
 /// Esquema das cotas: vista lateral com o valor de cada medida do tamanho escolhido ao lado.
 fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanho, comprimento: Option<f64>) {
     let valor = |s: &str| ficha.cotas.iter().position(|c| c.simbolo == s).map(|i| l.valores[i]);
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(190., 150.), Sense::hover());
+    // o cilindro tem doze cotas: a lista de valores pede mais altura
+    let altura = if ficha.tipo == TipoFixador::CilindroPneumatico { 215. } else { 150. };
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(190., altura), Sense::hover());
     let p = ui.painter_at(rect);
     let traco = Stroke::new(1.5, ui.visuals().text_color());
     let fino = Stroke::new(1., ui.visuals().weak_text_color());
@@ -708,6 +734,24 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
             notas.push((format!("d {}", fmt(d)), 0.));
             notas.push((format!("D {}", fmt(dd)), 1.));
             notas.push((format!("B {}", fmt(b)), 2.));
+        }
+        TipoFixador::CilindroPneumatico => {
+            // vista lateral: corpo E × L8, ressalto B, haste MM até WH + curso e a rosca KK por AM
+            let v = |s: &str, padrao: f64| valor(s).unwrap_or(padrao);
+            let (e_, l8, wh, mm, kk, am, b) = (v("E", d * 1.4), v("L8", d * 3.), v("WH", d), v("MM", d * 0.4), v("KK", d * 0.3), v("AM", d * 0.7), v("B", d));
+            let curso = comprimento.or(l.comprimentos.iter().copied().find(|c| *c >= 100.)).unwrap_or(100.);
+            let total = l8 + wh + am;
+            let esc = (105. / total as f32).min(60. / e_ as f32);
+            let x0 = rect.left() + 8.;
+            let cy = rect.top() + 60.;
+            let caixa = |xa: f64, xb: f64, alt: f64| Rect::from_two_pos(Pos2::new(x0 + xa as f32 * esc, cy - alt as f32 * esc / 2.), Pos2::new(x0 + xb as f32 * esc, cy + alt as f32 * esc / 2.));
+            p.rect_stroke(caixa(0., l8, e_), 1., traco, egui::StrokeKind::Middle);
+            p.rect_stroke(caixa(l8, l8 + (wh / 4.).min(4.), b), 0., fino, egui::StrokeKind::Middle);
+            p.rect_stroke(caixa(l8, l8 + wh, mm), 0., traco, egui::StrokeKind::Middle);
+            p.rect_stroke(caixa(l8 + wh, total, kk), 0., traco, egui::StrokeKind::Middle);
+            p.line_segment([Pos2::new(x0 - 4., cy), Pos2::new(x0 + total as f32 * esc + 6., cy)], fino);
+            notas.push((format!("Ø {}", fmt(d)), 0.));
+            notas.push((format!("{} {}", tr("curso"), fmt(curso)), 1.));
         }
         TipoFixador::Arruela => {
             let (d1, d2, h) = (valor("d1").unwrap_or(d), valor("d2").unwrap_or(d * 2.), valor("h").unwrap_or(d * 0.2));
@@ -1165,10 +1209,12 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
         }
         // `biblioteca_ficha_<id>`: a ficha da família aberta no tamanho do meio e esse item solto na
         // montagem (B51, B398). `biblioteca_b51` larga as famílias novas lado a lado.
-        n if n.starts_with("biblioteca_ficha_") || n == "biblioteca_b51" => {
+        n if n.starts_with("biblioteca_ficha_") || n == "biblioteca_b51" || n == "biblioteca_b44" => {
             let lib = biblioteca::publica();
             let ids: Vec<&str> = match n.strip_prefix("biblioteca_ficha_") {
                 Some(id) => vec![id],
+                // B44 e B45: rolamentos novos e o cilindro ISO 15552, com a ficha do cilindro aberta
+                None if n == "biblioteca_b44" => vec!["iso15552", "iso15_68", "iso15_69", "iso15_160", "iso15_72", "iso15_nu2", "iso355_302"],
                 None => vec!["iso10642", "iso7045", "iso7379", "din938", "din6923", "din6798a", "din25201", "asme_b18_3"],
             };
             let meio = |id: &str| lib.familia(id).and_then(|f| f.tamanhos.get(f.tamanhos.len() / 2)).map(|t| t.designacao.clone());
