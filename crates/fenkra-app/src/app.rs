@@ -9005,7 +9005,10 @@ impl eframe::App for App {
             }
         }
         if self.session.is_some() && !ctx.egui_wants_keyboard_input() {
-            if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+            if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.command) && crate::continuar::pode(self) {
+                // B20: Ctrl+Enter = aplicar e continuar
+                crate::continuar::aplicar_e_continuar(self);
+            } else if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                 self.conclude_session();
             } else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                 self.cancel_session();
