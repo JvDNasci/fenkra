@@ -66,7 +66,7 @@ fn editar_regras(ui: &mut egui::Ui, perfil: &Perfil, sel: u64) -> Option<Perfil>
         for l in &mut novo.regras {
             ui.label(tr(l.regra.rotulo()));
             let passo = (l.limite * 0.01).max(1.);
-            ui.add(egui::DragValue::new(&mut l.limite).range(0.0..=1.0e9).speed(passo));
+            ui.add(crate::ui_ext::dv(&mut l.limite).range(0.0..=1.0e9).speed(passo).rotulo(tr(l.regra.rotulo())));
             egui::ComboBox::from_id_salt(("gravidade_regra", sel, l.regra.chave())).selected_text(tr(l.gravidade.rotulo())).show_ui(ui, |ui| {
                 for g in [Gravidade::Informa, Gravidade::Avisa, Gravidade::Bloqueia] {
                     ui.selectable_value(&mut l.gravidade, g, tr(g.rotulo()));
