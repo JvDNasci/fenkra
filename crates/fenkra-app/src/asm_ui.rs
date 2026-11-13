@@ -4599,9 +4599,11 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
     let (mut salvar_eixo, mut salvar_chaveta): (bool, Option<(f64, f64)>) = (false, None);
     let tipo = g.p.tipo;
     let par = calculo_par(&g.p, g.dentes_coroa);
+    // B52: cada rótulo de campo tem dica com esquema (desenhado com os valores atuais)
+    let p_dica = g.p.clone();
     let campo = |ui: &mut egui::Ui, rotulo: &str, v: &mut f64, r: std::ops::RangeInclusive<f64>, suf: &str, vel: f64| {
         ui.horizontal(|ui| {
-            ui.label(tr(rotulo));
+            crate::engrenagens_abas_ui::rotulo(ui, rotulo, &p_dica);
             let resp = ui.add(crate::ui_ext::dv(v).range(r).speed(vel).max_decimals(3).suffix(suf));
             crate::ui_ext::wheel(ui, &resp, v);
         });
@@ -4620,6 +4622,10 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
             crate::engrenagens_verificar_ui::aba_verificar(ui, &mut g.verificar, par_ref);
             return;
         }
+        if g.verificar.aba == crate::engrenagens_verificar_ui::Aba::Eixo {
+            (salvar_eixo, salvar_chaveta) = crate::engrenagens_abas_ui::aba_eixo(ui, &mut g);
+            return;
+        }
         crate::editor::section(ui, "Tipo");
         ui.horizontal_wrapped(|ui| {
             for t in TipoEngrenagem::ALL {
@@ -4632,19 +4638,19 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
         campo(ui, "Módulo", &mut g.p.modulo, 0.1..=50., " mm", 0.05);
         if tipo != TipoEngrenagem::Cremalheira {
             ui.horizontal(|ui| {
-                ui.label(tr("Dentes do pinhão (z1)"));
+                crate::engrenagens_abas_ui::rotulo(ui, "Dentes do pinhão (z1)", &p_dica);
                 let resp = ui.add(crate::ui_ext::dv(&mut g.p.dentes).range(6..=400));
                 crate::ui_ext::wheel(ui, &resp, &mut g.p.dentes);
             });
             ui.horizontal(|ui| {
-                ui.label(tr(if tipo == TipoEngrenagem::Interna { "Dentes da coroa interna (z2)" } else { "Dentes da coroa (z2)" }));
+                crate::engrenagens_abas_ui::rotulo(ui, if tipo == TipoEngrenagem::Interna { "Dentes da coroa interna (z2)" } else { "Dentes da coroa (z2)" }, &p_dica);
                 let resp = ui.add(crate::ui_ext::dv(&mut g.dentes_coroa).range(6..=400));
                 crate::ui_ext::wheel(ui, &resp, &mut g.dentes_coroa);
             });
         } else {
             campo(ui, "Comprimento da cremalheira", &mut g.p.comprimento_cremalheira, 1.0..=10000., " mm", 1.);
             ui.horizontal(|ui| {
-                ui.label(tr("Dentes do pinhão (z1)"));
+                crate::engrenagens_abas_ui::rotulo(ui, "Dentes do pinhão (z1)", &p_dica);
                 let resp = ui.add(crate::ui_ext::dv(&mut g.p.dentes).range(6..=400));
                 crate::ui_ext::wheel(ui, &resp, &mut g.p.dentes);
             });
@@ -4740,90 +4746,6 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
                 ui.label(RichText::new(format!("⚠ {m}")).small());
             }
         }
-
-        crate::editor::section(ui, "Eixo e chaveta");
-        ui.label(RichText::new(tr("Eixo escalonado ao longo de Z (a partir de z = 0), com chanfros e rasgos de chaveta DIN 6885 forma A cortados em +X. A chaveta vem da tabela pelo diâmetro de cada trecho.")).weak().small());
-        ui.horizontal(|ui| {
-            ui.selectable_value(&mut g.eixo_grafico, false, tr("Tabela"));
-            ui.selectable_value(&mut g.eixo_grafico, true, tr("Gráfico")).on_hover_text(tr("Mostra o eixo no 3D com alças nas arestas dos trechos: arraste uma alça para mudar L ou Ø e a grade acompanha."));
-        });
-        crate::eixo_ui::perfil_lateral(ui, &mut g);
-        let mut remover: Option<usize> = None;
-        egui::Grid::new("grade_eixo").num_columns(8).spacing([8., 3.]).show(ui, |ui| {
-            for h in ["Ø", "L", "Chanfro", "Rasgo", "L rasgo", "Início", "Chaveta", ""] {
-                ui.label(RichText::new(tr(h)).strong());
-            }
-            ui.end_row();
-            for (i, t) in g.eixo.trechos.iter_mut().enumerate() {
-                for (v, r, vel) in [(&mut t.diametro, 1.0..=1000., 0.5), (&mut t.comprimento, 0.1..=10000., 1.), (&mut t.chanfro_fim, 0.0..=100., 0.1)] {
-                    let resp = ui.add(crate::ui_ext::dv(v).range(r).speed(vel).max_decimals(3));
-                    crate::ui_ext::wheel(ui, &resp, v);
-                }
-                let mut tem = t.rasgo.is_some();
-                if ui.checkbox(&mut tem, "").changed() {
-                    t.rasgo = tem.then(|| fenkra_solidos::RasgoChaveta { comprimento: t.comprimento.min(20.), desloc_inicio: 0. });
-                }
-                match t.rasgo.as_mut() {
-                    Some(r) => {
-                        let resp = ui.add(crate::ui_ext::dv(&mut r.comprimento).range(0.1..=10000.).speed(1.).max_decimals(3));
-                        crate::ui_ext::wheel(ui, &resp, &mut r.comprimento);
-                        let resp = ui.add(crate::ui_ext::dv(&mut r.desloc_inicio).range(0.0..=10000.).speed(1.).max_decimals(3));
-                        crate::ui_ext::wheel(ui, &resp, &mut r.desloc_inicio);
-                    }
-                    None => {
-                        ui.label("");
-                        ui.label("");
-                    }
-                }
-                match fenkra_solidos::biblioteca::chaveta_para_eixo(t.diametro) {
-                    Some(c) => ui.label(format!("{}×{} · t1 {} · t2 {}", fmt(c.b), fmt(c.h), fmt(c.t1), fmt(c.t2))),
-                    None => ui.label(RichText::new(tr("fora da tabela")).weak()),
-                };
-                if ui.small_button("✖").on_hover_text(tr("Remover trecho")).clicked() {
-                    remover = Some(i);
-                }
-                ui.end_row();
-            }
-        });
-        if let Some(i) = remover {
-            if g.eixo.trechos.len() > 1 {
-                g.eixo.trechos.remove(i);
-                crate::eixo_ui::remover_trecho(&mut g.recursos, i);
-                g.trecho_sel = Some(i.saturating_sub(1).min(g.eixo.trechos.len() - 1));
-            }
-        }
-        ui.horizontal_wrapped(|ui| {
-            if ui.button(tr("+ Trecho")).clicked() {
-                let mut novo = g.eixo.trechos.last().copied().unwrap_or(fenkra_solidos::TrechoEixo { diametro: 20., comprimento: 30., chanfro_fim: 0., rasgo: None });
-                novo.rasgo = None;
-                g.eixo.trechos.push(novo);
-            }
-            ui.checkbox(&mut g.eixo.furo_centro, tr("Furos de centro nas pontas"));
-        });
-        ui.horizontal_wrapped(|ui| {
-            for k in 0..g.eixo.trechos.len() {
-                ui.selectable_value(&mut g.trecho_sel, Some(k), format!("{} {}", tr("Trecho"), k + 1));
-            }
-        });
-        crate::eixo_ui::recursos_do_trecho(ui, &mut g);
-        let eixo_ok = g.eixo.validar().and_then(|c| fenkra_solidos::eixos_recursos::validar_recursos(&g.eixo, &g.recursos).map(|_| c));
-        if let Err(e) = &eixo_ok {
-            ui.label(RichText::new(format!("⚠ {e}")).color(Color32::from_rgb(220, 90, 60)));
-        }
-        // a chaveta é a do primeiro trecho com rasgo, no maior comprimento da série que cabe no rasgo
-        let chaveta = g.eixo.trechos.iter().find_map(|t| t.rasgo.map(|r| (t.diametro, fenkra_solidos::eixos::comprimento_chaveta_ate(r.comprimento))));
-        ui.horizontal_wrapped(|ui| {
-            ui.label(RichText::new(format!("{}: {} mm", tr("Comprimento total"), fmt(g.eixo.comprimento_total()))).small());
-            if ui.add_enabled(eixo_ok.is_ok(), egui::Button::new(tr("Salvar eixo..."))).on_hover_text(tr("Salva o eixo (.fkp) com os trechos, chanfros e rasgos acima.")).clicked() {
-                salvar_eixo = true;
-            }
-            let b = ui.add_enabled(eixo_ok.is_ok() && matches!(chaveta, Some((_, Some(_)))), egui::Button::new(tr("Salvar chaveta...")));
-            if b.on_hover_text(tr("Salva a chaveta DIN 6885 A do primeiro trecho com rasgo, no maior comprimento da série que cabe no rasgo.")).clicked() {
-                if let Some((d, Some(l))) = chaveta {
-                    salvar_chaveta = Some((d, l));
-                }
-            }
-        });
     });
     if !open || close {
         st.gears_open = None;

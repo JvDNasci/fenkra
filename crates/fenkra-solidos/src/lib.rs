@@ -52,11 +52,13 @@ pub mod transmissao_calc;
 pub mod transmissao_dados;
 pub mod engrenagens_conicas;
 pub mod engrenagens_trocoide;
+pub mod engrenagens_regen;
 pub mod engrenagens_resistencia;
 pub mod transmissao_corrente;
 pub mod transmissao_proposta;
 pub mod usinagens;
 pub mod eixos_recursos;
+pub mod eixos_resistencia;
 pub mod eixos;
 pub mod selecao_regras;
 pub mod chaveta_rasgos;
@@ -6275,6 +6277,16 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
 
 fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     let t0 = Instant::now();
+    // B52: a engrenagem do gerador redesenha o perfil quando m, z, alpha, beta... mudaram
+    let regen;
+    let (doc, erro_engrenagem) = match engrenagens_regen::perfil_atualizado(doc) {
+        Some(Ok(d)) => {
+            regen = d;
+            (&regen, None)
+        }
+        Some(Err(e)) => (doc, Some(e)),
+        None => (doc, None),
+    };
     let (vars, param_error) = match doc.eval_params() {
         // `espessura` vale em toda fórmula da chapa (raio = 1.15*espessura), do estilo ou do comando
         Ok(v) => (doc.sheet_efetivo().map(|s| s.vars_com_espessura(&v)).unwrap_or(v), None),
@@ -6783,7 +6795,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         exibicao,
         status: cx.status,
         params: cx.vars,
-        param_error,
+        param_error: param_error.or(erro_engrenagem),
         elapsed_ms: t0.elapsed().as_secs_f64() * 1000.,
         kernel: fenkra_kernel::version(),
         bend_lines,

@@ -126,6 +126,7 @@ mod midia;
 mod textos_ajuda;
 mod textos_biblioteca;
 mod alca_cota;
+mod engrenagens_abas_ui;
 mod engrenagens_ui;
 mod engrenagens_verificar_ui;
 mod transmissao_ui;
