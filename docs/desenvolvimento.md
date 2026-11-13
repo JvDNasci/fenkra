@@ -113,6 +113,7 @@ preferências do usuário.
 | `FENKRA_DEMO_JANELA=aplicar_continuar` | (B20) filete novo aberto, com "Aplicar e continuar" na barra do comando |
 | `FENKRA_DEMO_JANELA=ajuda_f1` | (B60) a janela Ajuda do comando que o F1 abre sobre o botão, aqui a do Filete |
 | `FENKRA_DEMO_JANELA=reparo_candidatas` | (B15) casca com a face perdida (ponto 3 mm acima do topo) e o Assistente de reparo aberto, com as candidatas numeradas no 3D (use com `FENKRA_DEMO_EXEMPLO=0`) |
+| `FENKRA_DEMO_JANELA=passo_a_passo` | (B59) dois cliques em ◀ na barra de status: o objeto em trabalho volta dois comandos (árvore, barra de status e peça na mesma posição; use com `FENKRA_DEMO_EXEMPLO=0`) |
 | `FENKRA_DEMO_JANELA=scan` | (B59) modo Scan ligado, olhando a peça no primeiro comando sólido; a barra de status diz até onde e mantém o objeto em trabalho |
 | `FENKRA_DEMO_SECOES=1` | (B130, B305) com `FENKRA_DEMO_PROJETO=1`, abre já expandidas as seções Ramos e mesclagem, Detalhes da qualidade e Regras do perfil do painel do projeto |
 | `FENKRA_DEMO_COMPARAR=1` | (B237) abre Comparar com um alvo usando como alvo a mesma peça com o primeiro parâmetro 5% maior: medidas, furos por diâmetro, mapa de distância e marcas |

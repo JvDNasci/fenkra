@@ -42,6 +42,12 @@ impl App {
                 }
             }
             "ramos" => self.demo_abrir_mescla(ctx),
+            // B59: dois cliques em ◀ na barra de status: o objeto em trabalho volta dois comandos
+            "passo_a_passo" => {
+                self.open.doc.passo_em_trabalho(fenkra_core::PassoTrabalho::Anterior);
+                self.open.doc.passo_em_trabalho(fenkra_core::PassoTrabalho::Anterior);
+                self.request_recompute();
+            }
             // B15: casca com a face perdida e o assistente de reparo aberto, candidatas numeradas no 3D
             "reparo_candidatas" => {
                 let mut d = Document::new("Reparo");

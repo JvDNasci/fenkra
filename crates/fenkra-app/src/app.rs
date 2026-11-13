@@ -5207,7 +5207,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         for c in &doc.collectors {
             let feats: Vec<(usize, &Feature)> = doc.features.iter().enumerate().filter(|(_, f)| f.target == c.id && !doc.is_free(f)).collect();
             let n = feats.len();
-            let marker_at = c.marker.unwrap_or(n).min(n);
+            // B59: o marcador mostra a barra de fim de peça (o objeto em trabalho); o marcador antigo do
+            // coletor só vale em arquivo que ainda o tenha
+            let antes_da_barra = feats.iter().filter(|(i, _)| *i < doc.rollback).count();
+            let marker_at = c.marker.unwrap_or(n).min(n).min(antes_da_barra);
             crate::tree_ui::no(ui, ("col", c.id.0), true, |ui| {
                     if eye(ui, !c.visible) {
                         actions.push(TreeAction::CollectorVisible(c.id, !c.visible));
@@ -6267,11 +6270,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     }
                 }
             }
-            TreeAction::CollectorMarker(c, m) => {
-                if let Some(x) = d.collectors.iter_mut().find(|x| x.id == c) {
-                    x.marker = m;
-                }
-            }
+            // B59: o marcador da linha do tempo é o objeto em trabalho, não uma posição à parte
+            TreeAction::CollectorMarker(c, m) => d.definir_marcador_do_coletor(c, m),
             TreeAction::Align(id) => {
                 self.sel = Sel::Feature(id);
                 self.align_to_selection();
@@ -7489,31 +7489,29 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if ui.small_button(tr("⟲ Reconstruir")).on_hover_text(tr("reconstrói tudo do zero, sem cache (Ctrl+F5)")).clicked() {
                     self.send_recompute(true);
                 }
-                // passo a passo: move o marcador do corpo ativo comando a comando. Na montagem não há
-                // linha do tempo de peça para andar, então a barra sai (B430)
-                let act = self.open.doc.active_collector;
-                let total = self.open.doc.features.iter().filter(|f| f.target == act && !self.open.doc.is_free(f)).count();
-                let cur = self.open.doc.collectors.iter().find(|c| c.id == act).and_then(|c| c.marker).unwrap_or(total).min(total);
-                let mut set: Option<Option<usize>> = None;
-                if crate::barra_estado::mostra_historico(self.sem_peca_em_edicao()) {
+                // passo a passo (B59): anda o objeto em trabalho (a barra de fim de peça) comando a
+                // comando, a mesma posição que a árvore sublinha. Na montagem não há linha do tempo de
+                // peça para andar, então a barra sai (B430)
+                let (cur, total) = self.open.doc.posicao_em_trabalho();
+                let mut passo: Option<fenkra_core::PassoTrabalho> = None;
+                if crate::barra_estado::mostra_historico(self.sem_peca_em_edicao()) && self.scan_volta.is_none() {
+                    use fenkra_core::PassoTrabalho as P;
                     if ui.small_button("⏮").on_hover_text(tr("voltar ao início (reconstruir passo a passo)")).clicked() {
-                        set = Some(Some(0));
+                        passo = Some(P::Inicio);
                     }
                     if ui.small_button("◀").on_hover_text(tr("um comando para trás")).clicked() {
-                        set = Some(Some(cur.saturating_sub(1)));
+                        passo = Some(P::Anterior);
                     }
                     ui.label(RichText::new(format!("{cur}/{total}")).small().weak());
                     if ui.small_button("▶").on_hover_text(tr("reconstruir o próximo comando")).clicked() {
-                        set = Some(if cur + 1 >= total { None } else { Some(cur + 1) });
+                        passo = Some(P::Proximo);
                     }
                     if ui.small_button("⏭").on_hover_text(tr("até o fim")).clicked() {
-                        set = Some(None);
+                        passo = Some(P::Fim);
                     }
                 }
-                if let Some(m) = set {
-                    if let Some(c) = self.open.doc.collectors.iter_mut().find(|c| c.id == act) {
-                        c.marker = m;
-                    }
+                if let Some(p) = passo {
+                    self.open.doc.passo_em_trabalho(p);
                 }
                 if let (true, Some(st)) = (self.settings.bench == crate::settings::Bench::Montagem, self.asm.as_ref()) {
                     let r = &st.report;
