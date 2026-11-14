@@ -2099,7 +2099,7 @@
    "tokens_k": 250,
    "teste": "Auto",
    "area": "Biblioteca de normas",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.2
   },
   {
@@ -2195,7 +2195,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "Desenho técnico",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -2580,7 +2580,7 @@
    "tokens_k": 250,
    "teste": "Auto",
    "area": "PDM / PLM",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -3396,7 +3396,7 @@
    "tokens_k": 420,
    "teste": "Auto + Visual",
    "area": "PMI 3D",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.4
   },
   {
@@ -6153,7 +6153,7 @@
    "tokens_k": 350,
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.3
   },
   {
