@@ -171,6 +171,7 @@ mod st_cantos_ui;
 mod st_acesso_ui;
 mod st_tocha_ui;
 mod st_corte_tubo_ui;
+mod st_portico_ui;
 mod st_limite_ui;
 mod textos_st_limite;
 mod st_encaixe_ui;

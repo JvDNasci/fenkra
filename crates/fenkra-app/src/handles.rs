@@ -583,6 +583,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: Camera) {
     crate::st_acesso_ui::overlay(app, ui, rect, &cam);
     // B163: caminho de corte do tubo e cabeçote da animação
     crate::st_corte_tubo_ui::overlay(ui, rect, &cam);
+    // B114: diagramas do pórtico, apoios e cargas
+    crate::st_portico_ui::overlay(ui, rect, &cam);
     alcas(app, ui, rect, cam);
     // B411: os rótulos de valor vão por cima de todas as setas e anéis, para nenhum ficar cortado
     crate::chapa_manip_ui::descarrega_rotulos(ui, rect);

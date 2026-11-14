@@ -863,6 +863,8 @@ impl App {
             app.st_cantos_open = std::env::var("FENKRA_DEMO_CANTOS").is_ok() || std::env::var("FENKRA_DEMO_LIMITE").is_ok();
             app.started = true;
         }
+        // desenvolvimento: FENKRA_DEMO_PORTICO abre o pórtico de exemplo da análise (B114)
+        crate::st_portico_ui::demo_se_pedido(&mut app);
         // desenvolvimento: FENKRA_DEMO_ENCAIXE=1 abre um tubo redondo oblíquo encaixado noutro (B155) com o
         // cartão do canto aberto; `folga` mostra também o rótulo da folga em edição
         if std::env::var("FENKRA_DEMO_ENCAIXE").is_ok() {
