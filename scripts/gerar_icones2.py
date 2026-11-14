@@ -274,6 +274,7 @@ def desenhos():
     ic("pl_regra", B="M7 10l3 30h28l3-30", R="M14 10l2 23h16l2-23M20 4h8")
     # B148: recursos de plástico; o traço de base é a parede/piso que já existia
     ic("pl_boss", B="M6 40h36M17 28l-6 12M31 28l6 12", R="M17 40l2-24h10l2 24M22 16v12h4v-12")
+    ic("pl_snap", B="M6 40h36M30 22h10", R="M18 40V10h5l6 6h-6v24")
     ic("an_conexao", B="M6 30c6-10 12-10 16-10M42 30c-6-10-12-10-16-10", R="M24 10v28M18 14l6-4 6 4M18 34l6 4 6-4")
     ic("an_desvio", B="M6 34c10-12 26-12 36 0", R="M6 22c10-12 26-12 36 0M14 17v9M24 14v9M34 17v9")
     ic("an_pente", B="M6 38c8-14 26-20 36-20", R="M10 32l-5-7M17 26l-4-9M25 22l-2-12M33 19l1-9M41 18l3-5")
@@ -760,7 +761,7 @@ SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", 
 SO_INTERFACE |= {"filete_assimetrico"}
 SO_INTERFACE |= {"an_inclinacao", "an_isofotas", "an_dfm"}
 SO_INTERFACE |= {"pl_regra"}
-SO_INTERFACE |= {"pl_boss"}
+SO_INTERFACE |= {"pl_boss", "pl_snap"}
 SO_INTERFACE |= {"asm_chaveta", "asm_calculo", "pmi_captura", "pmi_captura_modelo"}
 SO_INTERFACE |= {"asm_conjunto", "asm_regras_cor"}
 SO_INTERFACE |= {"verificar"}

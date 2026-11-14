@@ -21,6 +21,7 @@ type Vars = HashMap<String, f64>;
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Tipo {
     Boss,
+    Snap,
 }
 
 /// Comando novo: nasce com as fórmulas da regra quando a peça tem uma.
@@ -28,12 +29,14 @@ pub fn criar(doc: &Document, t: Tipo, sketch: Id) -> FeatureKind {
     let r = doc.plastico.as_ref();
     FeatureKind::Plastico(match t {
         Tipo::Boss => RecursoPlastico::Boss(Boss::novo(sketch, r)),
+        Tipo::Snap => RecursoPlastico::Snap(Snap::novo(sketch, r)),
     })
 }
 
 pub fn icone(p: &RecursoPlastico) -> &'static str {
     match p {
         RecursoPlastico::Boss(_) => "pl_boss",
+        RecursoPlastico::Snap(_) => "pl_snap",
     }
 }
 
@@ -102,6 +105,32 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, idx: usize, p: &mut RecursoPlas
             opcional(ui, "altura própria da nervura", "Altura da nervura", &mut b.nervura_alt, &crate::app::fmt(0.7 * h), vars, "mm");
             nota(ui, "Sem medida própria, a nervura vai até metade do diâmetro além da base e sobe 70% da altura.");
         }
+        RecursoPlastico::Snap(sn) => {
+            section(ui, "Suporte");
+            crate::feat_ui::sketch_pick(ui, "pl_snap_sk", "Raízes", doc, idx, &mut sn.sketch);
+            nota(ui, "Cada linha do sketch é a raiz de uma viga; a largura é o comprimento da linha.");
+            check(ui, &mut sn.reverse, "para o outro lado do plano");
+            check(ui, &mut sn.lado, "gancho para o outro lado da linha");
+            section(ui, "Parâmetros");
+            expr(ui, "Comprimento do snap", &mut sn.comprimento, vars, "mm");
+            crate::plastico_ui::campo(ui, regra, "Espessura do snap", &mut sn.espessura, Grandeza::Parede, vars, "mm");
+            expr(ui, "Altura do gancho", &mut sn.gancho, vars, "mm");
+            expr(ui, "Comprimento do gancho", &mut sn.gancho_alt, vars, "mm");
+            crate::plastico_ui::campo(ui, regra, "Filete da raiz", &mut sn.raio, Grandeza::Raio, vars, "mm");
+            section(ui, "Verificação");
+            expr(ui, "Deformação admissível", &mut sn.deformacao_adm, vars, "%");
+            let ev = |t: &str| fenkra_core::expr::eval_str(t, vars).ok();
+            if let (Some(t), Some(y), Some(l), Some(h), Some(adm)) = (ev(&sn.espessura), ev(&sn.gancho), ev(&sn.comprimento), ev(&sn.gancho_alt), ev(&sn.deformacao_adm)) {
+                let braco = l - h;
+                if braco > 0. {
+                    let e = 150. * t * y / (braco * braco);
+                    let txt = format!("{} {} %  ({} {} %)", tr("deformação na raiz:"), crate::app::fmt((e * 100.).round() / 100.), tr("admissível"), crate::app::fmt(adm));
+                    let cor = if e > adm + 1e-9 { crate::theme::st_warn() } else { ui.visuals().weak_text_color() };
+                    ui.label(RichText::new(txt).small().color(cor));
+                }
+            }
+            nota(ui, "Deformação = 1,5 x espessura x gancho / braço², com o braço da raiz até a face de retenção. Acima da admissível a árvore avisa.");
+        }
     }
 }
 
@@ -115,6 +144,12 @@ pub fn itens() -> Vec<crate::toolbar::Item> {
         brief: "Boss para parafuso ou inserto",
         advanced: "Pino oco em cada ponto do sketch, com saída e filete na base vindos da regra plástica, furo, rebaixo de inserto e nervuras de apoio quando ele fica alto.",
         act: Act::Cmd(Cmd::Plastico(Tipo::Boss)),
+    }, Item {
+        icon: "pl_snap",
+        name: "Snap-fit",
+        brief: "Snap-fit em balanço",
+        advanced: "Viga com gancho em cada linha do sketch, com espessura e filete da raiz vindos da regra plástica; confere a deformação na raiz contra a admissível do material.",
+        act: Act::Cmd(Cmd::Plastico(Tipo::Snap)),
     }]
 }
 
@@ -127,11 +162,17 @@ pub fn seta(r: &fenkra_solidos::RecomputeResult, p: &RecursoPlastico) -> Option<
             let base = glam::Vec3::from(*s.points.first()?);
             Some((base, if b.reverse { -n } else { n }, b.altura.clone(), "Altura do boss"))
         }
+        RecursoPlastico::Snap(sn) => {
+            let a = glam::Vec3::from(*s.lines.first()?);
+            let b = glam::Vec3::from(*s.lines.get(1)?);
+            Some(((a + b) / 2., if sn.reverse { -n } else { n }, sn.comprimento.clone(), "Comprimento do snap"))
+        }
     }
 }
 
 pub fn definir_seta(p: &mut RecursoPlastico, valor: String) {
     match p {
         RecursoPlastico::Boss(b) => b.altura = valor,
+        RecursoPlastico::Snap(s) => s.comprimento = valor,
     }
 }

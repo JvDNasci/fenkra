@@ -11,7 +11,7 @@
 //! entram sozinhas quando a altura passa de 3 diâmetros. Tudo é unido ao corpo do coletor.
 
 use super::*;
-use fenkra_core::recurso_plastico::{Boss, RecursoPlastico, BOSS_NERVURA_DIAMETROS};
+use fenkra_core::recurso_plastico::{Boss, RecursoPlastico, Snap, BOSS_NERVURA_DIAMETROS};
 use fenkra_kernel::Seg2;
 
 /// Medidas do boss já avaliadas e conferidas.
@@ -159,6 +159,90 @@ pub fn boss_perfil(m: &BossMedidas) -> Vec<Seg2> {
     segs
 }
 
+/// Medidas do snap-fit já avaliadas e conferidas.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SnapMedidas {
+    pub comprimento: f64,
+    pub espessura: f64,
+    pub gancho: f64,
+    pub gancho_alt: f64,
+    pub raio: f64,
+    /// deformação admissível, fração (0,02 = 2%)
+    pub adm: f64,
+}
+
+impl SnapMedidas {
+    /// Braço da viga: da raiz até a face de retenção do gancho.
+    pub fn braco(&self) -> f64 {
+        self.comprimento - self.gancho_alt
+    }
+    /// Deformação na raiz ao defletir o gancho inteiro: 1,5 t y / l² (viga em balanço de seção constante).
+    pub fn deformacao(&self) -> f64 {
+        1.5 * self.espessura * self.gancho / self.braco().powi(2)
+    }
+}
+
+pub fn snap_medidas(s: &Snap, vars: &Vars) -> Result<SnapMedidas, String> {
+    let m = SnapMedidas {
+        comprimento: ev(&s.comprimento, vars, "comprimento do snap")?,
+        espessura: ev(&s.espessura, vars, "espessura do snap")?,
+        gancho: ev(&s.gancho, vars, "altura do gancho")?,
+        gancho_alt: ev(&s.gancho_alt, vars, "comprimento do gancho")?,
+        raio: ev(&s.raio, vars, "filete da raiz")?,
+        adm: ev(&s.deformacao_adm, vars, "deformação admissível")? / 100.,
+    };
+    if !(m.comprimento > 0. && m.espessura > 0. && m.gancho > 0. && m.gancho_alt > 0.) {
+        return Err("o snap-fit precisa de comprimento, espessura e gancho positivos".into());
+    }
+    if m.gancho_alt >= m.comprimento {
+        return Err("o gancho precisa ser mais curto que a viga".into());
+    }
+    if m.raio < 0. || m.raio >= m.braco() {
+        return Err("o filete da raiz vai de zero até o braço da viga".into());
+    }
+    if !(m.adm > 0.) {
+        return Err("a deformação admissível precisa ser positiva".into());
+    }
+    Ok(m)
+}
+
+/// Perfil do snap no plano (m, n): m sai da linha para o lado do gancho, n sobe pela viga.
+pub fn snap_perfil(m: &SnapMedidas) -> Vec<Seg2> {
+    let (t, l, y, h, r) = (m.espessura, m.comprimento, m.gancho, m.gancho_alt, m.raio);
+    let k = r * (1. - std::f64::consts::FRAC_1_SQRT_2);
+    let mut v = vec![];
+    if r > 0. {
+        v.push(Seg2::Line([-r, 0.], [t + r, 0.]));
+        v.push(Seg2::Arc([t + r, 0.], [t + k, k], [t, r]));
+        v.push(Seg2::Line([t, r], [t, l - h]));
+    } else {
+        v.push(Seg2::Line([0., 0.], [t, 0.]));
+        v.push(Seg2::Line([t, 0.], [t, l - h]));
+    }
+    v.push(Seg2::Line([t, l - h], [t + y, l - h]));
+    v.push(Seg2::Line([t + y, l - h], [t, l]));
+    v.push(Seg2::Line([t, l], [0., l]));
+    if r > 0. {
+        v.push(Seg2::Line([0., l], [0., r]));
+        v.push(Seg2::Arc([0., r], [-k, k], [-r, 0.]));
+    } else {
+        v.push(Seg2::Line([0., l], [0., 0.]));
+    }
+    v
+}
+
+/// Sólido de um snap com a raiz na linha `a`–`b`, viga pela normal `n` e gancho para o lado `lado`.
+pub fn snap_solido(m: &SnapMedidas, a: V3, b: V3, n: V3, lado: bool) -> Result<Shape, String> {
+    let k = |e: KernelError| e.0;
+    let larg = geo3d::dist(a, b);
+    let d = geo3d::unit(geo3d::sub(b, a)).ok_or("linha do snap sem comprimento")?;
+    // m = n × d sai da linha no plano; no outro lado o perfil parte de b e anda para a
+    let (o, mv, dir) = if lado { (b, geo3d::mul(cruz(n, d), -1.), geo3d::mul(d, -1.)) } else { (a, cruz(n, d), d) };
+    let fr = Frame { origin: o, x: mv, normal: dir };
+    let face = Shape::face(&fr, &[snap_perfil(m)]).map_err(k)?;
+    face.extrude(dir, larg, 0.).map_err(k)
+}
+
 fn cruz(a: V3, b: V3) -> V3 {
     [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
@@ -194,6 +278,7 @@ impl Ctx<'_> {
     pub(super) fn plastico_rec(&mut self, f: &Feature, p: &RecursoPlastico) -> Result<Option<String>, String> {
         match p {
             RecursoPlastico::Boss(b) => self.plastico_boss(f, b),
+            RecursoPlastico::Snap(s) => self.plastico_snap(f, s),
         }
     }
 
@@ -214,5 +299,25 @@ impl Ctx<'_> {
         let aviso = (m.nervuras == 0 && m.altura > BOSS_NERVURA_DIAMETROS * 2. * m.r_topo + 1e-9)
             .then(|| format!("boss com altura de {:.3} mm passa de {} diâmetros sem nervuras de apoio", m.altura, BOSS_NERVURA_DIAMETROS));
         Ok(aviso)
+    }
+
+    fn plastico_snap(&mut self, f: &Feature, s: &Snap) -> Result<Option<String>, String> {
+        let k = |e: KernelError| e.0;
+        let (frame, sk) = self.sketch(s.sketch)?;
+        if sk.lines.is_empty() {
+            return Err("o sketch do snap-fit precisa de pelo menos uma linha (a raiz da viga)".into());
+        }
+        let m = snap_medidas(s, &self.vars)?;
+        let n = if s.reverse { frame.normal.map(|x| -x) } else { frame.normal };
+        let mut linhas: Vec<_> = sk.lines.iter().collect();
+        linhas.sort_by_key(|(id, _)| **id);
+        let mut tool = Shape::empty();
+        for (_, (p, q)) in linhas {
+            let sol = snap_solido(&m, frame.point(p[0], p[1]), frame.point(q[0], q[1]), n, s.lado)?;
+            tool = if tool.is_null() { sol } else { tool.boolean(&sol, Bool::Fuse).map_err(k)? };
+        }
+        self.apply(f.target, tool, BoolOp::Add, f.id)?;
+        let e = m.deformacao();
+        Ok((e > m.adm + 1e-12).then(|| format!("snap-fit: deformação na raiz de {:.2}% passa da admissível de {:.2}% (afine ou alongue a viga, ou diminua o gancho)", e * 100., m.adm * 100.)))
     }
 }

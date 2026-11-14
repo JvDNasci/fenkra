@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum RecursoPlastico {
     Boss(Boss),
+    Snap(Snap),
 }
 
 /// Boss: pino oco para parafuso ou inserto, em cada ponto do sketch, crescendo pela normal do plano.
@@ -78,6 +79,53 @@ impl Boss {
     }
 }
 
+/// Snap-fit em balanço: cada linha do sketch é a raiz de uma viga com gancho na ponta.
+///
+/// A viga cresce pela normal do plano a partir da linha (a largura é o comprimento da linha), com a
+/// face de trás sobre a linha e o gancho para o lado escolhido. A deformação na raiz ao passar o
+/// gancho, `1,5 t y / l²` (viga de seção constante, `l` da raiz até a face de retenção), é conferida
+/// contra a admissível do material: acima dela o comando avisa na árvore.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Snap {
+    /// as linhas deste sketch são as raízes
+    pub sketch: Id,
+    /// do plano até a ponta do gancho, mm
+    pub comprimento: String,
+    /// espessura da viga, mm
+    pub espessura: String,
+    /// quanto o gancho sobressai da viga (interferência), mm
+    pub gancho: String,
+    /// comprimento do gancho ao longo da viga (a rampa de entrada), mm
+    pub gancho_alt: String,
+    /// filete da raiz, mm (0 = canto vivo)
+    pub raio: String,
+    /// deformação admissível do material, %
+    pub deformacao_adm: String,
+    /// gancho para o outro lado da linha
+    #[serde(default)]
+    pub lado: bool,
+    /// cresce para o outro lado do plano
+    #[serde(default)]
+    pub reverse: bool,
+}
+
+impl Snap {
+    pub fn novo(sketch: Id, regra: Option<&RegraPlastica>) -> Snap {
+        let f = |g: Grandeza, padrao: &str| if regra.is_some() { RegraPlastica::formula(g).to_string() } else { padrao.to_string() };
+        Snap {
+            sketch,
+            comprimento: "18".into(),
+            espessura: f(Grandeza::Parede, "2"),
+            gancho: "1".into(),
+            gancho_alt: "3".into(),
+            raio: f(Grandeza::Raio, "0.5"),
+            deformacao_adm: "2".into(),
+            lado: false,
+            reverse: false,
+        }
+    }
+}
+
 /// Altura acima da qual o boss pede nervuras, em diâmetros.
 pub const BOSS_NERVURA_DIAMETROS: f64 = 3.;
 
@@ -85,18 +133,21 @@ impl RecursoPlastico {
     pub fn nome(&self) -> &'static str {
         match self {
             RecursoPlastico::Boss(_) => "Boss",
+            RecursoPlastico::Snap(_) => "Snap-fit",
         }
     }
 
     pub fn simbolo(&self) -> &'static str {
         match self {
             RecursoPlastico::Boss(_) => "⊚",
+            RecursoPlastico::Snap(_) => "↾",
         }
     }
 
     pub fn sketch(&self) -> Id {
         match self {
             RecursoPlastico::Boss(b) => b.sketch,
+            RecursoPlastico::Snap(s) => s.sketch,
         }
     }
 
@@ -111,6 +162,12 @@ impl RecursoPlastico {
                     }
                 }
             }
+            RecursoPlastico::Snap(s) => {
+                ids(&mut s.sketch);
+                for e in [&mut s.comprimento, &mut s.espessura, &mut s.gancho, &mut s.gancho_alt, &mut s.raio, &mut s.deformacao_adm] {
+                    exprs(e)
+                }
+            }
         }
     }
 
@@ -118,6 +175,7 @@ impl RecursoPlastico {
     pub fn campos_regra(&self) -> Vec<(Grandeza, &str, &'static str)> {
         match self {
             RecursoPlastico::Boss(b) => vec![(Grandeza::Saida, b.saida.as_str(), "saída do boss"), (Grandeza::Raio, b.raio.as_str(), "filete da base"), (Grandeza::Nervura, b.nervura_esp.as_str(), "nervura do boss")],
+            RecursoPlastico::Snap(s) => vec![(Grandeza::Parede, s.espessura.as_str(), "espessura do snap"), (Grandeza::Raio, s.raio.as_str(), "filete da raiz")],
         }
     }
 
@@ -125,6 +183,7 @@ impl RecursoPlastico {
     pub fn campos_regra_mut(&mut self) -> Vec<(Grandeza, &mut String)> {
         match self {
             RecursoPlastico::Boss(b) => vec![(Grandeza::Saida, &mut b.saida), (Grandeza::Raio, &mut b.raio), (Grandeza::Nervura, &mut b.nervura_esp)],
+            RecursoPlastico::Snap(s) => vec![(Grandeza::Parede, &mut s.espessura), (Grandeza::Raio, &mut s.raio)],
         }
     }
 }

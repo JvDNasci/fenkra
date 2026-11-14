@@ -205,3 +205,103 @@ fn boss_sem_o_sketch_e_erro_nomeado_e_medida_ruim_tambem() {
         s => panic!("esperava erro de referência, veio {s:?}"),
     }
 }
+
+// ------------------------------------------------------------------ snap-fit
+
+/// Placa 40 x 30 x 5 e uma linha de (10, y) a (30, y) no plano XY: o snap cresce para baixo.
+fn placa_linha(regra: Option<RegraPlastica>, y: f64) -> (Document, Id) {
+    let mut d = Document::new("placa_snap");
+    d.plastico = regra;
+    let a = sk_rect(&mut d, XY, [0., 0.], [40., 30.]);
+    d.add_feature(ext(a, BoolOp::Add, "5"));
+    let p = sk_poligono_aberto(&mut d, [10., y], [30., y]);
+    (d, p)
+}
+
+fn sk_poligono_aberto(d: &mut Document, a: [f64; 2], b: [f64; 2]) -> Id {
+    let mut data = SketchData::default();
+    let mut al = || d.alloc();
+    let pa = data.add_point(&mut al, a[0], a[1]);
+    let pb = data.add_point(&mut al, b[0], b[1]);
+    data.add_curve(&mut al, fenkra_core::sketch::Curve::Line { a: pa, b: pb }, false);
+    d.add_feature(FeatureKind::Sketch(Sketch { plane: XY, data }))
+}
+
+/// Volume do snap pela conta: viga + gancho triangular + dois filetes côncavos da raiz, vezes a largura.
+fn vol_snap(larg: f64, t: f64, l: f64, y: f64, h: f64, r: f64) -> f64 {
+    larg * (t * l + y * h / 2. + 2. * r * r * (1. - PI / 4.))
+}
+
+fn add_snap(d: &mut Document, s: Snap) -> Id {
+    d.add_feature(FeatureKind::Plastico(RecursoPlastico::Snap(s)))
+}
+
+#[test]
+fn snap_segue_a_regra_e_muda_com_ela() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let r = abs();
+    let (mut d, sk) = placa_linha(Some(r.clone()), 15.);
+    let mut s = Snap::novo(sk, Some(&r));
+    assert_eq!((s.espessura.as_str(), s.raio.as_str()), ("plastico_espessura", "plastico_raio"));
+    s.reverse = true;
+    add_snap(&mut d, s.clone());
+    let vars = d.vars_com_plastico(d.eval_params().unwrap());
+    let m = plastico_rec::snap_medidas(&s, &vars).unwrap();
+    assert!((m.espessura - r.espessura).abs() < 1e-6 && (m.raio - r.raio).abs() < 1e-6);
+    // 1,5 x 2 x 1 / 15² = 1,33%, abaixo dos 2% admissíveis
+    assert!((m.deformacao() - 1.5 * 2. * 1. / 225.).abs() < 1e-12);
+    let v = 6000. + vol_snap(20., r.espessura, 18., 1., 3., r.raio);
+    confere("snap ABS", &d, &esperado(v, [40., 30., 23.], [0., 0., -18.]));
+    d.plastico.as_mut().unwrap().espessura = 2.5;
+    d.plastico.as_mut().unwrap().raio = 1.5;
+    let v2 = 6000. + vol_snap(20., 2.5, 18., 1., 3., 1.5);
+    confere("snap regra nova", &d, &esperado(v2, [40., 30., 23.], [0., 0., -18.]));
+}
+
+#[test]
+fn snap_gancho_vai_para_o_lado_escolhido() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let r = abs();
+    // linha a 2,5 mm da borda: o gancho para fora passa 0,5 mm da placa (2,5 - t - y)
+    let (mut d, sk) = placa_linha(Some(r.clone()), 2.5);
+    let mut s = Snap::novo(sk, Some(&r));
+    s.reverse = true;
+    let id = add_snap(&mut d, s.clone());
+    let v = 6000. + vol_snap(20., 2., 18., 1., 3., 1.);
+    confere("gancho para fora", &d, &esperado(v, [40., 30.5, 23.], [0., -0.5, -18.]));
+    if let FeatureKind::Plastico(RecursoPlastico::Snap(s)) = &mut d.features.iter_mut().find(|f| f.id == id).unwrap().kind {
+        s.lado = true;
+    }
+    confere("gancho para dentro", &d, &esperado(v, [40., 30., 23.], [0., 0., -18.]));
+}
+
+#[test]
+fn snap_acima_da_deformacao_admissivel_avisa_na_arvore() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let (mut d, sk) = placa_linha(Some(abs()), 15.);
+    let mut s = Snap::novo(sk, d.plastico.as_ref());
+    s.reverse = true;
+    s.gancho = "2.5".into(); // 1,5 x 2 x 2,5 / 15² = 3,33%
+    let id = add_snap(&mut d, s);
+    let res = recompute(&d);
+    assert_eq!(res.bodies.len(), 1);
+    let v = 6000. + vol_snap(20., 2., 18., 2.5, 3., 1.);
+    assert!((volume_total(&res) - v).abs() < 1e-6 * v, "o snap continua sendo feito");
+    match res.status.get(&id) {
+        Some(Status::Warning(m)) => assert!(m.contains("3.33%") && m.contains("admissível de 2.00%"), "{m}"),
+        s => panic!("esperava aviso de deformação, veio {s:?}"),
+    }
+    // o sketch sem linha é erro nomeado
+    let (mut d2, sk2) = placa(Some(abs()), &[[20., 15.]]);
+    let id2 = add_snap(&mut d2, Snap::novo(sk2, None));
+    match recompute(&d2).status.get(&id2) {
+        Some(Status::Error(m)) => assert!(m.contains("pelo menos uma linha"), "{m}"),
+        s => panic!("esperava erro, veio {s:?}"),
+    }
+}
