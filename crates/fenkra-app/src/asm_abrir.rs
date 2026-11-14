@@ -222,6 +222,33 @@ mod tests {
     }
 
     #[test]
+    fn voltar_da_peca_nao_rearma_o_inserir_peca_nem_a_biblioteca() {
+        // B450: no teste com mouse, o Inserir peça voltava armado e um clique distraído punha mais uma cópia
+        let mut b = Bancada::nova("rearma");
+        let (a, f) = (b.a, b.arquivo("a.fkp"));
+        crate::asm_inserir::abrir(b.st(), false);
+        let st = b.st();
+        let mut est = st.inserir.take().unwrap();
+        crate::asm_inserir::pegar(st, &mut est, &f).unwrap();
+        st.inserir = Some(est);
+        let mut cat = crate::biblioteca_ui::Estado::default();
+        (cat.familia, cat.tamanho) = (Some("iso7089".into()), Some("M6".into()));
+        cat.inserindo = Some(crate::biblioteca_ui::Insercao { arrastando: false });
+        st.catalogo = Some(cat);
+        let pecas = b.st().asm.nodes.len();
+        b.abrir(a);
+        assert!(b.st().editing_part.is_some(), "a peça abriu");
+        assert!(b.st().inserir.is_none(), "ir para a peça encerra o Inserir peça");
+        b.aba_montagem();
+        b.de_volta_na_montagem();
+        assert!(b.st().inserir.is_none(), "o Inserir peça não volta armado");
+        assert!(b.st().catalogo.as_ref().is_some_and(|c| c.inserindo.is_none() && !c.adicionar_agora), "a biblioteca fica aberta, sem fantasma");
+        b.assentar();
+        assert_eq!(b.st().asm.nodes.len(), pecas, "nenhuma cópia a mais");
+        perto(b.volume(), 9000.);
+    }
+
+    #[test]
     fn abrir_nao_calcula_a_peca_na_thread_da_interface() {
         let mut b = Bancada::nova("sem_calculo");
         let (a, f) = (b.a, b.arquivo("a.fkp"));

@@ -283,6 +283,16 @@ fn fechar(st: &mut crate::asm_ui::AsmState, est: Estado) {
     st.sel = est.ultima.filter(|id| st.asm.node(*id).is_some()).or(est.pai);
 }
 
+/// Sair da montagem para editar uma peça (ou um subconjunto) encerra o comando, como o Esc até o fim:
+/// a peça da mão e a fila do diálogo ficam para trás. Sem isso o estado do comando sobrevivia à ida e,
+/// na volta, o "Inserir peça" reaparecia armado e um clique distraído na vista punha mais uma cópia
+/// (B450). Devolve `true` se havia comando aberto.
+pub fn encerrar_ao_sair(st: &mut crate::asm_ui::AsmState) -> bool {
+    let Some(est) = st.inserir.take() else { return false };
+    fechar(st, est);
+    true
+}
+
 /// Esc com o comando aberto.
 pub fn teclas(app: &mut App, ctx: &egui::Context) {
     if !app.asm.as_ref().is_some_and(|s| s.inserir.is_some()) || ctx.egui_wants_keyboard_input() {

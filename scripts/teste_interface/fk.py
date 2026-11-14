@@ -13,6 +13,7 @@ Uso pela linha de comando (cada comando termina com uma captura):
     python -I fk.py rolar <x> <y> <ticks>             # positivo = para cima
     python -I fk.py tecla ctrl+z | f2 | tab | shift+tab | alt+up | pgdn ...
     python -I fk.py digitar "texto"
+    python -I fk.py dialogo "C:/pasta/nome.fka" [--tecla enter|esc]   # diálogo do próprio Fenkra
     python -I fk.py roteiro <arquivo.json>
     python -I fk.py recorte <png> <x0> <y0> <x1> <y1> <saida.png> [--escala 2]
     python -I fk.py reduzir <png> <saida.png> [--fator 2]
@@ -24,7 +25,9 @@ espera 30 s e tenta de novo; com três falhas seguidas, encerra com código 3. N
 da janela: ponto fora da área cliente é recusado.
 
 Roteiro JSON: {"passos": [{"acao": "clicar", "x": 100, "y": 200, "nome": "abre_menu"}, ...]}.
-Ações do roteiro: clicar, duplo, direito, mover, arrastar, rolar, tecla, digitar, esperar, foto.
+Ações do roteiro: clicar, duplo, direito, mover, arrastar, rolar, tecla, digitar, dialogo, esperar,
+foto. `dialogo` ({"texto": ..., "tecla": "enter"|"esc"}) responde a um diálogo do sistema aberto
+pelo próprio Fenkra (Salvar como, Abrir): só age se a janela em foco for do mesmo processo.
 """
 
 from __future__ import annotations
@@ -207,6 +210,21 @@ def garantir_foco(h: int, espera: float = 30.0, tentativas: int = 3) -> None:
     raise SemFoco("o Fenkra perdeu o foco três vezes seguidas")
 
 
+def dialogo_do_processo(principal: int, espera: float = 10.0) -> int:
+    """Janela em foco que é um diálogo do próprio Fenkra (Salvar como, Abrir...): outra janela do
+    mesmo processo. Nunca age sobre janela de outro programa, nem de outro fenkra.exe aberto."""
+    pid = _estado().get("pid")
+    fim = time.time() + espera
+    while time.time() < fim:
+        f = user32.GetForegroundWindow()
+        p = W.DWORD()
+        user32.GetWindowThreadProcessId(f, ctypes.byref(p))
+        if f and f != principal and pid and p.value == pid:
+            return f
+        time.sleep(0.3)
+    raise SemFoco("nenhum diálogo do Fenkra em foco")
+
+
 def maximizar(h: int) -> None:
     user32.ShowWindow(h, 3)  # SW_MAXIMIZE
     time.sleep(0.8)
@@ -358,6 +376,22 @@ class Fenkra:
                 i.u.ki = KEYBDINPUT(0, ord(ch), K_UNI | up, 0, 0)
                 _enviar(i)
             time.sleep(0.02)
+
+    def dialogo(self, texto: str, tecla: str = "enter") -> None:
+        """Escreve no campo do diálogo em foco (do próprio Fenkra) e confirma ou cancela."""
+        d = dialogo_do_processo(self.h)
+        principal, self.h = self.h, d
+        try:
+            time.sleep(0.5)
+            if texto:
+                self.tecla("ctrl+a")
+                self.digitar(texto)
+                self.foto("dialogo_preenchido", estabilizar=0.3)
+            if tecla:
+                self.tecla(tecla)
+        finally:
+            self.h = principal
+        time.sleep(1.0)
 
     # ------------------------------------------------------------ captura
     def foto(self, nome: str | None = None, estabilizar: float = 0.8) -> Path:
@@ -589,6 +623,8 @@ def rodar_roteiro(arq: str) -> None:
             fk.tecla(p["tecla"])
         elif a == "digitar":
             fk.digitar(p["texto"])
+        elif a == "dialogo":
+            fk.dialogo(p.get("texto", ""), p.get("tecla", "enter"))
         elif a == "esperar":
             time.sleep(p["s"])
         elif a != "foto":
@@ -619,6 +655,7 @@ def main(argv=None) -> int:
     s.add_argument("ticks", type=int); s.add_argument("--nome")
     s = sub.add_parser("tecla"); s.add_argument("combo"); s.add_argument("--nome"); s.add_argument("--esperar", type=float, default=0.0)
     s = sub.add_parser("digitar"); s.add_argument("texto"); s.add_argument("--nome")
+    s = sub.add_parser("dialogo"); s.add_argument("texto"); s.add_argument("--tecla", default="enter"); s.add_argument("--nome")
     s = sub.add_parser("roteiro"); s.add_argument("arquivo")
     s = sub.add_parser("recorte"); s.add_argument("png")
     for c in ("x0", "y0", "x1", "y1"):
@@ -661,6 +698,8 @@ def main(argv=None) -> int:
                 fk.tecla(a.combo)
             elif a.cmd == "digitar":
                 fk.digitar(a.texto)
+            elif a.cmd == "dialogo":
+                fk.dialogo(a.texto, a.tecla)
             time.sleep(getattr(a, "esperar", 0.0) or 0.0)
             if not getattr(a, "sem_foto", False):
                 fk.foto(a.nome or a.cmd)

@@ -278,6 +278,8 @@ mod textos_desempenho;
 mod textos_montagem5;
 mod textos_montagem6;
 mod textos_montagem7;
+mod textos_montagem_sem_arquivo;
+mod avisos;
 mod textos_fechamont;
 mod mouse3d;
 mod mouse3d_hid;
