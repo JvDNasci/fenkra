@@ -18,6 +18,8 @@ mod organizacao;
 mod proximo;
 mod editor;
 mod render;
+mod render_efeitos;
+mod textos_efeitos;
 mod demo_polimento;
 mod scene;
 mod entradas;

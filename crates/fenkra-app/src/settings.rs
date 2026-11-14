@@ -391,11 +391,13 @@ pub struct Graficos {
     pub simplificar_ao_girar: bool,
     /// iluminação de três pontos com ambiente hemisférico e brilho suave
     pub iluminacao_realista: bool,
+    /// B139: sombra suave, oclusão de ambiente e PBR, com o nível de qualidade
+    pub efeitos: crate::render_efeitos::Efeitos,
 }
 
 impl Default for Graficos {
     fn default() -> Self {
-        Graficos { preset: PresetMalha::Normal, livre: QualidadeMalha::NORMAL, msaa: Msaa::X4, simplificar_ao_girar: false, iluminacao_realista: true }
+        Graficos { preset: PresetMalha::Normal, livre: QualidadeMalha::NORMAL, msaa: Msaa::X4, simplificar_ao_girar: false, iluminacao_realista: true, efeitos: Default::default() }
     }
 }
 
@@ -887,6 +889,7 @@ impl Settings {
             realista: self.graficos.iluminacao_realista,
             secao: None,
             mapa: None,
+            efeitos: crate::render_efeitos::demo(self.graficos.efeitos),
         }
     }
 

@@ -122,6 +122,9 @@ pub struct Anterior {
     pub simplificar_ao_girar: bool,
     pub iluminacao_realista: bool,
     pub animacoes: bool,
+    /// B139: efeitos da vista de antes (configuração antiga sem o campo volta aos de fábrica)
+    #[serde(default)]
+    pub efeitos: crate::render_efeitos::Efeitos,
 }
 
 impl Settings {
@@ -132,11 +135,13 @@ impl Settings {
         }
         if ligar {
             let g = &mut self.graficos;
-            self.leve_anterior = Some(Anterior { preset: g.preset, msaa: g.msaa, simplificar_ao_girar: g.simplificar_ao_girar, iluminacao_realista: g.iluminacao_realista, animacoes: self.animacoes });
+            self.leve_anterior = Some(Anterior { preset: g.preset, msaa: g.msaa, simplificar_ao_girar: g.simplificar_ao_girar, iluminacao_realista: g.iluminacao_realista, animacoes: self.animacoes, efeitos: g.efeitos });
             g.escolher(PresetMalha::Rascunho);
             g.msaa = Msaa::Desligado;
             g.simplificar_ao_girar = true;
             g.iluminacao_realista = false;
+            // B139: os efeitos nascem desligados no modo leve
+            g.efeitos = crate::render_efeitos::Efeitos { escolhidos: g.efeitos.escolhidos, ..crate::render_efeitos::Efeitos::DESLIGADOS };
             self.animacoes = false;
         } else if let Some(a) = self.leve_anterior.take() {
             let g = &mut self.graficos;
@@ -145,9 +150,17 @@ impl Settings {
             g.msaa = a.msaa;
             g.simplificar_ao_girar = a.simplificar_ao_girar;
             g.iluminacao_realista = a.iluminacao_realista;
+            g.efeitos = a.efeitos;
             self.animacoes = a.animacoes;
         }
         self.modo_leve = ligar;
+    }
+
+    /// B139: no adaptador de software os efeitos da vista nascem desligados, até a pessoa escolher.
+    pub fn efeitos_do_adaptador(&mut self, h: &Hardware) {
+        if h.software && !self.graficos.efeitos.escolhidos {
+            self.graficos.efeitos = crate::render_efeitos::Efeitos::DESLIGADOS;
+        }
     }
 
     /// Teto de fios do malhador pedido pelas configurações (`None`: padrão do kernel).
@@ -162,6 +175,30 @@ mod testes {
 
     fn forte() -> Hardware {
         Hardware { software: false, opengl: false, ram_gb: Some(16.0), logicos: 16 }
+    }
+
+    #[test]
+    fn efeitos_desligados_no_modo_leve_e_no_software() {
+        use crate::render_efeitos::{Efeitos, Nivel};
+        let mut s = Settings::default();
+        assert!(s.graficos.efeitos.sombra && s.graficos.efeitos.oclusao && s.graficos.efeitos.pbr);
+        s.graficos.efeitos.nivel = Nivel::Alto;
+        s.definir_modo_leve(true);
+        let e = s.graficos.efeitos;
+        assert!(e.nivel == Nivel::Rapido && !e.sombra && !e.oclusao && !e.pbr);
+        s.definir_modo_leve(false);
+        assert_eq!(s.graficos.efeitos.nivel, Nivel::Alto);
+        assert!(s.graficos.efeitos.sombra);
+        // software: desliga na partida, mas respeita a escolha da pessoa
+        let mut t = Settings::default();
+        t.efeitos_do_adaptador(&Hardware { software: true, ..forte() });
+        assert_eq!(t.graficos.efeitos, Efeitos::DESLIGADOS);
+        let mut u = Settings::default();
+        u.efeitos_do_adaptador(&forte());
+        assert_eq!(u.graficos.efeitos, Efeitos::default());
+        u.graficos.efeitos.escolhidos = true;
+        u.efeitos_do_adaptador(&Hardware { software: true, ..forte() });
+        assert!(u.graficos.efeitos.sombra);
     }
 
     #[test]
