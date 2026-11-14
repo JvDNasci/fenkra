@@ -118,4 +118,14 @@ pub(super) fn demo(st: &mut DwgState) {
     }
     let id = st.d.alloc();
     st.d.tables.push(Table { id, sheet: st.sheet, kind: TableKind::Caracteristicas, source: origem_vazia(), pos: [226., 100.], level: Default::default(), cfg: Default::default() });
+    // FENKRA_DEMO_DWG_INSPECAO=pmi (com FENKRA_DEMO_DWG=importar): traz para a frente o que o 3D tem;
+    // o que veio do modelo leva o número do PMI e o resto da folha continua depois
+    if std::env::var("FENKRA_DEMO_DWG_INSPECAO").as_deref() == Ok("pmi") {
+        if let Some(vista) = st.d.views.first().map(|v| v.id) {
+            let escolhidas: Vec<Id> = fenkra_desenho::importar::reconhecer(&st.d, &mut st.models, vista).into_iter().filter(|c| c.entra()).map(|c| c.pmi).collect();
+            fenkra_desenho::importar::importar(&mut st.d, &mut st.models, vista, &escolhidas);
+            // a folha inteira à vista, sem o painel da vista escolhida por cima
+            st.sel = None;
+        }
+    }
 }

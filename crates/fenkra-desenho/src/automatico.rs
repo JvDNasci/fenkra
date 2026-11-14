@@ -15,6 +15,11 @@
 //! 4. **Carimbo**: os campos automáticos ({descricao}, {codigo}, {material}, {massa}) vêm da peça.
 //!
 //! Rodar de novo não duplica: cada regra confere se a cota, a marca ou a tabela já existe.
+//!
+//! **Esquema do 3D primeiro** (B192): se a peça tem o esquema de cotagem automático no PMI (pasta
+//! `fenkra_solidos::esquema_pmi::PASTA`), as anotações dele vêm antes de tudo, cada uma para a
+//! primeira vista que a mostra, ligadas ao modelo (`importar`). As regras de contorno e de furos
+//! depois só completam o que falta: a medida que já veio do 3D não se repete.
 
 use crate::centros::{self, ModoCentro};
 use crate::layout::{anchor_candidates, dim_value};
@@ -29,6 +34,8 @@ pub struct Relatorio {
     pub centros: usize,
     pub tabela: bool,
     pub avisos: Vec<String>,
+    /// anotações do esquema automático do 3D trazidas para a folha (B192)
+    pub do_esquema: usize,
 }
 
 /// Papel da vista nas regras de contorno.
@@ -81,6 +88,33 @@ fn ja_tem(d: &Drawing, m: &mut Models, v: &View, kind: DimKind, valor: f64) -> b
     d.dims.iter().filter(|x| x.view == v.id && x.kind == kind).any(|x| dim_value(x, v, &p).is_some_and(|(val, _)| perto(val, valor)))
 }
 
+/// Traz para as vistas o que o esquema automático do 3D gerou e ainda não está na folha.
+fn trazer_esquema(d: &mut Drawing, m: &mut Models, vistas: &[View]) -> usize {
+    let mut feitas = 0;
+    let mut na_folha: std::collections::HashSet<(String, Id)> = std::collections::HashSet::new();
+    for v in vistas.iter().filter(|v| medidas_da_vista(v).is_some()) {
+        for x in d.dims.iter().filter_map(|x| x.pmi.map(|p| (x.view, p))).chain(d.notes.iter().filter_map(|n| Some((n.view?, n.pmi?)))) {
+            if let Some(vv) = d.view(x.0) {
+                na_folha.insert((vv.source.path.clone(), x.1));
+            }
+        }
+        let esquema: std::collections::HashSet<Id> = match &m.load(&v.source).model {
+            crate::source::Model::Part(doc) => doc.pmi.iter().filter(|p| fenkra_solidos::esquema_pmi::gerada(p)).map(|p| p.id).collect(),
+            crate::source::Model::Asm(_) => continue,
+        };
+        if esquema.is_empty() {
+            continue;
+        }
+        let escolhidas: Vec<Id> = crate::importar::reconhecer(d, m, v.id).into_iter().filter(|c| c.entra() && esquema.contains(&c.pmi) && !na_folha.contains(&(v.source.path.clone(), c.pmi))).map(|c| c.pmi).collect();
+        if escolhidas.is_empty() {
+            continue;
+        }
+        let r = crate::importar::importar(d, m, v.id, &escolhidas);
+        feitas += r.cotas.len() + r.notas.len();
+    }
+    feitas
+}
+
 /// Aplica as regras na folha. Devolve o que foi feito.
 pub fn completar(d: &mut Drawing, sheet: Id, m: &mut Models) -> Relatorio {
     let mut rel = Relatorio::default();
@@ -89,6 +123,8 @@ pub fn completar(d: &mut Drawing, sheet: Id, m: &mut Models) -> Relatorio {
         rel.avisos.push("a folha não tem vistas: crie as vistas antes".into());
         return rel;
     }
+    // 0. esquema de cotagem do 3D, cada anotação na primeira vista que a mostra
+    rel.do_esquema = trazer_esquema(d, m, &vistas);
     // 1. contorno
     for v in &vistas {
         let Some((horiz, vert)) = medidas_da_vista(v) else { continue };
@@ -145,7 +181,8 @@ pub fn completar(d: &mut Drawing, sheet: Id, m: &mut Models) -> Relatorio {
             }
         }
         for (k, (r, cs)) in tamanhos.into_iter().enumerate() {
-            if ja_tem(d, m, &v, DimKind::Diameter, 2. * r) {
+            // em qualquer vista da folha: o diâmetro que veio do esquema do 3D pode estar em outra
+            if vistas.iter().any(|vv| ja_tem(d, m, vv, DimKind::Diameter, 2. * r)) {
                 continue;
             }
             // cada tamanho num furo diferente (furo e rebaixo não se cobrem) e a chamada para fora
