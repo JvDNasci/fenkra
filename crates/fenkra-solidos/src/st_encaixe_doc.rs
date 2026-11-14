@@ -68,7 +68,8 @@ fn secao_do_membro(kind: SectionKind, g: &MemberGeom) -> Option<Secao> {
 fn membro(doc: &Document, id: Id, g: &MemberGeom, no: [f64; 3], para_dentro: [f64; 3]) -> Option<Membro> {
     let FeatureKind::StructMember(m) = &doc.feature(id)?.kind else { return None };
     Some(Membro {
-        secao: secao_do_membro(m.kind, g)?,
+        // B176: diâmetro e parede reais do lote, quando anotados
+        secao: crate::st_tubo_real::ler(doc, &m.designation).aplicar(secao_do_membro(m.kind, g)?),
         ponto: no,
         x: g.x,
         y: g.y,

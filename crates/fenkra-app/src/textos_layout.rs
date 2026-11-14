@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Traduções do layout em coluna (B433, B434, B435 e B447; ADR 0092), à parte de `i18n.rs`.
+//! Traduções do layout em coluna (B433, B434, B435 e B447; ADR 0093), à parte de `i18n.rs`.
 
 pub static TEXTOS: &[(&str, &str)] = &[
     ("O painel volta a encaixar na janela principal; arrastar esta janela de volta para ela faz o mesmo", "The panel docks back into the main window; dragging this window back onto it does the same"),

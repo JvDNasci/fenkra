@@ -341,7 +341,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
         }
         FeatureKind::Shell(s) => {
-            expr(ui, "Espessura", &mut s.thickness, vars, "mm");
+            crate::plastico_ui::campo(ui, doc.plastico.as_ref(), "Espessura", &mut s.thickness, fenkra_core::regra_plastica::Grandeza::Parede, vars, "mm");
             crate::editor::check(ui, &mut s.outward, "parede para fora (mantém o volume interno)");
             crate::editor::check(ui, &mut s.closed, "esvaziar sem abrir faces (cavidade fechada)");
             if s.closed {
@@ -378,7 +378,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
         }
         FeatureKind::Draft(d) => {
-            expr(ui, "Ângulo", &mut d.angle, vars, "°");
+            crate::plastico_ui::campo(ui, doc.plastico.as_ref(), "Ângulo", &mut d.angle, fenkra_core::regra_plastica::Grandeza::Saida, vars, "°");
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("Plano neutro")));
                 plane_combo(ui, "dr_pl", doc, &mut d.neutral, None);
@@ -487,7 +487,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::Stiffener(st) => {
             sketch_pick(ui, "st_sk", "Linhas", doc, idx, &mut st.sketch);
-            expr(ui, "Espessura", &mut st.thickness, vars, "mm");
+            crate::plastico_ui::campo(ui, doc.plastico.as_ref(), "Espessura", &mut st.thickness, fenkra_core::regra_plastica::Grandeza::Nervura, vars, "mm");
             crate::editor::check(ui, &mut st.to_body, "até encontrar o corpo");
             if !st.to_body {
                 expr(ui, "Profundidade", &mut st.depth, vars, "mm");

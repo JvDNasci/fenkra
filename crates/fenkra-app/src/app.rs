@@ -865,6 +865,8 @@ impl App {
             app.st_cantos_open = std::env::var("FENKRA_DEMO_CANTOS").is_ok() || std::env::var("FENKRA_DEMO_LIMITE").is_ok();
             app.started = true;
         }
+        // desenvolvimento: FENKRA_DEMO_PORTICO abre o pórtico de exemplo da análise (B114)
+        crate::st_portico_ui::demo_se_pedido(&mut app);
         // desenvolvimento: FENKRA_DEMO_ENCAIXE=1 abre um tubo redondo oblíquo encaixado noutro (B155) com o
         // cartão do canto aberto; `folga` mostra também o rótulo da folga em edição
         if std::env::var("FENKRA_DEMO_ENCAIXE").is_ok() {
@@ -3057,6 +3059,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
         };
         self.picks.clear();
+        // B198: casca, nervura e saída nascem seguindo a regra plástica da peça
+        if let Sel::Feature(id) = new_sel {
+            crate::plastico_ui::ao_criar(&mut self.open.doc, id);
+        }
         match new_sel {
             Sel::Feature(id) if !scene::is_sketch_feature(&self.open.doc, id) => self.start_session(id, true, Some(snapshot)),
             Sel::Ref(id) => self.start_session(id, true, Some(snapshot)),
@@ -3089,6 +3095,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             Act::Customize => self.customize_open = true,
             Act::Macros => self.macro_open = true,
             Act::Verificar => crate::verificar_ui::abrir(),
+            Act::RegraPlastica => crate::plastico_ui::abrir(),
             Act::View(y, p) => {
                 if let Some(v) = self.viewport.as_mut() {
                     let before = v.camera;
@@ -4768,6 +4775,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let hidden_secs = self.settings.tree_hidden.clone();
         let hide = |k: &str| hidden_secs.iter().any(|x| x == k);
 
+        // B439: a peça ativa na montagem fica embaixo dos produtos dela; 2 cliques num deles voltam
+        if let Some(st) = self.asm.as_mut() {
+            crate::asm_estrutura::acima_da_peca(st, ui);
+        }
         // ---------- peça
         let r = ui
             .horizontal(|ui| {
@@ -7618,7 +7629,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         Some(crate::picking::Pick::CurveVtx { curve, .. }) => Some(curve),
                         _ => None,
                     };
-                    if let Some(id) = target.filter(|id| self.open.doc.feature(*id).is_some() || self.open.doc.reference(*id).is_some()) {
+                    // B439: na montagem o documento aberto é a vista composta, e o dono da face é o
+                    // componente (um coletor dela), não um comando: sem isto o duplo clique na peça
+                    // não a ativava
+                    let componente = |id: &Id| self.in_asm() && self.open.doc.collectors.iter().any(|c| c.id == *id);
+                    if let Some(id) = target.filter(|id| self.open.doc.feature(*id).is_some() || self.open.doc.reference(*id).is_some() || componente(id)) {
                         if edge_cmd.is_none() {
                             self.open_pending = Some(id);
                         }
@@ -8856,6 +8871,7 @@ impl eframe::App for App {
         crate::sup_inclinacao::painel_inclinacao(self, ctx, area);
         crate::dfm_ui::painel(self, ctx, area);
         crate::verificar_ui::painel(self, ctx, area);
+        crate::plastico_ui::painel(self, ctx, area);
         crate::comparar_ui::painel(self, ctx, area);
         crate::forma_progresso::desenhar(ctx, area, self.gen_done < self.gen_sent);
         self.painel_importar(ctx, area);
@@ -9118,6 +9134,7 @@ impl eframe::App for App {
                 };
                 let mut s = crate::medir_quadros::fase("cena", || scene::build(scene_doc, r, &opts));
                 crate::dfm_ui::decorar(&self.settings, r, &ctx.global_style().visuals, &mut s);
+                crate::saida_faces::decorar(&self.settings, r, &ctx.global_style().visuals, &mut s);
                 crate::comparar_ui::decorar(&ctx.global_style().visuals, &mut s);
                 if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {
                     crate::previa::reter_ultima(&mut sess.ultima_valida, &mut s, r.status.get(&sess.id));

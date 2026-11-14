@@ -106,3 +106,55 @@ fn itens_saem_em_nc1_e_step() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Travessa de tubo quadrado 40x40x3 encaixada em dois montantes redondos Ø60,3 (sela nas duas
+/// pontas): o NC1 leva o contorno AK das quatro faces.
+#[test]
+fn encaixe_de_tubo_quadrado_vira_contorno_ak() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let mut d = Document::new("Sela");
+    let m1 = linha(&mut d, [0., 0., 0.], [0., 0., 600.]);
+    let m2 = linha(&mut d, [800., 0., 0.], [800., 0., 600.]);
+    d.add_feature(FeatureKind::StructMember(membro(vec![m1, m2], "Tubo redondo", "60,3x3,6", SectionKind::TuboRedondo, &["60.3", "3.6"], CornerMode::Nenhum)));
+    let t = linha(&mut d, [0., 0., 300.], [800., 0., 300.]);
+    d.add_feature(FeatureKind::StructMember(membro(vec![t], "Tubo quadrado", "40x3", SectionKind::TuboQuadrado, &["40", "3"], CornerMode::Encaixe)));
+    let r = recompute(&d);
+    assert!(r.status.values().all(|s| *s == Status::Ok), "{:?}", r.status);
+    let pecas = pecas_nc(&d);
+    let tr = pecas.iter().find(|p| p.kind == SectionKind::TuboQuadrado).expect("travessa");
+    // caixa do sólido cortado: 40 x 40 de seção e comprimento entre as selas
+    let (lo, hi) = tr.forma.bbox().unwrap();
+    // (a caixa do OpenCASCADE vem folgada pela tolerância, até uns 0,1 mm por lado)
+    assert!((hi[0] - lo[0] - 40.).abs() < 0.25 && (hi[1] - lo[1] - 40.).abs() < 0.25, "{lo:?} {hi:?}");
+    let comp = hi[2] - lo[2] - 0.2;
+    // nó a nó 800; cada ponta entra no montante entre √(R² − 20²) = 22,56 e R = 30,15
+    assert!(comp > 800. - 2. * 30.15 - 0.25 && comp < 800. - 2. * 22.56 + 0.25, "{comp}");
+    // volume: entre a seção vezes o trecho mais curto e a seção vezes a caixa
+    let area = 40. * 40. - 34. * 34.;
+    let vol = tr.forma.mass().volume;
+    assert!(vol < area * comp && vol > area * (800. - 2. * 30.15) * 0.98, "{vol}");
+    assert_eq!(tr.contornos.len(), 4, "{:?}", tr.faltas);
+    assert!(tr.faltas.iter().all(|f| !f.contains("AK")), "{:?}", tr.faltas);
+    let mut variacao = vec![];
+    for (face, pts) in &tr.contornos {
+        // fechado, anti-horário, na largura da face e no comprimento da peça
+        assert_eq!(pts.first(), pts.last(), "face {face}");
+        let area2: f64 = pts.windows(2).map(|w| w[0][0] * w[1][1] - w[1][0] * w[0][1]).sum();
+        assert!(area2 > 0., "face {face}: sentido horário");
+        assert!(pts.iter().all(|q| q[1] >= -0.01 && q[1] <= 40.01 && q[0] >= -0.01 && q[0] <= comp + 0.5), "{face} {pts:?}");
+        // ponta do início: os pontos da metade de x menor
+        let (a, b) = pts.iter().filter(|q| q[0] < comp / 2.).fold((f64::MAX, f64::MIN), |(a, b), q| (a.min(q[0]), b.max(q[0])));
+        variacao.push(b - a);
+    }
+    // duas faces cruzam o montante de lado (a sela fica nelas): a ponta varia de R menos 22,56 a
+    // 24,9; nas outras duas, paralelas ao eixo do montante, a ponta é reta
+    variacao.sort_by(f64::total_cmp);
+    assert!(variacao[0] < 0.05 && variacao[1] < 0.05, "{variacao:?}");
+    assert!(variacao[2] > 5.2 && variacao[3] < 7.65, "{variacao:?}");
+    let t = nc1(tr, "p", "p");
+    assert!(t.contains("\nAK\n") && t.contains("  v ") && t.contains("  o ") && t.contains("  u ") && t.contains("  h "), "{t}");
+    let ak = t.lines().skip_while(|l| *l != "AK").skip(1).take_while(|l| l.starts_with("  ")).count();
+    assert_eq!(ak, tr.contornos.iter().map(|c| c.1.len()).sum::<usize>());
+}
