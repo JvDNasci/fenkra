@@ -34,6 +34,8 @@ pub enum TipoEvento {
     Ramo,
     /// pedido, revisão e entrada de um ramo na linha principal (B130)
     Mesclagem,
+    /// pedido ou aviso de mudança (B141): `de` é o pedido (ou vazio ao abrir), `para` o número ou a decisão
+    Mudanca,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

@@ -23,6 +23,19 @@ use std::path::PathBuf;
 pub const ARQUIVO_OPCOES: &str = ".visualizacao.json";
 pub const PASTA: &str = ".visualizacao";
 
+/// Subpasta dos pacotes de montagens e de arquivos fora do índice.
+pub const PASTA_ARQUIVOS: &str = "arquivos";
+
+/// Nome do arquivo sem a extensão, só com letras, números e sublinhado.
+fn nome_seguro(p: &std::path::Path) -> String {
+    let s: String = p.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default().chars().map(|c| if c.is_alphanumeric() || c == '_' { c } else { '_' }).collect();
+    if s.is_empty() {
+        "arquivo".into()
+    } else {
+        s
+    }
+}
+
 /// Quantos pacotes de versões de trabalho ficam por documento. Os de revisão liberada nunca saem.
 pub const GUARDAR_POR_DOCUMENTO: usize = 6;
 
@@ -69,6 +82,67 @@ impl Project {
     pub fn visualizacao_pendente(&self, id: u64) -> Option<String> {
         let hash = self.entry(id).ok()?.versions.last()?.hash.clone();
         self.visualizacao_da_versao(id, &hash).is_none().then_some(hash)
+    }
+
+    /// Onde fica o pacote de um nó da árvore do produto (B364, B339): a peça do índice usa o pacote
+    /// da versão atual; a montagem e o arquivo de fora, um pacote nomeado pela assinatura do nó, que
+    /// muda quando qualquer peça de baixo muda.
+    pub fn caminho_visualizacao_no(&self, n: &crate::arvore_produto::NoProduto) -> PathBuf {
+        match (n.id, &n.versao) {
+            (Some(id), Some(h)) => self.caminho_visualizacao(id, h),
+            _ => self.root.join(PASTA).join(PASTA_ARQUIVOS).join(format!("{}-{}.fkv", nome_seguro(&n.arquivo), n.assinatura)),
+        }
+    }
+
+    /// O pacote do nó, se já foi gerado.
+    pub fn visualizacao_do_no(&self, n: &crate::arvore_produto::NoProduto) -> Option<PathBuf> {
+        let p = self.caminho_visualizacao_no(n);
+        p.is_file().then_some(p)
+    }
+
+    /// Pacote anterior do nó, para comparar com o atual (B339): na peça do índice, o da versão de
+    /// antes que ainda tem pacote; na montagem, o mais novo do mesmo arquivo com outra assinatura.
+    pub fn visualizacao_anterior_do_no(&self, n: &crate::arvore_produto::NoProduto) -> Option<PathBuf> {
+        if let (Some(id), Some(h)) = (n.id, &n.versao) {
+            let e = self.entry(id).ok()?;
+            return e.versions.iter().rev().map(|v| v.hash.as_str()).filter(|x| x != h).find_map(|x| self.visualizacao_da_versao(id, x));
+        }
+        let atual = self.caminho_visualizacao_no(n);
+        let prefixo = format!("{}-", nome_seguro(&n.arquivo));
+        std::fs::read_dir(self.root.join(PASTA).join(PASTA_ARQUIVOS))
+            .ok()?
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().strip_prefix(&prefixo).is_some_and(|r| r.len() == 20 && r.ends_with(".fkv")))
+            .filter(|e| e.path() != atual)
+            .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+            .max()
+            .map(|(_, c)| c)
+    }
+
+    /// Grava o pacote de um nó. Fora do índice, apaga os antigos do mesmo arquivo e deixa os
+    /// [`GUARDAR_POR_DOCUMENTO`] mais novos.
+    pub fn gravar_visualizacao_no(&self, n: &crate::arvore_produto::NoProduto, bytes: &[u8]) -> PResult<PathBuf> {
+        if let (Some(id), Some(h)) = (n.id, &n.versao) {
+            return self.gravar_visualizacao(id, h, bytes);
+        }
+        self.pode_gravar()?;
+        let destino = self.caminho_visualizacao_no(n);
+        gravar_atomico(&destino, bytes)?;
+        let prefixo = format!("{}-", nome_seguro(&n.arquivo));
+        let mut antigos: Vec<(std::time::SystemTime, PathBuf)> = std::fs::read_dir(self.root.join(PASTA).join(PASTA_ARQUIVOS))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| e.file_name().to_string_lossy().strip_prefix(&prefixo).is_some_and(|r| r.len() == 20 && r.ends_with(".fkv")))
+            .filter_map(|e| Some((e.metadata().ok()?.modified().ok()?, e.path())))
+            .filter(|(_, c)| *c != destino)
+            .collect();
+        antigos.sort();
+        let sobra = antigos.len().saturating_sub(GUARDAR_POR_DOCUMENTO - 1);
+        for (_, c) in antigos.into_iter().take(sobra) {
+            let _ = std::fs::remove_file(c);
+        }
+        Ok(destino)
     }
 
     /// Grava o pacote da versão `hash` e apaga os mais antigos de versões de trabalho.
@@ -157,6 +231,49 @@ mod tests {
         assert!(p.visualizacao_da_versao(id, &h1).is_some(), "o pacote da versão antiga serve para comparar");
         // um documento sem versão nunca fica pendente
         assert!(p.visualizacao_pendente(9999).is_none());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn pacote_de_montagem_pela_assinatura_e_poda_por_arquivo() {
+        let d = pasta("montagem");
+        let mut p = Project::create(&d, "P").unwrap();
+        let id = p.add_document(peca("40")).unwrap();
+        let f = p.entry(id).unwrap().file.replace('\\', "/");
+        let conj = format!(r#"{{"format_version": 1, "name": "Conj", "nodes": [{{"id": 1, "name": "Base", "kind": {{"Part": {{"path": "{f}"}}}}}}]}}"#);
+        std::fs::write(d.join("conj-1.fka"), conj).unwrap();
+        let a = p.arvore_produto();
+        let n = &a.nos[a.no_do_arquivo(&d.join("conj-1.fka")).unwrap()];
+        let c = p.caminho_visualizacao_no(n);
+        assert!(c.ends_with(format!("arquivos/conj_1-{}.fkv", n.assinatura)), "{}", c.display());
+        assert!(p.visualizacao_do_no(n).is_none());
+        assert_eq!(p.gravar_visualizacao_no(n, b"um").unwrap(), c);
+        assert!(p.visualizacao_do_no(n).is_some());
+        // a peça do índice usa o pacote da versão, o mesmo de "Ver no navegador"
+        let np = &a.nos[a.no_do_documento(id).unwrap()];
+        assert_eq!(p.caminho_visualizacao_no(np), p.caminho_visualizacao(id, &p.hash_da_versao(id, 1).unwrap()));
+        // muitas edições da peça: assinaturas novas da montagem, e a pasta não cresce sem fim
+        for k in 0..(GUARDAR_POR_DOCUMENTO + 3) {
+            p.save(id, &peca(&format!("{}", 50 + k)), "edição").unwrap();
+            let a = p.arvore_produto();
+            let n = &a.nos[a.no_do_arquivo(&d.join("conj-1.fka")).unwrap()];
+            p.gravar_visualizacao_no(n, b"x").unwrap();
+            assert!(p.visualizacao_do_no(n).is_some(), "o mais novo nunca sai");
+        }
+        let total = std::fs::read_dir(d.join(PASTA).join(PASTA_ARQUIVOS)).unwrap().count();
+        assert!(total <= GUARDAR_POR_DOCUMENTO, "{total} pacotes da montagem");
+        // comparar (B339): o anterior da montagem é outro pacote do mesmo arquivo; o da peça, o da versão de antes
+        let a = p.arvore_produto();
+        let n = &a.nos[a.no_do_arquivo(&d.join("conj-1.fka")).unwrap()];
+        let ant = p.visualizacao_anterior_do_no(n).expect("há pacote anterior da montagem");
+        assert_ne!(ant, p.caminho_visualizacao_no(n));
+        assert!(ant.file_name().unwrap().to_string_lossy().starts_with("conj_1-"));
+        let np = &a.nos[a.no_do_documento(id).unwrap()];
+        assert!(p.visualizacao_anterior_do_no(np).is_none(), "nenhuma versão da peça tem pacote ainda");
+        let nv = p.entry(id).unwrap().versions.len();
+        let h_antes = p.hash_da_versao(id, nv - 1).unwrap();
+        p.gravar_visualizacao(id, &h_antes, b"antes").unwrap();
+        assert_eq!(p.visualizacao_anterior_do_no(np), Some(p.caminho_visualizacao(id, &h_antes)));
         let _ = std::fs::remove_dir_all(&d);
     }
 

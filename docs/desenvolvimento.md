@@ -191,6 +191,8 @@ preferências do usuário.
 | `FENKRA_DEMO_SOLDA=<cosmetico\|solido\|intermitente>` | tubo contra placa com o cordão de filete (B285) |
 | `FENKRA_DEMO_ESTADO=<nome>` | força o estado na barra: `sem`, `liberada`, `editado`, `leitura` ou `conflito` |
 | `FENKRA_DEMO_PROJETO=1` | abre um projeto de exemplo com o painel à vista; `comparar` já mostra a comparação com a revisão; `versoes` (B214) abre a janela Comparar versões v1 ↔ v2, com o estado e os metadados de cada versão |
+| `FENKRA_DEMO_PROJETO=liberacao` | (B141) projeto com um pedido de mudança aprovado e com aviso emitido, outro aberto, e a janela Mudanças e liberação; `FENKRA_DEMO_LIBERACAO_ABA=1` mostra a aba do pacote já gerado pelo aviso ECN-0001 |
+| `FENKRA_DEMO_PROJETO=arvore` | (B364) projeto do kart com subconjuntos, peças liberadas e em trabalho, a janela Árvore do produto aberta e as miniaturas geradas; `FENKRA_DEMO_ARVORE_CARTAO=<PN>` mostra o cartão daquele nó como se o mouse estivesse em cima e `FENKRA_DEMO_ARVORE_FOCO=<nome>` entra na montagem |
 | `FENKRA_DEMO_SECAO=1` | liga o corte de seção na prévia da casca |
 | `FENKRA_DEMO_ARQUIVO=<caminho>` | abre esse `.fkp`, `.fka` ou `.fkd` ao iniciar |
 | `FENKRA_DEMO_APARENCIA=preto\|branco\|<RRGGBB>` | pinta a peça aberta com essa cor (B425), para conferir o contraste dela com o fundo; combine com `FENKRA_DEMO_TEMA` |

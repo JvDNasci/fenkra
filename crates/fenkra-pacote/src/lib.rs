@@ -10,6 +10,8 @@
 //! A geração é função pura do documento: o mesmo documento dá o mesmo pacote, byte a byte.
 
 mod analise;
+pub mod liberacao;
+pub mod miniatura;
 mod folhas;
 mod glb;
 mod pagina;
