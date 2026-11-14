@@ -23,8 +23,9 @@ uso: fenkra-cli [--pasta DIR] COMANDO [argumentos]
                                 imagem da peça sem abrir o aplicativo; V: frente, tras, topo, base,
                                 esquerda, direita, iso ou todas (quatro vistas); corte z=10 tira o
                                 que passa de z = 10 mm, z=10:maior tira o que fica abaixo
-  visualizar ARQ --saida X.fkv [--html X.html] [--decimar F]
-                                pacote de visualização para o navegador (.fkp, .fka ou .fkd)
+  visualizar ARQ --saida X.fkv [--html X.html] [--decimar F] [--compactar]
+                                pacote de visualização para o navegador (.fkp, .fka ou .fkd);
+                                --compactar grava as malhas com a extensão glTF meshopt
   servir                        um pedido JSON por linha na entrada padrão
 
 PECA é .fkx ou .fkp; ARQ pode ser também .step. Todo caminho fica dentro de --pasta (padrão: a pasta
@@ -37,6 +38,7 @@ struct Linha {
     saida: Option<String>,
     html: Option<String>,
     decimar: Option<f64>,
+    compactar: bool,
     vista: Option<String>,
     corte: Option<String>,
     zoom: Option<f64>,
@@ -51,6 +53,7 @@ fn ler_argumentos() -> Result<Linha, String> {
         saida: None,
         html: None,
         decimar: None,
+        compactar: false,
         vista: None,
         corte: None,
         zoom: None,
@@ -67,6 +70,7 @@ fn ler_argumentos() -> Result<Linha, String> {
                 let v = a.next().ok_or("--decimar pede uma fração")?;
                 l.decimar = Some(v.replace(',', ".").parse().map_err(|_| "--decimar pede um número de 0,01 a 1")?);
             }
+            "--compactar" => l.compactar = true,
             "--vista" => l.vista = Some(a.next().ok_or("--vista pede o nome da vista")?),
             "--corte" => l.corte = Some(a.next().ok_or("--corte pede EIXO=POSICAO, por exemplo z=10")?),
             "--tamanho" => l.tamanho = Some(a.next().ok_or("--tamanho pede LARGURAxALTURA")?),
@@ -236,7 +240,7 @@ fn main() {
         };
         let r = fenkra_cli::visualizar::visualizar(
             &pasta,
-            &fenkra_cli::visualizar::Pedido { arquivo, saida: saida_fkv, html: l.html.as_deref(), decimar: l.decimar, sobrescrever: l.sobrescrever },
+            &fenkra_cli::visualizar::Pedido { arquivo, saida: saida_fkv, html: l.html.as_deref(), decimar: l.decimar, compactar: l.compactar, sobrescrever: l.sobrescrever },
         );
         let falhou = r.is_err();
         let _ = escrever(&mut alvo, &envelope(r));

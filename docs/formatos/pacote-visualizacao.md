@@ -41,6 +41,20 @@ essa raiz.
 - As matrizes dos nós de peça já são as do mundo (os nós de grupo têm identidade).
 - Com `decimado` no manifesto, a malha vem sem normais e o leitor calcula.
 
+### Cena compactada (`EXT_meshopt_compression`, opcional)
+
+Com a opção de compactar (`Opcoes::compactar`, `fenkra-cli visualizar --compactar`, ou o orçamento de
+tamanho), cada vista do GLB vai pela extensão aberta `EXT_meshopt_compression` (ADR 0102):
+
+- posições e normais em modo `ATTRIBUTES` (versão 0, sem filtro), índices em modo `INDICES` (versão 1);
+- o binário do GLB (buffer 0) guarda só os fluxos; o buffer 1 é reserva sem dados, com
+  `extensions.EXT_meshopt_compression.fallback = true`, e dá o tamanho descompactado;
+- a extensão entra em `extensionsUsed` e `extensionsRequired`. Leitor glTF sem suporte recusa a cena,
+  por isso não é o padrão. O visualizador do Fenkra e o leitor Rust (`fenkra_pacote::meshopt::descompactar`)
+  decodificam e recebem exatamente os bytes que estariam no GLB sem compressão.
+
+O manifesto não muda com a compressão.
+
 ## Manifesto (`pacote.json`)
 
 Campos de topo:
@@ -59,6 +73,8 @@ Campos de topo:
 | `capturas` | lista | capturas de vista das anotações |
 | `vistas` | lista | câmeras salvas |
 | `estados` | lista | estados de exibição da montagem |
+| `passos` | lista | explosões da montagem, passo a passo, já calculadas (abaixo) |
+| `baloes` | lista | um balão por item da lista, na montagem montada (abaixo) |
 | `analise` | objeto | interferências e folgas da montagem já calculadas (abaixo); só em `montagem` |
 | `lista` | lista | lista de peças da montagem (item, quantidade, nome, arquivo) |
 | `folhas` | lista | folhas do desenho (id, nome, arquivo, largura, altura, formato) |
@@ -71,6 +87,8 @@ Campos de topo:
 
 Cada entrada: `id` (estável), `pai` (id ou nulo), `nome`, `tipo` (`peca`, `corpo`, `grupo`, `montagem`),
 `no` (índice do nó no GLB), `malha` (id da malha ou nulo), `visivel`, `cor` (RGB, quando há), `atributos`.
+Na montagem, cada `peca` leva também `arquivo`: a mesma chave da `lista` (caminho relativo à montagem de
+topo, com `#configuração` quando há), para casar peça, item e balão.
 
 **IDs estáveis.** Vêm dos IDs do documento: `n<id>` para componente de montagem, `c<id>` para corpo
 (coletor) dentro da peça, com o ID da peça na frente (`n3/c1`). Dentro de um subconjunto, o prefixo é o ID
@@ -132,6 +150,24 @@ Só entram componentes de topo (id `n<id>`); um subconjunto conta como uma peça
   etapas do detalhamento, com anterior e próxima.
 - Estado: `nome`, `ocultos` (ids da árvore), `cores`, `deslocamentos` (explosão, mm no mundo), `camera`.
 
+### `passos` e `baloes` (montagem)
+
+Calculados pelo Fenkra: a página não recalcula a explosão, só aplica. Cada explosão: `nome`, `passos` e
+`linhas` (`id` e `pontos` da linha de explosão de cada componente, da posição montada em diante).
+
+Cada passo: `indice` (posição na explosão, contando os suprimidos), `nome`, `modo`, `distancia_mm`,
+`movidas` (ids da árvore), `deslocamentos` (`id` e `d`: o acumulado até este passo, em mm no mundo, de
+cada componente que já saiu do lugar), `seta` (`ponto` e `direcao`), `lista` (peças que se moveram neste
+passo: `item`, `quantidade`, `nome`, `arquivo`) e `baloes`.
+
+O deslocamento de um componente leva os filhos dele: na cena, aplique `d` como translação no nó do
+componente, sobre a matriz base. A posição de uma peça é a montada mais a soma dos `d` dela e dos
+ancestrais.
+
+Balão: `item` (o número da `lista`), `id` (a peça da árvore, primeira ocorrência do item), `arquivo` e
+`ponto` (centro da peça, já com o deslocamento do passo). Em `baloes` do topo, a montagem está montada.
+A lista do passo e os balões saem das peças que se moveram: nada é digitado.
+
 ## Folhas (`folhas/f<N>.json`)
 
 Vetor nativo, em milímetros de papel, com Y para cima e origem no canto inferior esquerdo. Não é PDF nem
@@ -182,7 +218,15 @@ faz pedido de rede por conta própria (só busca o `.fkv` quando recebe uma URL)
 
 O teste `crates/fenkra-pacote/tests/corpus.rs` gera pacote de peça, montagem e desenho, abre pelo leitor de
 referência, valida as referências (nós, malhas, folhas, IDs únicos, pais) e confere números contra o
-documento. A página foi aberta em Chromium nas mesmas amostras (ver o ADR 0062).
+documento.
+
+`tests/conformidade.rs` (B181) abre **cinco pacotes de referência** (`tests/referencia/`: peça, peça
+decimada, montagem com passos, montagem compactada e desenho) em cada leitor: o Rust (`Pacote::ler` e
+`validar`, que também confere passos e balões contra a árvore e a lista) e o da página (o trecho de
+`visualizador.html` que abre o ZIP e o GLB, rodado pelo Node por `tests/leitor_web.mjs`). Os dois
+precisam dar o mesmo resumo, com a soma de cada acessor depois de decodificar. A mesma bateria gera os
+cinco de novo e confere a ida e volta (ler, regravar, mesmos bytes) e a medição entre centros de furo
+em 1e-6. Os gravados mudam só com `FENKRA_FKV_REFERENCIA=1`, quando o formato muda de propósito.
 
 ## Abrir o arquivo (B365)
 

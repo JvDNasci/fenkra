@@ -62,6 +62,8 @@ fn aplicar(m: &M4, p: [f64; 3]) -> [f64; 3] {
 
 /// Os triângulos da cena em milímetros (Z para cima).
 fn triangulos(cena: &[u8]) -> Result<Vec<[[f64; 3]; 3]>, String> {
+    let cru = crate::meshopt::descompactar(cena)?;
+    let cena = cru.as_slice();
     let (j, _) = glb::ler_json(cena)?;
     let tj = u32::from_le_bytes([cena[12], cena[13], cena[14], cena[15]]) as usize;
     let bin: &[u8] = if 20 + tj + 8 <= cena.len() { &cena[20 + tj + 8..] } else { &[] };

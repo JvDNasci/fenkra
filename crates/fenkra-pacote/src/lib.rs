@@ -14,7 +14,9 @@ pub mod liberacao;
 pub mod miniatura;
 mod folhas;
 mod glb;
+pub mod meshopt;
 mod pagina;
+mod passos;
 mod pontos;
 mod tipos;
 
@@ -50,6 +52,10 @@ pub struct Opcoes {
     /// progresso e cancelamento (B427): quando a geração roda numa thread, a interface lê os passos
     /// feitos e pode pedir para parar; cancelado, devolve `Err("cancelado")` sem pacote pela metade
     pub controle: Option<fenkra_core::trabalho::Controle>,
+    /// compacta as malhas do GLB pela extensão aberta `EXT_meshopt_compression` (B181): sem perda, o
+    /// arquivo fica menor e o visualizador do Fenkra decodifica; leitor glTF genérico precisa da
+    /// extensão, por isso é escolha e não padrão
+    pub compactar: bool,
 }
 
 impl Opcoes {
@@ -68,7 +74,7 @@ pub const CANCELADO: &str = "cancelado";
 
 impl Default for Opcoes {
     fn default() -> Self {
-        Opcoes { decimar: None, capturas: true, analise: true, controle: None }
+        Opcoes { decimar: None, capturas: true, analise: true, controle: None, compactar: false }
     }
 }
 
@@ -103,6 +109,8 @@ struct Peca {
     area: f64,
     caixa: Option<([f64; 3], [f64; 3])>,
     centro: Option<[f64; 3]>,
+    /// soma das posições da malha e quantos pontos: o centro de cada ocorrência no mundo sai daqui
+    soma: ([f64; 3], f64),
 }
 
 struct Corpo {
@@ -141,11 +149,16 @@ struct Gerador<'a> {
     avisos: Vec<String>,
     instancias: usize,
     triangulos: usize,
+    /// pasta da montagem de topo: a chave do arquivo de cada peça é relativa a ela, como na lista
+    pasta: PathBuf,
+    /// soma das posições no mundo e quantos pontos, por id da árvore (a peça soma nos ancestrais)
+    somas: HashMap<String, ([f64; 3], f64)>,
+    pais: HashMap<String, Option<String>>,
 }
 
 impl<'a> Gerador<'a> {
     fn novo(opc: &'a Opcoes) -> Self {
-        Gerador { opc, glb: Default::default(), malhas: vec![], arvore: vec![], pecas: HashMap::new(), por_conteudo: HashMap::new(), avisos: vec![], instancias: 0, triangulos: 0 }
+        Gerador { opc, glb: Default::default(), malhas: vec![], arvore: vec![], pecas: HashMap::new(), por_conteudo: HashMap::new(), avisos: vec![], instancias: 0, triangulos: 0, pasta: PathBuf::new(), somas: HashMap::new(), pais: HashMap::new() }
     }
 
     /// Calcula a peça e põe as malhas dos corpos no GLB, uma vez por chave.
@@ -173,6 +186,7 @@ impl<'a> Gerador<'a> {
             .unwrap_or_else(|| fenkra_solidos::massa::relatorio_massa(&doc));
         let (mut corpos, mut lo, mut hi) = (vec![], [f64::MAX; 3], [f64::MIN; 3]);
         let (mut volume, mut area) = (0., 0.);
+        let mut soma = ([0.; 3], 0.);
         let base = self.malhas.len();
         for b in &r.bodies {
             let m = &b.mesh;
@@ -187,7 +201,9 @@ impl<'a> Gerador<'a> {
                 _ => (m.positions.clone(), m.normals.clone(), m.indices.clone(), true),
             };
             for p in pos.chunks_exact(3) {
+                soma.1 += 1.;
                 for i in 0..3 {
+                    soma.0[i] += f64::from(p[i]);
                     lo[i] = lo[i].min(f64::from(p[i]));
                     hi[i] = hi[i].max(f64::from(p[i]));
                 }
@@ -219,6 +235,7 @@ impl<'a> Gerador<'a> {
             volume,
             area,
             caixa: Some((lo, hi)),
+            soma,
             doc,
             corpos,
         });
@@ -250,6 +267,19 @@ impl<'a> Gerador<'a> {
         self.instancias += 1;
         let no = self.glb.no(nome, id, m, &[]);
         let mut e = json!({"id": id, "pai": pai, "nome": nome, "tipo": "peca", "no": no, "malha": null, "atributos": Self::atributos(p, nome), "visivel": visivel});
+        let (s, k) = p.soma;
+        let mundo = match m {
+            Some(a) => [0, 1, 2].map(|l| a[4 * l] * s[0] + a[4 * l + 1] * s[1] + a[4 * l + 2] * s[2] + a[4 * l + 3] * k),
+            None => s,
+        };
+        self.pais.insert(id.to_string(), pai.map(String::from));
+        let mut alvo = Some(id.to_string());
+        while let Some(a) = alvo {
+            let t = self.somas.entry(a.clone()).or_insert(([0.; 3], 0.));
+            t.0 = [0, 1, 2].map(|i| t.0[i] + mundo[i]);
+            t.1 += k;
+            alvo = self.pais.get(&a).cloned().flatten();
+        }
         if let Some(c) = cor {
             e["cor"] = json!(c);
         }
@@ -288,12 +318,19 @@ impl<'a> Gerador<'a> {
                     };
                     massa += peca.massa_kg;
                     let no = self.instanciar(&id, &n.name, id_pai, &peca, Some(matriz(&lugar)), n.color, n.visible);
+                    // a mesma chave da lista de peças: caminho relativo à montagem de topo e a configuração
+                    let rel = cheio.strip_prefix(&self.pasta).unwrap_or(&cheio).to_string_lossy().replace('\\', "/");
+                    let cfg = asm.config_de(n.id);
+                    if let Some(e) = self.arvore.iter_mut().rev().find(|e| e["id"] == id.as_str()) {
+                        e["arquivo"] = json!(if cfg.is_empty() { rel } else { format!("{rel}#{cfg}") });
+                    }
                     (no, peca.massa_kg)
                 }
                 NodeKind::Group => {
                     let no = self.glb.no(&n.name, &id, None, &[]);
                     let pos = self.arvore.len();
                     self.arvore.push(json!({"id": id, "pai": id_pai, "nome": n.name, "tipo": "grupo", "no": no, "malha": null, "visivel": n.visible}));
+                    self.pais.insert(id.clone(), id_pai.map(String::from));
                     let m = self.descer(asm, pasta, Some(n.id), Some(&id), Some(no), mundo, prefixo, pilha, &mut vec![])?;
                     self.arvore[pos]["atributos"] = json!({"nome": n.name, "massa_kg": r6(m)});
                     (no, m)
@@ -320,6 +357,7 @@ impl<'a> Gerador<'a> {
                     let no = self.glb.no(&n.name, &id, None, &[]);
                     let pos = self.arvore.len();
                     self.arvore.push(json!({"id": id, "pai": id_pai, "nome": n.name, "tipo": "montagem", "no": no, "malha": null, "visivel": n.visible}));
+                    self.pais.insert(id.clone(), id_pai.map(String::from));
                     pilha.push(cheio.clone());
                     let prefixo_sub = format!("{id}/");
                     let m = self.descer(&sub, cheio.parent().unwrap_or(pasta), None, Some(&id), Some(no), &lugar, &prefixo_sub, pilha, &mut vec![])?;
@@ -454,7 +492,7 @@ fn terminar(g: Gerador, mut m: Value, raizes: &[usize], nome: &str) -> Pacote {
     m["avisos"] = json!(g.avisos);
     m["estatisticas"] = json!({"pecas_unicas": g.por_conteudo.len(), "instancias": g.instancias, "triangulos": g.triangulos});
     m["decimado"] = json!(g.opc.decimar);
-    let glb = g.glb.finalizar(raizes, nome);
+    let glb = g.glb.finalizar(raizes, nome, g.opc.compactar);
     m["cena"] = json!("cena.glb");
     Pacote { manifesto: m, arquivos: vec![("cena.glb".into(), glb)] }
 }
@@ -463,7 +501,7 @@ fn base(tipo: &str, nome: &str) -> Value {
     json!({
         "formato": NOME_FORMATO, "versao": VERSAO, "gerador": format!("Fenkra {}", env!("CARGO_PKG_VERSION")),
         "tipo": tipo, "nome": nome, "unidade": "mm", "eixo_para_cima": "Z",
-        "malhas": [], "arvore": [], "pmi": [], "capturas": [], "vistas": [], "estados": [], "folhas": [],
+        "malhas": [], "arvore": [], "pmi": [], "capturas": [], "vistas": [], "estados": [], "folhas": [], "passos": [], "baloes": [],
     })
 }
 
@@ -486,6 +524,7 @@ pub fn de_peca(doc: &Document, opc: &Opcoes) -> Result<Pacote, String> {
 /// Pacote de uma montagem. `pasta` é a pasta do `.fka`: os caminhos dos componentes são relativos a ela.
 pub fn de_montagem(asm: &Assembly, pasta: &Path, opc: &Opcoes) -> Result<Pacote, String> {
     let mut g = Gerador::novo(opc);
+    g.pasta = pasta.to_path_buf();
     if let Some(c) = &opc.controle {
         // um passo por componente (os subconjuntos somam os seus ao abrir) e dois para análise e fecho
         c.definir_total(asm.nodes.len() as u32 + 2);
@@ -520,6 +559,11 @@ pub fn de_montagem(asm: &Assembly, pasta: &Path, opc: &Opcoes) -> Result<Pacote,
         .iter()
         .map(|r| json!({"item": r.item, "quantidade": r.qty, "nome": r.name, "arquivo": r.key}))
         .collect::<Vec<_>>());
+    // passos das explosões e balões da lista (B181): calculados aqui, a página só reproduz
+    let centros = passos::centros(&g.somas);
+    let lista = m["lista"].clone();
+    m["baloes"] = passos::baloes(&g.arvore, &lista, &centros, &[]);
+    m["passos"] = passos::explosoes(asm, &g.arvore, &lista, &centros);
     Ok(terminar(g, m, &topo, &asm.name))
 }
 
@@ -606,7 +650,15 @@ impl Pacote {
         let arq = |n: &str| self.arquivos.iter().find(|a| a.0 == n).map(|a| &a.1);
         let mut nos = 0;
         if let Some(c) = m["cena"].as_str() {
-            let (j, _) = glb::ler_json(arq(c).ok_or("a cena apontada não está no pacote")?)?;
+            // a cena compactada (meshopt) tem de decodificar inteira: é o que o leitor faz ao abrir
+            let cru = meshopt::descompactar(arq(c).ok_or("a cena apontada não está no pacote")?)?;
+            let (j, bin) = glb::ler_json(&cru)?;
+            for (k, a) in j["accessors"].as_array().into_iter().flatten().enumerate() {
+                let v = &j["bufferViews"][a["bufferView"].as_u64().ok_or("acessor sem vista")? as usize];
+                if v["byteOffset"].as_u64().unwrap_or(0) + v["byteLength"].as_u64().unwrap_or(0) > bin as u64 {
+                    return Err(format!("o acessor {k} passa do fim do binário"));
+                }
+            }
             nos = j["nodes"].as_array().map_or(0, Vec::len);
             let malhas = j["meshes"].as_array().map_or(0, Vec::len);
             let declaradas = m["malhas"].as_array().map_or(0, Vec::len);
@@ -629,6 +681,33 @@ impl Pacote {
                 if !ids.contains(p) {
                     return Err(format!("pai '{p}' não existe"));
                 }
+            }
+        }
+        // passos e balões só apontam para o que existe: ids da árvore e itens da lista
+        let itens: std::collections::HashSet<String> = m["lista"].as_array().into_iter().flatten().map(|r| r["item"].to_string()).collect();
+        let confere_baloes = |b: &Value| -> Result<(), String> {
+            for x in b.as_array().into_iter().flatten() {
+                let id = x["id"].as_str().ok_or("balão sem id")?;
+                if !ids.contains(id) {
+                    return Err(format!("balão aponta para '{id}', que não está na árvore"));
+                }
+                if !itens.contains(&x["item"].to_string()) {
+                    return Err(format!("balão com item {} fora da lista", x["item"]));
+                }
+            }
+            Ok(())
+        };
+        confere_baloes(&m["baloes"])?;
+        for e in m["passos"].as_array().into_iter().flatten() {
+            for p in e["passos"].as_array().into_iter().flatten() {
+                let movidas = p["movidas"].as_array().into_iter().flatten().filter_map(Value::as_str);
+                let desl = p["deslocamentos"].as_array().into_iter().flatten().filter_map(|d| d["id"].as_str());
+                for id in movidas.chain(desl) {
+                    if !ids.contains(id) {
+                        return Err(format!("o passo '{}' move '{id}', que não está na árvore", p["nome"]));
+                    }
+                }
+                confere_baloes(&p["baloes"])?;
             }
         }
         for f in m["folhas"].as_array().into_iter().flatten() {
