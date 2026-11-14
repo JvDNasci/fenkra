@@ -127,3 +127,12 @@ fn chapa_compara_a_parede_do_furo_com_a_espessura() {
     assert_eq!(b.len(), 1, "{:#?}", r.violacoes);
     assert!((b[0].valor - 0.75).abs() < 0.03, "{:?}", b[0]);
 }
+
+/// Grava a peça do aceite num `.fkp` para a captura (`FENKRA_GRAVAR_PECA=<arquivo>`).
+#[test]
+#[ignore]
+fn grava_peca_do_aceite_para_captura() {
+    if let Ok(p) = std::env::var("FENKRA_GRAVAR_PECA") {
+        std::fs::write(p, peca().to_json()).unwrap();
+    }
+}
