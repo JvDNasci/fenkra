@@ -3112,6 +3112,8 @@ impl FeatureKind {
                         _ => {}
                     }
                 }
+                // posição do sketch por referência (B437)
+                s.data.pos.walk(ids);
             }
             Extrude(e) => {
                 ids(&mut e.sketch);
