@@ -45,7 +45,7 @@ pub fn abrir_legenda(lo: [f64; 3], hi: [f64; 3], ponto: Option<[f64; 3]>) {
 
 /// Há diálogo esperando resposta (a viewport não deve criar anotação por baixo).
 pub fn aberto() -> bool {
-    travar(&BALOES).is_some() || travar(&LEGENDA).is_some()
+    travar(&BALOES).is_some() || travar(&LEGENDA).is_some() || crate::pmi_esquema_ui::aberto()
 }
 
 /// Texto "N criados, M trocados" do diálogo (e do aviso depois de aplicar).
@@ -70,6 +70,7 @@ pub fn janela(app: &mut App, ctx: &egui::Context, area: Rect) {
     janela_baloes(app, ctx, area);
     janela_legenda(app, ctx, area);
     crate::pmi_empilhamento::janela(app, ctx, area);
+    crate::pmi_esquema_ui::janela(app, ctx, area);
 }
 
 enum Resposta {

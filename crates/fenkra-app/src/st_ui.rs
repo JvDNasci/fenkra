@@ -244,12 +244,7 @@ fn library(app: &mut App, ctx: &egui::Context) {
     if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
         open = false;
     }
-    egui::Window::new(tr("⌶ Biblioteca de perfis"))
-        .id(egui::Id::unique("janela_perfis"))
-        .open(&mut open)
-        .default_size([620., 420.])
-        .resizable(true)
-        .show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "perfis", tr("⌶ Biblioteca de perfis"), &mut open, 620., |ui| {
             if crate::app::done_bar(ui) {
                 ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
             }
@@ -452,11 +447,7 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
         open = false;
     }
-    egui::Window::new(tr("📋 Lista de corte"))
-        .id(egui::Id::unique("janela_lista_corte"))
-        .open(&mut open)
-        .default_width(620.)
-        .show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "lista_corte", tr("📋 Lista de corte"), &mut open, 620., |ui| {
             if crate::app::done_bar(ui) {
                 ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
             }

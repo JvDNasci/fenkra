@@ -216,7 +216,7 @@ pub fn janela(ctx: &egui::Context, doc: &Document) {
         return;
     }
     let mut aberta = true;
-    egui::Window::new(tr("Fabricação da chapa")).id(egui::Id::new("chapa_fab_janela")).open(&mut aberta).default_width(520.).resizable(true).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "chapa_fab", tr("Fabricação da chapa"), &mut aberta, 520., |ui| {
         ui.horizontal(|ui| {
             ui.selectable_value(&mut e.aba, 0, tr("Nesting")).on_hover_text(tr("Dispõe as planificadas em chapas comerciais, minimizando a sobra, e grava um DXF por chapa."));
             ui.selectable_value(&mut e.aba, 1, tr("Sequência de dobra")).on_hover_text(tr("Simula a ordem das dobras com o seu punção e a sua matriz: colisão da aba, aba mínima e retorno elástico."));

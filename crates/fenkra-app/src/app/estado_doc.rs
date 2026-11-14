@@ -60,7 +60,8 @@ impl App {
         let e = EstadoDoc::de(&self.fatos_do_documento());
         let rotulo = texto(&e);
         let imagem = egui::Image::new(crate::icons::get(e.icone())).fit_to_exact_size(egui::vec2(LADO_ICONE, LADO_ICONE));
-        let r = ui.add(egui::Button::image_and_text(imagem, RichText::new(&rotulo).small().color(cor(ui, &e))).frame(false));
+        // B434: no topo fino fica só o ícone; o texto do estado está na dica
+        let r = ui.add(egui::Button::image(imagem).frame(false));
         if crate::icons::hover_help(ui, r, &rotulo, tr(e.dica()), tr(e.passos())).clicked() {
             if e == EstadoDoc::EmConflito {
                 self.salvar_ativo();

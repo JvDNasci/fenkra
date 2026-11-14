@@ -48,11 +48,13 @@ pub struct ParamConica {
     /// folga entre dentes tirada da espessura (par)
     pub folga_dentes: f64,
     pub furo: f64,
+    /// usinagens editáveis sobre a cônica padronizada (B345): valem para as peças do par
+    pub usinagens: Vec<crate::usinagens::Usinagem>,
 }
 
 impl Default for ParamConica {
     fn default() -> Self {
-        ParamConica { modulo: 2., dentes: 20, dentes_par: 20, angulo_pressao: 20., largura: 0., folga_dentes: 0., furo: 8. }
+        ParamConica { modulo: 2., dentes: 20, dentes_par: 20, angulo_pressao: 20., largura: 0., folga_dentes: 0., furo: 8., usinagens: vec![] }
     }
 }
 
@@ -193,8 +195,32 @@ fn passos_conica(p: &ParamConica, escala: f64) -> Result<([f64; 2], Vec<Passo>),
 }
 
 /// Documento paramétrico da cônica reta: dentes (loft), cubo e furo.
+impl ParamConica {
+    /// Chave da cônica padronizada do catálogo (sem usinagens).
+    pub fn chave(&self) -> String {
+        format!("conica-m{}-z{}-{}-f{}", self.modulo, self.dentes, self.dentes_par, self.furo)
+    }
+
+    /// Chave do arquivo, com o sufixo das usinagens.
+    pub fn chave_arquivo(&self) -> String {
+        format!("{}{}", self.chave(), crate::usinagens::sufixo_de_chave(&self.usinagens))
+    }
+
+    /// O que a cônica padronizada oferece às usinagens (B345): o **cubo** abaixo dos dentes faz o
+    /// papel de disco (de `z = −hcubo` a `0`, raio do cubo); os dentes ficam acima, de `0` a `zt`, e
+    /// o furo e o rasgo os atravessam. Sem face plana, cubo novo e furos de alívio são recusados.
+    pub fn geo_base(&self) -> Result<crate::usinagens::GeoBase, String> {
+        let base = ParamConica { usinagens: vec![], ..self.clone() };
+        let c = calculo_conica(&base)?;
+        let (dc, hl) = cubo_dimensoes(&base, &c)?;
+        Ok(crate::usinagens::GeoBase { largura: hl, raio_raiz: dc / 2., furo: self.furo, cubo_proprio: None, z0: -hl, topo_dentes: c.profundidade_dentes })
+    }
+}
+
 pub fn conica_documento(p: &ParamConica) -> Result<Document, String> {
     let c = calculo_conica(p)?;
+    let g = p.geo_base()?;
+    crate::usinagens::validar(&g, &p.usinagens)?;
     let mut m = Montador::novo(&format!("Engrenagem cônica m{} z{}/z{}", p.modulo, p.dentes, p.dentes_par));
     m.doc.props.material = "Aço 1045".into();
     m.doc.props.part_type = PartType::Fabricada;
@@ -224,6 +250,10 @@ pub fn conica_documento(p: &ParamConica) -> Result<Document, String> {
         let plano_furo = m.plano("Plano_furo", "-hcubo-1")?;
         m.prim("Furo", PrimKind::Cilindro, plano_furo, ["furo/2", "hcubo+zt+2", "0", "0"], BoolOp::Cut)?;
     }
+    if !p.usinagens.is_empty() {
+        crate::usinagens::aplicar(&mut m, &g, &p.usinagens)?;
+    }
+    crate::usinagens::registrar_vinculo(&mut m.doc, &p.chave(), &p.usinagens);
     Ok(m.doc)
 }
 
@@ -245,11 +275,15 @@ pub struct ParamSemFim {
     /// largura da coroa; 0 = 0,75 do diâmetro primitivo do sem-fim
     pub largura_coroa: f64,
     pub furo_coroa: f64,
+    /// usinagens editáveis sobre a coroa padronizada (B345)
+    pub usinagens_coroa: Vec<crate::usinagens::Usinagem>,
+    /// usinagens editáveis sobre o sem-fim padronizado (B345)
+    pub usinagens_semfim: Vec<crate::usinagens::Usinagem>,
 }
 
 impl Default for ParamSemFim {
     fn default() -> Self {
-        ParamSemFim { modulo: 2., entradas: 1, diametro_primitivo: 20., comprimento: 24., angulo_pressao: 20., furo: 8., dentes_coroa: 30, largura_coroa: 0., furo_coroa: 10. }
+        ParamSemFim { modulo: 2., entradas: 1, diametro_primitivo: 20., comprimento: 24., angulo_pressao: 20., furo: 8., dentes_coroa: 30, largura_coroa: 0., furo_coroa: 10., usinagens_coroa: vec![], usinagens_semfim: vec![] }
     }
 }
 
@@ -341,6 +375,7 @@ pub fn coroa_param(p: &ParamSemFim) -> Result<ParamEngrenagem, String> {
         angulo_helice: lam.to_degrees(),
         largura: b,
         furo: p.furo_coroa,
+        usinagens: p.usinagens_coroa.clone(),
         ..Default::default()
     })
 }
@@ -421,6 +456,10 @@ pub fn sem_fim_documento(p: &ParamSemFim) -> Result<Document, String> {
     m.param("L", &p.comprimento.to_string())?;
     m.param("furo", &p.furo.to_string())?;
     m.param("avanco", &c.avanco.to_string())?;
+    // comprimento como `b`: o cubo das usinagens (B345) nasce na face de cima
+    m.param("b", &p.comprimento.to_string())?;
+    let g = geo_base_sem_fim(p)?;
+    crate::usinagens::validar(&g, &p.usinagens_semfim)?;
     let (inicio, passos) = passos_sem_fim(p)?;
     let n = c.secoes - 1;
     let mut secoes = vec![];
@@ -437,7 +476,18 @@ pub fn sem_fim_documento(p: &ParamSemFim) -> Result<Document, String> {
         let plano = m.plano("Plano_furo", "-1")?;
         m.prim("Furo", PrimKind::Cilindro, plano, ["furo/2", "L+2", "0", "0"], BoolOp::Cut)?;
     }
+    if !p.usinagens_semfim.is_empty() {
+        crate::usinagens::aplicar(&mut m, &g, &p.usinagens_semfim)?;
+    }
+    let chave = format!("semfim-m{}-e{}-d{}-l{}-f{}", p.modulo, p.entradas, p.diametro_primitivo, p.comprimento, p.furo);
+    crate::usinagens::registrar_vinculo(&mut m.doc, &chave, &p.usinagens_semfim);
     Ok(m.doc)
+}
+
+/// O que o sem-fim padronizado oferece às usinagens (B345): cilindro de `z = 0` ao comprimento, com
+/// a raiz do filete `d1/2 − 1,25·m` como limite de rebaixo, cubo e alívio.
+pub fn geo_base_sem_fim(p: &ParamSemFim) -> Result<crate::usinagens::GeoBase, String> {
+    Ok(crate::usinagens::GeoBase { largura: p.comprimento, raio_raiz: p.diametro_primitivo / 2. - 1.25 * p.modulo, furo: p.furo, cubo_proprio: None, ..Default::default() })
 }
 
 /// Rotação (rad) do sem-fim em torno do próprio eixo para o filete passar no vão da coroa na linha

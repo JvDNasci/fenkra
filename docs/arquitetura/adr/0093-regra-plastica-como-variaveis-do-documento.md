@@ -1,4 +1,4 @@
-# ADR 0092: regra plástica do documento como variáveis das fórmulas
+# ADR 0093: regra plástica do documento como variáveis das fórmulas
 
 Data: 2026-11-14. Estado: aceita. Itens: B198 (base de B148).
 

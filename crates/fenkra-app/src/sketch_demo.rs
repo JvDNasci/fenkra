@@ -5,12 +5,33 @@
 //! `chanfro` e `copia`. Relimitar: `aparar`, `estender`, `aparar_shift`. Seleção: `janela`, `cruzada`,
 //! `cadeia`, `cadeia_offset`. Snaps: `snap`, `arraste`, `arraste_ctrl`, `inferencia`, `perpendicular`.
 //! Cotas: `cota_raio`, `cota_diametro`, `cota_angulo`, `cota_suplemento`. Vínculos: `vinculo_tipo`,
-//! `vinculo_pontos`, `vinculo_quebrado`. `FENKRA_DEMO_SKETCH_CURSOR=x,y` troca o lugar do cursor.
+//! `vinculo_pontos`, `vinculo_quebrado`. Origem e eixos (B437): `origem`, `origem_escolha`, `origem_mouse`.
+//! `FENKRA_DEMO_SKETCH_CURSOR=x,y` troca o lugar do cursor.
 
 use crate::sketch_ui::{CKind, Ent, SketchEdit, Tool};
 use fenkra_core::projecao::Exata;
 use fenkra_core::sketch::{Curve, Kind, LinkSrc};
 use fenkra_core::*;
+
+/// Os casos de origem (B437) mostram o painel "Origem e eixos" aberto.
+pub fn abre_origem() -> bool {
+    std::env::var("FENKRA_DEMO_SKETCH").is_ok_and(|c| c.starts_with("origem"))
+}
+
+/// Retângulo 20 × 10 preso só à origem e aos eixos do sketch (B437).
+fn retangulo_nos_eixos(s: &mut SketchData, al: &mut impl FnMut() -> Id) {
+    let e = s.garantir_eixos(al);
+    let p = [[-9., -4.], [11., -6.], [9., 6.], [-11., 4.]].map(|q| s.add_point(al, q[0], q[1]));
+    let l = [0, 1, 2, 3].map(|i| s.add_curve(al, Curve::Line { a: p[i], b: p[(i + 1) % 4] }, false));
+    let diag = s.add_curve(al, Curve::Line { a: p[0], b: p[2] }, true);
+    s.add_constraint(al, Kind::Horizontal(l[0]));
+    s.add_constraint(al, Kind::Parallel(l[2], e.h));
+    s.add_constraint(al, Kind::Vertical(l[1]));
+    s.add_constraint(al, Kind::Parallel(l[3], e.v));
+    s.add_constraint(al, Kind::Midpoint(e.origem, diag));
+    s.add_constraint(al, Kind::PointLineDistance(p[0], e.h, "5".into()));
+    s.add_constraint(al, Kind::PointLineDistance(p[1], e.v, "10".into()));
+}
 
 /// Os casos de vínculo mostram o painel aberto, para a captura ver o estado de cada um.
 pub fn abre_vinculos() -> bool {
@@ -53,6 +74,24 @@ pub fn preparar(doc: &mut Document) -> Option<Id> {
         Id(n)
     };
     let mut s = SketchData::default();
+    if caso.starts_with("origem") {
+        // B437: `origem` tem a origem no centro da face lateral (x = 40) e H seguindo Y;
+        // `origem_escolha` está escolhendo o centro da face com o cursor sobre a face de cima
+        corpo_com_furo(doc);
+        retangulo_nos_eixos(&mut s, &mut al);
+        use fenkra_core::sketch_origem::{OrigemSk, OrientaSk};
+        s.pos = if caso == "origem" {
+            fenkra_core::sketch::SketchPos { modo: OrigemSk::CentroFace(LinkSrc::Face { point: [40., 10., 10.] }), orienta: OrientaSk::Eixo(OriginAxis::Y), ..Default::default() }
+        } else {
+            fenkra_core::sketch::SketchPos { modo: OrigemSk::OrigemPeca, origem: [-62., -38.], ..Default::default() }
+        };
+        if caso == "origem_mouse" {
+            // linha solta para o teste de mouse prender ao eixo H pelo botão direito
+            let (a, b) = (s.add_point(&mut al, 70., 20.), s.add_point(&mut al, 110., 32.));
+            s.add_curve(&mut al, Curve::Line { a, b }, false);
+        }
+        return Some(doc.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: s })));
+    }
     if caso.starts_with("vinculo") {
         corpo_com_furo(doc);
         // a origem é a aresta redonda do furo; o vínculo foi feito quando ela era outra coisa
@@ -159,7 +198,8 @@ pub fn preparar(doc: &mut Document) -> Option<Id> {
 pub fn aplicar(e: &mut SketchEdit, sk: &SketchData) {
     let Ok(caso) = std::env::var("FENKRA_DEMO_SKETCH") else { return };
     e.gesto = crate::sketch_gesto::Gesto::do_ambiente();
-    let linhas: Vec<Id> = sk.curves.iter().filter(|c| matches!(c.geom, Curve::Line { .. })).map(|c| c.id).collect();
+    // os eixos (B437) também são linhas, mas não são do desenho
+    let linhas: Vec<Id> = sk.curves.iter().filter(|c| matches!(c.geom, Curve::Line { .. }) && !sk.e_eixo(c.id)).map(|c| c.id).collect();
     match caso.as_str() {
         "retangulo" => {
             e.set_tool(Tool::RectCenter);
@@ -256,9 +296,14 @@ pub fn aplicar(e: &mut SketchEdit, sk: &SketchData) {
         }
         "perpendicular" => {
             e.set_tool(Tool::Line);
-            let fim = sk.curves.iter().rev().find_map(|c| if let Curve::Line { b, .. } = c.geom { Some(b) } else { None });
+            let fim = sk.curves.iter().rev().filter(|c| !sk.e_eixo(c.id)).find_map(|c| if let Curve::Line { b, .. } = c.geom { Some(b) } else { None });
             e.demo_cadeia(fim);
             e.demo_cursor = Some([40. - 12., 75. + 32.]);
+        }
+        "origem_escolha" => {
+            e.posicao.pedido = Some(crate::sketch_posicao_ui::Pedido::CentroFace);
+            // sobre a face de cima do corpo, longe do furo (coordenadas do sketch deslocado)
+            e.demo_cursor = Some([90., 50.]);
         }
         _ => {}
     }

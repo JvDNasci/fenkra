@@ -4,7 +4,9 @@
 //! rótulo, na ordem da lista do PMI, como o plano de inspeção do desenho faz na folha.
 
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke};
-use fenkra_core::pmi::{Pmi, PmiKind};
+use fenkra_core::pmi::Pmi;
+#[cfg(test)]
+use fenkra_core::pmi::PmiKind;
 use fenkra_core::Id;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -19,21 +21,10 @@ pub fn alternar() {
     LIGADO.fetch_xor(true, Ordering::Relaxed);
 }
 
-/// A anotação é uma característica a inspecionar? Cotas de referência (texto entre parênteses) não.
-pub fn e_caracteristica(p: &Pmi) -> bool {
-    let t = p.text.trim();
-    let referencia = t.starts_with('(') && t.ends_with(')');
-    match p.kind {
-        PmiKind::Linear | PmiKind::Radius | PmiKind::Diameter | PmiKind::Angle | PmiKind::Ordinate { .. } | PmiKind::Gap { .. } | PmiKind::ArcLength => !referencia,
-        PmiKind::Gdt { .. } | PmiKind::Roughness { .. } => true,
-        _ => false,
-    }
-}
-
-/// Número de cada característica, na ordem da lista do PMI (as ocultas também contam: o número não
-/// muda ao esconder uma anotação).
+/// Número de cada característica, na ordem da lista do PMI. É a mesma numeração que a folha usa
+/// para o que veio do 3D, então o balão tem o mesmo número nos dois lugares.
 pub fn numeracao(lista: &[Pmi]) -> Vec<(Id, usize)> {
-    lista.iter().filter(|p| e_caracteristica(p)).enumerate().map(|(i, p)| (p.id, i + 1)).collect()
+    fenkra_desenho::inspecao::numeracao_pmi(lista)
 }
 
 /// Desenha o balão de número `n` junto do canto de cima à direita do rótulo.

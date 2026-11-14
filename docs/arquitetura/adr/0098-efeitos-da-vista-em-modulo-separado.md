@@ -1,4 +1,4 @@
-# ADR 0093: efeitos da vista em módulo de shader separado, com queda para o nível Rápido
+# ADR 0098: efeitos da vista em módulo de shader separado, com queda para o nível Rápido
 
 Data: 2026-11-14. Item: B139.
 

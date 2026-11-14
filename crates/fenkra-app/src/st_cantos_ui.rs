@@ -76,7 +76,7 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
     let mut aviso: Option<String> = None;
     let mut escolher: Option<[f64; 3]> = None;
 
-    egui::Window::new(tr("⌐ Cantos da estrutura")).id(egui::Id::unique("janela_cantos")).open(&mut open).default_size([420., 460.]).resizable(true).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "cantos", tr("⌐ Cantos da estrutura"), &mut open, 420., |ui| {
         if crate::app::done_bar(ui) {
             ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
         }

@@ -65,7 +65,10 @@ pub mod eixos;
 pub mod selecao_regras;
 pub mod chaveta_rasgos;
 pub mod calculo_projeto;
+pub mod calculo_pecas;
+pub mod calculo_rotativos;
 pub mod profile;
+pub mod sketch_posicao;
 pub mod refs;
 pub mod papeis;
 pub mod reparo;
@@ -75,6 +78,7 @@ pub mod massa;
 pub mod termino;
 mod edicao_direta;
 pub mod reconhece;
+pub mod esquema_pmi;
 pub mod dfm;
 pub mod dfm_geo;
 pub mod dfm_saida;
@@ -4162,9 +4166,10 @@ impl Ctx<'_> {
         let k = |e: KernelError| e.0;
         match &f.kind {
             FeatureKind::Sketch(s) => {
-                let frame = profile::posiciona(self.plane(&s.plane, 0)?, &s.data.pos);
+                // B437: origem e orientação próprias, por referência ou automáticas
+                let (frame, pos_warn) = self.frame_do_sketch(s)?;
                 // geometria externa (converter/projetar/interseção): reposiciona antes de resolver
-                let mut link_warn = vec![];
+                let mut link_warn = pos_warn;
                 let mut quebrados = vec![];
                 let mut link_ops = vec![];
                 let data = if s.data.links.is_empty() {

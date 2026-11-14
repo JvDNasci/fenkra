@@ -329,7 +329,7 @@ impl App {
         let c = &st.resultado;
         let mut aberta = true;
         let mut sobrepor = false;
-        egui::Window::new(format!("{} {} ↔ {}", tr("Comparar versões"), c.antes.rotulo, c.depois.rotulo)).id(id_comparacao()).open(&mut aberta).default_width(460.).show(ctx, |ui| {
+        crate::paineis::encaixado(ctx, "comparar_versoes", format!("{} {} ↔ {}", tr("Comparar versões"), c.antes.rotulo, c.depois.rotulo), &mut aberta, 460., |ui| {
             ui.horizontal(|ui| {
                 ui.add(egui::Image::new(crate::icons::get("comparar_versoes")).fit_to_exact_size(egui::vec2(20., 20.)));
                 for m in [&c.antes, &c.depois] {
