@@ -59,10 +59,24 @@ pub enum Group {
     SkCotagem,
     SkRestricoes,
     SkFerramentas,
+    // B436: grupos por tipo de operação (organizacao.rs)
+    Booleanas,
+    Primitivas,
+    EdicaoDireta,
+    Malha,
+    ChDobras,
+    ChCorte,
+    ChTransformar,
+    StLigacoes,
+    StSolda,
+    StSaidas,
+    AsmRecursos,
+    Biblioteca,
+    DesGerar,
 }
 
 impl Group {
-    pub const ALL: [Group; 30] = [
+    pub const ALL: [Group; 43] = [
         Group::DesArquivo,
         Group::DesVistas,
         Group::DesCotas,
@@ -93,52 +107,34 @@ impl Group {
         Group::SkCotagem,
         Group::SkRestricoes,
         Group::SkFerramentas,
+        Group::Booleanas,
+        Group::Primitivas,
+        Group::EdicaoDireta,
+        Group::Malha,
+        Group::ChDobras,
+        Group::ChCorte,
+        Group::ChTransformar,
+        Group::StLigacoes,
+        Group::StSolda,
+        Group::StSaidas,
+        Group::AsmRecursos,
+        Group::Biblioteca,
+        Group::DesGerar,
     ];
-    /// Em que bancada o grupo aparece (Sketch, Referências/wireframe, Volume, Análise, Organização,
-    /// Seleção e Vista são comuns às duas).
+    /// Em que bancada o grupo aparece: os grupos de sketch valem em toda bancada que desenha sketch;
+    /// os demais seguem a ordem da bancada (B436, `organizacao::ordem`).
     pub fn in_bench(self, b: Bench) -> bool {
-        let des = matches!(self, Group::DesArquivo | Group::DesVistas | Group::DesCotas | Group::DesAnotacoes | Group::DesTabelas);
-        if b == Bench::Desenho || des {
-            return b == Bench::Desenho && des;
+        if self.sketch_only() {
+            return matches!(b, Bench::Solidos | Bench::Superficies);
         }
-        if b == Bench::Chapa {
-            return matches!(self, Group::Sketch | Group::Chapa | Group::Referencias | Group::Organizacao | Group::Pmi | Group::Vista | Group::Selecao | Group::Analise);
-        }
-        if b == Bench::Estrutural {
-            return matches!(self, Group::Sketch | Group::Estrutural | Group::Referencias | Group::Organizacao | Group::Pmi | Group::Vista | Group::Selecao | Group::Analise);
-        }
-        if b == Bench::FormaLivre {
-            return matches!(self, Group::FormaLivre | Group::Referencias | Group::Organizacao | Group::Vista | Group::Selecao | Group::Analise);
-        }
-        if matches!(self, Group::Chapa | Group::Estrutural | Group::FormaLivre) {
-            return false;
-        }
-        if b == Bench::Montagem {
-            return matches!(self, Group::Montagem | Group::Restricoes | Group::Cinematica | Group::Pmi | Group::Vista | Group::Selecao | Group::Analise);
-        }
-        match self {
-            Group::Montagem | Group::Restricoes | Group::Cinematica => false,
-            Group::Solidos | Group::Acabamento | Group::Padroes => b == Bench::Solidos,
-            Group::Superficies | Group::Operacoes | Group::Wireframe => b == Bench::Superficies,
-            // na bancada de superfícies o Wireframe mostra as referências abertas, sem famílias
-            Group::Referencias => b == Bench::Solidos,
-            _ => true,
-        }
+        crate::organizacao::ordem(b).contains(&self)
     }
     /// O grupo é do trabalho atual e fica à vista na faixa; os demais vão para o botão "Mais".
     pub fn do_contexto(self, b: Bench, sketching: bool) -> bool {
         if sketching {
             return self.sketch_only();
         }
-        match b {
-            Bench::Solidos => matches!(self, Group::Sketch | Group::Solidos | Group::Acabamento | Group::Padroes),
-            Bench::Superficies => matches!(self, Group::Sketch | Group::Wireframe | Group::Superficies | Group::Operacoes),
-            Bench::Montagem => matches!(self, Group::Montagem | Group::Restricoes),
-            Bench::Chapa => matches!(self, Group::Sketch | Group::Chapa),
-            Bench::Estrutural => matches!(self, Group::Sketch | Group::Estrutural),
-            Bench::FormaLivre => matches!(self, Group::FormaLivre),
-            Bench::Desenho => matches!(self, Group::DesVistas | Group::DesCotas | Group::DesAnotacoes),
-        }
+        crate::organizacao::no_contexto(b).contains(&self)
     }
     /// Grupos que só aparecem com um sketch em edição.
     /// Navegação (vista e seleção): mora na barra de baixo, não na de recursos (B434).
@@ -152,26 +148,26 @@ impl Group {
     pub fn label(self) -> &'static str {
         match self {
             Group::Sketch => tr("Sketch"),
-            Group::Solidos => tr("Sólidos"),
+            Group::Solidos => tr("Recursos de sketch"),
             Group::Acabamento => tr("Acabamento"),
             Group::Referencias => tr("Referências"),
             Group::Organizacao => tr("Organização"),
             Group::Selecao => tr("Seleção"),
             Group::Vista => tr("Vista"),
-            Group::Padroes => tr("Padrões e transformações"),
+            Group::Padroes => tr("Transformações"),
             Group::Superficies => tr("Superfícies"),
             Group::Wireframe => tr("Wireframe (pontos, linhas, planos, curvas)"),
             Group::Operacoes => tr("Operações"),
-            Group::Hibrido => tr("Volume (superfície ↔ sólido)"),
+            Group::Hibrido => tr("Superfície e volume"),
             Group::Analise => tr("Análise"),
-            Group::Montagem => tr("Montagem"),
+            Group::Montagem => tr("Estrutura do produto"),
             Group::Restricoes => tr("Restrições e movimento"),
             Group::Cinematica => tr("Cinemática"),
-            Group::Chapa => tr("Chapa metálica"),
-            Group::Estrutural => tr("Estrutural"),
+            Group::Chapa => tr("Paredes"),
+            Group::Estrutural => tr("Membros"),
             Group::FormaLivre => tr("Forma livre"),
             Group::Pmi => tr("Detalhamento 3D (PMI)"),
-            Group::DesArquivo => tr("Desenho"),
+            Group::DesArquivo => tr("Folha"),
             Group::DesVistas => tr("Vistas"),
             Group::DesCotas => tr("Cotas"),
             Group::DesAnotacoes => tr("Anotações e símbolos"),
@@ -181,6 +177,19 @@ impl Group {
             Group::SkCotagem => tr("Cotagem"),
             Group::SkRestricoes => tr("Restrições"),
             Group::SkFerramentas => tr("Ferramentas do sketch"),
+            Group::Booleanas => tr("Booleanas"),
+            Group::Primitivas => tr("Primitivas"),
+            Group::EdicaoDireta => tr("Edição direta"),
+            Group::Malha => tr("Malha e importação"),
+            Group::ChDobras => tr("Dobras"),
+            Group::ChCorte => tr("Corte e estampagem"),
+            Group::ChTransformar => tr("Transformações da chapa"),
+            Group::StLigacoes => tr("Ligações"),
+            Group::StSolda => tr("Solda"),
+            Group::StSaidas => tr("Saídas"),
+            Group::AsmRecursos => tr("Recursos de montagem"),
+            Group::Biblioteca => tr("Biblioteca"),
+            Group::DesGerar => tr("Gerar cotas"),
         }
     }
 }

@@ -111,7 +111,7 @@ const TIPO: &[(&str, &str, bool)] = &[
 /// Comandos das barras Sólidos, Acabamento e Padrões, sem repetir.
 pub fn comandos() -> Vec<Item> {
     let mut out: Vec<Item> = vec![];
-    for g in [Group::Solidos, Group::Acabamento, Group::Padroes] {
+    for g in [Group::Solidos, Group::Acabamento, Group::Padroes, Group::Booleanas, Group::Primitivas, Group::EdicaoDireta] {
         for e in entries(g) {
             let v = match e {
                 Entry::One(i) => vec![i],
