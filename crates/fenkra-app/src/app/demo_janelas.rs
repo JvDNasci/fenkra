@@ -12,6 +12,10 @@ impl App {
         static FEITO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
         let Ok(nome) = std::env::var("FENKRA_DEMO_JANELA") else { return };
         self.demo_diagnostico_acao(ctx);
+        // B440: controle visual, menu Janela e perfis do mouse (controle_visual.rs)
+        if self.demo_b440(ctx, &nome) {
+            return;
+        }
         // a vista da montagem compõe fora da thread da interface: tenta a cada quadro até a chamada nascer
         if nome == "pmi_feature_asm" {
             static CRIADA: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);

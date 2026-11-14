@@ -115,6 +115,7 @@ preferências do usuário.
 | `FENKRA_DEMO_FOLHA2D=<arquivo>` / `1` | (B211) abre um DXF, DWG ou SVG como desenho, como o Abrir do desenho técnico; com `1`, grava antes um DXF de prova (contorno, furo de centro, arco oculto, eixo fino e texto numa A3) e abre esse |
 | `FENKRA_DEMO_EXTERNOS=1` | (B211) abre as configurações na página Programas externos, com a pasta do LibreDWG e se `dwg2dxf` e `dxf2dwg` foram achados |
 | `FENKRA_DEMO_JANELA=ocultar_pasta\|ocultar_corpo\|ponto_referencial` | (B16, B24) sketches do primeiro corpo numa pasta de comandos oculta; o primeiro corpo oculto (os sketches dele somem junto); ponto no plano YZ selecionado, com as setas do referencial |
+| `FENKRA_DEMO_JANELA=controle_visual\|menu_janela\|opcoes_mouse` | (B440) o controle visual (projeção, estilo, esconder e mostrar, ambiente de ocultos) ou o menu Janela numa janela fixa; `opcoes_mouse` abre as configurações na navegação com a tabela do perfil, escolhido por `FENKRA_DEMO_NAV=<nome gravado>` (ex. `MeioGira`) |
 | `FENKRA_DEMO_JANELA=nova_pasta` | (B24) dois pontos novos agrupados por "Selecionados → nova pasta" dentro da pasta de geometria que já existe (use com `FENKRA_DEMO_EXEMPLO=0`) |
 | `FENKRA_DEMO_JANELA=filete_regra` | (B95) caixa de cantos arredondados com um filete que grava a regra "tangentes" a partir de uma aresta de cima, com o painel do filete aberto |
 | `FENKRA_DEMO_JANELA=saida_regra` | (B95) saída de 8° gravada pela regra "tangentes" a partir de uma parede da caixa de cantos arredondados; painel aberto com a regra e "Soltar a regra" |

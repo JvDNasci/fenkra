@@ -338,18 +338,8 @@ impl App {
                     let ortho = self.viewport.as_ref().is_some_and(|v| v.camera.ortho);
                     let modo = format!("{} · {}", tr(if ortho { "Ortogonal" } else { "Perspectiva" }), self.settings.display.label());
                     let r = ui.add(egui::Button::new(RichText::new(modo).small()).frame(false)).on_hover_text(tr("Projeção e modo de exibição. Clique para escolher."));
-                    egui::Popup::menu(&r).show(|ui| {
-                        if ui.selectable_label(!ortho, tr("Perspectiva")).clicked() && ortho {
-                            acts.push(Act::Ortho);
-                        }
-                        if ui.selectable_label(ortho, tr("Ortogonal")).clicked() && !ortho {
-                            acts.push(Act::Ortho);
-                        }
-                        ui.separator();
-                        for m in crate::render::DisplayMode::ALL {
-                            ui.radio_value(&mut self.settings.display, m, m.label());
-                        }
-                    });
+                    // B440: o mesmo controle visual do menu Exibir
+                    egui::Popup::menu(&r).show(|ui| self.controle_visual(ui, &mut acts));
                 });
             });
         });
