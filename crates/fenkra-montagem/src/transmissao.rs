@@ -889,9 +889,9 @@ mod tests {
         assert_eq!(lay.pecas.len(), 5);
         assert!((lay.razao - 0.5).abs() < 1e-12);
         // dado sem duas fontes não gera
-        let v = Elemento::Correia { designacao: "V B".into(), dentes1: 0, dentes2: 0, diametro1: 80., diametro2: 160., centros: 300., largura: 0., furo1: 12., furo2: 12. };
+        let v = Elemento::Correia { designacao: "T10".into(), dentes1: 0, dentes2: 0, diametro1: 80., diametro2: 160., centros: 300., largura: 0., furo1: 12., furo2: 12. };
         assert!(montar_layout(&v).is_err());
-        let ruim = Elemento::Corrente { corrente: "ANSI 40".into(), dentes1: 17, dentes2: 34, centros: 400., furo1: 10., furo2: 12. };
+        let ruim = Elemento::Corrente { corrente: "ANSI 41".into(), dentes1: 17, dentes2: 34, centros: 400., furo1: 10., furo2: 12. };
         assert!(montar_layout(&ruim).is_err());
         // o cálculo do elemento usa o mesmo estágio: 17/34 por corrente
         let r = calcular_elemento(&e, Entrada { rpm: 300., torque: 5. }).unwrap();

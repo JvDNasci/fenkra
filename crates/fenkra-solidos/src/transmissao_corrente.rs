@@ -521,8 +521,8 @@ mod tests {
 
     #[test]
     fn so_corrente_conferida_gera_roda() {
-        assert!(calculo_roda(&ParamRoda::nova("ANSI 40", 17, 8.)).is_err(), "largura em conflito");
-        assert!(calculo_roda(&ParamRoda::nova("ISO 06B-1", 17, 8.)).is_err());
+        assert!(calculo_roda(&ParamRoda::nova("ANSI 41", 17, 8.)).is_err(), "uma fonte só");
+        assert!(calculo_roda(&ParamRoda::nova("ANSI 40", 17, 8.)).is_ok(), "liberada em 2026-11-14");
         assert!(calculo_roda(&ParamRoda::nova("inexistente", 17, 8.)).is_err());
         assert!(calculo_roda(&ParamRoda::nova("ISO 08B-1", 5, 8.)).is_err());
         let c = calculo_roda(&ParamRoda::nova("ISO 08B-1", 19, 8.)).unwrap();
@@ -569,6 +569,34 @@ mod tests {
         let (_, lo, hi) = medir(&d);
         // entre as placas a largura interna 4,6 mm
         assert!(lo[2] < -0.5 && hi[2] > 4.6 + 0.5, "{lo:?} {hi:?}");
+    }
+
+    /// B342 (2026-11-14): cada corrente liberada na revisão gera a roda de 17 dentes com a largura do
+    /// dente `0,9·b1`, o diâmetro de topo `p (0,6 + cot(180°/17))` e um volume entre o disco de raiz e
+    /// o de topo. Conta à mão da ANSI 40: `Da = 12,7 · (0,6 + cot 10,588°) = 12,7 · (0,6 + 5,3495) = 75,56`.
+    #[test]
+    fn correntes_liberadas_em_2026_11_14_geram_roda() {
+        let da40 = crate::transmissao_dados::diametro_topo_roda(12.7, 17);
+        assert!((da40 - 75.56).abs() < 0.01, "{da40}");
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        for nome in ["ANSI 25", "ANSI 35", "ANSI 40", "ISO 06B-1", "ISO 10B-1", "ISO 12B-1", "ISO 16B-1"] {
+            let ch = crate::transmissao_dados::corrente(nome).unwrap();
+            let p = ParamRoda::nova(nome, 17, ch.passo * 0.6);
+            let c = calculo_roda(&p).unwrap_or_else(|e| panic!("{nome}: {e}"));
+            let (v, lo, hi) = medir(&roda_documento(&p).unwrap());
+            // altura: dentes (w) mais o cubo, de altura max(0,8·furo, 4)
+            let w = 0.9 * ch.largura;
+            let furo = ch.passo * 0.6;
+            let hub = (furo * 0.8).max(4.);
+            assert!((hi[2] - lo[2] - (w + hub)).abs() < 1e-3, "{nome}: altura {} contra {}", hi[2] - lo[2], w + hub);
+            assert!(((hi[0] - lo[0]).max(hi[1] - lo[1]) - c.diametro_topo).abs() < 0.02 * c.diametro_topo, "{nome}: {lo:?} {hi:?}");
+            let (rr, rt, rc, rf) = (c.diametro_raiz / 2., c.diametro_topo / 2., c.diametro_cubo / 2., furo / 2.);
+            let minimo = PI * (rr * rr - rf * rf) * w * 0.9;
+            let maximo = PI * (rt * rt - rf * rf) * w + PI * (rc * rc - rf * rf) * hub;
+            assert!(v > minimo && v < maximo, "{nome}: {v} fora de {minimo}..{maximo}");
+        }
     }
 
     #[test]
