@@ -125,7 +125,7 @@ impl App {
             return;
         }
         let celula = toolbar::celula(toolbar::tamanho_na_coluna(&self.settings));
-        let comandos: usize = grupos.iter().map(|g| toolbar::custom_entries(*g, &self.settings).len()).sum::<usize>() + meus.iter().map(|c| c.items.len()).sum::<usize>() + usize::from(!mais.is_empty());
+        let comandos: usize = grupos.iter().map(|g| toolbar::entradas_na_barra(*g, &self.settings).len()).sum::<usize>() + meus.iter().map(|c| c.items.len()).sum::<usize>() + usize::from(!mais.is_empty());
         let altura = root.available_rect_before_wrap().height() - 8.;
         let colunas = toolbar::colunas_para(comandos, grupos.len() + meus.len(), altura, celula.y);
         let largura = colunas as f32 * celula.x + 4.;
@@ -265,6 +265,7 @@ impl App {
     pub(super) fn barra_de_baixo(&mut self, root: &mut egui::Ui) {
         let fundo = root.visuals().panel_fill;
         let mut acts = vec![];
+        let prox = crate::proximo::contexto(self);
         egui::Panel::bottom("barra_de_baixo").resizable(false).frame(egui::Frame::new().fill(fundo).inner_margin(egui::Margin::symmetric(8, 2))).show(root, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
@@ -317,6 +318,8 @@ impl App {
                 if let Some(e) = self.result.as_ref().and_then(|r| r.param_error.clone()) {
                     ui.label(RichText::new(format!("Parâmetros: {e}")).small().color(crate::theme::st_err()));
                 }
+                // B441: próximos comandos do fluxo, depois do comando que acabou
+                acts.extend(crate::proximo::na_barra(ui, &prox));
                 ui.separator();
                 // navegação: vista e seleção, só ícones
                 let ts = self.tool_state();
@@ -389,7 +392,8 @@ mod tests {
                 let direita = toolbar::groups_at(&s, Dock::Direita, sketching);
                 assert!(!direita.is_empty(), "{b:?} sem comandos à direita");
                 assert!(direita.iter().all(|g| !g.de_navegacao()), "{b:?}: navegação na barra de recursos");
-                assert!(!direita.contains(&Group::SkRestricoes), "restrições ficam no botão direito");
+                // B436: as restrições do sketch seguem no botão direito; na barra, só um botão (menu pequeno)
+                assert!(direita.iter().all(|g| *g != Group::SkRestricoes || toolbar::entradas_na_barra(*g, &s).len() == 1));
                 let baixo = toolbar::grupos_de_baixo(&s, sketching);
                 assert!(baixo.contains(&Group::Vista), "{b:?}: vista embaixo");
                 assert!(baixo.iter().all(|g| g.de_navegacao()));

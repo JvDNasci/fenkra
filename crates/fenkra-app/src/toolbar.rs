@@ -154,26 +154,12 @@ pub fn entries(g: Group) -> Vec<Entry> {
             Family("varredura", vec![
                 it("nervura", "Nervura", "Varrer o perfil ao longo de uma curva (Rib)", "O perfil do sketch percorre uma curva guia (linha, spline, hélice, aresta) acrescentando material.", Cmd(C::Rib)),
                 it("rasgo_varrido", "Rasgo varrido", "Remover varrendo o perfil ao longo de uma curva (não é o rasgo de chapa)", "O perfil percorre a curva guia removendo material. Para um rasgo em chapa metálica use o recorte da bancada Chapa.", Cmd(C::Slot)),
+                it("reforco", "Reforço", "Reforço / nervura de parede (Stiffener)", "Cada linha do sketch vira uma parede fina com espessura e profundidade.", Cmd(C::Stiffener)),
             ]),
             Family("multisecoes", vec![
                 it("multisecoes", "Multi-seções", "Sólido por vários perfis (loft)", "Transição suave entre dois ou mais perfis em planos diferentes.", Cmd(C::Loft)),
                 it("multisecoes_remover", "Multi-seções -", "Remover por vários perfis", "Remove material com a transição entre os perfis.", Cmd(C::LoftCut)),
             ]),
-            Family("primitivas", vec![
-                it("prim_caixa", "Caixa", "Caixa", "Caixa centrada no plano escolhido; altura ao longo da normal.", Cmd(C::Prim(PrimKind::Caixa))),
-                it("prim_cilindro", "Cilindro", "Cilindro", "Raio e altura, sobre o plano escolhido.", Cmd(C::Prim(PrimKind::Cilindro))),
-                it("prim_esfera", "Esfera", "Esfera", "Raio, centro na origem do plano.", Cmd(C::Prim(PrimKind::Esfera))),
-                it("prim_cone", "Cone", "Cone / tronco", "Raios da base e do topo e altura.", Cmd(C::Prim(PrimKind::Cone))),
-                it("prim_toro", "Toro", "Toro", "Raio maior e menor.", Cmd(C::Prim(PrimKind::Toro))),
-                it("prim_cunha", "Cunha", "Cunha", "Caixa com o topo mais estreito.", Cmd(C::Prim(PrimKind::Cunha))),
-                it("prim_prisma", "Prisma", "Prisma poligonal", "Polígono regular extrudado (lados, raio, altura).", Cmd(C::Prim(PrimKind::Prisma))),
-            ]),
-            Family("booleana", vec![
-                it("bool_unir", "Unir corpos", "Unir dois corpos", "Junta ao corpo ativo o corpo de outro coletor.", Cmd(C::Combine(BoolOp::Add))),
-                it("bool_subtrair", "Subtrair corpo", "Subtrair um corpo", "Tira do corpo ativo o corpo de outro coletor.", Cmd(C::Combine(BoolOp::Cut))),
-                it("bool_intersecao", "Interseção", "Interseção de corpos", "Fica só o volume comum aos dois corpos.", Cmd(C::Combine(BoolOp::Intersect))),
-            ]),
-            One(it("reforco", "Reforço", "Reforço / nervura de parede (Stiffener)", "Cada linha do sketch vira uma parede fina com espessura e profundidade.", Cmd(C::Stiffener))),
             Family("furo", vec![
                 it("furo_simples", "Furo", "Furo de passagem", "Furo nos pontos de um sketch, com diâmetro de passagem para o parafuso escolhido.", Cmd(C::Hole)),
                 it("furo_rebaixado", "Rebaixado", "Furo rebaixado", "Passagem + rebaixo para a cabeça do parafuso Allen.", Cmd(C::HoleCounterbore)),
@@ -195,14 +181,10 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("chanfro_dist_angulo", "Dist. + ângulo", "Chanfro por distância e ângulo", "Distância numa face e ângulo em relação a ela.", Cmd(C::ChamferDistAngle)),
                 it("chanfro_dist", "Chanfro total", "Chanfro em todas as arestas", "Chanfra todas as arestas do corpo.", Cmd(C::ChamferAll)),
             ]),
-            One(it("casca", "Casca", "Esvaziar o sólido (Shell)", "Abre as faces escolhidas e deixa paredes com espessura uniforme.", Cmd(C::Shell))),
             One(it("saida", "Saída", "Ângulo de saída (Draft)", "Inclina as faces escolhidas a partir de um plano neutro, para desmoldar.", Cmd(C::Draft))),
-            One(it("espessura", "Espessura", "Engrossar ou afinar faces (Thickness)", "Acrescenta ou remove material nas faces planas escolhidas.", Cmd(C::Thickness))),
-            Family("edit_direta", vec![
-                it("edit_mover_face", "Mover face", "Mover faces (edição direta)", "Leva o relevo formado pelas faces escolhidas (boss, furo, rasgo) para outro lugar, sem histórico.", Cmd(C::DirectEdit(0))),
-                it("edit_apagar_face", "Apagar face", "Apagar faces com cura (edição direta)", "Apaga as faces e as vizinhas se estendem até se encontrar.", Cmd(C::DirectEdit(1))),
-                it("edit_deslocar_face", "Deslocar face", "Deslocar faces (edição direta)", "Empurra ou puxa as faces pela normal; em cilindro e esfera muda o raio.", Cmd(C::DirectEdit(2))),
-                it("edit_raio_filete", "Raio do filete", "Trocar o raio de um filete (edição direta)", "Escolha a face curva de um filete existente e dê o raio novo; zero desfaz o filete.", Cmd(C::DirectEdit(3))),
+            Family("casca", vec![
+                it("casca", "Casca", "Esvaziar o sólido (Shell)", "Abre as faces escolhidas e deixa paredes com espessura uniforme.", Cmd(C::Shell)),
+                it("espessura", "Espessura", "Engrossar ou afinar faces (Thickness)", "Acrescenta ou remove material nas faces planas escolhidas.", Cmd(C::Thickness)),
             ]),
             One(it("rosca", "Rosca", "Rosca em eixo ou furo (Thread/Tap)", "Rosca cosmética ou modelada numa face cilíndrica, por norma.", Cmd(C::Thread))),
         ],
@@ -221,6 +203,32 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("xf_afinidade", "Afinidade", "Afinidade (Affinity)", "Escala independente em X, Y e Z.", Cmd(C::MoveBody(3))),
             ]),
         ],
+        Group::Booleanas => vec![
+            Family("booleana", vec![
+                it("bool_unir", "Unir corpos", "Unir dois corpos", "Junta ao corpo ativo o corpo de outro coletor.", Cmd(C::Combine(BoolOp::Add))),
+                it("bool_subtrair", "Subtrair corpo", "Subtrair um corpo", "Tira do corpo ativo o corpo de outro coletor.", Cmd(C::Combine(BoolOp::Cut))),
+                it("bool_intersecao", "Interseção", "Interseção de corpos", "Fica só o volume comum aos dois corpos.", Cmd(C::Combine(BoolOp::Intersect))),
+            ]),
+        ],
+        Group::Primitivas => vec![
+            Family("primitivas", vec![
+                it("prim_caixa", "Caixa", "Caixa", "Caixa centrada no plano escolhido; altura ao longo da normal.", Cmd(C::Prim(PrimKind::Caixa))),
+                it("prim_cilindro", "Cilindro", "Cilindro", "Raio e altura, sobre o plano escolhido.", Cmd(C::Prim(PrimKind::Cilindro))),
+                it("prim_esfera", "Esfera", "Esfera", "Raio, centro na origem do plano.", Cmd(C::Prim(PrimKind::Esfera))),
+                it("prim_cone", "Cone", "Cone / tronco", "Raios da base e do topo e altura.", Cmd(C::Prim(PrimKind::Cone))),
+                it("prim_toro", "Toro", "Toro", "Raio maior e menor.", Cmd(C::Prim(PrimKind::Toro))),
+                it("prim_cunha", "Cunha", "Cunha", "Caixa com o topo mais estreito.", Cmd(C::Prim(PrimKind::Cunha))),
+                it("prim_prisma", "Prisma", "Prisma poligonal", "Polígono regular extrudado (lados, raio, altura).", Cmd(C::Prim(PrimKind::Prisma))),
+            ]),
+        ],
+        Group::EdicaoDireta => vec![
+            Family("edit_direta", vec![
+                it("edit_mover_face", "Mover face", "Mover faces (edição direta)", "Leva o relevo formado pelas faces escolhidas (boss, furo, rasgo) para outro lugar, sem histórico.", Cmd(C::DirectEdit(0))),
+                it("edit_apagar_face", "Apagar face", "Apagar faces com cura (edição direta)", "Apaga as faces e as vizinhas se estendem até se encontrar.", Cmd(C::DirectEdit(1))),
+                it("edit_deslocar_face", "Deslocar face", "Deslocar faces (edição direta)", "Empurra ou puxa as faces pela normal; em cilindro e esfera muda o raio.", Cmd(C::DirectEdit(2))),
+                it("edit_raio_filete", "Raio do filete", "Trocar o raio de um filete (edição direta)", "Escolha a face curva de um filete existente e dê o raio novo; zero desfaz o filete.", Cmd(C::DirectEdit(3))),
+            ]),
+        ],
         Group::Referencias => {
             let fam = |ks: &[GeoKind]| -> Vec<Item> {
                 ks.iter().map(|k| {
@@ -234,6 +242,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 Family("linha", fam(&geo_ui::LINES)),
                 Family("curva", fam(&geo_ui::CURVES)),
                 Family("superficie", fam(&geo_ui::SURFACES)),
+                One(it("wf_repetir", "Repetir pontos", "Repetir pontos na curva", "Selecione uma curva e crie N pontos associativos ao longo dela (por quantidade ou espaçamento), com planos normais opcionais em cada ponto.", Cmd(C::PointRepeat))),
             ]
         }
         Group::Montagem => vec![
@@ -248,25 +257,31 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("asm_peca_nova", "Peça nova", "Peça nova no contexto", "Cria o arquivo da peça ao lado da montagem e abre para modelar.", Cmd(C::AsmNewPart)),
                 it("asm_sub_selecao", "Subconjunto da seleção", "Subconjunto dos selecionados", "Os componentes escolhidos viram uma montagem nova (.fka), inserida no lugar deles; as restrições entre eles vão junto.", Cmd(C::AsmSubFromSel)),
             ]),
-            Family("asm_recorte_peca", vec![
-                it("asm_recorte_peca", "Recorte pela peça", "Recorte pela peça (entre peças)", "A peça escolhida na árvore (pino, aba, parafuso) recorta as peças clicadas: furo do pino, ranhura da aba. Segue as posições (associativo).", Cmd(C::AsmFeat(0))),
-                it("asm_furo_pecas", "Furo entre peças", "Furo atravessando peças", "Clique na face onde o furo começa, ou no eixo de um furo: a série atravessa as peças que o eixo cruza e grava um furo real em cada uma.", Cmd(C::AsmFeat(1))),
-            ]),
             One(it("asm_link", "Copiar geometria", "Copiar geometria de outra peça (link)", "Escolha na árvore a peça que recebe e clique numa face plana de outra peça: a face é publicada automaticamente e entra por link (sem referência circular).", Cmd(C::AsmLink))),
-            Family("asm_fixadores", vec![
-                it("asm_fixadores", "Fixadores", "Preencher furos com fixadores", "Insere parafuso, arruela e porca da biblioteca nos furos passantes (com a folga de um tamanho métrico) e nos roscados da montagem. Furos de peças diferentes no mesmo eixo recebem um parafuso só, com o comprimento tirado da espessura atravessada. Rodar de novo não duplica.", Cmd(C::AsmFasteners)),
-                it("asm_conjunto", "Conjunto de fixadores", "Conjunto de fixadores paramétrico", "Um comando na árvore controla todos os prendedores: parafuso, diâmetro e as pilhas sob a cabeça e na contracabeça, com quantas arruelas e porcas forem precisas. Os alvos são furos, pontos ou vetores, sem exigir furo nas peças. Duplo clique na árvore abre de novo para trocar a pilha ou acrescentar alvos.", Cmd(C::AsmConjunto)),
-                it("asm_regras_cor", "Regras por cor", "Regras de diâmetro por cor", "Cadastra o que cada cor quer dizer, em polegada ou métrico. Furos e pontos com a cor podem ser escolhidos juntos no conjunto de fixadores, e cada um segue o diâmetro da regra.", Cmd(C::AsmRegrasCor)),
-            ]),
-            One(it("asm_catalogo", "Biblioteca", "Biblioteca de normas", "Abre o catálogo de normas: busca, filtros, ficha com as cotas e a tabela de tamanhos, e prévia 3D que gira. Arraste um tamanho para a viewport: o fantasma salta para o furo cujo diâmetro casa e o item entra restrito, sem graus de liberdade.", Cmd(C::AsmCatalogo))),
-            One(it("asm_engrenagens", "Engrenagens", "Gerar engrenagens", "Gera engrenagem reta, helicoidal, interna ou cremalheira (módulo, dentes, ângulo de pressão, hélice, folga) com o cálculo ao vivo, e insere o par já engrenado na montagem — distância entre centros, dentes encaixados e restrição de engrenagem. Também salva uma engrenagem avulsa como peça.", Cmd(C::AsmGears))),
-            One(it("asm_chaveta", "Chaveta", "Inserir chaveta entre eixo e cubo", "Escolha o eixo e o cubo: o comando acha os dois rasgos, confere b, t1 e t2 com a tabela e mostra a chaveta fantasma dentro deles. Você escolhe o comprimento da série e a chaveta entra restrita ao rasgo do eixo, sem graus de liberdade. Avisa quando as medidas não casam ou o diâmetro está fora da tabela.", Cmd(C::AsmChaveta))),
-            One(it("asm_calculo", "Cálculo", "Calculadoras de projeto", "Painel de cálculo preliminar com fatores de segurança: parafuso, ajuste forçado, mola e viga. O parafuso pode ajustar o tamanho do fixador escolhido na árvore. Fórmulas fechadas com valores típicos, sem fadiga: confirme antes de fabricar.", Cmd(C::AsmCalculo))),
             One(it("asm_grupo", "Grupo", "Grupo de organização", "Elemento vazio só para organizar a árvore (não muda a geometria).", Cmd(C::AsmGroup))),
             One(it("asm_substituir", "Substituir", "Substituir componente", "Troca a peça mantendo a posição e as restrições (as faces são reencontradas pelo ponto clicado).", Cmd(C::AsmReplace))),
             One(it("asm_repeticao", "Repetição", "Repetição inteligente de componente", "Copia componentes numa direção dada por aresta, eixo ou face, em volta de um eixo ou pelos furos de uma peça. Mostra as cópias antes de aceitar.", Cmd(C::AsmPattern))),
             One(it("asm_numerar", "Numerar", "Numeração automática", "Renumera os componentes em sequência, na ordem da árvore.", Cmd(C::AsmNumber))),
             One(it("asm_lista", "Lista de peças", "Lista de peças por nível", "Primeiro nível, só peças (todos os níveis) ou estruturada. Os números de item ficam fixos entre revisões e são os mesmos dos balões e da tabela do desenho.", Cmd(C::AsmBom))),
+        ],
+        Group::AsmRecursos => vec![
+            Family("asm_recorte_peca", vec![
+                it("asm_recorte_peca", "Recorte pela peça", "Recorte pela peça (entre peças)", "A peça escolhida na árvore (pino, aba, parafuso) recorta as peças clicadas: furo do pino, ranhura da aba. Segue as posições (associativo).", Cmd(C::AsmFeat(0))),
+                it("asm_furo_pecas", "Furo entre peças", "Furo atravessando peças", "Clique na face onde o furo começa, ou no eixo de um furo: a série atravessa as peças que o eixo cruza e grava um furo real em cada uma.", Cmd(C::AsmFeat(1))),
+            ]),
+        ],
+        Group::Biblioteca => vec![
+            One(it("asm_catalogo", "Biblioteca", "Biblioteca de normas", "Abre o catálogo de normas: busca, filtros, ficha com as cotas e a tabela de tamanhos, e prévia 3D que gira. Arraste um tamanho para a viewport: o fantasma salta para o furo cujo diâmetro casa e o item entra restrito, sem graus de liberdade.", Cmd(C::AsmCatalogo))),
+            Family("asm_fixadores", vec![
+                it("asm_fixadores", "Fixadores", "Preencher furos com fixadores", "Insere parafuso, arruela e porca da biblioteca nos furos passantes (com a folga de um tamanho métrico) e nos roscados da montagem. Furos de peças diferentes no mesmo eixo recebem um parafuso só, com o comprimento tirado da espessura atravessada. Rodar de novo não duplica.", Cmd(C::AsmFasteners)),
+                it("asm_conjunto", "Conjunto de fixadores", "Conjunto de fixadores paramétrico", "Um comando na árvore controla todos os prendedores: parafuso, diâmetro e as pilhas sob a cabeça e na contracabeça, com quantas arruelas e porcas forem precisas. Os alvos são furos, pontos ou vetores, sem exigir furo nas peças. Duplo clique na árvore abre de novo para trocar a pilha ou acrescentar alvos.", Cmd(C::AsmConjunto)),
+                it("asm_regras_cor", "Regras por cor", "Regras de diâmetro por cor", "Cadastra o que cada cor quer dizer, em polegada ou métrico. Furos e pontos com a cor podem ser escolhidos juntos no conjunto de fixadores, e cada um segue o diâmetro da regra.", Cmd(C::AsmRegrasCor)),
+            ]),
+            Family("asm_transmissao", vec![
+                it("asm_engrenagens", "Engrenagens", "Gerar engrenagens", "Gera engrenagem reta, helicoidal, interna ou cremalheira (módulo, dentes, ângulo de pressão, hélice, folga) com o cálculo ao vivo, e insere o par já engrenado na montagem — distância entre centros, dentes encaixados e restrição de engrenagem. Também salva uma engrenagem avulsa como peça.", Cmd(C::AsmGears)),
+                it("asm_chaveta", "Chaveta", "Inserir chaveta entre eixo e cubo", "Escolha o eixo e o cubo: o comando acha os dois rasgos, confere b, t1 e t2 com a tabela e mostra a chaveta fantasma dentro deles. Você escolhe o comprimento da série e a chaveta entra restrita ao rasgo do eixo, sem graus de liberdade. Avisa quando as medidas não casam ou o diâmetro está fora da tabela.", Cmd(C::AsmChaveta)),
+                it("asm_calculo", "Cálculo", "Calculadoras de projeto", "Painel de cálculo preliminar com fatores de segurança: parafuso, ajuste forçado, mola e viga. O parafuso pode ajustar o tamanho do fixador escolhido na árvore. Fórmulas fechadas com valores típicos, sem fadiga: confirme antes de fabricar.", Cmd(C::AsmCalculo)),
+            ]),
         ],
         Group::Restricoes => vec![
             One(it("rest_auto", "Automática", "Restrição automática", "Escolha dois elementos: o tipo mais lógico é aplicado (faces de frente = contato; eixos = coincidência…).", Cmd(C::AsmMate(crate::asm_ui::MateCmd::Auto)))),
@@ -296,15 +311,16 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("sm_aba", "Aba", "Aba (comando unificado)", "Um comando só para toda aba: escolha o modo (aresta, laço, aresta curva, perfil ou superfície) no painel. Painel em Suporte, Modo, Parâmetros e Avançado; um botão único inverte a direção e o raio próprio nasce da regra da chapa.", Cmd(C::SmFlange)),
                 it("sm_bainha", "Bainha", "Bainha", "Dobra de 180° na borda: esmagada (folga 0) ou aberta/circular.", Cmd(C::SmHem)),
             ]),
+            One(it("sm_aba_perfis", "Aba entre perfis", "Aba entre perfis (lofted)", "Escolha dois contornos fechados em planos diferentes: a chapa passa de um ao outro, como um funil ou adaptador, com a espessura da chapa. Facetada (dobradeira) ou lisa (estampada).", Cmd(C::SmLoftFlange))),
+            One(it("sm_converter_chapa", "Converter em chapa", "Converter sólido em chapa", "Reconhece a espessura constante e as dobras de um corpo e o trata como chapa, para usar abas, alívios e planificação sobre ele. Clique na face fixa.", Cmd(C::SmConvert))),
+        ],
+        Group::ChDobras => vec![
             Family("sm_linha", vec![
                 it("sm_dobra_linha", "Dobra por linha", "Dobra por linha", "Escolha dois vértices na face: a chapa dobra nessa linha (linha de centro), com raio e fator K da chapa.", Cmd(C::SmBend)),
                 it("sm_joggle", "Joggle", "Joggle (desvio em Z)", "Desloca a chapa além de uma linha por uma rampa, para sobrepor sem saliência.", Cmd(C::SmJoggle)),
             ]),
-            Family("sm_estampo", vec![
-                it("sm_estampo", "Estampo", "Estampo (rebaixo/reforço)", "Rebaixa a chapa com o perfil fechado do sketch, mantendo a espessura.", Cmd(C::SmStamp)),
-                it("sm_furo_flangeado", "Furo flangeado", "Furo flangeado", "Furo com colar dobrado nos pontos do sketch (rigidez).", Cmd(C::SmFlangedHole)),
-                it("sm_veneziana", "Veneziana", "Veneziana (lanceta)", "Escolha dois vértices na face: corte nessa linha e a chapa atrás levantada em rampa (ventilação).", Cmd(C::SmLouver)),
-            ]),
+        ],
+        Group::ChCorte => vec![
             Family("sm_recorte", vec![
                 it("sm_recorte", "Recorte", "Recorte na chapa", "Perfil fechado do sketch, normal à chapa: normal, com folga, com saída (ângulo) ou flangeado (colar).", Cmd(C::SmCut)),
                 it("sm_alivio_canto", "Alívio de canto", "Alívio de canto", "Clique no canto (vértice): redondo, quadrado ou em gota, atravessando a chapa.", Cmd(C::SmCornerRelief)),
@@ -315,19 +331,25 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("furo_simples", "Furo", "Furo de passagem", "Furo nos pontos de um sketch na face da chapa (vale dobrado e planificado).", Cmd(C::Hole)),
                 it("furo_roscado", "Roscado", "Furo roscado", "Broca de rosca + rosca cosmética.", Cmd(C::HoleTapped)),
             ]),
+            Family("sm_estampo", vec![
+                it("sm_estampo", "Estampo", "Estampo (rebaixo/reforço)", "Rebaixa a chapa com o perfil fechado do sketch, mantendo a espessura.", Cmd(C::SmStamp)),
+                it("sm_furo_flangeado", "Furo flangeado", "Furo flangeado", "Furo com colar dobrado nos pontos do sketch (rigidez).", Cmd(C::SmFlangedHole)),
+                it("sm_veneziana", "Veneziana", "Veneziana (lanceta)", "Escolha dois vértices na face: corte nessa linha e a chapa atrás levantada em rampa (ventilação).", Cmd(C::SmLouver)),
+            ]),
             Family("filete", vec![
                 it("arestas_selecionar", "Raio", "Raio nos cantos da chapa", "Arredonda as arestas escolhidas (cantos da chapa ou das abas); acompanha dobrado e planificado.", Cmd(C::Fillet)),
                 it("chanfro", "Chanfro", "Chanfro nos cantos da chapa", "Chanfra as arestas escolhidas; acompanha dobrado e planificado.", Cmd(C::Chamfer)),
             ]),
+        ],
+        Group::ChTransformar => vec![
             Family("sm_desdobrar", vec![
                 it("sm_desdobrar", "Planificar", "Planificar a chapa (e dobrar de novo)", "Mostra a chapa plana, com o comprimento desenvolvido pelo fator K. Com o botão aceso, a chapa está plana: clique de novo para dobrar.", Cmd(C::SmUnfold)),
                 it("sm_desdobrar_parcial", "Desdobrar parcial", "Desdobrar só algumas abas", "Escolha as abas a planificar: o resto da peça continua dobrado. Serve para editar uma parte, por exemplo um recorte que atravessa a dobra.", Cmd(C::SmUnfoldPartial(false))),
                 it("sm_redobrar_parcial", "Redobrar parcial", "Redobrar abas desdobradas", "Volta a dobrar as abas que um desdobrar parcial deixou planas.", Cmd(C::SmUnfoldPartial(true))),
             ]),
-            One(it("sm_aba_perfis", "Aba entre perfis", "Aba entre perfis (lofted)", "Escolha dois contornos fechados em planos diferentes: a chapa passa de um ao outro, como um funil ou adaptador, com a espessura da chapa. Facetada (dobradeira) ou lisa (estampada).", Cmd(C::SmLoftFlange))),
-            One(it("sm_converter_chapa", "Converter em chapa", "Converter sólido em chapa", "Reconhece a espessura constante e as dobras de um corpo e o trata como chapa, para usar abas, alívios e planificação sobre ele. Clique na face fixa.", Cmd(C::SmConvert))),
         ],
         Group::DesArquivo => vec![
+            One(it("des_folha", "Folha", "Nova folha", "Acrescenta uma folha no mesmo formato da atual.", Cmd(C::Dwg(50)))),
             One(it("des_novo", "Novo", "Novo desenho", "Folha A3 vazia; a origem das vistas é a peça ou montagem aberta (salva).", Cmd(C::Dwg(0)))),
             One(it("des_abrir", "Abrir", "Abrir desenho (.fkd, DXF, DWG, SVG)", "Abre um desenho salvo, com as vistas recalculadas pelos arquivos de origem, ou um DXF, DWG ou SVG como folha nova, com um esboço por camada.", Cmd(C::Dwg(1)))),
             One(it("des_salvar", "Salvar", "Salvar desenho   Ctrl+S", "Grava o .fkd (caminhos das peças relativos à pasta do desenho).", Cmd(C::Dwg(2)))),
@@ -336,19 +358,21 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("des_svg", "SVG", "Exportar SVG", "A folha atual em SVG (mm).", Cmd(C::Dwg(4))),
                 it("des_dxf", "DXF", "Exportar DXF", "A folha atual em DXF R12, camadas por tipo de linha (visível, fina, oculta, centro).", Cmd(C::Dwg(5))),
             ]),
-            One(it("des_folha", "Folha", "Nova folha", "Acrescenta uma folha no mesmo formato da atual.", Cmd(C::Dwg(50)))),
         ],
         Group::DesVistas => vec![
             One(it("des_tres_vistas", "3 vistas", "Frente, superior, lateral e isométrica", "Conjunto padrão em 1º diedro (ABNT/ISO E): clique onde fica a frente.", Cmd(C::Dwg(10)))),
-            One(it("des_vista", "Vista", "Vista única", "Vista na direção escolhida no painel (frente, trás, superior, inferior, laterais).", Cmd(C::Dwg(11)))),
+            Family("des_vista_unica", vec![
+                it("des_vista", "Vista", "Vista única", "Vista na direção escolhida no painel (frente, trás, superior, inferior, laterais).", Cmd(C::Dwg(11))),
+                it("des_iso", "Isométrica", "Vista isométrica", "Vista em perspectiva isométrica.", Cmd(C::Dwg(16))),
+                it("des_vista_camera", "Câmera", "Vista pela câmera do 3D", "Vista na direção em que a peça ou a montagem está no 3D agora (gire no 3D e clique na folha).", Cmd(C::Dwg(18))),
+            ]),
             One(it("des_projetada", "Projetada", "Vista projetada", "Selecione uma vista e clique ao lado: fica alinhada a ela.", Cmd(C::Dwg(12)))),
-            One(it("des_iso", "Isométrica", "Vista isométrica", "Vista em perspectiva isométrica.", Cmd(C::Dwg(16)))),
             One(it("des_corte", "Corte", "Vista em corte", "Selecione a vista, trace a linha de corte (clique em cada ponto; Enter conclui) e posicione: face cortada hachurada.", Cmd(C::Dwg(13)))),
             One(it("des_detalhe", "Detalhe", "Vista de detalhe", "Selecione a vista, clique o centro e o raio, e posicione a ampliação (2× a escala).", Cmd(C::Dwg(14)))),
-            One(it("des_planificada", "Planificada", "Vista planificada", "Chapa desdobrada vista de cima (peça de chapa como origem).", Cmd(C::Dwg(15)))),
-            One(it("des_esquema", "Esquema", "Esquema cinemático", "Montagem com juntas como origem: símbolos das juntas, barras entre elas e terra nas peças fixas (direção do painel).", Cmd(C::Dwg(17)))),
-            One(it("des_automatico", "Automático", "Desenho automático por regras", "Sem vistas, cria a frente, a superior e a lateral pela peça; depois cota o contorno (largura e altura na frente, profundidade nas projetadas), um diâmetro por tamanho de furo (n×), as marcas de centro e a tabela de furos num canto livre. O carimbo se preenche pela peça. Rodar de novo não duplica.", Cmd(C::Dwg(46)))),
-            One(it("des_vista_camera", "Câmera", "Vista pela câmera do 3D", "Vista na direção em que a peça ou a montagem está no 3D agora (gire no 3D e clique na folha).", Cmd(C::Dwg(18)))),
+            Family("des_vista_especial", vec![
+                it("des_planificada", "Planificada", "Vista planificada", "Chapa desdobrada vista de cima (peça de chapa como origem).", Cmd(C::Dwg(15))),
+                it("des_esquema", "Esquema", "Esquema cinemático", "Montagem com juntas como origem: símbolos das juntas, barras entre elas e terra nas peças fixas (direção do painel).", Cmd(C::Dwg(17))),
+            ]),
         ],
         Group::DesCotas => vec![
             One(it("des_cota_inteligente", "Inteligente", "Cota inteligente", "Uma ferramenta só: o arco, a aresta ou os dois vértices sob o mouse propõem o tipo; Tab troca; clique fixa o afastamento. Segue ativa até Esc ou clique direito.", Cmd(C::Dwg(26)))),
@@ -357,22 +381,29 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("des_cota_v", "Vertical", "Cota vertical", "Dois vértices (snap nas arestas projetadas).", Cmd(C::Dwg(21))),
                 it("des_cota_al", "Alinhada", "Cota alinhada", "Distância real entre dois vértices na vista.", Cmd(C::Dwg(22))),
             ]),
-            One(it("des_cota_r", "Raio", "Cota de raio", "Clique num arco da vista.", Cmd(C::Dwg(23)))),
-            One(it("des_cota_d", "Diâmetro", "Cota de diâmetro", "Clique num círculo da vista.", Cmd(C::Dwg(24)))),
+            Family("des_cota_circ", vec![
+                it("des_cota_r", "Raio", "Cota de raio", "Clique num arco da vista.", Cmd(C::Dwg(23))),
+                it("des_cota_d", "Diâmetro", "Cota de diâmetro", "Clique num círculo da vista.", Cmd(C::Dwg(24))),
+            ]),
             One(it("des_cota_ang", "Ângulo", "Cota angular", "Vértice e um ponto de cada lado.", Cmd(C::Dwg(25)))),
         ],
         Group::DesAnotacoes => vec![
             One(it("des_nota", "Nota", "Nota de texto", "Texto livre (várias linhas); chamada opcional no painel.", Cmd(C::Dwg(30)))),
-            Family("des_balao", vec![
-                it("des_balao", "Balão", "Balão de item", "Ponta na peça e posição do balão: número do item da lista de materiais.", Cmd(C::Dwg(31))),
-                it("des_baloes_auto", "Balões auto", "Balões automáticos", "Um balão por peça da montagem, na ordem da lista de materiais.", Cmd(C::Dwg(35))),
+            One(it("des_balao", "Balão", "Balão de item", "Ponta na peça e posição do balão: número do item da lista de materiais.", Cmd(C::Dwg(31)))),
+            Family("des_simbolo", vec![
+                it("des_rugosidade", "Rugosidade", "Símbolo de rugosidade", "√ com o valor (ex.: Ra 1,6) e chamada para a superfície.", Cmd(C::Dwg(32))),
+                it("des_solda", "Solda", "Símbolo de solda", "Linha de referência com o filete e a medida (ex.: a4).", Cmd(C::Dwg(33))),
             ]),
-            One(it("des_rugosidade", "Rugosidade", "Símbolo de rugosidade", "√ com o valor (ex.: Ra 1,6) e chamada para a superfície.", Cmd(C::Dwg(32)))),
-            One(it("des_solda", "Solda", "Símbolo de solda", "Linha de referência com o filete e a medida (ex.: a4).", Cmd(C::Dwg(33)))),
+            Family("des_gdt", vec![
+                it("des_gdt", "GD&T", "Tolerância geométrica", "Quadro de controle (ISO 1101) com chamada presa à aresta da vista: acompanha a peça e a vista.", Cmd(C::Dwg(36))),
+                it("des_datum", "Referência", "Símbolo de referência (datum)", "Triângulo na aresta e a letra no quadro; preso à vista.", Cmd(C::Dwg(37))),
+            ]),
             One(it("des_centro", "Centro", "Marca de centro", "Cruz com linhas de centro traço-ponto.", Cmd(C::Dwg(34)))),
             One(it("des_esboco", "Esboço", "Esboço na vista ou na folha", "Clique numa vista para prender o esboço a ela (anda e escala com a vista; cotas na medida do modelo) ou fora das vistas para deixá-lo solto na folha. Desenha com as ferramentas do sketch: linhas, retângulos, círculos, arcos, cotas e restrições, com tipo de linha por curva. Entra na exportação.", Cmd(C::Dwg(38)))),
-            One(it("des_gdt", "GD&T", "Tolerância geométrica", "Quadro de controle (ISO 1101) com chamada presa à aresta da vista: acompanha a peça e a vista.", Cmd(C::Dwg(36)))),
-            One(it("des_datum", "Referência", "Símbolo de referência (datum)", "Triângulo na aresta e a letra no quadro; preso à vista.", Cmd(C::Dwg(37)))),
+        ],
+        Group::DesGerar => vec![
+            One(it("des_automatico", "Automático", "Desenho automático por regras", "Sem vistas, cria a frente, a superior e a lateral pela peça; depois cota o contorno (largura e altura na frente, profundidade nas projetadas), um diâmetro por tamanho de furo (n×), as marcas de centro e a tabela de furos num canto livre. O carimbo se preenche pela peça. Rodar de novo não duplica.", Cmd(C::Dwg(46)))),
+            One(it("des_baloes_auto", "Balões auto", "Balões automáticos", "Um balão por peça da montagem, na ordem da lista de materiais.", Cmd(C::Dwg(35)))),
         ],
         Group::DesTabelas => vec![
             One(it("des_bom", "Materiais", "Lista de materiais (BOM)", "Itens da montagem com código, descrição, material e quantidade.", Cmd(C::Dwg(40)))),
@@ -418,33 +449,26 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("pmi_baloes", "Balões", "Balões automáticos (montagem)", "Um balão 3D por componente com o número fixo da lista de peças; refaz os balões anteriores.", Cmd(C::Pmi(10))),
             ]),
         ],
-        Group::Estrutural => {
-            let g = |k: GeoKind| {
-                let (i, n, b, a) = k.info();
-                it(i, n, b, a, Cmd(C::Geo(k)))
-            };
-            let fam = |ks: &[GeoKind]| -> Vec<Item> { ks.iter().map(|k| g(*k)).collect() };
-            vec![
-            // esqueleto: arame 3D direto daqui
-            Family("wf_ponto", fam(&[GeoKind::PtCoords, GeoKind::PtOnCurve, GeoKind::PtBetween, GeoKind::PtOffset, GeoKind::PtCenter, GeoKind::PtProject])),
-            Family("wf_linha", fam(&[GeoKind::LinePts, GeoKind::LineDir, GeoKind::LineNormal, GeoKind::LineAngle, GeoKind::LinePlanes])),
-            One(g(GeoKind::Polyline)),
-            Family("wf_plano", fam(&geo_ui::PLANES)),
-            Family("wf_spline", fam(&[GeoKind::Spline, GeoKind::Connect, GeoKind::Corner, GeoKind::CurveJoin])),
-            One(it("wf_repetir", "Repetir pontos", "Repetir pontos na curva", "Selecione uma curva e crie N pontos associativos ao longo dela (por quantidade ou espaçamento), com planos normais opcionais em cada ponto.", Cmd(C::PointRepeat))),
+        // o arame 3D de apoio vem das Referências da bancada (B436)
+        Group::Estrutural => vec![
             One(it("st_membro", "Membro", "Membro estrutural", "Perfil ao longo das linhas selecionadas (arame 3D): família, medida, ancoragem, rotação, deslocamentos e cantos.", Cmd(C::StMember))),
+            One(it("st_biblioteca", "Biblioteca", "Biblioteca de perfis", "Cadastre famílias de perfis padronizados (tamanhos, ancoragem e rotação padrão).", Cmd(C::StLibrary))),
+            One(it("st_escada", "Escada", "Escada e guarda-corpo", "Gera escada de degraus, descansos e guarda-corpo de plataforma por parâmetros e confere os itens do Anexo III da NR-12.", Cmd(C::StAcesso))),
+        ],
+        Group::StLigacoes => vec![
             Family("st_ligacao", vec![
                 it("st_placa", "Placa", "Placa de extremidade", "Fecha a ponta do membro mais perto do vértice selecionado (base de fixação).", Cmd(C::StPlate)),
                 it("st_reforco", "Reforço", "Reforço (gusset)", "Chapa triangular ou com chanfro de alívio no encontro de dois membros.", Cmd(C::StGusset)),
-                it("st_solda", "Cordão de solda", "Cordão de solda por faces", "Cordão entre dois conjuntos de faces: cosmético (alimenta o símbolo do desenho) ou sólido, contínuo ou intermitente.", Cmd(C::StWeld)),
             ]),
-            One(it("st_biblioteca", "Biblioteca", "Biblioteca de perfis", "Cadastre famílias de perfis padronizados (tamanhos, ancoragem e rotação padrão).", Cmd(C::StLibrary))),
             One(it("st_canto_meia", "Cantos", "Cantos da estrutura", "Lista os cantos onde os membros se encontram, realça cada um no 3D, troca o tratamento e quem continua, e agrupa cantos iguais.", Cmd(C::StCorners))),
-            One(it("st_escada", "Escada", "Escada e guarda-corpo", "Gera escada de degraus, descansos e guarda-corpo de plataforma por parâmetros e confere os itens do Anexo III da NR-12.", Cmd(C::StAcesso))),
+        ],
+        Group::StSolda => vec![
+            One(it("st_solda", "Cordão de solda", "Cordão de solda por faces", "Cordão entre dois conjuntos de faces: cosmético (alimenta o símbolo do desenho) ou sólido, contínuo ou intermitente.", Cmd(C::StWeld))),
+        ],
+        Group::StSaidas => vec![
             One(it("st_corte", "Lista de corte", "Lista de corte", "Comprimento, quantidade e barras de matéria-prima (emendas) de cada perfil.", Cmd(C::StCutList))),
             One(it("st_montagem", "Gerar montagem", "Gerar montagem da estrutura", "Uma peça por grupo de peças iguais e uma montagem com as instâncias posicionadas, na pasta da peça (gerar de novo atualiza).", Cmd(C::StAssembly))),
-            ]
-        }
+        ],
         Group::Cinematica => {
             let j = |icon, name, brief, adv, k: u8| it(icon, name, brief, adv, Cmd(C::AsmJoint(k)));
             vec![
@@ -534,6 +558,8 @@ pub fn entries(g: Group) -> Vec<Entry> {
             ]),
             One(it("hib_costurar", "Costurar", "Costurar superfície no corpo (Sew Surface)", "Acrescenta o volume entre a superfície e o corpo, ou remove o lado escolhido.", Cmd(C::SewSurface))),
             One(it("hib_preencher", "Preencher", "Preencher fronteiras (Boundary Fill)", "Sólido dos volumes fechados por superfícies, faces e planos; escolha as células que ficam de fora.", Cmd(C::BoundaryFill))),
+        ],
+        Group::Malha => vec![
             Family("hib_malha", vec![
                 it("hib_malha", "Malha", "Importar malha como corpo", "Traz STL, OBJ, PLY ou 3MF como corpo de malha, sem teto de triângulos e sem virar B-rep.", Cmd(C::MeshImport)),
                 it("malha_reparar", "Reparar malha", "Reparar malha", "Solda vértices, separa não manifold, corrige normais e fecha furos do corpo de malha.", Cmd(C::Malha(crate::malha_ui::AcaoMalha::Reparar))),
@@ -639,6 +665,8 @@ pub struct ToolState {
     pub check: bool,
     /// a chapa aberta está planificada (aceso o botão Planificar)
     pub chapa_plana: bool,
+    /// B441: o que o documento tem, para dizer o passo que falta a cada comando
+    pub ctx: crate::proximo::Contexto,
 }
 
 fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
@@ -731,8 +759,25 @@ pub fn colunas_para(comandos: usize, grupos: usize, altura: f32, celula_h: f32) 
     if precisa <= altura { 1 } else { 2 }
 }
 
-pub fn show_group(ui: &mut egui::Ui, g: Group, s: &mut Settings, st: &ToolState, forma: Forma) -> Vec<Act> {
+/// Entradas do grupo como aparecem na barra (B436): as restrições do sketch viram um botão só, com
+/// todas as restrições na seta (menu pequeno); os demais grupos ficam como estão.
+pub fn entradas_na_barra(g: Group, s: &Settings) -> Vec<Entry> {
     let list = custom_entries(g, s);
+    if g != Group::SkRestricoes {
+        return list;
+    }
+    let itens: Vec<Item> = list
+        .into_iter()
+        .flat_map(|e| match e {
+            Entry::One(i) => vec![i],
+            Entry::Family(_, v) => v,
+        })
+        .collect();
+    if itens.is_empty() { vec![] } else { vec![Entry::Family("sk_restricoes", itens)] }
+}
+
+pub fn show_group(ui: &mut egui::Ui, g: Group, s: &mut Settings, st: &ToolState, forma: Forma) -> Vec<Act> {
+    let list = if forma == Forma::Bloco { custom_entries(g, s) } else { entradas_na_barra(g, s) };
     show_block(ui, Some(g), g.label().to_string(), list, s, st, forma)
 }
 
@@ -748,9 +793,9 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
         for e in list.clone() {
             match e {
                 Entry::One(i) => {
-                    if tool_button(ui, i.icon, i.name, size, labels, is_selected(i.act, s, st), i.brief, i.advanced).clicked() {
-                        acts.push(i.act);
-                    }
+                    let r = tool_button(ui, i.icon, i.name, size, labels, is_selected(i.act, s, st), i.brief, i.advanced);
+                    // B441: sem o passo anterior, o botão esmaece e o clique explica o que falta
+                    crate::proximo::clique(ui, &r, i.act, &st.ctx, &mut acts);
                     // na coluna, o comando sem variações guarda o lugar da seta: os ícones ficam alinhados
                     if forma == Forma::Coluna {
                         ui.allocate_exact_size(egui::vec2(SETA, size + 6.), egui::Sense::hover());
@@ -764,9 +809,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
                     let r = tool_button(ui, i.icon, i.name, size, labels, sel, i.brief, i.advanced);
                     let icones: Vec<&str> = items.iter().map(|x| x.icon).collect();
                     crate::curso_ui::destaque_em_familia(ui, r.rect, &icones, i.icon);
-                    if r.clicked() {
-                        acts.push(i.act);
-                    }
+                    crate::proximo::clique(ui, &r, i.act, &st.ctx, &mut acts);
                     // setinha: abre as variações da família
                     let arrow = seta_da_familia(ui, size).on_hover_text(tr("variações"));
                     egui::Popup::menu(&arrow).show(|ui| {
@@ -775,9 +818,17 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
                                 ui.add(egui::Image::new(crate::icons::get(v.icon)).fit_to_exact_size(egui::vec2(22., 22.)));
                                 ui.selectable_label(k == cur, RichText::new(tr(v.brief)))
                             });
-                            if r.inner.clicked() {
+                            // B441: variante que ainda não pode rodar fica escolhida no botão, que explica o que falta
+                            let falta = crate::proximo::falta(v.act, &st.ctx);
+                            let r = match falta {
+                                Some(f) => r.inner.on_hover_text(tr(f.motivo)),
+                                None => r.inner,
+                            };
+                            if r.clicked() {
                                 s.set_family(key, k);
-                                acts.push(v.act);
+                                if falta.is_none() {
+                                    acts.push(v.act);
+                                }
                                 ui.close();
                             }
                         }
@@ -913,18 +964,11 @@ fn fecha_ao_escolher(acts: &[Act]) -> bool {
     !acts.is_empty()
 }
 
-/// Grupos visíveis com determinada posição: no modo sketch, os de sketch + Vista.
+/// Grupos visíveis com determinada posição, na ordem da bancada (B436, `organizacao`): no modo sketch,
+/// os do sketch; fora dele, os da bancada. Vista e seleção moram na barra de baixo (B434).
 pub fn groups_at(s: &Settings, d: Dock, sketching: bool) -> Vec<Group> {
-    Group::ALL
-        .iter()
-        .copied()
-        .filter(|g| s.dock(*g) == d)
-        // restrições ficam no menu rápido do botão direito (smart)
-        .filter(|g| *g != Group::SkRestricoes)
-        // vista e seleção são navegação: moram na barra de baixo (B434)
-        .filter(|g| !g.de_navegacao())
-        .filter(|g| if sketching { g.sketch_only() } else { !g.sketch_only() && g.in_bench(s.bench) })
-        .collect()
+    let todos = if sketching { crate::organizacao::DO_SKETCH.to_vec() } else { crate::organizacao::ordem(s.bench) };
+    todos.into_iter().filter(|g| s.dock(*g) == d).filter(|g| !g.de_navegacao()).collect()
 }
 
 /// Grupos de navegação (vista e seleção) que a barra de baixo mostra agora.
