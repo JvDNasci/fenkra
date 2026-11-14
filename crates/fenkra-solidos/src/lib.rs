@@ -65,6 +65,7 @@ pub mod eixos;
 pub mod selecao_regras;
 pub mod chaveta_rasgos;
 pub mod calculo_projeto;
+pub mod calculo_pecas;
 pub mod profile;
 pub mod refs;
 pub mod papeis;

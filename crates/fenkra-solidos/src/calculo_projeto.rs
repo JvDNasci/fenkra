@@ -328,7 +328,7 @@ impl Extremidade {
             Extremidade::EsquadradaRetificada => "Esquadrada e retificada",
         }
     }
-    fn espiras_totais(self, na: f64) -> f64 {
+    pub fn espiras_totais(self, na: f64) -> f64 {
         match self {
             Extremidade::Simples => na,
             _ => na + 2.,

@@ -177,4 +177,13 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("σ = M·c/I na fibra mais afastada.", "σ = M·c/I at the farthest fiber."),
     ("FS à flexão", "Bending SF"),
     ("Escoamento dividido pela tensão máxima.", "Yield divided by the maximum stress."),
+    ("Inserir eixo e cubo", "Insert shaft and hub"),
+    ("Põe na montagem o eixo e o cubo da união, nas medidas nominais, com o ajuste ISO 286 e a interferência nas propriedades das peças.", "Puts the shaft and hub of the joint into the assembly, at nominal size, with the ISO 286 fit and the interference in the part properties."),
+    ("Inserir a mola", "Insert the spring"),
+    ("Põe na montagem a mola no comprimento livre, com fio, diâmetro e espiras como parâmetros. As pontas saem sem encostar (modelo simplificado).", "Puts the spring into the assembly at free length, with wire, diameter and coils as parameters. The end coils are not closed (simplified model)."),
+    ("Inserir a barra", "Insert the bar"),
+    ("Põe na montagem a barra com a seção e o vão calculados.", "Puts the bar with the calculated section and span into the assembly."),
+    ("A seção genérica não tem forma: escolha retangular, circular ou tubo para inserir a barra.", "The generic section has no shape: choose rectangular, circular or tube to insert the bar."),
+    ("Inserido na montagem", "Inserted into the assembly"),
+    ("salve a montagem antes: as peças calculadas são gravadas na pasta dela", "save the assembly first: the calculated parts are written to its folder"),
 ];
