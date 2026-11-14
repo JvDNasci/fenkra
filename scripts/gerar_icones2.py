@@ -275,6 +275,8 @@ def desenhos():
     # B148: recursos de plástico; o traço de base é a parede/piso que já existia
     ic("pl_boss", B="M6 40h36M17 28l-6 12M31 28l6 12", R="M17 40l2-24h10l2 24M22 16v12h4v-12")
     ic("pl_snap", B="M6 40h36M30 22h10", R="M18 40V10h5l6 6h-6v24")
+    ic("pl_lip", B="M8 40V20M40 40V20M8 20h8M32 20h8", R="M16 20V10h4v10M28 20V10h4v10")
+    ic("pl_ranhura", B="M8 8v20M40 8v20M8 28h6M34 28h6", R="M14 28v10h6V28M28 28v10h6V28")
     ic("pl_grelha", B=Q(6, 8, 36, 32), R=L((14, 14), (14, 34)) + L((20, 14), (20, 34)) + L((26, 14), (26, 34)) + L((32, 14), (32, 34)))
     ic("an_conexao", B="M6 30c6-10 12-10 16-10M42 30c-6-10-12-10-16-10", R="M24 10v28M18 14l6-4 6 4M18 34l6 4 6-4")
     ic("an_desvio", B="M6 34c10-12 26-12 36 0", R="M6 22c10-12 26-12 36 0M14 17v9M24 14v9M34 17v9")
@@ -762,7 +764,7 @@ SO_INTERFACE = {"sm_aba_perfis", "sm_desdobrar_parcial", "sm_redobrar_parcial", 
 SO_INTERFACE |= {"filete_assimetrico"}
 SO_INTERFACE |= {"an_inclinacao", "an_isofotas", "an_dfm"}
 SO_INTERFACE |= {"pl_regra"}
-SO_INTERFACE |= {"pl_boss", "pl_snap", "pl_grelha"}
+SO_INTERFACE |= {"pl_boss", "pl_snap", "pl_grelha", "pl_lip", "pl_ranhura"}
 SO_INTERFACE |= {"asm_chaveta", "asm_calculo", "pmi_captura", "pmi_captura_modelo"}
 SO_INTERFACE |= {"asm_conjunto", "asm_regras_cor"}
 SO_INTERFACE |= {"verificar"}

@@ -18,6 +18,7 @@ pub enum RecursoPlastico {
     Boss(Boss),
     Snap(Snap),
     Grelha(Grelha),
+    Lip(Lip),
 }
 
 /// Boss: pino oco para parafuso ou inserto, em cada ponto do sketch, crescendo pela normal do plano.
@@ -168,6 +169,39 @@ impl Grelha {
     }
 }
 
+/// Lip e ranhura com folga, na borda de uma caixa partida em duas.
+///
+/// O sketch traz o contorno externo da parede no plano da borda. O lip é um anel que sobe da borda,
+/// entre `recuo` e `recuo + largura` para dentro do contorno. A ranhura é o encaixe do outro lado: o
+/// mesmo anel alargado pela folga dos dois lados e afundado pela altura mais a folga, para o lip da
+/// outra metade entrar sem encostar.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Lip {
+    /// o perfil fechado deste sketch é o contorno externo da parede
+    pub sketch: Id,
+    /// ranhura (tira material) em vez de lip (acrescenta)
+    #[serde(default)]
+    pub ranhura: bool,
+    /// distância do contorno externo até a face de fora do lip, mm
+    pub recuo: String,
+    /// largura do lip, mm
+    pub largura: String,
+    /// altura do lip (a ranhura afunda isso mais a folga), mm
+    pub altura: String,
+    /// folga de cada lado e no fundo, mm
+    pub folga: String,
+    /// cresce (ou afunda) para o outro lado do plano
+    #[serde(default)]
+    pub reverse: bool,
+}
+
+impl Lip {
+    pub fn novo(sketch: Id, regra: Option<&RegraPlastica>, ranhura: bool) -> Lip {
+        let meia = if regra.is_some() { "plastico_espessura/2" } else { "1" };
+        Lip { sketch, ranhura, recuo: meia.into(), largura: meia.into(), altura: "2".into(), folga: "0.1".into(), reverse: false }
+    }
+}
+
 /// Altura acima da qual o boss pede nervuras, em diâmetros.
 pub const BOSS_NERVURA_DIAMETROS: f64 = 3.;
 
@@ -177,6 +211,8 @@ impl RecursoPlastico {
             RecursoPlastico::Boss(_) => "Boss",
             RecursoPlastico::Snap(_) => "Snap-fit",
             RecursoPlastico::Grelha(_) => "Grelha",
+            RecursoPlastico::Lip(l) if l.ranhura => "Ranhura de encaixe",
+            RecursoPlastico::Lip(_) => "Lip",
         }
     }
 
@@ -185,6 +221,7 @@ impl RecursoPlastico {
             RecursoPlastico::Boss(_) => "⊚",
             RecursoPlastico::Snap(_) => "↾",
             RecursoPlastico::Grelha(_) => "▥",
+            RecursoPlastico::Lip(_) => "⊓",
         }
     }
 
@@ -193,6 +230,7 @@ impl RecursoPlastico {
             RecursoPlastico::Boss(b) => b.sketch,
             RecursoPlastico::Snap(s) => s.sketch,
             RecursoPlastico::Grelha(g) => g.sketch,
+            RecursoPlastico::Lip(l) => l.sketch,
         }
     }
 
@@ -221,6 +259,12 @@ impl RecursoPlastico {
                     }
                 }
             }
+            RecursoPlastico::Lip(l) => {
+                ids(&mut l.sketch);
+                for e in [&mut l.recuo, &mut l.largura, &mut l.altura, &mut l.folga] {
+                    exprs(e)
+                }
+            }
         }
     }
 
@@ -230,6 +274,8 @@ impl RecursoPlastico {
             RecursoPlastico::Boss(b) => vec![(Grandeza::Saida, b.saida.as_str(), "saída do boss"), (Grandeza::Raio, b.raio.as_str(), "filete da base"), (Grandeza::Nervura, b.nervura_esp.as_str(), "nervura do boss")],
             RecursoPlastico::Snap(s) => vec![(Grandeza::Parede, s.espessura.as_str(), "espessura do snap"), (Grandeza::Raio, s.raio.as_str(), "filete da raiz")],
             RecursoPlastico::Grelha(g) => vec![(Grandeza::Nervura, g.nervura.as_str(), "barra da grelha")],
+            // o lip segue a parede pela fórmula (metade dela), mas não é uma parede: nada a conferir
+            RecursoPlastico::Lip(_) => vec![],
         }
     }
 
@@ -239,6 +285,7 @@ impl RecursoPlastico {
             RecursoPlastico::Boss(b) => vec![(Grandeza::Saida, &mut b.saida), (Grandeza::Raio, &mut b.raio), (Grandeza::Nervura, &mut b.nervura_esp)],
             RecursoPlastico::Snap(s) => vec![(Grandeza::Parede, &mut s.espessura), (Grandeza::Raio, &mut s.raio)],
             RecursoPlastico::Grelha(g) => vec![(Grandeza::Nervura, &mut g.nervura)],
+            RecursoPlastico::Lip(_) => vec![],
         }
     }
 }

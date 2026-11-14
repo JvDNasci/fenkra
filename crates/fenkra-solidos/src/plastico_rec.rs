@@ -11,7 +11,7 @@
 //! entram sozinhas quando a altura passa de 3 diâmetros. Tudo é unido ao corpo do coletor.
 
 use super::*;
-use fenkra_core::recurso_plastico::{Boss, Grelha, RecursoPlastico, Snap, BOSS_NERVURA_DIAMETROS};
+use fenkra_core::recurso_plastico::{Boss, Grelha, Lip, RecursoPlastico, Snap, BOSS_NERVURA_DIAMETROS};
 use fenkra_kernel::Seg2;
 
 /// Medidas do boss já avaliadas e conferidas.
@@ -290,6 +290,38 @@ fn barras(c: V3, e: V3, f: V3, passo: f64, w: f64, meia: f64, v: V3) -> Result<S
     Ok(s)
 }
 
+/// Medidas do lip já avaliadas: a faixa (de fora e de dentro, medidas do contorno para dentro) e a
+/// profundidade, já com a folga quando é ranhura.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LipMedidas {
+    pub fora: f64,
+    pub dentro: f64,
+    pub altura: f64,
+}
+
+pub fn lip_medidas(l: &Lip, vars: &Vars) -> Result<LipMedidas, String> {
+    let recuo = ev(&l.recuo, vars, "recuo do lip")?;
+    let largura = ev(&l.largura, vars, "largura do lip")?;
+    let altura = ev(&l.altura, vars, "altura do lip")?;
+    let folga = ev(&l.folga, vars, "folga do lip")?;
+    if recuo < 0. || !(largura > 0. && altura > 0.) || folga < 0. {
+        return Err("o lip precisa de largura e altura positivas, e recuo e folga não negativos".into());
+    }
+    Ok(if l.ranhura {
+        LipMedidas { fora: recuo - folga, dentro: recuo + largura + folga, altura: altura + folga }
+    } else {
+        LipMedidas { fora: recuo, dentro: recuo + largura, altura }
+    })
+}
+
+/// Contorno deslocado para dentro por `d` (negativo vai para fora); zero devolve o próprio contorno.
+fn para_dentro(face: &Shape, d: f64) -> Result<Shape, String> {
+    if d.abs() < 1e-12 {
+        return Ok(face.clone());
+    }
+    face.offset_face(-d).map_err(|e| format!("o contorno do lip não aceita o recuo de {d} mm: {}", e.0))
+}
+
 fn cruz(a: V3, b: V3) -> V3 {
     [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
@@ -327,6 +359,7 @@ impl Ctx<'_> {
             RecursoPlastico::Boss(b) => self.plastico_boss(f, b),
             RecursoPlastico::Snap(s) => self.plastico_snap(f, s),
             RecursoPlastico::Grelha(g) => self.plastico_grelha(f, g),
+            RecursoPlastico::Lip(l) => self.plastico_lip(f, l),
         }
     }
 
@@ -388,6 +421,27 @@ impl Ctx<'_> {
             tool = tool.boolean(&barras(c0, fy, e, m.passo, m.nervura, meia, v)?, Bool::Cut).map_err(k)?;
         }
         self.apply(f.target, tool, BoolOp::Cut, f.id)?;
+        Ok(None)
+    }
+
+    fn plastico_lip(&mut self, f: &Feature, l: &Lip) -> Result<Option<String>, String> {
+        let k = |e: KernelError| e.0;
+        let (frame, sk) = self.sketch(l.sketch)?;
+        if sk.loops.is_empty() {
+            return Err("o sketch do lip precisa do contorno externo fechado da parede".into());
+        }
+        let m = lip_medidas(l, &self.vars)?;
+        let contorno = Shape::face(&frame, &sk.loops).map_err(k)?;
+        let fora = para_dentro(&contorno, m.fora)?;
+        let dentro = para_dentro(&contorno, m.dentro)?;
+        // o lip sobe pela normal; a ranhura afunda contra ela
+        let sobe = if l.reverse { frame.normal.map(|x| -x) } else { frame.normal };
+        let dir = if l.ranhura { sobe.map(|x| -x) } else { sobe };
+        let anel = fora.extrude(dir, m.altura, 0.).map_err(k)?;
+        // o miolo passa 1 mm das duas pontas: a booleana não fica com face coincidente
+        let miolo = dentro.extrude(dir, m.altura + 1., 1.).map_err(k)?;
+        let tool = anel.boolean(&miolo, Bool::Cut).map_err(k)?;
+        self.apply(f.target, tool, if l.ranhura { BoolOp::Cut } else { BoolOp::Add }, f.id)?;
         Ok(None)
     }
 

@@ -78,6 +78,16 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
             g.cruzada = true;
             Some(DemoPrevia::Comando(FeatureKind::Plastico(recurso_plastico::RecursoPlastico::Grelha(g))))
         }
+        "lip" | "ranhura" => {
+            caixa(doc);
+            let topo = doc.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "30");
+            let sk = sketch(doc, PlaneRef::Datum(topo), &|data, al| {
+                data.add_rect(&mut &mut *al, [-30., -20.], [30., 20.], false);
+            });
+            let mut l = recurso_plastico::Lip::novo(sk, doc.plastico.as_ref(), nome == "ranhura");
+            l.altura = s("3");
+            Some(DemoPrevia::Comando(FeatureKind::Plastico(recurso_plastico::RecursoPlastico::Lip(l))))
+        }
         _ => None,
     }
 }

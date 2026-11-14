@@ -385,3 +385,74 @@ fn grelha_com_barra_fora_da_regra_avisa_e_passo_ruim_e_erro() {
         s => panic!("esperava erro, veio {s:?}"),
     }
 }
+
+// ------------------------------------------------------------------ lip e ranhura
+
+/// Caixa 60 x 40 x 20 com casca da regra aberta em cima e o contorno externo no plano da borda (z = 20).
+fn caixa_borda(regra: Option<RegraPlastica>) -> (Document, Id) {
+    let mut d = Document::new("caixa_lip");
+    d.plastico = regra;
+    let a = sk_rect(&mut d, XY, [0., 0.], [60., 40.]);
+    d.add_feature(ext(a, BoolOp::Add, "20"));
+    d.add_feature(FeatureKind::Shell(Shell { espessuras: vec![], faces: vec![[30., 20., 20.]], thickness: "plastico_espessura".into(), outward: false, face_keys: vec![], closed: false, regras: vec![] }));
+    let topo = d.add_offset_plane(XY, "20");
+    let c = sk_rect(&mut d, PlaneRef::Datum(topo), [0., 0.], [60., 40.]);
+    (d, c)
+}
+
+fn vol_caixa_aberta(t: f64) -> f64 {
+    60. * 40. * 20. - (60. - 2. * t) * (40. - 2. * t) * (20. - t)
+}
+
+/// Área entre dois retângulos 60 x 40 recuados `a` e `b` para dentro.
+fn anel(a: f64, b: f64) -> f64 {
+    (60. - 2. * a) * (40. - 2. * a) - (60. - 2. * b) * (40. - 2. * b)
+}
+
+#[test]
+fn lip_sobe_da_borda_na_metade_de_dentro_da_parede() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let r = abs();
+    let (mut d, sk) = caixa_borda(Some(r.clone()));
+    let l = Lip::novo(sk, Some(&r), false);
+    assert_eq!(l.recuo, "plastico_espessura/2");
+    let id = d.add_feature(FeatureKind::Plastico(RecursoPlastico::Lip(l)));
+    // parede 2: lip de 1 a 2 mm para dentro do contorno, 2 mm de altura
+    let v = vol_caixa_aberta(2.) + anel(1., 2.) * 2.;
+    confere("lip", &d, &esperado(v, [60., 40., 22.], [0.; 3]));
+    // a regra mais grossa leva a casca e o lip juntos
+    d.plastico.as_mut().unwrap().espessura = 3.;
+    let v3 = vol_caixa_aberta(3.) + anel(1.5, 3.) * 2.;
+    confere("lip da regra nova", &d, &esperado(v3, [60., 40., 22.], [0.; 3]));
+    // virar ranhura: o mesmo anel com 0,1 de folga dos lados e no fundo; por dentro passa da parede
+    d.plastico.as_mut().unwrap().espessura = 2.;
+    if let FeatureKind::Plastico(RecursoPlastico::Lip(l)) = &mut d.features.iter_mut().find(|f| f.id == id).unwrap().kind {
+        l.ranhura = true;
+    }
+    let vr = vol_caixa_aberta(2.) - anel(0.9, 2.) * 2.1;
+    confere("ranhura", &d, &esperado(vr, [60., 40., 20.], [0.; 3]));
+}
+
+#[test]
+fn lip_e_ranhura_encaixam_com_a_folga() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let r = abs();
+    let vars = r.vars(&Default::default());
+    let lip = plastico_rec::lip_medidas(&Lip::novo(Id(1), Some(&r), false), &vars).unwrap();
+    let ran = plastico_rec::lip_medidas(&Lip::novo(Id(1), Some(&r), true), &vars).unwrap();
+    // a ranhura envolve o lip com a folga de cada lado e no fundo (1e-6)
+    assert!((lip.fora - ran.fora - 0.1).abs() < 1e-6 && (ran.dentro - lip.dentro - 0.1).abs() < 1e-6);
+    assert!((ran.altura - lip.altura - 0.1).abs() < 1e-6);
+    // sem o contorno é erro nomeado
+    let (mut d, sk) = caixa_borda(Some(r));
+    let id = d.add_feature(FeatureKind::Plastico(RecursoPlastico::Lip(Lip::novo(sk, d.plastico.as_ref(), false))));
+    d.features.retain(|f| f.id != sk);
+    match recompute(&d).status.get(&id) {
+        Some(Status::Error(m)) => assert!(m.contains("referência perdida"), "{m}"),
+        s => panic!("esperava erro de referência, veio {s:?}"),
+    }
+}

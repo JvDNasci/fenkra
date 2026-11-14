@@ -23,6 +23,8 @@ pub enum Tipo {
     Boss,
     Snap,
     Grelha,
+    Lip,
+    Ranhura,
 }
 
 /// Comando novo: nasce com as fórmulas da regra quando a peça tem uma.
@@ -32,6 +34,8 @@ pub fn criar(doc: &Document, t: Tipo, sketch: Id) -> FeatureKind {
         Tipo::Boss => RecursoPlastico::Boss(Boss::novo(sketch, r)),
         Tipo::Snap => RecursoPlastico::Snap(Snap::novo(sketch, r)),
         Tipo::Grelha => RecursoPlastico::Grelha(Grelha::novo(sketch, r)),
+        Tipo::Lip => RecursoPlastico::Lip(Lip::novo(sketch, r, false)),
+        Tipo::Ranhura => RecursoPlastico::Lip(Lip::novo(sketch, r, true)),
     })
 }
 
@@ -40,6 +44,8 @@ pub fn icone(p: &RecursoPlastico) -> &'static str {
         RecursoPlastico::Boss(_) => "pl_boss",
         RecursoPlastico::Snap(_) => "pl_snap",
         RecursoPlastico::Grelha(_) => "pl_grelha",
+        RecursoPlastico::Lip(l) if l.ranhura => "pl_ranhura",
+        RecursoPlastico::Lip(_) => "pl_lip",
     }
 }
 
@@ -149,6 +155,26 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, idx: usize, p: &mut RecursoPlas
             opcional(ui, "profundidade própria", "Profundidade da grelha", &mut g.profundidade, "2", vars, "mm");
             nota(ui, "Sem profundidade própria, a grelha atravessa a parede no centro da região e para no vão de dentro.");
         }
+        RecursoPlastico::Lip(l) => {
+            section(ui, "Suporte");
+            crate::feat_ui::sketch_pick(ui, "pl_lip_sk", "Contorno", doc, idx, &mut l.sketch);
+            nota(ui, "O perfil fechado do sketch é o contorno externo da parede, no plano da borda.");
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut l.ranhura, false, tr("lip (acrescenta)"));
+                ui.radio_value(&mut l.ranhura, true, tr("ranhura (tira)"));
+            });
+            check(ui, &mut l.reverse, "para o outro lado do plano");
+            section(ui, "Parâmetros");
+            expr(ui, "Recuo do lip", &mut l.recuo, vars, "mm");
+            expr(ui, "Largura do lip", &mut l.largura, vars, "mm");
+            expr(ui, "Altura do lip", &mut l.altura, vars, "mm");
+            expr(ui, "Folga do lip", &mut l.folga, vars, "mm");
+            nota(ui, if l.ranhura {
+                "A ranhura é o lip alargado pela folga dos dois lados e afundado pela altura mais a folga: o lip da outra metade entra sem encostar."
+            } else {
+                "Use os mesmos valores na ranhura da outra metade: ela já soma a folga."
+            });
+        }
     }
 }
 
@@ -174,6 +200,18 @@ pub fn itens() -> Vec<crate::toolbar::Item> {
         brief: "Grelha de ventilação",
         advanced: "Vaza a região fechada do sketch através da parede, com borda cheia e barras paralelas ou cruzadas da largura da nervura da regra plástica.",
         act: Act::Cmd(Cmd::Plastico(Tipo::Grelha)),
+    }, Item {
+        icon: "pl_lip",
+        name: "Lip",
+        brief: "Lip na borda da caixa",
+        advanced: "Anel que sobe da borda, recuado do contorno externo da parede, para encaixar na ranhura da outra metade; recuo e largura seguem a parede da regra plástica.",
+        act: Act::Cmd(Cmd::Plastico(Tipo::Lip)),
+    }, Item {
+        icon: "pl_ranhura",
+        name: "Ranhura de encaixe",
+        brief: "Ranhura com folga para o lip",
+        advanced: "O mesmo anel do lip alargado pela folga dos dois lados e afundado pela altura mais a folga, na borda da outra metade da caixa.",
+        act: Act::Cmd(Cmd::Plastico(Tipo::Ranhura)),
     }]
 }
 
@@ -203,6 +241,11 @@ pub fn seta(r: &fenkra_solidos::RecomputeResult, p: &RecursoPlastico) -> Option<
             let e = x * th.cos() + y * th.sin();
             Some((c, n.cross(e), g.passo.clone(), "Passo das barras"))
         }
+        RecursoPlastico::Lip(l) => {
+            let p = glam::Vec3::from(*s.lines.first()?);
+            let sobe = if l.reverse { -n } else { n };
+            Some((p, if l.ranhura { -sobe } else { sobe }, l.altura.clone(), "Altura do lip"))
+        }
     }
 }
 
@@ -211,5 +254,6 @@ pub fn definir_seta(p: &mut RecursoPlastico, valor: String) {
         RecursoPlastico::Boss(b) => b.altura = valor,
         RecursoPlastico::Snap(s) => s.comprimento = valor,
         RecursoPlastico::Grelha(g) => g.passo = valor,
+        RecursoPlastico::Lip(l) => l.altura = valor,
     }
 }
