@@ -77,6 +77,7 @@ mod edicao_direta;
 pub mod reconhece;
 pub mod dfm;
 pub mod dfm_geo;
+pub mod dfm_saida;
 pub mod padrao;
 pub mod furo_norma;
 pub mod rosca_furo;

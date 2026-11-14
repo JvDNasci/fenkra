@@ -9633,6 +9633,7 @@ impl eframe::App for App {
                 };
                 let mut s = crate::medir_quadros::fase("cena", || scene::build(scene_doc, r, &opts));
                 crate::dfm_ui::decorar(&self.settings, r, &ctx.global_style().visuals, &mut s);
+                crate::saida_faces::decorar(&self.settings, r, &ctx.global_style().visuals, &mut s);
                 crate::comparar_ui::decorar(&ctx.global_style().visuals, &mut s);
                 if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {
                     crate::previa::reter_ultima(&mut sess.ultima_valida, &mut s, r.status.get(&sess.id));

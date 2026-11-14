@@ -233,6 +233,8 @@ mod textos_paineis;
 mod textos_arvore_soltura;
 mod dfm_ui;
 mod sup_inclinacao;
+mod saida_faces;
+mod textos_plastico;
 mod textos_features;
 mod tabela_projeto_ui;
 mod arestas_ui;

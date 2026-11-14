@@ -87,6 +87,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_furo_rosca::TEXTOS.iter())
             .chain(crate::textos_edicao_direta::TEXTOS.iter())
             .chain(crate::textos_dfm::TEXTOS.iter())
+            .chain(crate::textos_plastico::TEXTOS.iter())
             .chain(crate::textos_paineis::TEXTOS.iter())
             .chain(crate::textos_arvore_soltura::TEXTOS.iter())
             .chain(crate::textos_interface2::TEXTOS.iter())
