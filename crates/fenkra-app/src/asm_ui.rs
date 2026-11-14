@@ -293,6 +293,8 @@ pub struct AsmState {
     pub(crate) aviso: Option<(String, bool)>,
     // ---- simulação
     pub sim_open: bool,
+    /// posições nomeadas: área 3D e exportação em andamento (B123)
+    pub posicoes_ui: crate::asm_posicoes::Estado,
     pub sim_frames: Vec<kin::Frame>,
     pub sim_t: f64,
     pub sim_t1: f64,
@@ -301,7 +303,7 @@ pub struct AsmState {
     /// componente cuja velocidade/aceleração é mostrada
     pub sim_track: Option<Id>,
     /// posições antes de tocar a simulação (voltam ao fechar)
-    sim_rest: Option<Vec<(Id, Placement)>>,
+    pub(crate) sim_rest: Option<Vec<(Id, Placement)>>,
     // ---- exibição (estados de exibição)
     /// estado de exibição em uso (visibilidade, cores, explosão)
     pub live: fenkra_montagem::display::DisplayState,
@@ -426,6 +428,7 @@ impl AsmState {
             drag_start: None,
             snapshot: None,
             sim_open: false,
+            posicoes_ui: Default::default(),
             sim_frames: vec![],
             sim_t: 0.,
             sim_t1: 2.,
@@ -635,6 +638,11 @@ impl AsmState {
         self.compondo = true;
         self.envio_pendente = false;
         self.ultimo_envio = Some(std::time::Instant::now());
+    }
+
+    /// A vista mostra a montagem de agora: nada para recompor nem a caminho.
+    pub fn vista_em_dia(&self) -> bool {
+        !self.dirty && !self.envio_pendente && !self.compondo
     }
 
     /// Progresso da composição em andamento: componentes prontos e total.
@@ -4183,6 +4191,7 @@ pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::re
         return;
     }
     eixos_da_serie(st, ui, rect, cam);
+    st.posicoes_ui.area_3d = Some(rect);
     // restrição rápida: dois elementos de peças diferentes escolhidos (opções calculadas depois
     // da viewport; o clique vira ação aplicada lá)
     if !st.view_only && st.cmd.is_none() && app.picks.len() == 2 && st.quick.as_ref().is_some_and(|q| q.0 == app.picks) {
@@ -4217,6 +4226,7 @@ pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::re
 /// Janela de simulação: leis no tempo, quadros, reprodução, análise de GDL e gráfico de
 /// velocidade/aceleração do componente acompanhado.
 pub fn sim_window(app: &mut App, ctx: &egui::Context) {
+    crate::asm_posicoes::passo(app, ctx);
     let Some(st) = app.asm.as_mut() else { return };
     if !st.sim_open {
         return;
@@ -4246,6 +4256,7 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
                 .color(if ok { Color32::from_rgb(120, 210, 130) } else { crate::theme::st_warn() }),
             );
             crate::transmissao_ui::cadeia_na_simulacao(ui, st);
+            crate::asm_posicoes::secao(st, ui);
             crate::editor::section(ui, "Comandos (leis no tempo t, em segundos)");
             for j in st.asm.joints.iter_mut().filter(|j| !j.suppressed) {
                 let (ca, cl) = j.kind.drives();

@@ -223,7 +223,7 @@ fn faixa_lida<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Faixa, D::Error>
 }
 
 /// Grau de liberdade de uma junta, do jeito que se mede e se limita.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub enum Grau {
     /// giro em volta do eixo z da junta
     Giro,

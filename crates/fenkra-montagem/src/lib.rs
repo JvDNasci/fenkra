@@ -30,6 +30,7 @@ pub mod load;
 pub mod lod;
 pub mod manipulador;
 pub mod pilhas;
+pub mod posicoes;
 pub mod proposta;
 pub mod flexivel;
 pub mod parametros;
@@ -580,6 +581,9 @@ pub struct Assembly {
     /// elementos de transmissão gerados (B340): os parâmetros ficam aqui para editar depois
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub transmissoes: Vec<transmissao::RegistroTransmissao>,
+    /// posições nomeadas, na ordem da lista (B123)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub posicoes: Vec<posicoes::Posicao>,
 }
 
 /// Qual configuração da peça um componente usa. O nome precisa existir na tabela da peça: se não
@@ -704,7 +708,7 @@ impl Assembly {
     }
 
     pub fn new(name: &str) -> Self {
-        Assembly { format_version: 1, name: name.into(), uid: fenkra_core::formato::UidDoc::novo(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], conjuntos: vec![], regras_cor: vec![], interf: Default::default(), relational: false, politicas_link: vec![], params_ligados: vec![], flex: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![], transmissoes: vec![] }
+        Assembly { format_version: 1, name: name.into(), uid: fenkra_core::formato::UidDoc::novo(), props: Properties::default(), next_id: 1, nodes: vec![], mates: vec![], rigid: vec![], params: vec![], patterns: vec![], joints: vec![], couplings: vec![], display_states: vec![], animations: vec![], explosoes: vec![], pmi: vec![], items: vec![], pmi_captures: vec![], features: vec![], pilhas: vec![], conjuntos: vec![], regras_cor: vec![], interf: Default::default(), relational: false, politicas_link: vec![], params_ligados: vec![], flex: vec![], religacoes: vec![], geometria: None, esqueleto: None, contexto_livre: false, origem_oculta: false, configs: vec![], transmissoes: vec![], posicoes: vec![] }
     }
 
     /// Configuração escolhida para o componente (vazio = a ativa da própria peça).
