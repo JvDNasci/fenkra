@@ -1,0 +1,31 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//! Traduções de mudanças e pacote de liberação (B141). Tabela própria para não disputar `i18n.rs`.
+
+pub static TEXTOS: &[(&str, &str)] = &[
+    ("Mudanças e liberação", "Changes and release"),
+    ("Pedidos de mudança (ECR), avisos de mudança (ECN) e o pacote de liberação com STEP, PDF, DXF e lista de peças.", "Change requests (ECR), change notices (ECN) and the release package with STEP, PDF, DXF and parts list."),
+    ("Pedidos e avisos de mudança", "Change requests and notices"),
+    ("Pacote de liberação", "Release package"),
+    ("O registro de mudanças não pôde ser lido", "The change register could not be read"),
+    ("Nenhum pedido de mudança.", "No change requests."),
+    ("Aberto", "Open"),
+    ("Rejeitado", "Rejected"),
+    ("Implementado", "Implemented"),
+    ("Decidido por", "Decided by"),
+    ("Justificativa da decisão", "Reason for the decision"),
+    ("Rejeitar", "Reject"),
+    ("O que mudou (vai no aviso)", "What changed (goes in the notice)"),
+    ("Emitir aviso de mudança", "Issue change notice"),
+    ("Registra as revisões de antes e depois de cada documento. Só sai quando todos já ganharam revisão nova.", "Records the before and after revisions of each document. Only issued when all of them have a new revision."),
+    ("Novo pedido de mudança", "New change request"),
+    ("Motivo: o problema e o que se propõe", "Reason: the problem and what is proposed"),
+    ("Documentos afetados", "Affected documents"),
+    ("Abrir pedido", "Open request"),
+    ("Só peças liberadas, na revisão", "Only released parts, at their revision"),
+    ("Desligado, entram todas as peças na versão de trabalho (pacote para conferência, não para fabricar).", "When off, every part goes in at its working version (package for review, not for manufacturing)."),
+    ("Nenhum: pelas regras acima", "None: by the rules above"),
+    ("Aviso de mudança", "Change notice"),
+    ("Gerando o pacote… as peças são recalculadas.", "Generating the package… the parts are recomputed."),
+    ("Gerar pacote de liberação", "Generate release package"),
+    ("Pacote gravado", "Package saved"),
+];

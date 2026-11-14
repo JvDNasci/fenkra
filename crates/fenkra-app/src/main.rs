@@ -218,6 +218,7 @@ mod textos_chaveta;
 mod asm_encaixe;
 mod textos_plm;
 mod textos_arvore_produto;
+mod textos_liberacao;
 mod textos_curso;
 mod curso;
 mod curso_exemplos;

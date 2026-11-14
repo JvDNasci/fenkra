@@ -69,6 +69,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_fechamont::TEXTOS.iter())
             .chain(crate::textos_plm::TEXTOS.iter())
             .chain(crate::textos_arvore_produto::TEXTOS.iter())
+            .chain(crate::textos_liberacao::TEXTOS.iter())
             .chain(crate::textos_curso::TEXTOS.iter())
             .chain(crate::textos_pmi::TEXTOS.iter())
             .chain(crate::textos_pmi_consultor::TEXTOS.iter())

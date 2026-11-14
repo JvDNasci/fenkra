@@ -1432,6 +1432,7 @@ dependencies = [
 name = "fenkra-pacote"
 version = "0.1.0-alpha.36"
 dependencies = [
+ "blake3",
  "fenkra-core",
  "fenkra-desenho",
  "fenkra-kernel",

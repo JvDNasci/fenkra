@@ -20,6 +20,7 @@ pub mod diario;
 pub mod estado_doc;
 pub mod estados;
 pub mod importacao;
+pub mod mudancas;
 #[cfg(test)]
 mod links_externos_testes;
 pub mod pacote;
