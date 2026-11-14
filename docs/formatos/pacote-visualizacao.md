@@ -163,7 +163,7 @@ Entradas extras da página: segundo pacote embutido (`pagina_html_completa`), `?
 `?src=`, e `postMessage({fkv, comparar, meta})`. `meta` é opcional e leva `estado`, `revisao`, `versao`,
 `pn` e `comparando`; aparece ao lado do título. Ele não vai no pacote porque o estado muda depois.
 
-### Montagens do projeto e árvore do produto (B339, B364, ADR 0094)
+### Montagens do projeto e árvore do produto (B339, B364, ADR 0096)
 
 Peça do índice tem um pacote por versão (`.visualizacao/<id>-<hash>.fkv`). Montagem e arquivo fora do
 índice têm um pacote por **assinatura**: `.visualizacao/arquivos/<nome>-<assinatura>.fkv`, em que a
