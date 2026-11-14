@@ -320,6 +320,8 @@ impl App {
                 }
                 // B441: próximos comandos do fluxo, depois do comando que acabou
                 acts.extend(crate::proximo::na_barra(ui, &prox));
+                // B363: os documentos abertos, a mesma lista da barra de abas
+                self.documentos_no_rodape(ui);
                 ui.separator();
                 // navegação: vista e seleção, só ícones
                 let ts = self.tool_state();

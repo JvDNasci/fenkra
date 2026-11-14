@@ -2,8 +2,8 @@
 //! Menu Janela (B440): alternar o documento, abrir outro numa janela nova e arrumar as janelas lado
 //! a lado ou em cascata.
 //!
-//! Ainda não há vários documentos abertos na mesma janela (B363). Enquanto isso, "vários documentos"
-//! são várias janelas do Fenkra: cada uma é um processo deste executável, aberto com o arquivo na
+//! Dentro da janela, vários documentos ficam em abas (B363, `docs_abertos.rs`): o menu começa pela
+//! lista deles. "Abrir em nova janela" usa outro processo deste executável, aberto com o arquivo na
 //! linha de comando (como o duplo clique, B389). Esta janela guarda os processos que ela mesma abriu
 //! e só mexe neles e nela própria: nunca nas janelas de outra sessão do programa.
 //!
@@ -159,6 +159,13 @@ fn focar(pid: u32) {
 #[cfg(not(windows))]
 fn focar(_: u32) {}
 
+/// Abre `arquivo` numa janela nova; o erro vira aviso.
+pub(super) fn abrir_em_nova_janela_avisando(app: &mut App, arquivo: &Path) {
+    if let Err(e) = abrir_em_nova_janela(arquivo) {
+        app.toast(e, true);
+    }
+}
+
 /// Nome curto de um caminho, para o menu.
 fn nome_curto(p: &Path) -> String {
     p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| p.display().to_string())
@@ -170,14 +177,18 @@ impl App {
         let atual = self.open.file.clone();
         let nome_atual = atual.as_deref().map(nome_curto).unwrap_or_else(|| self.open.doc.name.clone());
         ui.label(RichText::new(format!("{} {nome_atual}", tr("Nesta janela:"))).small().weak());
+        // B363: os documentos abertos nesta janela, em abas
+        self.menu_documentos(ui);
+        ui.separator();
+        let abertos = self.arquivos_abertos();
         let outros: Vec<PathBuf> = self.settings.recent_files.iter().map(PathBuf::from).filter(|p| p.exists() && Some(p) != atual.as_ref()).take(12).collect();
-        ui.menu_button(tr("Alternar documento"), |ui| {
+        ui.menu_button(tr("Abrir recente"), |ui| {
             if outros.is_empty() {
                 ui.label(RichText::new(tr("Nenhum outro documento recente.")).weak());
             }
             for p in &outros {
                 if ui.button(nome_curto(p)).on_hover_text(p.display().to_string()).clicked() {
-                    // pergunta antes se a peça desta janela tem alterações por salvar
+                    // abre numa aba nova (ou traz a aba que já tem o arquivo)
                     self.com_confirmacao(Acao::AbrirCaminho(p.clone()));
                     ui.close();
                 }
@@ -185,7 +196,8 @@ impl App {
         });
         ui.menu_button(tr("Abrir em nova janela"), |ui| {
             let mut lista: Vec<PathBuf> = atual.iter().cloned().collect();
-            lista.extend(outros.iter().cloned());
+            lista.extend(abertos.iter().filter(|p| !lista.contains(p)).cloned().collect::<Vec<_>>());
+            lista.extend(outros.iter().filter(|p| !abertos.contains(p)).cloned());
             if lista.is_empty() {
                 ui.label(RichText::new(tr("Salve o documento para abri-lo em outra janela.")).weak());
             }
@@ -279,7 +291,7 @@ mod tests {
         for t in [
             "Janela",
             "Nesta janela:",
-            "Alternar documento",
+            "Abrir recente",
             "Nenhum outro documento recente.",
             "Abrir em nova janela",
             "Salve o documento para abri-lo em outra janela.",
