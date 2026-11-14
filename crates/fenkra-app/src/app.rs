@@ -3057,6 +3057,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
         };
         self.picks.clear();
+        // B198: casca, nervura e saída nascem seguindo a regra plástica da peça
+        if let Sel::Feature(id) = new_sel {
+            crate::plastico_ui::ao_criar(&mut self.open.doc, id);
+        }
         match new_sel {
             Sel::Feature(id) if !scene::is_sketch_feature(&self.open.doc, id) => self.start_session(id, true, Some(snapshot)),
             Sel::Ref(id) => self.start_session(id, true, Some(snapshot)),
@@ -3089,6 +3093,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             Act::Customize => self.customize_open = true,
             Act::Macros => self.macro_open = true,
             Act::Verificar => crate::verificar_ui::abrir(),
+            Act::RegraPlastica => crate::plastico_ui::abrir(),
             Act::View(y, p) => {
                 if let Some(v) = self.viewport.as_mut() {
                     let before = v.camera;
@@ -9378,6 +9383,7 @@ impl eframe::App for App {
         crate::sup_inclinacao::painel_inclinacao(self, ctx, area);
         crate::dfm_ui::painel(self, ctx, area);
         crate::verificar_ui::painel(self, ctx, area);
+        crate::plastico_ui::painel(self, ctx, area);
         crate::comparar_ui::painel(self, ctx, area);
         crate::forma_progresso::desenhar(ctx, area, self.gen_done < self.gen_sent);
         self.painel_importar(ctx, area);
@@ -9637,6 +9643,7 @@ impl eframe::App for App {
                 };
                 let mut s = crate::medir_quadros::fase("cena", || scene::build(scene_doc, r, &opts));
                 crate::dfm_ui::decorar(&self.settings, r, &ctx.global_style().visuals, &mut s);
+                crate::saida_faces::decorar(&self.settings, r, &ctx.global_style().visuals, &mut s);
                 crate::comparar_ui::decorar(&ctx.global_style().visuals, &mut s);
                 if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {
                     crate::previa::reter_ultima(&mut sess.ultima_valida, &mut s, r.status.get(&sess.id));

@@ -51,10 +51,12 @@ impl Severidade {
 /// |------------|-----------------------|-------------------------------------------------------|
 /// | furo       | diametro              | diâmetro, mm                                          |
 /// | furo       | profundidade_diametro | profundidade dividida pelo diâmetro                   |
+/// | furo       | distancia_borda       | menor parede entre o furo e a borda mais próxima, mm  |
 /// | bolso      | profundidade_raio     | altura do canto arredondado dividida pelo raio dele   |
 /// | chapa      | espessura             | espessura dominante da peça, mm                       |
 /// | chapa      | raio_dobra_espessura  | raio do filete convexo dividido pela espessura        |
 /// | chapa      | furo_espessura        | diâmetro do furo dividido pela espessura              |
+/// | chapa      | furo_borda_espessura  | parede entre furo e borda dividida pela espessura     |
 /// | parede     | espessura             | espessura local (bola máxima) de cada face, mm        |
 /// | saliencia  | angulo                | graus a partir da vertical da face sem apoio          |
 /// | canto      | raio_interno          | raio do canto côncavo (0 = aresta viva), mm           |
@@ -84,10 +86,12 @@ fn verdadeiro() -> bool {
 pub const MEDIDAS: &[(&str, &str)] = &[
     ("furo", "diametro"),
     ("furo", "profundidade_diametro"),
+    ("furo", "distancia_borda"),
     ("bolso", "profundidade_raio"),
     ("chapa", "espessura"),
     ("chapa", "raio_dobra_espessura"),
     ("chapa", "furo_espessura"),
+    ("chapa", "furo_borda_espessura"),
     ("parede", "espessura"),
     ("saliencia", "angulo"),
     ("canto", "raio_interno"),
@@ -275,6 +279,8 @@ fn texto(r: &Regra, valor: f64, limite: f64) -> String {
 pub const AMOSTRAS_ESPESSURA: usize = 4000;
 /// Tolerância das faixas do mapa de espessura.
 pub const TOL_FAIXA: f64 = 0.05;
+/// Raios em volta do eixo para medir a parede entre o furo e a borda (um a cada 5 graus).
+pub const RAIOS_LIGAMENTO: usize = 72;
 /// Fração da área de uma face que precisa estar fora do limite para a face ser acusada.
 pub const FRACAO_FACE: f64 = 0.05;
 
@@ -351,6 +357,27 @@ pub fn varrer(s: &Shape, perfil: &Perfil) -> Result<Relatorio, String> {
                             let v = e.medida2 / e.medida;
                             if let Some(l) = r.viola(v) {
                                 push(&mut rel, r, v, l, e.boca, faces.clone());
+                            }
+                        }
+                    }
+                    // parede entre o furo e a borda, no meio da profundidade
+                    let rs_borda = ativas("furo", "distancia_borda");
+                    let rs_borda_t = if t_chapa.is_some() { ativas("chapa", "furo_borda_espessura") } else { vec![] };
+                    if !rs_borda.is_empty() || !rs_borda_t.is_empty() {
+                        let meio = [0, 1, 2].map(|k| e.boca[k] + e.direcao[k] * e.medida2 / 2.);
+                        if let Some((w, ponto)) = geo::ligamento(&m, meio, e.direcao, RAIOS_LIGAMENTO) {
+                            for r in &rs_borda {
+                                if let Some(l) = r.viola(w) {
+                                    push(&mut rel, r, w, l, ponto, faces.clone());
+                                }
+                            }
+                            if let Some(t) = t_chapa {
+                                for r in &rs_borda_t {
+                                    let v = w / t;
+                                    if let Some(l) = r.viola(v) {
+                                        push(&mut rel, r, v, l, ponto, faces.clone());
+                                    }
+                                }
                             }
                         }
                     }
