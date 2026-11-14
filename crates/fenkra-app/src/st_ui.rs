@@ -194,6 +194,7 @@ pub fn windows(app: &mut App, ctx: &egui::Context) {
     crate::st_montagem_ui::window(app, ctx);
     crate::st_acesso_ui::window(app, ctx);
     crate::st_corte_tubo_ui::window(app, ctx);
+    crate::st_portico_ui::window(app, ctx);
 }
 
 /// Gerar montagem: uma peça por grupo de peças iguais e a montagem, em `<nome>_montagem` ao lado
@@ -591,6 +592,9 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                 }
                 if ui.button(tr("Caminho de corte…")).on_hover_text(tr("Caminho da máquina de tubo rotativo para os encaixes: vista desenvolvida, tabela por ponto, CSV e animação do cabeçote.")).clicked() {
                     crate::st_corte_tubo_ui::abrir(ui.ctx());
+                }
+                if ui.button(tr("Análise de pórtico…")).on_hover_text(tr("Apoios, cargas e peso próprio nos membros retos; diagramas de N, V, M e a deformada no 3D, e a verificação das barras pela NBR 8800.")).clicked() {
+                    crate::st_portico_ui::abrir(ui.ctx());
                 }
                 if ui.button(tr("Gerar montagem…")).on_hover_text(tr("Abre o resumo com peças, instâncias, pasta e nomes dos arquivos; nada é gravado antes de Confirmar.")).clicked() {
                     gerar = true;
