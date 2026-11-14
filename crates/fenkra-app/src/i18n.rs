@@ -60,6 +60,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_montagem4::TEXTOS.iter())
             .chain(crate::textos_montagem5::TEXTOS.iter())
             .chain(crate::textos_montagem6::TEXTOS.iter())
+            .chain(crate::textos_montagem7::TEXTOS.iter())
             .chain(crate::textos_interface3::TEXTOS.iter())
             .chain([crate::textos_interface4::TEXTOS, crate::handles::vocab::TEXTOS].into_iter().flatten())
             .chain(crate::textos_fechamont::TEXTOS.iter())

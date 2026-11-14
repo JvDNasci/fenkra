@@ -14,6 +14,7 @@
 //! - **Liberar revisão** marca a versão atual com uma letra e a congela (RF-GPR-011).
 
 pub mod comparacao;
+pub mod copia_projeto;
 pub mod diario;
 pub mod estado_doc;
 pub mod estados;
@@ -400,7 +401,13 @@ impl Project {
 
     /// Adiciona um documento novo ao projeto e grava a primeira versão. O contador de PN e o de IDs
     /// só avançam se a gravação inteira deu certo: falha de disco não queima número (B25).
-    pub fn add_document(&mut self, mut doc: Document) -> PResult<u64> {
+    pub fn add_document(&mut self, doc: Document) -> PResult<u64> {
+        self.adicionar(doc, None, "criado")
+    }
+
+    /// Como [`Project::add_document`], com o arquivo de trabalho (relativo à raiz) e a nota da primeira
+    /// versão dados; `None` usa `pecas/<id>.fkp`. A cópia para o projeto (B445) guarda o nome do arquivo.
+    pub(crate) fn adicionar(&mut self, mut doc: Document, arquivo: Option<String>, nota: &str) -> PResult<u64> {
         self.pode_gravar()?;
         let consome_pn = doc.props.pn.is_empty();
         let mut seq_usada = 0;
@@ -419,7 +426,7 @@ impl Project {
         self.index.documents.push(DocEntry {
             id,
             uid: doc.uid.0.clone(),
-            file: format!("{PARTS}/{id:05}.fkp"),
+            file: arquivo.unwrap_or_else(|| format!("{PARTS}/{id:05}.fkp")),
             name: doc.name.clone(),
             pn: doc.props.pn.clone(),
             description: doc.props.description.clone(),
@@ -428,7 +435,7 @@ impl Project {
             revisions: vec![],
             origem: doc.origem.clone(),
         });
-        if let Err(e) = self.save(id, &doc, "criado") {
+        if let Err(e) = self.save(id, &doc, nota) {
             // desfaz tudo: o projeto na memória volta a ser igual ao que está no disco
             self.index.documents.retain(|d| d.id != id);
             self.index.next_id = next_id_antes;
