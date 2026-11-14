@@ -766,6 +766,16 @@ SO_INTERFACE |= {"des_automatico"}
 SO_INTERFACE |= {"pmi_empilhamento"}
 SO_INTERFACE |= {"des_inspecao", "des_inspecao_baloes", "des_inspecao_csv", "des_inspecao_xlsx"}
 
+# topo fino (B434): menu em ícone e uma aba por bancada
+ic("menu", B=L((10, 14), (38, 14)) + L((10, 34), (38, 34)), R=L((10, 24), (38, 24)))
+ic("banc_solidos", B=CUBO_OCULTO(), R=CUBO())
+ic("banc_superficies", B="M14 27C22 19 30 19 37 24M24 16C22 24 22 30 23 36", R="M8 30C18 14 30 14 40 20L36 36C28 30 18 30 12 40z")
+ic("banc_montagem", B=Q(8, 22, 18, 18), R=Q(22, 8, 18, 18))
+ic("banc_chapa", B=Z((8, 28), (26, 20), (40, 26), (22, 34)), R=Z((26, 20), (40, 26), (40, 12), (26, 6)))
+ic("banc_estrutural", B=L((24, 11), (24, 37)), R=L((12, 10), (36, 10)) + L((12, 38), (36, 38)))
+ic("banc_desenho", B=Q(8, 9, 32, 30), R=Q(13, 14, 12, 9) + L((30, 39), (30, 32), (40, 32)))
+SO_INTERFACE |= {"menu", "banc_solidos", "banc_superficies", "banc_montagem", "banc_chapa", "banc_estrutural", "banc_desenho"}
+
 
 # ---------- saída ----------
 

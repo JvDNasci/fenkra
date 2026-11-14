@@ -201,6 +201,8 @@ impl App {
         self.janela_comparacao(ctx);
         self.janela_mescla(ctx);
         self.visualizador_quadro(ctx);
+        self.janela_arvore_produto(ctx);
+        self.janela_liberacao(ctx);
     }
 
     fn janela_salvar_como(&mut self, ctx: &egui::Context) {

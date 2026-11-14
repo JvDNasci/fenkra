@@ -42,6 +42,9 @@ pub const CLASSIFICACAO: &[(&str, Classe)] = &[
     ("arvore_solta", Sessao),
     ("arvore_minimizada", Sessao),
     ("arvore_fechada", Sessao),
+    ("coluna_largura", Interface),
+    ("layout_versao", Interface),
+    ("layout_anterior", Interface),
     ("impressao", Sessao),
     ("fatiador", Maquina),
     ("libredwg", Maquina),
@@ -303,7 +306,7 @@ pub fn carregar_de(usuario: Option<&Path>, empresa: Option<&Path>) -> Settings {
     let r = config::resolver(&programa, e.empresa.as_ref(), e.projeto.as_ref(), &usuario_mapa, None, CHAVES_DOC);
     e.avisos.extend(avisos);
     e.ultima = None;
-    settings_de(r.valores).migrar_tema()
+    settings_de(r.valores).migrar_tema().migrar_layout()
 }
 
 /// O que vai para o `config.json`: só o que a pessoa mudou em relação às camadas de baixo. Com um
@@ -469,7 +472,7 @@ pub fn importar_perfil(texto: &str, s: &mut Settings) -> Result<ResumoPerfil, St
     for (k, v) in p.valores {
         m.insert(k, v);
     }
-    *s = settings_de(m).migrar_tema();
+    *s = settings_de(m).migrar_tema().migrar_layout();
     Ok(ResumoPerfil { aplicadas, ignoradas: p.ignoradas, travadas: p.travadas, aviso: p.aviso })
 }
 

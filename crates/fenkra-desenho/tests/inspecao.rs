@@ -212,3 +212,70 @@ fn xlsx_leva_os_formularios_1_2_e_3() {
     assert!(inspecao::form1(&d, &cs, "", "", true).iter().any(|(k, v)| k.starts_with("19. ") && v.starts_with("Não")));
     assert!(inspecao::form1(&d, &cs, "", "", true).iter().any(|(k, v)| k.starts_with("13. ") && v == "Montagem"));
 }
+
+fn pmi(id: u64, kind: fenkra_core::pmi::PmiKind, anchors: Vec<[f64; 3]>, text: &str) -> fenkra_core::pmi::Pmi {
+    fenkra_core::pmi::Pmi { id: Id(id), name: String::new(), kind, anchors, offset: [0.; 3], text: text.into(), tol_plus: String::new(), tol_minus: String::new(), visible: true, plane: None, style: Default::default(), folder: String::new(), targets: vec![] }
+}
+
+#[test]
+fn numeracao_unica_entre_o_pmi_3d_e_a_folha() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    use fenkra_core::pmi::{GdtChar, PmiKind};
+    // peça com PMI: nota (não conta), cota de referência (não conta), comprimento, planeza, altura
+    let mut doc = fenkra_solidos::example_document();
+    doc.pmi.push(pmi(9001, PmiKind::Note, vec![[10., 0., 5.]], "Rebarbar"));
+    doc.pmi.push(pmi(9002, PmiKind::Linear, vec![[0., 0., 0.], [0., 0., 10.]], "(10)"));
+    doc.pmi.push(pmi(9003, PmiKind::Linear, vec![[0., 0., 0.], [120., 0., 0.]], ""));
+    doc.pmi.push(pmi(9004, PmiKind::Gdt { ch: GdtChar::Planeza, tol: "0,05".into(), datums: String::new(), extra: Default::default() }, vec![[60., 0., 10.]], ""));
+    doc.pmi.push(pmi(9005, PmiKind::Linear, vec![[0., 0., 0.], [0., 0., 10.]], ""));
+    let modelo = inspecao::numeracao_pmi(&doc.pmi);
+    assert_eq!(modelo, vec![(Id(9003), 1), (Id(9004), 2), (Id(9005), 3)]);
+
+    let dir = std::env::temp_dir().join(format!("fenkra_inspecao_unica_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("p.fkp"), doc.to_json()).unwrap();
+    let src = Source { path: "p.fkp".into(), display_state: String::new(), hidden: vec![] };
+    let mut d = Drawing::new("t", Format::A3);
+    let s = d.sheets[0].id;
+    let v = d.add_view(s, src.clone(), ViewKind::Standard(Dir::Frente), [200., 150.], 1.);
+    let mut m = Models::new(Some(dir.clone()));
+    let p = m.proj(&d, v);
+    assert!(p.error.is_none(), "{:?}", p.error);
+    // a peça de exemplo continua íntegra: volume e caixa da vista
+    assert!(m.volume(&src) > 0.);
+    assert!(p.hi[0] - p.lo[0] > 50. && p.hi[1] - p.lo[1] > 5., "caixa da vista {:?} {:?}", p.lo, p.hi);
+    // só o comprimento (1) e a planeza (2) vêm do 3D; a altura (3) fica só no modelo
+    let rel = fenkra_desenho::importar::importar(&mut d, &mut m, v, &[Id(9004), Id(9003)]);
+    assert_eq!(rel.cotas.len() + rel.notas.len(), 2, "{rel:?}");
+    // uma cota feita só na folha
+    let ax = p.axes.unwrap();
+    let id_folha = d.alloc();
+    d.dims.push(Dim { id: id_folha, view: v, kind: DimKind::Horizontal, anchors: vec![ax.unproject([p.lo[0], p.hi[1]]), ax.unproject([p.hi[0], p.hi[1]])], offset: 8., ..Default::default() });
+    let cs = inspecao::caracteristicas(&d, &mut m);
+    let numero_de = |pmi: u64| {
+        let dono = d.dims.iter().find(|x| x.pmi == Some(Id(pmi))).map(|x| x.id).or_else(|| d.notes.iter().find(|n| n.pmi == Some(Id(pmi))).map(|n| n.id)).unwrap();
+        cs.iter().find(|c| c.dono == dono).unwrap().numero
+    };
+    // o que veio do 3D tem o número do 3D; o que é só da folha vem depois de todas as do modelo
+    // (não repete o 3, que é da altura no 3D, mesmo ela não estando na folha)
+    assert_eq!(numero_de(9003), 1);
+    assert_eq!(numero_de(9004), 2);
+    assert_eq!(cs.iter().find(|c| c.dono == id_folha).unwrap().numero, 4);
+    assert_eq!(cs.iter().map(|c| c.numero).collect::<Vec<_>>(), vec![1, 2, 4], "tabela em ordem de número");
+    // o balão na folha mostra o mesmo número, junto da característica
+    d.inspecao.baloes = true;
+    let items = sheet(&d, s, &mut m);
+    let textos_de = |id: Id| items.iter().filter(|i| i.owner == Some(id)).filter_map(|i| if let Prim::Text { text, .. } = &i.prim { Some(text.clone()) } else { None }).collect::<Vec<_>>();
+    for c in &cs {
+        assert!(textos_de(c.dono).contains(&c.numero.to_string()), "balão {} junto de {:?}", c.numero, c.dono);
+    }
+    // com dois modelos diferentes nas vistas, a folha volta a numerar pela leitura (1, 2, 3)
+    std::fs::write(dir.join("q.fkp"), doc.to_json()).unwrap();
+    let v2 = d.add_view(s, Source { path: "q.fkp".into(), display_state: String::new(), hidden: vec![] }, ViewKind::Standard(Dir::Frente), [200., 60.], 1.);
+    fenkra_desenho::importar::importar(&mut d, &mut m, v2, &[Id(9003)]);
+    let cs2 = inspecao::caracteristicas(&d, &mut m);
+    assert_eq!(cs2.iter().map(|c| c.numero).collect::<Vec<_>>(), (1..=cs2.len()).collect::<Vec<_>>());
+    let _ = std::fs::remove_dir_all(dir);
+}

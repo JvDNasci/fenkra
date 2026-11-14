@@ -1,0 +1,40 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//! Traduções do layout em coluna (B433, B434, B435 e B447; ADR 0094), à parte de `i18n.rs`.
+
+pub static TEXTOS: &[(&str, &str)] = &[
+    ("O painel volta a encaixar na janela principal; arrastar esta janela de volta para ela faz o mesmo", "The panel docks back into the main window; dragging this window back onto it does the same"),
+    ("Mostrar a árvore", "Show the tree"),
+    ("escolher entradas", "pick inputs"),
+    ("Mostra a árvore para escolher entradas. O comando continua aberto.", "Shows the tree so you can pick inputs. The command stays open."),
+    ("Cancelar o comando", "Cancel the command"),
+    ("Abrir numa janela própria", "Open in its own window"),
+    ("Leva o painel para uma janela do sistema, que pode ir para outro monitor", "Moves the panel to a system window, which can go to another monitor"),
+    ("voltar a", "back to"),
+    ("Volta aos campos do comando", "Back to the command fields"),
+    ("A coluna vira um trilho com a seta que traz a árvore de volta", "The column becomes a rail with the arrow that brings the tree back"),
+    // B434: topo fino, recursos à direita e navegação embaixo
+    ("Menu: Arquivo, Exibir, Editar e Ajuda", "Menu: File, View, Edit and Help"),
+    ("Propriedades do que está selecionado: nome, estado, suprimir e aparência. Sem seleção, as propriedades da peça e as informações do modelo.", "Properties of what is selected: name, state, suppress and appearance. With nothing selected, the part properties and the model information."),
+    ("congelada", "frozen"),
+    ("Recálculo", "Recompute"),
+    ("Kernel geométrico", "Geometry kernel"),
+    ("Graus de liberdade livres", "Free degrees of freedom"),
+    ("Restrições com erro", "Constraints with errors"),
+    ("Navegação", "Navigation"),
+    ("⟳ Atualizar   F5", "⟳ Update   F5"),
+    ("⟲ Reconstruir   Ctrl+F5", "⟲ Rebuild   Ctrl+F5"),
+    ("Objeto em trabalho", "Work object"),
+    ("Clique para desligar o Scan; a peça volta", "Click to turn Scan off; the part comes back"),
+    ("restrição(ões) com erro", "constraint(s) with errors"),
+    ("Projeção e modo de exibição. Clique para escolher.", "Projection and display mode. Click to choose."),
+    ("Histórico da peça", "Part history"),
+    ("AMBIENTE DE OCULTOS", "HIDDEN ITEMS ENVIRONMENT"),
+    ("Na barra", "On the bar"),
+    ("Grupos que não são do trabalho atual. Marque um grupo para deixá-lo sempre na barra.", "Groups that are not part of the current work. Check a group to keep it on the bar."),
+    ("Scan ligado: vendo a peça até", "Scan on: viewing the part up to"),
+    ("Informações do modelo", "Model information"),
+    // B435: painel do comando enxuto
+    ("Propriedades…", "Properties…"),
+    ("Nome, estado, suprimido, suprimir quando, aparência e o quadro de entradas deste recurso", "Name, state, suppressed, suppress when, appearance and the inputs box of this feature"),
+    ("Este item não preenche nenhum campo vazio do comando. Limpe o campo para trocar a entrada.", "This item does not fill any empty field of the command. Clear the field to change the input."),
+];

@@ -967,7 +967,7 @@ pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
         }
         ctx.data_mut(|m| m.insert_temp(key, picked.to_vec()));
     }
-    let row = ui.horizontal(|ui| {
+    ui.horizontal(|ui| {
         ui.label(tr(label));
         let b = ui
             .add(egui::Button::new(RichText::new(format!("🛍 {}", items.len())).strong()).selected(active))
@@ -991,15 +991,7 @@ pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
         return;
     }
     let (mut open, mut close, mut del) = (true, false, None);
-    egui::Window::new(format!("{} — {}", tr("Lista de elementos"), tr(label)))
-        .id(key.with("janela"))
-        .open(&mut open)
-        // ao lado do painel (sem cobrir os campos)
-        .default_pos(egui::pos2(ui.max_rect().right().max(row.inner.right()) + 16., row.inner.top()))
-        .default_width(340.)
-        .min_width(300.)
-        .resizable(true)
-        .show(&ctx, |ui| {
+    crate::paineis::encaixado(&ctx, "lista_elementos", format!("{} — {}", tr("Lista de elementos"), tr(label)), &mut open, 340., |ui| {
             ui.label(RichText::new(tr("Cada clique no 3D acrescenta um elemento; Ctrl+clique soma/tira da seleção.")).weak().small());
             egui::ScrollArea::vertical().max_height(340.).show(ui, |ui| {
                 for (i, it) in items.iter_mut().enumerate() {

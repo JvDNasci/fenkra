@@ -59,7 +59,7 @@ pub fn janela(ctx: &egui::Context) {
     let agora = ctx.input(|i| i.time);
     let inicio = ctx.data_mut(|d| *d.get_temp_mut_or_insert_with(egui::Id::new(("fenkra_ajuda_f1_t", icone.as_str())), || agora));
     let t = agora - inicio;
-    egui::Window::new(format!("{} — {}", tr("Ajuda do comando"), tr(it.name))).id(egui::Id::new("janela_ajuda_f1")).open(&mut aberta).default_width(380.).default_pos([360., 140.]).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "ajuda_f1", format!("{} — {}", tr("Ajuda do comando"), tr(it.name)), &mut aberta, 380., |ui| {
         ui.horizontal(|ui| {
             ui.add(egui::Image::new(crate::icons::get(it.icon)).fit_to_exact_size(egui::vec2(32., 32.)));
             ui.vertical(|ui| {

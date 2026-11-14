@@ -13,12 +13,14 @@
 //! - Cada salvamento cria uma **versão** (RF-GPR-010).
 //! - **Liberar revisão** marca a versão atual com uma letra e a congela (RF-GPR-011).
 
+pub mod arvore_produto;
 pub mod comparacao;
 pub mod copia_projeto;
 pub mod diario;
 pub mod estado_doc;
 pub mod estados;
 pub mod importacao;
+pub mod mudancas;
 #[cfg(test)]
 mod links_externos_testes;
 pub mod pacote;

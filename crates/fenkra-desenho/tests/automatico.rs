@@ -72,3 +72,56 @@ fn folha_vazia_avisa() {
     let r = automatico::completar(&mut d, s, &mut Models::new(None));
     assert_eq!(r.avisos.len(), 1);
 }
+
+#[test]
+fn esquema_do_3d_vem_primeiro_e_as_regras_nao_repetem() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    use fenkra_solidos::esquema_pmi::{self, RegrasEsquema};
+    // B192: a placa com o esquema de cotagem automático no PMI
+    let mut doc = fenkra_solidos::example_document();
+    let r3 = esquema_pmi::gerar(&mut doc, &RegrasEsquema::default(), false).unwrap();
+    assert!(r3.novas > 5, "{r3:?}");
+    let dir = std::env::temp_dir().join(format!("fenkra_desenho_auto_esquema_{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(dir.join("placa.fkp"), doc.to_json()).unwrap();
+    let src = Source { path: "placa.fkp".into(), display_state: String::new(), hidden: vec![] };
+    let mut d = Drawing::new("Placa", Format::A3);
+    let s = d.sheets[0].id;
+    d.add_standard_set(s, src.clone(), [130., 190.], 1., 100.);
+    let mut m = Models::new(Some(dir.clone()));
+    assert!(m.volume(&src) > 0.8 * 120. * 72. * 10.);
+    let r = automatico::completar(&mut d, s, &mut m);
+    assert!(r.avisos.is_empty(), "{:?}", r.avisos);
+    assert!(r.do_esquema >= 4, "{r:?}");
+    assert_eq!(d.dims.iter().filter(|x| x.pmi.is_some()).count() + d.notes.iter().filter(|n| n.pmi.is_some()).count(), r.do_esquema);
+    // cada anotação do 3D numa vista só
+    let mut vistas_de: std::collections::HashMap<fenkra_core::Id, usize> = Default::default();
+    for x in d.dims.iter().filter_map(|x| x.pmi) {
+        *vistas_de.entry(x).or_default() += 1;
+    }
+    assert!(vistas_de.values().all(|n| *n == 1), "{vistas_de:?}");
+    // as regras da folha não repetem na mesma vista uma medida que já veio do 3D (duas medidas
+    // do 3D podem ter o mesmo valor: a localização do furo e a largura do rasgo, ambas 12), e o
+    // diâmetro do furo aparece uma vez só na folha
+    let valores: Vec<(fenkra_core::Id, DimKind, f64, bool)> = d
+        .dims
+        .iter()
+        .map(|dm| {
+            let v = d.view(dm.view).unwrap().clone();
+            let p = m.proj(&d, v.id);
+            (v.id, dm.kind, dim_value(dm, &v, &p).map(|x| x.0).unwrap_or(f64::NAN), dm.pmi.is_some())
+        })
+        .collect();
+    for a in valores.iter().filter(|x| !x.3) {
+        assert!(!valores.iter().any(|b| b.3 && a.0 == b.0 && a.1 == b.1 && (a.2 - b.2).abs() < 1e-3), "repetida: {a:?} {valores:?}");
+    }
+    assert!(valores.iter().any(|x| !x.3), "as regras ainda completam algo (o rebaixo Ø11): {valores:?}");
+    let furo = valores.iter().filter(|x| x.1 == DimKind::Diameter && (x.2 - 6.6).abs() < 1e-3).count();
+    assert_eq!(furo, 1, "{valores:?}");
+    // rodar de novo não traz nada
+    let r2 = automatico::completar(&mut d, s, &mut m);
+    assert_eq!((r2.do_esquema, r2.cotas), (0, 0), "{r2:?}");
+    let _ = std::fs::remove_dir_all(dir);
+}

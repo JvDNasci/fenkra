@@ -185,6 +185,11 @@ impl DwgState {
         self.sel.or(self.focus)
     }
 
+    /// Há um comando em andamento (ferramenta armada ou esboço em edição), e não só um item escolhido?
+    pub fn em_comando(&self) -> bool {
+        self.tool.is_some() || self.esb.editando.is_some()
+    }
+
     /// Algo aberto no painel (ferramenta, item selecionado ou propriedades)?
     pub fn active(&self) -> bool {
         self.tool.is_some() || self.sel.is_some() || self.props_open || self.esb.editando.is_some()

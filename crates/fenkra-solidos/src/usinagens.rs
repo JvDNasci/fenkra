@@ -71,7 +71,7 @@ impl Usinagem {
 }
 
 /// O que a peça padronizada oferece às usinagens.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct GeoBase {
     /// espessura do disco (z de 0 a largura)
     pub largura: f64,
@@ -81,6 +81,11 @@ pub struct GeoBase {
     pub furo: f64,
     /// a peça já tem cubo (roda de corrente), com (comprimento, diâmetro): `Cubo` é recusado
     pub cubo_proprio: Option<(f64, f64)>,
+    /// z da face de baixo do disco (0 na maioria; a cônica usa o cubo abaixo dos dentes como disco)
+    pub z0: f64,
+    /// material acima do disco que não é cubo (os dentes da cônica): furo e rasgo o atravessam, o
+    /// parafuso fica no disco, e cubo novo e furos de alívio são recusados (não há face plana)
+    pub topo_dentes: f64,
 }
 
 fn rosca_passo(d: f64) -> Option<f64> {
@@ -115,6 +120,9 @@ pub fn validar(g: &GeoBase, lista: &[Usinagem]) -> Result<(), String> {
     let tem_cubo = lista.iter().any(|u| matches!(u, Usinagem::Cubo { .. }));
     if tem_cubo && g.cubo_proprio.is_some() {
         return Err("esta peça já sai com cubo: edite o cubo dela em vez de acrescentar outro".into());
+    }
+    if g.topo_dentes > 0. && lista.iter().any(|u| matches!(u, Usinagem::Cubo { .. } | Usinagem::FurosAlivio { .. })) {
+        return Err("na engrenagem cônica os dentes ocupam a face de cima: o cubo já vem com a peça e não há disco plano para furos de alívio".into());
     }
     if lista.iter().filter(|u| matches!(u, Usinagem::Cubo { .. })).count() > 1 {
         return Err("só um cubo por peça".into());
@@ -201,7 +209,10 @@ pub(crate) fn aplicar(m: &mut Montador, g: &GeoBase, lista: &[Usinagem]) -> Resu
     validar(g, lista)?;
     let (furo, cubo_l, _) = efetivas(g, lista);
     let b = g.largura;
-    let topo = b + cubo_l;
+    let z0 = g.z0;
+    // até onde vão os cortes que atravessam a peça, medido a partir de z0
+    let topo = b + cubo_l + g.topo_dentes;
+    let abaixo = format!("{}", z0 - 1.);
     // 1. o cubo acrescenta material antes dos cortes
     for (i, u) in lista.iter().enumerate() {
         if let Usinagem::Cubo { diametro, comprimento } = *u {
@@ -217,12 +228,12 @@ pub(crate) fn aplicar(m: &mut Montador, g: &GeoBase, lista: &[Usinagem]) -> Resu
         if let Usinagem::FuroEixo { diametro } = *u {
             let k = i + 1;
             m.param(&format!("u{k}_furo"), &diametro.to_string())?;
-            let plano = m.plano(&format!("Plano_usinagem_{k}_furo"), "-1")?;
+            let plano = m.plano(&format!("Plano_usinagem_{k}_furo"), &abaixo)?;
             m.prim(&format!("Usinagem_{k}_Furo_eixo"), PrimKind::Cilindro, plano, [&format!("u{k}_furo/2"), &(topo + 2.).to_string(), "0", "0"], BoolOp::Cut)?;
         } else if matches!(u, Usinagem::Cubo { .. }) && g.furo > 0. {
             // o cubo novo fechou o furo do catálogo: reabre pelo furo do catálogo
             let k = i + 1;
-            let plano = m.plano(&format!("Plano_usinagem_{k}_furo_cubo"), "-1")?;
+            let plano = m.plano(&format!("Plano_usinagem_{k}_furo_cubo"), &abaixo)?;
             m.prim(&format!("Usinagem_{k}_Furo_no_cubo"), PrimKind::Cilindro, plano, ["furo/2", &(topo + 2.).to_string(), "0", "0"], BoolOp::Cut)?;
         }
     }
@@ -237,7 +248,7 @@ pub(crate) fn aplicar(m: &mut Montador, g: &GeoBase, lista: &[Usinagem]) -> Resu
                 let plano = plano_yz(m, &format!("Plano_usinagem_{k}_rasgo"), &format!("{}-1", furo / 2.))?;
                 let mut data = SketchData::default();
                 let mut al = || m.doc.alloc();
-                data.add_rect(&mut al, [-c.b / 2., -0.5], [c.b / 2., topo + 0.5], false);
+                data.add_rect(&mut al, [-c.b / 2., z0 - 0.5], [c.b / 2., z0 + topo + 0.5], false);
                 let sk = m.sketch(&format!("Usinagem_{k}_Rasgo"), plano, data);
                 extrusao_cega(m, &format!("Usinagem_{k}_Rasgo_chaveta"), sk, &format!("u{k}_kt2+1"), BoolOp::Cut, true);
             }
@@ -245,7 +256,7 @@ pub(crate) fn aplicar(m: &mut Montador, g: &GeoBase, lista: &[Usinagem]) -> Resu
                 let k = i + 1;
                 m.param(&format!("u{k}_dreb"), &diametro.to_string())?;
                 m.param(&format!("u{k}_preb"), &profundidade.to_string())?;
-                let plano = m.plano(&format!("Plano_usinagem_{k}_rebaixo"), "-1")?;
+                let plano = m.plano(&format!("Plano_usinagem_{k}_rebaixo"), &abaixo)?;
                 m.prim(&format!("Usinagem_{k}_Rebaixo"), PrimKind::Cilindro, plano, [&format!("u{k}_dreb/2"), &format!("u{k}_preb+1"), "0", "0"], BoolOp::Cut)?;
             }
             Usinagem::FurosAlivio { quantidade, diametro, raio_circulo } => {
@@ -271,7 +282,7 @@ pub(crate) fn aplicar(m: &mut Montador, g: &GeoBase, lista: &[Usinagem]) -> Resu
                 m.param(&format!("u{k}_dmacho"), &broca.to_string())?;
                 let base = crate::eixos_recursos::plano_girado(m, &format!("Plano_usinagem_{k}_giro"), rotacao);
                 let mut data = SketchData::default();
-                let z_meio = if cubo_l > 0. { b + cubo_l / 2. } else { b / 2. };
+                let z_meio = z0 + if cubo_l > 0. { b + cubo_l / 2. } else { b / 2. };
                 {
                     let mut al = || m.doc.alloc();
                     let c = data.add_point(&mut al, 0., z_meio);
@@ -342,7 +353,7 @@ mod tests {
 
     #[test]
     fn validacao_diz_o_que_corrigir() {
-        let g = GeoBase { largura: 12., raio_raiz: 37.5, furo: 10., cubo_proprio: None };
+        let g = GeoBase { largura: 12., raio_raiz: 37.5, furo: 10., cubo_proprio: None, ..Default::default() };
         assert!(validar(&g, &[]).is_ok());
         assert!(validar(&g, &[Usinagem::Cubo { diametro: 11., comprimento: 10. }]).unwrap_err().contains("2 mm"));
         assert!(validar(&g, &[Usinagem::Cubo { diametro: 30., comprimento: 10. }, Usinagem::Cubo { diametro: 30., comprimento: 5. }]).is_err());
@@ -362,6 +373,11 @@ mod tests {
         let roda = GeoBase { cubo_proprio: Some((8., 22.)), ..g };
         assert!(validar(&roda, &[Usinagem::Cubo { diametro: 30., comprimento: 10. }]).unwrap_err().contains("cubo"));
         assert_eq!(diametro_furo_de_macho(6.), Some(5.));
+        // cônica: dentes acima do disco recusam cubo novo e furos de alívio
+        let conica = GeoBase { topo_dentes: 10., z0: -12., ..g };
+        assert!(validar(&conica, &[Usinagem::FurosAlivio { quantidade: 4, diametro: 10., raio_circulo: 25. }]).unwrap_err().contains("cônica"));
+        assert!(validar(&conica, &[Usinagem::Cubo { diametro: 30., comprimento: 10. }]).is_err());
+        assert!(validar(&conica, &[Usinagem::RasgoChaveta, Usinagem::Rebaixo { diametro: 20., profundidade: 4. }]).is_ok());
     }
 
     #[test]
@@ -420,5 +436,82 @@ mod tests {
         let ruim = ParamEngrenagem { usinagens: vec![Usinagem::Rebaixo { diametro: 100., profundidade: 4. }], ..base() };
         assert!(engrenagem_documento(&ruim).is_err());
         assert!(crate::engrenagens::calculo(&ruim).is_err(), "o cálculo já avisa");
+    }
+
+    fn rel(a: f64, b: f64) -> f64 {
+        (a - b).abs() / b
+    }
+
+    /// B345: as usinagens valem em todo elemento de transmissão com furo de eixo: rodas de corrente,
+    /// polias, cônicas, sem-fim e coroa. Cada caso confere o volume tirado ou posto contra a conta à
+    /// mão, a caixa envolvente e o vínculo com o catálogo.
+    #[test]
+    fn usinagens_em_rodas_polias_conicas_e_sem_fim() {
+        use crate::engrenagens_conicas::{conica_documento, coroa_documento, sem_fim_documento, ParamConica, ParamSemFim};
+        use crate::transmissao_corrente::{polia_documento, roda_documento, ParamPolia, ParamRoda, TipoPolia};
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // roda 08B-1 z19, furo 8: 4 furos de alívio Ø10 no disco dos dentes (largura 0,9 · 7,75 = 6,975)
+        let roda = ParamRoda::nova("ISO 08B-1", 19, 8.);
+        let (v0, lo0, hi0) = medir(&roda_documento(&roda).unwrap());
+        let alivio = vec![Usinagem::FurosAlivio { quantidade: 4, diametro: 10., raio_circulo: 22. }];
+        let doc = roda_documento(&ParamRoda { usinagens: alivio.clone(), ..roda.clone() }).unwrap();
+        let (va, loa, hia) = medir(&doc);
+        let esperado = 4. * PI * 25. * 0.9 * 7.75;
+        assert!(rel(v0 - va, esperado) < 0.01, "alívio da roda {} contra {esperado}", v0 - va);
+        assert!((0..3).all(|i| (loa[i] - lo0[i]).abs() < 1e-3 && (hia[i] - hi0[i]).abs() < 1e-3), "a caixa não muda");
+        assert_eq!(vinculo_catalogo(&doc), Some((roda.chave(), alivio)));
+        // rasgo no furo Ø8 (DIN 6885: 2 × 1,0 no cubo) tira volume sem mexer na caixa
+        let (vk, ..) = medir(&roda_documento(&ParamRoda { usinagens: vec![Usinagem::RasgoChaveta], ..roda.clone() }).unwrap());
+        assert!(vk < v0 && v0 - vk > 1.);
+        // a roda já tem cubo: o cubo novo é recusado
+        assert!(roda_documento(&ParamRoda { usinagens: vec![Usinagem::Cubo { diametro: 20., comprimento: 5. }], ..roda.clone() }).is_err());
+
+        // polia em V Ø80 (seção Z, 10 × 6), furo 12, altura 10 + 6 = 16
+        let pv = ParamPolia { tipo: TipoPolia::EmV { topo: 10., altura: 6., diametro: 80. }, furo: 12., usinagens: vec![] };
+        let (p0, _, hp0) = medir(&polia_documento(&pv).unwrap());
+        assert!((hp0[2] - 16.).abs() < 1e-3);
+        // rebaixo Ø30 × 4: tira π (15² − 6²) · 4
+        let (pr, ..) = medir(&polia_documento(&ParamPolia { usinagens: vec![Usinagem::Rebaixo { diametro: 30., profundidade: 4. }], ..pv.clone() }).unwrap());
+        assert!(rel(p0 - pr, PI * (225. - 36.) * 4.) < 0.01, "rebaixo da polia {}", p0 - pr);
+        // cubo Ø30 × 10 em cima: põe π (15² − 6²) · 10 e a caixa sobe 10
+        let cubo = vec![Usinagem::Cubo { diametro: 30., comprimento: 10. }];
+        let dc = polia_documento(&ParamPolia { usinagens: cubo.clone(), ..pv.clone() }).unwrap();
+        let (pc, _, hpc) = medir(&dc);
+        assert!(rel(pc - p0, PI * (225. - 36.) * 10.) < 0.01, "cubo da polia {}", pc - p0);
+        assert!((hpc[2] - 26.).abs() < 1e-3);
+        assert_eq!(vinculo_catalogo(&dc), Some((pv.chave(), cubo)));
+        // polia dentada GT2 z20 (Ø12,73), furo 5 → 8: tira π (4² − 2,5²) · (8 + 3)
+        let pd = ParamPolia { tipo: TipoPolia::Dentada { passo: 2., dentes: 20, largura: 8. }, furo: 5., usinagens: vec![] };
+        let (d0, ..) = medir(&polia_documento(&pd).unwrap());
+        let (d1, ..) = medir(&polia_documento(&ParamPolia { usinagens: vec![Usinagem::FuroEixo { diametro: 8. }], ..pd }).unwrap());
+        assert!(rel(d0 - d1, PI * (16. - 6.25) * 11.) < 0.01, "furo da polia dentada {}", d0 - d1);
+
+        // cônica 20/20 m2, furo 8: cubo Ø14,4 × 9,6 abaixo dos dentes. Furo 8 → 10 atravessa cubo e dentes
+        let cn = ParamConica::default();
+        let g = cn.geo_base().unwrap();
+        assert!((g.largura - 9.6).abs() < 1e-9 && (g.z0 + 9.6).abs() < 1e-9 && g.topo_dentes > 0.);
+        let (c0, lc0, hc0) = medir(&conica_documento(&cn).unwrap());
+        let dcf = conica_documento(&ParamConica { usinagens: vec![Usinagem::FuroEixo { diametro: 10. }], ..cn.clone() }).unwrap();
+        let (c1, lc1, hc1) = medir(&dcf);
+        let esperado = PI * (25. - 16.) * (g.largura + g.topo_dentes);
+        assert!(rel(c0 - c1, esperado) < 0.01, "furo da cônica {} contra {esperado}", c0 - c1);
+        assert!((lc1[2] - lc0[2]).abs() < 1e-3 && (hc1[2] - hc0[2]).abs() < 1e-3 && (lc0[2] + 9.6).abs() < 0.02);
+        assert_eq!(vinculo_catalogo(&dcf).map(|v| v.0), Some(cn.chave()));
+        // rebaixo Ø12 × 3 pela face de baixo do cubo: tira π (6² − 4²) · 3
+        let (c2, ..) = medir(&conica_documento(&ParamConica { usinagens: vec![Usinagem::Rebaixo { diametro: 12., profundidade: 3. }], ..cn.clone() }).unwrap());
+        assert!(rel(c0 - c2, PI * (36. - 16.) * 3.) < 0.01, "rebaixo da cônica {}", c0 - c2);
+        assert!(conica_documento(&ParamConica { usinagens: vec![Usinagem::FurosAlivio { quantidade: 4, diametro: 2., raio_circulo: 6. }], ..cn }).is_err());
+
+        // sem-fim m2 d1 20 L24 furo 8 → 10: tira π (5² − 4²) · 24
+        let sf = ParamSemFim::default();
+        let (w0, ..) = medir(&sem_fim_documento(&sf).unwrap());
+        let (w1, ..) = medir(&sem_fim_documento(&ParamSemFim { usinagens_semfim: vec![Usinagem::FuroEixo { diametro: 10. }], ..sf.clone() }).unwrap());
+        assert!(rel(w0 - w1, PI * 9. * 24.) < 0.01, "furo do sem-fim {}", w0 - w1);
+        // coroa: furo 10 → 12 na largura 0,75 · 20 = 15: tira π (6² − 5²) · 15
+        let (k0, ..) = medir(&coroa_documento(&sf).unwrap());
+        let (k1, ..) = medir(&coroa_documento(&ParamSemFim { usinagens_coroa: vec![Usinagem::FuroEixo { diametro: 12. }], ..sf }).unwrap());
+        assert!(rel(k0 - k1, PI * 11. * 15.) < 0.01, "furo da coroa {}", k0 - k1);
     }
 }

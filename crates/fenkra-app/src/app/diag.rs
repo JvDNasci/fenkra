@@ -86,7 +86,7 @@ impl App {
         let mut acao: Option<(u8, Id)> = None;
         let montagem = self.asm.as_ref().filter(|_| self.settings.bench == crate::settings::Bench::Montagem).map(|st| st.report.failed.iter().map(|id| (*id, st.asm.name_of(*id))).collect::<Vec<_>>());
         let mut na_montagem: Option<(u8, Id)> = None;
-        egui::Window::new(tr("Diagnóstico")).open(&mut aberto).default_width(460.).default_pos([16., 130.]).show(ctx, |ui| {
+        crate::paineis::encaixado(ctx, "diagnostico", tr("Diagnóstico"), &mut aberto, 460., |ui| {
             for (id, nome) in montagem.iter().flatten() {
                 ui.group(|ui| {
                     ui.label(RichText::new(format!("✖ {nome}")).strong().color(crate::theme::st_err()));
@@ -280,7 +280,7 @@ impl App {
         let titulo = format!("{} - {}", tr("Pais e filhos"), self.open.doc.name_of(id));
         let geometria = self.open.doc.reference(id).is_some();
         let mut isolar = false;
-        egui::Window::new(titulo).id(egui::Id::new("fenkra_pais_filhos")).open(&mut aberto).default_width(340.).default_pos([490., 130.]).show(ctx, |ui| {
+        crate::paineis::encaixado(ctx, "pais_filhos", titulo, &mut aberto, 340., |ui| {
             if geometria && ui.button(tr("Isolar")).on_hover_text(tr("O elemento guarda a geometria de agora e deixa de depender dos pais.")).clicked() {
                 isolar = true;
             }
