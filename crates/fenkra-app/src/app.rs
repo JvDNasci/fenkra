@@ -21,6 +21,7 @@ use crate::i18n::tr;
 
 mod arvore;
 mod coluna;
+mod barras;
 mod diag;
 mod gravar;
 mod gerenciador;
@@ -3801,7 +3802,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     // ------------------------------------------------------------ painéis
 
     fn top(&mut self, root: &mut egui::Ui) {
-        egui::Panel::top("menu").frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(8, 2))).show(root, |ui| {
+        egui::Panel::top("menu").frame(egui::Frame::new().inner_margin(egui::Margin::symmetric(6, 1))).show(root, |ui| {
             // faixa do topo em degradê suave
             let r = ui.max_rect().expand2(egui::vec2(8., 2.));
             let (a, b) = (ui.visuals().panel_fill, ui.visuals().faint_bg_color);
@@ -3814,8 +3815,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             m.add_triangle(0, 2, 3);
             ui.painter().add(egui::Shape::mesh(m));
             ui.horizontal(|ui| {
-                ui.label(RichText::new(tr("◆ Fenkra")).strong().color(crate::theme::accent(ui.visuals())));
-                ui.separator();
+                // B434: o menu inteiro cabe num ícone; os menus de sempre viram submenus dele
+                ui.menu_image_button(Self::icone_do_menu(), |ui| {
                 ui.menu_button(tr("Arquivo"), |ui| {
                     if ui.button(tr("Tela inicial")).clicked() {
                         self.started = false;
@@ -3927,6 +3928,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         ui.close();
                     }
                     ui.separator();
+                    ui.menu_button(tr("Histórico da peça"), |ui| self.menu_historico(ui));
                     if ui.button(tr("Diagnóstico…")).clicked() {
                         self.abrir_diagnostico();
                         ui.close();
@@ -3952,15 +3954,13 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         ui.close();
                     }
                 });
+                })
+                .response
+                .on_hover_text(tr("Menu: Arquivo, Exibir, Editar e Ajuda"));
                 ui.separator();
-                // abas de módulo (RF-UI-006)
+                // abas de módulo (RF-UI-006), só ícones
                 use crate::settings::Bench;
-                ui.add_space(10.);
-                for (b, n, icon) in [(Bench::Solidos, "Modelagem Sólida", "▣"), (Bench::Superficies, "Superfícies", "◫"), (Bench::Montagem, "Montagem", "⚙"), (Bench::Chapa, "Chapa metálica", "▭"), (Bench::Estrutural, "Estrutural", "⌶"), (Bench::FormaLivre, "Forma livre", "◍"), (Bench::Desenho, "Desenho", "📐")] {
-                    if bench_tab(ui, self.settings.bench == b, &format!("{icon}  {}", tr(n)), true).on_hover_text(tr("As bancadas compartilham o mesmo modelo: sólidos e superfícies se conversam.")).clicked() {
-                        self.settings.bench = b;
-                    }
-                }
+                self.abas_de_bancada(ui);
                 if self.asm.as_ref().is_some_and(|s| s.editing_part.is_some()) && self.settings.bench != Bench::Montagem {
                     ui.add_space(8.);
                     if ui.button(RichText::new(tr("↩ Voltar à montagem")).strong().color(crate::theme::accent(ui.visuals()))).on_hover_text(tr("Fecha a peça ativa; com algo por salvar, pergunta antes")).clicked() {
@@ -3968,219 +3968,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     }
                 }
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let asm_title = self.asm.as_ref().filter(|_| self.settings.bench == Bench::Montagem).map(|s| format!("⚙ {}{}", s.asm.name, if s.modified { " •" } else { "" }));
-                    let asm_title = asm_title.or_else(|| self.dwg.as_ref().filter(|_| self.settings.bench == Bench::Desenho).map(|s| format!("📐 {}{}", s.d.name, if s.modified { " •" } else { "" })));
-                    let title = match (&self.open.frozen, self.open.modified) {
-                        _ if asm_title.is_some() => asm_title.clone().unwrap(),
-                        (Some(r), _) => format!("{} — revisão {r} (congelada)", self.open.doc.name),
-                        (None, true) => format!("{} •", self.open.doc.name),
-                        (None, false) => self.open.doc.name.clone(),
-                    };
-                    // tema dos menus (faixas de cor por grupo)
-                    let themes = ["Padrão", "Grafite", "Carmim", "Azul", "Do tema"];
-                    let cur = self.settings.menu_theme.min(4) as usize;
-                    ui.menu_button(RichText::new(format!("🎨 {}", tr(themes[cur]))).small(), |ui| {
-                        ui.label(RichText::new(tr("Tema dos menus")).strong());
-                        for (i, n) in themes.iter().enumerate() {
-                            if ui.radio(cur == i, tr(n)).clicked() {
-                                self.settings.menu_theme = i as u8;
-                                ui.close();
-                            }
-                        }
-                    });
-                    ui.label(RichText::new(title).weak());
-                    self.estado_na_barra(ui);
+                    // B434: à direita só o auxiliar; o nome do documento fica no título da janela
+                    self.auxiliares_do_topo(ui);
                 });
             });
         });
-
-        let sketching = self.sketch.is_some();
-        let ts = self.tool_state();
-        let (top, mais) = toolbar::contexto(&self.settings, toolbar::groups_at(&self.settings, Dock::Topo, sketching), sketching);
-        if !top.is_empty() || !mais.is_empty() {
-            let mut acts = vec![];
-            let fill = root.visuals().panel_fill;
-            egui::Panel::top("comandos").frame(egui::Frame::new().fill(fill).inner_margin(egui::Margin { left: 8, right: 8, top: 2, bottom: 1 })).show(root, |ui| {
-                // uma linha só, sem barra de rolagem à vista (não quebra linha);
-                // a roda do mouse (vertical) rola a barra para os lados
-                if ui.rect_contains_pointer(ui.max_rect()) {
-                    ui.ctx().input_mut(|i| {
-                        if i.smooth_scroll_delta.x == 0. {
-                            i.smooth_scroll_delta.x = i.smooth_scroll_delta.y;
-                            i.smooth_scroll_delta.y = 0.;
-                        }
-                    });
-                }
-                egui::ScrollArea::horizontal()
-                    .id_salt("rolagem_comandos")
-                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
-                    .show(ui, |ui| {
-                        ui.horizontal(|ui| {
-                            let gap = |ui: &mut egui::Ui| ui.add_space(14.);
-                            for (i, g) in top.iter().enumerate() {
-                                if i > 0 {
-                                    gap(ui);
-                                }
-                                acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, false));
-                            }
-                            // grupos montados pelo usuário
-                            let mine: Vec<crate::settings::CustomGroup> = self.settings.custom.groups.iter().filter(|c| c.sketch == sketching && !c.items.is_empty()).cloned().collect();
-                            for cg in &mine {
-                                gap(ui);
-                                acts.extend(toolbar::show_custom(ui, cg, &mut self.settings, &ts, false));
-                            }
-                            // o que não é do contexto continua a um clique
-                            if !mais.is_empty() {
-                                gap(ui);
-                                acts.extend(toolbar::mais(ui, &mais, &mut self.settings, &ts));
-                            }
-                        });
-                    });
-            });
-            for a in acts {
-                self.act(a);
-            }
-        }
-    }
-
-    /// Barra de comandos numa borda: painel livre com os grupos daquela doca. Encaixada em cima ou
-    /// embaixo, os grupos se deitam em fila; nas laterais, ficam em coluna.
-    #[allow(clippy::too_many_arguments)]
-    fn barra_livre(&mut self, ctx: &egui::Context, area: Rect, nome: &str, grupos: &[crate::settings::Group], encaixe: crate::paineis::Encaixe, padrao: egui::Pos2, acts: &mut Vec<Act>) {
-        use crate::paineis::{self, Opcoes, Painel};
-        let ts = self.tool_state();
-        let posicao = self.settings.painel(nome, encaixe);
-        let deitada = matches!(posicao.encaixe, paineis::Encaixe::Topo | paineis::Encaixe::Base);
-        let titulo = if nome == "barra_lateral" { tr("Barra esquerda") } else { tr("Barra direita") };
-        let largura = if deitada { (area.width() * 0.6).clamp(320., 900.) } else { 62. };
-        let cfg = Painel { nome: nome.to_string(), titulo: titulo.to_string(), padrao, largura, redimensiona: true };
-        let saida = paineis::mostrar_com(ctx, area, &cfg, posicao, Opcoes { persiste: true, variante: deitada as u8 }, |ui| {
-            if deitada {
-                egui::ScrollArea::horizontal().id_salt(nome).show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        for (i, g) in grupos.iter().enumerate() {
-                            if i > 0 {
-                                ui.separator();
-                            }
-                            acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, false));
-                        }
-                    });
-                });
-            } else {
-                egui::ScrollArea::vertical().id_salt(nome).show(ui, |ui| {
-                    for (i, g) in grupos.iter().enumerate() {
-                        if i > 0 {
-                            ui.separator();
-                        }
-                        acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, true));
-                    }
-                });
-            }
-        });
-        if let Some(mut p) = saida.movido {
-            // mudar de lateral para o topo ou a base troca o formato da barra: o tamanho antigo não serve
-            if matches!(p.encaixe, paineis::Encaixe::Topo | paineis::Encaixe::Base) != deitada {
-                p.largura = None;
-                p.altura = None;
-            }
-            self.settings.guardar_painel(nome, p);
-        }
-    }
-
-    /// Barras laterais e grupos soltos: todos flutuam sobre o modelo.
-    fn side_toolbars(&mut self, ctx: &egui::Context, area: Rect) {
-        use crate::paineis::{self, Encaixe, Painel, Posicao};
-        let mut acts = vec![];
-        let sketching = self.sketch.is_some();
-        let ts = self.tool_state();
-        let side = toolbar::groups_at(&self.settings, Dock::Lateral, sketching);
-        if !side.is_empty() {
-            self.barra_livre(ctx, area, "barra_lateral", &side, Encaixe::Esquerda, paineis::ao_lado_da_arvore(area), &mut acts);
-        }
-        let right = toolbar::groups_at(&self.settings, Dock::Direita, sketching);
-        if !right.is_empty() {
-            self.barra_livre(ctx, area, "barra_direita", &right, Encaixe::Direita, paineis::abaixo_do_cubo(area, 62.), &mut acts);
-        }
-        self.ctx_pointer = ctx.input(|i| i.pointer.interact_pos().or(i.pointer.latest_pos()));
-        // zonas de encaixe: faixa do topo e as duas laterais
-        let lado = Rect::from_min_max(egui::pos2(area.left() + paineis::FAIXA_ARVORE, area.top()), egui::pos2(area.left() + paineis::FAIXA_ARVORE + 70., area.bottom()));
-        let zones = [
-            (Dock::Topo, Rect::from_min_size(area.left_top() - egui::vec2(0., 70.), egui::vec2(area.width(), 70.))),
-            (Dock::Lateral, lado),
-            (Dock::Direita, Rect::from_min_max(egui::pos2(area.right() - 70., area.top()), area.right_bottom())),
-        ];
-        // grupo arrastado pela alça: fantasma segue o cursor e desliza até a doca de destino
-        if let Some(mut dd) = self.dock_drag {
-            let p = self.ctx_pointer.unwrap_or(dd.ghost.center());
-            let target = zones.iter().find(|(_, z)| z.contains(p)).copied();
-            let to = match target {
-                Some((d, z)) => {
-                    let w = match d {
-                        Dock::Topo => egui::vec2(dd.size.x.max(dd.size.y), 64.),
-                        _ => egui::vec2(64., dd.size.y.max(dd.size.x).min(z.height())),
-                    };
-                    let c = match d {
-                        Dock::Topo => egui::pos2(p.x.clamp(z.left() + w.x / 2., z.right() - w.x / 2.), z.center().y),
-                        _ => egui::pos2(z.center().x, p.y.clamp(z.top() + w.y / 2., z.bottom() - w.y / 2.)),
-                    };
-                    Rect::from_center_size(c, w)
-                }
-                None => Rect::from_min_size(p - dd.grab, dd.size),
-            };
-            // animação: aproxima uma fração a cada quadro
-            let k = 0.3;
-            dd.ghost = Rect::from_min_max(dd.ghost.min + (to.min - dd.ghost.min) * k, dd.ghost.max + (to.max - dd.ghost.max) * k);
-            let destaque = crate::theme::accent(&ctx.global_style().visuals);
-            let pt = ctx.layer_painter(egui::LayerId::new(egui::Order::Tooltip, egui::Id::unique("fantasma_doca")));
-            for (d, z) in zones {
-                let on = target.is_some_and(|t| t.0 == d);
-                pt.rect_filled(z, 8., destaque.gamma_multiply(if on { 0.18 } else { 0.06 }));
-                pt.rect_stroke(z, 8., egui::Stroke::new(if on { 2. } else { 1. }, destaque.gamma_multiply(if on { 0.8 } else { 0.3 })), egui::StrokeKind::Inside);
-            }
-            pt.rect_filled(dd.ghost, 8., destaque.gamma_multiply(0.4));
-            pt.rect_stroke(dd.ghost, 8., egui::Stroke::new(2., destaque), egui::StrokeKind::Inside);
-            pt.text(dd.ghost.center(), egui::Align2::CENTER_CENTER, dd.group.label(), egui::FontId::proportional(13.), ctx.global_style().visuals.strong_text_color());
-            ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
-            ctx.request_repaint();
-            if ctx.input(|i| i.pointer.any_released() || !i.pointer.primary_down()) {
-                match target {
-                    Some((d, _)) => acts.push(Act::Dock(dd.group, d)),
-                    None => {
-                        // flutuante exatamente onde soltou
-                        let q = p - dd.grab;
-                        self.settings.guardar_painel(&nome_do_grupo(dd.group), Posicao { encaixe: Encaixe::Livre, pos: Some([q.x, q.y]), ..Default::default() });
-                        acts.push(Act::Dock(dd.group, Dock::Flutuante));
-                    }
-                }
-                self.dock_drag = None;
-            } else {
-                self.dock_drag = Some(dd);
-            }
-        }
-        for (i, g) in toolbar::groups_at(&self.settings, Dock::Flutuante, sketching).into_iter().enumerate() {
-            let nome = nome_do_grupo(g);
-            let padrao = paineis::ao_lado_da_arvore(area) + egui::vec2(0., 120. * i as f32);
-            let cfg = Painel { nome: nome.clone(), titulo: g.label().to_string(), padrao, largura: 220., redimensiona: false };
-            let posicao = self.settings.painel(&nome, Encaixe::Livre);
-            let saida = paineis::mostrar_com(ctx, area, &cfg, posicao, paineis::Opcoes { persiste: true, variante: 0 }, |ui| {
-                acts.extend(toolbar::show_group(ui, g, &mut self.settings, &ts, false));
-            });
-            // soltar perto do topo ou de uma lateral devolve o grupo à barra daquela borda
-            match saida.solto_em {
-                Some(Encaixe::Topo) => acts.push(Act::Dock(g, Dock::Topo)),
-                Some(Encaixe::Esquerda) => acts.push(Act::Dock(g, Dock::Lateral)),
-                Some(Encaixe::Direita) => acts.push(Act::Dock(g, Dock::Direita)),
-                _ => {
-                    // solto embaixo ou no meio: fica onde foi solto, encaixado se for na base
-                    if let Some(p) = saida.movido {
-                        self.settings.guardar_painel(&nome, p);
-                    }
-                }
-            }
-        }
-        for a in acts {
-            self.act(a);
-        }
     }
 
     /// Seletor de vistas (Espaço): caixa central transparente com o cubo 3D translúcido,
@@ -7363,153 +7155,6 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     /// Status em uma linha sobre o modelo, sem painel.
-    /// Barra de baixo: uma faixa que reserva espaço (B433), então painel encaixado na base fica acima dela.
-    fn barra_status(&mut self, root: &mut egui::Ui) {
-        let fill = root.visuals().panel_fill;
-        egui::Panel::bottom("barra_de_baixo").resizable(false).frame(egui::Frame::new().fill(fill).inner_margin(egui::Margin::symmetric(8, 2))).show(root, |ui| {
-            let largura = ui.available_width();
-            ui.set_width(largura);
-            ui.horizontal(|ui| {
-                let (k, ms) = self.result.as_ref().map(|r| (r.kernel.clone(), r.elapsed_ms)).unwrap_or_default();
-                let busy = self.gen_done < self.gen_sent;
-                let now = ui.input(|i| i.time);
-                let n = self.open.doc.features.len();
-                let swept = (((now - self.sweep_t0) / 0.035) as usize).min(n);
-                let stale = self.stale_from().is_some() && !busy;
-                let compondo = self.asm.as_ref().filter(|s| self.settings.bench == crate::settings::Bench::Montagem && s.compondo);
-                let (txt, col) = if let Some(s) = compondo {
-                    let t = match s.progresso_composicao() {
-                        Some((f, t)) => format!("⏳ {} {}/{t}", tr("compondo a montagem…"), f.min(t)),
-                        None => format!("⏳ {}", tr("compondo a montagem…")),
-                    };
-                    (t, crate::theme::st_warn())
-                } else if busy {
-                    let t = match self.worker.progresso() {
-                        Some((f, t)) => format!("⏳ recalculando… {}/{t}", f.min(t)),
-                        None => "⏳ recalculando…".to_string(),
-                    };
-                    (t, crate::theme::st_warn())
-                } else if stale {
-                    (tr("⟳ desatualizado — F5 atualiza").to_string(), crate::theme::st_err())
-                } else if swept < n {
-                    (format!("▶ atualizando {swept}/{n}"), crate::theme::accent(ui.visuals()))
-                } else {
-                    (format!("✔ recalculado em {ms:.0} ms"), ui.visuals().text_color())
-                };
-                ui.label(RichText::new(txt).small().color(col));
-                ui.separator();
-                if busy && ui.small_button(tr("✖ Cancelar")).on_hover_text(tr("para o cálculo; o que já terminou fica guardado")).clicked() {
-                    self.worker.cancelar();
-                }
-                // o modo fica no documento: cada peça lembra o seu
-                let mut auto = self.open.doc.atualizacao == ModoAtualizacao::Automatica;
-                if ui.checkbox(&mut auto, RichText::new(tr("auto")).small()).on_hover_text(tr("atualizar automaticamente a cada mudança")).changed() {
-                    self.open.doc.atualizacao = if auto { ModoAtualizacao::Automatica } else { ModoAtualizacao::Manual };
-                }
-                if ui.small_button(tr("⟳ Atualizar")).on_hover_text(tr("recalcula o que mudou (F5)")).clicked() {
-                    self.send_recompute(false);
-                }
-                // no Scan o objeto em trabalho é o de antes dele, não o comando que se está olhando
-                let em_trabalho = match self.scan_volta {
-                    Some(v) => {
-                        let d = &self.open.doc;
-                        d.features[..v.min(d.features.len())].iter().rev().find(|f| !d.is_free(f)).map(|f| f.id)
-                    }
-                    None => self.open.doc.objeto_em_trabalho(),
-                };
-                if let Some(nome) = em_trabalho.map(|id| self.open.doc.name_of(id)).filter(|_| crate::barra_estado::mostra_historico(self.sem_peca_em_edicao())) {
-                    ui.separator();
-                    ui.label(RichText::new(format!("{}: {nome}", tr("Em trabalho"))).small());
-                }
-                // B59: modo Scan, percorre o histórico sem mudar o objeto em trabalho
-                if crate::barra_estado::mostra_historico(self.sem_peca_em_edicao()) {
-                    let ligado = self.scan_volta.is_some();
-                    if ui.add(egui::Button::new(RichText::new(tr("🔍 Scan")).small()).selected(ligado)).on_hover_text(tr("Scan: escolha comandos na árvore (clique ou setas) para ver a peça como estava em cada um. O objeto em trabalho não muda; ao desligar, a peça volta.")).clicked() {
-                        crate::scan::alternar(self);
-                    }
-                    if ligado {
-                        if let Some(n) = self.open.doc.rollback.checked_sub(1).and_then(|i| self.open.doc.features.get(i)).map(|f| f.name.clone()) {
-                            ui.label(RichText::new(format!("{} {n}", tr("Scan ligado: vendo a peça até"))).small().color(ui.visuals().warn_fg_color));
-                        }
-                    }
-                }
-                if self.scan_volta.is_none() && self.open.doc.retrocedida() && ui.small_button(tr("Voltar ao fim da peça")).clicked() {
-                    self.open.doc.voltar_ao_fim_da_peca();
-                }
-                if ui.small_button(tr("⟲ Reconstruir")).on_hover_text(tr("reconstrói tudo do zero, sem cache (Ctrl+F5)")).clicked() {
-                    self.send_recompute(true);
-                }
-                // passo a passo (B59): anda o objeto em trabalho (a barra de fim de peça) comando a
-                // comando, a mesma posição que a árvore sublinha. Na montagem não há linha do tempo de
-                // peça para andar, então a barra sai (B430)
-                let (cur, total) = self.open.doc.posicao_em_trabalho();
-                let mut passo: Option<fenkra_core::PassoTrabalho> = None;
-                if crate::barra_estado::mostra_historico(self.sem_peca_em_edicao()) && self.scan_volta.is_none() {
-                    use fenkra_core::PassoTrabalho as P;
-                    if ui.small_button("⏮").on_hover_text(tr("voltar ao início (reconstruir passo a passo)")).clicked() {
-                        passo = Some(P::Inicio);
-                    }
-                    if ui.small_button("◀").on_hover_text(tr("um comando para trás")).clicked() {
-                        passo = Some(P::Anterior);
-                    }
-                    ui.label(RichText::new(format!("{cur}/{total}")).small().weak());
-                    if ui.small_button("▶").on_hover_text(tr("reconstruir o próximo comando")).clicked() {
-                        passo = Some(P::Proximo);
-                    }
-                    if ui.small_button("⏭").on_hover_text(tr("até o fim")).clicked() {
-                        passo = Some(P::Fim);
-                    }
-                }
-                if let Some(p) = passo {
-                    self.open.doc.passo_em_trabalho(p);
-                }
-                if let (true, Some(st)) = (self.settings.bench == crate::settings::Bench::Montagem, self.asm.as_ref()) {
-                    let r = &st.report;
-                    let col = if r.failed.is_empty() { ui.visuals().text_color() } else { crate::theme::st_err() };
-                    ui.separator();
-                    ui.label(RichText::new(format!("⚙ {} GDL livres · {} restrição(ões) com erro", r.dof, r.failed.len())).small().color(col));
-                }
-                crate::pmi_ui::status(self, ui);
-                let errs = self.errors_prev;
-                if errs > 0 && ui.small_button(RichText::new(format!("✖ {errs} com erro — reparar")).color(crate::theme::st_err())).clicked() {
-                    self.wizard_open = true;
-                }
-                ui.separator();
-                ui.label(RichText::new(k).small().weak());
-                if let Some(e) = self.result.as_ref().and_then(|r| r.param_error.clone()) {
-                    ui.separator();
-                    ui.label(RichText::new(format!("Parâmetros: {e}")).small().color(crate::theme::st_err()));
-                }
-                let passo_sk = self.sketch.as_ref().map(|e| e.dica_passo());
-                use crate::ajuda_cmd::Tela;
-                let tela = match self.settings.bench {
-                    _ if self.in_asm() => Tela::Montagem,
-                    crate::settings::Bench::Montagem => Tela::Montagem,
-                    crate::settings::Bench::Desenho => Tela::Desenho,
-                    crate::settings::Bench::Chapa => Tela::Chapa,
-                    crate::settings::Bench::Estrutural => Tela::Estrutural,
-                    crate::settings::Bench::Superficies => Tela::Superficies,
-                    crate::settings::Bench::FormaLivre => Tela::FormaLivre,
-                    crate::settings::Bench::Solidos => Tela::Peca,
-                };
-                let ctx_ajuda = crate::ajuda_cmd::Contexto {
-                    tela,
-                    sketch: passo_sk.as_deref(),
-                    n_comandos: n,
-                    ultimo_e_sketch: self.open.doc.features.last().is_some_and(|f| matches!(f.kind, FeatureKind::Sketch(_))),
-                    n_selecionados: self.picks.len(),
-                };
-                if let Some(t) = crate::ajuda_cmd::proximo_passo(&ctx_ajuda) {
-                    ui.separator();
-                    ui.label(RichText::new(t).small().color(crate::theme::accent(ui.visuals())));
-                }
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(RichText::new(format!("{} · duplo clique: ajustar", self.settings.nav.help())).small().weak());
-                });
-            });
-        });
-    }
-
     fn viewport(&mut self, root: &mut egui::Ui, frame: &eframe::Frame) {
         let ctx = root.ctx().clone();
         self.arvore_com_roda = ctx.input(|i| i.pointer.latest_pos()).is_some_and(|p| self.arvore.conteudo.contains(p)) && self.arvore.transborda();
@@ -7812,14 +7457,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 );
             }
             // estado da vista no canto superior esquerdo
-            let info = format!(
-                "{}{} · {}",
-                if self.hidden_env { "AMBIENTE DE OCULTOS · " } else { "" },
-                if vp.camera.ortho { "Ortogonal" } else { "Perspectiva" },
-                self.settings.display.label()
-            );
-            let color = if self.hidden_env { Color32::from_rgb(255, 190, 80) } else { ink };
-            ui.painter().text(rect.center_top() + egui::vec2(0., 8.), egui::Align2::CENTER_TOP, info, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), color);
+            // B434: projeção e modo de exibição estão na barra de baixo; aqui só o aviso do ambiente de ocultos
+            if self.hidden_env {
+                ui.painter().text(rect.center_top() + egui::vec2(0., 8.), egui::Align2::CENTER_TOP, tr("AMBIENTE DE OCULTOS"), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), Color32::from_rgb(255, 190, 80));
+            }
             if self.hidden_env {
                 ui.painter().rect_stroke(rect.shrink(2.), 0., egui::Stroke::new(3., Color32::from_rgb(255, 170, 60)), egui::StrokeKind::Inside);
             }
@@ -7834,7 +7475,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 );
             }
             // cubo de vistas no canto superior direito
-            let cube_area = Rect::from_min_size(egui::pos2(rect.right() - 120., rect.top() + 8.), egui::vec2(112., 112.));
+            // B434: cubo pequeno no canto, o único elemento sobre a área 3D
+            let cube_area = Rect::from_min_size(egui::pos2(rect.right() - 86., rect.top() + 6.), egui::vec2(80., 80.));
             let (dir, drag) = crate::viewcube::cube(ui, cube_area, &cam, "canto", false);
             if dir.is_some() {
                 crate::curso::anotar("vista_cubo");
@@ -9166,7 +8808,8 @@ impl eframe::App for App {
         self.hover_now.set(None);
         self.atualizar_conjunto();
         crate::desempenho::marca("conjunto");
-        self.barra_status(root);
+        self.titulo_da_janela(ctx);
+        self.barra_de_baixo(root);
         // o painel de comando só existe com um comando aberto
         let active = if self.settings.bench == crate::settings::Bench::Desenho {
             self.dwg.as_ref().is_some_and(|s| s.active())
@@ -9177,6 +8820,8 @@ impl eframe::App for App {
         };
         // B433: a coluna da esquerda (árvore ou painel do comando) reserva espaço; nada flutua sobre a peça
         self.coluna_esquerda(root, active);
+        // B434: recursos da bancada à direita, só ícones
+        self.barra_direita(root);
         // `area`: onde os painéis encaixam (direita e base). A vista fica com o que sobra dela
         let area = root.available_rect_before_wrap();
         crate::paineis::publicar(ctx, area, &self.settings);
@@ -9232,7 +8877,7 @@ impl eframe::App for App {
         self.sheet_window(ctx);
         crate::chapa_fab_ui::janela(ctx, &self.open.doc);
         crate::st_ui::windows(self, ctx);
-        self.side_toolbars(ctx, area);
+        self.ctx_pointer = ctx.input(|i| i.pointer.interact_pos().or(i.pointer.latest_pos()));
         self.settings_window(ctx);
         self.about_window(ctx);
         self.curso_quadro(ctx, area);

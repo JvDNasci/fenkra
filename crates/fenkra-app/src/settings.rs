@@ -141,6 +141,11 @@ impl Group {
         }
     }
     /// Grupos que só aparecem com um sketch em edição.
+    /// Navegação (vista e seleção): mora na barra de baixo, não na de recursos (B434).
+    pub fn de_navegacao(self) -> bool {
+        matches!(self, Group::Vista | Group::Selecao)
+    }
+
     pub fn sketch_only(self) -> bool {
         matches!(self, Group::SkCriacao | Group::SkTransformar | Group::SkCotagem | Group::SkRestricoes | Group::SkFerramentas)
     }
@@ -334,14 +339,13 @@ pub enum Dock {
 }
 
 impl Dock {
-    pub const ALL: [Dock; 5] = [Dock::Topo, Dock::Lateral, Dock::Direita, Dock::Flutuante, Dock::Oculta];
+    /// O que a pessoa pode escolher (B434): o grupo aparece na barra dele ou fica oculto. Topo, lateral
+    /// esquerda e flutuante continuam no formato do arquivo, para ler preferências antigas.
+    pub const ALL: [Dock; 2] = [Dock::Direita, Dock::Oculta];
     pub fn label(self) -> &'static str {
         match self {
-            Dock::Topo => tr("Fixa no topo"),
-            Dock::Lateral => tr("Fixa na lateral esquerda"),
-            Dock::Direita => tr("Fixa na lateral direita"),
-            Dock::Flutuante => tr("Flutuante"),
             Dock::Oculta => tr("Oculta"),
+            _ => tr("Na barra"),
         }
     }
 }
@@ -408,7 +412,8 @@ impl Graficos {
 }
 
 /// Versão atual do layout da tela. 1: coluna da esquerda e painéis só na direita ou na base (B433).
-pub const LAYOUT_VERSAO: u8 = 1;
+/// 2: barras de recursos à direita, só com ícones, e navegação embaixo (B434).
+pub const LAYOUT_VERSAO: u8 = 2;
 
 /// O que a pessoa tinha arrumado antes de uma migração de layout. Fica no arquivo de preferências,
 /// para nada se perder e para a disposição antiga poder ser consultada (ADR 0092).
@@ -646,7 +651,7 @@ impl Default for Settings {
             tangent_edges: false,
             ortho: false,
             filter: Filter::default(),
-            docks: Group::ALL.iter().map(|g| (*g, Dock::Topo)).collect(),
+            docks: Group::ALL.iter().map(|g| (*g, Dock::Direita)).collect(),
             families: vec![],
             nav: NavStyle::Fenkra,
             invert_zoom: false,
@@ -762,6 +767,9 @@ impl Settings {
     /// Leva a disposição salva para o layout atual (ADR 0092), sem perder nada: a disposição antiga
     /// fica inteira em `layout_anterior`, e cada painel guarda tamanho, minimizado e fechado.
     ///
+    /// Versão 2 (B434): as barras de comandos que estavam no topo, na lateral esquerda ou flutuando vão
+    /// para a barra da direita; a oculta continua oculta.
+    ///
     /// Versão 1 (B433): painel livre ou na esquerda vai para a direita (largo, para a base), o do topo
     /// vai para a base, janela nativa continua janela. O painel do comando passa a morar na coluna da
     /// esquerda, e a largura que a pessoa tinha dado a ele vira a largura da coluna.
@@ -790,6 +798,14 @@ impl Settings {
             }
             if let Some(l) = largura_do_comando {
                 self.coluna_largura = l.clamp(240., 560.);
+            }
+        }
+        if self.layout_versao < 2 {
+            // B434: toda barra visível vai para o lugar dela (direita ou base); a oculta continua oculta
+            for (_, d) in &mut self.docks {
+                if *d != Dock::Oculta {
+                    *d = Dock::Direita;
+                }
             }
         }
         self.layout_versao = LAYOUT_VERSAO;
@@ -828,8 +844,13 @@ impl Settings {
         self.save();
     }
 
+    /// Onde o grupo fica: na barra dele (recursos à direita; vista e seleção embaixo) ou oculto. Doca
+    /// antiga (topo, lateral esquerda, flutuante) vale como "na barra" (ADR 0092).
     pub fn dock(&self, g: Group) -> Dock {
-        self.docks.iter().find(|(x, _)| *x == g).map(|(_, d)| *d).unwrap_or(Dock::Topo)
+        match self.docks.iter().find(|(x, _)| *x == g).map(|(_, d)| *d) {
+            Some(Dock::Oculta) => Dock::Oculta,
+            _ => Dock::Direita,
+        }
     }
 
     pub fn set_dock(&mut self, g: Group, d: Dock) {
@@ -882,6 +903,10 @@ mod tests {
         let mut s = Settings::default();
         assert_eq!(s.layout_versao, 0, "o padrão é zero: arquivo antigo não traz a chave");
         s.editor_left = false;
+        s.docks = Group::ALL.iter().map(|g| (*g, Dock::Topo)).collect();
+        s.set_dock(Group::Sketch, Dock::Flutuante);
+        s.set_dock(Group::Solidos, Dock::Lateral);
+        s.set_dock(Group::Padroes, Dock::Oculta);
         s.paineis = vec![
             salvo(Bench::Solidos, "comando", Posicao { encaixe: Encaixe::Livre, pos: Some([420., 180.]), largura: Some(380.), ..Default::default() }),
             salvo(Bench::Solidos, "features", Posicao { encaixe: Encaixe::Livre, pos: Some([500., 300.]), largura: Some(310.), altura: Some(222.), minimizado: true, fechado: true }),
@@ -911,6 +936,11 @@ mod tests {
         assert_eq!(de(Bench::Montagem, "comando"), antes.paineis[5].posicao, "janela em outro monitor continua lá");
         assert_eq!(de(Bench::Solidos, "comando").encaixe, Encaixe::Esquerda, "o comando mora na coluna");
         assert_eq!(m.coluna_largura, 380., "a largura que o painel do comando tinha vira a da coluna");
+        // B434: as barras vão para o lugar delas e a que estava oculta continua oculta
+        assert_eq!(m.dock(Group::Sketch), Dock::Direita);
+        assert_eq!(m.dock(Group::Padroes), Dock::Oculta);
+        assert!(m.docks.iter().all(|(_, d)| matches!(d, Dock::Direita | Dock::Oculta)), "{:?}", m.docks);
+        assert_eq!(m.docks.len(), antes.docks.len(), "nenhum grupo some da lista");
         // nada migrado fica livre sobre a peça
         assert!(m.paineis.iter().all(|p| p.nome == "comando" || matches!(p.posicao.encaixe, Encaixe::Direita | Encaixe::Base)));
         // a disposição antiga fica guardada inteira
@@ -919,6 +949,7 @@ mod tests {
         // todo o resto das preferências fica como estava
         let mut iguais = m.clone();
         iguais.paineis = antes.paineis.clone();
+        iguais.docks = antes.docks.clone();
         iguais.coluna_largura = antes.coluna_largura;
         iguais.layout_versao = 0;
         iguais.layout_anterior = None;

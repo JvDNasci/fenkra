@@ -716,6 +716,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let tex_names: Vec<String> = app.open.doc.textures.iter().map(|t| t.name.clone()).collect();
     // prévia do PN (B47): só para o documento que ainda não está no projeto
     let pn_info = if app.open.entry.is_none() { app.project.as_ref().map(|p| (p.pn_previa(&app.open.doc).ok(), p.pn_mascara_ativa())) } else { None };
+    let info_modelo = app.info_do_modelo();
     let doc = &mut app.open.doc;
 
     if let Some(rev) = &frozen {
@@ -875,6 +876,15 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 }
             }
             ui.label(RichText::new(tr("Projetada nos três planos (triplanar) e multiplicada pela cor: use branco para a imagem pura.")).weak().small());
+            // B434: o que saiu da barra de baixo (recálculo, kernel, objeto em trabalho) mora aqui
+            section(ui, "Informações do modelo");
+            egui::Grid::new("info_do_modelo").num_columns(2).show(ui, |ui| {
+                for (k, v) in &info_modelo {
+                    ui.label(RichText::new(k).weak());
+                    ui.label(v);
+                    ui.end_row();
+                }
+            });
         }
 
         Sel::Origin(o) => {

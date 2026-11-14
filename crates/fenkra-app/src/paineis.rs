@@ -675,7 +675,10 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
     let estilo = ctx.global_style();
     let (lado, canto) = (estilo.interaction.resize_grab_radius_side + 1., estilo.interaction.resize_grab_radius_corner);
     let (ponteiro, apertado, origem, decidido) = ctx.input(|i| (i.pointer.latest_pos(), i.pointer.primary_down(), i.pointer.press_origin(), i.pointer.is_decidedly_dragging()));
-    let max_alto = (area.height() - 2. * MARGEM).max(ALTURA_MIN);
+    // o painel nunca passa da faixa que pode reservar: na base, a altura tem teto; na direita, a largura
+    let teto = if posicao.encaixe == Encaixe::Base { area.height() * RESERVA_MAX } else { area.height() };
+    let max_alto = (teto - 2. * MARGEM).max(ALTURA_MIN);
+    let max_largo = (area.width() * RESERVA_MAX - 2. * MARGEM).max(LARGURA_MIN);
 
     // redimensionamento: começa quando o botão é apertado numa faixa de lado ou canto do painel
     let mut redim = ctx.data(|d| d.get_temp::<Redim>(id_redim));
@@ -726,6 +729,9 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
         .resizable([true, !minimizado])
         .default_width(posicao.largura.unwrap_or(cfg.largura))
         .min_size([LARGURA_MIN, if minimizado { 0. } else { ALTURA_MIN }])
+        // sem altura escolhida, o painel tem a altura do conteúdo até o teto (o padrão do egui pararia em 420)
+        .default_height(max_alto)
+        .max_width(max_largo)
         .max_height(max_alto)
         .constrain_to(area);
     if !arrastando && redim.is_none() {
