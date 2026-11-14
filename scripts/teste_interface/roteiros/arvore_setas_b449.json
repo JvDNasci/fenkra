@@ -1,0 +1,12 @@
+{
+  "descricao": "B449: setas na árvore depois do clique e redesenho imediato. Rode com FK_CUTUCAR=0 (o equipamento não mexe o cursor antes da captura): cada captura tem de mostrar o resultado da tecla sem movimento do mouse. Exemplo 'Placa paramétrica' no estado final de arvore_soltura_b446.json (Placa em y 479). Conferido em 13/11: ↓↓ andam Placa → Centros dos furos → Furos M6; → gira a vista; ↑ volta para Centros dos furos sem mexer a vista; depois do Esc, ↓ gira a vista.",
+  "passos": [
+    {"acao": "clicar", "x": 95, "y": 479, "nome": "clicou_placa"},
+    {"acao": "tecla", "tecla": "down", "nome": "baixo1_centros"},
+    {"acao": "tecla", "tecla": "down", "nome": "baixo2_furos"},
+    {"acao": "tecla", "tecla": "right", "nome": "direita_gira_a_vista"},
+    {"acao": "tecla", "tecla": "up", "nome": "cima_volta_centros"},
+    {"acao": "tecla", "tecla": "esc", "nome": "esc"},
+    {"acao": "tecla", "tecla": "down", "nome": "baixo_gira_a_vista"}
+  ]
+}

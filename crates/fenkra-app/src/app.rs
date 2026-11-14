@@ -5037,8 +5037,67 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         self.renaming = id;
     }
 
+    /// B449: com a árvore em foco, ↑ e ↓ andam pelas linhas dela, na ordem desenhada no quadro
+    /// anterior, e escolhem a linha como um clique. A árvore fica com as setas depois de um clique
+    /// numa linha (ou com o foco do Tab numa linha) até um clique fora dela ou um Esc.
+    fn setas_da_arvore(&mut self, ctx: &egui::Context) {
+        let mut ativa = crate::teclado::arvore_ativa(ctx);
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape) || i.pointer.any_pressed()) {
+            ativa = false;
+        }
+        let linhas = crate::teclado::linhas_da_arvore(ctx);
+        let foco = ctx.memory(|m| m.focused());
+        let linha_em_foco = foco.and_then(|f| linhas.iter().find(|(_, w)| *w == f).map(|(i, _)| *i));
+        let livre = self.session.is_none() && self.sketch.is_none();
+        if livre && crate::teclado::setas_na_arvore(ativa, linha_em_foco.is_some(), foco.is_some() && linha_em_foco.is_none()) {
+            if let Some(passo) = crate::teclado::passo_na_arvore(ctx.input(crate::teclado::Teclas::ler)) {
+                let d = &self.open.doc;
+                let ordem: Vec<Id> = self
+                    .last_order
+                    .borrow()
+                    .iter()
+                    .copied()
+                    .filter(|i| d.feature(*i).is_some() || d.reference(*i).is_some() || d.folder(*i).is_some() || d.collectors.iter().any(|c| c.id == *i) || d.params.iter().any(|p| p.id == *i))
+                    .collect();
+                let atual = linha_em_foco.or(match self.sel {
+                    Sel::Feature(i) | Sel::Ref(i) | Sel::Folder(i) | Sel::Collector(i) => Some(i),
+                    Sel::Params => self.multi.borrow().first().copied(),
+                    _ => None,
+                });
+                if let Some(novo) = crate::teclado::vizinho_na_lista(&ordem, atual, passo) {
+                    self.sel = if d.params.iter().any(|p| p.id == novo) {
+                        Sel::Params
+                    } else if d.collectors.iter().any(|c| c.id == novo) {
+                        Sel::Collector(novo)
+                    } else {
+                        self.sel_for(novo)
+                    };
+                    *self.multi.borrow_mut() = vec![novo];
+                    self.multi_anchor.set(Some(novo));
+                    // o foco do Tab acompanha a linha escolhida, sem o passo do próprio egui
+                    if linha_em_foco.is_some() {
+                        if let Some((_, w)) = linhas.iter().find(|(i, _)| *i == novo) {
+                            ctx.memory_mut(|m| {
+                                m.request_focus(*w);
+                                m.move_focus(egui::FocusDirection::None);
+                            });
+                        }
+                    }
+                    ativa = true;
+                }
+                ctx.input_mut(|i| {
+                    i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp);
+                    i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown);
+                });
+            }
+        }
+        crate::teclado::marcar_arvore_ativa(ctx, ativa);
+        crate::teclado::comecar_linhas_da_arvore(ctx);
+    }
+
     fn tree(&mut self, ui: &mut egui::Ui) {
         crate::arvore_soltura_ui::inicio_do_quadro(ui.ctx());
+        self.setas_da_arvore(ui.ctx());
         *self.stale_set.borrow_mut() = self.compute_stale();
         // ordem das linhas do quadro anterior (para o Shift+clique)
         let prev = std::mem::take(&mut *self.tree_order.borrow_mut());
@@ -5376,6 +5435,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         }
         if let Some(s) = new_sel {
             self.sel = s;
+            // B449: escolheu na árvore, as setas ficam com ela
+            crate::teclado::marcar_arvore_ativa(ui.ctx(), true);
         }
         for a in actions {
             self.tree_action(a);
@@ -5771,6 +5832,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         self.tree_order.borrow_mut().push(id);
         let in_multi = self.multi.borrow().contains(&id) && self.multi.borrow().len() > 1;
         let r = ui.selectable_label(selected || in_multi || self.selecao_extra.visto.contains(&id), text);
+        crate::teclado::anotar_linha_da_arvore(ui.ctx(), id, r.id);
         if selected {
             crate::tree_ui::achar(r.rect);
         }
@@ -5778,6 +5840,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             self.hover_now.set(Some(id));
         }
         if r.clicked() && !crate::arvore_soltura_ui::soltando(ui.ctx()) {
+            // B449: um foco de teclado que ficou em outro widget (não texto) prenderia as setas e os
+            // atalhos; o clique na linha o solta e as setas passam para a árvore
+            crate::teclado::soltar_foco_escondido(ui.ctx());
             // Ctrl soma/tira, Shift seleciona a faixa desde o último clicado, sem tecla = só este
             let (ctrl, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
             let mut m = self.multi.borrow_mut();
@@ -7671,8 +7736,14 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 vp.camera.pitch = (vp.camera.pitch + delta.y * 0.008).clamp(-1.5706, 1.5706);
             }
             // B321: sem nada em foco, setas giram, Shift+setas movem e Page Up/Down aproximam a vista
+            // B449: com a árvore em foco, ↑ e ↓ são dela (← e → continuam girando a vista)
             if self.sketch.is_none() && !ctx.egui_wants_keyboard_input() {
-                if let Some(m) = crate::teclado::movimento(ctx.input(crate::teclado::Teclas::ler)) {
+                let mut t = ctx.input(crate::teclado::Teclas::ler);
+                if crate::teclado::arvore_ativa(&ctx) {
+                    t.cima = false;
+                    t.baixo = false;
+                }
+                if let Some(m) = crate::teclado::movimento(t) {
                     vp.stop_anim();
                     vp.navegou();
                     crate::teclado::aplicar(&mut vp.camera, m);
@@ -8929,6 +9000,11 @@ impl eframe::App for App {
         crate::desempenho::fechar_se_acabou(root.ctx());
         crate::demo_foto::quadro(root.ctx(), || self.estado_demo());
         crate::partida::contar_quadro();
+        // B449: o clique e a tecla mudam o estado no meio do quadro (ações da árvore, painéis,
+        // comandos); mais um quadro mostra o resultado sem esperar o mouse se mexer
+        if root.ctx().input(|i| crate::teclado::evento_muda_estado(&i.events)) {
+            root.ctx().request_repaint();
+        }
         crate::medir_quadros::quadro(frame.info().cpu_usage);
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);

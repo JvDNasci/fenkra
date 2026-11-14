@@ -15,4 +15,5 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("O corpo {} não tem sólido antes deste comando para ele modificar", "Body {} has no solid before this command for it to modify"),
     ("Este lugar não guarda este item", "This place doesn't hold this item"),
     ("Objeto não encontrado", "Object not found"),
+    ("com um item da árvore em foco, andam pela árvore", "with a tree item focused, they walk the tree"),
 ];
