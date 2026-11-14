@@ -293,6 +293,11 @@ impl Registro {
         if formato == Formato::Dxf {
             return crate::dxf::importar(caminho, &bytes, o, extensao_diverge);
         }
+        if formato == Formato::Dwg {
+            let dxf = crate::dwg::para_dxf(caminho)?;
+            let d = fenkra_dxf::ler(&dxf).map_err(ErroConv::Leitura)?;
+            return crate::dxf::importar_desenho(caminho, &bytes, d, Formato::Dwg, o, extensao_diverge);
+        }
         if formato == Formato::Svg {
             let d = crate::plano::ler_svg(&bytes)?;
             return crate::dxf::importar_desenho(caminho, &bytes, d, Formato::Svg, o, extensao_diverge);

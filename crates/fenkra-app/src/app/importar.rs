@@ -163,7 +163,8 @@ impl Dialogo {
     }
 
     fn e_dxf(&self) -> bool {
-        self.caminho.extension().is_some_and(|e| e.eq_ignore_ascii_case("dxf"))
+        // B211: o DWG vira DXF pelo LibreDWG e segue as mesmas opções
+        self.caminho.extension().is_some_and(|e| e.eq_ignore_ascii_case("dxf") || e.eq_ignore_ascii_case("dwg"))
     }
 
     /// Vale perguntar o destino: o arquivo tem mais de uma ocorrência, lido em qualquer um dos dois.
@@ -399,7 +400,7 @@ fn relatorio_ui(ui: &mut egui::Ui, rel: &Relatorio, realce: Option<usize>) -> Sa
 impl App {
     pub(super) fn importar_arquivo(&mut self) {
         let malhas: Vec<&str> = fenkra_conversor::Formato::MALHA.iter().filter(|f| Registro::default().capacidades(**f).ler).flat_map(|f| f.extensoes().iter().copied()).collect();
-        let dialogo = rfd::FileDialog::new().add_filter(tr("Todos os formatos"), &Registro::default().extensoes_de_leitura()).add_filter("STEP, IGES, BREP, DXF", &["step", "stp", "igs", "iges", "brep", "dxf"]).add_filter(tr("Malha"), &malhas).add_filter(tr("Árvore paramétrica"), &["fkx"]).add_filter(tr("Todos os arquivos"), &["*"]);
+        let dialogo = rfd::FileDialog::new().add_filter(tr("Todos os formatos"), &Registro::default().extensoes_de_leitura()).add_filter("STEP, IGES, BREP, DXF, DWG", &["step", "stp", "igs", "iges", "brep", "dxf", "dwg"]).add_filter(tr("Malha"), &malhas).add_filter(tr("Árvore paramétrica"), &["fkx"]).add_filter(tr("Todos os arquivos"), &["*"]);
         let Some(caminho) = dialogo.pick_file() else { return };
         self.abrir_painel_importar(caminho);
     }

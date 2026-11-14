@@ -36,6 +36,8 @@ pub enum Formato {
     Svg,
     /// FBX binário ou texto; só leitura (formato fechado: o Fenkra não grava)
     Fbx,
+    /// desenho 2D pelo LibreDWG externo (ADR 0090): vira DXF e segue como ele
+    Dwg,
 }
 
 impl Formato {
@@ -43,12 +45,13 @@ impl Formato {
     pub const MALHA: [Formato; 14] = [Formato::Stl, Formato::Obj, Formato::Ply, Formato::Tmf, Formato::Amf, Formato::Gltf, Formato::Glb, Formato::Vrml, Formato::X3d, Formato::Collada, Formato::Usda, Formato::Usdz, Formato::Ifc, Formato::Fbx];
 
     /// Todos os formatos que o conversor conhece, na ordem da tela.
-    pub const TODOS: [Formato; 20] = [
+    pub const TODOS: [Formato; 21] = [
         Formato::Step,
         Formato::Iges,
         Formato::Brep,
         Formato::Dxf,
         Formato::Svg,
+        Formato::Dwg,
         Formato::Ifc,
         Formato::Arvore,
         Formato::Stl,
@@ -72,7 +75,7 @@ impl Formato {
 
     /// Formato de desenho plano, que vive de esboços e não de sólidos.
     pub fn e_2d(self) -> bool {
-        matches!(self, Formato::Dxf | Formato::Svg)
+        matches!(self, Formato::Dxf | Formato::Svg | Formato::Dwg)
     }
 
     pub fn nome(self) -> &'static str {
@@ -97,6 +100,7 @@ impl Formato {
             Formato::Ifc => "IFC",
             Formato::Svg => "SVG",
             Formato::Fbx => "FBX",
+            Formato::Dwg => "DWG",
         }
     }
 
@@ -122,6 +126,7 @@ impl Formato {
             Formato::Ifc => &["ifc"],
             Formato::Svg => &["svg"],
             Formato::Fbx => &["fbx"],
+            Formato::Dwg => &["dwg"],
         }
     }
 
@@ -139,6 +144,8 @@ impl Formato {
             Some(Formato::Brep)
         } else if texto.starts_with('{') && tem_marca_da_arvore(conteudo) {
             Some(Formato::Arvore)
+        } else if crate::dwg::e_dwg(conteudo) {
+            Some(Formato::Dwg)
         } else if e_iges(conteudo) {
             Some(Formato::Iges)
         } else if e_dxf(conteudo) {
@@ -252,8 +259,19 @@ fn tem_marca_da_arvore(conteudo: &[u8]) -> bool {
     conteudo.windows(marca.len()).any(|w| w == marca)
 }
 
+/// O 3DM abre com `3D Geometry File Format ` e a versão em oito caracteres.
+pub fn e_3dm(conteudo: &[u8]) -> bool {
+    conteudo.starts_with(b"3D Geometry File Format ")
+}
+
+/// Resposta ao 3DM enquanto a ponte com o openNURBS não existe (ADR 0090): diz o que é e o que fazer.
+pub const MENSAGEM_3DM: &str = "arquivo 3DM reconhecido, mas o Fenkra ainda não lê 3DM: a leitura exata das NURBS depende da ponte com o openNURBS, prevista no ADR 0090. Por enquanto, exporte STEP AP214 ou AP242 no programa de origem, que leva as superfícies exatas, as camadas e as cores";
+
 /// Formato do arquivo pelo conteúdo, e se a extensão diz outra coisa.
 pub fn detectar(caminho: &Path, conteudo: &[u8]) -> Result<(Formato, bool), ErroConv> {
+    if e_3dm(conteudo) {
+        return Err(ErroConv::Formato(MENSAGEM_3DM.into()));
+    }
     let Some(f) = Formato::por_conteudo(conteudo) else {
         return Err(ErroConv::Formato(format!(
             "'{}' não parece um formato que o Fenkra leia (STEP, IGES, BREP, DXF, árvore paramétrica ou malha aberta): exporte STEP AP214 ou AP242 no programa de origem",
@@ -327,6 +345,14 @@ mod testes {
         assert_eq!(detectar(Path::new("a.amf"), &z("peca.amf")).unwrap().0, Formato::Amf);
         assert_eq!(detectar(Path::new("a.usdz"), &z("modelo.usda")).unwrap().0, Formato::Usdz);
         assert!(detectar(Path::new("a.zip"), &z("leia.txt")).is_err());
+    }
+
+    #[test]
+    fn tresdm_e_reconhecido_e_explica_o_que_fazer() {
+        let e = detectar(Path::new("casco.3dm"), b"3D Geometry File Format        8\0\0").unwrap_err().to_string();
+        assert!(e.contains("3DM") && e.contains("openNURBS") && e.contains("STEP AP214"), "{e}");
+        // com outra extensão, o conteúdo manda do mesmo jeito
+        assert!(detectar(Path::new("casco.bin"), b"3D Geometry File Format        7").unwrap_err().to_string().contains("3DM"));
     }
 
     #[test]

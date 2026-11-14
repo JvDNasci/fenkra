@@ -327,7 +327,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
         ],
         Group::DesArquivo => vec![
             One(it("des_novo", "Novo", "Novo desenho", "Folha A3 vazia; a origem das vistas é a peça ou montagem aberta (salva).", Cmd(C::Dwg(0)))),
-            One(it("des_abrir", "Abrir", "Abrir desenho (.fkd)", "Abre um desenho salvo; as vistas se recalculam pelos arquivos de origem.", Cmd(C::Dwg(1)))),
+            One(it("des_abrir", "Abrir", "Abrir desenho (.fkd, DXF, DWG, SVG)", "Abre um desenho salvo, com as vistas recalculadas pelos arquivos de origem, ou um DXF, DWG ou SVG como folha nova, com um esboço por camada.", Cmd(C::Dwg(1)))),
             One(it("des_salvar", "Salvar", "Salvar desenho   Ctrl+S", "Grava o .fkd (caminhos das peças relativos à pasta do desenho).", Cmd(C::Dwg(2)))),
             Family("des_exportar", vec![
                 it("des_pdf", "PDF", "Exportar PDF", "Todas as folhas, vetorial, uma página por folha no tamanho real.", Cmd(C::Dwg(3))),

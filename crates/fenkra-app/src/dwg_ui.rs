@@ -519,7 +519,27 @@ pub fn command(app: &mut App, i: u8) {
             }
         }
         c::OPEN => {
-            let Some(p) = rfd::FileDialog::new().add_filter(tr("Desenho Fenkra"), &["fkd"]).pick_file() else { return };
+            let Some(p) = rfd::FileDialog::new().add_filter(tr("Desenho Fenkra"), &["fkd"]).add_filter(tr("Desenho 2D (DXF, DWG, SVG)"), &["dxf", "dwg", "svg"]).pick_file() else { return };
+            if !p.extension().is_some_and(|e| e.eq_ignore_ascii_case("fkd")) {
+                // B211: o arquivo 2D vira um desenho novo, sem caminho: gravar pergunta onde
+                match fenkra_conversor::folha::abrir_como_desenho(&p) {
+                    Ok((d, r)) => {
+                        app.settings.add_recent_file(&p);
+                        app.dwg = Some(DwgState::new(d, None));
+                        let fora: Vec<String> = r.fora.iter().map(|(t, n)| format!("{t} ({n})")).collect();
+                        let mut m = format!("{}: {} {}, {} {}", tr("Desenho aberto"), r.esbocos, tr("esboços"), r.textos, tr("textos"));
+                        if r.sem_unidade {
+                            m.push_str(&format!(" · {}", tr("sem unidade no arquivo: valeu milímetro")));
+                        }
+                        if !fora.is_empty() {
+                            m.push_str(&format!(" · {}: {}", tr("fora"), fora.join(", ")));
+                        }
+                        app.toast(m, false);
+                    }
+                    Err(e) => app.toast(format!("{}: {e}", tr("Não abriu o desenho")), true),
+                }
+                return;
+            }
             match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|t| Drawing::from_json(&t)) {
                 Ok(d) => {
                     app.settings.add_recent_file(&p);

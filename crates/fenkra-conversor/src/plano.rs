@@ -53,6 +53,9 @@ pub(crate) fn desenho_do_documento(doc: &Document) -> Result<Desenho, ErroConv> 
 /// Grava os esboços do documento no formato 2D pedido.
 pub(crate) fn gravar(doc: &Document, formato: Formato, caminho: &Path) -> Result<(), ErroConv> {
     let d = desenho_do_documento(doc)?;
+    if formato == Formato::Dwg {
+        return crate::dwg::de_dxf(&fenkra_dxf::gravar(&d), caminho);
+    }
     let texto = if formato == Formato::Svg { gravar_svg(&d) } else { fenkra_dxf::gravar(&d) };
     std::fs::write(caminho, texto).map_err(|e| ErroConv::Gravacao(format!("não foi possível gravar '{}': {e}", caminho.display())))
 }

@@ -10,6 +10,7 @@
 | BREP | brep | sim | sim | sim | – | – | – | – | – | – | – | OpenCASCADE |
 | DXF | dxf | sim | sim | sim | – | – | sim | – | – | – | sim | Fenkra |
 | SVG | svg | sim | sim | sim | – | – | sim | – | – | – | sim | Fenkra |
+| DWG | dwg | sim | sim | sim | – | – | sim | – | – | – | sim | LibreDWG (externo) |
 | IFC | ifc | sim | sim | – | sim | sim | – | – | – | – | sim | Fenkra |
 | Árvore paramétrica | fkx | sim | sim | – | – | sim | – | sim | – | sim | sim | Fenkra |
 | STL | stl | sim | sim | – | sim | – | – | – | – | – | – | Fenkra |

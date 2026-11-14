@@ -22,14 +22,14 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const PONTOS_POR_TRECHO: usize = 8;
 
 /// Junta pontos próximos numa grade do tamanho da tolerância.
-struct Pontos {
+pub(crate) struct Pontos {
     tol: f64,
     grade: HashMap<(i64, i64), Vec<(Id, P2)>>,
-    juntados: usize,
+    pub(crate) juntados: usize,
 }
 
 impl Pontos {
-    fn novo(tol: f64) -> Pontos {
+    pub(crate) fn novo(tol: f64) -> Pontos {
         Pontos { tol: tol.max(1e-9), grade: HashMap::new(), juntados: 0 }
     }
 
@@ -124,7 +124,7 @@ fn polilinha(sk: &mut SketchData, al: &mut impl FnMut() -> Id, pts: &mut Pontos,
 }
 
 /// Põe a entidade no sketch, já em mm. Devolve `false` para o que o sketch não representa.
-fn no_sketch(sk: &mut SketchData, al: &mut impl FnMut() -> Id, pts: &mut Pontos, e: &Entidade) -> bool {
+pub(crate) fn no_sketch(sk: &mut SketchData, al: &mut impl FnMut() -> Id, pts: &mut Pontos, e: &Entidade) -> bool {
     match e {
         Entidade::Linha(a, b) => {
             let (p, q) = (pts.ponto(sk, al, *a), pts.ponto(sk, al, *b));
@@ -165,7 +165,7 @@ fn no_sketch(sk: &mut SketchData, al: &mut impl FnMut() -> Id, pts: &mut Pontos,
 }
 
 /// A entidade em mm. Arcos e bojos não mudam com escala uniforme.
-fn escalada(e: &Entidade, k: f64) -> Entidade {
+pub(crate) fn escalada(e: &Entidade, k: f64) -> Entidade {
     let p = |q: &P2| [q[0] * k, q[1] * k];
     match e {
         Entidade::Linha(a, b) => Entidade::Linha(p(a), p(b)),

@@ -17,6 +17,11 @@ fn o_que_cada_formato_declara_e_o_que_ele_faz() {
     let r = Registro::default();
     let dir = pasta("sonda");
     for l in r.matriz() {
+        // o DWG depende do LibreDWG instalado à parte (ADR 0090): sem ele, a célula não tem como ser conferida
+        if l.formato == Formato::Dwg && !fenkra_conversor::dwg::disponivel() {
+            eprintln!("DWG IGNORADO: LibreDWG (dwg2dxf e dxf2dwg) não está instalado nesta máquina");
+            continue;
+        }
         let medido = r.sondar(l.formato, &dir).unwrap_or_else(|e| panic!("{}: {e}", l.formato.nome()));
         assert_eq!(medido, l.capacidades, "{} declara uma coisa e faz outra", l.formato.nome());
     }
