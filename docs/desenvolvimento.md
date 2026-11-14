@@ -82,6 +82,7 @@ preferências do usuário.
 | `FENKRA_DEMO_PASTA=<pasta>` | grava as peças de um conjunto importado nessa pasta, sem perguntar; a peça sem arquivo também salva nela, sem abrir o diálogo |
 | `FENKRA_DEMO_ABRIR=<caso>` | com `FENKRA_DEMO_ASM=1`, percorre a ida e a volta entre a montagem e a peça ativa, um passo a cada cálculo assentado: `ida` (peça ativa com o conjunto em volta), `volta`, `suja` (a pergunta ao voltar), `editada` (edita, salva e volta) e `ausente` (o arquivo da peça sumiu) |
 | `FENKRA_DEMO_ASM=inserir_mouse` | só o painel Inserir peça, sem cursor fixo, com uma peça `barrada` (comando em erro) na pasta; os cliques vêm de `FENKRA_DEMO_PAINEL`, pelo caminho do mouse de verdade |
+| `FENKRA_DEMO_ASM=inserir_fora` | aviso "Peça de fora do projeto" (B445): projeto com uma `placa.fkp` e a mesma peça vinda de uma pasta externa, com o nome que vai mudar para `placa_2.fkp` |
 | `FENKRA_DEMO_EXPORTAR=iges` | abre o painel de exportação (`iges` ou outro valor para STEP) |
 | `FENKRA_DEMO_EXPORTAR_PMI=grafico` | com `FENKRA_DEMO_EXPORTAR`, abre em STEP AP242 com o modo de PMI (`nenhum`, `grafico` ou `ambos`) |
 | `FENKRA_DEMO_VISUALIZACAO=1` | abre o painel Exportar visualização (B365); `FENKRA_DEMO_VISUALIZACAO_ARQUIVO=<arquivo>` grava ao clicar em Exportar sem abrir o diálogo |

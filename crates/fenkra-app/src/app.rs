@@ -669,6 +669,10 @@ impl App {
             crate::asm_cmd::demo(&mut stt, &std::env::var("FENKRA_DEMO_ASM").unwrap_or_default());
             app.asm = Some(stt);
             app.settings.bench = crate::settings::Bench::Montagem;
+            // B445: aviso da peça de fora do projeto, com o projeto e a pasta externa montados
+            if std::env::var("FENKRA_DEMO_ASM").is_ok_and(|v| v == "inserir_fora") {
+                crate::asm_inserir_projeto::demo(&mut app);
+            }
             app.started = true;
         }
         // desenvolvimento: FENKRA_DEMO_CHAPA=1 abre uma peça de chapa de exemplo na bancada Chapa

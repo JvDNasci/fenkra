@@ -73,11 +73,13 @@ pub struct Estado {
     pub recusada: bool,
     /// documento aberto já pedido à fila de miniaturas (B362)
     chave_aberta: String,
+    /// peça de fora do projeto esperando o aviso "Copiar para o projeto" ou "Cancelar" (B445)
+    pub externa: Option<PathBuf>,
 }
 
 impl Estado {
     pub fn novo(sub: bool, pai: Option<Id>) -> Self {
-        Estado { sub, pai, filtro: String::new(), mao: None, fila: vec![], colocadas: 0, ultima: None, cursor_demo: None, perfil: None, simplificada: false, bloqueada: None, recusada: false, chave_aberta: String::new() }
+        Estado { sub, pai, filtro: String::new(), mao: None, fila: vec![], colocadas: 0, ultima: None, cursor_demo: None, perfil: None, simplificada: false, bloqueada: None, recusada: false, chave_aberta: String::new(), externa: None }
     }
 }
 
@@ -193,7 +195,8 @@ pub(crate) fn pegar_aberta(app: &mut App, est: &mut Estado) -> Result<(), String
     }
     let f = caminho_aberto(app).filter(|_| !aberta_por_salvar(app)).ok_or_else(|| tr("A peça precisa estar salva para entrar na montagem").to_string())?;
     let st = app.asm.as_mut().ok_or("montagem fechada")?;
-    pegar(st, est, &f)?;
+    // peça solta com projeto aberto: passa pelo aviso de cópia (B445)
+    crate::asm_inserir_projeto::pegar_ou_avisar(app.project.as_ref(), st, est, &f)?;
     app.settings.add_recent_file(&f);
     Ok(())
 }
@@ -266,11 +269,11 @@ pub fn colocar_copia(st: &mut crate::asm_ui::AsmState, est: &mut Estado, origem:
 
 /// Esc: larga a peça da mão; o próximo arquivo do diálogo entra, e sem fila o comando fecha.
 /// Devolve `false` quando o comando acabou.
-fn encerrar_mao(st: &mut crate::asm_ui::AsmState, est: &mut Estado) -> Result<bool, String> {
+fn encerrar_mao(projeto: Option<&fenkra_project::Project>, st: &mut crate::asm_ui::AsmState, est: &mut Estado) -> Result<bool, String> {
     est.mao = None;
     while !est.fila.is_empty() {
         let f = est.fila.remove(0);
-        pegar(st, est, &f)?;
+        crate::asm_inserir_projeto::pegar_ou_avisar(projeto, st, est, &f)?;
         return Ok(true);
     }
     Ok(false)
@@ -286,16 +289,22 @@ pub fn teclas(app: &mut App, ctx: &egui::Context) {
         return;
     }
     if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape)) {
-        let aviso = esc(app.asm.as_mut().expect("montagem aberta"));
+        let aviso = esc(app.project.as_ref(), app.asm.as_mut().expect("montagem aberta"));
         if let Some(e) = aviso {
             app.toast(e, true);
         }
     }
 }
 
-fn esc(st: &mut crate::asm_ui::AsmState) -> Option<String> {
+fn esc(projeto: Option<&fenkra_project::Project>, st: &mut crate::asm_ui::AsmState) -> Option<String> {
     let mut est = st.inserir.take()?;
-    let (segue, erro) = match encerrar_mao(st, &mut est) {
+    // com o aviso de peça de fora aberto, Esc é o Cancelar dele (B445)
+    if est.externa.is_some() {
+        let erro = crate::asm_inserir_projeto::cancelar(projeto, st, &mut est).err();
+        st.inserir = Some(est);
+        return erro;
+    }
+    let (segue, erro) = match encerrar_mao(projeto, st, &mut est) {
         Ok(s) => (s, None),
         Err(e) => (!est.fila.is_empty(), Some(e)),
     };
@@ -504,7 +513,7 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
         }
         Some(Acao::Pegar(f)) => {
             est.fila.clear();
-            aviso = pegar(st, &mut est, &f).err();
+            aviso = crate::asm_inserir_projeto::pegar_ou_avisar(app.project.as_ref(), st, &mut est, &f).err();
             if aviso.is_none() {
                 app.settings.add_recent_file(&f);
             }
@@ -514,7 +523,7 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
             if let Some(mut files) = rfd::FileDialog::new().add_filter(filtro, &[e]).pick_files().filter(|f| !f.is_empty()) {
                 let f = files.remove(0);
                 est.fila = files;
-                aviso = pegar(st, &mut est, &f).err();
+                aviso = crate::asm_inserir_projeto::pegar_ou_avisar(app.project.as_ref(), st, &mut est, &f).err();
                 if aviso.is_none() {
                     app.settings.add_recent_file(&f);
                 }
@@ -526,6 +535,7 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
     if let Some(a) = aviso {
         app.toast(a, true);
     }
+    crate::asm_inserir_projeto::aviso(app, ctx);
 }
 
 fn v3(p: V3) -> Vec3 {
@@ -633,7 +643,8 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
     abrir(st, false);
     // `inserir_mouse`: só o painel; os cliques vêm de `FENKRA_DEMO_PAINEL`, pelo caminho do mouse de
     // verdade, sem o cursor fixo que pula o filtro de camada
-    if nome == "inserir_mouse" {
+    // `inserir_fora`: o aviso de peça de fora do projeto (B445) é montado depois, com o projeto
+    if nome == "inserir_mouse" || nome == "inserir_fora" {
         let _ = std::fs::write(dir.join("barrada.fkp"), peca_com_erro().to_json());
         return;
     }
@@ -817,7 +828,7 @@ mod tests {
         st.inserir = Some(est);
         let ctx = egui::Context::default();
         passo(&ctx, &mut st, vec![egui::Event::PointerMoved(pos2(300., 300.))]);
-        assert!(esc(&mut st).is_none());
+        assert!(esc(None, &mut st).is_none());
         assert!(st.inserir.is_none(), "Esc encerra");
         assert_eq!(pecas(&st), 0);
         assert!(st.undo.is_empty() && !st.modified, "nada a desfazer");
@@ -836,9 +847,9 @@ mod tests {
         pegar(&mut st, &mut est, &d.join("placa.fkp")).expect("pegar");
         est.fila = vec![d.join("outra.fkp")];
         st.inserir = Some(est);
-        esc(&mut st);
+        esc(None, &mut st);
         assert_eq!(st.inserir.as_ref().unwrap().mao.as_ref().unwrap().escolha.nome, "outra");
-        esc(&mut st);
+        esc(None, &mut st);
         assert!(st.inserir.is_none());
         let _ = std::fs::remove_dir_all(d);
     }
