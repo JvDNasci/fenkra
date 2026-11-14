@@ -39,6 +39,7 @@ mod lote;
 mod plm;
 pub(crate) use plm::medidas_do_resultado;
 mod visualizador_plm;
+mod arvore_produto_ui;
 mod polir;
 mod projeto;
 mod ramos_ui;
@@ -588,7 +589,12 @@ impl App {
         }
         // desenvolvimento: FENKRA_DEMO_PROJETO=1 abre um projeto de exemplo; =comparar já mostra a comparação
         if let Ok(modo) = std::env::var("FENKRA_DEMO_PROJETO") {
-            app.demo_projeto(modo == "comparar");
+            // B364: `arvore` abre o kart de exemplo com a árvore do produto
+            if modo == "arvore" {
+                app.demo_arvore_produto();
+            } else {
+                app.demo_projeto(modo == "comparar");
+            }
             // B214: `versoes` abre a janela Comparar versões (v1 ↔ v2), com o estado de cada versão
             if modo == "versoes" {
                 if let Some(id) = app.project_sel {
@@ -7464,6 +7470,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             let (rotulo, frase, passos) = estado_doc::EXPORTAR;
             if estado_doc::botao(ui, true, "exportar_arquivo", rotulo, frase, passos).clicked() {
                 self.abrir_painel_exportar(fenkra_conversor::Formato::Step);
+            }
+            if ui.button(tr("Árvore do produto")).on_hover_text(tr("Grafo navegável das montagens e peças do projeto, com miniatura, PN e estado de cada nó.")).clicked() {
+                self.abrir_arvore_produto();
             }
             if ui.button(tr("📄 Estrutura CSV")).clicked() {
                 if let Some(path) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("estrutura.csv").save_file() {

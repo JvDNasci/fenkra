@@ -1437,6 +1437,7 @@ dependencies = [
  "fenkra-kernel",
  "fenkra-malha",
  "fenkra-montagem",
+ "fenkra-project",
  "fenkra-solidos",
  "serde",
  "serde_json",
