@@ -1,4 +1,4 @@
-# ADR 0094: esquema de cotagem automático marcado por pasta e chave de nome
+# ADR 0097: esquema de cotagem automático marcado por pasta e chave de nome
 
 Data: 2026-11-14. Estado: aceita. Itens: B192 (com B117 e B144).
 
