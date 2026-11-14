@@ -2548,7 +2548,7 @@
    "tokens_k": 200,
    "teste": "Auto",
    "area": "Navegação",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -3028,7 +3028,7 @@
    "tokens_k": 350,
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -3204,7 +3204,7 @@
    "tokens_k": 150,
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -7305,7 +7305,7 @@
    "tokens_k": 150,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -7337,7 +7337,7 @@
    "tokens_k": 250,
    "teste": "Auto + Visual",
    "area": "Navegação",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -7385,7 +7385,7 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
