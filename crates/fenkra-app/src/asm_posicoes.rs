@@ -64,7 +64,7 @@ pub fn secao(st: &mut AsmState, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             let p = &mut st.asm.posicoes[i];
             ui.label(RichText::new(format!("{}.", i + 1)).weak());
-            mudou |= ui.add(egui::TextEdit::singleline(&mut p.nome).desired_width(96.)).on_hover_text(tr("Nome da posição")).changed();
+            mudou |= ui.add(egui::TextEdit::singleline(&mut p.nome).desired_width(64.)).on_hover_text(tr("Nome da posição")).changed();
             if i > 0 {
                 let r = ui.add(crate::ui_ext::dv(&mut p.transicao).range(0.0..=600.0).speed(0.1).suffix(" s").max_decimals(2).dica(tr("Tempo para chegar a esta posição saindo da anterior")));
                 mudou |= r.changed();
@@ -89,7 +89,7 @@ pub fn secao(st: &mut AsmState, ui: &mut egui::Ui) {
         });
     }
     ui.horizontal_wrapped(|ui| {
-        if ui.button(tr("＋ Gravar posição")).on_hover_text(tr("Guarda a situação de agora no fim da lista")).clicked() {
+        if ui.button(tr("+ Gravar posição")).on_hover_text(tr("Guarda a situação de agora no fim da lista")).clicked() {
             acao = Some(Acao::Gravar);
         }
         let dois = n >= 2;
@@ -159,7 +159,7 @@ pub fn tocar(st: &mut AsmState) {
 }
 
 /// Começa a exportação: a tabela sai já, e as imagens, um quadro por vez nos próximos quadros.
-fn exportar(st: &mut AsmState, pasta: PathBuf) -> Result<(), String> {
+pub fn exportar(st: &mut AsmState, pasta: PathBuf) -> Result<(), String> {
     std::fs::create_dir_all(&pasta).map_err(|e| format!("{}: {e}", pasta.display()))?;
     let lista = st.asm.posicoes.clone();
     let quadros = posicoes::percorrer(&mut st.asm, &lista, QUADROS_POR_SEGUNDO);
@@ -212,6 +212,8 @@ pub fn passo(app: &mut App, ctx: &egui::Context) {
             }
         }
         st.dirty |= mudou;
+        // a marca da trajetória no 3D acompanha o quadro exportado
+        st.sim_t = q.t;
         e.espera = 1;
     } else if st.vista_em_dia() {
         e.espera += 1;

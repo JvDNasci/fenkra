@@ -18,6 +18,8 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 - **Restrição rápida / inteligente** (Restrição rápida) — quick_options, after_view_quick.
 - **Juntas cinemáticas** (Juntas) — AsmJoint, kin.rs; comandos; tipo automático, modos de origem, alinhamento e Animar na criação (B260).
 - **Limites de junta** (Juntas) — `kin.rs`, `asm_limites.rs`: Mínimo, Atual e Máximo por grau de liberdade, caixa por extremo que guarda o valor, marca na árvore, arco, trilho e a própria trajetória arrastáveis no 3D. O solucionador impõe a faixa: comando e arraste param no batente, sem contar como falha (B36).
+- **Estudo de movimento** (Simular) — `estudo.rs`, `asm_estudo.rs`: painel na coluna da esquerda com cursor direto por grau de cada junta (pelo solucionador, sem quadros), leis em `t` e quadros só para tocar, cursor de tempo, gráficos com eixos e unidades, trajetória de um ponto no 3D e lista do que falta comandar, presa a cada junta e calculada por teste de posto (B121).
+- **Posições nomeadas** (Simular › Posições) — `posicoes.rs`, `asm_posicoes.rs`: valores de juntas e cotas com tempo de transição, ordem, atualizar e reordenar; tocar e cursor pelo percurso; exportar `animacao.csv` e uma imagem por quadro da área 3D (B123).
 - **Acoplamentos mecânicos** (Engrenagem, cremalheira, polia, came) — MateKind Gear/RackPinion; couplings; teste came_e_seguidor.
 - **Graus de liberdade** (GDL na árvore) — dof_per_comp; selos na árvore.
 - **Padrão de componentes** (Repetição) — `repeticao.rs`, `asm_repeticao.rs`: direção por aresta, eixo ou face, Pelos furos, vários componentes, segunda direção, fantasmas, seta e marcas para pular (B263).

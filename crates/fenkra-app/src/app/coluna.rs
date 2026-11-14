@@ -113,6 +113,8 @@ impl App {
             }
         } else if let Some(p) = self.asm.as_ref().and_then(|s| s.cmd.as_ref()).filter(|_| self.in_asm()) {
             tr(p.c.tipo.label()).to_string()
+        } else if self.in_asm() && self.asm.as_ref().is_some_and(|s| s.sim_open) {
+            tr("Estudo de movimento").to_string()
         } else if let Some(i) = self.pmi_pending.filter(|_| !self.in_asm()) {
             // B448: anotação pendente: o painel é do comando, não da seleção anterior
             tr(crate::pmi_ui::kind_of(i).label()).to_string()

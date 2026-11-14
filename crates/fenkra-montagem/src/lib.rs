@@ -14,6 +14,7 @@ pub mod conflito;
 pub mod contexto;
 pub mod display;
 pub mod encaixe;
+pub mod estudo;
 pub mod releitura;
 pub mod engrenagens;
 pub mod estrutura;

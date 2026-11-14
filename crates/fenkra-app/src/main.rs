@@ -75,6 +75,7 @@ mod sentido_corte_ui;
 mod asm_cmd;
 mod asm_manip;
 mod asm_posicoes;
+mod asm_estudo;
 mod demo_dica;
 mod demo_foto;
 mod teclado;
