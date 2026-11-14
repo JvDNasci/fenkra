@@ -12,6 +12,7 @@ pub static CAMPOS: &[(&str, &str, &str)] = &[
     // análises de superfície
     ("Amostras por borda", "Quantos pontos a análise mede em cada borda da junção. Mais amostras acham defeitos menores; típico 8 a 64.", "How many points the analysis measures on each junction edge. More samples find smaller defects; typically 8 to 64."),
     ("Dentes", "Quantos dentes o pente desenha ao longo da curva. Típico 32 a 200; não muda a curva.", "How many teeth the comb draws along the curve. Typically 32 to 200; it does not change the curve."),
+    ("Tolerância do ajuste", "Distância máxima entre a malha e a superfície reconhecida. Menor fica mais fiel e reconhece menos superfícies; típico 0,01 a 0,1 mm.", "Maximum distance between the mesh and the recognized surface. Smaller is more faithful and recognizes fewer surfaces; typically 0.01 to 0.1 mm."),
     ("Escala", "Tamanho dos dentes do pente: milímetros de dente por unidade de curvatura. Só muda o desenho.", "Comb tooth size: millimeters of tooth per unit of curvature. It only changes the drawing."),
     ("Folga máxima da junção", "Bordas mais afastadas que isto não contam como junção. Maior que zero; aumente se a análise não achar a emenda.", "Edges farther apart than this do not count as a junction. Above zero; raise it if the analysis misses the seam."),
     // corpo de malha

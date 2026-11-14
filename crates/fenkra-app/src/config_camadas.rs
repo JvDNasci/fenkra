@@ -46,6 +46,7 @@ pub const CLASSIFICACAO: &[(&str, Classe)] = &[
     ("layout_versao", Interface),
     ("layout_anterior", Interface),
     ("impressao", Sessao),
+    ("analise_sup", Sessao),
     ("fatiador", Maquina),
     ("libredwg", Maquina),
     ("theme", Interface),
