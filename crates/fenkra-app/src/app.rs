@@ -1482,6 +1482,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     /// Depois de medir o hardware (uma vez, na partida): se a máquina parece fraca e a pessoa ainda
     /// não viu a sugestão, guarda os motivos para o diálogo. Nunca liga nada sozinho.
     pub fn avaliar_perfil(&mut self, h: &crate::perfil::Hardware) {
+        self.settings.efeitos_do_adaptador(h);
         if self.settings.sugestao_leve_vista || self.settings.modo_leve {
             return;
         }
@@ -7916,6 +7917,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 crate::desempenho::marca("vp_navegacao");
                 let tex = vp.render(rs, size, style);
                 crate::desempenho::marca("vp_render_cpu");
+                if let Some(m) = vp.aviso_efeitos.take() {
+                    self.toasts.push((m, 0., false));
+                }
                 crate::desempenho::esperar_placa(&rs.device);
                 if vp.inst.subindo {
                     ui.ctx().request_repaint();
@@ -9992,6 +9996,8 @@ fn graficos_ui(ui: &mut egui::Ui, s: &mut Settings) {
     ui.label(RichText::new(tr("Durante órbita, pan e zoom desenha sem anti-serrilhamento e volta à qualidade total ao parar.")).weak().small());
     ui.checkbox(&mut g.iluminacao_realista, tr("Iluminação realista"));
     ui.label(RichText::new(tr("Sombreado com luz de três pontos, ambiente de céu e chão e brilho suave. Desligado usa o sombreado simples.")).weak().small());
+    let realista = g.iluminacao_realista;
+    crate::render_efeitos::ui(ui, &mut g.efeitos, realista);
     desempenho_ui(ui, s);
 }
 

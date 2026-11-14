@@ -23,6 +23,12 @@ struct U {
     mapa: vec4<f32>,       // mapa por pixel: x = tipo de curvatura, y = raio da escala, z = saída mínima (°), w = tampa (°)
     mapa_dir: vec4<f32>,   // direção de abertura da inclinação
     mapa_cor: array<vec4<f32>, 4>,  // paradas da escala do tema
+    // B139 (ver `render_efeitos.rs`)
+    luz_vp: mat4x4<f32>,   // projeção da luz principal para o mapa de sombra
+    luz: vec4<f32>,        // xyz = direção para a luz principal, w = recuo de profundidade da sombra
+    efeitos: vec4<f32>,    // x = sombra ligada, y = pontos da oclusão (0 = desligada), z = PBR, w = toques da sombra
+    efeitos2: vec4<f32>,   // x = texel do mapa de sombra, y = raio da oclusão (mm), w = recuo pela normal (mm)
+    prof: vec4<f32>,       // x = perto, y = longe, z = 1 ortográfica
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var tex: texture_2d_array<f32>;
@@ -44,6 +50,10 @@ fn cortado(p: vec3<f32>) -> bool {
     return dot(u.secao.xyz, u.secao.xyz) > 0.5 && dot(u.secao.xyz, p) > u.secao.w;
 }
 
+// B139: sombra e oclusão. No módulo base são funções que devolvem 1; no módulo dos efeitos leem o
+// mapa de sombra e a profundidade da câmera (grupo 1).
+//@EFEITOS@
+
 // A textura da viewport é exibida pelo egui sem reconversão: as cores do tema são valores de tela (sRGB).
 // A iluminação realista soma luz em espaço linear e devolve o resultado em sRGB.
 fn to_linear(c: vec3<f32>) -> vec3<f32> { return pow(max(c, vec3<f32>(0.0)), vec3<f32>(2.2)); }
@@ -51,21 +61,27 @@ fn to_display(c: vec3<f32>) -> vec3<f32> { return pow(clamp(c, vec3<f32>(0.0), v
 
 // luz de três pontos presa à câmera (principal acima à esquerda, preenchimento à direita, contraluz
 // fraco atrás), ambiente hemisférico (céu/chão, Z para cima) e brilho Blinn-Phong leve
-fn shade_realistic(base_s: vec3<f32>, n: vec3<f32>, v: vec3<f32>, rough: f32, metal: f32) -> vec3<f32> {
+// luz principal: com a sombra ligada vem do uniforme, a mesma direção do mapa de sombra
+fn luz_principal(v: vec3<f32>, right: vec3<f32>, up: vec3<f32>) -> vec3<f32> {
+    if (u.efeitos.x > 0.5) { return normalize(u.luz.xyz); }
+    return normalize(v * 0.55 + up * 0.60 - right * 0.55);
+}
+
+fn shade_realistic(base_s: vec3<f32>, n: vec3<f32>, v: vec3<f32>, rough: f32, metal: f32, sh: f32, ao: f32) -> vec3<f32> {
     let base = to_linear(base_s);
     var r = cross(vec3<f32>(0.0, 0.0, 1.0), v);
     if (length(r) < 1e-3) { r = vec3<f32>(1.0, 0.0, 0.0); }
     let right = normalize(r);
     let up = cross(v, right);
-    let key = normalize(v * 0.55 + up * 0.60 - right * 0.55);
+    let key = luz_principal(v, right, up);
     let fill = normalize(v * 0.70 + right * 0.70 - up * 0.10);
     let rim = normalize(-v * 0.80 + up * 0.50 + right * 0.30);
 
     let sky = vec3<f32>(0.62, 0.68, 0.80);
     let ground = vec3<f32>(0.20, 0.18, 0.16);
-    let amb = mix(ground, sky, n.z * 0.5 + 0.5) * 0.34;
-    let kd = max(dot(n, key), 0.0);
-    let fd = max(dot(n, fill), 0.0);
+    let amb = mix(ground, sky, n.z * 0.5 + 0.5) * 0.34 * ao;
+    let kd = max(dot(n, key), 0.0) * sh;
+    let fd = max(dot(n, fill), 0.0) * mix(1.0, ao, 0.5);
     let diffc = base * (1.0 - metal * 0.75);
     var c = diffc * (amb + vec3<f32>(1.0, 0.98, 0.94) * kd * 0.70 + vec3<f32>(0.80, 0.88, 1.0) * fd * 0.24);
 
@@ -77,6 +93,56 @@ fn shade_realistic(base_s: vec3<f32>, n: vec3<f32>, v: vec3<f32>, rough: f32, me
     let spec = pow(max(dot(n, normalize(key + v)), 0.0), shin) * (1.0 - rough * 0.8);
     c = c + mix(vec3<f32>(1.0), base, metal) * spec * 0.30 * kd;
     c = c + base * metal * amb * 0.5;
+    return to_display(c);
+}
+
+// B139: material físico. Microfacetas GGX com sombreamento de Smith (Schlick-GGX) e Fresnel de
+// Schlick para a luz principal e o preenchimento; ambiente difuso hemisférico e reflexo do ambiente
+// pela aproximação analítica da integral do BRDF (sem textura de consulta). `sh` atenua só a luz
+// principal; `ao`, o ambiente.
+fn ggx_direta(n: vec3<f32>, v: vec3<f32>, l: vec3<f32>, a2: f32, k: f32, f0: vec3<f32>, diffc: vec3<f32>) -> vec3<f32> {
+    let nl = max(dot(n, l), 0.0);
+    if (nl <= 0.0) { return vec3<f32>(0.0); }
+    let h = normalize(l + v);
+    let nv = max(dot(n, v), 1e-3);
+    let nh = max(dot(n, h), 0.0);
+    let vh = max(dot(v, h), 0.0);
+    let dd = nh * nh * (a2 - 1.0) + 1.0;
+    let d = a2 / (3.14159265 * dd * dd);
+    let g = (nv / (nv * (1.0 - k) + k)) * (nl / (nl * (1.0 - k) + k));
+    let f = f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - vh, 5.0);
+    let spec = d * g * f / (4.0 * nv * nl + 1e-4);
+    return ((vec3<f32>(1.0) - f) * diffc + spec * 3.14159265) * nl;
+}
+fn brdf_ambiente(f0: vec3<f32>, rough: f32, nv: f32) -> vec3<f32> {
+    let c0 = vec4<f32>(-1.0, -0.0275, -0.572, 0.022);
+    let c1 = vec4<f32>(1.0, 0.0425, 1.04, -0.04);
+    let r = rough * c0 + c1;
+    let a004 = min(r.x * r.x, exp2(-9.28 * nv)) * r.x + r.y;
+    let ab = vec2<f32>(-1.04, 1.04) * a004 + r.zw;
+    return f0 * ab.x + ab.y;
+}
+fn shade_pbr(base_s: vec3<f32>, n: vec3<f32>, v: vec3<f32>, rough_in: f32, metal: f32, sh: f32, ao: f32) -> vec3<f32> {
+    let base = to_linear(base_s);
+    var r = cross(vec3<f32>(0.0, 0.0, 1.0), v);
+    if (length(r) < 1e-3) { r = vec3<f32>(1.0, 0.0, 0.0); }
+    let right = normalize(r);
+    let up = cross(v, right);
+    let key = luz_principal(v, right, up);
+    let fill = normalize(v * 0.70 + right * 0.70 - up * 0.10);
+    let rough = clamp(rough_in, 0.08, 1.0);
+    let a2 = pow(rough, 4.0);
+    let k = (rough + 1.0) * (rough + 1.0) / 8.0;
+    let f0 = mix(vec3<f32>(0.04), base, metal);
+    let diffc = base * (1.0 - metal);
+    var c = ggx_direta(n, v, key, a2, k, f0, diffc) * vec3<f32>(1.0, 0.98, 0.94) * 0.85 * sh;
+    c = c + ggx_direta(n, v, fill, a2, k, f0, diffc) * vec3<f32>(0.80, 0.88, 1.0) * 0.28 * mix(1.0, ao, 0.5);
+    let sky = vec3<f32>(0.62, 0.68, 0.80);
+    let ground = vec3<f32>(0.20, 0.18, 0.16);
+    c = c + diffc * mix(ground, sky, n.z * 0.5 + 0.5) * 0.36 * ao;
+    let rf = reflect(-v, n);
+    let env = mix(ground, sky, smoothstep(-0.3, 0.5, rf.z)) * mix(1.0, 0.45, rough);
+    c = c + brdf_ambiente(f0, rough, max(dot(n, v), 1e-3)) * env * 0.9 * ao;
     return to_display(c);
 }
 
@@ -161,6 +227,13 @@ struct MOut {
     var alpha = i.mat.z * i.col.a;
 
     var c: vec3<f32>;
+    // B139: sombra e oclusão só nos sombreados (0, 1) e no semi-renderizado (5)
+    var sh = 1.0;
+    var ao = 1.0;
+    if (mode < 1.5 || (mode > 4.5 && mode < 5.5)) {
+        sh = sombra_em(i.wp, n);
+        ao = oclusao_em(i.wp, n);
+    }
     if (mode > 8.5) {
         // inclinação por pixel: o ângulo de saída vem da normal, e a faixa troca onde a superfície troca
         let ang = degrees(asin(clamp(abs(dot(n, u.mapa_dir.xyz)), 0.0, 1.0)));
@@ -204,21 +277,24 @@ struct MOut {
         // semi-renderizado: céu/chão + luz principal + reflexo de ambiente + Fresnel
         let sky = vec3<f32>(0.80, 0.85, 0.95);
         let ground = vec3<f32>(0.22, 0.20, 0.18);
-        let amb = mix(ground, sky, n.z * 0.5 + 0.5);
-        let l = normalize(vec3<f32>(0.45, -0.55, 0.85) + v * 0.6);
-        let diff = max(dot(n, l), 0.0);
+        let amb = mix(ground, sky, n.z * 0.5 + 0.5) * ao;
+        var l = normalize(vec3<f32>(0.45, -0.55, 0.85) + v * 0.6);
+        if (u.efeitos.x > 0.5) { l = normalize(u.luz.xyz); }
+        let diff = max(dot(n, l), 0.0) * sh;
         let h = normalize(l + v);
         let shin = mix(400.0, 6.0, rough);
         let spec = pow(max(dot(n, h), 0.0), shin) * (1.0 - rough * 0.85);
         let f0 = mix(vec3<f32>(0.04), base, metal);
         let fres = f0 + (vec3<f32>(1.0) - f0) * pow(1.0 - max(dot(n, v), 0.0), 5.0);
         let r = reflect(-v, n);
-        let env = mix(ground, sky, smoothstep(-0.3, 0.4, r.z));
+        let env = mix(ground, sky, smoothstep(-0.3, 0.4, r.z)) * mix(1.0, ao, 0.7);
         let diffc = base * (1.0 - metal);
-        c = diffc * (amb * 0.45 + diff * 0.75) + fres * (env * (1.0 - rough * 0.7) * 0.9 + vec3<f32>(spec) * 1.4);
+        c = diffc * (amb * 0.45 + diff * 0.75) + fres * (env * (1.0 - rough * 0.7) * 0.9 + vec3<f32>(spec) * 1.4 * sh);
         if (metal > 0.5) { c = c + base * env * 0.35; }
+    } else if (u.qual.x > 0.5 && u.efeitos.z > 0.5) {
+        c = shade_pbr(base, n, v, rough, metal, sh, ao);
     } else if (u.qual.x > 0.5) {
-        c = shade_realistic(base, n, v, rough, metal);
+        c = shade_realistic(base, n, v, rough, metal, sh, ao);
     } else {
         let d = abs(dot(n, v));
         let k = normalize(vec3<f32>(0.3, 0.5, 1.0));
@@ -306,6 +382,34 @@ fn posto(i: IIn, p: vec4<f32>) -> vec3<f32> { return vec3<f32>(dot(i.m0, p), dot
     p.z = p.z - u.params.w;
     o.clip = p; o.col = i.aresta; o.wp = w;
     return o;
+}
+// ---------- B139: passadas só de profundidade (mapa de sombra e profundidade para a oclusão)
+struct SOut { @builtin(position) clip: vec4<f32> };
+@vertex fn vs_sombra(v: MIn) -> SOut {
+    var o: SOut;
+    o.clip = u.luz_vp * vec4<f32>(v.pos, 1.0);
+    return o;
+}
+@vertex fn vs_sombra_i(@location(0) pos: vec3<f32>, @location(1) nrm: vec3<f32>, i: IIn) -> SOut {
+    var o: SOut;
+    o.clip = u.luz_vp * vec4<f32>(posto(i, vec4<f32>(pos, 1.0)), 1.0);
+    return o;
+}
+// profundidade [0, 1] em 24 bits de uma cor RGBA8 (o alfa fica 1)
+fn empacotar(z: f32) -> vec4<f32> {
+    let v = floor(clamp(z, 0.0, 1.0) * 16777215.0);
+    let a = floor(v / 65536.0);
+    let b = floor((v - a * 65536.0) / 256.0);
+    return vec4<f32>(a, b, v - a * 65536.0 - b * 256.0, 255.0) / 255.0;
+}
+fn desempacotar(c: vec4<f32>) -> f32 {
+    let v = round(c.xyz * 255.0);
+    return (v.x * 65536.0 + v.y * 256.0 + v.z) / 16777215.0;
+}
+// a profundidade da câmera respeita o corte da prévia, senão a parte cortada fecharia os cantos
+@fragment fn fs_corte(i: MOut) -> @location(0) vec4<f32> {
+    if (cortado(i.wp)) { discard; }
+    return empacotar(i.clip.z);
 }
 @fragment fn fs_line(i: LOut) -> @location(0) vec4<f32> {
     if (cortado(i.wp)) { discard; }
@@ -480,6 +584,8 @@ pub struct ViewStyle {
     pub secao: Option<[f32; 4]>,
     /// escala dos mapas calculados por pixel (B346)
     pub mapa: Option<MapaGpu>,
+    /// sombra, oclusão e PBR pedidos (B139)
+    pub efeitos: crate::render_efeitos::Efeitos,
 }
 
 /// O que o shader precisa para pintar o mapa de curvatura ou de inclinação por pixel.
@@ -556,6 +662,11 @@ struct Uniforms {
     mapa: [f32; 4],
     mapa_dir: [f32; 4],
     mapa_cor: [[f32; 4]; 4],
+    luz_vp: [[f32; 4]; 4],
+    luz: [f32; 4],
+    efeitos: [f32; 4],
+    efeitos2: [f32; 4],
+    prof: [f32; 4],
 }
 
 /// Camadas do array de texturas (cada imagem é reduzida para TEX × TEX).
@@ -708,8 +819,8 @@ struct Targets {
 }
 
 /// Os pipelines de uma contagem de amostras.
-struct Pipes {
-    samples: u32,
+pub(crate) struct Pipes {
+    pub(crate) samples: u32,
     bg: wgpu::RenderPipeline,
     mesh: wgpu::RenderPipeline,
     xray: wgpu::RenderPipeline,
@@ -762,6 +873,92 @@ pub struct Viewport {
     ultimo_giro: Option<std::time::Instant>,
     /// transições de câmera ligadas (desligadas no modo leve: a vista salta direto)
     pub animar: bool,
+    bgl: wgpu::BindGroupLayout,
+    /// B139: recursos da sombra e da oclusão, criados no primeiro quadro que os pede
+    efeitos: Option<crate::render_efeitos::Recursos>,
+    /// o que a placa aceita; cai para `SemProfundidade` se o módulo dos efeitos falhar
+    cap_efeitos: crate::render_efeitos::Capacidade,
+    /// aviso de queda dos efeitos, que a interface mostra uma vez
+    pub aviso_efeitos: Option<String>,
+    aviso_dado: bool,
+}
+
+/// Fonte do shader: o base (sombra e oclusão valem 1) ou o dos efeitos (B139).
+pub(crate) fn fonte_shader(efeitos: bool) -> String {
+    SHADER.replace(crate::render_efeitos::MARCA, if efeitos { crate::render_efeitos::EFEITOS_WGSL } else { crate::render_efeitos::STUB_WGSL })
+}
+
+/// Grupo 0 de recursos: uniforme, texturas e amostrador.
+fn grupo0(dev: &wgpu::Device) -> wgpu::BindGroupLayout {
+    dev.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
+        entries: &[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry {
+                binding: 1,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture {
+                    sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                    view_dimension: wgpu::TextureViewDimension::D2Array,
+                    multisampled: false,
+                },
+                count: None,
+            },
+            wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), count: None },
+        ],
+    })
+}
+
+/// Para o teste: monta o módulo base e o dos efeitos e os pipelines de 1 e 4 amostras num
+/// dispositivo qualquer, devolvendo o primeiro erro da placa.
+#[cfg(test)]
+pub(crate) fn testar_pipelines(dev: &wgpu::Device, q: &wgpu::Queue, cap: crate::render_efeitos::Capacidade) -> Result<(), String> {
+    use crate::render_efeitos as ef;
+    let bgl = grupo0(dev);
+    let layout = dev.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: None, bind_group_layouts: &[Some(&bgl)], ..Default::default() });
+    let module = ef::protegido(dev, || dev.create_shader_module(wgpu::ShaderModuleDescriptor { label: None, source: wgpu::ShaderSource::Wgsl(fonte_shader(false).into()) }))?;
+    ef::protegido(dev, || {
+        make_pipes(dev, &module, &layout, 1);
+        make_pipes(dev, &module, &layout, 4);
+    })?;
+    let ef::Capacidade::Completa { .. } = cap else { return Ok(()) };
+    let mut r = ef::Recursos::criar(dev, &bgl, &module, &layout, &fonte_shader(true))?;
+    let a = ef::ativos(ef::Efeitos { nivel: ef::Nivel::Alto, ..Default::default() }, true, false, DisplayMode::SombreadoArestas, false, cap);
+    r.garantir(dev, a, [640, 480], 4)?;
+    r.garantir(dev, a, [640, 480], 1)?;
+    // grava e envia as passadas de profundidade: anexo e pipeline têm de casar
+    ef::protegido(dev, || {
+        let ubuf = dev.create_buffer(&wgpu::BufferDescriptor { label: None, size: std::mem::size_of::<Uniforms>() as u64, usage: wgpu::BufferUsages::UNIFORM, mapped_at_creation: false });
+        let tex = dev.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size: wgpu::Extent3d { width: 4, height: 4, depth_or_array_layers: 2 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Rgba8UnormSrgb,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        });
+        let tv = tex.create_view(&wgpu::TextureViewDescriptor { dimension: Some(wgpu::TextureViewDimension::D2Array), ..Default::default() });
+        let samp = dev.create_sampler(&Default::default());
+        let bind = dev.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: ubuf.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&tv) },
+                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&samp) },
+            ],
+        });
+        let mut enc = dev.create_command_encoder(&Default::default());
+        r.passadas(&mut enc, a, &bind, None, &crate::instancias::Instanciador::default());
+        q.submit([enc.finish()]);
+    })
 }
 
 const FMT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -785,7 +982,7 @@ fn lin(c: [u8; 3]) -> [f32; 4] {
 }
 
 /// Monta os pipelines para uma contagem de amostras.
-fn make_pipes(dev: &wgpu::Device, module: &wgpu::ShaderModule, layout: &wgpu::PipelineLayout, samples: u32) -> Pipes {
+pub(crate) fn make_pipes(dev: &wgpu::Device, module: &wgpu::ShaderModule, layout: &wgpu::PipelineLayout, samples: u32) -> Pipes {
     let target = [Some(wgpu::ColorTargetState { format: FMT, blend: Some(wgpu::BlendState::ALPHA_BLENDING), write_mask: wgpu::ColorWrites::ALL })];
     let mesh_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x4, 3 => Float32x4];
     let line_attrs = wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x4];
@@ -912,6 +1109,56 @@ impl Viewport {
         self.suportadas.iter().copied().filter(|n| *n <= pedido).max().unwrap_or(1)
     }
 
+    /// B139: decide os efeitos do quadro e garante os recursos deles. Placa sem o recurso, ou erro ao
+    /// montar o módulo dos efeitos, derruba sombra e oclusão (o nível cai para Rápido), registra o
+    /// motivo e deixa um aviso para a interface, uma vez por sessão.
+    fn preparar_efeitos(&mut self, rs: &egui_wgpu::RenderState, style: &ViewStyle, size: [u32; 2], amostras: u32) -> crate::render_efeitos::Ativos {
+        use crate::render_efeitos as ef;
+        let movendo = style.simplificar && style.navegando;
+        let pedidos = ef::ativos(style.efeitos, style.realista, style.leve, style.mode, movendo, ef::Capacidade::Completa { max_px: 4096 });
+        let mut a = ef::ativos(style.efeitos, style.realista, style.leve, style.mode, movendo, self.cap_efeitos);
+        if pedidos.usa_profundidade() && !a.usa_profundidade() {
+            self.avisar_efeitos("placa sem comparação de profundidade ou com textura pequena");
+        }
+        if !a.usa_profundidade() {
+            return a;
+        }
+        if self.efeitos.is_none() {
+            let base_layout = &self.layout;
+            match ef::Recursos::criar(&rs.device, &self.bgl, &self.module, base_layout, &fonte_shader(true)) {
+                Ok(r) => self.efeitos = Some(r),
+                Err(e) => {
+                    self.cair_efeitos(&e);
+                    a.sombra_px = 0;
+                    a.ao_amostras = 0;
+                    return a;
+                }
+            }
+        }
+        if let Err(e) = self.efeitos.as_mut().unwrap().garantir(&rs.device, a, size, amostras) {
+            self.cair_efeitos(&e);
+            a.sombra_px = 0;
+            a.ao_amostras = 0;
+        }
+        a
+    }
+
+    fn cair_efeitos(&mut self, motivo: &str) {
+        self.efeitos = None;
+        self.cap_efeitos = crate::render_efeitos::Capacidade::SemProfundidade;
+        self.last = None;
+        self.avisar_efeitos(motivo);
+    }
+
+    fn avisar_efeitos(&mut self, motivo: &str) {
+        if self.aviso_dado {
+            return;
+        }
+        self.aviso_dado = true;
+        crate::partida::registrar("efeitos", motivo);
+        self.aviso_efeitos = Some(tr("A placa de vídeo não aceita sombra e oclusão: a vista passou para o nível Rápido.").to_string());
+    }
+
     /// A câmera mudou por um comando (vista, ajustar, alinhar): em vez de saltar, anima a partir de `before`.
     pub fn animate_from(&mut self, before: Camera) {
         let mut to = self.camera;
@@ -964,35 +1211,14 @@ impl Viewport {
 
     pub fn new(rs: &egui_wgpu::RenderState) -> Self {
         let dev = &rs.device;
-        let module = dev.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("fenkra"), source: wgpu::ShaderSource::Wgsl(SHADER.into()) });
+        let module = dev.create_shader_module(wgpu::ShaderModuleDescriptor { label: Some("fenkra"), source: wgpu::ShaderSource::Wgsl(fonte_shader(false).into()) });
         let ubuf = dev.create_buffer(&wgpu::BufferDescriptor {
             label: Some("uniforms"),
             size: std::mem::size_of::<Uniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let bgl = dev.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: None,
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                    ty: wgpu::BindingType::Buffer { ty: wgpu::BufferBindingType::Uniform, has_dynamic_offset: false, min_binding_size: None },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2Array,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), count: None },
-            ],
-        });
+        let bgl = grupo0(dev);
         // texturas: array de camadas brancas até o usuário escolher imagens
         let textures = dev.create_texture(&wgpu::TextureDescriptor {
             label: Some("texturas"),
@@ -1052,6 +1278,11 @@ impl Viewport {
             cena_grande: false,
             inst: Default::default(),
             bounds: None,
+            bgl,
+            efeitos: None,
+            cap_efeitos: crate::render_efeitos::capacidade(rs.adapter.get_downlevel_capabilities().flags, rs.device.limits().max_texture_dimension_2d),
+            aviso_efeitos: None,
+            aviso_dado: false,
         }
     }
 
@@ -1161,6 +1392,9 @@ impl Viewport {
             let limiar = fenkra_montagem::lod::LIMIAR_PX * if style.simplificar && style.navegando { 4. } else { 1. } * if style.leve { 2. } else { 1. };
             crate::medir_quadros::fase("preparar", || self.inst.preparar(&rs.device, &rs.queue, &crate::instancias::Quadro { camera: self.camera, tamanho: size, limiar_px: limiar }));
         }
+        // B139: o que vale neste quadro; sem recurso na placa o nível cai sozinho e avisa uma vez
+        let ativos = self.preparar_efeitos(rs, &style, size, amostras);
+        let ue = crate::render_efeitos::uniforme(ativos, &self.camera, self.bounds);
         let t = self.targets.as_ref().unwrap();
         let vp = self.camera.view_proj(size[0] as f32 / size[1] as f32);
         let e = self.camera.eye();
@@ -1179,11 +1413,22 @@ impl Viewport {
             mapa: style.mapa.map_or([0.; 4], |m| [m.tipo, m.raio, m.minimo, m.tampa]),
             mapa_dir: style.mapa.map_or([0., 0., 1., 0.], |m| [m.dir[0], m.dir[1], m.dir[2], 0.]),
             mapa_cor: style.mapa.map_or([[0.; 4]; 4], |m| m.paradas.map(|c| [c[0], c[1], c[2], 1.])),
+            luz_vp: ue.luz_vp,
+            luz: ue.luz,
+            efeitos: ue.efeitos,
+            efeitos2: ue.efeitos2,
+            prof: ue.prof,
         };
         rs.queue.write_buffer(&self.ubuf, 0, bytemuck::bytes_of(&u));
 
         let (Some(ms), Some(p)) = (t.ms.iter().find(|m| m.samples == amostras), self.pipes.iter().find(|p| p.samples == amostras)) else { return t.tex_id };
         let mut enc = rs.device.create_command_encoder(&Default::default());
+        // B139: mapa de sombra e profundidade da câmera antes da passada principal
+        let efeito = if ativos.usa_profundidade() { self.efeitos.as_ref().and_then(|r| Some((r, r.pipes(amostras)?, r.bind()?))) } else { None };
+        if let Some((r, _, _)) = efeito {
+            let malha = self.vb.as_ref().filter(|_| style.mode != DisplayMode::Arame).map(|(v, i, n)| (v, i, *n));
+            crate::medir_quadros::fase("efeitos", || r.passadas(&mut enc, ativos, &self.bind, malha, &self.inst));
+        }
         {
             let view = t.resolve.create_view(&Default::default());
             // com anti-serrilhamento desenha na textura multiamostrada e resolve na `resolve`;
@@ -1219,14 +1464,22 @@ impl Viewport {
                 DisplayMode::SemiRenderizado => style.edges_in_render,
                 _ => true,
             };
+            // B139: as faces opacas usam o módulo dos efeitos (grupo 1) quando sombra ou oclusão valem
+            let (mesh, mesh_i) = match efeito {
+                Some((_, pe, b1)) if m != DisplayMode::RaioX => {
+                    pass.set_bind_group(1, b1, &[]);
+                    (&pe.mesh, &pe.mesh_i)
+                }
+                _ => (&p.mesh, &p.mesh_i),
+            };
             if let (true, Some((vb, ib, n))) = (faces, &self.vb) {
-                pass.set_pipeline(if m == DisplayMode::RaioX { &p.xray } else { &p.mesh });
+                pass.set_pipeline(if m == DisplayMode::RaioX { &p.xray } else { mesh });
                 pass.set_vertex_buffer(0, vb.slice(..));
                 pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
                 pass.draw_indexed(0..*n, 0, 0..1);
             }
             if faces {
-                pass.set_pipeline(if m == DisplayMode::RaioX { &p.xray_i } else { &p.mesh_i });
+                pass.set_pipeline(if m == DisplayMode::RaioX { &p.xray_i } else { mesh_i });
                 self.inst.faces(&mut pass);
             }
             if let (false, Some((fb, n))) = (m == DisplayMode::LinhasOcultas, &self.fb) {

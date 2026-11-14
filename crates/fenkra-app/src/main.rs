@@ -16,6 +16,8 @@ mod settings;
 mod toolbar;
 mod editor;
 mod render;
+mod render_efeitos;
+mod textos_efeitos;
 mod demo_polimento;
 mod scene;
 mod entradas;
