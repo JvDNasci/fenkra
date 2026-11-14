@@ -37,6 +37,7 @@ pub mod qualidade;
 pub mod regras;
 pub mod requisitos;
 pub mod sketch;
+pub mod sketch_origem;
 pub mod subd;
 pub mod subd_ops;
 pub mod subd_brep;

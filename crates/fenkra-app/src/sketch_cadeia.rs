@@ -330,7 +330,8 @@ fn toca(r: Rect, a: Pos2, b: Pos2) -> bool {
 /// Pontos das pontas das curvas ficam de fora: a curva já os representa.
 pub fn na_janela(sk: &SketchData, tela: &dyn Fn(P) -> Pos2, r: Rect, cruzada: bool) -> Vec<Ent> {
     let mut v = vec![];
-    for c in &sk.curves {
+    // a origem e os eixos (B437) não entram: a cruzada sempre tocaria os eixos
+    for c in sk.curves.iter().filter(|c| !sk.e_da_origem(c.id) && !matches!(c.geom, Curve::Point { p } if sk.e_da_origem(p))) {
         if let Curve::Point { p } = c.geom {
             if dentro(r, tela(sk.pos(p))) {
                 v.push(Ent::Pt(p));
