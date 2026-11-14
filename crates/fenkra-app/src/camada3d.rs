@@ -204,7 +204,7 @@ pub fn na_cena(v: &egui::Visuals, s: &mut Scene) {
 pub fn janela(ctx: &egui::Context) -> bool {
     let Some(mut c) = trava(&ATIVO).clone() else { return false };
     let (mut aberta, antes, mut fechar) = (true, c.visivel, false);
-    egui::Window::new(format!("{}: {}", tr("Comparação no 3D"), c.titulo)).id(egui::Id::new("fenkra_camada3d")).open(&mut aberta).default_pos([60., 120.]).default_width(300.).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "camada3d", format!("{}: {}", tr("Comparação no 3D"), c.titulo), &mut aberta, 300., |ui| {
         for (papel, texto) in &c.legenda {
             ui.horizontal(|ui| {
                 let (r, _) = ui.allocate_exact_size(egui::vec2(14., 14.), egui::Sense::hover());

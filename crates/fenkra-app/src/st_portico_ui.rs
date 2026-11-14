@@ -174,7 +174,7 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
     let mut novo = caso.clone();
     let mut aberta = true;
     let analise = e.analise.clone();
-    egui::Window::new(tr("Análise de pórtico")).id(egui::Id::unique("janela_portico")).open(&mut aberta).default_size([520., 600.]).resizable(true).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "portico", tr("Análise de pórtico"), &mut aberta, 500., |ui| {
         // o modelo de barras sai do documento mesmo sem apoio, para listar os nós
         let modelo = fenkra_solidos::st_portico::modelo_da_estrutura(app.doc());
         let (p, origem) = match &modelo {

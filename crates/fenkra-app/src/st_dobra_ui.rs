@@ -329,7 +329,7 @@ pub fn janela_regras(app: &mut App, ctx: &egui::Context) {
     if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
         aberta = false;
     }
-    egui::Window::new(tr("📐 Regras de dobra de tubo")).id(egui::Id::new("janela_regras_tubo")).open(&mut aberta).default_size([520., 520.]).resizable(true).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "regras_tubo", tr("📐 Regras de dobra de tubo"), &mut aberta, 520., |ui| {
         if crate::app::done_bar(ui) {
             ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
         }
