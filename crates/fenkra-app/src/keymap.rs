@@ -60,16 +60,18 @@ pub enum KeyAction {
     SkMirror,
     SkSpline,
     SkModo,
+    /// B438: devolve o compasso ao canto da vista
+    CompassoCanto,
 }
 
 use KeyAction::*;
 use crate::i18n::tr;
 
 impl KeyAction {
-    pub const ALL: [KeyAction; 46] = [
+    pub const ALL: [KeyAction; 47] = [
         Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Undo, Redo, Delete, Save, SaveAll, ClipCopy, ClipCut,
         ClipPaste, ClipDup, Sketch,
-        Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, RodaComandos, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid, SkTrim, SkOffset, SkFillet, SkMirror, SkSpline, SkModo,
+        Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, RodaComandos, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid, SkTrim, SkOffset, SkFillet, SkMirror, SkSpline, SkModo, CompassoCanto,
     ];
 
     pub fn label(self) -> &'static str {
@@ -87,6 +89,7 @@ impl KeyAction {
             ViewIso => tr("Vista isométrica"),
             Hide => tr("Ocultar/mostrar seleção"),
             HiddenEnv => tr("Ambiente de ocultos"),
+            CompassoCanto => tr("Devolver o compasso ao canto"),
             Undo => tr("Desfazer"),
             Redo => tr("Refazer"),
             Delete => tr("Apagar"),
@@ -125,7 +128,7 @@ impl KeyAction {
 
     pub fn group(self) -> &'static str {
         match self {
-            Fit | ViewMenu | Normal | Ortho | ViewFront | ViewBack | ViewTop | ViewBottom | ViewLeft | ViewRight | ViewIso | Hide | HiddenEnv => "Vista",
+            Fit | ViewMenu | Normal | Ortho | ViewFront | ViewBack | ViewTop | ViewBottom | ViewLeft | ViewRight | ViewIso | Hide | HiddenEnv | CompassoCanto => "Vista",
             Undo | Redo | Delete | Save | SaveAll | ClipCopy | ClipCut | ClipPaste | ClipDup => "Edição",
             Sketch | Extrude | Cut | Revolve | Hole | Fillet | Chamfer | Plane | RodaComandos => "Modelagem",
             _ => "Sketch",
@@ -294,6 +297,8 @@ impl Preset {
         v.extend([(SkTrim, "T"), (SkOffset, "Shift+O"), (SkFillet, "Alt+F"), (SkMirror, "Shift+M"), (SkSpline, "B"), (SkModo, "M")]);
         // roda de comandos (B256): Shift+W não é usada em nenhuma predefinição
         v.push((RodaComandos, "Shift+W"));
+        // compasso (B438): Alt+Home não é usada em nenhuma predefinição
+        v.push((CompassoCanto, "Alt+Home"));
         v
     }
 }

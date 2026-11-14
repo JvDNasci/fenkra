@@ -273,6 +273,8 @@ pub struct App {
     pub picks: Vec<crate::picking::Pick>,
     /// estado da bancada Forma livre
     pub forma: crate::forma_ui::Estado,
+    /// B438: o cubo de vistas que se prende na peça
+    pub compasso: crate::compasso::Compasso,
     pub(crate) hover_pick: Option<crate::picking::Pick>,
     /// já passou da tela inicial
     pub(crate) started: bool,
@@ -485,6 +487,7 @@ impl App {
             view_menu: false,
             new_view_name: String::new(),
             view_choice: None,
+            compasso: crate::compasso::Compasso::novo(),
             hover_item: None,
             hover_now: std::cell::Cell::new(None),
             multi: Default::default(),
@@ -3187,7 +3190,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
 
     /// O X do painel de comando: cancela o comando aberto, como o botão Cancelar.
     fn fechar_comando(&mut self) {
-        if self.session.is_some() {
+        if self.compasso_no_painel() {
+            self.compasso.devolver();
+        } else if self.session.is_some() {
             self.cancel_session();
         } else if self.sketch.is_some() {
             self.finish_sketch();
@@ -7500,17 +7505,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
             // cubo de vistas no canto superior direito
             // B434: cubo pequeno no canto, o único elemento sobre a área 3D
-            let cube_area = Rect::from_min_size(egui::pos2(rect.right() - 86., rect.top() + 6.), egui::vec2(80., 80.));
-            let (dir, drag) = crate::viewcube::cube(ui, cube_area, &cam, "canto", false);
-            if dir.is_some() {
-                crate::curso::anotar("vista_cubo");
-            }
-            if dir.is_some() {
-                self.view_choice = dir;
-            }
-            if let Some(vp) = self.viewport.as_mut() {
-                vp.camera.yaw -= drag.x * 0.008;
-                vp.camera.pitch = (vp.camera.pitch + drag.y * 0.008).clamp(-1.5706, 1.5706);
+            // B438: o cubo é também o compasso, que se arrasta para a peça
+            if let Some(dir) = crate::compasso::canto(self, ui, rect, &cam) {
+                self.view_choice = Some(dir);
             }
             if self.sketch.is_some() {
                 crate::sketch_ui::overlay(self, ui, rect, &resp, cam);
@@ -8849,6 +8846,7 @@ impl eframe::App for App {
         } else {
             self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some()
         };
+        let active = active || self.compasso_no_painel();
         self.coluna_esquerda(root, active, comando);
         // B434: recursos da bancada à direita, só ícones
         self.barra_direita(root);

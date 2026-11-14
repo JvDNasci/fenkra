@@ -43,6 +43,8 @@ mod scan;
 mod textos_ger8;
 mod alca_estado;
 mod viewcube;
+mod compasso;
+mod textos_compasso;
 mod sketch_ui;
 mod sketch_vinculos;
 mod sketch_posicao_ui;

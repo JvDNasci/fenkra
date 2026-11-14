@@ -92,9 +92,17 @@ fn seta(ui: &mut egui::Ui, aberta: bool, rotulo: &str, lembrete: &str, dica: &st
 }
 
 impl App {
+    /// B438: o compasso preso tem o painel dele na coluna, quando nenhum comando de verdade está aberto.
+    pub(super) fn compasso_no_painel(&self) -> bool {
+        let comando_asm = self.in_asm() && self.asm.as_ref().is_some_and(|s| s.cmd.is_some());
+        crate::compasso::painel_aberto(self) && self.session.is_none() && self.sketch.is_none() && !self.sketch_wait_plane && self.pmi_pending.is_none() && !comando_asm
+    }
+
     /// Título do painel do comando aberto.
     fn titulo_do_comando(&self) -> String {
-        if self.sketch.is_some() {
+        if self.compasso_no_painel() {
+            tr("Compasso").to_string()
+        } else if self.sketch.is_some() {
             tr("Sketch").to_string()
         } else if let Some(s) = &self.session {
             // B435: o tipo do recurso saiu do corpo do painel e fica no título, junto do nome
@@ -117,6 +125,9 @@ impl App {
 
     /// Concluir, Cancelar e companhia: ficam à vista também com a árvore aberta pela seta.
     fn barras_do_comando(&mut self, ui: &mut egui::Ui) {
+        if self.compasso_no_painel() {
+            return;
+        }
         self.conclude_bar(ui);
         if !matches!(self.settings.bench, crate::settings::Bench::Desenho | crate::settings::Bench::Montagem) && self.sketch.is_none() {
             editor::barra_fixa(self, ui);
@@ -131,7 +142,9 @@ impl App {
             rolagem = rolagem.vertical_scroll_offset(px);
         }
         rolagem.show(ui, |ui| {
-            if self.settings.bench == crate::settings::Bench::Desenho {
+            if self.compasso_no_painel() {
+                crate::compasso::painel(self, ui)
+            } else if self.settings.bench == crate::settings::Bench::Desenho {
                 crate::dwg_ui::panel(self, ui)
             } else if self.settings.bench == crate::settings::Bench::Montagem {
                 crate::medir_quadros::fase("painel", || crate::asm_ui::panel(self, ui))

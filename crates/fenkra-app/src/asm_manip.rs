@@ -220,7 +220,7 @@ pub fn apos_viewport(app: &mut App) -> bool {
 }
 
 /// A peça vai para `alvo` de uma vez: é o valor digitado no rótulo.
-fn aplicar(st: &mut AsmState, id: Id, alvo: Placement, escopo: &[Id]) {
+pub(crate) fn aplicar(st: &mut AsmState, id: Id, alvo: Placement, escopo: &[Id]) {
     let mut copia = st.asm.clone();
     if st.respect {
         levar(&mut copia, id, alvo);
@@ -310,7 +310,9 @@ pub fn desenhar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let p = n.placement;
     let caixa = app.result.as_ref().and_then(|r| view::centro_caixa(r.bodies.iter().filter(|b| b.collector == id).map(|b| &b.mesh)));
     let centro = caixa.unwrap_or(p.origin);
-    let c = v3(centro);
+    // B438: com o compasso preso, as alças nascem na origem dele, nos eixos dele
+    let bussola = crate::compasso::quadro_na_montagem(&app.compasso, &st.asm);
+    let c = bussola.map_or(v3(centro), |q| v3(q.origin));
     if st.explode_mode {
         let off = st.live.offset(id);
         if let Some(v) = crate::gizmo::translate_gizmo(ui, rect, cam, id.0 ^ 0x5eed, c, [Vec3::X, Vec3::Y, Vec3::Z], off, [false; 3]) {
@@ -329,17 +331,20 @@ pub fn desenhar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     }
     picks_comps = st.comps_of(&app.picks).into_iter().chain(st.multi.iter().copied()).collect();
     let Some(cs) = cam.project(rect, c) else { return };
-    let e = st.manip.eixos_arrasto.unwrap_or_else(|| eixos(st.manip.referencia, &p, st.manip.face));
+    let e = st.manip.eixos_arrasto.unwrap_or_else(|| bussola.map_or_else(|| eixos(st.manip.referencia, &p, st.manip.face), |q| q.rot));
     let lib = liberdade(st, id, e, centro, p);
     if let Some(t) = trava(&st.asm, id, lib.as_ref()) {
         cadeado(ui, rect, cs, t);
-        if t != Trava::Fixa {
+        if t != Trava::Fixa && bussola.is_none() {
             barra(st, ui, rect, cs);
         }
         return;
     }
     let lib = lib.unwrap_or_else(tudo_livre);
-    barra(st, ui, rect, cs);
+    // preso, o compasso é a referência e o pivô: a barrinha de eixos e pivô sai
+    if bussola.is_none() {
+        barra(st, ui, rect, cs);
+    }
     let ax = e.map(v3);
     let inicio = st.drag_start.unwrap_or(p);
     let mut cand: Option<Placement> = None;
@@ -354,7 +359,11 @@ pub fn desenhar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let rad = 95. / ppm;
     let mut pontas = [None; 3];
     for k in (0..3).filter(|k| lib.girar[*k]) {
-        let ponto = st.drag_center.filter(|_| st.rot_drag.is_some_and(|r| r.0 == k)).unwrap_or_else(|| ponto_de_giro(st.manip.pivo, &inicio, centro, lib.pivo[k]));
+        let ponto = st.drag_center.filter(|_| st.rot_drag.is_some_and(|r| r.0 == k)).unwrap_or_else(|| match bussola {
+            // o eixo que as restrições impõem continua mandando; solto, gira pela origem do compasso
+            Some(q) if lib.pivo[k].is_none() => q.origin,
+            _ => ponto_de_giro(st.manip.pivo, &inicio, centro, lib.pivo[k]),
+        });
         let o = v3(ponto);
         let dentro = (ax[(k + 1) % 3] + ax[(k + 2) % 3]).normalize();
         let src = o + dentro * rad;
@@ -416,6 +425,7 @@ pub fn desenhar(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let solto = ui.input(|i| i.pointer.any_released());
     if let Some(q) = cand {
         if st.drag_start.is_none() {
+            crate::compasso::seguir(&mut app.compasso, &st.asm, id);
             st.drag_start = Some(p);
             st.manip.eixos_arrasto = Some(e);
             st.snapshot = Some(st.asm.clone());
