@@ -1348,6 +1348,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     crate::pmi_setas::novo_quadro(ui.ctx().cumulative_frame_nr());
     let painter = ui.painter_at(rect);
     crate::pmi_baloes_ui::previa(app, ui, rect, cam);
+    crate::pmi_esquema_ui::previa(app, ui, rect, cam);
     let mut edit_req: Option<Id> = None;
     let mut anchor_req: Option<(Id, usize, [f64; 3], Option<PmiTarget>)> = None;
     let mut refresh: Vec<(Id, Vec<[f64; 3]>, Vec<Option<PmiTarget>>)> = vec![];
@@ -2178,6 +2179,7 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_captura
     let sel = if app.in_asm() { app.asm.as_ref().and_then(|s| s.sel) } else if let Sel::Pmi(i) = app.sel { Some(i) } else { None };
     let sel = sel.or(app.pmi_focus);
     let mut create: Option<u8> = None;
+    let mut esquema = false;
     let mut acts: Vec<crate::app::TreeAction> = vec![];
     let mut reorder: Option<(Id, Id)> = None;
     let mut reorder_cap: Option<(Id, Id)> = None;
@@ -2216,6 +2218,10 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_captura
         let ligado = crate::pmi_inspecao_3d::ligado();
         if ui.button(tr(if ligado { "Esconder os balões de inspeção" } else { "Mostrar os balões de inspeção" })).on_hover_text(tr("Número de inspeção em cada cota, tolerância geométrica e rugosidade, na ordem da lista")).clicked() {
             crate::pmi_inspecao_3d::alternar();
+            ui.close();
+        }
+        if !app.in_asm() && ui.button(tr("⚙ Esquema de cotagem automático…")).on_hover_text(tr("Escolhe as referências A, B e C e gera cotas, tolerâncias e referências sobre furos, rasgos e chanfros, no modo Mais/Menos ou Geométrico.")).clicked() {
+            esquema = true;
             ui.close();
         }
         ui.separator();
@@ -2350,6 +2356,9 @@ pub fn tree_section(app: &mut App, ui: &mut egui::Ui, com_pmi: bool, com_captura
         } else {
             app.sel = Sel::Pmi(id);
         }
+    }
+    if esquema {
+        crate::pmi_esquema_ui::abrir(app);
     }
     if let Some(i) = create {
         command(app, i);

@@ -76,6 +76,7 @@ pub mod massa;
 pub mod termino;
 mod edicao_direta;
 pub mod reconhece;
+pub mod esquema_pmi;
 pub mod dfm;
 pub mod dfm_geo;
 pub mod dfm_saida;
