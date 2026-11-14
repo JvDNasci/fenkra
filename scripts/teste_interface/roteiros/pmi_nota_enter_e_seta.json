@@ -1,0 +1,14 @@
+{
+  "descricao": "B448, depois de pmi_nota_varias_setas.json (Nota 1 com três setas na Placa paramétrica). Duplo clique na seta que vai ao furo, sobre a face do topo: abre a Nota 1 com a Seta 2 expandida, sem abrir a extrusão Placa nem ajustar a vista. Depois Concluir, Mais › Nota, dois alvos com Ctrl e Enter (sem foco no texto): Nota 2 com duas setas.",
+  "passos": [
+    {"acao": "duplo", "x": 1137, "y": 578, "nome": "duplo_clique_na_seta"},
+    {"acao": "clicar", "x": 362, "y": 157, "nome": "concluir", "foto": false},
+    {"acao": "clicar", "x": 1629, "y": 65, "nome": "abre_mais", "foto": false},
+    {"acao": "clicar", "x": 1126, "y": 150, "nome": "escolhe_nota", "foto": false},
+    {"acao": "mover", "x": 700, "y": 950, "esperar": 1, "nome": "painel_nota_limpo"},
+    {"acao": "clicar", "x": 900, "y": 700, "mods": ["ctrl"], "nome": "alvo1", "foto": false},
+    {"acao": "clicar", "x": 1095, "y": 745, "mods": ["ctrl"], "nome": "alvo2"},
+    {"acao": "tecla", "tecla": "enter", "nome": "enter_cria"},
+    {"acao": "mover", "x": 1500, "y": 950, "esperar": 1, "nome": "nota2_duas_setas"}
+  ]
+}

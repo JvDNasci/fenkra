@@ -1,0 +1,12 @@
+{
+  "descricao": "B448: o menu Mais fecha ao escolher qualquer comando, não só a Nota. Abre Mais e escolhe Ajustar (grupo Vista); depois abre Mais e escolhe a variação Iso pela setinha da família. Em cada foto final o menu deve estar fechado.",
+  "passos": [
+    {"acao": "tecla", "tecla": "esc", "foto": false},
+    {"acao": "clicar", "x": 1629, "y": 65, "nome": "mais_aberto"},
+    {"acao": "clicar", "x": 1063, "y": 740, "nome": "ajustar", "foto": false},
+    {"acao": "mover", "x": 700, "y": 950, "esperar": 1, "nome": "mais_fechou_apos_ajustar"},
+    {"acao": "clicar", "x": 1629, "y": 65, "nome": "mais_aberto2"},
+    {"acao": "clicar", "x": 1114, "y": 740, "nome": "iso", "foto": false},
+    {"acao": "mover", "x": 700, "y": 950, "esperar": 1, "nome": "mais_fechou_apos_iso"}
+  ]
+}

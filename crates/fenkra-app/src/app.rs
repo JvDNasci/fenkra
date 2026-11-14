@@ -4042,6 +4042,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             self.open.doc.name_of(s.id)
         } else if let Some(p) = self.asm.as_ref().and_then(|s| s.cmd.as_ref()).filter(|_| self.in_asm()) {
             tr(p.c.tipo.label()).to_string()
+        } else if let Some(i) = self.pmi_pending.filter(|_| !self.in_asm()) {
+            // B448: anotação pendente: o painel é do comando, não da seleção anterior
+            tr(crate::pmi_ui::kind_of(i).label()).to_string()
         } else if self.sel == Sel::Part {
             tr("Propriedades da peça").to_string()
         } else {
@@ -4065,6 +4068,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     crate::medir_quadros::fase("painel", || crate::asm_ui::panel(self, ui))
                 } else if self.sketch.is_some() {
                     crate::sketch_ui::panel(self, ui)
+                } else if self.pmi_pending.is_some() {
+                    crate::pmi_nota_cmd::painel(self, ui)
                 } else {
                     editor::show(self, ui);
                     crate::measure::panel(self, ui);
@@ -7711,7 +7716,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             if let Some(id) = forma_clicada {
                 self.open_pending = Some(id);
             }
-            if (resp.double_clicked() && self.sketch.is_none() && self.hover_pick.is_none() && forma_clicada.is_none()) || self.fit_pending {
+            // B448: duplo clique na seta de uma nota abre a nota, não ajusta a vista
+            let na_seta = resp.interact_pointer_pos().and_then(|q| crate::pmi_setas::seta_em(ctx.cumulative_frame_nr(), q)).is_some();
+            if (resp.double_clicked() && self.sketch.is_none() && self.hover_pick.is_none() && forma_clicada.is_none() && !na_seta) || self.fit_pending {
                 if let Some(b) = vp.bounds {
                     let before = vp.camera;
                     vp.camera.fit(b);
@@ -7918,7 +7925,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     crate::medir_quadros::fase("pick_caixas", || crate::picking::pick_com_caixas(r, &self.open.doc, &cam, rect, rect.center(), &filt, caixas));
                 }
                 let dragging = resp.dragged();
+                let quadro = ctx.cumulative_frame_nr();
                 self.hover_pick = match (resp.hover_pos(), dragging) {
+                    // B448: a seta de uma nota fica à frente do modelo no teste de clique
+                    (Some(h), false) if crate::pmi_setas::seta_em(quadro, h).is_some() => None,
                     (Some(h), false) => {
                         let doc = &self.open.doc;
                         let outro = self.selecao_ciclo.escolher(h, passo_ciclo, || crate::picking::pilha_de_faces(r, doc, &cam, rect, h, &filt));
