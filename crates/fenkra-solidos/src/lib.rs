@@ -103,6 +103,7 @@ pub use chapa_flat::{passos_planificados, PassoPlanificado};
 pub mod st_frames;
 pub mod st_portico;
 pub mod st_caminho_tubo;
+pub mod st_tubo_real;
 pub mod st_verifica_aco;
 pub mod st_ligacoes;
 mod st_placas;
