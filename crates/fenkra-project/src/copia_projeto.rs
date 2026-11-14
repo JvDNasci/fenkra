@@ -21,15 +21,12 @@
 //! tocado. Se qualquer gravação falha, os arquivos criados são apagados e o índice volta ao que era.
 
 use crate::referencias::{caminho_relativo, ler_uid};
+use crate::relacoes::{arquivo_da_ref, TipoRef, PREFIXO_FURO};
 use crate::seguro::gravar_atomico;
 use crate::{PResult, Project, ProjectError, PARTS};
 use fenkra_core::{Document, FeatureKind};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
-
-/// Publicação dos furos que a montagem manda para a peça (`fenkra_montagem::furos::PREFIXO`). Esse
-/// link aponta para a montagem, que não é dependência da peça: não é copiada, só reapontada.
-const PREFIXO_FURO: &str = "montagem:furo:";
 
 /// O que a cópia gravou e o que o chamador precisa avisar.
 #[derive(Clone, Debug, Default)]
@@ -87,27 +84,23 @@ fn minusculo(s: &str) -> String {
     }
 }
 
-/// Arquivo de origem de um link, visto da peça que o grava. Mesma regra de `fenkra_montagem::links`:
-/// caminho relativo vale a partir da pasta da peça.
-fn alvo_do_link(peca: &Path, caminho: &str) -> PathBuf {
-    let p = Path::new(caminho);
-    if p.is_absolute() {
-        p.to_path_buf()
-    } else {
-        peca.parent().map(|d| d.join(p)).unwrap_or_else(|| p.to_path_buf())
-    }
+fn pasta_de(peca: &Path) -> &Path {
+    peca.parent().unwrap_or(Path::new(""))
 }
 
-/// Arquivo de malha ou de textura: absoluto, ao lado da peça ou relativo à pasta de trabalho.
+/// Arquivo de origem de um link, visto da peça que o grava: a mesma regra de
+/// [`crate::relacoes::arquivo_da_ref`], que Salvar como, o pacote e o onde-usado também seguem.
+fn alvo_do_link(peca: &Path, caminho: &str) -> PathBuf {
+    arquivo_da_ref(pasta_de(peca), TipoRef::Link, caminho)
+}
+
+/// Arquivo de malha ou de textura que existe: absoluto, ao lado da peça ou relativo à pasta de trabalho.
 fn arquivo_de_recurso(peca: &Path, caminho: &str) -> Option<PathBuf> {
     if caminho.is_empty() {
         return None;
     }
-    let p = Path::new(caminho);
-    if p.is_absolute() {
-        return p.is_file().then(|| p.to_path_buf());
-    }
-    [peca.parent().map(|d| d.join(p)), Some(p.to_path_buf())].into_iter().flatten().find(|c| c.is_file()).map(|c| absoluto(&c))
+    let c = arquivo_da_ref(pasta_de(peca), TipoRef::Malha, caminho);
+    c.is_file().then(|| absoluto(&c))
 }
 
 fn texto_do_caminho(p: &Path) -> String {

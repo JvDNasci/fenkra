@@ -19,11 +19,17 @@
 //! Por que a cópia ganha uid novo: o uid é a identidade do documento (B66). Dois arquivos com o mesmo
 //! uid fazem o resolvedor de referências achar "vários candidatos" e pedir decisão ao usuário.
 //!
+//! Referências seguidas (B452): componentes e subconjuntos da montagem, vistas do desenho, links de
+//! peça em `external[]` (peça linkada ou derivada), malha importada e texturas. Malha e textura são
+//! copiadas byte a byte e o caminho fica absoluto, porque o comando as lê pela pasta de trabalho. O
+//! furo que a montagem manda para a peça não entra na tabela: a montagem não é dependência da peça;
+//! o caminho só é recalculado (ou leva à cópia da montagem, se ela também for copiada).
+//!
 //! Garantias: o plano não grava nada; `executar` valida tudo antes, grava com escrita atômica e, se
 //! qualquer gravação falhar, **desfaz** o que já tinha gravado (apaga os arquivos criados e restaura
 //! o conteúdo dos substituídos). O original só é removido (modo mover) depois de tudo gravado.
 
-use crate::referencias::{caminho_relativo, Ref};
+use crate::referencias::caminho_relativo;
 use crate::relacoes::{onde_usado, referencias_do_json, trocar_caminhos, TipoRef};
 use crate::seguro::gravar_atomico;
 use crate::{PResult, ProjectError};
@@ -207,7 +213,10 @@ impl PlanoSalvarComo {
         while !fila.is_empty() {
             let (txt, dir, nivel) = fila.remove(0);
             for r in referencias_do_json(&txt) {
-                let completo = absoluto(&Ref { uid: r.uid.clone(), caminho: r.caminho.clone() }.caminho_completo(&dir));
+                if !r.tipo.e_dependencia() {
+                    continue;
+                }
+                let completo = absoluto(&r.arquivo(&dir));
                 let k = chave(&completo);
                 if let Some(&i) = indice.get(&k) {
                     linhas[i].usos += 1;
@@ -226,7 +235,7 @@ impl PlanoSalvarComo {
                     acao: AcaoRef::Manter,
                     resolucao: ResolucaoConflito::Renomear,
                 });
-                if existe && visitados.insert(k) {
+                if existe && r.tipo.eh_documento() && visitados.insert(k) {
                     if let Ok(t) = std::fs::read_to_string(&completo) {
                         fila.push((t, completo.parent().map(Path::to_path_buf).unwrap_or_default(), nivel + 1));
                     }
@@ -402,8 +411,14 @@ impl PlanoSalvarComo {
             None => std::fs::read_to_string(&self.origem)?,
         };
         trabalhos.push((self.origem.clone(), principal, self.destino.clone(), self.modo.mantem_uid()));
+        // malha e textura vão como estão, depois dos documentos (o principal fica primeiro em `gravados`)
+        let mut recursos: Vec<(PathBuf, PathBuf)> = vec![];
         for (l, d) in &copias {
-            trabalhos.push((l.original.clone(), std::fs::read_to_string(&l.original)?, d.clone(), false));
+            if l.tipo.eh_documento() {
+                trabalhos.push((l.original.clone(), std::fs::read_to_string(&l.original)?, d.clone(), false));
+            } else {
+                recursos.push((l.original.clone(), d.clone()));
+            }
         }
         // uids novos, decididos antes para que quem referencia a cópia receba o uid dela
         let mut uids: Vec<(String, String)> = vec![];
@@ -424,9 +439,9 @@ impl PlanoSalvarComo {
                 if !vistos.insert(r.caminho.clone()) {
                     continue;
                 }
-                let completo = absoluto(&Ref { uid: r.uid.clone(), caminho: r.caminho.clone() }.caminho_completo(&dir_orig));
+                let completo = absoluto(&r.arquivo(&dir_orig));
                 let alvo = mapa.get(&chave(&completo)).cloned().unwrap_or(completo);
-                let novo = caminho_relativo(&absoluto(&dir_novo), &absoluto(&alvo));
+                let novo = if r.tipo.caminho_absoluto() { alvo.to_string_lossy().replace('\\', "/") } else { caminho_relativo(&absoluto(&dir_novo), &absoluto(&alvo)) };
                 if novo != r.caminho {
                     trocas.push((r.caminho, novo));
                 }
@@ -442,6 +457,10 @@ impl PlanoSalvarComo {
             }
             tx.gravar(dest, saida.as_bytes())?;
             res.gravados.push((orig.clone(), dest.clone()));
+        }
+        for (orig, dest) in recursos {
+            tx.gravar(&dest, &std::fs::read(&orig)?)?;
+            res.gravados.push((orig, dest));
         }
 
         // 5. modo mover: quem usava o original passa a apontar para o destino, depois o original sai

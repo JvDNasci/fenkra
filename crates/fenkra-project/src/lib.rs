@@ -19,6 +19,8 @@ pub mod diario;
 pub mod estado_doc;
 pub mod estados;
 pub mod importacao;
+#[cfg(test)]
+mod links_externos_testes;
 pub mod pacote;
 pub mod plano;
 pub mod pn;

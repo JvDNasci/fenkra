@@ -174,4 +174,6 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Tira as camadas coloridas do 3D", "Removes the colored layers from 3D"),
     ("O perfil de qualidade do projeto barra esta peça. Registre uma exceção com nome e motivo no painel do projeto para inseri-la.", "The project's quality profile blocks this part. Register an exception with a name and reason in the project panel to insert it."),
     ("O perfil de qualidade do projeto barra esta peça. Registre uma exceção com nome e motivo no painel do projeto.", "The project's quality profile blocks this part. Register an exception with a name and reason in the project panel."),
+    // B452: tipo de referência na tabela de Salvar como e no onde-usado
+    ("Furo mandado pela montagem", "Hole sent by the assembly"),
 ];

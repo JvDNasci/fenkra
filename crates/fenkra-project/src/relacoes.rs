@@ -5,8 +5,11 @@
 //! Três ideias sustentam o módulo:
 //! - **Referências vêm do JSON, sem abrir o documento** (nem recalcular nada): montagem guarda
 //!   `kind: {Part: {path}}`/`{SubAssembly: {path}}` em cada nó, desenho guarda `source.path` em cada
-//!   vista, e um link entre peças guarda o par `uid` + `caminho`. Ler assim é barato e funciona
-//!   mesmo para arquivo de formato futuro.
+//!   vista. Uma peça guarda os links em `external[]`, cada um com `path`, `uid` e `publication`:
+//!   peça linkada, peça derivada (corpo trazido de outra) e o furo que a montagem manda (publicação
+//!   com [`PREFIXO_FURO`], que aponta para a montagem). A malha importada fica em
+//!   `kind: {MeshImport: {path}}` e as imagens de textura em `textures[].path`. Ler assim é barato e
+//!   funciona mesmo para arquivo de formato futuro.
 //! - **Cabeçalho** ([`ler_cabecalho`]) lê só `uid`, `name`, `format_version` e `props.pn/description`;
 //!   o resto do arquivo é saltado pelo leitor sem montar nenhuma estrutura em memória.
 //! - **Reparar é em duas etapas**: [`diagnosticar`] só olha e propõe; [`aplicar_reparos`] só troca o
@@ -18,6 +21,11 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+/// Publicação dos furos que a montagem manda para a peça (`fenkra_montagem::furos::PREFIXO`). O link
+/// aponta para a montagem, que não é dependência da peça: quem copia ou empacota a peça não segue
+/// esse caminho, só o reaponta.
+pub const PREFIXO_FURO: &str = "montagem:furo:";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TipoRef {
     /// componente do tipo peça numa montagem
@@ -26,8 +34,14 @@ pub enum TipoRef {
     Subconjunto,
     /// vista de desenho
     Vista,
-    /// link entre peças (uid + caminho)
+    /// link entre peças: `external[]` com `path` + `uid` (peça linkada ou derivada)
     Link,
+    /// furo mandado pela montagem: `external[]` cuja publicação começa com [`PREFIXO_FURO`]
+    FuroMontagem,
+    /// arquivo de malha lido pelo comando de importar malha
+    Malha,
+    /// imagem de textura de uma aparência
+    Textura,
 }
 
 impl TipoRef {
@@ -37,7 +51,29 @@ impl TipoRef {
             TipoRef::Subconjunto => "Subconjunto",
             TipoRef::Vista => "Vista de desenho",
             TipoRef::Link => "Link",
+            TipoRef::FuroMontagem => "Furo mandado pela montagem",
+            TipoRef::Malha => "Malha",
+            TipoRef::Textura => "Textura",
         }
+    }
+
+    /// O alvo é um documento do Fenkra (`.fkp`, `.fka`, `.fkd`). Malha e textura são arquivos de
+    /// outro formato: copiados byte a byte, sem procurar referências dentro.
+    pub fn eh_documento(self) -> bool {
+        !matches!(self, TipoRef::Malha | TipoRef::Textura)
+    }
+
+    /// Quem copia ou empacota o documento leva também o alvo e segue as referências dele. O furo da
+    /// montagem é o contrário de uma dependência (a montagem é que usa a peça): segui-lo traria a
+    /// montagem e todas as outras peças dela.
+    pub fn e_dependencia(self) -> bool {
+        self != TipoRef::FuroMontagem
+    }
+
+    /// Caminho gravado como texto absoluto: o comando lê malha e textura pelo caminho como está, a
+    /// partir da pasta de trabalho do programa, então um caminho relativo à peça quebraria.
+    pub fn caminho_absoluto(self) -> bool {
+        !self.eh_documento()
     }
 }
 
@@ -54,6 +90,31 @@ pub struct RefEncontrada {
     pub nome: String,
 }
 
+impl RefEncontrada {
+    /// Arquivo no disco a que a referência leva, visto da pasta do documento que a grava.
+    pub fn arquivo(&self, dir: &Path) -> PathBuf {
+        arquivo_da_ref(dir, self.tipo, &self.caminho)
+    }
+}
+
+/// Regra única para achar o alvo de uma referência (usada também pela cópia para o projeto, B445):
+/// - caminho absoluto vale como está;
+/// - documento e link: relativo à pasta do documento que grava (mesma regra de
+///   `fenkra_montagem::links::resolver`);
+/// - malha e textura: ao lado do documento ou, se lá não existir, relativo à pasta de trabalho, que é
+///   como o comando as lê.
+pub fn arquivo_da_ref(dir: &Path, tipo: TipoRef, caminho: &str) -> PathBuf {
+    let p = Path::new(caminho);
+    if p.is_absolute() {
+        return p.to_path_buf();
+    }
+    let perto = dir.join(p);
+    if !tipo.eh_documento() && !perto.is_file() && p.is_file() {
+        return std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf());
+    }
+    perto
+}
+
 fn caminho_de(v: &Value) -> Option<&str> {
     v.get("path").and_then(Value::as_str).filter(|s| !s.is_empty())
 }
@@ -63,13 +124,13 @@ fn varrer(v: &Value, out: &mut Vec<RefEncontrada>) {
         Value::Object(m) => {
             // nó de montagem: o tipo mora em `kind`
             if let Some(Value::Object(k)) = m.get("kind") {
-                for (chave, tipo) in [("Part", TipoRef::Peca), ("SubAssembly", TipoRef::Subconjunto)] {
+                for (chave, tipo) in [("Part", TipoRef::Peca), ("SubAssembly", TipoRef::Subconjunto), ("MeshImport", TipoRef::Malha)] {
                     if let Some(c) = k.get(chave).and_then(caminho_de) {
                         out.push(RefEncontrada {
                             tipo,
                             caminho: c.into(),
                             uid: String::new(),
-                            no: m.get("id").and_then(Value::as_u64),
+                            no: if tipo == TipoRef::Malha { None } else { m.get("id").and_then(Value::as_u64) },
                             nome: m.get("name").and_then(Value::as_str).unwrap_or_default().into(),
                         });
                     }
@@ -85,7 +146,25 @@ fn varrer(v: &Value, out: &mut Vec<RefEncontrada>) {
                     nome: m.get("name").and_then(Value::as_str).unwrap_or_default().into(),
                 });
             }
-            // link: par uid + caminho
+            // link de peça: item de `external[]`, com `publication` + `path` + `uid`
+            if let (Some(p), Some(c)) = (m.get("publication").and_then(Value::as_str), caminho_de(v)) {
+                out.push(RefEncontrada {
+                    tipo: if p.starts_with(PREFIXO_FURO) { TipoRef::FuroMontagem } else { TipoRef::Link },
+                    caminho: c.into(),
+                    uid: m.get("uid").and_then(Value::as_str).unwrap_or_default().into(),
+                    no: None,
+                    nome: m.get("name").and_then(Value::as_str).unwrap_or_default().into(),
+                });
+            }
+            // imagens de textura das aparências
+            if let Some(Value::Array(t)) = m.get("textures") {
+                for x in t {
+                    if let Some(c) = caminho_de(x) {
+                        out.push(RefEncontrada { tipo: TipoRef::Textura, caminho: c.into(), uid: String::new(), no: None, nome: x.get("name").and_then(Value::as_str).unwrap_or_default().into() });
+                    }
+                }
+            }
+            // forma antiga de link: par uid + caminho
             if let (Some(u), Some(c)) = (m.get("uid").and_then(Value::as_str), m.get("caminho").and_then(Value::as_str)) {
                 if !c.is_empty() {
                     out.push(RefEncontrada { tipo: TipoRef::Link, caminho: c.into(), uid: u.into(), no: None, nome: String::new() });
@@ -212,7 +291,7 @@ pub fn onde_usado(pastas: &[PathBuf], alvo: &Path, uid_alvo: &str) -> Vec<Uso> {
         let dir = arq.parent().map(Path::to_path_buf).unwrap_or_default();
         let nome = ler_cabecalho(&arq).map(|c| c.nome).unwrap_or_default();
         for r in refs {
-            let completo = Ref { uid: r.uid.clone(), caminho: r.caminho.clone() }.caminho_completo(&dir);
+            let completo = r.arquivo(&dir);
             let por_caminho = mesmo_arquivo(&completo, alvo);
             let por_uid = !uid_alvo.is_empty() && r.uid == uid_alvo;
             if por_caminho || por_uid {
@@ -266,7 +345,7 @@ pub fn diagnosticar(arquivo: &Path, busca: &[PathBuf]) -> Vec<Diagnostico> {
         .into_iter()
         .map(|r| {
             let veredito = if r.uid.is_empty() {
-                let alvo = Ref { uid: String::new(), caminho: r.caminho.clone() }.caminho_completo(&dir);
+                let alvo = r.arquivo(&dir);
                 if alvo.is_file() {
                     Veredito::Ok
                 } else {

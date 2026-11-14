@@ -9,7 +9,9 @@
 //! - `Hierarquica` preserva a posição relativa dos arquivos (as referências continuam válidas sem
 //!   reescrita); `Plana` põe tudo numa pasta só, o que exige renomear colisões. Cada colisão é
 //!   renomeada (`nome_2.fkp`) e **listada** no manifesto: nada é sobrescrito em silêncio.
-//! - "Linkados" são os documentos citados por links entre peças (par uid + caminho); "derivados" são
+//! - "Linkados" são os documentos citados por links entre peças (`external[]` com `path` + `uid`,
+//!   B452); o furo que a montagem manda para a peça não é seguido (a montagem é que usa a peça).
+//!   Malha importada e texturas entram como `recurso`, copiadas byte a byte. "Derivados" são
 //!   os documentos que carregam o selo de origem (nascidos de outro arquivo); "bibliotecas" são
 //!   arquivos sob as pastas de biblioteca informadas. Cada categoria pode ficar de fora; o que ficou
 //!   de fora é listado em `excluidas`, e a referência a ele vira caminho absoluto (continua achando o
@@ -63,7 +65,7 @@ impl Default for OpcoesPacote {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Entrada {
-    /// `raiz`, `referenciado`, `desenho`, `linkado`
+    /// `raiz`, `referenciado`, `desenho`, `linkado`, `recurso` (malha ou textura, sem referências dentro)
     pub papel: String,
     pub original: String,
     pub pacote: String,
@@ -345,6 +347,9 @@ struct Item {
     papel: &'static str,
 }
 
+/// Papel da malha e da textura: arquivo copiado como está, sem referências dentro.
+const RECURSO: &str = "recurso";
+
 fn tem_origem(texto: &str) -> bool {
     serde_json::from_str::<serde_json::Value>(texto).map(|v| v.get("origem").map(|o| !o.is_null()).unwrap_or(false)).unwrap_or(false)
 }
@@ -377,7 +382,10 @@ fn reunir(raiz: &Path, o: &OpcoesPacote, m: &mut Manifesto) -> PResult<Vec<Item>
             let txt = std::fs::read_to_string(&arq)?;
             let dir = arq.parent().map(Path::to_path_buf).unwrap_or_default();
             for r in referencias_do_json(&txt) {
-                let completo = absoluto(&crate::referencias::Ref { uid: r.uid.clone(), caminho: r.caminho.clone() }.caminho_completo(&dir));
+                if !r.tipo.e_dependencia() {
+                    continue;
+                }
+                let completo = absoluto(&r.arquivo(&dir));
                 let k = chave(&completo);
                 if vistos.contains(&k) {
                     continue;
@@ -401,6 +409,10 @@ fn reunir(raiz: &Path, o: &OpcoesPacote, m: &mut Manifesto) -> PResult<Vec<Item>
                     m.excluidas.push(Excluida { original: texto(&completo), motivo: motivo.into() });
                     continue;
                 }
+                if !r.tipo.eh_documento() {
+                    itens.push(Item { original: completo, papel: RECURSO });
+                    continue;
+                }
                 itens.push(Item { original: completo, papel: if r.tipo == TipoRef::Link { "linkado" } else { "referenciado" } });
                 fila.push(itens.len() - 1);
             }
@@ -410,7 +422,7 @@ fn reunir(raiz: &Path, o: &OpcoesPacote, m: &mut Manifesto) -> PResult<Vec<Item>
         }
         // desenhos que usam algo já incluído; cada novo desenho pode trazer mais referências
         let mut novos = false;
-        let atuais: Vec<PathBuf> = itens.iter().filter(|i| !eh_desenho(&i.original)).map(|i| i.original.clone()).collect();
+        let atuais: Vec<PathBuf> = itens.iter().filter(|i| !eh_desenho(&i.original) && i.papel != RECURSO).map(|i| i.original.clone()).collect();
         for alvo in atuais {
             if !desenhos_buscados.insert(chave(&alvo)) {
                 continue;
@@ -528,6 +540,19 @@ pub fn empacotar(raiz: &Path, destino: &Path, o: &OpcoesPacote) -> PResult<Resul
 
     let mut arquivos: Vec<(String, Vec<u8>)> = vec![];
     for (item, pac) in itens.iter().zip(&caminhos) {
+        if item.papel == RECURSO {
+            let dados = std::fs::read(&item.original)?;
+            m.entradas.push(Entrada {
+                papel: RECURSO.into(),
+                original: texto(&item.original),
+                pacote: pac.clone(),
+                uid: String::new(),
+                hash: blake3::hash(&dados).to_hex().to_string(),
+                bytes: dados.len() as u64,
+            });
+            arquivos.push((pac.clone(), dados));
+            continue;
+        }
         let txt = std::fs::read_to_string(&item.original)?;
         let dir_orig = item.original.parent().map(Path::to_path_buf).unwrap_or_default();
         let dir_pac = pac.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
@@ -537,7 +562,7 @@ pub fn empacotar(raiz: &Path, destino: &Path, o: &OpcoesPacote) -> PResult<Resul
             if !vistos.insert(r.caminho.clone()) {
                 continue;
             }
-            let completo = absoluto(&crate::referencias::Ref { uid: r.uid.clone(), caminho: r.caminho.clone() }.caminho_completo(&dir_orig));
+            let completo = absoluto(&r.arquivo(&dir_orig));
             match mapa.get(&chave(&completo)) {
                 Some(alvo) => {
                     let novo = relativo_virtual(dir_pac, alvo);
@@ -625,6 +650,9 @@ pub fn verificar(pacote: &Path) -> PResult<Verificacao> {
         };
         if dados.len() as u64 != e.bytes || blake3::hash(dados).to_hex().to_string() != e.hash {
             v.hash_ou_tamanho_diferente.push(e.pacote.clone());
+        }
+        if e.papel == RECURSO {
+            continue;
         }
         let Ok(txt) = std::str::from_utf8(dados) else {
             v.ilegiveis.push(e.pacote.clone());
