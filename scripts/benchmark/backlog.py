@@ -920,9 +920,11 @@ c('B450', 3, 'P1', 'Biblioteca e montagem: inserir sem arquivo, aviso legível e
 c('B451', 3, 'P1', 'Teste com mouse real, rodada 2', 'Repetir pelo equipamento scripts/teste_interface os casos que faltaram em 13/11 (desenho: esboço na folha, balões automáticos, Cancelar na barra; Reancorar restrição; biblioteca em furo e em ponto) e reconferir os corrigidos (B446, B448, B449, B450).',
   ['USR-MOUSE'], [], 80, 'Manual', 'Interface'),
 c('B452', 3, 'P1', 'PLM: links de peça (external path + uid) ignorados por Salvar como, pacote e onde-usado', 'Achado do B445: relacoes::referencias_do_json não lê os links reais de peça, que ficam em external[] com path e uid. Por isso Salvar como, o pacote do projeto e o onde-usado não seguem esses links. Corrigir a leitura e testar com montagem de peça com link externo: salvar como, empacotar e onde-usado acham a dependência.',
-  ['USR-CHECK'], [], 60, 'Auto', 'PLM'),
+  ['USR-CHECK'], [], 60, 'Auto', 'PLM', status='feito'),
 c('B453', 3, 'P1', 'Testes instáveis sob carga: isolar estado compartilhado', 'Em 13 e 14/11 falharam, só quando a suíte roda em paralelo e a máquina está carregada, testes que passam sozinhos: desempenho::contador_ligado_pede_so_a_conferencia, medir_quadros::relogios_do_sistema_andam, config_camadas::documento_sobrepoe_grava_no_arquivo_e_solta, plm::medidas_de_uma_caixa_saem_do_recalculo e o corpus de chapa perto de 60 s. Achar o estado compartilhado (arquivo temporário fixo, variável de ambiente, relógio) e isolar cada teste; a suíte tem de passar inteira sob carga.',
   ['USR-CHECK'], [], 50, 'Auto', 'Geral'),
+c('B454', 3, 'P1', 'Malha e textura: caminho relativo à pasta do documento', 'Achado do B452: o comando de importar malha lê o caminho a partir da pasta de trabalho do programa; no pacote e em outra máquina, malha e textura com caminho relativo podem não abrir. Resolver o caminho a partir da pasta do documento, com teste de abrir o pacote em outra pasta.',
+  ['USR-CHECK'], [], 40, 'Auto', 'PLM'),
 ]
 def main():
     for x in B:

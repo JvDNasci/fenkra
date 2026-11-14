@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 107360,
+ "tokens_total_k": 107400,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -23,7 +23,7 @@
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 23280,
+   "tokens_k": 23320,
    "pct": 21.7
   },
   "4": {
@@ -7529,7 +7529,7 @@
    "tokens_k": 60,
    "teste": "Auto",
    "area": "PLM",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -7545,6 +7545,22 @@
    "tokens_k": 50,
    "teste": "Auto",
    "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B454",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Malha e textura: caminho relativo à pasta do documento",
+   "oque": "Achado do B452: o comando de importar malha lê o caminho a partir da pasta de trabalho do programa; no pacote e em outra máquina, malha e textura com caminho relativo podem não abrir. Resolver o caminho a partir da pasta do documento, com teste de abrir o pacote em outra pasta.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto",
+   "area": "PLM",
    "status": "a fazer",
    "pct": 0.0
   }
