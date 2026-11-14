@@ -47,6 +47,8 @@ pub enum Act {
     Display(DisplayMode),
     /// abre o painel de requisitos da peça (B418)
     Verificar,
+    /// abre o painel da regra plástica da peça (B198)
+    RegraPlastica,
 }
 
 /// Botão: ícone, nome, descrição breve, descrição avançada, ação.
@@ -554,6 +556,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(geo_analise(GeoKind::AnDesvio)),
             One(geo_analise(GeoKind::AnPente)),
             One(it("verificar", "Requisitos", "Verificar requisitos da peça", "Declare o que a peça precisa cumprir (massa, furos, folga, interferência, tamanho, parâmetro que chega na forma) e confira um a um, com o que foi medido.", Verificar)),
+            One(it("pl_regra", "Regra plástica", "Regra plástica da peça", "Espessura, saída e raio que casca, nervura, saída e os recursos de plástico seguem, vindos de uma biblioteca versionada; a árvore avisa quando um recurso sai da regra.", RegraPlastica)),
             One(it("an_sombreado", "Normal", "Voltar ao sombreado com arestas", "Sai da análise.", Display(DisplayMode::SombreadoArestas))),
         ],
         Group::Organizacao => vec![
@@ -651,6 +654,7 @@ fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
         Act::HiddenEnv => st.hidden_env,
         Act::Display(m) => s.display == m,
         Act::Verificar => crate::verificar_ui::aberto(),
+        Act::RegraPlastica => crate::plastico_ui::aberto(),
         Act::Cmd(Cmd::SmUnfold) => st.chapa_plana,
         _ => false,
     }

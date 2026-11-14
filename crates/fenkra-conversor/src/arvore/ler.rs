@@ -203,7 +203,7 @@ impl<'a> Tabela<'a> {
             data.spline_tan.push(SplineTan { curve: self.do_esboco(id, &t.curva)?, point: self.do_esboco(id, &t.ponto)?, dir: t.direcao });
         }
         if let Some(p) = &e.posicao {
-            data.pos = SketchPos { origem: p.origem, trocar: p.trocar, inverter_h: p.inverter_h, inverter_v: p.inverter_v };
+            data.pos = SketchPos { origem: p.origem, trocar: p.trocar, inverter_h: p.inverter_h, inverter_v: p.inverter_v, ..Default::default() };
         }
         Ok(Sketch { plane: self.plano(&e.plano)?, data })
     }

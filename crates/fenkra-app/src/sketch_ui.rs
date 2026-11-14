@@ -267,6 +267,8 @@ pub struct SketchEdit {
     pub(crate) demo_janela: Option<[f64; 2]>,
     /// `FENKRA_DEMO_SKETCH_GESTO`: eventos de ponteiro simulados
     pub(crate) gesto: Option<crate::sketch_gesto::Gesto>,
+    /// B437: escolha da origem e dos eixos no 3D
+    pub(crate) posicao: crate::sketch_posicao_ui::Escolha,
 }
 
 /// Campo de valor aberto agora: o painel lê daqui o rótulo e a medida atual.
@@ -463,6 +465,7 @@ impl SketchEdit {
             demo_ctrl: false,
             demo_janela: None,
             gesto: None,
+            posicao: Default::default(),
         }
     }
     /// Plano de corte dos corpos para o renderizador, com o olho em `olho`.
@@ -615,6 +618,11 @@ impl SketchEdit {
     }
     /// Cancela a operação em andamento; devolve false se não havia nada a cancelar.
     pub fn cancel(&mut self) -> bool {
+        // a escolha da origem no 3D sai antes de tudo
+        if self.posicao.pedido.take().is_some() {
+            self.posicao.primeira = None;
+            return true;
+        }
         if self.menu.take().is_some() {
             return true;
         }
@@ -788,6 +796,20 @@ pub fn apply_constraint(sk: &mut SketchData, al: &mut impl FnMut() -> Id, k: CKi
     };
     match k {
         CKind::Horizontal | CKind::Vertical => {
+            // B437: com um eixo junto, a restrição vale para o resto; ponto e eixo, alinhado à origem
+            let eixos = sk.eixos;
+            let proprias: Vec<Id> = lines.iter().copied().filter(|l| !sk.e_eixo(*l)).collect();
+            let tem_eixo = lines.len() > proprias.len();
+            let lines = if tem_eixo { proprias } else { lines };
+            if tem_eixo && lines.is_empty() && pts.len() == 1 {
+                if let Some(o) = eixos.map(|e| e.origem).filter(|o| *o != pts[0]) {
+                    add(sk, if k == CKind::Horizontal { Kind::HorizontalPts(pts[0], o) } else { Kind::VerticalPts(pts[0], o) });
+                    return Ok(());
+                }
+            }
+            if tem_eixo && lines.is_empty() && pts.len() != 2 {
+                return Err("os eixos já são fixos: selecione também a geometria");
+            }
             if !lines.is_empty() {
                 for l in lines {
                     add(sk, if k == CKind::Horizontal { Kind::Horizontal(l) } else { Kind::Vertical(l) });
@@ -817,6 +839,9 @@ pub fn apply_constraint(sk: &mut SketchData, al: &mut impl FnMut() -> Id, k: CKi
             }
         }
         CKind::Equal => {
+            if lines.iter().any(|l| sk.e_eixo(*l)) {
+                return Err("o eixo não tem comprimento");
+            }
             if lines.len() == 2 {
                 add(sk, Kind::Equal(lines[0], lines[1]))
             } else if rounds.len() == 2 {
@@ -914,6 +939,8 @@ fn dim_options(sk: &SketchData, sel: &[Ent]) -> Vec<(&'static str, &'static str,
     let e = String::new;
     let mut o = vec![];
     match sel {
+        // o eixo não tem comprimento: só serve de base para outra cota
+        [Ent::Cv(c)] if sk.e_eixo(*c) => {}
         [Ent::Cv(c)] => match sk.curve(*c).map(|x| x.geom.clone()) {
             Some(Curve::Line { a, b }) => {
                 o.push(("sk_cota", "Comprimento", Kind::Length(*c, e())));
@@ -937,6 +964,8 @@ fn dim_options(sk: &SketchData, sel: &[Ent]) -> Vec<(&'static str, &'static str,
         }
         [Ent::Cv(x), Ent::Cv(y)] => match (is_line(sk, *x), is_line(sk, *y)) {
             (true, true) => {
+                // com um eixo, a distância é medida até ele, a partir da linha de verdade
+                let (x, y) = if sk.e_eixo(*y) { (y, x) } else { (x, y) };
                 let ((a, b), (c, d)) = (line_ends(sk, *x).unwrap(), line_ends(sk, *y).unwrap());
                 let (pa, pb, pc, pd) = (sk.pos(a), sk.pos(b), sk.pos(c), sk.pos(d));
                 let (r, q) = ([pb[0] - pa[0], pb[1] - pa[1]], [pd[0] - pc[0], pd[1] - pc[1]]);
@@ -1314,6 +1343,10 @@ pub fn delete_selection(sk: &mut SketchData, sel: &[Ent]) {
 
 fn delete_selection_raw(sk: &mut SketchData, sel: &[Ent]) {
     for e in sel {
+        // a origem e os eixos são do sketch: não se apagam
+        if matches!(*e, Ent::Cv(x) | Ent::Pt(x) if sk.e_da_origem(x)) {
+            continue;
+        }
         match *e {
             Ent::Cs(c) => sk.constraints.retain(|x| x.id != c),
             Ent::Cv(c) => sk.remove_curve(c),
@@ -2160,6 +2193,8 @@ fn clique_fora_das_curvas(edit: &mut SketchEdit, sk: &SketchData, uv: Option<[f6
 
 pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Response, cam: Camera) {
     let Some(f) = frame(app) else { return };
+    // B437: prévia e escolha da origem e dos eixos no 3D, antes de copiar o sketch (ela muda a posição)
+    let escolheu = crate::sketch_posicao_ui::overlay(app, ui, &ui.painter_at(rect), &cam, rect, &f, resp);
     let Some(mut sk) = data(app).cloned() else {
         app.sketch = None;
         return;
@@ -2209,8 +2244,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     painter.line_segment([v.to_screen([lo[0], y]), v.to_screen([hi[0], y])], Stroke::new(1., c));
                 }
             }
-            painter.line_segment([v.to_screen([lo[0], 0.]), v.to_screen([hi[0], 0.])], Stroke::new(1.2, Color32::from_rgba_unmultiplied(230, 80, 80, 110)));
-            painter.line_segment([v.to_screen([0., lo[1]]), v.to_screen([0., hi[1]])], Stroke::new(1.2, Color32::from_rgba_unmultiplied(80, 200, 90, 110)));
+            // B437: os eixos agora são do sketch e se desenham com as curvas, sempre à mostra
         }
     }
 
@@ -2241,7 +2275,15 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
 
     // ---------- curvas
     let pt_color = |id: Id| if report.fixed_points.contains(&id) { defined } else { FREE };
-    for c in sk.curves.iter().filter(|c| !curvas_ocultas.contains(&c.id)) {
+    // B437: eixos H e V do sketch, sempre à mostra e atravessando a vista
+    for (eixo, eixo_v) in sk.eixos.map(|e| [(e.h, false), (e.v, true)]).into_iter().flatten() {
+        if let Some((a, b)) = line_ends(&sk, eixo) {
+            let (pa, pb) = crate::sketch_posicao_ui::perto_do_meio(sk.pos(a), sk.pos(b));
+            let destaque = selected(Ent::Cv(eixo), edit).then_some(SEL);
+            crate::sketch_posicao_ui::desenha_eixo(&painter, rect, v.to_screen(pa), v.to_screen(pb), eixo_v, destaque);
+        }
+    }
+    for c in sk.curves.iter().filter(|c| !curvas_ocultas.contains(&c.id) && !sk.e_eixo(c.id)) {
         let bad = failing.iter().any(|f| sk.constraints.iter().any(|k| k.id == *f && k.kind.refs().contains(&c.id)));
         let all_fixed = SketchData::curve_points(&c.geom).iter().all(|p| report.fixed_points.contains(p));
         let mut col = if c.construction { CONSTR } else if all_fixed { defined } else { FREE };
@@ -2264,7 +2306,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             painter.add(egui::Shape::line(pts, Stroke::new(w, col)));
         }
     }
-    for p in sk.points.iter().filter(|p| !pontos_ocultos.contains(&p.id)) {
+    for p in sk.points.iter().filter(|p| !pontos_ocultos.contains(&p.id) && !sk.e_ponta_de_eixo(p.id)) {
         let s = v.to_screen([p.x, p.y]);
         let mut col = pt_color(p.id);
         if selected(Ent::Pt(p.id), edit) {
@@ -2418,8 +2460,13 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     // curva mais perto do cursor, sem olhar os pontos: relimitar age na curva mesmo junto à ponta
     let pick_curve = |pos: Pos2, sk: &SketchData| -> Option<(f32, Id)> {
         let mut best: Option<(f32, Id)> = None;
-        for c in sk.curves.iter().filter(|c| !curvas_ocultas.contains(&c.id)) {
+        for c in sk.curves.iter().filter(|c| !curvas_ocultas.contains(&c.id) || sk.e_eixo(c.id)) {
             let d = match c.geom {
+                // eixo: reta infinita, e uma curva de verdade no mesmo lugar ganha dele
+                Curve::Line { a, b } if sk.e_eixo(c.id) => {
+                    let (pa, pb) = crate::sketch_posicao_ui::perto_do_meio(sk.pos(a), sk.pos(b));
+                    crate::sketch_posicao_ui::distancia_ao_eixo(pos, v.to_screen(pa), v.to_screen(pb)) + 2.
+                }
                 Curve::Line { a, b } => seg_dist(pos, v.to_screen(sk.pos(a)), v.to_screen(sk.pos(b))),
                 Curve::Circle { c: ctr, r } => ((pos - v.to_screen(sk.pos(ctr))).length() - r as f32 * ppm).abs(),
                 // só o trecho que existe: o resto do círculo do arco é vazio
@@ -2443,7 +2490,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     // pick: pontos > rótulos > curvas
     let pick = |pos: Pos2, sk: &SketchData, hits: &[(Rect, Ent)]| -> Option<Ent> {
         let mut best: Option<(f32, Ent)> = None;
-        for p in sk.points.iter().filter(|p| !pontos_ocultos.contains(&p.id)) {
+        for p in sk.points.iter().filter(|p| !pontos_ocultos.contains(&p.id) && !sk.e_ponta_de_eixo(p.id)) {
             let d = (v.to_screen([p.x, p.y]) - pos).length();
             if d < 9. && best.is_none_or(|(bd, _)| d < bd) {
                 best = Some((d, Ent::Pt(p.id)));
@@ -2633,7 +2680,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         }
     }
 
-    let mut primary_click = resp.clicked_by(egui::PointerButton::Primary) && !handle_busy;
+    let mut primary_click = resp.clicked_by(egui::PointerButton::Primary) && !handle_busy && !escolheu;
     let secondary_click = resp.clicked_by(egui::PointerButton::Secondary);
     // clique fora do menu rápido só o fecha
     if primary_click && edit.menu.take().is_some() {
@@ -3023,7 +3070,8 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             use crate::sketch_relimita as rl;
             // Shift segurado troca aparar e estender; a curva vale até junto da ponta
             let modo = rl::efetiva(tool, shift);
-            let mut over = hover.and_then(|p| pick_curve(p, &sk)).map(|x| x.1);
+            // os eixos (B437) limitam o corte, mas não se aparam nem se estendem
+            let mut over = hover.and_then(|p| pick_curve(p, &sk)).map(|x| x.1).filter(|c| !sk.e_eixo(*c));
             // seleção prévia: só as curvas escolhidas antes valem; o resto é recusado com o motivo
             let previa: Vec<Id> = edit.sel.iter().filter_map(|e| if let Ent::Cv(c) = e { Some(*c) } else { None }).collect();
             let mut fora = false;
@@ -3585,7 +3633,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 edit.sel.clear();
             }
             MenuAct::Construction => {
-                for c in sk.curves.iter_mut().filter(|c| msel.contains(&Ent::Cv(c.id))) {
+                // os eixos (B437) são sempre construção
+                let eixos = sk.eixos;
+                for c in sk.curves.iter_mut().filter(|c| msel.contains(&Ent::Cv(c.id)) && !eixos.is_some_and(|e| e.h == c.id || e.v == c.id)) {
                     c.construction = !c.construction;
                 }
             }
@@ -3783,6 +3833,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     }
     project_ui(app, ui);
     crate::sketch_vinculos::painel(app, ui);
+    crate::sketch_posicao_ui::painel(app, ui);
     let Some(edit) = app.sketch.as_mut() else { return };
     ui.separator();
     let sel = edit.sel.clone();
@@ -3924,6 +3975,23 @@ fn edit_report_set(app: &mut App, rep: SolveReport) {
     }
 }
 
+/// B437: todo sketch tem origem e eixos H e V. Arquivo antigo os ganha aqui, sem mudar a geometria:
+/// são um ponto e duas linhas de construção fixos, e só se grava se faltava algo.
+fn garantir_eixos(app: &mut App, id: Id) {
+    let Some(FeatureKind::Sketch(s)) = app.open.doc.feature(id).map(|f| &f.kind) else { return };
+    let mut d = s.data.clone();
+    {
+        let doc = &mut app.open.doc;
+        let mut al = || doc.alloc();
+        d.garantir_eixos(&mut al);
+    }
+    if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
+        if s.data != d {
+            s.data = d;
+        }
+    }
+}
+
 /// Entra no modo sketch.
 pub fn begin(app: &mut App, id: Id) {
     let prev = app.settings.ortho;
@@ -3931,6 +3999,7 @@ pub fn begin(app: &mut App, id: Id) {
     let vars = app.vars();
     // a geometria externa vem na posição atual do 3D
     crate::sketch_vinculos::sincroniza(app, id);
+    garantir_eixos(app, id);
     if let Some(FeatureKind::Sketch(s)) = app.open.doc.feature(id).map(|f| &f.kind) {
         e.report = s.data.clone().solve(&vars, &[]);
         crate::sketch_demo::aplicar(&mut e, &s.data);
