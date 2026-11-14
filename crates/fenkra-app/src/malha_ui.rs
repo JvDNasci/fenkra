@@ -39,7 +39,7 @@ pub fn nova_op(a: AcaoMalha, d: &Document) -> Result<MeshOpKind, &'static str> {
             let tool = outro_coletor(d).ok_or("Crie outro coletor de corpos com o corpo ferramenta primeiro")?;
             MeshOpKind::Booleana(MeshBoolean { tool, op: BoolOp::Cut, keep_tool: false })
         }
-        AcaoMalha::ParaBrep => MeshOpKind::ParaBrep { solid: true },
+        AcaoMalha::ParaBrep => MeshOpKind::ParaBrep { solid: true, modo: fenkra_core::malha::ModoBrep::Primitivas, tol: "0".into() },
         AcaoMalha::DeBrep => MeshOpKind::DeBrep { desvio: "0".into(), angulo: "15".into() },
     })
 }
@@ -116,10 +116,19 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut MeshOp, vars: &
             check(ui, &mut b.keep_tool, "manter o corpo ferramenta visível");
             dica(ui, "Os dois corpos precisam ser cascas fechadas. Corpo B-rep entra pela malha dele.");
         }
-        MeshOpKind::ParaBrep { solid } => {
+        MeshOpKind::ParaBrep { solid, modo, tol } => {
             section(ui, "Malha para sólido");
+            ui.horizontal(|ui| {
+                use fenkra_core::malha::ModoBrep;
+                ui.selectable_value(modo, ModoBrep::Primitivas, tr("Reconhecer primitivas")).on_hover_text(tr("Planos, cilindros, cones, esferas e toros viram faces exatas; o que não se ajusta fica triangular."));
+                ui.selectable_value(modo, ModoBrep::Facetado, tr("Facetado")).on_hover_text(tr("Uma face plana por triângulo, com as faces coplanares fundidas."));
+            });
+            if *modo == fenkra_core::malha::ModoBrep::Primitivas {
+                expr(ui, "Tolerância do ajuste", tol, vars, "mm");
+                dica(ui, "Quanto um vértice pode ficar fora da superfície reconhecida. Vazio ou zero: um décimo de milésimo da diagonal.");
+            }
             check(ui, solid, "fechar em sólido quando a malha for fechada");
-            dica(ui, "Cada triângulo vira uma face plana; malhas grandes ficam pesadas (máx. 200 mil triângulos).");
+            dica(ui, "Malhas grandes ficam pesadas (máx. 200 mil triângulos): decime antes.");
         }
         MeshOpKind::DeBrep { desvio, angulo } => {
             section(ui, "Sólido para malha");
@@ -240,6 +249,14 @@ fn malha_demo(aberta: bool) -> fenkra_malha::Malha {
 
 /// Monta o documento das capturas e devolve o comando que fica aberto.
 pub fn demo_preparar(d: &mut Document, modo: &str) -> Option<Id> {
+    // B169: `solido` e `facetado` convertem a malha de uma placa com furo e cantos arredondados
+    if modo == "solido" || modo == "facetado" {
+        let malha = fenkra_solidos::malha_primitivas::malha_de_exemplo();
+        let dados = embutir(d, &malha);
+        d.add_feature(FeatureKind::MeshImport(MeshImport { path: "placa.stl".into(), solid: false, corpo: true, dados }));
+        let m = if modo == "solido" { fenkra_core::malha::ModoBrep::Primitivas } else { fenkra_core::malha::ModoBrep::Facetado };
+        return Some(d.add_feature(FeatureKind::MeshOp(MeshOp { op: MeshOpKind::ParaBrep { solid: true, modo: m, tol: "0".into() } })));
+    }
     let malha = malha_demo(modo == "reparar");
     let dados = embutir(d, &malha);
     let importado = d.add_feature(FeatureKind::MeshImport(MeshImport { path: "exemplo.stl".into(), solid: false, corpo: true, dados }));

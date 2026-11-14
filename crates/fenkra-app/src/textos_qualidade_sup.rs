@@ -17,4 +17,11 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Quantas linhas de mesmo ângulo com a luz.", "How many lines of equal angle to the light."),
     ("Luz", "Light"),
     ("Oblíqua", "Oblique"),
+    ("Reconhecer primitivas", "Recognize primitives"),
+    ("Planos, cilindros, cones, esferas e toros viram faces exatas; o que não se ajusta fica triangular.", "Planes, cylinders, cones, spheres and tori become exact faces; what does not fit stays triangular."),
+    ("Facetado", "Faceted"),
+    ("Uma face plana por triângulo, com as faces coplanares fundidas.", "One flat face per triangle, with coplanar faces merged."),
+    ("Tolerância do ajuste", "Fit tolerance"),
+    ("Quanto um vértice pode ficar fora da superfície reconhecida. Vazio ou zero: um décimo de milésimo da diagonal.", "How far a vertex may lie off the recognized surface. Empty or zero: one ten-thousandth of the diagonal."),
+    ("Malhas grandes ficam pesadas (máx. 200 mil triângulos): decime antes.", "Large meshes get heavy (max. 200 thousand triangles): decimate first."),
 ];
