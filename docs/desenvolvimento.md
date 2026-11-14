@@ -163,6 +163,7 @@ preferências do usuário.
 | `FENKRA_DEMO_ASM=geometria` | plano da montagem no grupo da árvore e o contato preso a ele |
 | `FENKRA_DEMO_ASM=cadeia` / `caixa_solta` | dois pares em cadeia, ou o diferencial de caixa solta, com a janela de simulação aberta |
 | `FENKRA_DEMO_ASM=transmissao` com `FENKRA_DEMO_TRANS=caixa_solta` ou `FENKRA_DEMO_TRANS_MEDIDA=1` | comando de transmissão no diferencial solto, ou com os dois pontos da distância já clicados no 3D |
+| `FENKRA_DEMO_ASM=transmissao` com `FENKRA_DEMO_TRANS=corrente_usinada` | (B342, B345) corrente ANSI 40, pinhão de 15 e coroa de 45, com rasgo e parafuso de fixação no pinhão e furos de alívio e rasgo na coroa, na prévia e no painel de usinagens |
 | `FENKRA_DEMO_JANELA=diagnostico` com `FENKRA_DEMO_DIAG=reordenar\|substituir\|isolar\|pais` | peça com as falhas do painel Diagnóstico; a variável faz o que o botão faria, para ver o depois |
 | `FENKRA_DEMO_ASM=resolver` | janela Resolver referências com um componente de dois candidatos e um arquivo sumido |
 | `FENKRA_DEMO_IMPORTAR=<arquivo>` | abre o painel de importação com o arquivo, sem o seletor; o `fenkra-conv` precisa estar ao lado do executável; com `FENKRA_DEMO_IMPORTAR_OK=1`, confirma sozinho e mostra o relatório |

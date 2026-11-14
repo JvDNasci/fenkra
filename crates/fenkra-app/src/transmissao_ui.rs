@@ -24,6 +24,7 @@ use fenkra_solidos::engrenagens_conicas::{ParamConica, ParamSemFim};
 use fenkra_solidos::transmissao_calc::{calcular_cadeia as calcular_cadeia_com, Entrada, Estagio, ResultadoCadeia, TipoEstagio, REFERENCIA};
 use fenkra_solidos::transmissao_dados::{self as dados, FamiliaCorreia};
 use fenkra_solidos::transmissao_proposta::{propor, Familia, Proposta, Restricoes};
+use fenkra_solidos::transmissao_corrente::{ParamPolia, ParamRoda, TipoPolia};
 use fenkra_solidos::usinagens::{GeoBase, Usinagem};
 use fenkra_solidos::recompute;
 use std::sync::Arc;
@@ -92,6 +93,9 @@ pub struct TransUi {
     pub dp1: f64,
     pub dp2: f64,
     pub largura_correia: f64,
+    /// usinagens da roda ou polia menor (1) e da maior (2), na corrente e na correia (B345)
+    pub usinagens1: Vec<Usinagem>,
+    pub usinagens2: Vec<Usinagem>,
     /// entrada do cálculo e da simulação
     pub rpm: f64,
     pub torque: f64,
@@ -137,6 +141,8 @@ impl Default for TransUi {
             dp1: 80.,
             dp2: 160.,
             largura_correia: 6.,
+            usinagens1: vec![],
+            usinagens2: vec![],
             rpm: 600.,
             torque: 5.,
             extra: vec![],
@@ -176,8 +182,20 @@ impl TransUi {
             Tipo::Conicas => Elemento::Conicas { par: self.conica.clone() },
             Tipo::Diferencial => Elemento::Diferencial { lateral: self.diferencial.clone(), caixa_solta: self.caixa_solta, giro_relativo: self.giro_relativo },
             Tipo::SemFim => Elemento::SemFim { p: self.semfim.clone() },
-            Tipo::Corrente => Elemento::Corrente { corrente: self.corrente.clone(), dentes1: self.z1, dentes2: self.z2, centros: self.centros, furo1: self.furo1, furo2: self.furo2 },
-            Tipo::Correia => Elemento::Correia { designacao: self.correia.clone(), dentes1: self.z1, dentes2: self.z2, diametro1: self.dp1, diametro2: self.dp2, centros: self.centros, largura: self.largura_correia, furo1: self.furo1, furo2: self.furo2 },
+            Tipo::Corrente => Elemento::Corrente { corrente: self.corrente.clone(), dentes1: self.z1, dentes2: self.z2, centros: self.centros, furo1: self.furo1, furo2: self.furo2, usinagens1: self.usinagens1.clone(), usinagens2: self.usinagens2.clone() },
+            Tipo::Correia => Elemento::Correia {
+                designacao: self.correia.clone(),
+                dentes1: self.z1,
+                dentes2: self.z2,
+                diametro1: self.dp1,
+                diametro2: self.dp2,
+                centros: self.centros,
+                largura: self.largura_correia,
+                furo1: self.furo1,
+                furo2: self.furo2,
+                usinagens1: self.usinagens1.clone(),
+                usinagens2: self.usinagens2.clone(),
+            },
         }
     }
 
@@ -208,13 +226,15 @@ impl TransUi {
                 self.tipo = Tipo::SemFim;
                 self.semfim = p.clone();
             }
-            Elemento::Corrente { corrente, dentes1, dentes2, centros, furo1, furo2 } => {
+            Elemento::Corrente { corrente, dentes1, dentes2, centros, furo1, furo2, usinagens1, usinagens2 } => {
                 self.tipo = Tipo::Corrente;
                 (self.corrente, self.z1, self.z2, self.centros, self.furo1, self.furo2) = (corrente.clone(), *dentes1, *dentes2, *centros, *furo1, *furo2);
+                (self.usinagens1, self.usinagens2) = (usinagens1.clone(), usinagens2.clone());
             }
-            Elemento::Correia { designacao, dentes1, dentes2, diametro1, diametro2, centros, largura, furo1, furo2 } => {
+            Elemento::Correia { designacao, dentes1, dentes2, diametro1, diametro2, centros, largura, furo1, furo2, usinagens1, usinagens2 } => {
                 self.tipo = Tipo::Correia;
                 (self.correia, self.z1, self.z2, self.dp1, self.dp2, self.centros, self.largura_correia, self.furo1, self.furo2) = (designacao.clone(), *dentes1, *dentes2, *diametro1, *diametro2, *centros, *largura, *furo1, *furo2);
+                (self.usinagens1, self.usinagens2) = (usinagens1.clone(), usinagens2.clone());
             }
         }
     }
@@ -544,12 +564,15 @@ fn campos_correia(ui: &mut egui::Ui, t: &mut TransUi) {
     campo(ui, "Furo da polia 2", &mut t.furo2, 0.0..=200., " mm", 0.5, "Furo do eixo da polia maior.");
 }
 
-fn usinagens_da_engrenagem(ui: &mut egui::Ui, t: &mut TransUi) {
-    let raio_raiz = fenkra_solidos::calculo_engrenagem(&ParamEngrenagem { usinagens: vec![], ..t.pinhao.clone() }).map(|c| c.diametro_raiz / 2.).unwrap_or(30.);
-    let g = GeoBase { largura: t.pinhao.largura, raio_raiz, furo: t.pinhao.furo, cubo_proprio: None };
-    ui.label(RichText::new(tr("Furo, cubo, rebaixo, alívio, rasgo e parafuso são usinagens sobre a peça padronizada: o vínculo com o catálogo fica gravado na peça. Valem para as duas engrenagens do par.")).weak().small());
+/// Lista editável de usinagens sobre uma peça padronizada `g`. `id` distingue os combos quando há
+/// duas listas no painel (roda menor e maior). Mostra o erro da validação, se a lista não cabe na peça.
+fn editor_usinagens(ui: &mut egui::Ui, id: &str, lista: &mut Vec<Usinagem>, g: Option<GeoBase>) {
+    let Some(g) = g else {
+        ui.label(RichText::new(tr("Ajuste as medidas acima: a peça padronizada ainda não fecha.")).weak().small());
+        return;
+    };
     let mut tirar: Option<usize> = None;
-    for (i, u) in t.pinhao.usinagens.iter_mut().enumerate() {
+    for (i, u) in lista.iter_mut().enumerate() {
         ui.horizontal_wrapped(|ui| {
             ui.label(RichText::new(tr(u.nome())).strong());
             match u {
@@ -583,20 +606,96 @@ fn usinagens_da_engrenagem(ui: &mut egui::Ui, t: &mut TransUi) {
         });
     }
     if let Some(i) = tirar {
-        t.pinhao.usinagens.remove(i);
+        lista.remove(i);
     }
     ui.horizontal(|ui| {
-        egui::ComboBox::from_id_salt("trans_usinagem_nova").selected_text(tr("+ Usinagem")).show_ui(ui, |ui| {
+        egui::ComboBox::from_id_salt(format!("trans_usinagem_nova_{id}")).selected_text(tr("+ Usinagem")).show_ui(ui, |ui| {
             for n in Usinagem::NOMES {
+                // a roda de corrente já sai com cubo: o cubo novo não entra
+                if n == Usinagem::NOMES[2] && g.cubo_proprio.is_some() {
+                    continue;
+                }
                 if ui.selectable_label(false, tr(n)).clicked() {
-                    t.pinhao.usinagens.push(Usinagem::padrao(n, &g));
+                    lista.push(Usinagem::padrao(n, &g));
                 }
             }
         });
-        if !t.pinhao.usinagens.is_empty() && ui.button(tr("Voltar à peça padronizada")).on_hover_text(tr("Remove todas as usinagens: a peça volta a ser a do catálogo.")).clicked() {
-            t.pinhao.usinagens.clear();
+        if !lista.is_empty() && ui.button(tr("Voltar à peça padronizada")).on_hover_text(tr("Remove todas as usinagens: a peça volta a ser a do catálogo.")).clicked() {
+            lista.clear();
         }
     });
+    if let Err(e) = fenkra_solidos::usinagens::validar(&g, lista) {
+        ui.label(RichText::new(format!("⚠ {}", tr(&e))).small().color(crate::theme::st_err()));
+    }
+}
+
+/// Polias da correia descritas pelos campos (menor, maior), para as usinagens (B345).
+fn polias_do_painel(t: &TransUi) -> Option<(ParamPolia, ParamPolia)> {
+    let c = dados::correia(&t.correia)?;
+    let (a, b) = match c.familia {
+        FamiliaCorreia::Dentada => {
+            let (n1, n2) = (t.z1.min(t.z2), t.z1.max(t.z2));
+            (TipoPolia::Dentada { passo: c.passo, dentes: n1, largura: t.largura_correia }, TipoPolia::Dentada { passo: c.passo, dentes: n2, largura: t.largura_correia })
+        }
+        FamiliaCorreia::EmV => (TipoPolia::EmV { topo: c.largura_topo, altura: c.altura, diametro: t.dp1.min(t.dp2) }, TipoPolia::EmV { topo: c.largura_topo, altura: c.altura, diametro: t.dp1.max(t.dp2) }),
+    };
+    Some((ParamPolia { tipo: a, furo: t.furo1, usinagens: vec![] }, ParamPolia { tipo: b, furo: t.furo2, usinagens: vec![] }))
+}
+
+/// Usinagens sobre as peças padronizadas do elemento escolhido (B345). Cônicas, diferencial e
+/// engrenagem interna não têm disco plano para elas: o painel diz isso.
+fn usinagens_do_elemento(ui: &mut egui::Ui, t: &mut TransUi) {
+    ui.label(RichText::new(tr("Furo, cubo, rebaixo, alívio, rasgo e parafuso são usinagens sobre a peça padronizada: o vínculo com o catálogo fica gravado na peça.")).weak().small());
+    match t.tipo {
+        Tipo::Retas | Tipo::Helicoidais | Tipo::EspinhaDePeixe => {
+            let raio_raiz = fenkra_solidos::calculo_engrenagem(&ParamEngrenagem { usinagens: vec![], ..t.pinhao.clone() }).map(|c| c.diametro_raiz / 2.).ok();
+            let g = raio_raiz.map(|r| GeoBase { largura: t.pinhao.largura, raio_raiz: r, furo: t.pinhao.furo, cubo_proprio: None, ..Default::default() });
+            ui.label(RichText::new(tr("Valem para as duas engrenagens do par.")).weak().small());
+            editor_usinagens(ui, "engrenagem", &mut t.pinhao.usinagens, g);
+        }
+        Tipo::SemFim => {
+            let g = fenkra_solidos::engrenagens_conicas::coroa_param(&ParamSemFim { usinagens_coroa: vec![], ..t.semfim.clone() })
+                .and_then(|c| fenkra_solidos::calculo_engrenagem(&c).map(|k| GeoBase { largura: c.largura, raio_raiz: k.diametro_raiz / 2., furo: c.furo, cubo_proprio: None, ..Default::default() }))
+                .ok();
+            ui.label(RichText::new(tr("Coroa")).strong());
+            editor_usinagens(ui, "coroa", &mut t.semfim.usinagens_coroa, g);
+            let gw = fenkra_solidos::engrenagens_conicas::geo_base_sem_fim(&t.semfim).ok();
+            ui.label(RichText::new(tr("Sem-fim")).strong());
+            editor_usinagens(ui, "semfim", &mut t.semfim.usinagens_semfim, gw);
+        }
+        Tipo::Corrente => {
+            let (n1, n2) = (t.z1.min(t.z2), t.z1.max(t.z2));
+            let g1 = ParamRoda::nova(&t.corrente, n1, t.furo1).geo_base().ok();
+            let g2 = ParamRoda::nova(&t.corrente, n2, t.furo2).geo_base().ok();
+            ui.label(RichText::new(tr("Pinhão (roda menor)")).strong());
+            editor_usinagens(ui, "roda1", &mut t.usinagens1, g1);
+            ui.label(RichText::new(tr("Coroa (roda maior)")).strong());
+            editor_usinagens(ui, "roda2", &mut t.usinagens2, g2);
+        }
+        Tipo::Correia => {
+            let pol = polias_do_painel(t);
+            ui.label(RichText::new(tr("Polia menor")).strong());
+            editor_usinagens(ui, "polia1", &mut t.usinagens1, pol.as_ref().map(|p| p.0.geo_base()));
+            ui.label(RichText::new(tr("Polia maior")).strong());
+            editor_usinagens(ui, "polia2", &mut t.usinagens2, pol.as_ref().map(|p| p.1.geo_base()));
+        }
+        Tipo::Conicas => {
+            let g = t.conica.geo_base().ok();
+            ui.label(RichText::new(tr("Valem para as duas cônicas do par. O cubo abaixo dos dentes faz o papel de disco: sem cubo novo nem furos de alívio.")).weak().small());
+            editor_usinagens(ui, "conica", &mut t.conica.usinagens, g);
+        }
+        Tipo::Diferencial => {
+            let g = t.diferencial.geo_base().ok();
+            ui.label(RichText::new(tr("Valem para as laterais e os satélites. O cubo abaixo dos dentes faz o papel de disco: sem cubo novo nem furos de alívio.")).weak().small());
+            editor_usinagens(ui, "diferencial", &mut t.diferencial.usinagens, g);
+        }
+        Tipo::Interna => {
+            ui.label(RichText::new(tr("A engrenagem interna é um anel com os dentes no lado de dentro: não tem furo de eixo nem disco para usinar. As usinagens valem para o pinhão do par.")).weak().small());
+            let raio_raiz = fenkra_solidos::calculo_engrenagem(&ParamEngrenagem { usinagens: vec![], tipo: TipoEngrenagem::Reta, ..t.pinhao.clone() }).map(|c| c.diametro_raiz / 2.).ok();
+            let g = raio_raiz.map(|r| GeoBase { largura: t.pinhao.largura, raio_raiz: r, furo: t.pinhao.furo, ..Default::default() });
+            editor_usinagens(ui, "interna", &mut t.pinhao.usinagens, g);
+        }
+    }
 }
 
 fn painel_calculo(ui: &mut egui::Ui, t: &mut TransUi) {
@@ -849,10 +948,8 @@ pub fn janela(app: &mut App, ctx: &egui::Context) {
             Tipo::Corrente => campos_corrente(ui, &mut t),
             Tipo::Correia => campos_correia(ui, &mut t),
         }
-        if t.tipo.engrenagem() && t.tipo != Tipo::Interna {
-            crate::editor::section(ui, "Usinagens sobre a peça padronizada");
-            usinagens_da_engrenagem(ui, &mut t);
-        }
+        crate::editor::section(ui, "Usinagens sobre a peça padronizada");
+        usinagens_do_elemento(ui, &mut t);
         crate::editor::section(ui, "Adaptação de projeto");
         painel_adaptacao(ui, &mut t);
         crate::editor::section(ui, "Cálculo ao vivo");

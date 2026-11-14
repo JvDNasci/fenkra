@@ -51,8 +51,35 @@ pub enum Elemento {
         giro_relativo: f64,
     },
     SemFim { p: ParamSemFim },
-    Corrente { corrente: String, dentes1: u32, dentes2: u32, centros: f64, furo1: f64, furo2: f64 },
-    Correia { designacao: String, dentes1: u32, dentes2: u32, diametro1: f64, diametro2: f64, centros: f64, largura: f64, furo1: f64, furo2: f64 },
+    /// corrente e as duas rodas; `usinagens1` vai na roda menor (motora) e `usinagens2` na maior (B345)
+    Corrente {
+        corrente: String,
+        dentes1: u32,
+        dentes2: u32,
+        centros: f64,
+        furo1: f64,
+        furo2: f64,
+        #[serde(default)]
+        usinagens1: Vec<fenkra_solidos::usinagens::Usinagem>,
+        #[serde(default)]
+        usinagens2: Vec<fenkra_solidos::usinagens::Usinagem>,
+    },
+    /// correia e as duas polias; `usinagens1` vai na polia menor (motora) e `usinagens2` na maior (B345)
+    Correia {
+        designacao: String,
+        dentes1: u32,
+        dentes2: u32,
+        diametro1: f64,
+        diametro2: f64,
+        centros: f64,
+        largura: f64,
+        furo1: f64,
+        furo2: f64,
+        #[serde(default)]
+        usinagens1: Vec<fenkra_solidos::usinagens::Usinagem>,
+        #[serde(default)]
+        usinagens2: Vec<fenkra_solidos::usinagens::Usinagem>,
+    },
 }
 
 impl Elemento {
@@ -237,7 +264,7 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
             let hub = |p: &ParamConica| (p.furo * 1.2).max(p.modulo * 3.);
             let d1 = conica_documento(par)?;
             let d2 = conica_documento(&pg)?;
-            let (k1, k2) = (format!("conica-m{}-z{}-{}-f{}", par.modulo, par.dentes, par.dentes_par, par.furo), format!("conica-m{}-z{}-{}-f{}", pg.modulo, pg.dentes, pg.dentes_par, pg.furo));
+            let (k1, k2) = (par.chave_arquivo(), pg.chave_arquivo());
             let j1 = peca_com_eixo(&mut pecas, &mut juntas, peca(d1, k1, l1), par.furo, -hub(par) - SOBRA_PINO, c1.profundidade_dentes + SOBRA_PINO)?;
             let j2 = peca_com_eixo(&mut pecas, &mut juntas, peca(d2, k2, l2), pg.furo, -hub(&pg) - SOBRA_PINO, c2.profundidade_dentes + SOBRA_PINO)?;
             let r = -(par.dentes as f64) / par.dentes_par as f64;
@@ -270,8 +297,8 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
             let hub = |p: &ParamConica| (p.furo * 1.2).max(p.modulo * 3.);
             let dl = conica_documento(lateral)?;
             let dsat = conica_documento(&sat)?;
-            let kl = format!("conica-m{}-z{}-{}-f{}", lateral.modulo, zs, zp, lateral.furo);
-            let ks = format!("conica-m{}-z{}-{}-f{}", sat.modulo, zp, zs, sat.furo);
+            let kl = lateral.chave_arquivo();
+            let ks = sat.chave_arquivo();
             let js1 = peca_com_eixo(&mut pecas, &mut juntas, PecaLayout { nome: "Lateral 1".into(), ..peca(dl.clone(), kl.clone(), l_s1) }, lateral.furo, -hub(lateral) - SOBRA_PINO, cs.profundidade_dentes + SOBRA_PINO)?;
             let jp1 = peca_com_eixo(&mut pecas, &mut juntas, PecaLayout { nome: "Satélite 1".into(), ..peca(dsat.clone(), ks.clone(), l_p1) }, sat.furo, -hub(&sat) - SOBRA_PINO, cp.profundidade_dentes + SOBRA_PINO)?;
             let js2 = peca_com_eixo(&mut pecas, &mut juntas, PecaLayout { nome: "Lateral 2".into(), ..peca(dl, kl, l_s2) }, lateral.furo, -hub(lateral) - SOBRA_PINO, cs.profundidade_dentes + SOBRA_PINO)?;
@@ -323,8 +350,8 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
             let base = Placement { origin: [c.distancia_centros, -p.comprimento / 2., b2 / 2.], rot: [[1., 0., 0.], [0., 0., -1.], [0., 1., 0.]] };
             let spin = giro_de_engrenamento(p);
             let l_worm = Placement { origin: base.origin, rot: base.rot.map(|v| rotvec(v, [base.rot[2][0] * spin, base.rot[2][1] * spin, base.rot[2][2] * spin])) };
-            let kw = format!("semfim-m{}-e{}-d{}-l{}-f{}", p.modulo, p.entradas, p.diametro_primitivo, p.comprimento, p.furo);
-            let kc = format!("coroa-semfim-m{}-e{}-d{}-z{}-b{}-f{}", p.modulo, p.entradas, p.diametro_primitivo, p.dentes_coroa, b2, p.furo_coroa);
+            let kw = format!("semfim-m{}-e{}-d{}-l{}-f{}{}", p.modulo, p.entradas, p.diametro_primitivo, p.comprimento, p.furo, fenkra_solidos::usinagens::sufixo_de_chave(&p.usinagens_semfim));
+            let kc = format!("coroa-semfim-m{}-e{}-d{}-z{}-b{}-f{}{}", p.modulo, p.entradas, p.diametro_primitivo, p.dentes_coroa, b2, p.furo_coroa, fenkra_solidos::usinagens::sufixo_de_chave(&p.usinagens_coroa));
             let jw = peca_com_eixo(&mut pecas, &mut juntas, peca(dw, kw, l_worm), p.furo, -SOBRA_PINO, p.comprimento + SOBRA_PINO)?;
             let jc = peca_com_eixo(&mut pecas, &mut juntas, peca(dc, kc, l_coroa), p.furo_coroa, -SOBRA_PINO, b2 + SOBRA_PINO)?;
             // eixos do mundo: sem-fim +Y, coroa +Z: com o filete de mão direita o giro da coroa tem o sinal oposto
@@ -335,7 +362,7 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
             motora = jw;
             avisos.extend(c.avisos);
         }
-        Elemento::Corrente { corrente, dentes1, dentes2, centros, furo1, furo2 } => {
+        Elemento::Corrente { corrente, dentes1, dentes2, centros, furo1, furo2, usinagens1, usinagens2 } => {
             // a largura pode ser provisória (linha em `LARGURAS_PROVISORIAS`): a peça leva o aviso e o painel também
             let (c, aviso_largura) = dados::corrente_para_gerar(corrente)?;
             avisos.extend(aviso_largura);
@@ -345,8 +372,8 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
             if (cc - centros).abs() > c.passo {
                 avisos.push(format!("distância entre centros corrigida: {cc:.2} mm (o pedido, {centros:.2}, não fecha em elos inteiros)"));
             }
-            let r1 = ParamRoda::nova(corrente, n1, *furo1);
-            let r2 = ParamRoda::nova(corrente, n2, *furo2);
+            let r1 = ParamRoda { usinagens: usinagens1.clone(), ..ParamRoda::nova(corrente, n1, *furo1) };
+            let r2 = ParamRoda { usinagens: usinagens2.clone(), ..ParamRoda::nova(corrente, n2, *furo2) };
             let k1 = calculo_roda(&r1)?;
             calculo_roda(&r2)?;
             let z_roda = (c.largura - k1.largura_dente) / 2.;
@@ -367,7 +394,7 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
             motora = j1;
             avisos.push(format!("{} elos, distância corrigida {cc:.2} mm; perfil da roda simplificado (preliminar)", elos));
         }
-        Elemento::Correia { designacao, dentes1, dentes2, diametro1, diametro2, centros, largura, furo1, furo2 } => {
+        Elemento::Correia { designacao, dentes1, dentes2, diametro1, diametro2, centros, largura, furo1, furo2, usinagens1, usinagens2 } => {
             let c = dados::correia(designacao).ok_or_else(|| format!("correia '{designacao}' fora da biblioteca"))?;
             if !c.liberada() {
                 return Err(format!("{}: dado {}: a geração só usa linhas conferidas em duas fontes", c.designacao, c.conferencia.rotulo()));
@@ -381,8 +408,8 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
                     let cc = dados::distancia_da_correia(d1, d2, nt as f64 * c.passo).ok_or("a correia é curta demais para as duas polias")?;
                     avisos.push(format!("correia de {nt} dentes, centros {cc:.2} mm; polia lisa e correia sem dentes desenhados (a altura do dente não tem duas fontes)"));
                     (
-                        ParamPolia { tipo: TipoPolia::Dentada { passo: c.passo, dentes: n1, largura: *largura }, furo: *furo1 },
-                        ParamPolia { tipo: TipoPolia::Dentada { passo: c.passo, dentes: n2, largura: *largura }, furo: *furo2 },
+                        ParamPolia { tipo: TipoPolia::Dentada { passo: c.passo, dentes: n1, largura: *largura }, furo: *furo1, usinagens: usinagens1.clone() },
+                        ParamPolia { tipo: TipoPolia::Dentada { passo: c.passo, dentes: n2, largura: *largura }, furo: *furo2, usinagens: usinagens2.clone() },
                         d1,
                         d2,
                         (0.5 * c.passo).max(1.),
@@ -393,8 +420,8 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
                     let (d1, d2) = (diametro1.min(*diametro2), diametro1.max(*diametro2));
                     avisos.push("correia em V: seção em V não desenhada na correia (anel liso); ângulo do sulco 38° (uma fonte)".into());
                     (
-                        ParamPolia { tipo: TipoPolia::EmV { topo: c.largura_topo, altura: c.altura, diametro: d1 }, furo: *furo1 },
-                        ParamPolia { tipo: TipoPolia::EmV { topo: c.largura_topo, altura: c.altura, diametro: d2 }, furo: *furo2 },
+                        ParamPolia { tipo: TipoPolia::EmV { topo: c.largura_topo, altura: c.altura, diametro: d1 }, furo: *furo1, usinagens: usinagens1.clone() },
+                        ParamPolia { tipo: TipoPolia::EmV { topo: c.largura_topo, altura: c.altura, diametro: d2 }, furo: *furo2, usinagens: usinagens2.clone() },
                         d1,
                         d2,
                         c.altura / 2.,
@@ -402,16 +429,23 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
                     )
                 }
             };
-            let altura_polia = |p: &ParamPolia| match p.tipo {
-                TipoPolia::Dentada { largura, .. } => largura + 3.,
-                TipoPolia::EmV { topo, .. } => topo + 6.,
+            // altura da polia mais o cubo das usinagens, para o eixo passar inteiro
+            let altura_polia = |p: &ParamPolia| {
+                p.altura()
+                    + p.usinagens
+                        .iter()
+                        .map(|u| match u {
+                            fenkra_solidos::usinagens::Usinagem::Cubo { comprimento, .. } => *comprimento,
+                            _ => 0.,
+                        })
+                        .fold(0., f64::max)
             };
             let (h1, h2) = (altura_polia(&pol1), altura_polia(&pol2));
             let dp1 = polia_documento(&pol1)?;
             let dp2 = polia_documento(&pol2)?;
             let (l1, l2) = (Placement::default(), Placement { origin: [cc, 0., 0.], ..Default::default() });
-            let j1 = peca_com_eixo(&mut pecas, &mut juntas, peca(dp1, format!("polia-{}-d{:.2}-f{furo1}", designacao.replace(' ', ""), d1), l1), *furo1, -SOBRA_PINO, h1 + SOBRA_PINO)?;
-            let j2 = peca_com_eixo(&mut pecas, &mut juntas, peca(dp2, format!("polia-{}-d{:.2}-f{furo2}", designacao.replace(' ', ""), d2), l2), *furo2, -SOBRA_PINO, h2 + SOBRA_PINO)?;
+            let j1 = peca_com_eixo(&mut pecas, &mut juntas, peca(dp1, format!("polia-{}-d{:.2}-f{furo1}{}", designacao.replace(' ', ""), d1, fenkra_solidos::usinagens::sufixo_de_chave(&pol1.usinagens)), l1), *furo1, -SOBRA_PINO, h1 + SOBRA_PINO)?;
+            let j2 = peca_com_eixo(&mut pecas, &mut juntas, peca(dp2, format!("polia-{}-d{:.2}-f{furo2}{}", designacao.replace(' ', ""), d2, fenkra_solidos::usinagens::sufixo_de_chave(&pol2.usinagens)), l2), *furo2, -SOBRA_PINO, h2 + SOBRA_PINO)?;
             // a correia envolve as polias: o anel começa no raio externo (o primitivo) e tem a espessura dada
             let largura_cor = match c.familia {
                 FamiliaCorreia::Dentada => *largura,
@@ -841,7 +875,7 @@ mod tests {
     #[test]
     fn os_rolos_da_corrente_andam_pelo_laco_com_a_roda_motora() {
         let dir = pasta("rolos");
-        let e = Elemento::Corrente { corrente: "ISO 08B-1".into(), dentes1: 17, dentes2: 34, centros: 400., furo1: 10., furo2: 12. };
+        let e = Elemento::Corrente { corrente: "ISO 08B-1".into(), dentes1: 17, dentes2: 34, centros: 400., furo1: 10., furo2: 12., usinagens1: vec![], usinagens2: vec![] };
         let mut a = Assembly::new("Corrente");
         inserir_transmissao(&mut a, Some(&dir), &e, 300., 5., &Placement::default()).unwrap();
         let reg = a.transmissoes[0].clone();
@@ -872,7 +906,7 @@ mod tests {
     #[test]
     fn corrente_e_correia_com_distancia_corrigida_e_razao() {
         let dir = pasta("corrente");
-        let e = Elemento::Corrente { corrente: "ISO 08B-1".into(), dentes1: 17, dentes2: 34, centros: 400., furo1: 10., furo2: 12. };
+        let e = Elemento::Corrente { corrente: "ISO 08B-1".into(), dentes1: 17, dentes2: 34, centros: 400., furo1: 10., furo2: 12., usinagens1: vec![], usinagens2: vec![] };
         let lay = montar_layout(&e).unwrap();
         // 2 eixos + 2 rodas + a corrente; o acoplamento é 17/34 no mesmo sentido
         assert_eq!(lay.pecas.len(), 5);
@@ -884,17 +918,43 @@ mod tests {
         let (g1, g2) = (angulo_de(&a, j1, 0.02), angulo_de(&a, j2, 0.02));
         assert!((g2 / g1 - 0.5).abs() < 1e-3, "{g1} {g2}");
         // correia dentada: 20/40 dentes GT2, centros pedidos 100
-        let c = Elemento::Correia { designacao: "GT2".into(), dentes1: 20, dentes2: 40, diametro1: 0., diametro2: 0., centros: 100., largura: 6., furo1: 5., furo2: 5. };
+        let c = Elemento::Correia { designacao: "GT2".into(), dentes1: 20, dentes2: 40, diametro1: 0., diametro2: 0., centros: 100., largura: 6., furo1: 5., furo2: 5., usinagens1: vec![], usinagens2: vec![] };
         let lay = montar_layout(&c).unwrap();
         assert_eq!(lay.pecas.len(), 5);
         assert!((lay.razao - 0.5).abs() < 1e-12);
         // dado sem duas fontes não gera
-        let v = Elemento::Correia { designacao: "T10".into(), dentes1: 0, dentes2: 0, diametro1: 80., diametro2: 160., centros: 300., largura: 0., furo1: 12., furo2: 12. };
+        let v = Elemento::Correia { designacao: "T10".into(), dentes1: 0, dentes2: 0, diametro1: 80., diametro2: 160., centros: 300., largura: 0., furo1: 12., furo2: 12., usinagens1: vec![], usinagens2: vec![] };
         assert!(montar_layout(&v).is_err());
-        let ruim = Elemento::Corrente { corrente: "ANSI 41".into(), dentes1: 17, dentes2: 34, centros: 400., furo1: 10., furo2: 12. };
+        let ruim = Elemento::Corrente { corrente: "ANSI 41".into(), dentes1: 17, dentes2: 34, centros: 400., furo1: 10., furo2: 12., usinagens1: vec![], usinagens2: vec![] };
         assert!(montar_layout(&ruim).is_err());
         // o cálculo do elemento usa o mesmo estágio: 17/34 por corrente
         let r = calcular_elemento(&e, Entrada { rpm: 300., torque: 5. }).unwrap();
         assert!((r.razao_total - 2.).abs() < 1e-12 && (r.rpm_saida - 150.).abs() < 1e-9);
+    }
+
+    /// B345: as usinagens de cada roda e polia chegam à peça gerada, com arquivo próprio e o vínculo
+    /// com o catálogo; o elemento gravado sem elas (arquivo antigo) continua lendo.
+    #[test]
+    fn usinagens_chegam_as_rodas_e_polias_do_elemento() {
+        use fenkra_solidos::usinagens::{vinculo_catalogo, Usinagem};
+        let rasgo = vec![Usinagem::RasgoChaveta];
+        let alivio = vec![Usinagem::FurosAlivio { quantidade: 4, diametro: 10., raio_circulo: 40. }];
+        let e = Elemento::Corrente { corrente: "ISO 08B-1".into(), dentes1: 34, dentes2: 17, centros: 400., furo1: 10., furo2: 12., usinagens1: rasgo.clone(), usinagens2: alivio.clone() };
+        let lay = montar_layout(&e).unwrap();
+        let rodas: Vec<_> = lay.pecas.iter().filter(|p| p.chave.starts_with("roda-")).collect();
+        assert_eq!(rodas.len(), 2);
+        // a menor (17) leva a lista 1, mesmo pedida como dentes2
+        assert!(rodas[0].chave.starts_with("roda-ISO08B-1-z17-f10-u") && rodas[1].chave.starts_with("roda-ISO08B-1-z34-f12-u"), "{} {}", rodas[0].chave, rodas[1].chave);
+        assert_eq!(vinculo_catalogo(&rodas[0].doc), Some(("roda-ISO08B-1-z17-f10".into(), rasgo.clone())));
+        assert_eq!(vinculo_catalogo(&rodas[1].doc).map(|v| v.1), Some(alivio));
+        let c = Elemento::Correia { designacao: "V Z".into(), dentes1: 0, dentes2: 0, diametro1: 80., diametro2: 160., centros: 300., largura: 0., furo1: 12., furo2: 12., usinagens1: vec![], usinagens2: vec![Usinagem::Cubo { diametro: 40., comprimento: 15. }] };
+        let lay = montar_layout(&c).unwrap();
+        let polias: Vec<_> = lay.pecas.iter().filter(|p| p.chave.starts_with("polia-")).collect();
+        assert!(!polias[0].chave.contains("-u") && polias[1].chave.contains("-u"));
+        assert_eq!(vinculo_catalogo(&polias[1].doc).map(|v| v.1.len()), Some(1));
+        // elemento gravado antes do B345 (sem os campos) ainda abre
+        let antigo = r#"{"Corrente":{"corrente":"ISO 08B-1","dentes1":17,"dentes2":34,"centros":400.0,"furo1":10.0,"furo2":12.0}}"#;
+        let lido: Elemento = serde_json::from_str(antigo).unwrap();
+        assert!(matches!(lido, Elemento::Corrente { ref usinagens1, .. } if usinagens1.is_empty()));
     }
 }

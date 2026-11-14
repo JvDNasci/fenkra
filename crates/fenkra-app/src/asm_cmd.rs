@@ -765,6 +765,16 @@ pub fn demo(st: &mut AsmState, nome: &str) {
             t.furo1 = 8.;
             t.furo2 = 20.;
         }
+        if std::env::var("FENKRA_DEMO_TRANS").is_ok_and(|v| v == "corrente_usinada") {
+            // B342 e B345: corrente ANSI 40 (liberada com a segunda fonte) e usinagens nas duas rodas
+            use fenkra_solidos::usinagens::Usinagem;
+            t.corrente = "ANSI 40".into();
+            t.z1 = 15;
+            t.z2 = 45;
+            t.centros = 260.;
+            t.usinagens1 = vec![Usinagem::RasgoChaveta, Usinagem::ParafusoFixacao { rosca: 3., rotacao: 90. }];
+            t.usinagens2 = vec![Usinagem::FurosAlivio { quantidade: 6, diametro: 22., raio_circulo: 55. }, Usinagem::RasgoChaveta];
+        }
         if std::env::var("FENKRA_DEMO_TRANS_MEDIDA").is_ok() {
             // dois pontos já clicados nas placas de exemplo, como o mouse os deixaria
             t.medindo = true;

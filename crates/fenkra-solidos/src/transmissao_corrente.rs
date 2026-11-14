@@ -50,6 +50,14 @@ impl ParamRoda {
     pub fn chave_arquivo(&self) -> String {
         format!("{}{}", self.chave(), crate::usinagens::sufixo_de_chave(&self.usinagens))
     }
+
+    /// O que a roda padronizada oferece às usinagens (B345): disco dos dentes de `z = 0` a `0,9·b1`,
+    /// raiz dos dentes e o cubo próprio, que já sai com a roda.
+    pub fn geo_base(&self) -> Result<crate::usinagens::GeoBase, String> {
+        let k = calculo_roda(&ParamRoda { usinagens: vec![], ..self.clone() })?;
+        let hub = (self.furo * 0.8).max(4.);
+        Ok(crate::usinagens::GeoBase { largura: k.largura_dente, raio_raiz: k.diametro_raiz / 2., furo: self.furo, cubo_proprio: Some((hub, k.diametro_cubo)), ..Default::default() })
+    }
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -92,7 +100,7 @@ pub fn calculo_roda(p: &ParamRoda) -> Result<CalculoRoda, String> {
         return Err(format!("o furo precisa ser menor que {:.1} mm nesta roda", cubo - 2.));
     }
     let hub = (p.furo * 0.8).max(4.);
-    crate::usinagens::validar(&crate::usinagens::GeoBase { largura: 0.9 * c.largura, raio_raiz: raiz / 2., furo: p.furo, cubo_proprio: Some((hub, cubo)) }, &p.usinagens)?;
+    crate::usinagens::validar(&crate::usinagens::GeoBase { largura: 0.9 * c.largura, raio_raiz: raiz / 2., furo: p.furo, cubo_proprio: Some((hub, cubo)), ..Default::default() }, &p.usinagens)?;
     Ok(CalculoRoda { diametro_primitivo: d, diametro_topo: diametro_topo_roda(c.passo, p.dentes), diametro_raiz: raiz, largura_dente: 0.9 * c.largura, diametro_cubo: cubo })
 }
 
@@ -167,7 +175,7 @@ pub fn roda_documento(p: &ParamRoda) -> Result<Document, String> {
         m.prim("Furo", PrimKind::Cilindro, plano, ["furo/2", &(k.largura_dente + hub + 2.).to_string(), "0", "0"], BoolOp::Cut)?;
     }
     if !p.usinagens.is_empty() {
-        crate::usinagens::aplicar(&mut m, &crate::usinagens::GeoBase { largura: k.largura_dente, raio_raiz: k.diametro_raiz / 2., furo: p.furo, cubo_proprio: Some((hub, k.diametro_cubo)) }, &p.usinagens)?;
+        crate::usinagens::aplicar(&mut m, &crate::usinagens::GeoBase { largura: k.largura_dente, raio_raiz: k.diametro_raiz / 2., furo: p.furo, cubo_proprio: Some((hub, k.diametro_cubo)), ..Default::default() }, &p.usinagens)?;
     }
     crate::usinagens::registrar_vinculo(&mut m.doc, &p.chave(), &p.usinagens);
     Ok(m.doc)
@@ -428,6 +436,8 @@ pub enum TipoPolia {
 pub struct ParamPolia {
     pub tipo: TipoPolia,
     pub furo: f64,
+    /// usinagens editáveis sobre a polia padronizada (B345)
+    pub usinagens: Vec<crate::usinagens::Usinagem>,
 }
 
 impl ParamPolia {
@@ -436,6 +446,35 @@ impl ParamPolia {
         match self.tipo {
             TipoPolia::Dentada { passo, dentes, .. } => crate::transmissao_dados::diametro_polia_dentada(passo, dentes),
             TipoPolia::EmV { diametro, .. } => diametro,
+        }
+    }
+
+    /// Altura total da polia (flanges ou paredes do sulco incluídas), de `z = 0` a `z = altura`.
+    pub fn altura(&self) -> f64 {
+        match self.tipo {
+            TipoPolia::Dentada { largura, .. } => largura + 3.,
+            TipoPolia::EmV { topo, .. } => topo + 6.,
+        }
+    }
+
+    /// Raio do fundo onde a correia assenta: as usinagens (alívio, rebaixo, cubo) ficam abaixo dele.
+    pub fn raio_fundo(&self) -> f64 {
+        match self.tipo {
+            TipoPolia::Dentada { .. } => self.diametro() / 2.,
+            TipoPolia::EmV { altura, .. } => self.diametro() / 2. - altura,
+        }
+    }
+
+    /// O que a polia padronizada oferece às usinagens: disco cheio de `z = 0` à altura, sem cubo.
+    pub fn geo_base(&self) -> crate::usinagens::GeoBase {
+        crate::usinagens::GeoBase { largura: self.altura(), raio_raiz: self.raio_fundo(), furo: self.furo, cubo_proprio: None, ..Default::default() }
+    }
+
+    /// Chave da polia padronizada do catálogo (sem usinagens): o perfil e o furo.
+    pub fn chave(&self) -> String {
+        match self.tipo {
+            TipoPolia::Dentada { passo, dentes, largura } => format!("polia-p{passo}-z{dentes}-l{largura}-f{}", self.furo),
+            TipoPolia::EmV { topo, altura, diametro } => format!("polia-v{topo}x{altura}-d{diametro:.2}-f{}", self.furo),
         }
     }
 }
@@ -479,6 +518,9 @@ pub fn polia_documento(p: &ParamPolia) -> Result<Document, String> {
     let altura_total = pts.iter().map(|q| q[1]).fold(0., f64::max);
     m.param("furo", &p.furo.to_string())?;
     m.param("dpri", &d.to_string())?;
+    // altura total: o cubo das usinagens (B345) nasce em `b`
+    m.param("b", &altura_total.to_string())?;
+    crate::usinagens::validar(&p.geo_base(), &p.usinagens)?;
     let mut data = SketchData::default();
     let mut al = || m.doc.alloc();
     let ids: Vec<Id> = pts.iter().map(|q| data.add_point(&mut al, q[0], q[1])).collect();
@@ -492,6 +534,10 @@ pub fn polia_documento(p: &ParamPolia) -> Result<Document, String> {
         let plano = m.plano("Plano_furo", "-1")?;
         m.prim("Furo", PrimKind::Cilindro, plano, ["furo/2", &(altura_total + 2.).to_string(), "0", "0"], BoolOp::Cut)?;
     }
+    if !p.usinagens.is_empty() {
+        crate::usinagens::aplicar(&mut m, &p.geo_base(), &p.usinagens)?;
+    }
+    crate::usinagens::registrar_vinculo(&mut m.doc, &p.chave(), &p.usinagens);
     Ok(m.doc)
 }
 
@@ -689,14 +735,14 @@ mod tests {
         if !fenkra_kernel::AVAILABLE {
             return;
         }
-        let p = ParamPolia { tipo: TipoPolia::Dentada { passo: 2., dentes: 20, largura: 8. }, furo: 5. };
+        let p = ParamPolia { tipo: TipoPolia::Dentada { passo: 2., dentes: 20, largura: 8. }, furo: 5., usinagens: vec![] };
         let (v, lo, hi) = medir(&polia_documento(&p).unwrap());
         assert!(v > 0. && lo[2].abs() < 1e-6);
         let r = p.diametro() / 2. + 1.2;
         assert!((hi[0].max(hi[1]) - r).abs() < 0.1, "{hi:?} {r}");
-        let pv = ParamPolia { tipo: TipoPolia::EmV { topo: 10., altura: 6., diametro: 80. }, furo: 12. };
+        let pv = ParamPolia { tipo: TipoPolia::EmV { topo: 10., altura: 6., diametro: 80. }, furo: 12., usinagens: vec![] };
         let (vv, _, hv) = medir(&polia_documento(&pv).unwrap());
         assert!(vv > 0. && (hv[0].max(hv[1]) - 40.).abs() < 0.1, "{hv:?}");
-        assert!(polia_documento(&ParamPolia { tipo: TipoPolia::EmV { topo: 10., altura: 50., diametro: 40. }, furo: 5. }).is_err());
+        assert!(polia_documento(&ParamPolia { tipo: TipoPolia::EmV { topo: 10., altura: 50., diametro: 40. }, furo: 5., usinagens: vec![] }).is_err());
     }
 }
