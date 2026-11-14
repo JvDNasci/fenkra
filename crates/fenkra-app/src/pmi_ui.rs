@@ -196,6 +196,11 @@ fn anchors(app: &App, kind: &PmiKind, picks: &[Pick]) -> Option<(Vec<[f64; 3]>, 
             }
             Some((vec![v[0].0, v[1].0], vec![Some(v[0].1), Some(v[1].1)]))
         }
+        PmiKind::Note => {
+            // nota: uma seta para cada elemento escolhido (B448)
+            let v: Vec<([f64; 3], Option<PmiTarget>)> = picks.iter().filter_map(|p| Some((pt(p)?, r.and_then(|r| pick_target(r, p))))).collect();
+            (!v.is_empty()).then(|| v.into_iter().unzip())
+        }
         k => {
             let v: Vec<([f64; 3], Option<PmiTarget>)> = picks.iter().filter_map(|p| Some((pt(p)?, r.and_then(|r| pick_target(r, p))))).collect();
             if v.len() < k.anchors() {
@@ -308,7 +313,7 @@ fn candidates(ctx: &egui::Context, r: &RecomputeResult) -> std::sync::Arc<Vec<Pm
 }
 
 /// Nome do alvo na interface ('furo Ø6,5'), traduzido.
-fn target_label(t: &PmiTarget) -> String {
+pub(crate) fn target_label(t: &PmiTarget) -> String {
     let d = || num(t.radius * 2.);
     match t.class {
         TargetClass::FacePlana => tr("face plana").to_string(),
@@ -346,6 +351,14 @@ pub fn command(app: &mut App, i: u8) {
     }
     set_variant(None);
     let kind = kind_of(i);
+    if i == 4 {
+        // nota (B448): começa limpa; com elementos já escolhidos, nasce com uma seta para cada um
+        crate::pmi_nota_cmd::comecar();
+        if !app.picks.is_empty() {
+            crate::pmi_nota_cmd::criar(app);
+            return;
+        }
+    }
     if i == crate::pmi_smart::SMART {
         // cota inteligente: o tipo sai dos elementos escolhidos (B268)
         app.pmi_pending = Some(i);
@@ -408,7 +421,7 @@ pub fn criar_legenda(app: &mut App, ponto: [f64; 3], off: [f64; 3]) {
     }
 }
 
-fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>, targets: Vec<Option<PmiTarget>>, picks: &[Pick]) {
+pub(crate) fn create(app: &mut App, kind: PmiKind, a: Vec<[f64; 3]>, targets: Vec<Option<PmiTarget>>, picks: &[Pick]) {
     set_variant(None);
     // chamada de feature: amarra a feature dona da face e grava o texto gerado
     let (kind, gen_text) = match (&kind, picks.first()) {
@@ -559,6 +572,11 @@ pub fn after_viewport(app: &mut App) {
             return;
         }
     }
+    if i == 4 {
+        // nota: clique simples cria; Ctrl ou Shift acumulam alvos até o Enter ou o OK (B448)
+        crate::pmi_nota_cmd::depois_do_clique(app);
+        return;
+    }
     if i == 16 {
         // nova(s) ponta(s) numa nota que já existe: clique simples põe uma; com Ctrl ou Shift
         // as escolhas se somam e o Enter conclui (B368)
@@ -652,7 +670,7 @@ fn split_feature(app: &mut App, id: Id) {
 /// Conclui a cadeia ou a base: cada elemento escolhido vira um ponto e o conjunto gera uma cota
 /// por trecho, todas numa pasta da árvore (apagam e movem juntas).
 /// Pontos e alvos de cada elemento escolhido (vértice, aresta ou face), para virarem setas.
-fn pontas_das_escolhas(app: &App) -> Vec<([f64; 3], Option<PmiTarget>)> {
+pub(crate) fn pontas_das_escolhas(app: &App) -> Vec<([f64; 3], Option<PmiTarget>)> {
     app.picks
         .iter()
         .filter_map(|p| {
@@ -713,6 +731,10 @@ fn finish_multi(app: &mut App) {
     let Some(i) = app.pmi_pending else { return };
     if i == 16 {
         aplicar_pontas(app, None);
+        return;
+    }
+    if i == 4 {
+        crate::pmi_nota_cmd::criar(app);
         return;
     }
     let kind = kind_now(i);
@@ -1209,7 +1231,7 @@ fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &R
             let align_key = if has_var { Key::T } else { Key::Tab };
             (s.consume_key(Modifiers::NONE, Key::Space), s.consume_key(Modifiers::NONE, Key::F), s.consume_key(Modifiers::NONE, align_key), s.consume_key(Modifiers::NONE, Key::Escape), s.consume_key(Modifiers::NONE, Key::Backspace), s.consume_key(Modifiers::NONE, Key::Enter))
         });
-        finish = enter && (is_multi(i) || smart || i == 16);
+        finish = enter && (is_multi(i) || smart || i == 16 || i == 4);
         if space {
             set_pref(|p| p.sel = (p.sel + 1) % (cands.len() + 1));
         }
@@ -1270,6 +1292,8 @@ fn pending_preview(app: &App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, r: &R
             let mut l = vec![(format!("{} — {} {}", tr("Cota"), tr("elementos"), app.picks.len()), titulo)];
             l.extend(crate::pmi_smart::cursor_lines(inf, app.picks.len()));
             l
+        } else if i == 4 {
+            vec![(format!("{} — {} {}  ·  {}", tr("Nota"), tr("alvos"), app.picks.len(), tr("Ctrl ou Shift somam · Enter cria")), titulo)]
         } else if is_multi(i) {
             vec![(format!("{} — {} {}  ·  {}", tr(if i == 13 { "Cadeia de cotas" } else { "Cotas a partir de uma base" }), tr("pontos"), app.picks.len(), tr("Enter conclui")), titulo)]
         } else {
@@ -1321,6 +1345,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let mut click_mods: Option<(Id, bool, bool)> = None;
     let mut abrir_seta: Option<(Id, usize)> = None;
     crate::pmi_setas::marcar_modificador(ui);
+    crate::pmi_setas::novo_quadro(ui.ctx().cumulative_frame_nr());
     let painter = ui.painter_at(rect);
     crate::pmi_baloes_ui::previa(app, ui, rect, cam);
     let mut edit_req: Option<Id> = None;
@@ -1638,7 +1663,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         }
         // setas da nota: início visível e arrastável na borda da caixa, toque duplo na seta (B368)
         if plane.is_none() && crate::pmi_setas::tem_setas(&pm.kind) {
-            crate::pmi_setas::interagir(ui, &painter, &pen, cam, rect, pm, &a, rect_lbl, is_sel && !bad, &mut hout, &mut abrir_seta);
+            crate::pmi_setas::interagir(ui, &painter, &pen, cam, rect, pm, &a, rect_lbl, is_sel && !bad, &mut hout);
         }
         // rótulo girado na tela: a área de clique envolve o rótulo girado
         let rect_lbl = if plane.is_none() && !matches!(pm.kind, PmiKind::Datum { .. } | PmiKind::Balloon { .. } | PmiKind::Weld { .. } | PmiKind::Roughness { .. } | PmiKind::DatumTarget { .. }) { pen.outer(rect_lbl) } else { rect_lbl };
@@ -1933,6 +1958,19 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
             }
         }
         clicked = Some(id);
+    }
+    // clique na seta (B448): o teste de clique do 3D já deixou a face de baixo de lado
+    // (`pmi_setas::seta_em`); aqui um clique escolhe a nota e o duplo clique a abre com a seta
+    if let Some(q) = ui.input(|i| i.pointer.interact_pos()).filter(|_| ui.rect_contains_pointer(rect)) {
+        let (duplo, simples) = ui.input(|i| (i.pointer.button_double_clicked(egui::PointerButton::Primary), i.pointer.button_clicked(egui::PointerButton::Primary)));
+        if let (true, Some((id, k))) = (duplo || simples, crate::pmi_setas::seta_em(ui.ctx().cumulative_frame_nr(), q)) {
+            if duplo {
+                abrir_seta = Some((id, k));
+            } else if clicked.is_none() && app.pmi_pending.is_none() {
+                clicked = Some(id);
+                click_mods = Some((id, ui.input(|i| i.modifiers.command), ui.input(|i| i.modifiers.shift)));
+            }
+        }
     }
     // clique no vazio da vista: tira o realce
     if clicked.is_none() && edit_req.is_none() && action.is_none() && ui.input(|i| i.pointer.primary_clicked() && i.pointer.interact_pos().is_some_and(|q| rect.contains(q))) {

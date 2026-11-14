@@ -880,8 +880,18 @@ pub fn mais(ui: &mut egui::Ui, grupos: &[Group], s: &mut Settings, st: &ToolStat
             acts.extend(show_group(ui, *g, s, st, false));
             ui.add_space(4.);
         }
+        // B448: escolher qualquer comando (botão, variação da família, Ajustes...) fecha o menu. Com
+        // `CloseOnClickOutside` o egui só fecha ao clicar fora, e o menu ficava cobrindo a vista.
+        if fecha_ao_escolher(&acts) {
+            ui.close();
+        }
     });
     acts
+}
+
+/// O menu "Mais" fecha quando o clique escolheu um comando; marcar "fixo" num grupo não fecha.
+fn fecha_ao_escolher(acts: &[Act]) -> bool {
+    !acts.is_empty()
 }
 
 /// Grupos visíveis com determinada posição: no modo sketch, os de sketch + Vista.
