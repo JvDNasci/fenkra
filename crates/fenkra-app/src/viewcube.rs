@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Cubo de vistas: gira junto com a peça; clicar numa face ou num canto leva àquela vista.
 //! A tecla Espaço abre o seletor grande com as vistas padrão e as vistas salvas (câmeras).
+//! B438: o cubo do canto é também o compasso (ver `compasso.rs`): arrastado para fora, prende na peça.
 
 use crate::render::Camera;
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke};
@@ -48,6 +49,12 @@ pub const EXTRA: [([f32; 3], &str); 2] = [([0.68, -0.68, 0.28], "Dimétrica"), (
 /// e o arraste sobre o cubo (para girar a câmera). `glass`: cubo transparente do seletor grande,
 /// com as faces de trás à mostra e as arestas clicáveis.
 pub fn cube(ui: &mut egui::Ui, area: Rect, cam: &Camera, id: &str, glass: bool) -> (Option<Vec3>, egui::Vec2) {
+    let (d, g, _) = cube_resp(ui, area, cam, id, glass);
+    (d, g)
+}
+
+/// O mesmo cubo devolvendo também a resposta da área (dica e arrasto do compasso, B438).
+pub fn cube_resp(ui: &mut egui::Ui, area: Rect, cam: &Camera, id: &str, glass: bool) -> (Option<Vec3>, egui::Vec2, egui::Response) {
     let resp = ui.interact(area, egui::Id::unique(("viewcube", id)), egui::Sense::click_and_drag());
     let painter = ui.painter_at(area);
     let c = area.center();
@@ -119,7 +126,7 @@ pub fn cube(ui: &mut egui::Ui, area: Rect, cam: &Camera, id: &str, glass: bool) 
         }
     }
     let drag = if resp.dragged_by(egui::PointerButton::Primary) { resp.drag_delta() } else { egui::Vec2::ZERO };
-    (chosen, drag)
+    (chosen, drag, resp)
 }
 
 /// Cores do cubo a partir do tema: traço, face, realce sob o mouse e letra.
