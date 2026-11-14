@@ -383,6 +383,8 @@ impl App {
         setup_fonts(&cc.egui_ctx);
         egui_extras::install_image_loaders(&cc.egui_ctx);
         let mut settings = Settings::load();
+        // B211: a pasta do LibreDWG chega ao conversor e ao processo filho pela variável
+        crate::config_externos::aplicar(&settings);
         crate::theme::reload_user();
         // desenvolvimento: FENKRA_DEMO_TEMA=<nome> usa esse tema (sem gravar)
         if let Some(t) = std::env::var("FENKRA_DEMO_TEMA").ok().or_else(gravar::tema).and_then(|n| crate::theme::find(&n)) {
@@ -599,6 +601,12 @@ impl App {
             app.settings_open = true;
             app.settings_page = 4;
             app.settings.contador_fps = true;
+            app.started = true;
+        }
+        // desenvolvimento: FENKRA_DEMO_EXTERNOS=1 abre as configurações em Programas externos (B211)
+        if std::env::var("FENKRA_DEMO_EXTERNOS").is_ok() {
+            app.settings_open = true;
+            app.settings_page = 10;
             app.started = true;
         }
         // desenvolvimento: FENKRA_AJUSTES=1 abre as configurações ao iniciar
@@ -4878,7 +4886,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         if !self.settings_open {
             return;
         }
-        const PAGES: [(&str, &str); 10] = [
+        const PAGES: [(&str, &str); 11] = [
             ("🖥", "Interface"),
             ("🎨", "Fundo da viewport"),
             ("⌨", "Atalhos"),
@@ -4889,6 +4897,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             ("📐", "Cotagem"),
             ("✏", "Sketch"),
             ("🗂", "Camadas e perfil"),
+            ("🔌", "Programas externos"),
         ];
         let mut open = true;
         let page = &mut self.settings_page;
@@ -4923,6 +4932,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         egui::ScrollArea::vertical().id_salt("pagina_config").auto_shrink([false, false]).show(ui, |ui| {
                             if *page == 9 {
                                 crate::config_ui::pagina(ui, s, doc_cfg);
+                            } else if *page == 10 {
+                                crate::config_externos::pagina(ui, s);
                             } else {
                                 settings_page(ui, *page, s);
                             }

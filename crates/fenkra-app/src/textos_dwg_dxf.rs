@@ -9,5 +9,11 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("esboços", "sketches"),
     ("textos", "texts"),
     ("sem unidade no arquivo: valeu milímetro", "no unit in the file: millimeter was used"),
-    ("fora", "left out"),
+    ("Programas externos", "External programs"),
+    ("LibreDWG (DWG)", "LibreDWG (DWG)"),
+    ("Programa livre, instalado à parte, que o Fenkra chama para ler e gravar DWG. Ele roda em outro processo e não faz parte do Fenkra.", "Free program, installed separately, that Fenkra calls to read and write DWG. It runs in another process and is not part of Fenkra."),
+    ("vazio: procura no PATH", "empty: searches the PATH"),
+    ("Pasta com dwg2dxf e dxf2dwg. Vazia, o Fenkra procura no PATH e nas pastas de instalação de costume.", "Folder with dwg2dxf and dxf2dwg. When empty, Fenkra searches the PATH and the usual install folders."),
+    ("Escolhe a pasta do LibreDWG.", "Chooses the LibreDWG folder."),
+    ("Como instalar: baixe o pacote para Windows em ftp.gnu.org/gnu/libredwg (ou rode vcpkg install libredwg[tools]), descompacte e escolha aqui a pasta com dwg2dxf e dxf2dwg.", "How to install: download the Windows package from ftp.gnu.org/gnu/libredwg (or run vcpkg install libredwg[tools]), unzip it and choose here the folder with dwg2dxf and dxf2dwg."),
 ];

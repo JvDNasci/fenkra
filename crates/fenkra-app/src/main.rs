@@ -253,6 +253,7 @@ mod perfil;
 mod relatorio;
 mod param_ui;
 mod config_camadas;
+mod config_externos;
 mod camada3d;
 mod config_ui;
 mod textos_config;

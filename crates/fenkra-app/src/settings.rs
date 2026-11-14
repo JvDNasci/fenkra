@@ -422,6 +422,9 @@ pub struct Settings {
     /// programa do fatiador externo
     #[serde(default)]
     pub fatiador: String,
+    /// pasta do LibreDWG (dwg2dxf e dxf2dwg), programa externo do DWG (B211); vazia: procura no PATH
+    #[serde(default)]
+    pub libredwg: String,
     /// últimas opções do painel de importação
     #[serde(default)]
     pub opcoes_importar: fenkra_conversor::OpcoesImportar,
@@ -599,6 +602,7 @@ impl Default for Settings {
             arvore_fechada: false,
             impressao: Default::default(),
             fatiador: String::new(),
+            libredwg: String::new(),
             opcoes_importar: Default::default(),
             opcoes_exportar: Default::default(),
             theme: Theme::Claro,

@@ -44,6 +44,7 @@ pub const CLASSIFICACAO: &[(&str, Classe)] = &[
     ("arvore_fechada", Sessao),
     ("impressao", Sessao),
     ("fatiador", Maquina),
+    ("libredwg", Maquina),
     ("theme", Interface),
     ("ui_scale", Interface),
     ("gradient", Interface),

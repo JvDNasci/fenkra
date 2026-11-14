@@ -36,6 +36,8 @@ pub enum Formato {
     Svg,
     /// FBX binário ou texto; só leitura (formato fechado: o Fenkra não grava)
     Fbx,
+    /// desenho 2D pelo LibreDWG externo (ADR 0090): vira DXF e segue como ele
+    Dwg,
 }
 
 impl Formato {
@@ -43,12 +45,13 @@ impl Formato {
     pub const MALHA: [Formato; 14] = [Formato::Stl, Formato::Obj, Formato::Ply, Formato::Tmf, Formato::Amf, Formato::Gltf, Formato::Glb, Formato::Vrml, Formato::X3d, Formato::Collada, Formato::Usda, Formato::Usdz, Formato::Ifc, Formato::Fbx];
 
     /// Todos os formatos que o conversor conhece, na ordem da tela.
-    pub const TODOS: [Formato; 20] = [
+    pub const TODOS: [Formato; 21] = [
         Formato::Step,
         Formato::Iges,
         Formato::Brep,
         Formato::Dxf,
         Formato::Svg,
+        Formato::Dwg,
         Formato::Ifc,
         Formato::Arvore,
         Formato::Stl,
@@ -72,7 +75,7 @@ impl Formato {
 
     /// Formato de desenho plano, que vive de esboços e não de sólidos.
     pub fn e_2d(self) -> bool {
-        matches!(self, Formato::Dxf | Formato::Svg)
+        matches!(self, Formato::Dxf | Formato::Svg | Formato::Dwg)
     }
 
     pub fn nome(self) -> &'static str {
@@ -97,6 +100,7 @@ impl Formato {
             Formato::Ifc => "IFC",
             Formato::Svg => "SVG",
             Formato::Fbx => "FBX",
+            Formato::Dwg => "DWG",
         }
     }
 
@@ -122,6 +126,7 @@ impl Formato {
             Formato::Ifc => &["ifc"],
             Formato::Svg => &["svg"],
             Formato::Fbx => &["fbx"],
+            Formato::Dwg => &["dwg"],
         }
     }
 
@@ -139,6 +144,8 @@ impl Formato {
             Some(Formato::Brep)
         } else if texto.starts_with('{') && tem_marca_da_arvore(conteudo) {
             Some(Formato::Arvore)
+        } else if crate::dwg::e_dwg(conteudo) {
+            Some(Formato::Dwg)
         } else if e_iges(conteudo) {
             Some(Formato::Iges)
         } else if e_dxf(conteudo) {

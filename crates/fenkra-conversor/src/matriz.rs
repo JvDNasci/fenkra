@@ -61,7 +61,7 @@ pub struct LinhaMatriz {
 fn internas(f: Formato) -> Option<Capacidades> {
     match f {
         Formato::Arvore => Some(Capacidades { ler: true, gravar: true, cor: true, montagem: true, parametros: true, unidade: true, ..Default::default() }),
-        Formato::Dxf | Formato::Svg => Some(Capacidades { ler: true, gravar: true, exata: true, camadas: true, unidade: true, ..Default::default() }),
+        Formato::Dxf | Formato::Svg | Formato::Dwg => Some(Capacidades { ler: true, gravar: true, exata: true, camadas: true, unidade: true, ..Default::default() }),
         _ => None,
     }
 }
@@ -73,7 +73,7 @@ impl Registro {
             .into_iter()
             .filter_map(|formato| match self.provedor(formato) {
                 Ok(p) => Some(LinhaMatriz { formato, provedor: p.id().into(), capacidades: p.capacidades(formato) }),
-                Err(_) => internas(formato).map(|capacidades| LinhaMatriz { formato, provedor: "Fenkra".into(), capacidades }),
+                Err(_) => internas(formato).map(|capacidades| LinhaMatriz { formato, provedor: if formato == Formato::Dwg { "LibreDWG (externo)" } else { "Fenkra" }.into(), capacidades }),
             })
             .collect()
     }

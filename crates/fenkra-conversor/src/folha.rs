@@ -51,6 +51,7 @@ pub fn ler_2d(caminho: &Path) -> Result<(Desenho, Formato), ErroConv> {
     let d = match formato {
         Formato::Dxf => fenkra_dxf::ler(&bytes).map_err(ErroConv::Leitura)?,
         Formato::Svg => crate::plano::ler_svg(&bytes)?,
+        Formato::Dwg => fenkra_dxf::ler(&crate::dwg::para_dxf(caminho)?).map_err(ErroConv::Leitura)?,
         outro => return Err(ErroConv::Formato(format!("{} não é desenho 2D: use Importar para trazer a peça", outro.nome()))),
     };
     Ok((d, formato))
