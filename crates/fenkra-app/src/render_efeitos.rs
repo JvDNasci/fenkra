@@ -184,9 +184,10 @@ pub struct UniformeEfeitos {
     pub prof: [f32; 4],
 }
 
-/// Monta o uniforme. Sem caixa envolvente não há sombra (não há onde pôr a luz).
-pub fn uniforme(a: Ativos, cam: &Camera, bounds: Option<(Vec3, Vec3)>) -> UniformeEfeitos {
-    let dir = direcao_da_luz(cam);
+/// Monta o uniforme. Sem caixa envolvente não há sombra (não há onde pôr a luz). `luz_fixa`: a luz
+/// principal da cena (B182) está parada no mundo, e a sombra vem dessa direção.
+pub fn uniforme(a: Ativos, cam: &Camera, bounds: Option<(Vec3, Vec3)>, luz_fixa: Option<Vec3>) -> UniformeEfeitos {
+    let dir = luz_fixa.and_then(|d| d.try_normalize()).unwrap_or_else(|| direcao_da_luz(cam));
     let (luz_vp, r) = bounds.map_or((Mat4::IDENTITY, 1.), |b| projecao_da_luz(dir, b));
     let sombra = a.sombra_px > 0 && bounds.is_some();
     let px = a.sombra_px.max(1) as f32;
@@ -201,6 +202,126 @@ pub fn uniforme(a: Ativos, cam: &Camera, bounds: Option<(Vec3, Vec3)>) -> Unifor
         efeitos: [if sombra { 1. } else { 0. }, a.ao_amostras as f32, if a.pbr { 1. } else { 0. }, a.toques.max(1) as f32],
         efeitos2: [1. / px, ao_raio, 0., texel_mundo * 1.5],
         prof: [perto, longe, orto, 0.],
+    }
+}
+
+// ---------------------------------------------------------------- B182: cena de apresentação
+
+/// O que a vista precisa da cena de apresentação, já traduzido para números (cabe no estilo da vista,
+/// que é copiável e comparado a cada quadro para saber se redesenha).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct CenaVista {
+    /// luz principal fixa no mundo (direção para a luz); `None` = presa à câmera
+    pub luz_fixa: Option<[f32; 3]>,
+    /// cor × intensidade da luz principal (1, 1, 1 = de fábrica; 0 = desligada)
+    pub luz_cor: [f32; 3],
+    /// força da luz de ambiente
+    pub ambiente: f32,
+    /// imagem panorâmica de fundo: giro (rad) e exposição. A imagem em si sobe pela viewport.
+    pub panoramica: Option<[f32; 2]>,
+    pub chao: bool,
+    /// 0 = sem reflexo
+    pub reflexo: f32,
+    pub sombra_no_chao: bool,
+}
+
+impl Default for CenaVista {
+    fn default() -> Self {
+        CenaVista { luz_fixa: None, luz_cor: [1.; 3], ambiente: 1., panoramica: None, chao: false, reflexo: 0., sombra_no_chao: false }
+    }
+}
+
+impl CenaVista {
+    /// Tradução da cena do documento. A cor da luz vale em espaço linear, como a soma da iluminação.
+    pub fn de(c: &fenkra_core::cena::Cena) -> CenaVista {
+        use fenkra_core::cena::{Fundo, TipoLuz};
+        let a = &c.ambiente;
+        let lin = |x: u8| (x as f32 / 255.).powf(2.2);
+        let (luz_fixa, luz_cor) = match c.luz_principal() {
+            Some(l) => ((l.tipo == TipoLuz::Direcional).then_some(l.direcao), l.cor.map(|x| lin(x) * l.intensidade.max(0.))),
+            None => (None, [0.; 3]),
+        };
+        CenaVista {
+            luz_fixa,
+            luz_cor,
+            ambiente: a.ambiente.max(0.),
+            panoramica: match &a.fundo {
+                Fundo::Panoramica { caminho, rotacao_graus, exposicao } if !caminho.trim().is_empty() => Some([rotacao_graus.to_radians(), exposicao.max(0.)]),
+                _ => None,
+            },
+            chao: a.chao,
+            reflexo: if a.chao && a.reflexo_ligado { a.reflexo.clamp(0., 1.) } else { 0. },
+            sombra_no_chao: a.chao && a.sombra_no_chao,
+        }
+    }
+}
+
+/// O que da cena vale neste quadro.
+#[derive(Clone, Copy, PartialEq, Debug, Default)]
+pub struct CenaQuadro {
+    pub chao: bool,
+    /// força do reflexo (0 = a peça espelhada não é desenhada)
+    pub reflexo: f32,
+    /// o chão lê o mapa de sombra
+    pub sombra_no_chao: bool,
+    /// as faces refletem a imagem panorâmica (senão, só a cor média dela)
+    pub reflexo_panoramica: bool,
+}
+
+/// Regras de custo da cena, como as do B139: chão, reflexo e sombra no chão só nos modos sombreados e
+/// no semi-renderizado; o modo leve tira tudo; o nível Rápido (também ao girar com "Simplificar ao
+/// girar") tira o reflexo, que redesenha a peça, e a leitura da imagem panorâmica nas faces. O chão em
+/// si são dois triângulos e fica. A sombra no chão só existe quando a sombra suave do quadro existe.
+/// Com a câmera abaixo do chão não há chão nem reflexo.
+pub fn cena_do_quadro(c: &CenaVista, e: Efeitos, a: Ativos, leve: bool, modo: DisplayMode, movendo: bool, abaixo_do_chao: bool) -> CenaQuadro {
+    let sombreado = matches!(modo, DisplayMode::SombreadoArestas | DisplayMode::Sombreado | DisplayMode::SemiRenderizado);
+    if leve || !sombreado {
+        return CenaQuadro::default();
+    }
+    let rapido = movendo || e.nivel == Nivel::Rapido;
+    let chao = c.chao && !abaixo_do_chao;
+    CenaQuadro {
+        chao,
+        reflexo: if chao && !rapido { c.reflexo } else { 0. },
+        sombra_no_chao: chao && c.sombra_no_chao && a.sombra_px > 0,
+        reflexo_panoramica: c.panoramica.is_some() && !rapido,
+    }
+}
+
+/// Plano do chão para a caixa envolvente: centro em XY, altura (um pouco abaixo da base, para não
+/// brigar com a face de baixo) e meio lado.
+pub fn plano_do_chao(b: (Vec3, Vec3)) -> [f32; 4] {
+    let diag = (b.1 - b.0).length().max(1.);
+    let c = (b.0 + b.1) * 0.5;
+    [c.x, c.y, b.0.z - diag * 5e-4, diag * 0.9]
+}
+
+/// Valores da cena que vão para o uniforme do shader.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct UniformeCena {
+    pub inv_vp: [[f32; 4]; 4],
+    /// x = imagem panorâmica, y = giro (rad), z = exposição, w = luz de ambiente
+    pub cena: [f32; 4],
+    /// cor média da imagem panorâmica (valores de tela)
+    pub cena_media: [f32; 4],
+    /// rgb = cor da luz principal; w = 1 usa a direção do uniforme da luz (luz fixa)
+    pub luz_cor: [f32; 4],
+    /// xy = centro, z = altura, w = meio lado
+    pub chao: [f32; 4],
+    /// x = chão ligado, y = reflexo, z = sombra no chão, w = faces refletem a imagem panorâmica
+    pub chao2: [f32; 4],
+}
+
+pub fn uniforme_cena(c: &CenaVista, q: CenaQuadro, vp: Mat4, bounds: Option<(Vec3, Vec3)>, media: [u8; 3]) -> UniformeCena {
+    let b = |x: bool| if x { 1. } else { 0. };
+    let [giro, exp] = c.panoramica.unwrap_or([0., 1.]);
+    UniformeCena {
+        inv_vp: vp.inverse().to_cols_array_2d(),
+        cena: [b(c.panoramica.is_some()), giro, exp, c.ambiente],
+        cena_media: [media[0] as f32 / 255., media[1] as f32 / 255., media[2] as f32 / 255., 1.],
+        luz_cor: [c.luz_cor[0], c.luz_cor[1], c.luz_cor[2], b(c.luz_fixa.is_some())],
+        chao: bounds.map_or([0., 0., 0., 1.], plano_do_chao),
+        chao2: [b(q.chao && bounds.is_some()), q.reflexo, b(q.sombra_no_chao), b(q.reflexo_panoramica)],
     }
 }
 
@@ -629,12 +750,68 @@ mod testes {
     #[test]
     fn uniforme_desligado_nao_muda_o_shader() {
         let cam = Camera::default();
-        let u = uniforme(Ativos::default(), &cam, Some((Vec3::ZERO, Vec3::splat(10.))));
+        let u = uniforme(Ativos::default(), &cam, Some((Vec3::ZERO, Vec3::splat(10.))), None);
         assert_eq!((u.efeitos[0], u.efeitos[1], u.efeitos[2]), (0., 0., 0.));
         // sem caixa não há sombra, mesmo pedida
         let a = Ativos { sombra_px: 1024, toques: 4, ao_amostras: 8, pbr: true };
-        assert_eq!(uniforme(a, &cam, None).efeitos[0], 0.);
-        assert_eq!(uniforme(a, &cam, Some((Vec3::ZERO, Vec3::ONE))).efeitos[0], 1.);
+        assert_eq!(uniforme(a, &cam, None, None).efeitos[0], 0.);
+        assert_eq!(uniforme(a, &cam, Some((Vec3::ZERO, Vec3::ONE)), None).efeitos[0], 1.);
+    }
+
+    /// B182: a luz fixa da cena dá a direção da sombra, e a sombra não gira com a vista.
+    #[test]
+    fn luz_fixa_da_cena_manda_na_sombra() {
+        let a = Ativos { sombra_px: 1024, toques: 4, ao_amostras: 0, pbr: true };
+        let b = Some((Vec3::ZERO, Vec3::splat(10.)));
+        let fixa = Vec3::new(-0.6, -0.3, 0.75);
+        let u1 = uniforme(a, &Camera::default(), b, Some(fixa));
+        let u2 = uniforme(a, &Camera { yaw: 2.0, ..Camera::default() }, b, Some(fixa));
+        assert_eq!(u1.luz_vp, u2.luz_vp);
+        let d = Vec3::from_slice(&u1.luz[..3]);
+        assert!((d - fixa.normalize()).length() < 1e-5);
+        // presa à câmera, girar a vista gira a luz
+        assert_ne!(uniforme(a, &Camera::default(), b, None).luz_vp, uniforme(a, &Camera { yaw: 2.0, ..Camera::default() }, b, None).luz_vp);
+    }
+
+    /// B182: cena de fábrica não muda o shader; cada efeito da cena tem interruptor e o nível Rápido
+    /// (ou girar com "Simplificar ao girar") tira o reflexo e a leitura da imagem nas faces.
+    #[test]
+    fn cena_respeita_interruptores_e_nivel_rapido() {
+        use fenkra_core::cena::{Cena, Fundo};
+        let fabrica = CenaVista::de(&Cena::default());
+        assert_eq!(fabrica, CenaVista::default());
+        let e = Efeitos::default();
+        let m = DisplayMode::SombreadoArestas;
+        let a = ativos(e, true, false, m, false, TUDO);
+        assert_eq!(cena_do_quadro(&fabrica, e, a, false, m, false, false), CenaQuadro::default());
+        let mut c = Cena::default();
+        c.ambiente.chao = true;
+        c.ambiente.reflexo_ligado = true;
+        c.ambiente.reflexo = 0.4;
+        c.ambiente.fundo = Fundo::Panoramica { caminho: "a.png".into(), rotacao_graus: 90., exposicao: 1. };
+        let cv = CenaVista::de(&c);
+        let tudo = cena_do_quadro(&cv, e, a, false, m, false, false);
+        assert!(tudo.chao && tudo.reflexo == 0.4 && tudo.sombra_no_chao && tudo.reflexo_panoramica);
+        // interruptores: sem reflexo ligado não há segunda passada da peça
+        let mut sem = c.clone();
+        sem.ambiente.reflexo_ligado = false;
+        sem.ambiente.sombra_no_chao = false;
+        let q = cena_do_quadro(&CenaVista::de(&sem), e, a, false, m, false, false);
+        assert!(q.chao && q.reflexo == 0. && !q.sombra_no_chao);
+        // Rápido: sem sombra (B139), sem reflexo, sem imagem nas faces; o chão fica
+        let er = Efeitos { nivel: Nivel::Rapido, ..e };
+        let ar = ativos(er, true, false, m, false, TUDO);
+        let r = cena_do_quadro(&cv, er, ar, false, m, false, false);
+        assert!(r.chao && r.reflexo == 0. && !r.sombra_no_chao && !r.reflexo_panoramica);
+        assert_eq!(cena_do_quadro(&cv, e, ativos(e, true, false, m, true, TUDO), false, m, true, false).reflexo, 0.);
+        // modo leve, modos de análise e câmera abaixo do chão
+        assert_eq!(cena_do_quadro(&cv, e, a, true, m, false, false), CenaQuadro::default());
+        assert!(!cena_do_quadro(&cv, e, a, false, DisplayMode::Zebra, false, false).chao);
+        let baixo = cena_do_quadro(&cv, e, a, false, m, false, true);
+        assert!(!baixo.chao && baixo.reflexo == 0.);
+        // o chão fica sob a peça, abaixo da base
+        let p = plano_do_chao((Vec3::new(-10., -10., 5.), Vec3::new(10., 30., 25.)));
+        assert!(p[0] == 0. && p[1] == 10. && p[2] < 5. && p[3] > 20.);
     }
 
     /// O shader base e o dos efeitos compilam (naga) e criam pipelines em cada placa disponível,

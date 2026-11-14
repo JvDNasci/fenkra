@@ -98,9 +98,16 @@ impl App {
         crate::compasso::painel_aberto(self) && self.session.is_none() && self.sketch.is_none() && !self.sketch_wait_plane && self.pmi_pending.is_none() && !comando_asm
     }
 
+    /// B182: o painel da cena está na coluna (na peça, sem comando aberto: um comando o encobre).
+    pub(super) fn cena_no_painel(&self) -> bool {
+        crate::cena_ui::aberto() && self.settings.bench != crate::settings::Bench::Desenho && !self.in_asm() && self.session.is_none() && self.sketch.is_none() && !self.sketch_wait_plane && self.pmi_pending.is_none() && !self.compasso_no_painel()
+    }
+
     /// Título do painel do comando aberto.
     fn titulo_do_comando(&self) -> String {
-        if self.compasso_no_painel() {
+        if self.cena_no_painel() {
+            tr("Cena").to_string()
+        } else if self.compasso_no_painel() {
             tr("Compasso").to_string()
         } else if self.sketch.is_some() {
             tr("Sketch").to_string()
@@ -125,7 +132,7 @@ impl App {
 
     /// Concluir, Cancelar e companhia: ficam à vista também com a árvore aberta pela seta.
     fn barras_do_comando(&mut self, ui: &mut egui::Ui) {
-        if self.compasso_no_painel() {
+        if self.compasso_no_painel() || self.cena_no_painel() {
             return;
         }
         self.conclude_bar(ui);
@@ -142,7 +149,9 @@ impl App {
             rolagem = rolagem.vertical_scroll_offset(px);
         }
         rolagem.show(ui, |ui| {
-            if self.compasso_no_painel() {
+            if self.cena_no_painel() {
+                crate::cena_ui::painel(self, ui)
+            } else if self.compasso_no_painel() {
                 crate::compasso::painel(self, ui)
             } else if self.settings.bench == crate::settings::Bench::Desenho {
                 crate::dwg_ui::panel(self, ui)

@@ -890,6 +890,7 @@ impl Settings {
             secao: None,
             mapa: None,
             efeitos: crate::render_efeitos::demo(self.graficos.efeitos),
+            cena: Default::default(),
         }
     }
 

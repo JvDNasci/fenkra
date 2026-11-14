@@ -3207,7 +3207,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
 
     /// O X do painel de comando: cancela o comando aberto, como o botão Cancelar.
     fn fechar_comando(&mut self) {
-        if self.compasso_no_painel() {
+        if self.cena_no_painel() {
+            crate::cena_ui::fechar();
+        } else if self.compasso_no_painel() {
             self.compasso.devolver();
         } else if self.session.is_some() {
             self.cancel_session();
@@ -4907,6 +4909,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let visivel = |k: &&&str| !hide(if **k == "capturas" { "pmi" } else { **k });
         for k in GRUPOS.iter().filter(visivel).filter(|k| cheio(k)) {
             self.secao_da_arvore(ui, k, &doc, sel, &mut new_sel, &mut actions);
+        }
+
+        // ---------- B182: cena de apresentação
+        if !hide("cena") && crate::cena_ui::no_da_arvore(&doc, ui) {
+            crate::cena_ui::abrir();
         }
 
         if !hide("vistas") {
@@ -7418,6 +7425,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     ctx.request_repaint_after(crate::render::PAUSA_NAVEGACAO + std::time::Duration::from_millis(20));
                 }
                 crate::desempenho::marca("vp_navegacao");
+                // B182: luz, fundo, chão e reflexo da cena de apresentação
+                if let Some(e) = crate::cena_ui::no_estilo(&self.open.doc, &mut style, vp, rs) {
+                    self.toasts.push((e, 0., true));
+                }
                 let tex = vp.render(rs, size, style);
                 crate::desempenho::marca("vp_render_cpu");
                 if let Some(m) = vp.aviso_efeitos.take() {
@@ -8878,6 +8889,9 @@ impl eframe::App for App {
             self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some()
         };
         let active = active || self.compasso_no_painel();
+        // B182: o painel da cena divide a coluna com a árvore, como as propriedades de um item
+        crate::cena_ui::preparar(self);
+        let active = active || self.cena_no_painel();
         self.coluna_esquerda(root, active, comando);
         // B434: recursos da bancada à direita, só ícones
         self.barra_direita(root);

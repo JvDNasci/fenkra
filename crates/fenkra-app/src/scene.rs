@@ -151,15 +151,23 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
         // antes, senão a pessoa perde a referência do que vai mudar
         let fid = o.fantasma.as_ref().map(|f| f.id);
         let camadas = r.bodies.iter().flat_map(|b| {
-            let antes = o.fantasma.as_ref().and_then(|f| f.antes_de(b)).map(|c| (c.collector, &c.mesh, c.face_owner.as_slice()));
+            let antes = o.fantasma.as_ref().and_then(|f| f.antes_de(b)).map(|c| (c.collector, &c.mesh, c.face_owner.as_slice(), None));
             // a prévia pinta sobre a malha de trabalho, e a de tela passaria por cima dela
             let tela = r.exibicao.get(&b.collector).filter(|_| o.fantasma.is_none());
-            antes.into_iter().chain(std::iter::once((b.collector, tela.map_or(&b.mesh, |m| &**m), b.face_owner.as_slice())))
+            antes.into_iter().chain(std::iter::once((b.collector, tela.map_or(&b.mesh, |m| &**m), b.face_owner.as_slice(), Some(b))))
         });
-        for (collector, m, face_owner) in camadas {
+        for (collector, m, face_owner, corpo) in camadas {
             let Some(col) = doc.collectors.iter().find(|c| c.id == collector) else { continue };
             let body_sel = hi(collector);
             let base = doc.appearance.unwrap_or(Appearance { color: col.color, finish: col.finish, texture: col.texture });
+            // B182: aparência de apresentação da cena: a do corpo vence a da peça; a da face (pela
+            // referência estável) vence a do comando
+            let cena = doc.cena.as_ref();
+            let base = cena.and_then(|c| c.aparencia_do_corpo(collector)).unwrap_or(base);
+            let das_faces: Vec<Option<Appearance>> = match (cena, corpo) {
+                (Some(c), Some(b)) if c.aparencias_de_face().next().is_some() => c.aparencias_das_faces(&(0..b.face_owner.len()).map(|f| b.face_key(f)).collect::<Vec<_>>()),
+                _ => vec![],
+            };
             if let Some(i) = copias.get(&collector) {
                 if shows(!col.visible, env) {
                     // subconjunto de várias aparências: uma cópia por aparência
@@ -192,7 +200,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                     crate::previa::crescer_com_face(m, fi, &mut |p| grow(&mut bounds, p));
                     continue;
                 }
-                let app = owner.and_then(|w| feat_app.get(&w).copied()).unwrap_or(base);
+                let app = das_faces.get(fi).copied().flatten().or_else(|| owner.and_then(|w| feat_app.get(&w).copied())).unwrap_or(base);
                 let (rough, metal, alpha) = app.finish.params();
                 // corpo na cor padrão do documento ganha a cor de peça do tema
                 let c = rgb(if app.color == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(app.color) } else { app.color });

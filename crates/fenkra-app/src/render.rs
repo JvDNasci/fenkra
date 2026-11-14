@@ -29,10 +29,30 @@ struct U {
     efeitos: vec4<f32>,    // x = sombra ligada, y = pontos da oclusão (0 = desligada), z = PBR, w = toques da sombra
     efeitos2: vec4<f32>,   // x = texel do mapa de sombra, y = raio da oclusão (mm), w = recuo pela normal (mm)
     prof: vec4<f32>,       // x = perto, y = longe, z = 1 ortográfica
+    // B182: cena de apresentação (ver `render_efeitos::UniformeCena`)
+    inv_vp: mat4x4<f32>,
+    cena: vec4<f32>,       // x = imagem panorâmica, y = giro (rad), z = exposição, w = luz de ambiente
+    cena_media: vec4<f32>, // cor média da imagem panorâmica
+    luz_cor: vec4<f32>,    // rgb = cor × intensidade da luz principal; w = 1 usa a direção de `luz`
+    chao: vec4<f32>,       // xy = centro, z = altura, w = meio lado
+    chao2: vec4<f32>,      // x = ligado, y = reflexo, z = sombra no chão, w = faces refletem a imagem
 };
 @group(0) @binding(0) var<uniform> u: U;
 @group(0) @binding(1) var tex: texture_2d_array<f32>;
 @group(0) @binding(2) var samp: sampler;
+@group(0) @binding(3) var pano: texture_2d<f32>;
+
+// B182: imagem panorâmica equirretangular, Z para cima, girada em torno de Z
+fn ceu(d: vec3<f32>) -> vec3<f32> {
+    let a = atan2(d.y, d.x) + u.cena.y;
+    let uv = vec2<f32>(fract(a / 6.2831853 + 0.5), acos(clamp(d.z, -1.0, 1.0)) / 3.14159265);
+    return textureSampleLevel(pano, samp, uv, 0.0).rgb * u.cena.z;
+}
+// céu do ambiente hemisférico: com imagem panorâmica, a cor média dela (em espaço linear)
+fn ceu_medio(padrao: vec3<f32>) -> vec3<f32> {
+    if (u.cena.x > 0.5) { return pow(max(u.cena_media.rgb, vec3<f32>(0.0)), vec3<f32>(2.2)) * 1.3; }
+    return padrao;
+}
 
 // textura triplanar: projeta a imagem nos três planos e mistura pela normal
 fn triplanar(layer: i32, p: vec3<f32>, n: vec3<f32>) -> vec3<f32> {
@@ -63,7 +83,7 @@ fn to_display(c: vec3<f32>) -> vec3<f32> { return pow(clamp(c, vec3<f32>(0.0), v
 // fraco atrás), ambiente hemisférico (céu/chão, Z para cima) e brilho Blinn-Phong leve
 // luz principal: com a sombra ligada vem do uniforme, a mesma direção do mapa de sombra
 fn luz_principal(v: vec3<f32>, right: vec3<f32>, up: vec3<f32>) -> vec3<f32> {
-    if (u.efeitos.x > 0.5) { return normalize(u.luz.xyz); }
+    if (u.efeitos.x > 0.5 || u.luz_cor.w > 0.5) { return normalize(u.luz.xyz); }
     return normalize(v * 0.55 + up * 0.60 - right * 0.55);
 }
 
@@ -77,13 +97,13 @@ fn shade_realistic(base_s: vec3<f32>, n: vec3<f32>, v: vec3<f32>, rough: f32, me
     let fill = normalize(v * 0.70 + right * 0.70 - up * 0.10);
     let rim = normalize(-v * 0.80 + up * 0.50 + right * 0.30);
 
-    let sky = vec3<f32>(0.62, 0.68, 0.80);
-    let ground = vec3<f32>(0.20, 0.18, 0.16);
-    let amb = mix(ground, sky, n.z * 0.5 + 0.5) * 0.34 * ao;
+    let sky = ceu_medio(vec3<f32>(0.62, 0.68, 0.80));
+    let ground = select(vec3<f32>(0.20, 0.18, 0.16), sky * 0.45, u.cena.x > 0.5);
+    let amb = mix(ground, sky, n.z * 0.5 + 0.5) * 0.34 * ao * u.cena.w;
     let kd = max(dot(n, key), 0.0) * sh;
     let fd = max(dot(n, fill), 0.0) * mix(1.0, ao, 0.5);
     let diffc = base * (1.0 - metal * 0.75);
-    var c = diffc * (amb + vec3<f32>(1.0, 0.98, 0.94) * kd * 0.70 + vec3<f32>(0.80, 0.88, 1.0) * fd * 0.24);
+    var c = diffc * (amb + vec3<f32>(1.0, 0.98, 0.94) * u.luz_cor.rgb * kd * 0.70 + vec3<f32>(0.80, 0.88, 1.0) * fd * 0.24);
 
     // contraluz: só nas bordas voltadas para longe da câmera
     let edge = pow(1.0 - max(dot(n, v), 0.0), 3.0);
@@ -91,7 +111,7 @@ fn shade_realistic(base_s: vec3<f32>, n: vec3<f32>, v: vec3<f32>, rough: f32, me
 
     let shin = mix(110.0, 10.0, rough);
     let spec = pow(max(dot(n, normalize(key + v)), 0.0), shin) * (1.0 - rough * 0.8);
-    c = c + mix(vec3<f32>(1.0), base, metal) * spec * 0.30 * kd;
+    c = c + mix(vec3<f32>(1.0), base, metal) * u.luz_cor.rgb * spec * 0.30 * kd;
     c = c + base * metal * amb * 0.5;
     return to_display(c);
 }
@@ -135,13 +155,16 @@ fn shade_pbr(base_s: vec3<f32>, n: vec3<f32>, v: vec3<f32>, rough_in: f32, metal
     let k = (rough + 1.0) * (rough + 1.0) / 8.0;
     let f0 = mix(vec3<f32>(0.04), base, metal);
     let diffc = base * (1.0 - metal);
-    var c = ggx_direta(n, v, key, a2, k, f0, diffc) * vec3<f32>(1.0, 0.98, 0.94) * 0.85 * sh;
+    var c = ggx_direta(n, v, key, a2, k, f0, diffc) * vec3<f32>(1.0, 0.98, 0.94) * u.luz_cor.rgb * 0.85 * sh;
     c = c + ggx_direta(n, v, fill, a2, k, f0, diffc) * vec3<f32>(0.80, 0.88, 1.0) * 0.28 * mix(1.0, ao, 0.5);
-    let sky = vec3<f32>(0.62, 0.68, 0.80);
-    let ground = vec3<f32>(0.20, 0.18, 0.16);
-    c = c + diffc * mix(ground, sky, n.z * 0.5 + 0.5) * 0.36 * ao;
+    let sky = ceu_medio(vec3<f32>(0.62, 0.68, 0.80));
+    let ground = select(vec3<f32>(0.20, 0.18, 0.16), sky * 0.45, u.cena.x > 0.5);
+    c = c + diffc * mix(ground, sky, n.z * 0.5 + 0.5) * 0.36 * ao * u.cena.w;
     let rf = reflect(-v, n);
-    let env = mix(ground, sky, smoothstep(-0.3, 0.5, rf.z)) * mix(1.0, 0.45, rough);
+    var env = mix(ground, sky, smoothstep(-0.3, 0.5, rf.z)) * mix(1.0, 0.45, rough);
+    // B182: com a imagem panorâmica (fora do nível Rápido) o reflexo é a própria imagem, que tende à
+    // cor média conforme a rugosidade cresce
+    if (u.chao2.w > 0.5) { env = mix(pow(ceu(rf), vec3<f32>(2.2)), sky * 0.8, rough * rough); }
     c = c + brdf_ambiente(f0, rough, max(dot(n, v), 1e-3)) * env * 0.9 * ao;
     return to_display(c);
 }
@@ -177,15 +200,22 @@ fn cor_curvatura(k1: f32, k2: f32) -> vec3<f32> {
 }
 
 // ---------- fundo
-struct BOut { @builtin(position) clip: vec4<f32>, @location(0) y: f32 };
+struct BOut { @builtin(position) clip: vec4<f32>, @location(0) y: f32, @location(1) ndc: vec2<f32> };
 @vertex fn vs_bg(@builtin(vertex_index) i: u32) -> BOut {
     var p = array<vec2<f32>, 3>(vec2<f32>(-1.0, -1.0), vec2<f32>(3.0, -1.0), vec2<f32>(-1.0, 3.0));
     var o: BOut;
     o.clip = vec4<f32>(p[i], 0.0, 1.0);
     o.y = p[i].y * 0.5 + 0.5;
+    o.ndc = p[i];
     return o;
 }
 @fragment fn fs_bg(i: BOut) -> @location(0) vec4<f32> {
+    // B182: imagem panorâmica pela direção do raio de cada pixel
+    if (u.cena.x > 0.5) {
+        let a = u.inv_vp * vec4<f32>(i.ndc, 0.0, 1.0);
+        let b = u.inv_vp * vec4<f32>(i.ndc, 1.0, 1.0);
+        return vec4<f32>(clamp(ceu(normalize(b.xyz / b.w - a.xyz / a.w)), vec3<f32>(0.0), vec3<f32>(1.0)), 1.0);
+    }
     var c = u.bg_bottom.rgb;
     if (u.bg_bottom.w > 0.5) { c = mix(u.bg_bottom.rgb, u.bg_top.rgb, clamp(i.y, 0.0, 1.0)); }
     return vec4<f32>(c, 1.0);
@@ -207,6 +237,22 @@ struct MOut {
     // derivadas antes de qualquer desvio dependente do pixel (exigência de uniformidade do WGSL)
     let g = cross(dpdx(i.wp), dpdy(i.wp));
     if (cortado(i.wp)) { discard; }
+    return cor_da_face(i, g, true);
+}
+
+// B182: reflexo da peça no chão. A malha vem espelhada pelo plano do chão; longe do centro e fundo
+// abaixo dele o reflexo some na cor do chão. A cor sai sem sombra nem oclusão: o ponto espelhado não
+// existe na cena, e os mapas de sombra e de profundidade não o conhecem.
+@fragment fn fs_espelho(i: MOut) -> @location(0) vec4<f32> {
+    let g = cross(dpdx(i.wp), dpdy(i.wp));
+    let c = cor_da_face(i, g, false);
+    let r = length(i.wp.xy - u.chao.xy) / max(u.chao.w, 1e-3);
+    let fundo = (u.chao.z - i.wp.z) / max(u.chao.w * 0.5, 1e-3);
+    let some = (1.0 - smoothstep(0.35, 0.8, r)) * (1.0 - smoothstep(0.0, 1.0, fundo));
+    return vec4<f32>(mix(cor_do_chao(), c.rgb, some), 1.0);
+}
+
+fn cor_da_face(i: MOut, g: vec3<f32>, efeitos: bool) -> vec4<f32> {
     let mode = u.params.x;
     let v = normalize(u.eye.xyz - i.wp);
     var n = normalize(i.n);
@@ -230,7 +276,7 @@ struct MOut {
     // B139: sombra e oclusão só nos sombreados (0, 1) e no semi-renderizado (5)
     var sh = 1.0;
     var ao = 1.0;
-    if (mode < 1.5 || (mode > 4.5 && mode < 5.5)) {
+    if (efeitos && (mode < 1.5 || (mode > 4.5 && mode < 5.5))) {
         sh = sombra_em(i.wp, n);
         ao = oclusao_em(i.wp, n);
     }
@@ -290,10 +336,10 @@ struct MOut {
         // semi-renderizado: céu/chão + luz principal + reflexo de ambiente + Fresnel
         let sky = vec3<f32>(0.80, 0.85, 0.95);
         let ground = vec3<f32>(0.22, 0.20, 0.18);
-        let amb = mix(ground, sky, n.z * 0.5 + 0.5) * ao;
+        let amb = mix(ground, sky, n.z * 0.5 + 0.5) * ao * u.cena.w;
         var l = normalize(vec3<f32>(0.45, -0.55, 0.85) + v * 0.6);
-        if (u.efeitos.x > 0.5) { l = normalize(u.luz.xyz); }
-        let diff = max(dot(n, l), 0.0) * sh;
+        if (u.efeitos.x > 0.5 || u.luz_cor.w > 0.5) { l = normalize(u.luz.xyz); }
+        let diff = max(dot(n, l), 0.0) * sh * lum(u.luz_cor.rgb);
         let h = normalize(l + v);
         let shin = mix(400.0, 6.0, rough);
         let spec = pow(max(dot(n, h), 0.0), shin) * (1.0 - rough * 0.85);
@@ -418,6 +464,48 @@ fn empacotar(z: f32) -> vec4<f32> {
 fn desempacotar(c: vec4<f32>) -> f32 {
     let v = round(c.xyz * 255.0);
     return (v.x * 65536.0 + v.y * 256.0 + v.z) / 16777215.0;
+}
+// ---------- B182: chão da cena (dois triângulos gerados no shader) e malha espelhada pelo plano dele
+fn espelhar(p: vec3<f32>) -> vec3<f32> { return vec3<f32>(p.x, p.y, 2.0 * u.chao.z - p.z); }
+@vertex fn vs_espelho(v: MIn) -> MOut {
+    var o: MOut;
+    let w = espelhar(v.pos);
+    o.clip = u.view_proj * vec4<f32>(w, 1.0);
+    o.n = v.nrm * vec3<f32>(1.0, 1.0, -1.0); o.col = v.col; o.wp = w; o.mat = v.mat;
+    return o;
+}
+@vertex fn vs_espelho_i(@location(0) pos: vec3<f32>, @location(1) nrm: vec3<f32>, i: IIn) -> MOut {
+    var o: MOut;
+    let w = espelhar(posto(i, vec4<f32>(pos, 1.0)));
+    o.clip = u.view_proj * vec4<f32>(w, 1.0);
+    o.n = posto(i, vec4<f32>(nrm, 0.0)) * vec3<f32>(1.0, 1.0, -1.0); o.col = i.col; o.wp = w; o.mat = i.mat;
+    return o;
+}
+struct COut { @builtin(position) clip: vec4<f32>, @location(0) wp: vec3<f32> };
+@vertex fn vs_chao(@builtin(vertex_index) k: u32) -> COut {
+    var q = array<vec2<f32>, 6>(vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, -1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, -1.0), vec2<f32>(1.0, 1.0), vec2<f32>(-1.0, 1.0));
+    var o: COut;
+    let p = vec3<f32>(u.chao.xy + q[k] * u.chao.w, u.chao.z);
+    o.clip = u.view_proj * vec4<f32>(p, 1.0);
+    o.wp = p;
+    return o;
+}
+// cor do chão: o fundo puxado para o lado oposto da luminância, para o chão não sumir nele e a peça
+// continuar distinta dos dois
+fn cor_do_chao() -> vec3<f32> {
+    let bgc = mix(u.bg_bottom.rgb, u.bg_top.rgb, select(0.0, 0.5, u.bg_bottom.w > 0.5));
+    if (u.cena.x > 0.5) { return u.cena_media.rgb * 0.8; }
+    return select(bgc + vec3<f32>(0.07), bgc * 0.84, lum(bgc) > 0.5);
+}
+@fragment fn fs_chao(i: COut) -> @location(0) vec4<f32> {
+    var sh = 1.0;
+    if (u.chao2.z > 0.5) { sh = sombra_em(i.wp, vec3<f32>(0.0, 0.0, 1.0)); }
+    let cor = cor_do_chao() * mix(0.55, 1.0, sh);
+    let r = length(i.wp.xy - u.chao.xy) / max(u.chao.w, 1e-3);
+    let borda = 1.0 - smoothstep(0.45, 1.0, r);
+    // a sombra fica opaca mesmo com reflexo: senão a peça refletida apagaria a própria sombra
+    let a = max(1.0 - u.chao2.y * 0.8, (1.0 - sh) * 0.6);
+    return vec4<f32>(cor, a * borda);
 }
 // a profundidade da câmera respeita o corte da prévia, senão a parte cortada fecharia os cantos
 @fragment fn fs_corte(i: MOut) -> @location(0) vec4<f32> {
@@ -599,6 +687,8 @@ pub struct ViewStyle {
     pub mapa: Option<MapaGpu>,
     /// sombra, oclusão e PBR pedidos (B139)
     pub efeitos: crate::render_efeitos::Efeitos,
+    /// cena de apresentação do documento (B182): luz principal, ambiente, chão e reflexo
+    pub cena: crate::render_efeitos::CenaVista,
 }
 
 /// O que o shader precisa para pintar o mapa de curvatura ou de inclinação por pixel.
@@ -680,6 +770,12 @@ struct Uniforms {
     efeitos: [f32; 4],
     efeitos2: [f32; 4],
     prof: [f32; 4],
+    inv_vp: [[f32; 4]; 4],
+    cena: [f32; 4],
+    cena_media: [f32; 4],
+    luz_cor: [f32; 4],
+    chao: [f32; 4],
+    chao2: [f32; 4],
 }
 
 /// Camadas do array de texturas (cada imagem é reduzida para TEX × TEX).
@@ -849,6 +945,10 @@ pub(crate) struct Pipes {
     xray_i: wgpu::RenderPipeline,
     line_i: wgpu::RenderPipeline,
     overlay_i: wgpu::RenderPipeline,
+    /// B182: peça espelhada pelo chão (comum e cópias) e o chão, translúcido, sem gravar profundidade
+    espelho: wgpu::RenderPipeline,
+    espelho_i: wgpu::RenderPipeline,
+    chao: wgpu::RenderPipeline,
 }
 
 type Buf = Option<(wgpu::Buffer, u32)>;
@@ -894,6 +994,11 @@ pub struct Viewport {
     /// aviso de queda dos efeitos, que a interface mostra uma vez
     pub aviso_efeitos: Option<String>,
     aviso_dado: bool,
+    /// B182: vistas que o grupo 0 junta (para refazê-lo ao trocar a imagem panorâmica)
+    tex_view: wgpu::TextureView,
+    sampler: wgpu::Sampler,
+    /// imagem panorâmica carregada: caminho e cor média (`None` = a de 1 × 1)
+    pub panoramica: Option<(String, [u8; 3])>,
 }
 
 /// Fonte do shader: o base (sombra e oclusão valem 1) ou o dos efeitos (B139).
@@ -923,8 +1028,78 @@ fn grupo0(dev: &wgpu::Device) -> wgpu::BindGroupLayout {
                 count: None,
             },
             wgpu::BindGroupLayoutEntry { binding: 2, visibility: wgpu::ShaderStages::FRAGMENT, ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering), count: None },
+            // B182: imagem panorâmica da cena (1 × 1 enquanto não houver)
+            wgpu::BindGroupLayoutEntry {
+                binding: 3,
+                visibility: wgpu::ShaderStages::FRAGMENT,
+                ty: wgpu::BindingType::Texture { sample_type: wgpu::TextureSampleType::Float { filterable: true }, view_dimension: wgpu::TextureViewDimension::D2, multisampled: false },
+                count: None,
+            },
         ],
     })
+}
+
+/// Grupo 0 montado: uniforme, texturas das aparências, amostrador e imagem panorâmica.
+fn grupo0_bind(dev: &wgpu::Device, bgl: &wgpu::BindGroupLayout, ubuf: &wgpu::Buffer, tex: &wgpu::TextureView, samp: &wgpu::Sampler, pano: &wgpu::TextureView) -> wgpu::BindGroup {
+    dev.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
+        layout: bgl,
+        entries: &[
+            wgpu::BindGroupEntry { binding: 0, resource: ubuf.as_entire_binding() },
+            wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(tex) },
+            wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(samp) },
+            wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(pano) },
+        ],
+    })
+}
+
+/// Lado maior da imagem panorâmica na placa: 2048 × 1024 bastam para fundo e reflexo e cabem no
+/// OpenGL ES 3 (2048 é o mínimo garantido).
+const PANO_LARGURA: u32 = 2048;
+
+/// Textura da imagem panorâmica (RGBA) e a vista dela.
+fn textura_pano(dev: &wgpu::Device, q: &wgpu::Queue, w: u32, h: u32, rgba: &[u8]) -> wgpu::TextureView {
+    let t = dev.create_texture(&wgpu::TextureDescriptor {
+        label: Some("panoramica"),
+        size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        // sem conversão sRGB: o shader lê valores de tela, como as cores do tema (ver `to_linear`)
+        format: wgpu::TextureFormat::Rgba8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    q.write_texture(
+        wgpu::TexelCopyTextureInfo { texture: &t, mip_level: 0, origin: wgpu::Origin3d::ZERO, aspect: wgpu::TextureAspect::All },
+        rgba,
+        wgpu::TexelCopyBufferLayout { offset: 0, bytes_per_row: Some(w * 4), rows_per_image: Some(h) },
+        wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+    );
+    t.create_view(&Default::default())
+}
+
+/// Lê a imagem panorâmica, reduz para no máximo `PANO_LARGURA` de largura e devolve RGBA, tamanho e
+/// a cor média (que vira o fundo para a regra de contraste e a cor do céu na luz de ambiente).
+pub fn ler_panoramica(caminho: &std::path::Path) -> Result<(Vec<u8>, [u32; 2], [u8; 3]), String> {
+    let img = image::open(caminho).map_err(|e| e.to_string())?.to_rgba8();
+    let (w, h) = img.dimensions();
+    let w2 = w.min(PANO_LARGURA).max(2);
+    let h2 = ((h as u64 * w2 as u64 / w.max(1) as u64) as u32).clamp(1, PANO_LARGURA / 2);
+    let img = if (w2, h2) != (w, h) { image::imageops::resize(&img, w2, h2, image::imageops::FilterType::Triangle) } else { img };
+    Ok((img.as_raw().clone(), [w2, h2], media_rgba(img.as_raw())))
+}
+
+/// Cor média de uma imagem RGBA.
+pub fn media_rgba(rgba: &[u8]) -> [u8; 3] {
+    let n = (rgba.len() / 4).max(1) as u64;
+    let mut s = [0u64; 3];
+    for p in rgba.chunks_exact(4) {
+        for k in 0..3 {
+            s[k] += p[k] as u64;
+        }
+    }
+    s.map(|x| (x / n) as u8)
 }
 
 /// Para o teste: monta o módulo base e o dos efeitos e os pipelines de 1 e 4 amostras num
@@ -959,6 +1134,7 @@ pub(crate) fn testar_pipelines(dev: &wgpu::Device, q: &wgpu::Queue, cap: crate::
         });
         let tv = tex.create_view(&wgpu::TextureViewDescriptor { dimension: Some(wgpu::TextureViewDimension::D2Array), ..Default::default() });
         let samp = dev.create_sampler(&Default::default());
+        let pano = textura_pano(dev, q, 2, 1, &[128; 8]);
         let bind = dev.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &bgl,
@@ -966,6 +1142,7 @@ pub(crate) fn testar_pipelines(dev: &wgpu::Device, q: &wgpu::Queue, cap: crate::
                 wgpu::BindGroupEntry { binding: 0, resource: ubuf.as_entire_binding() },
                 wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&tv) },
                 wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&samp) },
+                wgpu::BindGroupEntry { binding: 3, resource: wgpu::BindingResource::TextureView(&pano) },
             ],
         });
         let mut enc = dev.create_command_encoder(&Default::default());
@@ -1093,6 +1270,9 @@ pub(crate) fn make_pipes(dev: &wgpu::Device, module: &wgpu::ShaderModule, layout
         xray_i: copia("vs_mesh_i", "fs_mesh", T::TriangleList, C::Less, false, true),
         line_i: copia("vs_line_i", "fs_line", T::LineList, C::LessEqual, false, false),
         overlay_i: copia("vs_line_i", "fs_line", T::LineList, C::Always, false, false),
+        espelho: pipe("vs_espelho", "fs_espelho", &mesh_attrs, ms, T::TriangleList, C::Less, true),
+        espelho_i: copia("vs_espelho_i", "fs_espelho", T::TriangleList, C::Less, true, true),
+        chao: pipe("vs_chao", "fs_chao", &[], 0, T::TriangleList, C::LessEqual, false),
     }
 }
 
@@ -1255,15 +1435,8 @@ impl Viewport {
             min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
-        let bind = dev.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: None,
-            layout: &bgl,
-            entries: &[
-                wgpu::BindGroupEntry { binding: 0, resource: ubuf.as_entire_binding() },
-                wgpu::BindGroupEntry { binding: 1, resource: wgpu::BindingResource::TextureView(&tex_view) },
-                wgpu::BindGroupEntry { binding: 2, resource: wgpu::BindingResource::Sampler(&sampler) },
-            ],
-        });
+        let pano = textura_pano(dev, &rs.queue, 1, 1, &[128, 128, 128, 255]);
+        let bind = grupo0_bind(dev, &bgl, &ubuf, &tex_view, &sampler, &pano);
         let layout = dev.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor { label: None, bind_group_layouts: &[Some(&bgl)], ..Default::default() });
         Viewport {
             module,
@@ -1296,7 +1469,25 @@ impl Viewport {
             cap_efeitos: crate::render_efeitos::capacidade(rs.adapter.get_downlevel_capabilities().flags, rs.device.limits().max_texture_dimension_2d),
             aviso_efeitos: None,
             aviso_dado: false,
+            tex_view,
+            sampler,
+            panoramica: None,
         }
+    }
+
+    /// B182: troca a imagem panorâmica da cena (`None` volta à de 1 × 1). Devolve o erro de leitura,
+    /// e nesse caso a cena fica sem imagem (o fundo volta ao do tema).
+    pub fn set_panoramica(&mut self, rs: &egui_wgpu::RenderState, caminho: Option<&str>) -> Result<(), String> {
+        let dev = &rs.device;
+        let (pano, estado, r) = match caminho.map(|c| ler_panoramica(std::path::Path::new(c))) {
+            Some(Ok((rgba, [w, h], media))) => (textura_pano(dev, &rs.queue, w, h, &rgba), Some((caminho.unwrap().to_string(), media)), Ok(())),
+            Some(Err(e)) => (textura_pano(dev, &rs.queue, 1, 1, &[128, 128, 128, 255]), None, Err(e)),
+            None => (textura_pano(dev, &rs.queue, 1, 1, &[128, 128, 128, 255]), None, Ok(())),
+        };
+        self.bind = grupo0_bind(dev, &self.bgl, &self.ubuf, &self.tex_view, &self.sampler, &pano);
+        self.panoramica = estado;
+        self.last = None;
+        r
     }
 
     /// Carrega as imagens de textura (RGBA já em TEX × TEX) e o tamanho de repetição de cada uma.
@@ -1407,10 +1598,18 @@ impl Viewport {
         }
         // B139: o que vale neste quadro; sem recurso na placa o nível cai sozinho e avisa uma vez
         let ativos = self.preparar_efeitos(rs, &style, size, amostras);
-        let ue = crate::render_efeitos::uniforme(ativos, &self.camera, self.bounds);
+        let ue = crate::render_efeitos::uniforme(ativos, &self.camera, self.bounds, style.cena.luz_fixa.map(Vec3::from));
         let t = self.targets.as_ref().unwrap();
         let vp = self.camera.view_proj(size[0] as f32 / size[1] as f32);
         let e = self.camera.eye();
+        // B182: o que da cena vale neste quadro (chão, reflexo, sombra no chão), pelo nível e pelo modo
+        let mut cv = style.cena;
+        if self.panoramica.is_none() {
+            cv.panoramica = None;
+        }
+        let abaixo = self.bounds.is_some_and(|b| e.z < crate::render_efeitos::plano_do_chao(b)[2]);
+        let cq = crate::render_efeitos::cena_do_quadro(&cv, style.efeitos, ativos, style.leve, style.mode, style.simplificar && style.navegando, abaixo);
+        let uc = crate::render_efeitos::uniforme_cena(&cv, cq, vp, self.bounds, self.panoramica.as_ref().map_or([128; 3], |p| p.1));
         let mut bottom = lin(style.bg_bottom);
         bottom[3] = if style.gradient { 1. } else { 0. };
         let u = Uniforms {
@@ -1431,6 +1630,12 @@ impl Viewport {
             efeitos: ue.efeitos,
             efeitos2: ue.efeitos2,
             prof: ue.prof,
+            inv_vp: uc.inv_vp,
+            cena: uc.cena,
+            cena_media: uc.cena_media,
+            luz_cor: uc.luz_cor,
+            chao: uc.chao,
+            chao2: uc.chao2,
         };
         rs.queue.write_buffer(&self.ubuf, 0, bytemuck::bytes_of(&u));
 
@@ -1478,13 +1683,24 @@ impl Viewport {
                 _ => true,
             };
             // B139: as faces opacas usam o módulo dos efeitos (grupo 1) quando sombra ou oclusão valem
-            let (mesh, mesh_i) = match efeito {
+            let (mesh, mesh_i, chao) = match efeito {
                 Some((_, pe, b1)) if m != DisplayMode::RaioX => {
                     pass.set_bind_group(1, b1, &[]);
-                    (&pe.mesh, &pe.mesh_i)
+                    (&pe.mesh, &pe.mesh_i, &pe.chao)
                 }
-                _ => (&p.mesh, &p.mesh_i),
+                _ => (&p.mesh, &p.mesh_i, &p.chao),
             };
+            // B182: a peça espelhada vem antes, embaixo do chão; o chão translúcido passa por cima dela
+            if faces && cq.chao && cq.reflexo > 0. {
+                if let Some((vb, ib, n)) = &self.vb {
+                    pass.set_pipeline(&p.espelho);
+                    pass.set_vertex_buffer(0, vb.slice(..));
+                    pass.set_index_buffer(ib.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.draw_indexed(0..*n, 0, 0..1);
+                }
+                pass.set_pipeline(&p.espelho_i);
+                self.inst.faces(&mut pass);
+            }
             if let (true, Some((vb, ib, n))) = (faces, &self.vb) {
                 pass.set_pipeline(if m == DisplayMode::RaioX { &p.xray } else { mesh });
                 pass.set_vertex_buffer(0, vb.slice(..));
@@ -1494,6 +1710,11 @@ impl Viewport {
             if faces {
                 pass.set_pipeline(if m == DisplayMode::RaioX { &p.xray_i } else { mesh_i });
                 self.inst.faces(&mut pass);
+            }
+            // o chão depois das faces opacas: a peça o esconde onde está na frente dele
+            if uc.chao2[0] > 0.5 {
+                pass.set_pipeline(chao);
+                pass.draw(0..6, 0..1);
             }
             if let (false, Some((fb, n))) = (m == DisplayMode::LinhasOcultas, &self.fb) {
                 pass.set_pipeline(&p.xray);

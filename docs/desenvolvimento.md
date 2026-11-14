@@ -98,6 +98,7 @@ preferências do usuário.
 | `FENKRA_MEDIR_FIM=<n>` | fecha o programa depois de n quadros |
 | `FENKRA_MEDIR_GPU=1` | com `FENKRA_MEDIR_QUADROS`, espera a placa depois da viewport e grava `gpu_vp_ms` (tira o paralelismo entre CPU e placa, então o tempo de quadro medido sobe) |
 | `FENKRA_DEMO_EFEITOS=desligados\|rapido\|equilibrado\|alto\|sem_pbr` | (B139) força os efeitos da vista (sombra suave, oclusão, PBR) para capturas e medidas de antes e depois |
+| `FENKRA_DEMO_CENA=chao\|reflexo\|luz\|cores\|panoramica\|camera` | (B182) abre o painel da cena com uma cena de exemplo: chão, chão com reflexo, luz fixa colorida, aparências de corpo e face, imagem panorâmica gerada, ou câmera guardada e restaurada depois de girar a vista |
 | `FENKRA_DEMO_ABA=<n>` | abre o painel de comando já na aba n (a primeira é 0), para capturas sem mouse |
 | `FENKRA_DEMO_DOBRA=1` | tubo retangular dobrado em U na bancada Estrutural; com `FENKRA_EDITAR=Membro` abre o painel do nó de dobra |
 | `FENKRA_DEMO_FORMA=<modo>` | abre uma cúpula em edição na bancada Forma livre; `gaiola`, `liso`, `laco`, `tangencia`, `suave` (círculo de influência), `selecao` (laço selecionado) `vinculos` (nós presos e cota) e `perdido` (o pai apagado) já mudam o que aparece; `converter`, `g0` e `g2` abrem o relatório da conversão; `anel` abre a primitiva Anel |

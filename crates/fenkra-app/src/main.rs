@@ -20,6 +20,8 @@ mod editor;
 mod render;
 mod render_efeitos;
 mod textos_efeitos;
+mod cena_ui;
+mod textos_cena;
 mod demo_polimento;
 mod scene;
 mod entradas;
