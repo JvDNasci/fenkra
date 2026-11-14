@@ -86,6 +86,7 @@ pub mod dfm;
 pub mod dfm_geo;
 pub mod dfm_saida;
 pub mod plastico;
+pub mod plastico_rec;
 pub mod padrao;
 pub mod furo_norma;
 pub mod rosca_furo;
@@ -5886,6 +5887,7 @@ impl Ctx<'_> {
             FeatureKind::StructPlate(pl) => self.struct_plate(f, pl),
             FeatureKind::StructGusset(gs) => self.struct_gusset(f, gs),
             FeatureKind::StructWeld(w) => self.struct_weld(f, w),
+            FeatureKind::Plastico(p) => self.plastico_rec(f, p),
             FeatureKind::MoveBody(m) => {
                 let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para mover")?;
                 let rigid = match &m.xf {

@@ -451,6 +451,7 @@ pub fn icone_comando(k: &FeatureKind) -> &'static str {
         Mirror(_) => "espelho",
         Scale(_) => "escala",
         Stiffener(_) => "reforco",
+        Plastico(p) => crate::plastico_rec_ui::icone(p),
         Thread(_) => "rosca",
         Combine(_) => "bool_unir",
         SplitBody(_) => "hib_dividir",

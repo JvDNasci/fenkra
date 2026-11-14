@@ -187,6 +187,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("espessura", "Espessura", "Engrossar ou afinar faces (Thickness)", "Acrescenta ou remove material nas faces planas escolhidas.", Cmd(C::Thickness)),
             ]),
             One(it("rosca", "Rosca", "Rosca em eixo ou furo (Thread/Tap)", "Rosca cosmética ou modelada numa face cilíndrica, por norma.", Cmd(C::Thread))),
+            Family("pl_boss", crate::plastico_rec_ui::itens()),
         ],
         Group::Padroes => vec![
             Family("padrao", vec![

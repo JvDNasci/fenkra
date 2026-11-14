@@ -256,6 +256,8 @@ mod dfm_ui;
 mod sup_inclinacao;
 mod saida_faces;
 mod plastico_ui;
+mod plastico_rec_ui;
+mod demo_plastico;
 mod textos_plastico;
 mod textos_features;
 mod tabela_projeto_ui;

@@ -377,6 +377,9 @@ pub fn demo_preparar(doc: &mut Document) -> Option<DemoPrevia> {
     if let Some(d) = crate::demo_rosca::demo(&nome, doc) {
         return Some(d);
     }
+    if let Some(d) = crate::demo_plastico::demo(&nome, doc) {
+        return Some(d);
+    }
     let s = |x: &str| x.to_string();
     let sketch = |d: &mut Document, plane: PlaneRef, monta: &dyn Fn(&mut SketchData, &mut dyn FnMut() -> Id)| {
         let mut data = SketchData::default();

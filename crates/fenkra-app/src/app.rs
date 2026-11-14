@@ -2885,6 +2885,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 let sk = sk_or_unset;
                 Sel::Feature(d.add_feature(FeatureKind::Stiffener(Stiffener { sketch: sk, thickness: s("3"), depth: s("20"), reverse: false, to_body: false, side: 0 })))
             }
+            Cmd::Plastico(t) => {
+                let k = crate::plastico_rec_ui::criar(d, t, sk_or_unset);
+                Sel::Feature(d.add_feature(k))
+            }
             Cmd::StWeld => {
                 // as faces já selecionadas formam o conjunto 1; o próximo clique entra no conjunto 2
                 let mut w = StructWeld::novo("5");
@@ -7976,6 +7980,8 @@ pub enum Cmd {
     LoftCut,
     Prim(PrimKind),
     Stiffener,
+    /// B148: recurso de plástico (boss, snap-fit, grelha, lip)
+    Plastico(crate::plastico_rec_ui::Tipo),
     FilletVar,
     ChamferTwoDist,
     ChamferDistAngle,

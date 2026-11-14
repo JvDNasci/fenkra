@@ -71,6 +71,8 @@ pub fn ao_criar(doc: &mut Document, id: Id) {
         FeatureKind::Shell(s) => s.thickness = fo(Grandeza::Parede),
         FeatureKind::Stiffener(s) => s.thickness = fo(Grandeza::Nervura),
         FeatureKind::Draft(d) => d.angle = fo(Grandeza::Saida),
+        // B148: boss, snap-fit, grelha e lip
+        FeatureKind::Plastico(p) => p.campos_regra_mut().into_iter().for_each(|(g, s)| *s = fo(g)),
         _ => {}
     }
 }
