@@ -158,12 +158,27 @@ pub enum Volta {
     /// um nível: da peça para o conjunto dela, do subconjunto para a montagem mãe
     Pai,
     Topo,
+    /// até o produto deste nível da estrutura: 0 é o topo (B439, duplo clique na linha do produto)
+    Nivel(usize),
+}
+
+impl Volta {
+    /// Nível em que a volta para; `atual` é o nível ativo agora.
+    pub fn alvo(self, atual: usize) -> usize {
+        match self {
+            Volta::Pai => atual.saturating_sub(1),
+            Volta::Topo => 0,
+            Volta::Nivel(n) => n.min(atual),
+        }
+    }
 }
 
 /// Que peça a janela de peça nova cria.
 #[derive(Clone, PartialEq)]
 enum TipoPecaNova {
     Comum,
+    /// produto novo: subconjunto vazio que abre como a montagem ativa (B439)
+    Produto,
     Esqueleto,
     /// a partir do esqueleto: publicações oferecidas e as marcadas
     DoEsqueleto(Vec<(String, bool)>),
@@ -243,6 +258,9 @@ pub struct AsmState {
     pub editing_part: Option<(Id, PathBuf)>,
     /// montagens de cima, do topo até a mãe desta (subconjunto ativado no lugar)
     pub pais: Vec<AsmState>,
+    /// este produto acabou de nascer vazio no contexto, com este componente na mãe: se a volta o
+    /// achar ainda vazio, ele some com o arquivo, como a peça nova que não recebeu nada (B439)
+    produto_novo: Option<Id>,
     /// o conjunto em volta do que está ativo, no sistema dele
     pub vista_contexto: Option<RecomputeResult>,
     /// a composição ainda corre: o contexto da peça ativa fica pronto quando ela chegar
@@ -342,7 +360,7 @@ pub struct AsmState {
     /// ação do menu do botão direito da viewport (aplicada no próximo quadro)
     pub ctx_act: Option<AsmCtx>,
     /// subconjuntos lidos para a árvore (caminho → linhas)
-    sub_rows: std::collections::HashMap<PathBuf, Vec<(usize, String, bool)>>,
+    sub_rows: std::collections::HashMap<PathBuf, Vec<LinhaSub>>,
     /// juntas comandáveis de cada subconjunto, lidas uma vez por arquivo
     sub_juntas: std::collections::HashMap<PathBuf, Vec<fenkra_montagem::flexivel::JuntaFlex>>,
     /// recursos e posições na última sincronização dos furos com as peças
@@ -391,6 +409,7 @@ impl AsmState {
             stop_collision: false,
             editing_part: None,
             pais: vec![],
+            produto_novo: None,
             vista_contexto: None,
             contexto_aguardando: false,
             doc_de_fora: None,
@@ -600,9 +619,7 @@ impl AsmState {
             return false;
         }
         let pl = self.asm.node(id).map(|n| n.placement).unwrap_or_default();
-        let mut vistas: Vec<&RecomputeResult> = self.view.iter().collect();
-        vistas.extend(self.vista_contexto_acima.iter());
-        self.vista_contexto = Some(fenkra_montagem::contexto::vista_no_sistema(&vistas, id, &pl));
+        self.vista_contexto = Some(fenkra_montagem::contexto::vista_no_sistema(self.view.as_ref(), self.vista_contexto_acima.as_ref(), id, &pl));
         self.contexto_aguardando = false;
         true
     }
@@ -1251,9 +1268,7 @@ fn ativar_subconjunto(app: &mut App, id: Id, path: &str) {
     };
     st.refresh();
     let pl = st.asm.node(id).map(|n| n.placement).unwrap_or_default();
-    let mut vistas: Vec<&RecomputeResult> = st.view.iter().collect();
-    vistas.extend(st.vista_contexto.iter());
-    let ctx = fenkra_montagem::contexto::vista_no_sistema(&vistas, id, &pl);
+    let ctx = fenkra_montagem::contexto::vista_no_sistema(st.view.as_ref(), st.vista_contexto.as_ref(), id, &pl);
     let mut filho = AsmState::new(sub, Some(full));
     filho.vista_contexto = Some(ctx);
     let mut mae = app.asm.take().unwrap();
@@ -1275,7 +1290,13 @@ pub fn pedir_volta(app: &mut App, destino: Volta) {
     // comando ou sketch aberto também é trabalho em andamento: ele fala de um documento que vai sair
     let parte_suja = app.open.modified || app.session.is_some() || app.sketch.is_some();
     let Some(st) = app.asm.as_mut() else { return };
-    let sujo = if st.editing_part.is_some() { parte_suja } else { st.modified };
+    // já está no produto pedido (ou acima dele): nada a fechar
+    if destino.alvo(nivel_ativo(st)) >= nivel_ativo(st) {
+        return;
+    }
+    // a peça salva no contexto marca o subproduto, mas o arquivo dele pode estar igual: perguntar
+    // nesse caso era uma pergunta sem o que salvar no caminho de volta ao raiz (B439)
+    let sujo = if st.editing_part.is_some() { parte_suja } else { st.modified && !igual_ao_disco(st) };
     if sujo {
         st.volta = Some(destino);
     } else {
@@ -1283,9 +1304,17 @@ pub fn pedir_volta(app: &mut App, destino: Volta) {
     }
 }
 
+/// A montagem ativa é a mesma que está gravada? Na dúvida (sem arquivo, ilegível), não é.
+fn igual_ao_disco(st: &AsmState) -> bool {
+    let Some(f) = &st.file else { return false };
+    std::fs::read_to_string(f).ok().and_then(|t| Assembly::from_json(&t).ok()).is_some_and(|a| a.to_json() == st.asm.to_json())
+}
+
 /// Sai um nível (ou todos). `salvar`: grava antes; se a gravação falhar, fica onde está.
 pub(crate) fn concluir_volta(app: &mut App, destino: Volta, salvar: bool) {
     let Some(st) = app.asm.as_mut() else { return };
+    // o alvo se mede antes do primeiro passo: depois dele o nível já é outro
+    let alvo = destino.alvo(nivel_ativo(st));
     st.volta = None;
     st.contexto_pick = None;
     if st.editing_part.is_some() {
@@ -1301,8 +1330,9 @@ pub(crate) fn concluir_volta(app: &mut App, destino: Volta, salvar: bool) {
         }
         sair_do_subconjunto(app);
     }
-    if destino == Volta::Topo && app.asm.as_ref().is_some_and(|s| !s.pais.is_empty()) {
-        pedir_volta(app, Volta::Topo);
+    // cada nível que ainda falta passa pela mesma pergunta, com o seu próprio documento
+    if app.asm.as_ref().is_some_and(|s| nivel_ativo(s) > alvo) {
+        pedir_volta(app, Volta::Nivel(alvo));
     }
 }
 
@@ -1385,6 +1415,14 @@ fn sair_do_subconjunto(app: &mut App) {
         return;
     };
     mae.pais = std::mem::take(&mut filho.pais);
+    // o produto que nasceu e não recebeu nada some sem deixar arquivo
+    if let (Some(id), true) = (filho.produto_novo, filho.asm.nodes.is_empty()) {
+        if let Some(f) = &filho.file {
+            let _ = std::fs::remove_file(f);
+        }
+        mae.asm.delete(id);
+        mae.sel = None;
+    }
     mae.cache = PartCache::default();
     mae.solve();
     app.asm = Some(mae);
@@ -1512,12 +1550,13 @@ fn rotulo_copias(nodes: &[Node], inst: &std::collections::HashMap<String, usize>
 
 struct TreeInfo {
     feats: std::collections::HashMap<Id, PartOutline>,
-    subs: std::collections::HashMap<Id, Vec<(usize, String, bool)>>,
+    subs: std::collections::HashMap<Id, Vec<LinhaSub>>,
     inst: std::collections::HashMap<String, usize>,
 }
 
-/// Componentes de um subconjunto (e dos subconjuntos dentro dele), com a profundidade.
-fn sub_listing(full: &std::path::Path, depth: usize) -> Vec<(usize, String, bool)> {
+/// Componentes de dentro do subconjunto, em profundidade: nível, nome, se é subconjunto e o caminho
+/// de ids do subconjunto até ele (é por ele que os 2 cliques ativam o componente, B439).
+fn sub_listing(full: &std::path::Path, depth: usize) -> Vec<LinhaSub> {
     let mut out = vec![];
     if depth > 6 {
         return out;
@@ -1526,13 +1565,19 @@ fn sub_listing(full: &std::path::Path, depth: usize) -> Vec<(usize, String, bool
     let dir = full.parent().map(|p| p.to_path_buf());
     for n in a.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)) {
         let sub = matches!(n.kind, NodeKind::SubAssembly { .. });
-        out.push((depth, n.name.clone(), sub));
+        out.push((depth, n.name.clone(), sub, vec![n.id]));
         if let NodeKind::SubAssembly { path } = &n.kind {
-            out.extend(sub_listing(&full_path(dir.as_deref(), path), depth + 1));
+            out.extend(sub_listing(&full_path(dir.as_deref(), path), depth + 1).into_iter().map(|(d, nome, s, mut c)| {
+                c.insert(0, n.id);
+                (d, nome, s, c)
+            }));
         }
     }
     out
 }
+
+/// Linha de um componente de dentro do subconjunto na árvore.
+type LinhaSub = (usize, String, bool, Vec<Id>);
 
 pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     let Some(st) = app.asm.as_mut() else {
@@ -1556,6 +1601,8 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     let mut new_sel = None;
     let mut hover = None;
     let title = format!("{}{}", st.asm.name, if st.modified { " •" } else { "" });
+    // B439: com um subproduto ativo, os produtos de cima ficam acima dele e voltam com 2 cliques
+    crate::asm_estrutura::acima_do_subproduto(st, ui);
     let tr_resp = ui
         .horizontal(|ui| {
             ui.add(egui::Image::new(crate::icons::get("asm_nova")).fit_to_exact_size(egui::vec2(18., 18.)));
@@ -1912,12 +1959,20 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         }
                     }
                 }
-                for (d, name, sub) in info.subs.get(&n.id).map(|v| v.as_slice()).unwrap_or(&[]) {
-                    ui.horizontal(|ui| {
-                        ui.add_space((depth + 2 + d) as f32 * 14.);
-                        ui.add(egui::Image::new(crate::icons::get(if *sub { "asm_subconjunto" } else { "nova_peca" })).fit_to_exact_size(egui::vec2(14., 14.)));
-                        ui.label(RichText::new(name).small());
-                    });
+                for (d, name, sub, caminho) in info.subs.get(&n.id).map(|v| v.as_slice()).unwrap_or(&[]) {
+                    let r = ui
+                        .horizontal(|ui| {
+                            ui.add_space((depth + 2 + d) as f32 * 14.);
+                            ui.add(egui::Image::new(crate::icons::get(if *sub { "asm_subconjunto" } else { "nova_peca" })).fit_to_exact_size(egui::vec2(14., 14.)));
+                            ui.selectable_label(false, RichText::new(name).small())
+                        })
+                        .inner
+                        .on_hover_text(tr("2 cliques: ativa o componente dentro do subconjunto"));
+                    // B439: a mesma regra das peças de fora; o caminho começa pelo próprio subconjunto
+                    if r.double_clicked() {
+                        let c: Vec<Id> = std::iter::once(n.id).chain(caminho.iter().copied()).collect();
+                        ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("asm_sub_ativar"), c));
+                    }
                 }
             }
             if group_open {
@@ -1930,6 +1985,12 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
         crate::asm_conjunto::linha_na_arvore(ui, st, c, &mut act, &mut new_sel);
     }
     crate::tree_ui::filhos(ui, |ui| rows(ui, st, &info, None, 0, &mut new_sel, &mut act, &mut hover));
+    // 2 cliques num componente de dentro de um subconjunto: ativa o caminho até ele (B439)
+    if let Some(c) = ui.ctx().data(|m| m.get_temp::<Vec<Id>>(egui::Id::unique("asm_sub_ativar"))) {
+        ui.ctx().data_mut(|m| m.remove::<Vec<Id>>(egui::Id::unique("asm_sub_ativar")));
+        crate::asm_estrutura::ativar_caminho(app, &c);
+        return;
+    }
     // 2 cliques num recurso da peça: abre a peça e o recurso
     if let Some((comp, fid)) = ui.ctx().data(|m| m.get_temp::<(Id, Id)>(egui::Id::unique("asm_recurso_editar"))) {
         ui.ctx().data_mut(|m| m.remove::<(Id, Id)>(egui::Id::unique("asm_recurso_editar")));
@@ -3835,7 +3896,16 @@ pub fn contexto_window(app: &mut App, ctx: &egui::Context) {
     let Some(st) = app.asm.as_mut() else { return };
     let Some(mut nova) = st.nova_peca.take() else { return };
     let (mut criar, mut fechar) = (false, false);
-    egui::Window::new(tr("Peça nova no contexto")).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, [0., 0.]).show(ctx, |ui| {
+    let produto = nova.tipo == TipoPecaNova::Produto;
+    let titulo = if produto { tr("Produto novo no contexto") } else { tr("Peça nova no contexto") };
+    egui::Window::new(titulo).id(egui::Id::unique("asm_nova_peca")).collapsible(false).resizable(false).anchor(egui::Align2::CENTER_CENTER, [0., 0.]).show(ctx, |ui| {
+        // B439: a mesma janela cria a peça ou o produto (subconjunto) novo
+        if matches!(nova.tipo, TipoPecaNova::Comum | TipoPecaNova::Produto) {
+            ui.horizontal(|ui| {
+                ui.radio_value(&mut nova.tipo, TipoPecaNova::Comum, tr("Peça")).on_hover_text(tr("Arquivo de peça (.fkp) que abre na Modelagem Sólida"));
+                ui.radio_value(&mut nova.tipo, TipoPecaNova::Produto, tr("Produto")).on_hover_text(tr("Subconjunto vazio (.fka) que vira a montagem ativa para receber peças"));
+            });
+        }
         ui.horizontal(|ui| {
             ui.label(tr("Nome"));
             ui.text_edit_singleline(&mut nova.nome).on_hover_text(tr("Vira o nome do arquivo e do componente"));
@@ -3855,7 +3925,8 @@ pub fn contexto_window(app: &mut App, ctx: &egui::Context) {
                 ui.checkbox(marcada, n.as_str());
             }
         }
-        ui.label(RichText::new(tr("O arquivo só é gravado no Salvar da montagem: cancelar não deixa nada para trás.")).weak().small());
+        let nota = if produto { tr("O produto nasce vazio e abre como a montagem ativa; se voltar sem nada dentro, ele some com o arquivo.") } else { tr("O arquivo só é gravado no Salvar da montagem: cancelar não deixa nada para trás.") };
+        ui.label(RichText::new(nota).weak().small());
         if let Some(m) = &nova.msg {
             ui.label(RichText::new(tr(m)).color(crate::theme::st_err()));
         }
@@ -3871,7 +3942,20 @@ pub fn contexto_window(app: &mut App, ctx: &egui::Context) {
         st.nova_peca = Some(nova);
         return;
     }
-    match fenkra_montagem::contexto::arquivo_novo(std::path::Path::new(nova.pasta.trim()), &nova.nome) {
+    criar_componente_novo(app, nova);
+}
+
+/// Produto novo no contexto, como o Criar da janela com Produto marcado (B439).
+pub(crate) fn criar_produto_novo(app: &mut App, nome: &str, pasta: &std::path::Path) {
+    criar_componente_novo(app, NovaPecaUi { nome: nome.into(), pasta: pasta.to_string_lossy().to_string(), msg: None, tipo: TipoPecaNova::Produto });
+}
+
+/// Cria o que a janela pediu e o ativa; se não deu, a janela volta com o motivo.
+fn criar_componente_novo(app: &mut App, mut nova: NovaPecaUi) {
+    let Some(st) = app.asm.as_mut() else { return };
+    let pasta = std::path::Path::new(nova.pasta.trim());
+    let arquivo = if nova.tipo == TipoPecaNova::Produto { fenkra_montagem::contexto::produto_novo(pasta, &nova.nome) } else { fenkra_montagem::contexto::arquivo_novo(pasta, &nova.nome) };
+    match arquivo {
         Ok(f) => {
             let nome = nova.nome.trim().to_string();
             st.push_undo();
@@ -3885,6 +3969,10 @@ pub fn contexto_window(app: &mut App, ctx: &egui::Context) {
                         st.asm.node_mut(id).unwrap().fixed = true;
                     }
                     Ok(id)
+                }
+                TipoPecaNova::Produto => {
+                    // o subconjunto se lê do disco ao ativar e ao compor: o arquivo vazio nasce já
+                    fenkra_project::seguro::gravar_atomico(&f, Assembly::new(&nome).to_json().as_bytes()).map_err(|e| e.to_string()).map(|()| st.asm.add_component(&nome, NodeKind::SubAssembly { path }, Placement::default(), None))
                 }
                 TipoPecaNova::Esqueleto => geometria::criar_esqueleto(&mut st.asm, &nome, &f, &path, &mut st.cache),
                 TipoPecaNova::DoEsqueleto(pubs) => {
@@ -3904,7 +3992,13 @@ pub fn contexto_window(app: &mut App, ctx: &egui::Context) {
             st.sel = Some(id);
             st.dirty = true;
             st.modified = true;
+            let produto = nova.tipo == TipoPecaNova::Produto;
             edit_part(app, id);
+            if produto {
+                if let Some(filho) = app.asm.as_mut().filter(|s| !s.pais.is_empty()) {
+                    filho.produto_novo = Some(id);
+                }
+            }
         }
         Err(e) => {
             nova.msg = Some(e);

@@ -58,6 +58,8 @@ mod chapa_manip_ui;
 mod gizmo;
 mod asm_ui;
 mod asm_abrir;
+mod asm_estrutura;
+mod textos_estrutura;
 mod textos_abrir;
 mod textos_validade;
 mod sentido_corte_ui;

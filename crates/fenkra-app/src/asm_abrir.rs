@@ -414,6 +414,143 @@ mod tests {
         b.de_volta_na_montagem();
     }
 
+    /// Topo com A, B e o subproduto Sub (com C, bloco de 10, em z = 80), já composto.
+    fn com_subproduto(nome: &str) -> (Bancada, Id, Id) {
+        let mut b = Bancada::nova(nome);
+        std::fs::write(b.arquivo("c.fkp"), bloco("C", 10.).to_json()).unwrap();
+        let mut sub = Assembly::new("Sub");
+        let c = sub.add_component("C", NodeKind::Part { path: "c.fkp".into() }, Placement::default(), None);
+        std::fs::write(b.arquivo("sub.fka"), sub.to_json()).unwrap();
+        let s = b.st().asm.add_component("Sub", NodeKind::SubAssembly { path: "sub.fka".into() }, Placement { origin: [0., 0., 80.], ..Default::default() }, None);
+        b.st().dirty = true;
+        b.assentar();
+        perto(b.volume(), 10000.);
+        (b, s, c)
+    }
+
+    /// Caixa do corpo do componente na vista da montagem ativa.
+    fn caixa(b: &mut Bancada, comp: Id) -> ([f32; 3], [f32; 3]) {
+        let i = b.st().view.as_ref().unwrap().bodies.iter().position(|c| c.collector == comp).unwrap();
+        b.st().caixas[i]
+    }
+
+    /// Como os 2 cliques na linha do produto: a volta entra no meio do quadro.
+    fn dois_cliques_no_produto(b: &mut Bancada, nivel: usize) {
+        b.st().volta_adiada = Some(Volta::Nivel(nivel));
+        b.quadro();
+    }
+
+    #[test]
+    fn subproduto_ativar_a_peca_editar_e_voltar_pelo_raiz_atualiza() {
+        // B439: a mesma regra no subproduto: ativa o Sub, ativa a peça dele, edita a cota, salva e
+        // volta direto ao raiz com 2 cliques nele
+        let (mut b, s, c) = com_subproduto("sub_raiz");
+        perto(caixa(&mut b, s).1[2] as f64, 90.);
+        b.abrir(s);
+        assert_eq!(b.st().pais.len(), 1, "o subproduto é a montagem ativa");
+        assert_eq!(b.app.settings.bench, Bench::Montagem, "subproduto fica na bancada Montagem");
+        assert_eq!(b.st().vista_contexto.as_ref().map(|v| v.bodies.len()), Some(2), "A e B em volta");
+        b.abrir(c);
+        assert_eq!(b.app.open.file, Some(b.arquivo("c.fkp")));
+        assert_eq!(b.app.settings.bench, Bench::Solidos, "as barras trocam para a bancada da peça");
+        assert_eq!(crate::asm_estrutura::produtos(b.st()), vec!["Conjunto".to_string(), "Sub".to_string()], "a árvore da peça mostra os produtos dela");
+        assert_eq!(b.st().vista_contexto.as_ref().map(|v| v.bodies.len()), Some(2), "o conjunto de cima segue em volta da peça");
+        b.editar();
+        b.app.save_pub();
+        assert!(!b.app.open.modified);
+        dois_cliques_no_produto(&mut b, 0);
+        assert!(b.st().volta.is_none(), "o subproduto não mudou no disco: nada a perguntar");
+        assert!(b.st().pais.is_empty(), "voltou ao raiz");
+        b.de_volta_na_montagem();
+        b.assentar();
+        assert!(b.st().errors.is_empty(), "{:?}", b.st().errors);
+        assert!(b.st().report.converged);
+        // C triplicou: 1000 + 8000 + 3000, e a caixa do Sub sobe de 90 para 110
+        perto(b.volume(), 12000.);
+        perto(caixa(&mut b, s).1[2] as f64, 110.);
+        perto(caixa(&mut b, s).0[2] as f64, 80.);
+        perto(fenkra_solidos::recompute(&b.no_disco("c.fkp")).bodies[0].mass.volume, 3000.);
+    }
+
+    #[test]
+    fn subproduto_voltar_um_nivel_por_vez_tambem_atualiza() {
+        let (mut b, s, c) = com_subproduto("sub_nivel");
+        b.abrir(s);
+        b.abrir(c);
+        b.editar();
+        b.app.save_pub();
+        // 2 cliques no Sub: fecha a peça e fica no subproduto, já com a peça nova
+        dois_cliques_no_produto(&mut b, 1);
+        assert!(b.st().editing_part.is_none() && b.st().pais.len() == 1);
+        assert_eq!(b.app.settings.bench, Bench::Montagem);
+        b.assentar();
+        perto(b.volume(), 3000.);
+        // o botão Voltar sobe mais um
+        crate::asm_ui::back_to_assembly(&mut b.app);
+        assert!(b.st().pais.is_empty() && b.st().volta.is_none());
+        b.assentar();
+        perto(b.volume(), 12000.);
+    }
+
+    #[test]
+    fn subproduto_com_mudanca_propria_pergunta_na_volta() {
+        let (mut b, s, _) = com_subproduto("sub_sujo");
+        b.abrir(s);
+        b.st().asm.nodes[0].placement.origin[0] = 5.;
+        b.st().modified = true;
+        dois_cliques_no_produto(&mut b, 0);
+        assert!(b.st().volta.is_some() && b.st().pais.len() == 1, "o que só existe na memória pede decisão");
+        concluir_volta(&mut b.app, Volta::Nivel(0), true);
+        assert!(b.st().pais.is_empty());
+        let gravado = Assembly::from_json(&std::fs::read_to_string(b.arquivo("sub.fka")).unwrap()).unwrap();
+        assert_eq!(gravado.nodes[0].placement.origin[0], 5.);
+    }
+
+    #[test]
+    fn peca_de_dentro_do_subproduto_ativa_pelo_caminho() {
+        // 2 cliques na linha de C, dentro do Sub, na árvore do raiz
+        let (mut b, s, c) = com_subproduto("sub_caminho");
+        crate::asm_estrutura::ativar_caminho(&mut b.app, &[s, c]);
+        b.assentar();
+        assert_eq!(b.st().pais.len(), 1);
+        assert_eq!(b.st().editing_part.as_ref().map(|p| p.0), Some(c));
+        assert_eq!(b.app.settings.bench, Bench::Solidos);
+        assert!(b.st().vista_contexto.is_some());
+        dois_cliques_no_produto(&mut b, 0);
+        assert!(b.st().pais.is_empty());
+        b.de_volta_na_montagem();
+    }
+
+    #[test]
+    fn produto_novo_abre_vazio_e_some_se_nada_entrar() {
+        let mut b = Bancada::nova("produto_novo");
+        let dir = b.dir.clone();
+        crate::asm_ui::criar_produto_novo(&mut b.app, "Caixa", &dir);
+        let f = b.arquivo("Caixa.fka");
+        assert!(f.exists(), "o subconjunto se lê do disco: o arquivo vazio nasce ao criar");
+        assert_eq!(b.st().pais.len(), 1, "o produto novo vira a montagem ativa");
+        assert_eq!(b.st().asm.name, "Caixa");
+        assert_eq!(b.app.settings.bench, Bench::Montagem);
+        dois_cliques_no_produto(&mut b, 0);
+        assert!(b.st().pais.is_empty());
+        assert!(!f.exists() && !b.st().asm.nodes.iter().any(|n| n.name == "Caixa"), "vazio, some com o arquivo");
+        // com uma peça dentro, fica: nasce a pergunta, salva e a montagem de cima a mostra
+        crate::asm_ui::criar_produto_novo(&mut b.app, "Caixa", &dir);
+        b.st().asm.add_component("C", NodeKind::Part { path: "a.fkp".into() }, Placement::default(), None);
+        b.st().modified = true;
+        b.st().dirty = true;
+        b.assentar();
+        perto(b.volume(), 1000.);
+        dois_cliques_no_produto(&mut b, 0);
+        assert!(b.st().volta.is_some());
+        concluir_volta(&mut b.app, Volta::Nivel(0), true);
+        assert!(b.st().pais.is_empty() && f.exists());
+        b.assentar();
+        assert!(b.st().errors.is_empty(), "{:?}", b.st().errors);
+        perto(b.volume(), 10000.);
+        assert!(b.st().modified, "o componente novo deixa a montagem de cima por salvar");
+    }
+
     #[test]
     fn peca_sem_arquivo_guarda_na_memoria_e_nasce_ao_salvar() {
         let mut b = Bancada::nova("pendente");
