@@ -2009,9 +2009,15 @@ pub struct TubeBend {
     /// número de rasgos em V (modos de corte; B328)
     #[serde(default)]
     pub cuts: String,
-    /// folga de raiz da solda (B333)
+    /// folga de solda (raiz do cordão) entre as faces que se fecham: V comum, V múltiplo e canto
+    /// com gabarito (B333, B442). Vazio = a da regra; sem regra, zero
     #[serde(default)]
     pub root_gap: String,
+    /// folga de dobra dos rasgos em V (B442): quanto a abertura de cada rasgo cresce na parede
+    /// interna, com o tubo aberto, para as faces não se travarem ao fechar. Vazio = a da regra
+    /// (campo `clearance`); sem regra, zero
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub bend_gap: String,
     /// gomos do tubo redondo no corte simples (1 = uma esquadria)
     #[serde(default)]
     pub segments: String,
@@ -2043,7 +2049,7 @@ pub struct TubeRule {
     /// retorno elástico em graus (a máquina dobra além do ângulo pedido)
     #[serde(default)]
     pub springback: String,
-    /// folga em mm
+    /// folga de dobra dos rasgos em V, em mm (B442): alarga a abertura de cada rasgo
     #[serde(default)]
     pub clearance: String,
     /// alongamento admissível da fibra externa (fração: 0,25 = 25%)
@@ -2052,7 +2058,7 @@ pub struct TubeRule {
     /// fator K da placa externa nos modos em V
     #[serde(default)]
     pub plate_k: String,
-    /// folga de raiz da solda em mm
+    /// folga de solda (raiz do cordão) em mm
     #[serde(default)]
     pub root_gap: String,
     /// raio mínimo da linha de articulações do V múltiplo, em mm

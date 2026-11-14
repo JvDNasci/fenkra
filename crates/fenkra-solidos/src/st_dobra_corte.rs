@@ -296,9 +296,23 @@ impl Tiras {
     }
 }
 
-/// Contorno fechado de um rasgo em V: lateral 1, fenda da parede interna e lateral 2.
-fn hexagono(tiras: Tiras, xc: f64, meia_abertura: f64, t: f64) -> Vec<[f64; 2]> {
+/// Contorno fechado de um rasgo em V: lateral 1, fenda da parede interna e lateral 2. Com folga de
+/// solda (`fundo` > 0, B442) o vértice vira um fundo reto dessa largura e o contorno tem oito lados.
+fn hexagono(tiras: Tiras, xc: f64, meia_abertura: f64, fundo: f64, t: f64) -> Vec<[f64; 2]> {
     let (b, h) = (tiras.b, tiras.h);
+    if fundo > 1e-9 {
+        let f = fundo / 2.;
+        return vec![
+            [xc + f, tiras.lateral1(t)],
+            [xc + meia_abertura, b + h],
+            [xc + meia_abertura, 2. * b + h],
+            [xc + f, tiras.lateral2(t)],
+            [xc - f, tiras.lateral2(t)],
+            [xc - meia_abertura, 2. * b + h],
+            [xc - meia_abertura, b + h],
+            [xc - f, tiras.lateral1(t)],
+        ];
+    }
     vec![
         [xc, tiras.lateral1(t)],
         [xc + meia_abertura, b + h],
@@ -348,10 +362,10 @@ pub fn planificado(t: &TuboDobrado) -> Result<Desenho, String> {
         }
         match r.modo {
             BendMode::VComum | BendMode::CorteDobradeira => {
-                let (w, th) = (r.abertura_v.unwrap_or(0.), r.parede);
+                let (w, th, fundo) = (r.abertura_v.unwrap_or(0.), r.parede, r.fundo_v.unwrap_or(0.));
                 let meia = w / 2.;
                 for (j, xc) in posicoes_dos_v(r, db.inicio, db.fim).into_iter().enumerate() {
-                    d.poli(Camada::Corte, hexagono(tiras, xc, meia, th), true);
+                    d.poli(Camada::Corte, hexagono(tiras, xc, meia, fundo, th), true);
                     d.linha(Camada::Marcacao, [xc, 0.], [xc, tiras.b], true);
                     d.texto(Camada::Cota, [xc + 1., tiras.perimetro() + 1.], 2.5, format!("V{} x={:.2}", j + 1, xc));
                     ha_corte = true;
@@ -402,10 +416,44 @@ fn regua(d: &mut Desenho, x0: f64, x1: f64, y: f64, sentido: f64) {
     }
 }
 
+/// Cota horizontal de `xa` a `xb` na altura `y`, com tiques nas pontas.
+fn cota_h(d: &mut Desenho, xa: f64, xb: f64, y: f64) {
+    d.linha(Camada::Cota, [xa, y], [xb, y], false);
+    for x in [xa, xb] {
+        d.linha(Camada::Cota, [x, y - 1.], [x, y + 1.], false);
+    }
+}
+
+/// Cotas das folgas de dobra e de solda (B442) no primeiro V da faixa: o V geométrico tracejado
+/// (o que fecha sem folga), a abertura cortada e o fundo da folga de solda no vértice.
+fn cotas_das_folgas(d: &mut Desenho, r: &ResultadoDobra, xc: f64) {
+    let (h, t) = (r.h_plano, r.parede);
+    let (w, fundo) = (r.abertura_v.unwrap_or(0.), r.fundo_v.unwrap_or(0.));
+    let geo = w - r.folga_dobra - fundo;
+    d.poli(Camada::Marcacao, vec![[xc - geo / 2., h], [xc, t], [xc + geo / 2., h]], false);
+    if let Some(tr) = d.tracos.last_mut() {
+        tr.tracejado = true;
+    }
+    cota_h(d, xc - w / 2., xc + w / 2., h - 2.);
+    let mut partes = vec![format!("abertura {w:.2} = V {geo:.2}")];
+    if r.folga_dobra > 1e-9 {
+        partes.push(format!("folga de dobra {:.2}", r.folga_dobra));
+    }
+    if fundo > 1e-9 {
+        partes.push(format!("fundo {fundo:.2}"));
+    }
+    d.texto(Camada::Cota, [xc - w / 2., h - 5.5], 2.2, partes.join(" + "));
+    if fundo > 1e-9 {
+        cota_h(d, xc - fundo / 2., xc + fundo / 2., t + 1.5);
+        d.texto(Camada::Cota, [xc + w / 2. + 1.5, t + 0.8], 2.2, format!("folga de solda {:.2}: fundo do V {fundo:.2}", r.folga_raiz));
+    }
+}
+
 /// Faixa de marcação de uma dobra em V: a lateral do tubo com os triângulos em escala 1:1.
 fn faixa_v(db: &crate::st_dobra::DobraDoTubo, n_dobra: usize) -> Desenho {
     let r = &db.resultado;
     let (h, t, w, b) = (r.h_plano, r.parede, r.abertura_v.unwrap_or(0.), r.b_fora);
+    let fundo = r.fundo_v.unwrap_or(0.);
     let xs = posicoes_dos_v(r, db.inicio, db.fim);
     let x0 = (xs[0] - w / 2. - 12.).floor().max(0.);
     let x1 = (xs[xs.len() - 1] + w / 2. + 12.).ceil();
@@ -416,9 +464,13 @@ fn faixa_v(db: &crate::st_dobra::DobraDoTubo, n_dobra: usize) -> Desenho {
     d.retangulo(Camada::Contorno, x0, 0., x1, h);
     d.linha(Camada::Marcacao, [x0, t], [x1, t], true);
     for (j, &xc) in xs.iter().enumerate() {
-        d.poli(Camada::Corte, vec![[xc - w / 2., h], [xc, t], [xc + w / 2., h]], false);
+        let lados = if fundo > 1e-9 { vec![[xc - w / 2., h], [xc - fundo / 2., t], [xc + fundo / 2., t], [xc + w / 2., h]] } else { vec![[xc - w / 2., h], [xc, t], [xc + w / 2., h]] };
+        d.poli(Camada::Corte, lados, false);
         d.linha(Camada::Marcacao, [xc, 0.], [xc, h], true);
         d.texto(Camada::Cota, [xc - 6., h + 1.], 2.5, format!("V{} {:.2}", j + 1, xc));
+    }
+    if r.folga_dobra > 1e-9 || r.folga_raiz > 1e-9 {
+        cotas_das_folgas(&mut d, r, xs[0]);
     }
     regua(&mut d, x0, x1, 0., -1.);
     // a fenda correspondente na parede interna (largura w), conferência por sobreposição
@@ -459,6 +511,17 @@ fn faixa_canto(db: &crate::st_dobra::DobraDoTubo, n_dobra: usize) -> Option<Dese
     d.linha(Camada::Marcacao, [0., ro], fa, true);
     d.linha(Camada::Marcacao, [l, ro], [l - fa[0], fa[1]], true);
     d.texto(Camada::Cota, [l / 2. - 10., h - 4.], 2.5, format!("folga plana {:.2} mm", r.folga_plana.unwrap_or(0.)));
+    if r.folga_raiz > 1e-9 {
+        // cota da folga de solda (B442): do fim do arco à bissetriz sem folga, e/2 de cada lado
+        let dir = [a.meio.sin(), -a.meio.cos()];
+        let proj = (fa[0] - 0.) * dir[0] + (fa[1] - ro) * dir[1];
+        let pe = [dir[0] * proj, ro + dir[1] * proj];
+        d.linha(Camada::Cota, fa, pe, false);
+        d.linha(Camada::Cota, [l - fa[0], fa[1]], [l - pe[0], pe[1]], false);
+        d.linha(Camada::Marcacao, [0., ro], pe, true);
+        d.linha(Camada::Marcacao, [l, ro], [l - pe[0], pe[1]], true);
+        d.texto(Camada::Cota, [l / 2. - 10., h - 8.], 2.5, format!("folga de solda {:.2} mm: cada bissetriz recua {:.2}", r.folga_raiz, r.folga_raiz / 2.));
+    }
     regua(&mut d, 0., l, 0., -1.);
     d.texto(Camada::Cota, [0., -9.], 2.5, format!("Régua da placa: 0 a {:.2} mm", l));
     Some(d)
@@ -500,7 +563,7 @@ mod tests {
     use fenkra_core::SectionKind;
 
     fn entrada(modo: BendMode, raio: f64, rasgos: usize) -> EntradaDobra {
-        EntradaDobra { tipo: SectionKind::TuboQuadrado, dims: vec![30., 1.2], theta: 90., modo, raio, regra: None, k: None, retorno: None, folga_raiz: None, rasgos, gomos: 1, plano: 0 }
+        EntradaDobra { tipo: SectionKind::TuboQuadrado, dims: vec![30., 1.2], theta: 90., modo, raio, regra: None, k: None, retorno: None, folga_raiz: None, folga_dobra: None, rasgos, gomos: 1, plano: 0 }
     }
 
     fn tubo(e: &EntradaDobra, pernas: [f64; 2]) -> TuboDobrado {
@@ -641,6 +704,109 @@ mod tests {
         // dobradeira sem corte: não há o que desenrolar
         let t = tubo(&entrada(BendMode::Dobradeira, 60., 1), [200., 150.]);
         assert!(planificado(&t).is_err());
+    }
+
+    fn larguras_dos_rasgos(d: &Desenho) -> Vec<f64> {
+        d.tracos.iter().filter(|x| x.camada == Camada::Corte && x.fechado).map(|h| {
+            let (lo, hi) = h.pts.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p[0]), b.max(p[0])));
+            hi - lo
+        }).collect()
+    }
+
+    #[test]
+    fn folgas_zero_nao_mudam_nada() {
+        // B442: folga 0 informada no nó dá o mesmo planificado e o mesmo gabarito de antes
+        for (modo, raio, n) in [(BendMode::VComum, 1.8, 1), (BendMode::VComum, 45., 6), (BendMode::VComRaio, 30., 1)] {
+            let sem = entrada(modo, raio, n);
+            let mut zero = entrada(modo, raio, n);
+            zero.folga_dobra = Some(0.);
+            zero.folga_raiz = Some(0.);
+            let (rs, rz) = (calcular(&sem), calcular(&zero));
+            assert_eq!((rs.abertura_v, rs.lado_v, rs.folga_plana, rs.arco, rs.ajuste_corte), (rz.abertura_v, rz.lado_v, rz.folga_plana, rz.arco, rz.ajuste_corte));
+            let (ts, tz) = (tubo(&sem, [200., 150.]), tubo(&zero, [200., 150.]));
+            assert_eq!(planificado(&ts).unwrap(), planificado(&tz).unwrap(), "{modo:?} {n}");
+            assert_eq!(gabarito(&ts).unwrap(), gabarito(&tz).unwrap(), "{modo:?} {n}");
+            assert_eq!(crate::st_dobra_saida::svg(&gabarito(&ts).unwrap()), crate::st_dobra_saida::svg(&gabarito(&tz).unwrap()));
+        }
+    }
+
+    #[test]
+    fn folgas_alargam_cada_rasgo_no_valor_esperado() {
+        // V comum 30x30x1,2 a 90°: abertura 57,6; folga de dobra 1 soma 1; folga de solda 1 soma
+        // 1/cos(45°) = 1,414 e abre um fundo reto dessa largura no vértice
+        let mut e = entrada(BendMode::VComum, 1.8, 1);
+        e.folga_dobra = Some(1.);
+        e.folga_raiz = Some(1.);
+        let r = calcular(&e);
+        assert!(r.erros.is_empty(), "{:?}", r.erros);
+        let fundo = 1. / (PI / 4.).cos();
+        assert!((r.abertura_v.unwrap() - (57.6 + 1. + fundo)).abs() < 1e-9);
+        assert!((r.fundo_v.unwrap() - fundo).abs() < 1e-9);
+        let t = tubo(&e, [200., 150.]);
+        let d = planificado(&t).unwrap();
+        let w = larguras_dos_rasgos(&d);
+        assert_eq!(w.len(), 1);
+        assert!((w[0] - (57.6 + 1. + fundo)).abs() < 1e-9, "{w:?}");
+        let oct = d.tracos.iter().find(|x| x.camada == Camada::Corte).unwrap();
+        assert_eq!(oct.pts.len(), 8);
+        // o fundo do V na lateral 1 tem a largura da folga de solda
+        assert!((oct.pts[0][0] - oct.pts[7][0] - fundo).abs() < 1e-9);
+        // só a folga de dobra: o V segue em ponta (seis lados) e cresce 2 mm
+        let mut e2 = entrada(BendMode::VComum, 1.8, 1);
+        e2.folga_dobra = Some(2.);
+        let d2 = planificado(&tubo(&e2, [200., 150.])).unwrap();
+        assert!((larguras_dos_rasgos(&d2)[0] - 59.6).abs() < 1e-9);
+        assert_eq!(d2.tracos.iter().find(|x| x.camada == Camada::Corte).unwrap().pts.len(), 6);
+        // V múltiplo n = 6: cada rasgo cresce 0,5 + 0,3/cos(7,5°), o passo não muda
+        let base = planificado(&tubo(&entrada(BendMode::VComum, 45., 6), [200., 150.])).unwrap();
+        let mut em = entrada(BendMode::VComum, 45., 6);
+        em.folga_dobra = Some(0.5);
+        em.folga_raiz = Some(0.3);
+        let dm = planificado(&tubo(&em, [200., 150.])).unwrap();
+        let cresce = 0.5 + 0.3 / (7.5f64.to_radians()).cos();
+        for (a, b) in larguras_dos_rasgos(&base).iter().zip(larguras_dos_rasgos(&dm)) {
+            assert!((b - a - cresce).abs() < 1e-9, "{a} {b}");
+        }
+        assert_eq!(larguras_dos_rasgos(&dm).len(), 6);
+    }
+
+    #[test]
+    fn folgas_grandes_demais_no_v_multiplo_dao_erro() {
+        // passo 11,75 e abertura 7,58: folga de dobra de 5 encosta os rasgos
+        let mut e = entrada(BendMode::VComum, 45., 6);
+        e.folga_dobra = Some(5.);
+        let r = calcular(&e);
+        assert!(r.erros.iter().any(|x| x.contains("se encostam")), "{:?}", r.erros);
+        let mut e = entrada(BendMode::VComum, 1.8, 1);
+        e.folga_raiz = Some(-1.);
+        assert!(!calcular(&e).erros.is_empty());
+    }
+
+    #[test]
+    fn regua_mostra_a_cota_das_folgas() {
+        let mut e = entrada(BendMode::VComum, 1.8, 1);
+        e.folga_dobra = Some(1.);
+        e.folga_raiz = Some(1.);
+        let g = gabarito(&tubo(&e, [200., 150.])).unwrap();
+        assert_eq!(rotulos_se_sobrepoem(&g), None);
+        // o lado do V na régua: fundo reto no vértice (quatro pontos)
+        let lado = g.tracos.iter().find(|x| x.camada == Camada::Corte && !x.fechado).unwrap();
+        assert_eq!(lado.pts.len(), 4);
+        let svg = crate::st_dobra_saida::svg(&g);
+        assert!(svg.contains("folga de dobra 1.00"), "{svg}");
+        assert!(svg.contains("folga de solda 1.00: fundo do V 1.41"));
+        assert!(svg.contains("abertura 60.01 = V 57.60"));
+        // o V geométrico (sem folga) aparece tracejado na marcação
+        assert!(g.tracos.iter().any(|x| x.camada == Camada::Marcacao && x.tracejado && x.pts.len() == 3));
+        // canto com gabarito: a cota da folga de solda
+        let mut c = entrada(BendMode::VComRaio, 30., 1);
+        c.folga_raiz = Some(2.);
+        let g = gabarito(&tubo(&c, [200., 150.])).unwrap();
+        assert_eq!(rotulos_se_sobrepoem(&g), None);
+        assert!(crate::st_dobra_saida::svg(&g).contains("folga de solda 2.00 mm: cada bissetriz recua 1.00"));
+        // a perna da cota mede e/2
+        let cota = g.tracos.iter().filter(|x| x.camada == Camada::Cota && x.pts.len() == 2).find(|x| (dist(x.pts[0], x.pts[1]) - 1.).abs() < 1e-6);
+        assert!(cota.is_some());
     }
 
     #[test]

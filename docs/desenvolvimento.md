@@ -100,6 +100,7 @@ preferências do usuário.
 | `FENKRA_DEMO_DOBRA=1` | tubo retangular dobrado em U na bancada Estrutural; com `FENKRA_EDITAR=Membro` abre o painel do nó de dobra |
 | `FENKRA_DEMO_FORMA=<modo>` | abre uma cúpula em edição na bancada Forma livre; `gaiola`, `liso`, `laco`, `tangencia`, `suave` (círculo de influência), `selecao` (laço selecionado) `vinculos` (nós presos e cota) e `perdido` (o pai apagado) já mudam o que aparece; `converter`, `g0` e `g2` abrem o relatório da conversão; `anel` abre a primitiva Anel |
 | `FENKRA_DEMO_DOBRA=1` | tubo retangular dobrado em U na bancada Estrutural; com `FENKRA_EDITAR=Membro` abre o painel do nó de dobra. Com `canto`, `v` ou `multiplo` no lugar do 1, as duas dobras usam V com raio, V comum ou V múltiplo (tubo fechado no 3D) |
+| `FENKRA_DEMO_FOLGA=<dobra>,<solda>` | (B442) com `FENKRA_DEMO_DOBRA=v`, `multiplo` ou `canto`, preenche a folga de dobra e a folga de solda das duas dobras, em mm (por exemplo `2,1`) |
 | `FENKRA_DEMO_ASM=<nome>` | montagem de exemplo com: `mec` (mecanismo), `cmd` (restrição com fantasma), `junta` (junta automática), `simbolos` (cota e junta no modelo), `manip` (manipulador numa dobradiça), `duzentas` (200 restrições) |
 | `FENKRA_DEMO_MALHA=<modo>` | acrescenta um corpo de malha ondulado à peça e abre o comando: `importar`, `reparar` (calota aberta), `decimar`, `booleana` |
 | `FENKRA_DEMO_IMPRESSAO=1` | abre o preparo de impressão com a peça aberta; `FENKRA_DEMO_IMPRESSAO_ARQUIVO=<arquivo>` grava o 3MF sem perguntar |

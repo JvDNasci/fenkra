@@ -172,4 +172,16 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Salvo em", "Saved to"),
     ("Falha ao salvar:", "Could not save:"),
     ("dobra", "bend"),
+    // folgas de dobra e de solda (B442); "Folga de solda" já está em i18n.rs
+    ("Folga de dobra", "Bend clearance"),
+    ("Quanto cada rasgo em V abre a mais na parede interna, com o tubo aberto. O vértice fica no lugar: ao fechar sobra uma cunha e as faces não se travam. Vazio usa a folga da regra; sem regra, zero.", "How much wider each V notch opens at the inner wall, with the tube still flat. The apex stays put: when closed a small wedge is left and the faces do not jam. Empty uses the rule's clearance; without a rule, zero."),
+    ("Abertura entre as faces depois de fechar, para o cordão de solda entrar. No tubo aberto, cada lado do corte recua metade dela; no V o vértice vira um fundo reto. Vazio usa a folga de raiz da regra; sem regra, zero.", "Gap between the faces once closed, for the weld bead to go in. On the flat tube each side of the cut moves back by half of it; on the V the apex becomes a flat bottom. Empty uses the rule's root gap; without a rule, zero."),
+    ("Abertura do V na face e comprimento do seu lado, já com as folgas de dobra e de solda.", "V opening at the face and length of its side, including the bend and weld clearances."),
+    ("Fundo do V", "V bottom"),
+    ("Largura do rasgo no vértice, na face interna da placa: a folga de solda vista no tubo aberto (folga ÷ cos da metade do ângulo do V).", "Width of the notch at the apex, on the inner face of the plate: the weld gap seen on the flat tube (gap ÷ cos of half the V angle)."),
+    ("Quanto cada rasgo em V abre a mais na parede interna, em mm, para as faces não se travarem ao fechar.", "How much wider each V notch opens at the inner wall, in mm, so the faces do not jam when closing."),
+    ("Abertura entre as faces depois de fechar, para o cordão, em mm. Vale no V e no canto com gabarito.", "Gap between the faces once closed, for the bead, in mm. Applies to the V and to the template corner."),
+    ("folga de solda", "weld gap"),
+    ("folga de dobra", "bend clearance"),
+    ("informado no nó", "set at the node"),
 ];

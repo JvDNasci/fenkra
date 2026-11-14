@@ -102,11 +102,16 @@ impl Ctx<'_> {
                 let c = q1.p(x0, ro, 0.);
                 let esporao = self.esporao(&q1, th, (h, b), ro)?;
                 let banda = face_em(&q1, x0, linhas(&[[-b / 2., 0.], [b / 2., 0.], [b / 2., t], [-b / 2., t]]))?.revolve(c, q1.uz, no.theta, 0.).map_err(k)?;
-                Ok(NoTratado {
-                    antes: antes.boolean(&esporao, fenkra_kernel::Bool::Cut).map_err(k)?,
-                    depois: depois.boolean(&esporao, fenkra_kernel::Bool::Cut).map_err(k)?,
-                    extras: vec![banda],
-                })
+                let mut antes2 = antes.boolean(&esporao, fenkra_kernel::Bool::Cut).map_err(k)?;
+                let mut depois2 = depois.boolean(&esporao, fenkra_kernel::Bool::Cut).map_err(k)?;
+                // folgas (B442): o vértice fechado fica na face interna da dobradiça, sobre a bissetriz
+                let interno = geo3d::add(geo3d::mul(q1.ux, -hf.sin()), geo3d::mul(q1.uy, hf.cos()));
+                let vertice = geo3d::sub(c, geo3d::mul(interno, r.raio));
+                if let Some(vao) = self.vao_das_folgas(r, vertice, interno, no.eixo, (q1.p(0., t, 0.), q1.uy), (q2.p(0., t, 0.), q2.uy), hf)? {
+                    antes2 = antes2.boolean(&vao, fenkra_kernel::Bool::Cut).map_err(k)?;
+                    depois2 = depois2.boolean(&vao, fenkra_kernel::Bool::Cut).map_err(k)?;
+                }
+                Ok(NoTratado { antes: antes2, depois: depois2, extras: vec![banda] })
             }
             BendMode::VComum | BendMode::CorteDobradeira => {
                 let n = r.rasgos;
@@ -149,10 +154,59 @@ impl Ctx<'_> {
                         .map_err(k)?;
                     extras.push(peca);
                 }
-                Ok(NoTratado { antes: antes2, depois: depois2, extras })
+                // folgas (B442): um vão em cada junta, entre a peça j e a j + 1
+                let mut pecas = vec![antes2];
+                pecas.extend(extras);
+                pecas.push(depois2);
+                for j in 0..n {
+                    let interno = geo3d::rotate(n1, no.eixo, (j as f64 + 0.5) * phi);
+                    let (ya, yb) = (geo3d::rotate(n1, no.eixo, j as f64 * phi), geo3d::rotate(n1, no.eixo, (j + 1) as f64 * phi));
+                    if let Some(vao) = self.vao_das_folgas(r, a[j], interno, no.eixo, (a[j], ya), (a[j], yb), phi / 2.)? {
+                        for q in [j, j + 1] {
+                            pecas[q] = pecas[q].boolean(&vao, fenkra_kernel::Bool::Cut).map_err(k)?;
+                        }
+                    }
+                }
+                let depois2 = pecas.pop().ok_or("V múltiplo sem peças")?;
+                let antes2 = pecas.remove(0);
+                Ok(NoTratado { antes: antes2, depois: depois2, extras: pecas })
             }
             _ => Err("este modo de dobra não tem rasgo em V".into()),
         }
+    }
+
+    /// Vão que as folgas de dobra e de solda (B442) abrem numa junta de V já fechado. `vertice` é o
+    /// vértice do V (na face interna da placa), `interno` a bissetriz apontando para a parede
+    /// interna e `meio` a metade do ângulo do V. Os dois planos (`ponto`, `normal`) são as faces
+    /// internas da placa das duas peças: o vão fica acima delas, para a dobradiça não ser cortada.
+    ///
+    /// No tubo aberto, cada lado do V gira em torno do vértice até a abertura crescer `folga_dobra`
+    /// e recua `e/(2·cos(meio))` (folga de solda `e`). Fechando, as peças giram como corpo rígido em
+    /// torno do vértice: o lado vira uma reta a `e/2` da bissetriz, inclinada de `δ = α' − meio`.
+    #[allow(clippy::too_many_arguments)]
+    fn vao_das_folgas(&self, r: &crate::st_dobra::ResultadoDobra, vertice: V3, interno: V3, eixo: V3, pa: (V3, V3), pb: (V3, V3), meio: f64) -> Result<Option<Shape>, String> {
+        let (h, b, t) = (r.h_plano, r.b_fora, r.parede);
+        let (c, e) = (r.folga_dobra, r.folga_raiz);
+        if c <= 1e-9 && e <= 1e-9 {
+            return Ok(None);
+        }
+        let alfa = (meio.tan() + c / (2. * (h - t))).atan();
+        let td = (alfa - meio).tan();
+        let fundo = e / meio.cos();
+        let meia = |s: f64| e / 2. + (s - fundo / 2. * meio.sin()) * td;
+        let l = h / meio.cos() + 2.;
+        let (v0, vl) = (meia(0.).max(0.), meia(l));
+        let laco = if v0 < 1e-6 { linhas(&[[0., 0.], [l, -vl], [l, vl]]) } else { linhas(&[[0., -v0], [l, -vl], [l, vl], [0., v0]]) };
+        let big = self.size_hint();
+        let vao = Shape::face(&Frame { origin: vertice, x: interno, normal: eixo }, &[laco])
+            .map_err(k)?
+            .extrude(eixo, b / 2. + 2., b / 2. + 2.)
+            .map_err(k)?
+            .boolean(&half_space(pa.0, pa.1, big)?, fenkra_kernel::Bool::Common)
+            .map_err(k)?
+            .boolean(&half_space(pb.0, pb.1, big)?, fenkra_kernel::Bool::Common)
+            .map_err(k)?;
+        Ok(Some(vao))
     }
 
     /// O que sobra da esquadria fora do raio externo `ro` da placa curvada, entre os planos de
