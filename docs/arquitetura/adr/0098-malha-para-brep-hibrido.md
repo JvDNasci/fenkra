@@ -1,4 +1,4 @@
-# ADR 0094: malha para B-rep híbrido com primitivas reconhecidas
+# ADR 0098: malha para B-rep híbrido com primitivas reconhecidas
 
 Data: 2026-11-14. Estado: aceita. Itens: B169.
 
