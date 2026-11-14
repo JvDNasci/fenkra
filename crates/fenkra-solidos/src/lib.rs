@@ -66,6 +66,7 @@ pub mod selecao_regras;
 pub mod chaveta_rasgos;
 pub mod calculo_projeto;
 pub mod profile;
+pub mod sketch_posicao;
 pub mod refs;
 pub mod papeis;
 pub mod reparo;
@@ -77,6 +78,8 @@ mod edicao_direta;
 pub mod reconhece;
 pub mod dfm;
 pub mod dfm_geo;
+pub mod dfm_saida;
+pub mod plastico;
 pub mod padrao;
 pub mod furo_norma;
 pub mod rosca_furo;
@@ -103,6 +106,8 @@ pub use chapa_flat::{passos_planificados, PassoPlanificado};
 pub mod st_frames;
 pub mod st_portico;
 pub mod st_caminho_tubo;
+pub mod st_tubo_real;
+pub mod st_portico_doc;
 pub mod st_verifica_aco;
 pub mod st_ligacoes;
 mod st_placas;
@@ -4158,9 +4163,10 @@ impl Ctx<'_> {
         let k = |e: KernelError| e.0;
         match &f.kind {
             FeatureKind::Sketch(s) => {
-                let frame = profile::posiciona(self.plane(&s.plane, 0)?, &s.data.pos);
+                // B437: origem e orientação próprias, por referência ou automáticas
+                let (frame, pos_warn) = self.frame_do_sketch(s)?;
                 // geometria externa (converter/projetar/interseção): reposiciona antes de resolver
-                let mut link_warn = vec![];
+                let mut link_warn = pos_warn;
                 let mut quebrados = vec![];
                 let mut link_ops = vec![];
                 let data = if s.data.links.is_empty() {
@@ -6333,7 +6339,8 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     };
     let (vars, param_error) = match doc.eval_params() {
         // `espessura` vale em toda fórmula da chapa (raio = 1.15*espessura), do estilo ou do comando
-        Ok(v) => (doc.sheet_efetivo().map(|s| s.vars_com_espessura(&v)).unwrap_or(v), None),
+        // B198: `plastico_espessura`, `plastico_saida`... valem em toda fórmula quando a peça tem regra plástica
+        Ok(v) => (doc.vars_com_plastico(doc.sheet_efetivo().map(|s| s.vars_com_espessura(&v)).unwrap_or(v)), None),
         Err(e) => (HashMap::new(), Some(e.to_string())),
     };
     // outra qualidade: as malhas guardadas não servem mais (os comandos continuam valendo)
@@ -6826,6 +6833,8 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         cache.polir.aplicar(&alvos, &cx.qualidade, cancelar.as_deref())
     };
 
+    // B198: recurso que sai da regra plástica avisa na árvore (fora do cache: mudar só um limite já vale)
+    plastico::diagnosticar(doc, &cx.vars, &mut cx.status);
     RecomputeResult {
         notes: cache.notes.clone(),
         bodies,
@@ -7899,7 +7908,7 @@ pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), S
 /// Como `export`, escolhendo a malha do STL (o preset não muda o STEP, que guarda a forma exata).
 pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, preset: PresetStl) -> Result<(), String> {
     let formato = FormatoExport::do_caminho(path)?;
-    let vars = doc.eval_params().map_err(|e| e.to_string())?;
+    let vars = doc.vars_com_plastico(doc.eval_params().map_err(|e| e.to_string())?);
     let mut cx = Ctx {
         doc,
         vars,
@@ -7964,7 +7973,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
     // B102: vale a configuração ativa; se ela não existe mais, não há forma (nunca a primeira linha)
     let efetivo = doc.efetivo().ok()?;
     let doc: &Document = &efetivo;
-    let vars = doc.eval_params().ok()?;
+    let vars = doc.vars_com_plastico(doc.eval_params().ok()?);
     let mut cx = Ctx {
         doc,
         vars,

@@ -496,6 +496,9 @@ pub struct SketchData {
     /// origem e orientação próprias
     #[serde(default)]
     pub pos: SketchPos,
+    /// ponto da origem e linhas dos eixos H e V (B437); arquivo antigo abre sem e ganha ao editar
+    #[serde(default)]
+    pub eixos: Option<crate::sketch_origem::EixosSk>,
 }
 
 impl SketchData {
@@ -571,7 +574,7 @@ impl SketchData {
 }
 
 /// Origem de uma geometria externa do sketch.
-#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum LinkSrc {
     /// ponto, linha/curva ou superfície de referência (inclusive importada por link)
     Ref(Id),
@@ -622,7 +625,8 @@ pub enum LinkPolicy {
 /// H × V é sempre a normal: o sketch passa a ser visto pelo outro lado.
 #[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct SketchPos {
-    /// origem do sketch, em coordenadas do plano-base
+    /// deslocamento da origem, nos eixos H e V antes de trocar e inverter (com origem automática,
+    /// nas coordenadas do plano-base, como nos arquivos antigos)
     #[serde(default)]
     pub origem: [f64; 2],
     /// H e V trocam de lugar
@@ -632,6 +636,12 @@ pub struct SketchPos {
     pub inverter_h: bool,
     #[serde(default)]
     pub inverter_v: bool,
+    /// de onde vem a origem (B437); arquivo antigo: automática, e `origem` vira o deslocamento
+    #[serde(default)]
+    pub modo: crate::sketch_origem::OrigemSk,
+    /// o que o eixo H segue
+    #[serde(default)]
+    pub orienta: crate::sketch_origem::OrientaSk,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -936,6 +946,10 @@ impl SketchData {
 
     /// Remove curva e pontos que só ela usava, além das restrições que ficam sem alvo.
     pub fn remove_curve(&mut self, id: Id) {
+        // os eixos são do sketch, não do usuário
+        if self.e_eixo(id) {
+            return;
+        }
         let Some(c) = self.curve(id).cloned() else { return };
         self.curves.retain(|x| x.id != id);
         let used: HashSet<Id> = self.curves.iter().flat_map(|c| Self::curve_points(&c.geom)).collect();

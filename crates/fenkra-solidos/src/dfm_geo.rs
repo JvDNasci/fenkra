@@ -645,6 +645,40 @@ fn dist_seg(p: V3, s: [V3; 2]) -> f64 {
     norma(sub(p, add(s[0], esc(ab, t))))
 }
 
+// ---------------------------------------------------------------------------------- furo até a borda
+
+/// Ligamento de um furo: a menor parede de material entre a parede do furo e a superfície mais
+/// próxima do lado de fora (a borda da peça, outro furo, um bolso), medida no meio do furo.
+///
+/// Do eixo saem `n` raios perpendiculares a ele. O primeiro triângulo atingido é a parede do furo;
+/// o raio continua a partir dali e o segundo triângulo é onde o material acaba. A diferença entre os
+/// dois é a parede naquela direção, sem depender do raio nominal (a tesselação deixa a parede do furo
+/// um pouco para dentro do círculo). Devolve a menor parede e o ponto da borda do furo nessa direção.
+pub fn ligamento(m: &Malha, meio: V3, eixo: V3, n: usize) -> Option<(f64, V3)> {
+    let e = unit(eixo);
+    if norma(e) < 0.5 {
+        return None;
+    }
+    // base perpendicular ao eixo
+    let aux = if e[0].abs() < 0.9 { [1., 0., 0.] } else { [0., 1., 0.] };
+    let u = unit(cruz(e, aux));
+    let v = cruz(e, u);
+    let eps = m.diag * 1e-6;
+    let mut melhor: Option<(f64, V3)> = None;
+    for k in 0..n.max(4) {
+        let a = std::f64::consts::TAU * k as f64 / n.max(4) as f64;
+        let d = add(esc(u, a.cos()), esc(v, a.sin()));
+        let Some((t1, _)) = m.raio_tri(meio, d, m.diag * 2.) else { continue };
+        let parede = add(meio, esc(d, t1 + eps));
+        let Some((t2, _)) = m.raio_tri(parede, d, m.diag * 2.) else { continue };
+        let w = t2 + eps;
+        if melhor.is_none_or(|(b, _)| w < b) {
+            melhor = Some((w, add(meio, esc(d, t1))));
+        }
+    }
+    melhor
+}
+
 // ---------------------------------------------------------------------------------- saída e undercut
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

@@ -74,6 +74,8 @@ pub struct PecaNc {
     /// cortes inclinados em graus: alma início, alma fim, aba início, aba fim
     pub cortes: [f64; 4],
     pub furos: Vec<FuroDstv>,
+    /// contorno externo (AK) por face, já fechado (o primeiro ponto repete no fim), em (x, y) da face
+    pub contornos: Vec<(char, Vec<[f64; 2]>)>,
     /// o que o arquivo não descreve (encaixe, furo de tubo redondo, furo oblíquo)
     pub faltas: Vec<String>,
     /// sólido cortado no referencial local
@@ -165,6 +167,142 @@ fn furos(sh: &Shape, kind: SectionKind, faltas: &mut Vec<String>) -> Vec<FuroDst
     out
 }
 
+/// Caixa envolvente pelos vértices da malha: justa nas faces planas, ao contrário de `bbox`.
+fn caixa_justa(sh: &Shape) -> Option<(V3, V3)> {
+    let mesh = sh.mesh_angle(0.2, 0.2).ok()?;
+    let mut lo = [f64::MAX; 3];
+    let mut hi = [f64::MIN; 3];
+    for v in mesh.positions.chunks(3) {
+        for k in 0..3 {
+            lo[k] = lo[k].min(v[k] as f64);
+            hi[k] = hi[k].max(v[k] as f64);
+        }
+    }
+    (lo[0] <= hi[0]).then_some((lo, hi))
+}
+
+/// Contorno externo (bloco AK) do tubo quadrado ou retangular com encaixe numa ou nas duas pontas.
+///
+/// Como funciona: a curva de encaixe (`st_encaixe_doc`, pele externa) é levada ao referencial local
+/// do sólido do item (o mesmo dos furos: Z ao longo da barra, X e Y da seção). Cada ponto cai numa
+/// das quatro faces pelo lado da caixa de que está mais perto (v = +X, h = −X, o = +Y, u = −Y), e
+/// onde a curva passa de uma face para a vizinha entra o ponto do canto, com o Z interpolado pela
+/// distância de cada ponto até a aresta. Em cada face o contorno é a tira da face fechada pelas duas
+/// pontas, no sentido anti-horário que o DSTV pede para contorno externo: borda de baixo do início
+/// ao fim, a ponta do fim subindo, borda de cima de volta e a ponta do início descendo. A ponta sem
+/// encaixe só entra se for reta (sem corte inclinado no sólido); senão não há AK.
+fn contornos_ak(doc: &Document, g: &StructGroup, kind: SectionKind, pontas_planas: &[Option<V3>; 2]) -> Vec<(char, Vec<[f64; 2]>)> {
+    if !matches!(kind, SectionKind::TuboQuadrado | SectionKind::TuboRetangular) {
+        return vec![];
+    }
+    let Some(r) = g.members.first() else { return vec![] };
+    // caixa justa pelos vértices da malha (a caixa do OpenCASCADE vem folgada pela tolerância)
+    let Some((lo, hi)) = caixa_justa(&g.shape) else { return vec![] };
+    let Some(m) = crate::st_encaixe_doc::encaixes_da_estrutura(doc, &Default::default()).into_iter().find(|m| m.feature == r.feature && m.linha == r.index) else { return vec![] };
+    let f = &r.frame;
+    let fy = f.y();
+    let local = |p: V3| {
+        let d = geo3d::sub(p, f.origin);
+        [geo3d::dot(d, f.x), geo3d::dot(d, fy), geo3d::dot(d, f.normal)]
+    };
+    let (mx, my) = ((lo[0] + hi[0]) / 2., (lo[1] + hi[1]) / 2.);
+    let (ax, ay) = ((hi[0] - lo[0]) / 2., (hi[1] - lo[1]) / 2.);
+    let face_de = |q: V3| {
+        let (u, v) = ((q[0] - mx) / ax, (q[1] - my) / ay);
+        if u.abs() >= v.abs() {
+            if u > 0. { 'v' } else { 'h' }
+        } else if v > 0. {
+            'o'
+        } else {
+            'u'
+        }
+    };
+    // canto entre duas faces vizinhas (X, Y), ou nada se forem opostas
+    let canto = |a: char, b: char| -> Option<(f64, f64)> {
+        let sx = |c: char| match c {
+            'v' => Some(mx + ax),
+            'h' => Some(mx - ax),
+            _ => None,
+        };
+        let sy = |c: char| match c {
+            'o' => Some(my + ay),
+            'u' => Some(my - ay),
+            _ => None,
+        };
+        Some((sx(a).or(sx(b))?, sy(a).or(sy(b))?))
+    };
+    // coordenadas da face no DSTV: x do início da peça; y da borda de baixo (v, h: Y; o, u: X)
+    let na_face = |c: char, q: V3| -> [f64; 2] { [q[2] - lo[2], if matches!(c, 'v' | 'h') { q[1] - lo[1] } else { q[0] - lo[0] }] };
+    // por ponta: face -> pontos (x, y) da face
+    let mut por_ponta: Vec<(f64, std::collections::BTreeMap<char, Vec<[f64; 2]>>)> = vec![];
+    for p in m.pontas() {
+        let pts: Vec<V3> = p.corte.pontos.iter().map(|q| local(q.p3)).collect();
+        if pts.len() < 3 {
+            return vec![];
+        }
+        let mut mapa: std::collections::BTreeMap<char, Vec<[f64; 2]>> = Default::default();
+        for i in 0..pts.len() {
+            let (a, b) = (pts[i], pts[(i + 1) % pts.len()]);
+            let (fa, fb) = (face_de(a), face_de(b));
+            mapa.entry(fa).or_default().push(na_face(fa, a));
+            if fa != fb {
+                let Some((cx, cy)) = canto(fa, fb) else { return vec![] };
+                let dist = |c: char, q: V3| if matches!(c, 'v' | 'h') { (q[1] - cy).abs() } else { (q[0] - cx).abs() };
+                let (da, db) = (dist(fa, a), dist(fb, b));
+                let t = if da + db > 1e-12 { da / (da + db) } else { 0.5 };
+                let c3 = [cx, cy, a[2] + (b[2] - a[2]) * t];
+                mapa.entry(fa).or_default().push(na_face(fa, c3));
+                mapa.entry(fb).or_default().push(na_face(fb, c3));
+            }
+        }
+        let z_medio = pts.iter().map(|q| q[2]).sum::<f64>() / pts.len() as f64;
+        por_ponta.push((z_medio, mapa));
+    }
+    por_ponta.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let comprimento = hi[2] - lo[2];
+    let (inicio, fim): (Option<&std::collections::BTreeMap<char, Vec<[f64; 2]>>>, Option<&std::collections::BTreeMap<char, Vec<[f64; 2]>>>) = match por_ponta.len() {
+        2 => (Some(&por_ponta[0].1), Some(&por_ponta[1].1)),
+        1 if por_ponta[0].0 - lo[2] < comprimento / 2. => (Some(&por_ponta[0].1), None),
+        1 => (None, Some(&por_ponta[0].1)),
+        _ => return vec![],
+    };
+    // ponta sem encaixe: só a reta (a normal plana tem de ser o eixo)
+    let reta = |k: usize| pontas_planas[k].is_some_and(|n| n[2].abs() > 0.99999);
+    if (inicio.is_none() && !reta(0)) || (fim.is_none() && !reta(1)) {
+        return vec![];
+    }
+    let mut out = vec![];
+    for c in ['v', 'o', 'u', 'h'] {
+        let largura = if matches!(c, 'v' | 'h') { hi[1] - lo[1] } else { hi[0] - lo[0] };
+        let ordenada = |mapa: Option<&std::collections::BTreeMap<char, Vec<[f64; 2]>>>, x_reto: f64| -> Vec<[f64; 2]> {
+            let mut v = match mapa.and_then(|m| m.get(&c)) {
+                Some(v) => v.clone(),
+                None if mapa.is_none() => vec![[x_reto, 0.], [x_reto, largura]],
+                None => vec![],
+            };
+            v.sort_by(|a, b| a[1].total_cmp(&b[1]));
+            v.dedup_by(|a, b| (a[0] - b[0]).abs() < 1e-6 && (a[1] - b[1]).abs() < 1e-6);
+            v
+        };
+        let (a, b) = (ordenada(inicio, 0.), ordenada(fim, comprimento));
+        if a.len() < 2 || b.len() < 2 {
+            return vec![];
+        }
+        let arred = |q: [f64; 2]| [(q[0] * 100.).round() / 100., (q[1] * 100.).round() / 100.];
+        let mut pts: Vec<[f64; 2]> = vec![];
+        pts.extend(b.iter().copied());
+        pts.extend(a.iter().rev().copied());
+        let mut pts: Vec<[f64; 2]> = pts.into_iter().map(arred).collect();
+        pts.dedup();
+        // começa no canto de baixo do início e fecha repetindo o primeiro ponto
+        let k0 = pts.iter().enumerate().min_by(|(_, p), (_, q)| (p[1], p[0]).partial_cmp(&(q[1], q[0])).unwrap_or(std::cmp::Ordering::Equal)).map(|(i, _)| i).unwrap_or(0);
+        pts.rotate_left(k0);
+        pts.push(pts[0]);
+        out.push((c, pts));
+    }
+    out
+}
+
 /// Peças da estrutura para a máquina: um por item de membro da lista de corte.
 pub fn pecas_nc(doc: &Document) -> Vec<PecaNc> {
     let grupos = structural_groups(doc);
@@ -197,7 +335,8 @@ pub fn pecas_nc(doc: &Document) -> Vec<PecaNc> {
         };
         let pontas = normais_das_pontas(&g.shape);
         let mut faltas = vec![];
-        if pontas.iter().any(Option::is_none) {
+        let contornos = if pontas.iter().any(Option::is_none) { contornos_ak(doc, g, m.kind, &pontas) } else { vec![] };
+        if pontas.iter().any(Option::is_none) && contornos.is_empty() {
             faltas.push("ponta que não é plana (encaixe ou entalhe): o contorno AK não é gravado".into());
         }
         let cortes = [
@@ -219,6 +358,7 @@ pub fn pecas_nc(doc: &Document) -> Vec<PecaNc> {
             pintura_m,
             cortes,
             furos,
+            contornos,
             faltas,
             forma: g.shape.clone(),
         });
@@ -283,6 +423,17 @@ pub fn nc1(p: &PecaNc, pedido: &str, desenho: &str) -> String {
     }
     for f in &p.faltas {
         s += &format!("** sem descrição: {f}\n");
+    }
+    if !p.contornos.is_empty() {
+        // contorno externo: a letra da face em cada linha, a referência da cota (u = borda de baixo)
+        // no primeiro ponto, raio 0 (trechos retos)
+        s += "AK\n";
+        for (face, pts) in &p.contornos {
+            for (i, q) in pts.iter().enumerate() {
+                let r = if i == 0 { "u" } else { " " };
+                s += &format!("  {face} {:>10.2}{r} {:>10.2} {:>8.2}\n", q[0], q[1], 0.);
+            }
+        }
     }
     if !p.furos.is_empty() {
         s += "BO\n";

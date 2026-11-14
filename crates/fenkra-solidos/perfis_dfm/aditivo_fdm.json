@@ -30,6 +30,14 @@
       "severidade": "info",
       "texto": "Furo de {valor} mm tende a fechar na impressão (mínimo {limite} mm).",
       "min": 1.5
+    },
+    {
+      "id": "fdm.furo.borda",
+      "entidade": "furo",
+      "medida": "distancia_borda",
+      "severidade": "info",
+      "texto": "Furo a {valor} mm da borda; abaixo de {limite} mm a parede imprime frágil.",
+      "min": 1.0
     }
   ]
 }
