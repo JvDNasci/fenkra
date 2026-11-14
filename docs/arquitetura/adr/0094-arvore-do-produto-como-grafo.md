@@ -1,4 +1,4 @@
-# ADR 0092: árvore do produto como grafo de arquivos, com miniatura tirada do pacote de visualização (B364)
+# ADR 0094: árvore do produto como grafo de arquivos, com miniatura tirada do pacote de visualização (B364)
 
 Data: 2026-11-14. Estado: aceita. Itens: B364, B339 (montagens do projeto no visualizador).
 

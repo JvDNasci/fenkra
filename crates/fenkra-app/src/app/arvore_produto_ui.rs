@@ -90,6 +90,7 @@ enum Acao {
     Foco(usize),
     Abrir(usize),
     Ver(usize),
+    Comparar(usize),
 }
 
 fn opcoes(p: &Project) -> fenkra_pacote::Opcoes {
@@ -367,7 +368,7 @@ impl App {
         }
         let mut abrir: Option<PathBuf> = None;
         let mut abrir_doc: Option<u64> = None;
-        let mut ver: Option<NoProduto> = None;
+        let mut ver: Option<(NoProduto, bool)> = None;
         for a in acoes {
             match a {
                 Acao::Alternar(c, estava) => {
@@ -401,7 +402,8 @@ impl App {
                     Some(id) => abrir_doc = Some(id),
                     None => abrir = Some(st.arvore.nos[i].arquivo.clone()),
                 },
-                Acao::Ver(i) => ver = Some(st.arvore.nos[i].clone()),
+                Acao::Ver(i) => ver = Some((st.arvore.nos[i].clone(), false)),
+                Acao::Comparar(i) => ver = Some((st.arvore.nos[i].clone(), true)),
             }
         }
         if atualizar {
@@ -420,21 +422,37 @@ impl App {
         if let Some(c) = abrir {
             self.open_path(&c);
         }
-        if let Some(n) = ver {
-            self.ver_no_navegador(n);
+        if let Some((n, comparar)) = ver {
+            self.ver_no_navegador(n, comparar);
         }
     }
 
     /// "Ver no navegador" de um nó (B339): a peça abre pela versão atual; a montagem, pelo pacote da
-    /// assinatura dela, gerado se ainda não existe.
-    fn ver_no_navegador(&mut self, n: NoProduto) {
+    /// assinatura dela, gerado se ainda não existe. `comparar` abre junto o pacote anterior: na peça, o
+    /// da versão de antes; na montagem, o da assinatura anterior (antes da última mudança de baixo).
+    fn ver_no_navegador(&mut self, n: NoProduto, comparar: bool) {
         if let (Some(id), Some(h)) = (n.id, n.versao.clone()) {
-            return self.visualizar_versao(id, &h, None);
+            let antes = comparar.then(|| self.project.as_ref().and_then(|p| p.entry(id).ok()).and_then(|e| e.versions.iter().rev().map(|v| v.hash.clone()).find(|x| *x != h))).flatten();
+            if comparar && antes.is_none() {
+                return self.toast(tr("Não há versão anterior para comparar."), true);
+            }
+            return self.visualizar_versao(id, &h, antes.as_deref());
         }
         let Some(p) = self.project.as_ref() else { return };
+        let anterior = if comparar {
+            match p.visualizacao_anterior_do_no(&n).map(std::fs::read) {
+                Some(Ok(b)) => Some(b),
+                _ => return self.toast(tr("Não há pacote anterior desta montagem para comparar. Ele existe depois que uma peça de baixo muda e a visualização é gerada de novo."), true),
+            }
+        } else {
+            None
+        };
         let pagina = |bytes: &[u8]| -> std::io::Result<PathBuf> {
-            let meta = serde_json::json!({"nome": n.nome, "pn": n.pn, "estado": match n.estado { EstadoNo::Derivado { liberadas, total } => format!("{liberadas}/{total} {}", tr("peças liberadas")), _ => String::new() }}).to_string();
-            let html = fenkra_pacote::pagina_html_completa(Some(bytes), None, Some(&meta));
+            let mut meta = serde_json::json!({"nome": n.nome, "pn": n.pn, "estado": match n.estado { EstadoNo::Derivado { liberadas, total } => format!("{liberadas}/{total} {}", tr("peças liberadas")), _ => String::new() }});
+            if anterior.is_some() {
+                meta["comparando"] = serde_json::json!({"antes": tr("anterior"), "depois": tr("atual")});
+            }
+            let html = fenkra_pacote::pagina_html_completa(Some(bytes), anterior.as_deref(), Some(&meta.to_string()));
             let arq = p.root.join(fenkra_project::visualizacao::PASTA).join("paginas").join(format!("{}.html", n.assinatura));
             std::fs::create_dir_all(arq.parent().unwrap())?;
             std::fs::write(&arq, html)?;
@@ -637,6 +655,10 @@ fn tela(ui: &mut egui::Ui, st: &mut ArvoreUi, acoes: &mut Vec<Acao>) {
             }
             if ui.add_enabled(n.existe, egui::Button::new(tr("Ver no navegador"))).clicked() {
                 acoes.push(Acao::Ver(c.no));
+                ui.close();
+            }
+            if ui.add_enabled(n.existe, egui::Button::new(tr("Comparar com a anterior"))).on_hover_text(tr("Abre no navegador o pacote atual e o anterior, com o que foi adicionado, removido, movido e alterado.")).clicked() {
+                acoes.push(Acao::Comparar(c.no));
                 ui.close();
             }
         });

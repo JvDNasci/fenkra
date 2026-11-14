@@ -262,6 +262,18 @@ mod tests {
         }
         let total = std::fs::read_dir(d.join(PASTA).join(PASTA_ARQUIVOS)).unwrap().count();
         assert!(total <= GUARDAR_POR_DOCUMENTO, "{total} pacotes da montagem");
+        // comparar (B339): o anterior da montagem é outro pacote do mesmo arquivo; o da peça, o da versão de antes
+        let a = p.arvore_produto();
+        let n = &a.nos[a.no_do_arquivo(&d.join("conj-1.fka")).unwrap()];
+        let ant = p.visualizacao_anterior_do_no(n).expect("há pacote anterior da montagem");
+        assert_ne!(ant, p.caminho_visualizacao_no(n));
+        assert!(ant.file_name().unwrap().to_string_lossy().starts_with("conj_1-"));
+        let np = &a.nos[a.no_do_documento(id).unwrap()];
+        assert!(p.visualizacao_anterior_do_no(np).is_none(), "nenhuma versão da peça tem pacote ainda");
+        let nv = p.entry(id).unwrap().versions.len();
+        let h_antes = p.hash_da_versao(id, nv - 1).unwrap();
+        p.gravar_visualizacao(id, &h_antes, b"antes").unwrap();
+        assert_eq!(p.visualizacao_anterior_do_no(np), Some(p.caminho_visualizacao(id, &h_antes)));
         let _ = std::fs::remove_dir_all(&d);
     }
 

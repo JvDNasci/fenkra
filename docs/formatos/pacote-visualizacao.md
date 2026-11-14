@@ -163,6 +163,16 @@ Entradas extras da página: segundo pacote embutido (`pagina_html_completa`), `?
 `?src=`, e `postMessage({fkv, comparar, meta})`. `meta` é opcional e leva `estado`, `revisao`, `versao`,
 `pn` e `comparando`; aparece ao lado do título. Ele não vai no pacote porque o estado muda depois.
 
+### Montagens do projeto e árvore do produto (B339, B364, ADR 0094)
+
+Peça do índice tem um pacote por versão (`.visualizacao/<id>-<hash>.fkv`). Montagem e arquivo fora do
+índice têm um pacote por **assinatura**: `.visualizacao/arquivos/<nome>-<assinatura>.fkv`, em que a
+assinatura junta o conteúdo do arquivo e as assinaturas dos filhos. Mudou uma peça de baixo, muda a
+assinatura; ficam os 6 pacotes mais novos de cada arquivo. Pela árvore do produto, "Ver no navegador" abre
+o pacote do nó (gerado se faltar) e "Comparar com a anterior" abre junto o pacote anterior (na peça, o da
+versão de antes; na montagem, o da assinatura anterior), com a aba Comparar da página. A miniatura de cada
+nó da árvore sai do mesmo pacote (`fenkra_pacote::miniatura`).
+
 ## Segurança
 
 O pacote não carrega código. O visualizador só lê dados, escapa todo texto antes de pôr na página e não

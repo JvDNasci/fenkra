@@ -4,7 +4,6 @@
 pub static TEXTOS: &[(&str, &str)] = &[
     ("Árvore do produto", "Product tree"),
     ("Grafo navegável das montagens e peças do projeto, com miniatura, PN e estado de cada nó.", "Navigable graph of the project's assemblies and parts, with thumbnail, PN and state for each node."),
-    ("Produto", "Product"),
     ("Volta para todas as montagens de topo e peças soltas do projeto.", "Back to all top-level assemblies and loose parts of the project."),
     ("Níveis", "Levels"),
     ("Quantos níveis aparecem abertos. Clique num nó para abrir ou fechar só ele.", "How many levels are shown open. Click a node to open or close only that one."),
@@ -36,4 +35,9 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Sem miniatura", "No thumbnail"),
     ("Clique: abre ou fecha o nível · duplo clique: entra ou abre · botão direito: mais", "Click: open or close the level · double click: enter or open · right button: more"),
     ("Todas as miniaturas já estão prontas.", "All thumbnails are ready."),
+    // B339: comparar o pacote atual com o anterior pela árvore
+    ("Não há versão anterior para comparar.", "There is no previous version to compare."),
+    ("Não há pacote anterior desta montagem para comparar. Ele existe depois que uma peça de baixo muda e a visualização é gerada de novo.", "There is no previous package of this assembly to compare. It exists after a part below changes and the view is generated again."),
+    ("anterior", "previous"),
+    ("Abre no navegador o pacote atual e o anterior, com o que foi adicionado, removido, movido e alterado.", "Opens the current and the previous package in the browser, with what was added, removed, moved and changed."),
 ];
