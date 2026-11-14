@@ -20,8 +20,8 @@ struct U {
     tex_scale: array<vec4<f32>, 2>,  // tamanho (mm) de uma repetição de cada textura
     qual: vec4<f32>,       // x = 1 → iluminação realista (três pontos, ambiente hemisférico, gama)
     secao: vec4<f32>,      // plano de corte da prévia: xyz = normal (zero = sem corte), w = distância
-    mapa: vec4<f32>,       // mapa por pixel: x = tipo de curvatura, y = raio da escala, z = saída mínima (°), w = tampa (°)
-    mapa_dir: vec4<f32>,   // direção de abertura da inclinação
+    mapa: vec4<f32>,       // mapa por pixel: x = tipo de curvatura, y = raio da escala, z = saída mínima (°), w = tampa (°); zebra e isofotas: z = faixas, w = estilo
+    mapa_dir: vec4<f32>,   // direção de abertura da inclinação; eixo das listras da zebra; luz das isofotas
     mapa_cor: array<vec4<f32>, 4>,  // paradas da escala do tema
 };
 @group(0) @binding(0) var<uniform> u: U;
@@ -106,7 +106,7 @@ fn rampa(t: f32) -> vec3<f32> {
 // Cor da curvatura (`EscalaCurvatura::cor`): as curvaturas principais vêm interpoladas e a escala vale aqui.
 fn cor_curvatura(k1: f32, k2: f32) -> vec3<f32> {
     var k = max(abs(k1), abs(k2));
-    if (u.mapa.x > 1.5) { k = sqrt(abs(k1 * k2)); } else if (u.mapa.x > 0.5) { k = abs(k1 + k2) * 0.5; }
+    if (u.mapa.x > 2.5) { k = min(abs(k1), abs(k2)); } else if (u.mapa.x > 1.5) { k = sqrt(abs(k1 * k2)); } else if (u.mapa.x > 0.5) { k = abs(k1 + k2) * 0.5; }
     return rampa(log2(1.0 + k * u.mapa.y * 15.0) / 4.0);
 }
 
@@ -175,8 +175,10 @@ struct MOut {
     }
     if (mode > 7.5 && mode < 8.5) {
         // isofotas: linhas onde o ângulo entre a normal e a luz é o mesmo; a luz fica presa ao mundo
-        let l = normalize(vec3<f32>(0.35, -0.45, 0.82));
-        let s = dot(n, l) * 14.0;
+        // (B180: a luz e o número de linhas vêm do painel; sem painel, a oblíqua e 14 linhas)
+        var l = normalize(vec3<f32>(0.35, -0.45, 0.82));
+        if (dot(u.mapa_dir.xyz, u.mapa_dir.xyz) > 0.5 && u.mapa.z > 1.5) { l = normalize(u.mapa_dir.xyz); }
+        let s = dot(n, l) * select(14.0, u.mapa.z, u.mapa.z > 1.5);
         let w = max(fwidth(s), 1e-4);
         let linha = 1.0 - smoothstep(0.0, 1.5 * w + 0.06, abs(fract(s + 0.5) - 0.5));
         let d = abs(dot(n, v));
@@ -192,12 +194,23 @@ struct MOut {
         return vec4<f32>(cor * (0.55 + 0.45 * d), 1.0);
     }
     if (mode > 5.5) {
-        // zebra: faixas do reflexo de um ambiente de listras horizontais
+        // zebra: faixas do reflexo de um ambiente de listras ao longo de um eixo do mundo. O número de
+        // faixas e o eixo vêm do painel (B180); sem painel, 9 faixas em Z.
         let r = reflect(-v, n);
-        let s = r.z * 9.0;
+        var eixo = vec3<f32>(0.0, 0.0, 1.0);
+        var nf = 9.0;
+        if (u.mapa.z > 1.5) { nf = u.mapa.z; eixo = normalize(u.mapa_dir.xyz); }
+        let s = dot(r, eixo) * nf;
         let w = max(fwidth(s), 1e-4);
-        let band = smoothstep(0.5 - w, 0.5 + w, abs(fract(s) - 0.5) * 2.0);
         let d = abs(dot(n, v));
+        if (u.mapa.w > 0.5) {
+            // reflexo: tubos de luz suaves sobre um fundo escuro; o brilho segue a curvatura sem degrau
+            let t = abs(fract(s) - 0.5) * 2.0;
+            let tubo = pow(1.0 - smoothstep(0.0, 0.55, t), 2.0);
+            let c = mix(vec3<f32>(0.10, 0.11, 0.13), vec3<f32>(0.96, 0.97, 1.0), tubo);
+            return vec4<f32>(c * (0.80 + 0.20 * d), 1.0);
+        }
+        let band = smoothstep(0.5 - w, 0.5 + w, abs(fract(s) - 0.5) * 2.0);
         return vec4<f32>(vec3<f32>(band * 0.92 + 0.04) * (0.75 + 0.25 * d), 1.0);
     }
     if (mode > 4.5) {
@@ -485,11 +498,11 @@ pub struct ViewStyle {
 /// O que o shader precisa para pintar o mapa de curvatura ou de inclinação por pixel.
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub struct MapaGpu {
-    /// 0 máxima, 1 média, 2 gaussiana
+    /// 0 máxima, 1 média, 2 gaussiana, 3 mínima
     pub tipo: f32,
     /// raio que recebe a última cor, em mm
     pub raio: f32,
-    /// saída mínima e início da tampa, em graus
+    /// saída mínima e início da tampa, em graus; na zebra e nas isofotas, faixas e estilo (B180)
     pub minimo: f32,
     pub tampa: f32,
     /// direção de abertura

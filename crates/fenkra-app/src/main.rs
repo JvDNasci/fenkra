@@ -35,6 +35,8 @@ mod picking;
 mod realce_face;
 mod analise_janela;
 mod textos_analise;
+mod sup_qualidade;
+mod textos_qualidade_sup;
 mod selecao;
 mod selecao_regras;
 mod continuar;

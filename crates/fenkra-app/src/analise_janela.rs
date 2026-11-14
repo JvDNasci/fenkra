@@ -51,7 +51,7 @@ pub fn janela(ctx: &egui::Context, area: Rect, cfg: &Painel, s: &mut Settings, c
     saida.rect
 }
 
-/// Zebra e isofotas não têm número para ajustar: o painel explica o que se vê e deixa fechar.
+/// Zebra e isofotas: o painel explica o que se vê, ajusta faixas e luz (B180) e deixa fechar.
 pub fn painel_listras(app: &mut crate::app::App, ctx: &egui::Context, area: Rect) {
     let (nome, titulo, texto) = match app.settings.display {
         DisplayMode::Zebra => ("analise_zebra", "Análise: zebra", "Listras de reflexo: se elas se quebram numa junção, as superfícies só se encostam; se seguem sem torcer, a transição é suave."),
@@ -59,8 +59,16 @@ pub fn painel_listras(app: &mut crate::app::App, ctx: &egui::Context, area: Rect
         _ => return,
     };
     let cfg = Painel { nome: nome.into(), titulo: tr(titulo).to_string(), padrao: paineis::abaixo_do_cubo(area, 240.), largura: 240., redimensiona: false };
-    janela(ctx, area, &cfg, &mut app.settings, |ui, _| {
+    let zebra = app.settings.display == DisplayMode::Zebra;
+    janela(ctx, area, &cfg, &mut app.settings, |ui, s| {
         ui.label(egui::RichText::new(tr(texto)).small());
+        // B180: faixas, direção e reflexo; linhas e luz; e o plano de corte de toda análise
+        if zebra {
+            crate::sup_qualidade::controles_da_zebra(ui, &mut s.analise_sup);
+        } else {
+            crate::sup_qualidade::controles_das_isofotas(ui, &mut s.analise_sup);
+        }
+        crate::sup_qualidade::controles_do_corte(ui, &mut s.analise_sup);
     });
 }
 

@@ -43,16 +43,19 @@ pub enum TipoCurvatura {
     Media,
     /// produto das duas: zero em superfície desenvolvível
     Gaussiana,
+    /// a menor curvatura em valor absoluto: zero onde a face é reta numa direção (B180)
+    Minima,
 }
 
 impl TipoCurvatura {
-    pub const TODOS: [TipoCurvatura; 3] = [TipoCurvatura::Maxima, TipoCurvatura::Media, TipoCurvatura::Gaussiana];
+    pub const TODOS: [TipoCurvatura; 4] = [TipoCurvatura::Maxima, TipoCurvatura::Media, TipoCurvatura::Gaussiana, TipoCurvatura::Minima];
 
     pub fn rotulo(self) -> &'static str {
         match self {
             TipoCurvatura::Maxima => "Máxima",
             TipoCurvatura::Media => "Média",
             TipoCurvatura::Gaussiana => "Gaussiana",
+            TipoCurvatura::Minima => "Mínima",
         }
     }
 
@@ -62,6 +65,7 @@ impl TipoCurvatura {
             TipoCurvatura::Maxima => k1.abs().max(k2.abs()),
             TipoCurvatura::Media => ((k1 + k2) / 2.).abs(),
             TipoCurvatura::Gaussiana => (k1 * k2).abs().sqrt(),
+            TipoCurvatura::Minima => k1.abs().min(k2.abs()),
         }
     }
 }
@@ -126,6 +130,7 @@ pub fn painel_curvatura(app: &mut App, ctx: &egui::Context, area: Rect) {
         });
         ui.add(crate::ui_ext::slider(&mut s.curv_raio, 0.5..=2000.).logarithmic(true).suffix(" mm").text(tr("Raio"))).on_hover_text(tr("Raio que recebe a última cor. A medida vem da superfície: não muda com o zoom nem com a malha."));
         barra(ui, &p, tr("plano"), &format!("R {} mm", crate::app::fmt(s.curv_raio as f64)));
+        crate::sup_qualidade::controles_do_corte(ui, &mut s.analise_sup);
     });
 }
 
@@ -281,5 +286,7 @@ mod tests {
         assert_eq!(TipoCurvatura::Maxima.valor(0.1, -0.3), 0.3);
         assert_eq!(TipoCurvatura::Media.valor(0.1, -0.1), 0.);
         assert_eq!(TipoCurvatura::Gaussiana.valor(0.5, 0.), 0., "cilindro é desenvolvível");
+        assert_eq!(TipoCurvatura::Minima.valor(0.1, -0.3), 0.1);
+        assert_eq!(TipoCurvatura::Minima.valor(0.05, 0.), 0., "cilindro: reta ao longo do eixo");
     }
 }

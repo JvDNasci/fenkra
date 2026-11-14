@@ -81,6 +81,7 @@ impl EscalaMapa {
                     T::Maxima => 0.,
                     T::Media => 1.,
                     T::Gaussiana => 2.,
+                    T::Minima => 3.,
                 },
                 raio: e.raio,
                 minimo: 0.,
@@ -136,6 +137,7 @@ pub fn painel_inclinacao(app: &mut App, ctx: &egui::Context, area: Rect) {
                 ui.label(RichText::new(tr(nome)).small().weak());
             });
         }
+        crate::sup_qualidade::controles_do_corte(ui, &mut s.analise_sup);
     });
 }
 

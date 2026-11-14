@@ -451,6 +451,9 @@ pub struct Settings {
     pub incl_inverte: bool,
     #[serde(default = "minimo_da_inclinacao")]
     pub incl_min: f32,
+    /// B180: zebra, isofotas e plano de corte das análises
+    #[serde(default)]
+    pub analise_sup: crate::sup_qualidade::AjustesAnalise,
     pub edges_in_render: bool,
     /// arestas de tangência visíveis (padrão: escondidas, como numa peça real)
     pub tangent_edges: bool,
@@ -616,6 +619,7 @@ impl Default for Settings {
             incl_eixo: eixo_da_inclinacao(),
             incl_inverte: false,
             incl_min: minimo_da_inclinacao(),
+            analise_sup: Default::default(),
             edges_in_render: true,
             tangent_edges: false,
             ortho: false,
