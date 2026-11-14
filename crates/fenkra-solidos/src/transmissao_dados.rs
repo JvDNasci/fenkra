@@ -76,18 +76,21 @@ pub const CORRENTES: &[Corrente] = &[
     Corrente { designacao: "ISO 08B-1", norma: "ISO 606", passo: 12.7, rolo: 8.51, largura: 7.75, conferencia: DuasFontes, fontes: "F3 (distribuidor RS e fabricante)", nota: "" },
     Corrente { designacao: "ISO 10B-1", norma: "ISO 606", passo: 15.875, rolo: 10.16, largura: 9.65, conferencia: UmaFonte, fontes: "F3 (fabricante)", nota: "só uma tabela traz as três medidas" },
     Corrente { designacao: "428", norma: "corrente de moto e kart", passo: 12.7, rolo: 8.51, largura: 7.75, conferencia: DuasFontes, fontes: "F7 (tabela de kart e listagem de peças)", nota: "passo e rolo concordam em tabelas de kart e de moto; largura 7,75 em duas fontes, uma terceira dá 0,313 pol (7,95 mm)" },
-    Corrente { designacao: "219", norma: "corrente de kart", passo: 7.774, rolo: 4.59, largura: 0., conferencia: Conflito, fontes: "F7 (tabela de kart e ficha de fabricante)", nota: "passo e rolo concordam; largura interna 4,6 mm numa fonte e 5,00 mm noutra, sem valor único" },
+    // B354/B395: passo e rolo concordam nas duas fontes; a largura interna diverge (4,6 x 5,00 mm) e
+    // o usuário decidiu, em 2026-11-13, usar a menor das duas, 4,6 mm: o dente feito para a corrente
+    // mais estreita ainda entra na mais larga. Deixa de ser provisória e libera a geração.
+    Corrente { designacao: "219", norma: "corrente de kart", passo: 7.774, rolo: 4.59, largura: 4.6, conferencia: DuasFontes, fontes: "F7 (tabela de kart e ficha de fabricante)", nota: "passo e rolo concordam; largura interna 4,6 mm (decisão do usuário: a menor das fontes, que dão 4,6 e 5,00 mm)" },
 ];
 
 pub fn corrente(designacao: &str) -> Option<&'static Corrente> {
     CORRENTES.iter().find(|c| c.designacao == designacao)
 }
 
-/// Linhas em que passo e rolo concordam e só a largura interna diverge entre as fontes (B354, B395).
-/// A geração usa a **menor** largura das fontes como valor provisório, porque o dente feito para a
-/// corrente mais estreita ainda entra na mais larga; o valor vira o parâmetro editável `w` da roda e
-/// `b1` da corrente, e a peça leva o aviso até alguém medir a corrente de verdade.
-pub const LARGURAS_PROVISORIAS: &[(&str, f64, &str)] = &[("219", 4.6, "largura interna da corrente 219 provisória: 4,6 mm (as fontes dão 4,6 e 5,00 mm). Meça a corrente usada e mude o parâmetro w da roda e b1 da corrente")];
+/// Linhas em que passo e rolo concordam e só a largura interna diverge entre as fontes. A geração
+/// usaria a **menor** largura das fontes como valor provisório, porque o dente feito para a corrente
+/// mais estreita ainda entra na mais larga, e a peça levaria o aviso. Está vazia: a 219, que era a
+/// única (B395), teve a largura decidida pelo usuário (4,6 mm) e saiu daqui como linha liberada.
+pub const LARGURAS_PROVISORIAS: &[(&str, f64, &str)] = &[];
 
 /// Corrente pronta para gerar e o aviso, quando a largura é provisória. Recusa as linhas sem duas
 /// fontes que não estão em [`LARGURAS_PROVISORIAS`].
@@ -221,15 +224,15 @@ mod tests {
     #[test]
     fn so_linhas_conferidas_em_duas_fontes_geram() {
         let lib: Vec<_> = CORRENTES.iter().filter(|c| c.liberada()).map(|c| c.designacao).collect();
-        assert_eq!(lib, ["ANSI 50", "ANSI 60", "ANSI 80", "ISO 08B-1", "428"]);
-        // B354: a 219 tem passo e rolo conferidos, mas a largura interna diverge (4,6 x 5,00 mm)
+        assert_eq!(lib, ["ANSI 50", "ANSI 60", "ANSI 80", "ISO 08B-1", "428", "219"]);
+        // B354/B395: a 219 sai liberada com a largura decidida pelo usuário, 4,6 mm, sem aviso
         let c219 = corrente("219").unwrap();
-        assert_eq!((c219.passo, c219.rolo, c219.largura), (7.774, 4.59, 0.));
-        assert!(!c219.liberada() && c219.conferencia == Conferencia::Conflito);
-        // B395: gera com a menor largura das fontes, como provisória e com aviso; a ANSI 40 não
+        assert_eq!((c219.passo, c219.rolo, c219.largura), (7.774, 4.59, 4.6));
+        assert!(c219.liberada() && c219.conferencia == Conferencia::DuasFontes);
         let (c, aviso) = corrente_para_gerar("219").unwrap();
         assert_eq!((c.passo, c.rolo, c.largura), (7.774, 4.59, 4.6));
-        assert!(aviso.is_some_and(|a| a.contains("provisória")));
+        assert_eq!(aviso, None);
+        assert!(LARGURAS_PROVISORIAS.is_empty());
         assert!(corrente_para_gerar("ANSI 40").is_err() && corrente_para_gerar("ISO 06B-1").is_err());
         assert_eq!(corrente_para_gerar("428").unwrap().1, None);
         // linhas com uma fonte ou conflito ficam na lista, rotuladas, mas não liberadas

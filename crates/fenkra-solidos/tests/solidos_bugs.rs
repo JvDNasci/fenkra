@@ -26,7 +26,7 @@ fn espessura_com_botao_remover_tira_material() {
         return;
     }
     let v0 = volume(&caixa());
-    let t = Thickness { faces: vec![[0., 0., 20.]], value: "5".into(), face_keys: vec![], remove: true };
+    let t = Thickness { faces: vec![[0., 0., 20.]], value: "5".into(), face_keys: vec![], remove: true, regras: vec![] };
     let mut d = caixa();
     let f = d.add_feature(FeatureKind::Thickness(t.clone()));
     let r = recompute(&d);

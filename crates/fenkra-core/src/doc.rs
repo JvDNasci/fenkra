@@ -1703,6 +1703,15 @@ impl OrdemConteiner {
     }
 }
 
+/// Botões passo a passo da barra de status (B59): andam o objeto em trabalho.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum PassoTrabalho {
+    Inicio,
+    Anterior,
+    Proximo,
+    Fim,
+}
+
 /// Quando a árvore é recalculada (B59).
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
 pub enum ModoAtualizacao {
@@ -2009,9 +2018,15 @@ pub struct TubeBend {
     /// número de rasgos em V (modos de corte; B328)
     #[serde(default)]
     pub cuts: String,
-    /// folga de raiz da solda (B333)
+    /// folga de solda (raiz do cordão) entre as faces que se fecham: V comum, V múltiplo e canto
+    /// com gabarito (B333, B442). Vazio = a da regra; sem regra, zero
     #[serde(default)]
     pub root_gap: String,
+    /// folga de dobra dos rasgos em V (B442): quanto a abertura de cada rasgo cresce na parede
+    /// interna, com o tubo aberto, para as faces não se travarem ao fechar. Vazio = a da regra
+    /// (campo `clearance`); sem regra, zero
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub bend_gap: String,
     /// gomos do tubo redondo no corte simples (1 = uma esquadria)
     #[serde(default)]
     pub segments: String,
@@ -2043,7 +2058,7 @@ pub struct TubeRule {
     /// retorno elástico em graus (a máquina dobra além do ângulo pedido)
     #[serde(default)]
     pub springback: String,
-    /// folga em mm
+    /// folga de dobra dos rasgos em V, em mm (B442): alarga a abertura de cada rasgo
     #[serde(default)]
     pub clearance: String,
     /// alongamento admissível da fibra externa (fração: 0,25 = 25%)
@@ -2052,7 +2067,7 @@ pub struct TubeRule {
     /// fator K da placa externa nos modos em V
     #[serde(default)]
     pub plate_k: String,
-    /// folga de raiz da solda em mm
+    /// folga de solda (raiz do cordão) em mm
     #[serde(default)]
     pub root_gap: String,
     /// raio mínimo da linha de articulações do V múltiplo, em mm
@@ -3677,6 +3692,10 @@ pub struct Thickness {
     /// B07: remove material em vez de acrescentar (o valor é sempre a distância positiva)
     #[serde(default)]
     pub remove: bool,
+    /// B95: seleção por intenção gravada (tangentes, concêntricas). Cada regra parte de uma face de
+    /// `faces` (a semente) e é refeita a cada recompute: faces que a mudança do modelo criar entram sozinhas.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub regras: Vec<RegraAresta>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -5217,6 +5236,63 @@ impl Document {
         self.rollback = self.features.len();
     }
 
+    /// Posição do objeto em trabalho entre os comandos da linha do tempo (sem os livres): quantos
+    /// estão antes da barra de fim de peça e quantos há. É o "3/5" dos botões passo a passo.
+    pub fn posicao_em_trabalho(&self) -> (usize, usize) {
+        let n = self.rollback.min(self.features.len());
+        let total = self.features.iter().filter(|f| !self.is_free(f)).count();
+        let cur = self.features[..n].iter().filter(|f| !self.is_free(f)).count();
+        (cur, total)
+    }
+
+    /// Botões ⏮ ◀ ▶ ⏭ (B59): andam o objeto em trabalho, a barra de fim de peça, comando a comando.
+    /// Antes andavam o marcador do corpo ativo, um segundo "onde estou" que não era o objeto em
+    /// trabalho: a árvore sublinhava um comando e a peça mostrava outro. O marcador dos coletores
+    /// fica zerado, para sobrar uma posição só.
+    pub fn passo_em_trabalho(&mut self, passo: PassoTrabalho) {
+        let idx: Vec<usize> = (0..self.features.len()).filter(|i| !self.is_free(&self.features[*i])).collect();
+        let (cur, total) = self.posicao_em_trabalho();
+        let k = match passo {
+            PassoTrabalho::Inicio => 0,
+            PassoTrabalho::Anterior => cur.saturating_sub(1),
+            PassoTrabalho::Proximo => (cur + 1).min(total),
+            PassoTrabalho::Fim => total,
+        };
+        self.ir_para_posicao(&idx, k);
+    }
+
+    /// Marcador arrastado na linha do tempo de um coletor (`m` comandos dele ativos, `None` = todos):
+    /// vira o objeto em trabalho, para o marcador e a barra de fim de peça serem a mesma coisa.
+    pub fn definir_marcador_do_coletor(&mut self, coletor: Id, m: Option<usize>) {
+        let dele: Vec<usize> = (0..self.features.len()).filter(|i| self.features[*i].target == coletor && !self.is_free(&self.features[*i])).collect();
+        match m {
+            Some(k) if k < dele.len() => {
+                let idx: Vec<usize> = (0..self.features.len()).filter(|i| !self.is_free(&self.features[*i])).collect();
+                // posição na linha do tempo inteira do k-ésimo comando do coletor
+                let pos = idx.iter().position(|i| *i == dele[k]).unwrap_or(0);
+                self.ir_para_posicao(&idx, pos);
+            }
+            _ => self.voltar_ao_fim_da_peca(),
+        }
+        for c in &mut self.collectors {
+            c.marker = None;
+        }
+    }
+
+    fn ir_para_posicao(&mut self, idx: &[usize], k: usize) {
+        for c in &mut self.collectors {
+            c.marker = None;
+        }
+        if k >= idx.len() {
+            self.voltar_ao_fim_da_peca();
+        } else if k == 0 {
+            self.rollback = idx.first().copied().unwrap_or(0);
+        } else {
+            let id = self.features[idx[k - 1]].id;
+            let _ = self.definir_objeto_em_trabalho(id);
+        }
+    }
+
     /// A peça está retrocedida? (comandos depois da barra de fim de peça; avisa ao salvar)
     pub fn retrocedida(&self) -> bool {
         self.features.iter().enumerate().any(|(i, f)| i >= self.rollback && !self.is_free(f))
@@ -5544,6 +5620,42 @@ mod tests {
         assert_eq!(d.objeto_em_trabalho(), Some(ex));
         assert!(!d.retrocedida());
         assert!(matches!(d.definir_objeto_em_trabalho(Id(9999)), Err(DocError::NotFound)));
+    }
+
+    #[test]
+    fn passo_a_passo_anda_o_objeto_em_trabalho_e_nao_um_marcador_a_parte() {
+        let mut d = Document::new("p");
+        let sk = sketch_rect(&mut d);
+        let ex = extrusao_de(&mut d, sk);
+        let sk2 = sketch_rect(&mut d);
+        let ex2 = extrusao_de(&mut d, sk2);
+        let col = d.active_collector;
+        // marcador antigo do coletor (arquivo de antes): o passo zera e fica só a barra de fim de peça
+        if let Some(c) = d.collectors.iter_mut().find(|c| c.id == col) {
+            c.marker = Some(1);
+        }
+        assert_eq!(d.posicao_em_trabalho(), (4, 4));
+        d.passo_em_trabalho(PassoTrabalho::Anterior);
+        assert_eq!(d.objeto_em_trabalho(), Some(sk2));
+        assert_eq!(d.posicao_em_trabalho(), (3, 4));
+        assert!(d.collectors.iter().all(|c| c.marker.is_none()));
+        assert!(!d.is_active(3) && d.is_active(2), "o comando depois da barra fica inativo; o de antes, ativo");
+        d.passo_em_trabalho(PassoTrabalho::Inicio);
+        assert_eq!(d.posicao_em_trabalho(), (0, 4));
+        assert_eq!(d.objeto_em_trabalho(), None);
+        d.passo_em_trabalho(PassoTrabalho::Proximo);
+        assert_eq!(d.objeto_em_trabalho(), Some(sk));
+        d.passo_em_trabalho(PassoTrabalho::Proximo);
+        assert_eq!(d.objeto_em_trabalho(), Some(ex));
+        d.passo_em_trabalho(PassoTrabalho::Fim);
+        assert_eq!(d.objeto_em_trabalho(), Some(ex2));
+        assert!(!d.retrocedida());
+        // o marcador arrastado na árvore vira o objeto em trabalho
+        d.definir_marcador_do_coletor(col, Some(2));
+        assert_eq!(d.objeto_em_trabalho(), Some(ex));
+        assert!(d.collectors.iter().all(|c| c.marker.is_none()));
+        d.definir_marcador_do_coletor(col, None);
+        assert_eq!(d.objeto_em_trabalho(), Some(ex2));
     }
 
     #[test]

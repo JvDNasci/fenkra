@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 106690,
+ "tokens_total_k": 107250,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -12,25 +12,25 @@
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 10.9
+   "pct": 10.8
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 30.3
+   "pct": 30.2
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 22650,
-   "pct": 21.2
+   "tokens_k": 23170,
+   "pct": 21.6
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 32900,
-   "pct": 30.8
+   "tokens_k": 32940,
+   "pct": 30.7
   }
  },
  "itens": [
@@ -318,7 +318,7 @@
    "tokens_k": 400,
    "teste": "Auto",
    "area": "Sólidos",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -978,7 +978,7 @@
    "tokens_k": 0,
    "teste": "Manual",
    "area": "Geral",
-   "status": "aguarda você",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -1251,7 +1251,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -1829,7 +1829,7 @@
    "tokens_k": 400,
    "teste": "Auto + Visual",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.4
   },
   {
@@ -3572,7 +3572,7 @@
    "tokens_k": 60,
    "teste": "Manual",
    "area": "Geral",
-   "status": "aguarda você",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -3636,7 +3636,7 @@
    "tokens_k": 40,
    "teste": "Manual",
    "area": "Geral",
-   "status": "aguarda você",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -3702,7 +3702,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "Geral",
-   "status": "aguarda você",
+   "status": "em andamento",
    "pct": 0.3
   },
   {
@@ -4600,7 +4600,7 @@
    "tokens_k": 80,
    "teste": "Auto",
    "area": "Geral",
-   "status": "aguarda você",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -4920,7 +4920,7 @@
    "tokens_k": 350,
    "teste": "Auto",
    "area": "Geral",
-   "status": "aguarda você",
+   "status": "em andamento",
    "pct": 0.3
   },
   {
@@ -5096,7 +5096,7 @@
    "tokens_k": 250,
    "teste": "Auto + Visual",
    "area": "Geral",
-   "status": "aguarda você",
+   "status": "a fazer",
    "pct": 0.2
   },
   {
@@ -5352,7 +5352,7 @@
    "tokens_k": 200,
    "teste": "Visual",
    "area": "Interface",
-   "status": "aguarda você",
+   "status": "a fazer",
    "pct": 0.2
   },
   {
@@ -5576,7 +5576,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
-   "status": "aguarda você",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -5592,7 +5592,7 @@
    "tokens_k": 150,
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
-   "status": "aguarda você",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -5656,7 +5656,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
-   "status": "aguarda você",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -5993,7 +5993,7 @@
    "tokens_k": 60,
    "teste": "Auto",
    "area": "Biblioteca de normas",
-   "status": "aguarda você",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -6281,7 +6281,7 @@
    "tokens_k": 250,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "aguarda você",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -6649,7 +6649,7 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
-   "status": "aguarda você",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -6681,7 +6681,7 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
-   "status": "aguarda você",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -7384,6 +7384,134 @@
    "catalogo": [],
    "tokens_k": 100,
    "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B442",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Estrutural: folga de dobra e folga de solda no corte em V e na régua",
+   "oque": "Pedido do usuário depois do teste físico do B328/B329/B333 (fechou igual ao gabarito): folga de dobra configurável que alarga cada rasgo, para o tubo fechar sem travar, e folga de solda que deixa abertura para o cordão no metalon. Os dois valores no painel, na prévia e na régua PDF/SVG com cota; padrão 0 mantém o resultado de hoje.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto + Visual",
+   "area": "Estrutural",
+   "status": "em andamento",
+   "pct": 0.1
+  },
+  {
+   "id": "B445",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Montagem: peça de fora do projeto com aviso e cópia para o projeto",
+   "oque": "Decisão do usuário (checklist 12A): com projeto aberto, a peça de fora deixa de ser barrada; aviso com Copiar para o projeto (padrão, com dependências, identidade e histórico) ou Cancelar; colisão de nome renomeia e avisa.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "em andamento",
+   "pct": 0.1
+  },
+  {
+   "id": "B446",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Árvore: arrastar recurso em todas as pastas",
+   "oque": "Teste com mouse real de 13/11: o arraste só funciona entre recursos e para a pasta de geometria. Soltar na pasta de comandos do mesmo corpo move para ela com ordem válida; soltar no nó do corpo move para esse corpo ou diz o motivo; parâmetros reordenáveis; grupos vazios aceitam; alvo que recusa não seleciona nem engole a soltura.",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto + Manual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B447",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Painéis: árvore solta recortada, painel na base sobre a barra de status e janela da chapa sobre a barra de menus",
+   "oque": "Teste com mouse real de 13/11. Resolver junto com o layout em coluna do B433: árvore solta recorta pela área útil, painel encaixado embaixo respeita a barra de status, janela da chapa abre abaixo da barra de ferramentas.",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B448",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "PMI: nota com várias setas, duplo clique na seta e menu Mais",
+   "oque": "Teste com mouse real de 13/11: a seta da nota entra no teste de clique antes da face (duplo clique abre a nota, não a extrusão de baixo); Ctrl ou Shift no comando Nota acumula alvos e cria a nota com Enter; o painel começa com os campos da nota sem herdar a seleção anterior; o menu Mais fecha ao escolher um comando.",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto + Manual",
+   "area": "PMI",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B449",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Teclado: setas andam na árvore depois do clique e redesenho imediato",
+   "oque": "Teste com mouse real de 13/11: depois de clicar na árvore as setas ficam mortas até um Esc; com item da árvore em foco, setas andam na árvore. E o app só redesenha no evento seguinte: o resultado de um clique tem de aparecer sem mexer o mouse.",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 60,
+   "teste": "Auto + Manual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B450",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Biblioteca e montagem: inserir sem arquivo, aviso legível e voltar da peça",
+   "oque": "Teste com mouse real de 13/11: com a montagem sem arquivo, Adicionar da biblioteca pede para salvar em vez de armar um fantasma que não pode ser posto; o aviso cabe na coluna (quebra de linha); voltar da peça para a montagem não rearma o Inserir peça sem perguntar.",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 60,
+   "teste": "Auto + Manual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B451",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Teste com mouse real, rodada 2",
+   "oque": "Repetir pelo equipamento scripts/teste_interface os casos que faltaram em 13/11 (desenho: esboço na folha, balões automáticos, Cancelar na barra; Reancorar restrição; biblioteca em furo e em ponto) e reconferir os corrigidos (B446, B448, B449, B450).",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Manual",
    "area": "Interface",
    "status": "a fazer",
    "pct": 0.1

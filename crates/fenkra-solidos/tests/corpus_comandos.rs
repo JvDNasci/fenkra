@@ -504,7 +504,7 @@ fn espessura_na_face_de_cima_engrossa_o_corpo() {
     precisa_kernel!();
     let (mut d, _, _) = caixa_cotada();
     param(&mut d, "g", "3");
-    d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[20., 15., 20.]], value: s("g"), face_keys: vec![], remove: false }));
+    d.add_feature(FeatureKind::Thickness(Thickness { faces: vec![[20., 15., 20.]], value: s("g"), face_keys: vec![], remove: false, regras: vec![] }));
     ciclo("espessura na face", &mut d, "g", "5", &prisma(1200. * 23., [40., 30., 23.]), &prisma(1200. * 25., [40., 30., 25.]));
 }
 

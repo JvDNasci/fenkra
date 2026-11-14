@@ -61,7 +61,7 @@ pub struct CalculoRoda {
     pub diametro_cubo: f64,
 }
 
-/// A linha da corrente para gerar; a largura pode ser provisória (219), e então vem o aviso.
+/// A linha da corrente para gerar; se a largura for provisória (linha em `LARGURAS_PROVISORIAS`), vem o aviso.
 fn dados_com_aviso(corr: &str) -> Result<(Corrente, Option<String>), String> {
     crate::transmissao_dados::corrente_para_gerar(corr)
 }
@@ -70,7 +70,7 @@ fn dados(corr: &str) -> Result<Corrente, String> {
     dados_com_aviso(corr).map(|(c, _)| c)
 }
 
-/// Grava o aviso da largura provisória nas propriedades da peça, para a lista de peças e a árvore.
+/// Grava o aviso de largura provisória, quando houver, nas propriedades da peça, para a lista de peças e a árvore.
 fn marcar_aviso(m: &mut Montador, aviso: Option<String>) {
     if let Some(a) = aviso {
         m.doc.props.custom.push(("Aviso".into(), a));
@@ -531,18 +531,18 @@ mod tests {
     }
 
     #[test]
-    fn corrente_428_gera_roda_e_219_gera_com_largura_provisoria() {
+    fn correntes_428_e_219_geram_roda_sem_aviso() {
         let c = calculo_roda(&ParamRoda::nova("428", 11, 8.)).unwrap();
         assert!((c.diametro_primitivo - 12.7 / (std::f64::consts::PI / 11.).sin()).abs() < 1e-6);
         assert!((c.largura_dente - 0.9 * 7.75).abs() < 1e-9);
-        // B395: a 219 sai com a menor largura das fontes (4,6 mm), como parâmetro e com aviso
+        // B354/B395: a 219 sai com a largura decidida pelo usuário (4,6 mm), como parâmetro e sem aviso
         let c = calculo_roda(&ParamRoda::nova("219", 82, 40.)).unwrap();
         assert!((c.diametro_primitivo - 7.774 / (std::f64::consts::PI / 82.).sin()).abs() < 1e-6);
         assert!((c.largura_dente - 0.9 * 4.6).abs() < 1e-9);
         let d = roda_documento(&ParamRoda::nova("219", 82, 40.)).unwrap();
-        assert!(d.props.custom.iter().any(|(k, v)| k == "Aviso" && v.contains("provisória")));
+        assert!(!d.props.custom.iter().any(|(k, _)| k == "Aviso"));
         assert!(d.params.iter().any(|p| p.name == "w"));
-        // a 428 não leva aviso
+        // a 428 também não
         assert!(!roda_documento(&ParamRoda::nova("428", 11, 8.)).unwrap().props.custom.iter().any(|(k, _)| k == "Aviso"));
     }
 
@@ -551,7 +551,7 @@ mod tests {
         if !fenkra_kernel::AVAILABLE {
             return;
         }
-        // kart: pinhão de 11 e coroa de 82 dentes; a largura da roda é 0,9 da largura provisória
+        // kart: pinhão de 11 e coroa de 82 dentes; a largura da roda é 0,9 da largura interna (4,6 mm)
         // o pinhão de 11 dentes só aceita furo pequeno (cubo dentro da raiz)
         for (z, furo) in [(11, 8.), (82, 20.)] {
             let d = roda_documento(&ParamRoda::nova("219", z, furo)).unwrap();
@@ -565,9 +565,9 @@ mod tests {
         let elos = crate::transmissao_dados::elos_da_corrente(7.774, 11, 82, 300.);
         let cc = crate::transmissao_dados::distancia_corrigida_corrente(7.774, 11, 82, elos).unwrap();
         let d = corrente_documento(&ParamLacoCorrente { corrente: "219".into(), dentes1: 11, dentes2: 82, elos, centros: cc, com_rolos: true }).unwrap();
-        assert!(d.props.custom.iter().any(|(k, _)| k == "Aviso"));
+        assert!(!d.props.custom.iter().any(|(k, _)| k == "Aviso"));
         let (_, lo, hi) = medir(&d);
-        // entre as placas a largura provisória 4,6 mm
+        // entre as placas a largura interna 4,6 mm
         assert!(lo[2] < -0.5 && hi[2] > 4.6 + 0.5, "{lo:?} {hi:?}");
     }
 

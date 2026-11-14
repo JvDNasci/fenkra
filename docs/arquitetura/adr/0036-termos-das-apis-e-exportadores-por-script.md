@@ -1,6 +1,6 @@
 # ADR 0036: Termos das APIs públicas dos CADs de origem e exportadores por script
 
-- **Status:** proposta. Falta a revisão humana exigida pelo B267; nenhum exportador pode sair antes dela.
+- **Status:** aceita em 13/11/2026 pelo responsável do projeto (decisão abaixo, em "Decisão do responsável").
 - **Data:** 2026-11-05
 - **Item:** B267. Relacionados: B266 (esquema aberto), [ADR 0010](0010-referencias-v2.md)
 
@@ -83,6 +83,21 @@ documentação de terceiros, e, até a revisão, qualquer script para os CADs da
 
 O formato aberto do B266 **não depende desta trava**: é uma especificação nossa, e o leitor do Fenkra não contém código
 de nenhum fabricante. Qualquer pessoa pode gravar nele por conta própria.
+
+## Decisão do responsável (13/11/2026)
+
+O responsável do projeto liberou a integração por script, com estas condições, que passam a valer junto com os
+pontos 1 a 4, 6 e 7 acima:
+
+- **O caminho recomendado é o STEP.** A documentação e a interface do importador dizem que exportar em STEP no CAD de
+  origem é o caminho ideal e suficiente para a geometria. O script serve só para quem também quer a árvore, os
+  parâmetros e os nomes.
+- **Só pela API própria do CAD de origem.** Importar e exportar dados nativos exige a API documentada que o próprio
+  fabricante oferece, rodada pela pessoa na própria licença. O Fenkra nunca lê o formato nativo.
+- **O script avisa antes de rodar** que usa a licença e a API de quem roda e que cabe a essa pessoa conferir o contrato
+  que aceitou.
+- O ponto 5 (trava) fica atendido para o primeiro CAD de origem, que o responsável tem instalado para teste (B298). Os
+  demais continuam travados até nova decisão.
 
 ## Alternativas consideradas
 

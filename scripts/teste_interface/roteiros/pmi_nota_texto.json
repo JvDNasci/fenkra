@@ -1,0 +1,8 @@
+{
+  "descricao": "Com a caixa de texto da nota aberta (logo depois de apontar a face), escreve o texto, confirma com Enter e tira o mouse de cima.",
+  "passos": [
+    {"acao": "digitar", "texto": "Quebrar cantos", "nome": "nota_texto"},
+    {"acao": "tecla", "tecla": "enter", "nome": "nota_enter"},
+    {"acao": "mover", "x": 1500, "y": 900, "nome": "nota_pronta"}
+  ]
+}

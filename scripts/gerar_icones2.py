@@ -382,7 +382,9 @@ def desenhos():
     ic("filete_variavel", B="M6 14h28", R="M6 14l28 20M34 14a10 10 0 0 1 0 20")
     ic("filete_assimetrico", B="M6 40V8M6 40h38", R="M6 14a16 26 0 0 0 16 26")
     ic("arestas_selecionar", B=CUBO(), R=L((8, 14), (24, 22)))
-    ic("arestas_todas", b=CUBO_OCULTO(), R=CUBO())
+    # B60: era o mesmo desenho da caixa; agora a caixa com as quinas de cima e as da frente já arredondadas
+    ic("arestas_todas", B=L((8, 14), (8, 32), (24, 40), (40, 32), (40, 14)),
+       R="M20 8Q24 6 28 8L36 12Q40 14 36 16L28 20Q24 22 20 20L12 16Q8 14 12 12z" + L((24, 22), (24, 40)))
     ic("arestas_comando", B=CUBO(21, 8, 15, 7.5, 16), R=L((6, 15.5), (21, 23)) + CURSOR(30, 22, .85))
     ic("prop_minima", B="M26 34c10 0 10-20 18-20", R="M6 34h20M26 28v12")
     ic("prop_tangente", B="M6 42h36", R="M6 34h20c10 0 10-20 18-20", pr=[(26, 34)])

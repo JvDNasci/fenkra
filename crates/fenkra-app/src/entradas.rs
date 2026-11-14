@@ -458,7 +458,7 @@ mod tests {
         assert_eq!(campo_ativo(&k), None);
         assert_eq!(contagem(&k), Some((Espera::Face, 1)));
 
-        let mut k = FeatureKind::Thickness(Thickness { faces: vec![], value: s("2"), face_keys: vec![], remove: false });
+        let mut k = FeatureKind::Thickness(Thickness { faces: vec![], value: s("2"), face_keys: vec![], remove: false, regras: vec![] });
         assert_eq!(campo_ativo(&k), Some(Espera::Face));
         crate::feat_ui::add_face(&mut k, [0., 0., 20.]);
         assert_eq!(campo_ativo(&k), None);

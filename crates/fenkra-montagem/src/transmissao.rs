@@ -336,7 +336,7 @@ pub fn montar_layout(e: &Elemento) -> Result<Layout, String> {
             avisos.extend(c.avisos);
         }
         Elemento::Corrente { corrente, dentes1, dentes2, centros, furo1, furo2 } => {
-            // a largura pode ser provisória (219, B395): a peça leva o aviso e o painel também
+            // a largura pode ser provisória (linha em `LARGURAS_PROVISORIAS`): a peça leva o aviso e o painel também
             let (c, aviso_largura) = dados::corrente_para_gerar(corrente)?;
             avisos.extend(aviso_largura);
             let (n1, n2) = ((*dentes1).min(*dentes2), (*dentes1).max(*dentes2));

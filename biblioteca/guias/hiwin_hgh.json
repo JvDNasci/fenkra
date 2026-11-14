@@ -51,7 +51,7 @@
     "HR": 15
    },
    "confirmado_por": 2,
-   "nota": "H, H1, N, W, B, C, L1, L e a rosca M4×5 dos furos de fixação: catálogo Hiwin e catálogo HG da LM76 concordam. Bloco padrão (fixação por cima), trilho HGR15R (WR 15, HR 15). N = (W − WR)/2. Modelo simplificado: caixa W × L de H1 a H com o canal do trilho e quatro furos M no passo B × C; sem esferas, vedações nem graxeiro."
+   "nota": "H, H1, N, W, B, C, L1, L e a rosca M4×5 dos furos de fixação: catálogo Hiwin e catálogo HG da LM76 concordam. L 61,4 (B17-dados): a folha da Sorotec dá 60,5, mas o catálogo do fabricante, a LM76 e as listagens de distribuidor (DigiKey, peça HGH-15-CA-Z0-C) dão 61,4; fica 61,4. Bloco padrão (fixação por cima), trilho HGR15R (WR 15, HR 15). N = (W − WR)/2. Modelo simplificado: caixa W × L de H1 a H com o canal do trilho e quatro furos M no passo B × C; sem esferas, vedações nem graxeiro."
   },
   {
    "designacao": "HGH20CA",

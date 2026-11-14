@@ -256,3 +256,89 @@ fn canto_com_gabarito_com_raio_menor_e_maior_que_a_altura_continua_um_solido() {
         assert!(perto(hi[0], 320., 0.3) && perto(lo[1], -20., 0.3), "Ro = {ro}: {lo:?} {hi:?}");
     }
 }
+
+#[test]
+fn folgas_zero_dao_o_mesmo_tubo_fechado() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    // B442: folga de dobra e de solda 0 informadas no nó não mudam o sólido nem a lista de corte
+    for b in [TubeBend { k: s("0.33"), ..bend(BendMode::VComum, "1.8") }, TubeBend { cuts: s("6"), ..bend(BendMode::VComum, "45") }, bend(BendMode::VComRaio, "30")] {
+        let (d, f) = l_dobrado(SectionKind::TuboQuadrado, &["30", "1.2"], b.clone());
+        let (d0, f0) = l_dobrado(SectionKind::TuboQuadrado, &["30", "1.2"], TubeBend { bend_gap: s("0"), root_gap: s("0"), ..b.clone() });
+        let (r, r0) = (recompute(&d), recompute(&d0));
+        sem_erro(&r, f);
+        sem_erro(&r0, f0);
+        assert_eq!(r.bodies.len(), r0.bodies.len());
+        assert!(perto(volume(&r), volume(&r0), 1e-6), "{:?}: {} contra {}", b.mode, volume(&r), volume(&r0));
+        assert_eq!(caixa(&r), caixa(&r0));
+        assert_eq!(cut_list(&d)[0].length, cut_list(&d0)[0].length);
+    }
+}
+
+#[test]
+fn folga_de_solda_no_v_comum_abre_um_vao_de_largura_constante() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    // 30 x 30 x 1,2, ri = 1,8, folga de solda 1: tira uma faixa de 1 mm em torno da bissetriz das
+    // laterais e da parede interna; a dobradiça (placa) fica inteira
+    let base = TubeBend { k: s("0.33"), ..bend(BendMode::VComum, "1.8") };
+    let (d, f) = l_dobrado(SectionKind::TuboQuadrado, &["30", "1.2"], base.clone());
+    let (d1, f1) = l_dobrado(SectionKind::TuboQuadrado, &["30", "1.2"], TubeBend { root_gap: s("1"), ..base.clone() });
+    let (r, r1) = (recompute(&d), recompute(&d1));
+    sem_erro(&r, f);
+    sem_erro(&r1, f1);
+    assert_eq!(r1.bodies.len(), 1, "a dobradiça segura as duas pernas");
+    let tirado = volume(&r) - volume(&r1);
+    // laterais: 2 t e Lb, com Lb = (H - yA)/cos 45 e yA = t + ri (1 - cos 45); parede interna: (b - 2t) e t / cos 45
+    let c45 = (PI / 4.).cos();
+    let ya = 1.2 + 1.8 * (1. - c45);
+    let esperado = 2. * 1.2 * (30. - ya) / c45 + 27.6 * 1.2 / c45;
+    assert!(perto(tirado, esperado, 0.06 * esperado), "tirado {tirado} contra {esperado}");
+    // a caixa não muda: a folga fica por dentro do canto
+    let ((lo, hi), (lo1, hi1)) = (caixa(&r), caixa(&r1));
+    for k in 0..3 {
+        assert!(perto(lo[k], lo1[k], 0.05) && perto(hi[k], hi1[k], 0.05), "{lo:?} {hi:?} contra {lo1:?} {hi1:?}");
+    }
+    // o comprimento de corte não muda (a folga só alarga o rasgo)
+    assert!(perto(cut_list(&d1)[0].length, cut_list(&d)[0].length, 1e-9));
+}
+
+#[test]
+fn folga_de_dobra_no_v_comum_e_no_v_multiplo_tira_uma_cunha() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    // folga de dobra 2: o V abre 2 mm a mais na parede interna e fecha deixando uma cunha com o
+    // vértice na dobradiça
+    let base = TubeBend { k: s("0.33"), ..bend(BendMode::VComum, "1.8") };
+    let (d, _) = l_dobrado(SectionKind::TuboQuadrado, &["30", "1.2"], base.clone());
+    let (d2, f2) = l_dobrado(SectionKind::TuboQuadrado, &["30", "1.2"], TubeBend { bend_gap: s("2"), ..base });
+    let (r, r2) = (recompute(&d), recompute(&d2));
+    sem_erro(&r2, f2);
+    assert_eq!(r2.bodies.len(), 1);
+    let tirado = volume(&r) - volume(&r2);
+    // cunha de meia abertura s·tan δ: laterais 2 t Lb² tan δ, parede interna (b - 2t) 2 Lb tan δ t / cos 45
+    let c45 = (PI / 4.).cos();
+    let lb = (30. - 1.2 - 1.8 * (1. - c45)) / c45;
+    let td = ((1f64 + 2. / (2. * 28.8)).atan() - PI / 4.).tan();
+    let esperado = 2. * 1.2 * lb * lb * td + 27.6 * 2. * lb * td * 1.2 / c45;
+    assert!(tirado > 0.75 * esperado && tirado < 1.25 * esperado, "tirado {tirado} contra {esperado}");
+    // V múltiplo n = 6 com as duas folgas: continua um sólido só e perde material nas seis juntas
+    let mb = TubeBend { cuts: s("6"), ..bend(BendMode::VComum, "45") };
+    let (dm, _) = l_dobrado(SectionKind::TuboQuadrado, &["30", "1.2"], mb.clone());
+    let (dm2, fm2) = l_dobrado(SectionKind::TuboQuadrado, &["30", "1.2"], TubeBend { bend_gap: s("0.5"), root_gap: s("0.5"), ..mb });
+    let (rm, rm2) = (recompute(&dm), recompute(&dm2));
+    sem_erro(&rm2, fm2);
+    assert_eq!(rm2.bodies.len(), 1);
+    let tirado = volume(&rm) - volume(&rm2);
+    // por junta: faixa de 0,5 (laterais 2 t Lj e parede interna) mais a cunha; Lj = (H - t)/cos 7,5
+    let c = (7.5f64.to_radians()).cos();
+    let por_junta = 0.5 * (2. * 1.2 * 28.8 / c + 27.6 * 1.2 / c);
+    assert!(tirado > 6. * por_junta && tirado < 6. * por_junta * 2.5, "tirado {tirado}, faixa por junta {por_junta}");
+    let ((lo, hi), (lo2, hi2)) = (caixa(&rm), caixa(&rm2));
+    for k in 0..3 {
+        assert!(perto(lo[k], lo2[k], 0.05) && perto(hi[k], hi2[k], 0.05), "{lo:?} {hi:?} contra {lo2:?} {hi2:?}");
+    }
+}

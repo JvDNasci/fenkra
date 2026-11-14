@@ -1,9 +1,7 @@
 Fenkra
 Copyright (c) 2026 João Vitor Dias Nascimento e colaboradores do Fenkra
 
-[DECISÃO HUMANA] Titular e ano do copyright acima assumidos a partir do usuário do git; confirmar.
-[DECISÃO HUMANA] A licença LGPL-2.1-or-later segue a ADR 0003, ainda em estado "proposta". Este
-arquivo não encerra a decisão jurídica; ver docs/pesquisa/propriedade-intelectual.md.
+Titular: João Vitor Dias Nascimento, pessoa física (ADR 0003, aceita em 13/11/2026).
 
 O Fenkra é software livre, distribuído sob a GNU Lesser General Public License, versão 2.1 ou, a seu
 critério, qualquer versão posterior (LGPL-2.1-or-later). O texto está em LICENSE.
@@ -28,9 +26,8 @@ Oferta escrita de código-fonte (LGPL-2.1, seção 6, item c)
 Por no mínimo três anos a partir da data de cada distribuição binária, qualquer pessoa que receba este
 pacote pode obter, por um valor que não exceda o custo de realizar a distribuição física, uma cópia
 completa do código-fonte correspondente do OpenCASCADE Technology 8.0.1 e das demais bibliotecas
-LGPL incluídas, e do código-fonte do Fenkra da mesma versão. Peça pelos canais de contato do
-repositório do Fenkra [DECISÃO HUMANA: informar o endereço do repositório público e um e-mail de
-contato antes do primeiro release].
+LGPL incluídas, e do código-fonte do Fenkra da mesma versão. Peça por uma issue no
+repositório do Fenkra: https://github.com/JvDNasci/fenkra.
 
 Versão exata e origem:
   - OpenCASCADE Technology 8.0.1: https://github.com/Open-Cascade-SAS/OCCT (tag da versão 8.0.1) e

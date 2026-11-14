@@ -398,9 +398,11 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 ui.radio_value(&mut t.remove, true, tr("Remover"));
             });
             ui.label(RichText::new(tr("Escolha acrescentar ou remover; a distância é sempre positiva (valor negativo também remove).")).weak().small());
+            crate::selecao_regras::regra_faces_ui(ui, &mut t.regras, &t.faces);
             let before = t.faces.clone();
             faces_ui(ui, &mut t.faces, picked_faces);
             t.face_keys = carry_keys(&before, &t.face_keys, &t.faces);
+            crate::selecao_regras::acompanhar_sementes(&mut t.regras, &before, &t.faces);
         }
         FeatureKind::DirectEdit(e) => crate::edicao_direta_ui::painel(ui, e, vars, picked_faces),
         FeatureKind::Pattern(p) => {

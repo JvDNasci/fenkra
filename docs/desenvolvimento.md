@@ -101,6 +101,7 @@ preferências do usuário.
 | `FENKRA_DEMO_DOBRA=1` | tubo retangular dobrado em U na bancada Estrutural; com `FENKRA_EDITAR=Membro` abre o painel do nó de dobra |
 | `FENKRA_DEMO_FORMA=<modo>` | abre uma cúpula em edição na bancada Forma livre; `gaiola`, `liso`, `laco`, `tangencia`, `suave` (círculo de influência), `selecao` (laço selecionado) `vinculos` (nós presos e cota) e `perdido` (o pai apagado) já mudam o que aparece; `converter`, `g0` e `g2` abrem o relatório da conversão; `anel` abre a primitiva Anel |
 | `FENKRA_DEMO_DOBRA=1` | tubo retangular dobrado em U na bancada Estrutural; com `FENKRA_EDITAR=Membro` abre o painel do nó de dobra. Com `canto`, `v` ou `multiplo` no lugar do 1, as duas dobras usam V com raio, V comum ou V múltiplo (tubo fechado no 3D) |
+| `FENKRA_DEMO_FOLGA=<dobra>,<solda>` | (B442) com `FENKRA_DEMO_DOBRA=v`, `multiplo` ou `canto`, preenche a folga de dobra e a folga de solda das duas dobras, em mm (por exemplo `2,1`) |
 | `FENKRA_DEMO_ASM=<nome>` | montagem de exemplo com: `mec` (mecanismo), `cmd` (restrição com fantasma), `junta` (junta automática), `simbolos` (cota e junta no modelo), `manip` (manipulador numa dobradiça), `duzentas` (200 restrições) |
 | `FENKRA_DEMO_MALHA=<modo>` | acrescenta um corpo de malha ondulado à peça e abre o comando: `importar`, `reparar` (calota aberta), `decimar`, `booleana` |
 | `FENKRA_DEMO_IMPRESSAO=1` | abre o preparo de impressão com a peça aberta; `FENKRA_DEMO_IMPRESSAO_ARQUIVO=<arquivo>` grava o 3MF sem perguntar |
@@ -111,8 +112,11 @@ preferências do usuário.
 | `FENKRA_DEMO_JANELA=nova_pasta` | (B24) dois pontos novos agrupados por "Selecionados → nova pasta" dentro da pasta de geometria que já existe (use com `FENKRA_DEMO_EXEMPLO=0`) |
 | `FENKRA_DEMO_JANELA=filete_regra` | (B95) caixa de cantos arredondados com um filete que grava a regra "tangentes" a partir de uma aresta de cima, com o painel do filete aberto |
 | `FENKRA_DEMO_JANELA=saida_regra` | (B95) saída de 8° gravada pela regra "tangentes" a partir de uma parede da caixa de cantos arredondados; painel aberto com a regra e "Soltar a regra" |
+| `FENKRA_DEMO_JANELA=espessura_regra` | (B95) espessura de 2 mm gravada pela regra "tangentes" a partir de uma parede da caixa de cantos arredondados: paredes e cantos engrossam juntos; painel aberto com a regra |
 | `FENKRA_DEMO_JANELA=aplicar_continuar` | (B20) filete novo aberto, com "Aplicar e continuar" na barra do comando |
 | `FENKRA_DEMO_JANELA=ajuda_f1` | (B60) a janela Ajuda do comando que o F1 abre sobre o botão, aqui a do Filete |
+| `FENKRA_DEMO_JANELA=reparo_candidatas` | (B15) casca com a face perdida (ponto 3 mm acima do topo) e o Assistente de reparo aberto, com as candidatas numeradas no 3D (use com `FENKRA_DEMO_EXEMPLO=0`) |
+| `FENKRA_DEMO_JANELA=passo_a_passo` | (B59) dois cliques em ◀ na barra de status: o objeto em trabalho volta dois comandos (árvore, barra de status e peça na mesma posição; use com `FENKRA_DEMO_EXEMPLO=0`) |
 | `FENKRA_DEMO_JANELA=scan` | (B59) modo Scan ligado, olhando a peça no primeiro comando sólido; a barra de status diz até onde e mantém o objeto em trabalho |
 | `FENKRA_DEMO_SECOES=1` | (B130, B305) com `FENKRA_DEMO_PROJETO=1`, abre já expandidas as seções Ramos e mesclagem, Detalhes da qualidade e Regras do perfil do painel do projeto |
 | `FENKRA_DEMO_COMPARAR=1` | (B237) abre Comparar com um alvo usando como alvo a mesma peça com o primeiro parâmetro 5% maior: medidas, furos por diâmetro, mapa de distância e marcas |

@@ -3,7 +3,7 @@
  "nome": "Parafuso aeronáutico de cabeça sextavada (AN3 a AN8)",
  "norma": "AN (AN3 a AN20, domínio público, distribuição A)",
  "revisao": "sem revisão conferida (tabela usual de pega)",
- "versao": 3,
+ "versao": 4,
  "gerador": "parafuso_sextavado",
  "tipo": "parafuso_sextavado",
  "nivel": "C",
@@ -44,6 +44,10 @@
   {
    "rotulo": "Hi-Line — parafusos AN7 e AN8 (chave de 5/8\" e 3/4\", pega e comprimento roscado)",
    "url": "https://hi-line.com/7-16-20-x-1-7-32-an7-hex-head-airframe-bolt-cadmium-plated"
+  },
+  {
+   "rotulo": "Boeing Distribution — parafusos AN7-22A e AN8-27A (altura da cabeça)",
+   "url": "https://shop.boeing.com/aviation-supply/p/AN8-27A=28"
   }
  ],
  "campos": [
@@ -183,8 +187,8 @@
     "k": 6.35,
     "b": 16.669
    },
-   "confirmado_por": 1,
-   "nota": "Rosca 7/16-20 UNF classe 3A. O número do traço (dash number) é o comprimento nominal: o último dígito conta oitavos de polegada e os anteriores, polegadas inteiras; o sufixo A indica haste sem furo para contrapino. Comprimento L sob a cabeça por traço: -5: L 23/32\", -6: L 27/32\", -7: L 31/32\", -10: L 1-3/32\", -11: L 1-7/32\", -12: L 1-11/32\", -13: L 1-15/32\", -14: L 1-19/32\", -15: L 1-23/32\", -16: L 1-27/32\", -17: L 1-31/32\", -20: L 2-3/32\". L e desconto da pega (21/32\"): Experimental Aircraft; a ficha AN7-12A do Military Fasteners (dados FLIS) dá L entre o mínimo e o máximo e o comprimento roscado dentro da faixa, e a Hi-Line repete a pega. Chave: s entre 0.615 e 0.627 pol (Military Fasteners) e chave de 5/8\" (Hi-Line). PENDENTE: a altura da cabeça k (0.234 a 0.266 pol) só aparece no Military Fasteners; falta a segunda fonte gratuita. O modelo usa o meio das faixas. Medidas em polegada convertidas para mm.",
+   "confirmado_por": 2,
+   "nota": "Rosca 7/16-20 UNF classe 3A. O número do traço (dash number) é o comprimento nominal: o último dígito conta oitavos de polegada e os anteriores, polegadas inteiras; o sufixo A indica haste sem furo para contrapino. Comprimento L sob a cabeça por traço: -5: L 23/32\", -6: L 27/32\", -7: L 31/32\", -10: L 1-3/32\", -11: L 1-7/32\", -12: L 1-11/32\", -13: L 1-15/32\", -14: L 1-19/32\", -15: L 1-23/32\", -16: L 1-27/32\", -17: L 1-31/32\", -20: L 2-3/32\". L e desconto da pega (21/32\"): Experimental Aircraft; a ficha AN7-12A do Military Fasteners (dados FLIS) dá L entre o mínimo e o máximo e o comprimento roscado dentro da faixa, e a Hi-Line repete a pega. Chave: s entre 0.615 e 0.627 pol (Military Fasteners) e chave de 5/8\" (Hi-Line). Altura da cabeça k de 0.234 a 0.266 pol no Military Fasteners e na Boeing Distribution (listagens AN7-20, AN7-23 e AN7-22A), que concordam; o modelo usa o meio da faixa, 0.250 pol (B17-dados). O modelo usa o meio das faixas. Medidas em polegada convertidas para mm.",
    "comprimentos": [
     18.256,
     21.431,
@@ -212,8 +216,8 @@
     "k": 7.137,
     "b": 19.844
    },
-   "confirmado_por": 1,
-   "nota": "Rosca 1/2-20 UNF classe 3A. O número do traço (dash number) é o comprimento nominal: o último dígito conta oitavos de polegada e os anteriores, polegadas inteiras; o sufixo A indica haste sem furo para contrapino. Comprimento L sob a cabeça por traço: -6: L 27/32\", -7: L 31/32\", -10: L 1-3/32\", -11: L 1-7/32\", -12: L 1-11/32\", -13: L 1-15/32\", -14: L 1-19/32\", -15: L 1-23/32\", -16: L 1-27/32\", -17: L 1-31/32\", -20: L 2-3/32\". L e desconto da pega (25/32\"): Experimental Aircraft; a ficha AN8-12A do Military Fasteners (dados FLIS) dá L entre o mínimo e o máximo e o comprimento roscado dentro da faixa, e a Hi-Line repete a pega. Chave: s entre 0.74 e 0.752 pol (Military Fasteners) e chave de 3/4\" (Hi-Line). PENDENTE: a altura da cabeça k (0.265 a 0.297 pol) só aparece no Military Fasteners; falta a segunda fonte gratuita. O modelo usa o meio das faixas. Medidas em polegada convertidas para mm.",
+   "confirmado_por": 2,
+   "nota": "Rosca 1/2-20 UNF classe 3A. O número do traço (dash number) é o comprimento nominal: o último dígito conta oitavos de polegada e os anteriores, polegadas inteiras; o sufixo A indica haste sem furo para contrapino. Comprimento L sob a cabeça por traço: -6: L 27/32\", -7: L 31/32\", -10: L 1-3/32\", -11: L 1-7/32\", -12: L 1-11/32\", -13: L 1-15/32\", -14: L 1-19/32\", -15: L 1-23/32\", -16: L 1-27/32\", -17: L 1-31/32\", -20: L 2-3/32\". L e desconto da pega (25/32\"): Experimental Aircraft; a ficha AN8-12A do Military Fasteners (dados FLIS) dá L entre o mínimo e o máximo e o comprimento roscado dentro da faixa, e a Hi-Line repete a pega. Chave: s entre 0.74 e 0.752 pol (Military Fasteners) e chave de 3/4\" (Hi-Line). Altura da cabeça k de 0.265 a 0.297 pol no Military Fasteners e na Boeing Distribution (listagens AN8-27A e AN8-47A), que concordam; o modelo usa o meio da faixa, 0.281 pol (B17-dados). O modelo usa o meio das faixas. Medidas em polegada convertidas para mm.",
    "comprimentos": [
     21.431,
     24.606,

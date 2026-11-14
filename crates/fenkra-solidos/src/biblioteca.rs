@@ -59,6 +59,8 @@ pub enum TipoFixador {
     PorcaEsferas,
     /// fuso de esferas (o eixo); o comprimento é o do fuso
     FusoEsferas,
+    /// terminal rotular macho (cabeça com esfera furada e haste roscada), dos braços da direção
+    TerminalRotular,
 }
 
 /// Geradores de geometria nomeados. Uma família escolhe o gerador pelo nome (`"gerador"` no JSON);
@@ -79,6 +81,7 @@ pub const GERADORES: &[(&str, TipoFixador)] = &[
     ("patim_linear", TipoFixador::PatimLinear),
     ("porca_esferas", TipoFixador::PorcaEsferas),
     ("fuso_esferas", TipoFixador::FusoEsferas),
+    ("terminal_rotular", TipoFixador::TerminalRotular),
     // geradores de forma própria sobre um tipo já existente: o tipo diz como a montagem usa a peça
     ("parafuso_escareado", TipoFixador::ParafusoAllen),
     ("parafuso_ombro", TipoFixador::ParafusoAllen),
@@ -115,6 +118,7 @@ impl TipoFixador {
             TipoFixador::PatimLinear => "Patim de guia linear",
             TipoFixador::PorcaEsferas => "Porca de esferas",
             TipoFixador::FusoEsferas => "Fuso de esferas",
+            TipoFixador::TerminalRotular => "Terminal rotular",
         }
     }
 
@@ -157,6 +161,8 @@ impl TipoFixador {
             TipoFixador::PatimLinear => &["H", "H1", "W", "B", "C", "L", "M", "prof", "WR", "HR"],
             TipoFixador::PorcaEsferas => &["P", "D", "A", "B", "L", "H"],
             TipoFixador::FusoEsferas => &["P"],
+            // o furo da esfera e a rosca da haste são o diâmetro nominal do tamanho
+            TipoFixador::TerminalRotular => &["dk", "C1", "dE", "B", "h", "dh", "l1"],
         }
     }
 }
@@ -261,6 +267,10 @@ pub struct Familia {
     pub comprimentos: Vec<f64>,
     /// camada de onde a família veio
     pub camada: Camada,
+    /// Medidas **ilustrativas**, escolhidas pelo Fenkra só para dar forma coerente à peça, sem fonte
+    /// de norma ou catálogo (B397). A família diz isso na ficha e na dica; os tamanhos ficam com
+    /// `confirmado_por` 0, porque nenhuma fonte os confirma.
+    pub ilustrativo: bool,
 }
 
 #[derive(Deserialize)]
@@ -289,6 +299,8 @@ struct FamiliaBruta {
     tamanhos: Vec<Tamanho>,
     #[serde(default)]
     comprimentos: Vec<f64>,
+    #[serde(default)]
+    ilustrativo: bool,
 }
 
 fn um() -> u32 {
@@ -326,6 +338,7 @@ impl TryFrom<FamiliaBruta> for Familia {
             tamanhos: b.tamanhos,
             comprimentos: b.comprimentos,
             camada: Camada::Publica,
+            ilustrativo: b.ilustrativo,
         })
     }
 }
@@ -407,6 +420,10 @@ impl Familia {
         if self.nivel == "C" && self.fontes.len() < 2 {
             return er("nível C exige ao menos duas fontes");
         }
+        // medida ilustrativa é nossa (nível A) e nunca se passa por conferida
+        if self.ilustrativo && (self.nivel != "A" || self.tamanhos.iter().any(|t| t.confirmado_por != 0)) {
+            return er("família ilustrativa: nível A e confirmado_por 0 em todo tamanho");
+        }
         if self.campos.is_empty() {
             return er("sem campos");
         }
@@ -443,7 +460,7 @@ impl Familia {
             if !vistos.insert(t.chave()) {
                 return er(&format!("tamanho {} repetido", t.designacao));
             }
-            if t.confirmado_por == 0 {
+            if t.confirmado_por == 0 && !self.ilustrativo {
                 return er(&format!("{}: confirmado_por deve ser >= 1", t.designacao));
             }
             if t.valores.len() != self.campos.len() {
@@ -583,6 +600,7 @@ const PUBLICA: &[(&str, &str)] = &[
     ("hiwin_hgh.json", include_str!("../../../biblioteca/guias/hiwin_hgh.json")),
     ("din69051_porca.json", include_str!("../../../biblioteca/guias/din69051_porca.json")),
     ("din69051_fuso.json", include_str!("../../../biblioteca/guias/din69051_fuso.json")),
+    ("terminal_rotular_ilustrativo.json", include_str!("../../../biblioteca/articulacoes/terminal_rotular_ilustrativo.json")),
 ];
 
 /// A biblioteca pública embutida. Os arquivos são validados nos testes; aqui um arquivo inválido
@@ -740,7 +758,8 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        assert_eq!(b.familias.len(), 42);
+        // 42 e o terminal rotular ilustrativo (B397)
+        assert_eq!(b.familias.len(), 43);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -869,9 +888,11 @@ mod tests {
         // AN8-12: pega de 9/16" (L 1 11/32" − 25/32")
         assert!(an8.comprimentos.iter().any(|l| (l / pol - 25. / 32. - 9. / 16.).abs() < 1e-3));
         assert!((0.740..=0.752).contains(&(an8.valor("s").unwrap() / pol)));
-        // a altura da cabeça de AN7 e AN8 só tem uma fonte gratuita: fica marcada e PENDENTE
+        // B17-dados: a altura da cabeça de AN7 (0,234 a 0,266 pol) e AN8 (0,265 a 0,297 pol) tem duas
+        // fontes (Military Fasteners e Boeing Distribution); o modelo usa o meio da faixa
+        assert!((an7.valor("k").unwrap() - 0.250 * pol).abs() < 1e-3 && (an8.valor("k").unwrap() - 0.281 * pol).abs() < 2e-3);
         for t in [an7, an8] {
-            assert!(t.confirmado_por == 1 && t.nota.as_deref().is_some_and(|n| n.contains("PENDENTE")), "{}", t.designacao);
+            assert!(t.confirmado_por == 2 && t.nota.as_deref().is_some_and(|n| !n.contains("PENDENTE")), "{}", t.designacao);
         }
         let an3 = tamanho("an3", "AN3").unwrap();
         assert!((an3.valor("P").unwrap() - pol / 32.).abs() < 1e-3 && (an3.valor("b").unwrap() - 13. / 32. * pol).abs() < 1e-3);
@@ -1143,7 +1164,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 43);
+        assert_eq!(m.familias.len(), 44);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

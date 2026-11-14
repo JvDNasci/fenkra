@@ -3,16 +3,15 @@
 Obrigado por querer ajudar. Este guia diz o que precisamos para aceitar uma contribuição sem risco
 de propriedade intelectual. Ele vale para código, dados da biblioteca, documentação, ícones e textos.
 
-> **Pendente de decisão humana:** a licença do projeto (LGPL-2.1-or-later) segue a
-> [ADR 0003](docs/arquitetura/adr/0003-licenca.md), ainda em estado "proposta". Se houver plano de
-> dupla licença ou versão comercial, será preciso um CLA em vez do DCO abaixo (item B206). Até lá,
-> vale o DCO.
+> A licença do projeto é LGPL-2.1-or-later ([ADR 0003](docs/arquitetura/adr/0003-licenca.md)). O titular
+> é João Vitor Dias Nascimento.
 
-## 1. Declaração de autoria (DCO)
+## 1. Acordo de contribuição (CLA)
 
-Todo commit leva a linha `Signed-off-by: Nome <email>` (use `git commit -s`). Ao assinar, você declara o
-[Developer Certificate of Origin 1.1](https://developercertificate.org/): que escreveu a contribuição
-ou tem o direito de enviá-la sob a licença do projeto, e que entende que ela fica pública.
+Antes do primeiro pull request, leia o [CLA](CLA.md) e escreva no PR a frase de aceite. Pelo CLA você continua
+dono da sua contribuição e dá ao titular o direito de distribuí-la também sob outras licenças. Isso permite
+oferecer depois uma solução integrada sem fechar o núcleo, que segue livre. A linha `Signed-off-by` (`git
+commit -s`) continua bem-vinda, mas não substitui o aceite do CLA.
 
 ## 2. O que NÃO pode entrar
 
@@ -40,7 +39,7 @@ ou tem o direito de enviá-la sob a licença do projeto, e que entende que ela f
 
 Se uma parte relevante foi escrita ou sugerida por uma ferramenta de IA, diga isso no PR e qual
 ferramenta usou. Você continua responsável por revisar, por garantir que nada foi copiado de fonte
-incompatível e por assinar o DCO.
+incompatível e por aceitar o CLA.
 
 ## 5. Dados de normas e catálogos
 
@@ -58,7 +57,7 @@ licença. Nunca copie valores de fonte GPL.
 
 ## 7. Lista do pull request
 
-- [ ] Todos os commits têm `Signed-off-by`.
+- [ ] Aceitei o [CLA](CLA.md) (frase de aceite no primeiro PR).
 - [ ] Escrevi a contribuição ou tenho o direito de enviá-la.
 - [ ] Não há código GPL/AGPL, de licença desconhecida, nem material de produto proprietário.
 - [ ] Não citei marcas proprietárias.
@@ -66,5 +65,5 @@ licença. Nunca copie valores de fonte GPL.
 - [ ] Dados de normas têm fonte, página, nível e licença.
 - [ ] Atualizei procedencia.md e THIRD-PARTY-LICENSES quando precisou.
 
-> A checagem automática do `Signed-off-by` e o modelo de PR com essas caixas dependem da CI (B67), que
+> A checagem automática do aceite do CLA e o modelo de PR com essas caixas dependem da CI (B67), que
 > ainda não existe; não há pasta `.github/` no repositório.

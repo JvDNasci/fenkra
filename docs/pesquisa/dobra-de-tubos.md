@@ -341,3 +341,18 @@ Ordem sugerida: 2 e 5 (sem geometria nova), depois 1, 3, 6, 4 e 7.
 - **B330** muda: campos novos `ε_adm`, K da placa, folga de raiz e, Rp mínimo.
 - **Falta item novo**: "Estrutural: canto com gabarito (andorinha)", cerca de 220 mil tokens: contorno do corte por lateral, placa, prévia aberto e fechado, solda; teste:
   30×30×1,2 a 90° dá ℓ = 46,17, BD = 13,83, folga 5,44, solda 148,1. E "contorno plano do corte em DXF/SVG para laser", cerca de 100 mil tokens.
+
+## 11. Folgas de dobra e de solda (B442)
+
+Pedido depois do protótipo real (B328, B329, B333 fecharam como o gabarito). Derivação própria, sem
+fonte nova:
+
+- **Folga de dobra `c`** (só V): o vértice fica na face interna da placa e a abertura na parede
+  interna passa de `w = 2·(H−t)·tan(φ/2)` para `w + c`. Cada lado do V gira `δ = atan(tan(φ/2) +
+  c/(2·(H−t))) − φ/2` em torno do vértice; fechado, sobra uma cunha (zero na dobradiça), então as
+  faces não se travam.
+- **Folga de solda `e`** (V e canto com gabarito): as faces fechadas ficam paralelas a `e`. No tubo
+  aberto cada lado do V recua `e/(2·cos(φ/2))` na direção do tubo e o vértice vira um fundo reto de
+  `e/cos(φ/2)` (1,41·e a 90°). No canto, a bissetriz recua `e/2` (seção 7, já existente).
+- No V múltiplo, `w + c + e/cos(φ/2)` não pode passar do passo `p`, senão os rasgos se encostam.
+- Valores 0 reproduzem a geometria anterior (testes `folgas_zero_*`).
