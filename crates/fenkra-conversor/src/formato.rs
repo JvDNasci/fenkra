@@ -259,8 +259,19 @@ fn tem_marca_da_arvore(conteudo: &[u8]) -> bool {
     conteudo.windows(marca.len()).any(|w| w == marca)
 }
 
+/// O 3DM abre com `3D Geometry File Format ` e a versão em oito caracteres.
+pub fn e_3dm(conteudo: &[u8]) -> bool {
+    conteudo.starts_with(b"3D Geometry File Format ")
+}
+
+/// Resposta ao 3DM enquanto a ponte com o openNURBS não existe (ADR 0090): diz o que é e o que fazer.
+pub const MENSAGEM_3DM: &str = "arquivo 3DM reconhecido, mas o Fenkra ainda não lê 3DM: a leitura exata das NURBS depende da ponte com o openNURBS, prevista no ADR 0090. Por enquanto, exporte STEP AP214 ou AP242 no programa de origem, que leva as superfícies exatas, as camadas e as cores";
+
 /// Formato do arquivo pelo conteúdo, e se a extensão diz outra coisa.
 pub fn detectar(caminho: &Path, conteudo: &[u8]) -> Result<(Formato, bool), ErroConv> {
+    if e_3dm(conteudo) {
+        return Err(ErroConv::Formato(MENSAGEM_3DM.into()));
+    }
     let Some(f) = Formato::por_conteudo(conteudo) else {
         return Err(ErroConv::Formato(format!(
             "'{}' não parece um formato que o Fenkra leia (STEP, IGES, BREP, DXF, árvore paramétrica ou malha aberta): exporte STEP AP214 ou AP242 no programa de origem",
@@ -334,6 +345,14 @@ mod testes {
         assert_eq!(detectar(Path::new("a.amf"), &z("peca.amf")).unwrap().0, Formato::Amf);
         assert_eq!(detectar(Path::new("a.usdz"), &z("modelo.usda")).unwrap().0, Formato::Usdz);
         assert!(detectar(Path::new("a.zip"), &z("leia.txt")).is_err());
+    }
+
+    #[test]
+    fn tresdm_e_reconhecido_e_explica_o_que_fazer() {
+        let e = detectar(Path::new("casco.3dm"), b"3D Geometry File Format        8\0\0").unwrap_err().to_string();
+        assert!(e.contains("3DM") && e.contains("openNURBS") && e.contains("STEP AP214"), "{e}");
+        // com outra extensão, o conteúdo manda do mesmo jeito
+        assert!(detectar(Path::new("casco.bin"), b"3D Geometry File Format        7").unwrap_err().to_string().contains("3DM"));
     }
 
     #[test]
