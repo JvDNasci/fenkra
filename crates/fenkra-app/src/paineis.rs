@@ -1324,6 +1324,48 @@ mod tests {
         assert!(reservas(&b.ctx, tela()).0 <= tela().width() * RESERVA_MAX + 0.1);
     }
 
+    /// B447 (teste com mouse real de 13/11): painel encaixado embaixo fica acima da barra de baixo e
+    /// janela de ferramenta (a da chapa) nasce abaixo do topo, qualquer que seja a posição que ficou
+    /// salva: livre por cima do menu, no topo, fora da tela ou por baixo da barra.
+    #[test]
+    fn painel_respeita_o_topo_e_a_barra_de_baixo() {
+        // a área dos painéis vai do topo fino (26) à barra de baixo (780), depois da coluna (320)
+        let area = Rect::from_min_max(pos2(320., 26.), pos2(1160., 780.));
+        let salvas = [
+            Posicao { encaixe: Encaixe::Livre, pos: Some([16., 2.]), ..Default::default() },
+            Posicao { encaixe: Encaixe::Topo, pos: Some([0., 0.]), ..Default::default() },
+            Posicao { encaixe: Encaixe::Base, pos: Some([400., 5000.]), ..Default::default() },
+            Posicao { encaixe: Encaixe::Base, pos: Some([0., 790.]), altura: Some(900.), ..Default::default() },
+            Posicao { encaixe: Encaixe::Direita, pos: Some([2000., -50.]), ..Default::default() },
+            Posicao { encaixe: Encaixe::Esquerda, pos: Some([-300., 300.]), largura: Some(3000.), ..Default::default() },
+        ];
+        for (i, posicao) in salvas.into_iter().enumerate() {
+            let ctx = egui::Context::default();
+            let cfg = Painel { nome: format!("p{i}"), titulo: "Chapa".into(), padrao: pos2(16., 2.), largura: 380., redimensiona: true };
+            let mut rect = None;
+            for _ in 0..5 {
+                let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0., 0.), vec2(1200., 800.))), ..Default::default() };
+                passo_ui(&ctx, raw, |ui| {
+                    let ctx = ui.ctx().clone();
+                    rect = mostrar(&ctx, area, &cfg, posicao, |ui| {
+                        for k in 0..30 {
+                            ui.label(format!("linha {k}"));
+                        }
+                    })
+                    .rect;
+                });
+            }
+            let r = rect.expect("painel");
+            assert!(r.top() >= area.top() - 0.5, "{posicao:?}: sobre o topo, {r:?}");
+            assert!(r.bottom() <= area.bottom() + 0.5, "{posicao:?}: sobre a barra de baixo, {r:?}");
+            assert!(r.left() >= area.left() - 0.5 && r.right() <= area.right() + 0.5, "{posicao:?}: fora da área, {r:?}");
+            // e a faixa reservada dá conta do painel inteiro: ele não cobre a vista
+            let (direita, base) = reservas(&ctx, area);
+            let vista = Rect::from_min_max(area.min, pos2(area.right() - direita, area.bottom() - base));
+            assert!(!vista.shrink(1.).intersects(r), "{posicao:?}: cobre a vista {vista:?} com {r:?}");
+        }
+    }
+
     /// B433: janela de ferramenta que só tem o `Context` também encaixa e reserva; o X devolve a chave
     /// de aberto, e a borda escolhida chega às preferências pelo `recolher`.
     #[test]
