@@ -17,6 +17,7 @@
 use crate::layout::dim_value;
 use crate::source::Models;
 use crate::{DimKind, Drawing, NoteKind, TolMode, V2};
+use fenkra_core::pmi::{Pmi, PmiKind};
 use fenkra_core::Id;
 use fenkra_tolerancias::ajustes::ClasseTol;
 use fenkra_tolerancias::geral::ClasseGeral;
@@ -198,16 +199,85 @@ fn candidatos(d: &Drawing, m: &mut Models) -> Vec<Caracteristica> {
     out
 }
 
-/// Características do desenho, numeradas na ordem de leitura.
+/// A anotação 3D é uma característica a inspecionar? Cotas de referência (texto entre parênteses)
+/// não; quadros de tolerância geométrica e rugosidades sim; notas, referências e balões não.
+pub fn pmi_e_caracteristica(p: &Pmi) -> bool {
+    let t = p.text.trim();
+    let referencia = t.starts_with('(') && t.ends_with(')');
+    match p.kind {
+        PmiKind::Linear | PmiKind::Radius | PmiKind::Diameter | PmiKind::Angle | PmiKind::Ordinate { .. } | PmiKind::Gap { .. } | PmiKind::ArcLength => !referencia,
+        PmiKind::Gdt { .. } | PmiKind::Roughness { .. } => true,
+        _ => false,
+    }
+}
+
+/// Número de inspeção de cada característica do PMI 3D, na ordem da lista do modelo. As ocultas
+/// também contam: o número não muda ao esconder uma anotação. É a numeração que manda: a folha
+/// segue a mesma para o que veio do 3D.
+pub fn numeracao_pmi(lista: &[Pmi]) -> Vec<(Id, usize)> {
+    lista.iter().filter(|p| pmi_e_caracteristica(p)).enumerate().map(|(i, p)| (p.id, i + 1)).collect()
+}
+
+/// Para cada característica da folha que veio do 3D (cota ou nota com `pmi`), o número que ela tem
+/// no PMI do modelo. Só vale quando tudo o que veio do 3D vem do mesmo modelo: com dois modelos os
+/// números se repetiriam, e a folha volta a numerar só pela leitura.
+///
+/// Devolve também quantas características o modelo tem: o que só existe na folha começa depois
+/// delas, para não repetir o número de uma anotação 3D que não veio para a folha.
+fn numeros_do_modelo(d: &Drawing, m: &mut Models, cs: &[Caracteristica]) -> (std::collections::HashMap<Id, usize>, usize) {
+    let mut origem: Option<crate::Source> = None;
+    let mut pares: Vec<(Id, Id)> = vec![]; // (dono na folha, anotação 3D)
+    for c in cs {
+        let (pmi, vista) = match d.dims.iter().find(|x| x.id == c.dono) {
+            Some(dm) => (dm.pmi, Some(dm.view)),
+            None => match d.notes.iter().find(|n| n.id == c.dono) {
+                Some(n) => (n.pmi, n.view),
+                None => (None, None),
+            },
+        };
+        let (Some(pmi), Some(v)) = (pmi, vista.and_then(|v| d.view(v))) else { continue };
+        match &origem {
+            None => origem = Some(v.source.clone()),
+            Some(o) if o.path == v.source.path => {}
+            Some(_) => return (Default::default(), 0),
+        }
+        pares.push((c.dono, pmi));
+    }
+    let Some(src) = origem else { return (Default::default(), 0) };
+    let lista: Vec<Pmi> = match &m.load(&src).model {
+        crate::source::Model::Part(doc) => doc.pmi.clone(),
+        crate::source::Model::Asm(a) => a.pmi.clone(),
+    };
+    let todos = numeracao_pmi(&lista);
+    let total = todos.len();
+    let num: std::collections::HashMap<Id, usize> = todos.into_iter().collect();
+    (pares.into_iter().filter_map(|(dono, pmi)| num.get(&pmi).map(|n| (dono, *n))).collect(), total)
+}
+
+/// Características do desenho, numeradas. O que veio do PMI 3D leva o número que tem no modelo
+/// (o mesmo balão no 3D e na folha); o que só existe na folha continua depois do maior número do
+/// modelo, na ordem de leitura (folha, zona, posição).
 pub fn caracteristicas(d: &Drawing, m: &mut Models) -> Vec<Caracteristica> {
     let mut todas = candidatos(d, m);
     let ordem_folha = |id: Id| d.sheets.iter().position(|s| s.id == id).unwrap_or(usize::MAX);
     let tam = |id: Id| d.sheet(id).map(|s| s.size()).unwrap_or([420., 297.]);
     todas.sort_by_key(|c| (ordem_folha(c.folha), ordem_de_zona(tam(c.folha), c.pos)));
-    for (i, c) in todas.iter_mut().enumerate() {
-        c.numero = i + 1;
+    let (do_modelo, total_modelo) = numeros_do_modelo(d, m, &todas);
+    // a mesma anotação 3D importada em duas vistas: o número fica só na primeira, a outra segue
+    // como característica da folha
+    let mut usados = std::collections::HashSet::new();
+    let mut proximo = if do_modelo.is_empty() { 0 } else { total_modelo };
+    for c in todas.iter_mut() {
         c.zona = zona(tam(c.folha), c.pos);
+        c.numero = match do_modelo.get(&c.dono) {
+            Some(n) if usados.insert(*n) => *n,
+            _ => {
+                proximo += 1;
+                proximo
+            }
+        };
     }
+    todas.sort_by_key(|c| c.numero);
     todas
 }
 
