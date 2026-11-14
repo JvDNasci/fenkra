@@ -35,6 +35,7 @@ pub mod projecao;
 pub mod vinculo;
 pub mod qualidade;
 pub mod regras;
+pub mod regra_plastica;
 pub mod requisitos;
 pub mod sketch;
 pub mod subd;

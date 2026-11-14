@@ -234,6 +234,7 @@ mod textos_arvore_soltura;
 mod dfm_ui;
 mod sup_inclinacao;
 mod saida_faces;
+mod plastico_ui;
 mod textos_plastico;
 mod textos_features;
 mod tabela_projeto_ui;

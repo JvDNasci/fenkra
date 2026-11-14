@@ -78,6 +78,7 @@ pub mod reconhece;
 pub mod dfm;
 pub mod dfm_geo;
 pub mod dfm_saida;
+pub mod plastico;
 pub mod padrao;
 pub mod furo_norma;
 pub mod rosca_furo;
@@ -6334,7 +6335,8 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     };
     let (vars, param_error) = match doc.eval_params() {
         // `espessura` vale em toda fórmula da chapa (raio = 1.15*espessura), do estilo ou do comando
-        Ok(v) => (doc.sheet_efetivo().map(|s| s.vars_com_espessura(&v)).unwrap_or(v), None),
+        // B198: `plastico_espessura`, `plastico_saida`... valem em toda fórmula quando a peça tem regra plástica
+        Ok(v) => (doc.vars_com_plastico(doc.sheet_efetivo().map(|s| s.vars_com_espessura(&v)).unwrap_or(v)), None),
         Err(e) => (HashMap::new(), Some(e.to_string())),
     };
     // outra qualidade: as malhas guardadas não servem mais (os comandos continuam valendo)
@@ -6827,6 +6829,8 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         cache.polir.aplicar(&alvos, &cx.qualidade, cancelar.as_deref())
     };
 
+    // B198: recurso que sai da regra plástica avisa na árvore (fora do cache: mudar só um limite já vale)
+    plastico::diagnosticar(doc, &cx.vars, &mut cx.status);
     RecomputeResult {
         notes: cache.notes.clone(),
         bodies,
@@ -7900,7 +7904,7 @@ pub fn export(doc: &Document, collector: Option<Id>, path: &str) -> Result<(), S
 /// Como `export`, escolhendo a malha do STL (o preset não muda o STEP, que guarda a forma exata).
 pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, preset: PresetStl) -> Result<(), String> {
     let formato = FormatoExport::do_caminho(path)?;
-    let vars = doc.eval_params().map_err(|e| e.to_string())?;
+    let vars = doc.vars_com_plastico(doc.eval_params().map_err(|e| e.to_string())?);
     let mut cx = Ctx {
         doc,
         vars,
@@ -7965,7 +7969,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
     // B102: vale a configuração ativa; se ela não existe mais, não há forma (nunca a primeira linha)
     let efetivo = doc.efetivo().ok()?;
     let doc: &Document = &efetivo;
-    let vars = doc.eval_params().ok()?;
+    let vars = doc.vars_com_plastico(doc.eval_params().ok()?);
     let mut cx = Ctx {
         doc,
         vars,

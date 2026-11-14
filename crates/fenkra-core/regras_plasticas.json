@@ -1,0 +1,72 @@
+[
+  {
+    "nome": "ABS geral",
+    "material": "ABS",
+    "versao": 1,
+    "espessura": 2.0,
+    "saida": 1.0,
+    "raio": 1.0,
+    "espessura_min": 1.2,
+    "espessura_max": 3.5,
+    "saida_min": 0.5,
+    "raio_min": 0.5,
+    "nervura_fracao": 0.6,
+    "nervura_max": 0.75
+  },
+  {
+    "nome": "PC geral",
+    "material": "PC",
+    "versao": 1,
+    "espessura": 2.5,
+    "saida": 1.0,
+    "raio": 1.25,
+    "espessura_min": 1.0,
+    "espessura_max": 4.0,
+    "saida_min": 1.0,
+    "raio_min": 0.6,
+    "nervura_fracao": 0.6,
+    "nervura_max": 0.7
+  },
+  {
+    "nome": "PP geral",
+    "material": "PP",
+    "versao": 1,
+    "espessura": 1.8,
+    "saida": 1.5,
+    "raio": 0.9,
+    "espessura_min": 0.8,
+    "espessura_max": 3.8,
+    "saida_min": 1.0,
+    "raio_min": 0.4,
+    "nervura_fracao": 0.5,
+    "nervura_max": 0.6
+  },
+  {
+    "nome": "PA6 com fibra de vidro",
+    "material": "PA6 GF30",
+    "versao": 1,
+    "espessura": 2.5,
+    "saida": 1.0,
+    "raio": 1.25,
+    "espessura_min": 0.8,
+    "espessura_max": 3.0,
+    "saida_min": 0.5,
+    "raio_min": 0.6,
+    "nervura_fracao": 0.5,
+    "nervura_max": 0.6
+  },
+  {
+    "nome": "POM geral",
+    "material": "POM",
+    "versao": 1,
+    "espessura": 2.0,
+    "saida": 0.5,
+    "raio": 0.5,
+    "espessura_min": 0.8,
+    "espessura_max": 3.0,
+    "saida_min": 0.5,
+    "raio_min": 0.3,
+    "nervura_fracao": 0.5,
+    "nervura_max": 0.6
+  }
+]

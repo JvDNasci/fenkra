@@ -4219,6 +4219,10 @@ pub struct Document {
     /// regras de dobra de tubo cadastradas pelo usuário (B330)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tube_rules: Vec<TubeRule>,
+    /// regra plástica da peça (B198): espessura, saída e raio que casca, nervura, saída e os
+    /// recursos de plástico seguem, com os limites que o recálculo confere
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plastico: Option<crate::regra_plastica::RegraPlastica>,
     /// Ordem do vetor = ordem da linha de tempo.
     pub features: Vec<Feature>,
     /// Quantidade de comandos ativos (marcador de rollback, RF-ARV-051).
@@ -4285,6 +4289,7 @@ impl Document {
             pmi_captures: vec![],
             line_styles: vec![],
             tube_rules: vec![],
+            plastico: None,
             features: vec![],
             rollback: 0,
             atualizacao: ModoAtualizacao::Automatica,
