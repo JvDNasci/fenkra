@@ -265,6 +265,7 @@ impl App {
     pub(super) fn barra_de_baixo(&mut self, root: &mut egui::Ui) {
         let fundo = root.visuals().panel_fill;
         let mut acts = vec![];
+        let prox = crate::proximo::contexto(self);
         egui::Panel::bottom("barra_de_baixo").resizable(false).frame(egui::Frame::new().fill(fundo).inner_margin(egui::Margin::symmetric(8, 2))).show(root, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal(|ui| {
@@ -317,6 +318,8 @@ impl App {
                 if let Some(e) = self.result.as_ref().and_then(|r| r.param_error.clone()) {
                     ui.label(RichText::new(format!("Parâmetros: {e}")).small().color(crate::theme::st_err()));
                 }
+                // B441: próximos comandos do fluxo, depois do comando que acabou
+                acts.extend(crate::proximo::na_barra(ui, &prox));
                 ui.separator();
                 // navegação: vista e seleção, só ícones
                 let ts = self.tool_state();

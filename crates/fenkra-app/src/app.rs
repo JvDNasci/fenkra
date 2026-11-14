@@ -2464,6 +2464,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     fn command(&mut self, c: Cmd) {
+        // B441: lembra o comando para sugerir os próximos quando ele terminar
+        crate::proximo::registrar(c, &crate::proximo::contexto(self));
         if let Cmd::Pmi(i) = c {
             crate::pmi_ui::command(self, i);
             return;
@@ -3290,6 +3292,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             construction: self.sketch.as_ref().is_some_and(|e| e.construction),
             check: self.sketch.as_ref().is_some_and(|e| e.check),
             chapa_plana: self.open.doc.sheet.as_ref().is_some_and(|sp| sp.flat),
+            ctx: crate::proximo::contexto(self),
         }
     }
 

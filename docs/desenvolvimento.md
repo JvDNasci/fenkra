@@ -126,6 +126,7 @@ preferências do usuário.
 | `FENKRA_DEMO_COMPARAR=1` | (B237) abre Comparar com um alvo usando como alvo a mesma peça com o primeiro parâmetro 5% maior: medidas, furos por diâmetro, mapa de distância e marcas |
 | `FENKRA_DEMO_ACESSO=1` ou `gerada` | (B136) comando Escada e guarda-corpo aberto ao lado de uma plataforma, com a prévia das linhas no 3D; `gerada` já põe a escada de dois lances (4,4 m) na peça, sem o painel |
 | `FENKRA_DEMO_FOTO=<arquivo.png>` | grava a janela depois de 9 s e fecha o programa |
+| `FENKRA_DEMO_PROXIMO=1` | (B441) com uma peça aberta, mostra na barra de baixo os próximos comandos sugeridos, como se o último item tivesse acabado de sair do comando Sketch |
 | `FENKRA_DEMO_ARVORE=solta` | (B447) árvore solta e deslocada para a direita e para baixo: ela é cortada pela borda da coluna, sem desenhar sobre a área 3D |
 | `FENKRA_DEMO_PROPRIEDADES=1` | (B435) abre o painel Propriedades do comando aberto (nome, estado, suprimido, suprimir quando, aparência e o quadro de entradas) ou, sem comando, as propriedades da peça com as informações do modelo |
 | `FENKRA_DEMO_SETA=1` | (B433) com um comando aberto, mostra a coluna da esquerda como fica depois de clicar na seta: a árvore no lugar dos campos, com Concluir e Cancelar à vista |

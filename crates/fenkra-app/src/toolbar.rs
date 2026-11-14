@@ -665,6 +665,8 @@ pub struct ToolState {
     pub check: bool,
     /// a chapa aberta está planificada (aceso o botão Planificar)
     pub chapa_plana: bool,
+    /// B441: o que o documento tem, para dizer o passo que falta a cada comando
+    pub ctx: crate::proximo::Contexto,
 }
 
 fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
@@ -791,9 +793,9 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
         for e in list.clone() {
             match e {
                 Entry::One(i) => {
-                    if tool_button(ui, i.icon, i.name, size, labels, is_selected(i.act, s, st), i.brief, i.advanced).clicked() {
-                        acts.push(i.act);
-                    }
+                    let r = tool_button(ui, i.icon, i.name, size, labels, is_selected(i.act, s, st), i.brief, i.advanced);
+                    // B441: sem o passo anterior, o botão esmaece e o clique explica o que falta
+                    crate::proximo::clique(ui, &r, i.act, &st.ctx, &mut acts);
                     // na coluna, o comando sem variações guarda o lugar da seta: os ícones ficam alinhados
                     if forma == Forma::Coluna {
                         ui.allocate_exact_size(egui::vec2(SETA, size + 6.), egui::Sense::hover());
@@ -807,9 +809,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
                     let r = tool_button(ui, i.icon, i.name, size, labels, sel, i.brief, i.advanced);
                     let icones: Vec<&str> = items.iter().map(|x| x.icon).collect();
                     crate::curso_ui::destaque_em_familia(ui, r.rect, &icones, i.icon);
-                    if r.clicked() {
-                        acts.push(i.act);
-                    }
+                    crate::proximo::clique(ui, &r, i.act, &st.ctx, &mut acts);
                     // setinha: abre as variações da família
                     let arrow = seta_da_familia(ui, size).on_hover_text(tr("variações"));
                     egui::Popup::menu(&arrow).show(|ui| {
@@ -818,9 +818,17 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
                                 ui.add(egui::Image::new(crate::icons::get(v.icon)).fit_to_exact_size(egui::vec2(22., 22.)));
                                 ui.selectable_label(k == cur, RichText::new(tr(v.brief)))
                             });
-                            if r.inner.clicked() {
+                            // B441: variante que ainda não pode rodar fica escolhida no botão, que explica o que falta
+                            let falta = crate::proximo::falta(v.act, &st.ctx);
+                            let r = match falta {
+                                Some(f) => r.inner.on_hover_text(tr(f.motivo)),
+                                None => r.inner,
+                            };
+                            if r.clicked() {
                                 s.set_family(key, k);
-                                acts.push(v.act);
+                                if falta.is_none() {
+                                    acts.push(v.act);
+                                }
                                 ui.close();
                             }
                         }
