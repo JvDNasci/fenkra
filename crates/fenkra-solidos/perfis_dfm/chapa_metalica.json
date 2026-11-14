@@ -31,6 +31,14 @@
       "severidade": "aviso",
       "texto": "Furo de {valor} vezes a espessura; o punção pede ao menos {limite}.",
       "min": 1.0
+    },
+    {
+      "id": "chapa.furo.borda",
+      "entidade": "chapa",
+      "medida": "furo_borda_espessura",
+      "severidade": "aviso",
+      "texto": "Furo a {valor} espessuras da borda; abaixo de {limite} a chapa rasga ou deforma.",
+      "min": 2.0
     }
   ]
 }

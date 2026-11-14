@@ -46,6 +46,14 @@
       "severidade": "aviso",
       "texto": "Parede de {valor} mm abaixo de {limite} mm: vibra e empena ao usinar.",
       "min": 0.8
+    },
+    {
+      "id": "cnc.furo.borda",
+      "entidade": "furo",
+      "medida": "distancia_borda",
+      "severidade": "aviso",
+      "texto": "Furo a {valor} mm da borda; deixe ao menos {limite} mm de parede.",
+      "min": 1.0
     }
   ]
 }
