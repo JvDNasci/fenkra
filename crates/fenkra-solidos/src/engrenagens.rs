@@ -425,7 +425,7 @@ pub fn calculo(p: &ParamEngrenagem) -> Result<CalculoEngrenagem, String> {
                     return Err(format!("o rasgo do cubo (furo + {:.1} mm) passa da raiz: aumente o módulo ou os dentes", k.t2));
                 }
             }
-            crate::usinagens::validar(&crate::usinagens::GeoBase { largura: p.largura, raio_raiz: c.diametro_raiz / 2., furo: p.furo, cubo_proprio: None }, &p.usinagens)?;
+            crate::usinagens::validar(&crate::usinagens::GeoBase { largura: p.largura, raio_raiz: c.diametro_raiz / 2., furo: p.furo, cubo_proprio: None, ..Default::default() }, &p.usinagens)?;
             // B52: o mínimo vem do ponto em que a ponta da ferramenta encontra o flanco reto (com o
             // raio de ponta usado no filete), e a geometria gerada confirma se a trocoide cortou o dente
             c.raio_filete = l.rho;
@@ -477,7 +477,7 @@ pub fn engrenagem_documento(p: &ParamEngrenagem) -> Result<Document, String> {
     }
     if matches!(p.tipo, TipoEngrenagem::Reta | TipoEngrenagem::Helicoidal) && !p.usinagens.is_empty() {
         let c = calculo(p)?;
-        crate::usinagens::aplicar(&mut m, &crate::usinagens::GeoBase { largura: p.largura, raio_raiz: c.diametro_raiz / 2., furo: p.furo, cubo_proprio: None }, &p.usinagens)?;
+        crate::usinagens::aplicar(&mut m, &crate::usinagens::GeoBase { largura: p.largura, raio_raiz: c.diametro_raiz / 2., furo: p.furo, cubo_proprio: None, ..Default::default() }, &p.usinagens)?;
     }
     crate::usinagens::registrar_vinculo(&mut m.doc, &p.chave(), &p.usinagens);
     crate::engrenagens_regen::gravar_gerador(&mut m.doc, p);
