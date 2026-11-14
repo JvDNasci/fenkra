@@ -1,0 +1,14 @@
+{
+  "descricao": "B446: arrastar na árvore para cada tipo de alvo. Exemplo 'Placa paramétrica' aberto pela tela inicial (clicar 890 530), aviso 'De onde você vem?' fechado em 'Agora não' (994 852), janela maximizada em 1920x1080 (área cliente 1920x1009), 'Grupos vazios' expandido. Coordenadas do estado inicial; cada passo muda a árvore, então a ordem importa. Conferido em 13/11 com o binário release do worktree s10_arv: Furos M6 entra em Acabamentos; L desce para depois de margem; PlanoTopo sobre o corpo e Furos M6 sobre Capturas mostram o motivo, trocam o cursor e não selecionam o alvo; PlanoTopo em Publicações publica; Placa entra em Acabamentos com Centros dos furos passando para antes da pasta.",
+  "passos": [
+    {"acao": "foto", "nome": "arvore_inicio"},
+    {"acao": "arrastar", "x0": 110, "y0": 499, "x1": 140, "y1": 519, "passos": 25, "segurando": "furos_sobre_acabamentos", "nome": "furos_na_pasta_de_comandos"},
+    {"acao": "arrastar", "x0": 75, "y0": 299, "x1": 80, "y1": 359, "passos": 25, "segurando": "l_sobre_margem", "nome": "parametro_reordenado"},
+    {"acao": "arrastar", "x0": 110, "y0": 399, "x1": 150, "y1": 419, "passos": 25, "segurando": "plano_sobre_corpo_recusa", "nome": "plano_no_corpo_recusado"},
+    {"acao": "mover", "x": 1100, "y": 900, "nome": "corpo_nao_selecionado"},
+    {"acao": "arrastar", "x0": 110, "y0": 519, "x1": 110, "y1": 659, "passos": 30, "segurando": "furos_sobre_capturas_recusa", "nome": "furos_em_capturas_recusado"},
+    {"acao": "arrastar", "x0": 110, "y0": 399, "x1": 110, "y1": 619, "passos": 30, "segurando": "plano_sobre_publicacoes", "nome": "plano_publicado"},
+    {"acao": "arrastar", "x0": 85, "y0": 479, "x1": 140, "y1": 519, "passos": 25, "segurando": "placa_sobre_acabamentos", "nome": "placa_na_pasta_de_comandos"},
+    {"acao": "mover", "x": 1100, "y": 900, "nome": "arvore_final"}
+  ]
+}

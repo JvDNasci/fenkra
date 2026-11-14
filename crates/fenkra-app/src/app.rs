@@ -5048,7 +5048,67 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         self.renaming = id;
     }
 
+    /// B449: com a árvore em foco, ↑ e ↓ andam pelas linhas dela, na ordem desenhada no quadro
+    /// anterior, e escolhem a linha como um clique. A árvore fica com as setas depois de um clique
+    /// numa linha (ou com o foco do Tab numa linha) até um clique fora dela ou um Esc.
+    fn setas_da_arvore(&mut self, ctx: &egui::Context) {
+        let mut ativa = crate::teclado::arvore_ativa(ctx);
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape) || i.pointer.any_pressed()) {
+            ativa = false;
+        }
+        let linhas = crate::teclado::linhas_da_arvore(ctx);
+        let foco = ctx.memory(|m| m.focused());
+        let linha_em_foco = foco.and_then(|f| linhas.iter().find(|(_, w)| *w == f).map(|(i, _)| *i));
+        let livre = self.session.is_none() && self.sketch.is_none();
+        if livre && crate::teclado::setas_na_arvore(ativa, linha_em_foco.is_some(), foco.is_some() && linha_em_foco.is_none()) {
+            if let Some(passo) = crate::teclado::passo_na_arvore(ctx.input(crate::teclado::Teclas::ler)) {
+                let d = &self.open.doc;
+                let ordem: Vec<Id> = self
+                    .last_order
+                    .borrow()
+                    .iter()
+                    .copied()
+                    .filter(|i| d.feature(*i).is_some() || d.reference(*i).is_some() || d.folder(*i).is_some() || d.collectors.iter().any(|c| c.id == *i) || d.params.iter().any(|p| p.id == *i))
+                    .collect();
+                let atual = linha_em_foco.or(match self.sel {
+                    Sel::Feature(i) | Sel::Ref(i) | Sel::Folder(i) | Sel::Collector(i) => Some(i),
+                    Sel::Params => self.multi.borrow().first().copied(),
+                    _ => None,
+                });
+                if let Some(novo) = crate::teclado::vizinho_na_lista(&ordem, atual, passo) {
+                    self.sel = if d.params.iter().any(|p| p.id == novo) {
+                        Sel::Params
+                    } else if d.collectors.iter().any(|c| c.id == novo) {
+                        Sel::Collector(novo)
+                    } else {
+                        self.sel_for(novo)
+                    };
+                    *self.multi.borrow_mut() = vec![novo];
+                    self.multi_anchor.set(Some(novo));
+                    // o foco do Tab acompanha a linha escolhida, sem o passo do próprio egui
+                    if linha_em_foco.is_some() {
+                        if let Some((_, w)) = linhas.iter().find(|(i, _)| *i == novo) {
+                            ctx.memory_mut(|m| {
+                                m.request_focus(*w);
+                                m.move_focus(egui::FocusDirection::None);
+                            });
+                        }
+                    }
+                    ativa = true;
+                }
+                ctx.input_mut(|i| {
+                    i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp);
+                    i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown);
+                });
+            }
+        }
+        crate::teclado::marcar_arvore_ativa(ctx, ativa);
+        crate::teclado::comecar_linhas_da_arvore(ctx);
+    }
+
     fn tree(&mut self, ui: &mut egui::Ui) {
+        crate::arvore_soltura_ui::inicio_do_quadro(ui.ctx());
+        self.setas_da_arvore(ui.ctx());
         *self.stale_set.borrow_mut() = self.compute_stale();
         // ordem das linhas do quadro anterior (para o Shift+clique)
         let prev = std::mem::take(&mut *self.tree_order.borrow_mut());
@@ -5232,6 +5292,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     crate::tree_ui::icone(ui, "coletor");
                     let txt = if active { RichText::new(format!("{} {}", c.name, tr("(ativo)"))).strong() } else { RichText::new(&c.name) };
                     let resp = self.row_label(ui, c.id, &c.name, sel == Sel::Collector(c.id), txt, &mut actions);
+                    // B446: soltar no corpo move o comando para ele, ou diz por que não
+                    crate::arvore_soltura_ui::ligar(ui, &resp, &doc, crate::arvore_soltura_ui::Alvo::Corpo(c.id), &mut actions);
                     if resp.clicked() {
                         new_sel = Some(Sel::Collector(c.id));
                     }
@@ -5309,6 +5371,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                                     let t = if oculta || !c.visible { RichText::new(name.as_str()).weak() } else { RichText::new(name.as_str()) };
                                     ui.selectable_label(self.sel == Sel::Folder(fid), t)
                                 });
+                                // B446: a pasta de comandos recebe comandos do mesmo corpo
+                                crate::arvore_soltura_ui::ligar(ui, &h.cabeca, &doc, crate::arvore_soltura_ui::Alvo::Pasta(fid), &mut actions);
                                 let h = h.corpo(ui, |ui| {
                                     for (j, g) in feats.iter().filter(|(_, g)| g.folder == Some(fid)) {
                                         self.feature_row(ui, &doc, *j, g, &mut new_sel, &mut actions);
@@ -5346,6 +5410,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         for fo in doc.folders.iter().filter(|fo| fo.kind == FolderKind::Comandos && !doc.features.iter().any(|f| f.folder == Some(fo.id))) {
             crate::tree_ui::marca(ui);
             let r = pick(ui, Sel::Folder(fo.id), RichText::new(format!("🗀 {} (vazia)", fo.name)).weak());
+            crate::arvore_soltura_ui::ligar(ui, &r, &doc, crate::arvore_soltura_ui::Alvo::Pasta(fo.id), &mut actions);
             if r.clicked() {
                 new_sel = Some(Sel::Folder(fo.id));
             }
@@ -5365,7 +5430,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let vazios: Vec<&str> = GRUPOS.iter().filter(visivel).filter(|k| !cheio(k)).copied().collect();
         if !vazios.is_empty() {
             let titulo = RichText::new(format!("{} ({})", tr("Grupos vazios"), vazios.len())).weak();
-            let _ = crate::tree_ui::grupo(ui, "arvore_vazios", None, titulo, false).corpo(ui, |ui| {
+            let g = crate::tree_ui::grupo(ui, "arvore_vazios", None, titulo, false);
+            crate::arvore_soltura_ui::ligar(ui, &g.cabeca, &doc, crate::arvore_soltura_ui::Alvo::Grupo("vazios"), &mut actions);
+            let _ = g.corpo(ui, |ui| {
                 for k in vazios {
                     self.secao_da_arvore(ui, k, &doc, sel, &mut new_sel, &mut actions);
                 }
@@ -5373,8 +5440,14 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         }
         });
 
+        // B446: soltar não é clicar no alvo
+        if crate::arvore_soltura_ui::soltando(ui.ctx()) {
+            new_sel = None;
+        }
         if let Some(s) = new_sel {
             self.sel = s;
+            // B449: escolheu na árvore, as setas ficam com ela
+            crate::teclado::marcar_arvore_ativa(ui.ctx(), true);
         }
         for a in actions {
             self.tree_action(a);
@@ -5388,6 +5461,20 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
 
     /// Uma seção que pode estar vazia: a mesma, com conteúdo ou dentro de "Grupos vazios".
     fn secao_da_arvore(&mut self, ui: &mut egui::Ui, k: &str, doc: &Document, sel: Sel, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
+        // B446: a cabeça de cada grupo também é alvo de soltura (aceita o que guarda, recusa o resto)
+        let topo = ui.cursor().top();
+        let chave: &'static str = match k {
+            "externas" => "externas",
+            "publicacoes" => "publicacoes",
+            "pmi" => "pmi",
+            "capturas" => "capturas",
+            _ => "parametros",
+        };
+        self.secao_da_arvore_sem_alvo(ui, k, doc, sel, new_sel, actions);
+        crate::arvore_soltura_ui::ligar_cabeca(ui, topo, chave, doc, actions);
+    }
+
+    fn secao_da_arvore_sem_alvo(&mut self, ui: &mut egui::Ui, k: &str, doc: &Document, sel: Sel, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
         match k {
             "externas" => self.secao_externas(ui, doc, new_sel, actions),
             "publicacoes" => self.secao_publicacoes(ui, doc, new_sel, actions),
@@ -5566,6 +5653,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 crate::tree_ui::marca(ui);
                 let mut r = self.row_label(ui, p.id, &p.name, sel == Sel::Params && self.multi.borrow().contains(&p.id), RichText::new(format!("{}{} = {v}{}", if p.published { "📤 " } else { "" }, p.name, if aviso.is_some() { " ⚠" } else { "" })), actions);
                 r = drag_item(ui, r, p.id, self.renaming != Some(p.id));
+                // B446: parâmetro solto sobre outro vai para o lugar dele
+                crate::arvore_soltura_ui::ligar(ui, &r, doc, crate::arvore_soltura_ui::Alvo::Parametro(p.id), actions);
                 if let Some(m) = aviso {
                     r = r.on_hover_text(m);
                 }
@@ -5653,13 +5742,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if r.double_clicked() {
                     actions.push(TreeAction::StartRename(fo.id));
                 }
-                // soltar um item arrastado aqui move para esta pasta
-                if let Some(p) = r.dnd_release_payload::<DragItem>() {
-                    actions.push(TreeAction::MoveTo(p.0, fo.id));
-                }
-                if r.dnd_hover_payload::<DragItem>().is_some() {
-                    ui.painter().rect_stroke(r.rect.expand(2.), 3., egui::Stroke::new(1.5, crate::theme::accent(ui.visuals())), egui::StrokeKind::Outside);
-                }
+                // soltar um item arrastado aqui move para esta pasta (B446: ou diz por que não)
+                crate::arvore_soltura_ui::ligar(ui, &r, doc, crate::arvore_soltura_ui::Alvo::Pasta(fo.id), actions);
                 if r.clicked() {
                     *new_sel = Some(Sel::Folder(fo.id));
                 }
@@ -5759,13 +5843,17 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         self.tree_order.borrow_mut().push(id);
         let in_multi = self.multi.borrow().contains(&id) && self.multi.borrow().len() > 1;
         let r = ui.selectable_label(selected || in_multi || self.selecao_extra.visto.contains(&id), text);
+        crate::teclado::anotar_linha_da_arvore(ui.ctx(), id, r.id);
         if selected {
             crate::tree_ui::achar(r.rect);
         }
         if r.hovered() {
             self.hover_now.set(Some(id));
         }
-        if r.clicked() {
+        if r.clicked() && !crate::arvore_soltura_ui::soltando(ui.ctx()) {
+            // B449: um foco de teclado que ficou em outro widget (não texto) prenderia as setas e os
+            // atalhos; o clique na linha o solta e as setas passam para a árvore
+            crate::teclado::soltar_foco_escondido(ui.ctx());
             // Ctrl soma/tira, Shift seleciona a faixa desde o último clicado, sem tecla = só este
             let (ctrl, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
             let mut m = self.multi.borrow_mut();
@@ -5954,7 +6042,14 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         if let Some(p) = resp.dnd_release_payload::<DragItem>() {
             if p.0 != f.id && doc.feature(p.0).is_some() {
                 actions.push(TreeAction::Move(p.0, i));
+            } else if p.0 != f.id {
+                // B446: o que não é comando não cai em silêncio
+                actions.push(TreeAction::SolturaRecusada(crate::arvore_soltura_ui::motivo(&fenkra_core::RecusaSoltura::NaoEComando)));
             }
+        }
+        if resp.dnd_hover_payload::<DragItem>().is_some_and(|p| p.0 != f.id && doc.feature(p.0).is_none()) {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::NoDrop);
+            resp.show_tooltip_text(crate::arvore_soltura_ui::motivo(&fenkra_core::RecusaSoltura::NaoEComando));
         }
         let origem = resp.dnd_hover_payload::<DragItem>().filter(|p| p.0 != f.id).and_then(|p| doc.features.iter().position(|x| x.id == p.0));
         if let Some(de) = origem {
@@ -6110,13 +6205,25 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     f.suppressed = !f.suppressed
                 }
             }
-            TreeAction::ToFolder(id, fo) => {
-                if let Some(f) = d.feature_mut(id) {
-                    f.folder = fo
+            TreeAction::ToFolder(id, Some(fo)) => {
+                // B446: as mesmas regras do arraste (corpo da pasta e ordem válida)
+                if let Err(e) = d.soltar_em_pasta(id, fo) {
+                    self.toast(crate::arvore_soltura_ui::motivo(&e), true);
                 }
             }
+            TreeAction::ToFolder(id, None) => {
+                if let Some(f) = d.feature_mut(id) {
+                    f.folder = None
+                }
+            }
+            TreeAction::Soltar(item, alvo) => match crate::arvore_soltura_ui::aplicar(d, item, alvo) {
+                Ok(()) => self.sel = self.sel_for(item),
+                Err(e) => self.toast(crate::arvore_soltura_ui::motivo(&e), true),
+            },
+            TreeAction::SolturaRecusada(m) => self.toast(m, true),
             TreeAction::Move(id, to) => {
-                if let Err(e) = d.move_feature(id, to) {
+                // contêiner ordenado continua em bloco (B59)
+                if let Err(e) = d.reordenar_comando(id, to) {
                     self.toast(e.to_string(), true);
                 }
             }
@@ -7640,8 +7747,14 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 vp.camera.pitch = (vp.camera.pitch + delta.y * 0.008).clamp(-1.5706, 1.5706);
             }
             // B321: sem nada em foco, setas giram, Shift+setas movem e Page Up/Down aproximam a vista
+            // B449: com a árvore em foco, ↑ e ↓ são dela (← e → continuam girando a vista)
             if self.sketch.is_none() && !ctx.egui_wants_keyboard_input() {
-                if let Some(m) = crate::teclado::movimento(ctx.input(crate::teclado::Teclas::ler)) {
+                let mut t = ctx.input(crate::teclado::Teclas::ler);
+                if crate::teclado::arvore_ativa(&ctx) {
+                    t.cima = false;
+                    t.baixo = false;
+                }
+                if let Some(m) = crate::teclado::movimento(t) {
                     vp.stop_anim();
                     vp.navegou();
                     crate::teclado::aplicar(&mut vp.camera, m);
@@ -8546,6 +8659,10 @@ fn eye(ui: &mut egui::Ui, hidden: bool) -> bool {
 }
 
 pub(crate) enum TreeAction {
+    /// B446: item arrastado solto num alvo que aceita (pasta, corpo, parâmetro, grupo)
+    Soltar(Id, crate::arvore_soltura_ui::Alvo),
+    /// B446: soltura recusada; o texto é o motivo, já traduzido
+    SolturaRecusada(String),
     ObjetoTrabalho(Id),
     AtualizarAte(Id),
     NovoConteiner(OrdemConteiner),
@@ -8899,6 +9016,11 @@ impl eframe::App for App {
         crate::desempenho::fechar_se_acabou(root.ctx());
         crate::demo_foto::quadro(root.ctx(), || self.estado_demo());
         crate::partida::contar_quadro();
+        // B449: o clique e a tecla mudam o estado no meio do quadro (ações da árvore, painéis,
+        // comandos); mais um quadro mostra o resultado sem esperar o mouse se mexer
+        if root.ctx().input(|i| crate::teclado::evento_muda_estado(&i.events)) {
+            root.ctx().request_repaint();
+        }
         crate::medir_quadros::quadro(frame.info().cpu_usage);
         let ctx = &root.ctx().clone();
         crate::i18n::set_english(self.settings.english);

@@ -6,6 +6,8 @@
 //!   acionam o botão em foco, e todo botão desenhado à mão pinta o anel de foco (`anel_de_foco`).
 //! - Sem nada em foco: setas giram a vista 15°, Shift+setas a movem, Page Up e Page Down aproximam e
 //!   afastam. Esc solta o foco e volta para a vista.
+//! - Com um item da árvore em foco (clicado, ou com o foco do Tab), ↑ e ↓ andam pela árvore (B449);
+//!   um clique fora da árvore ou o Esc devolvem as setas à vista.
 //! - Alt+↑ e Alt+↓ escolhem o comando anterior ou o seguinte da árvore; Enter abre o escolhido para
 //!   edição; com o comando aberto, Enter conclui e Esc cancela.
 //! - Ctrl+K abre a busca de comandos, que se percorre com setas e Enter.
@@ -120,6 +122,100 @@ pub fn passo_da_arvore(t: Teclas) -> Option<i32> {
     }
 }
 
+/// ↑ ou ↓ sem modificador (B449): o passo das setas quando a árvore tem o foco.
+pub fn passo_na_arvore(t: Teclas) -> Option<i32> {
+    if t.alt || t.ctrl || t.shift {
+        return None;
+    }
+    match (t.cima, t.baixo) {
+        (true, false) => Some(-1),
+        (false, true) => Some(1),
+        _ => None,
+    }
+}
+
+/// A linha vizinha na ordem em que a árvore foi desenhada (B449). Sem linha atual, ↓ vai à primeira
+/// e ↑ à última; nas pontas, fica onde está.
+pub fn vizinho_na_lista<T: PartialEq + Copy>(ordem: &[T], atual: Option<T>, passo: i32) -> Option<T> {
+    if ordem.is_empty() {
+        return None;
+    }
+    let n = ordem.len() as i32;
+    let i = match atual.and_then(|a| ordem.iter().position(|x| *x == a)) {
+        Some(i) => (i as i32 + passo).clamp(0, n - 1),
+        None if passo > 0 => 0,
+        None => n - 1,
+    };
+    Some(ordem[i as usize])
+}
+
+/// Quem recebe ↑ e ↓ (B449): a árvore, quando o foco do teclado está numa linha dela ou quando o
+/// último clique foi nela e nenhum outro widget pegou o foco; senão, a vista (B321). Antes, o
+/// clique na árvore deixava as setas sem dono até um Esc.
+pub fn setas_na_arvore(arvore_ativa: bool, foco_em_linha: bool, foco_em_outro: bool) -> bool {
+    foco_em_linha || (arvore_ativa && !foco_em_outro)
+}
+
+const CHAVE_ATIVA: &str = "fk_arvore_teclado";
+const CHAVE_LINHAS: &str = "fk_arvore_linhas";
+const CHAVE_LINHAS_NOVAS: &str = "fk_arvore_linhas_novas";
+
+/// A árvore está com as setas (último clique nela, sem Esc nem clique fora depois)?
+pub fn arvore_ativa(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp(egui::Id::new(CHAVE_ATIVA))).unwrap_or(false)
+}
+
+pub fn marcar_arvore_ativa(ctx: &egui::Context, ativa: bool) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(CHAVE_ATIVA), ativa));
+}
+
+/// Linhas da árvore do quadro anterior: o id do objeto e o do widget, na ordem desenhada.
+pub fn linhas_da_arvore(ctx: &egui::Context) -> Vec<(fenkra_core::Id, egui::Id)> {
+    ctx.data(|d| d.get_temp(egui::Id::new(CHAVE_LINHAS))).unwrap_or_default()
+}
+
+/// Começo do quadro da árvore: as linhas anotadas no quadro anterior passam a valer.
+pub fn comecar_linhas_da_arvore(ctx: &egui::Context) {
+    ctx.data_mut(|d| {
+        let novas: Vec<(fenkra_core::Id, egui::Id)> = d.get_temp(egui::Id::new(CHAVE_LINHAS_NOVAS)).unwrap_or_default();
+        if !novas.is_empty() {
+            d.insert_temp(egui::Id::new(CHAVE_LINHAS), novas);
+        }
+        d.insert_temp(egui::Id::new(CHAVE_LINHAS_NOVAS), Vec::<(fenkra_core::Id, egui::Id)>::new());
+    });
+}
+
+pub fn anotar_linha_da_arvore(ctx: &egui::Context, id: fenkra_core::Id, widget: egui::Id) {
+    ctx.data_mut(|d| d.get_temp_mut_or_default::<Vec<(fenkra_core::Id, egui::Id)>>(egui::Id::new(CHAVE_LINHAS_NOVAS)).push((id, widget)));
+}
+
+/// Solta um foco de teclado que não seja de campo de texto. Um widget com foco faz o egui achar
+/// que o teclado é dele: as setas e os atalhos param até um Esc (B449).
+pub fn soltar_foco_escondido(ctx: &egui::Context) {
+    if !ctx.text_edit_focused() {
+        ctx.memory_mut(|m| {
+            if let Some(f) = m.focused() {
+                m.surrender_focus(f);
+            }
+        });
+    }
+}
+
+/// Algum evento deste quadro pode mudar o estado da interface: botão do mouse, tecla, texto ou roda.
+///
+/// O egui desenha um quadro por evento e o app muda o estado no meio dele (os cliques da árvore e
+/// dos painéis viram ações aplicadas depois de desenhar). Sem pedir mais um quadro, o resultado só
+/// aparecia no próximo movimento do mouse (B449). Movimento puro do ponteiro não conta: ele já traz
+/// o próprio quadro e não muda estado sozinho.
+pub fn evento_muda_estado(eventos: &[egui::Event]) -> bool {
+    eventos.iter().any(|e| {
+        matches!(
+            e,
+            egui::Event::PointerButton { .. } | egui::Event::Key { .. } | egui::Event::Text(_) | egui::Event::MouseWheel { .. } | egui::Event::Paste(_) | egui::Event::Copy | egui::Event::Cut | egui::Event::PointerGone
+        )
+    })
+}
+
 /// Anel de foco do teclado em widget desenhado à mão: o mesmo traço de 2 px que o tema dá ao foco
 /// dos widgets do egui (contraste de componente de 3:1).
 pub fn anel_de_foco(ui: &egui::Ui, resp: &egui::Response, rect: egui::Rect) {
@@ -137,9 +233,10 @@ pub fn anel(ui: &egui::Ui, resp: egui::Response) -> egui::Response {
 }
 
 /// Linhas do resumo das teclas, para as Preferências e o mapa de atalhos.
-pub const RESUMO: [(&str, &str); 6] = [
+pub const RESUMO: [(&str, &str); 7] = [
     ("Tab / Shift+Tab", "passa o foco por botões e campos; Enter ou Espaço aciona"),
     ("Setas", "giram a vista; com Shift, movem"),
+    ("↑ / ↓", "com um item da árvore em foco, andam pela árvore"),
     ("Page Up / Page Down", "aproximam e afastam a vista"),
     ("Alt+↑ / Alt+↓", "escolhem o comando anterior ou o seguinte da árvore"),
     ("Enter", "abre o comando escolhido; com ele aberto, conclui"),
@@ -248,6 +345,96 @@ mod tests {
         let (f, foco) = quadro(&ctx, vec![]);
         assert_eq!(foco, [false, true], "segundo Tab: o botão desenhado à mão");
         assert_eq!(aneis(&ctx, &f), 1);
+    }
+
+    #[test]
+    fn setas_andam_na_arvore_com_ela_em_foco_e_voltam_para_a_vista_sem() {
+        let ordem = [10, 20, 30];
+        assert_eq!(vizinho_na_lista(&ordem, Some(20), 1), Some(30));
+        assert_eq!(vizinho_na_lista(&ordem, Some(20), -1), Some(10));
+        assert_eq!(vizinho_na_lista(&ordem, Some(30), 1), Some(30), "para no fim");
+        assert_eq!(vizinho_na_lista(&ordem, None, 1), Some(10));
+        assert_eq!(vizinho_na_lista(&ordem, None, -1), Some(30));
+        assert_eq!(vizinho_na_lista::<i32>(&[], None, 1), None);
+        assert_eq!(passo_na_arvore(Teclas { baixo: true, ..Default::default() }), Some(1));
+        assert_eq!(passo_na_arvore(Teclas { cima: true, ..Default::default() }), Some(-1));
+        assert_eq!(passo_na_arvore(Teclas { baixo: true, alt: true, ..Default::default() }), None, "Alt+↓ é o comando seguinte");
+        assert_eq!(passo_na_arvore(Teclas { direita: true, ..Default::default() }), None, "← e → ficam com a vista");
+        // o clique na árvore dá as setas a ela; o foco do Tab numa linha também; outro widget com
+        // foco (um campo) fica com elas; sem nada, a vista
+        assert!(setas_na_arvore(true, false, false));
+        assert!(setas_na_arvore(false, true, false));
+        assert!(!setas_na_arvore(true, false, true));
+        assert!(!setas_na_arvore(false, false, false));
+    }
+
+    #[test]
+    fn clique_tecla_e_roda_pedem_quadro_movimento_nao() {
+        let mv = egui::Event::PointerMoved(egui::pos2(1., 1.));
+        assert!(!evento_muda_estado(&[mv.clone()]));
+        assert!(!evento_muda_estado(&[]));
+        let clique = egui::Event::PointerButton { pos: egui::pos2(1., 1.), button: egui::PointerButton::Primary, pressed: false, modifiers: Default::default() };
+        assert!(evento_muda_estado(&[mv, clique]));
+        assert!(evento_muda_estado(&tab()));
+    }
+
+    #[test]
+    fn foco_escondido_em_botao_sai_e_o_de_campo_de_texto_fica() {
+        let ctx = egui::Context::default();
+        quadro(&ctx, vec![]);
+        quadro(&ctx, tab());
+        let (_, foco) = quadro(&ctx, vec![]);
+        assert_eq!(foco, [true, false]);
+        assert!(ctx.egui_wants_keyboard_input(), "com o foco num botão, o egui segura as setas e os atalhos");
+        soltar_foco_escondido(&ctx);
+        assert!(!ctx.egui_wants_keyboard_input());
+        // campo de texto em edição não perde o foco
+        let campo = |ctx: &egui::Context, focar: bool| {
+            let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400., 300.))), ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
+                    let mut t = String::new();
+                    let r = ui.text_edit_singleline(&mut t);
+                    if focar {
+                        r.request_focus();
+                    }
+                });
+            });
+            out.textures_delta.clear();
+        };
+        campo(&ctx, true);
+        campo(&ctx, false);
+        assert!(ctx.text_edit_focused());
+        soltar_foco_escondido(&ctx);
+        assert!(ctx.text_edit_focused());
+    }
+
+    /// Diagnóstico do B449: o clique numa linha da árvore (rótulo escolhível com arrastar, como
+    /// `drag_item`) dá ou não o foco do teclado ao rótulo?
+    #[test]
+    fn clique_numa_linha_e_o_foco_do_teclado() {
+        let ctx = egui::Context::default();
+        let rodar = |ctx: &egui::Context, eventos: Vec<egui::Event>| {
+            let raw = egui::RawInput { events: eventos, screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(400., 300.))), ..Default::default() };
+            let mut rect = egui::Rect::NOTHING;
+            let mut out = ctx.run_ui(raw, |ui| {
+                egui::CentralPanel::default().show_inside(ui, |ui| {
+                    let r = ui.selectable_label(false, "Placa");
+                    let r = r.interact(egui::Sense::click_and_drag());
+                    rect = r.rect;
+                });
+            });
+            out.textures_delta.clear();
+            rect
+        };
+        let rect = rodar(&ctx, vec![]);
+        let p = rect.center();
+        let botao = |pressed| egui::Event::PointerButton { pos: p, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        rodar(&ctx, vec![egui::Event::PointerMoved(p)]);
+        rodar(&ctx, vec![botao(true)]);
+        rodar(&ctx, vec![botao(false)]);
+        rodar(&ctx, vec![]);
+        assert!(!ctx.egui_wants_keyboard_input(), "o clique não deve prender o foco: {:?}", ctx.memory(|m| m.focused()));
     }
 
     #[test]
