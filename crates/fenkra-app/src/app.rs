@@ -5149,6 +5149,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let hidden_secs = self.settings.tree_hidden.clone();
         let hide = |k: &str| hidden_secs.iter().any(|x| x == k);
 
+        // B439: a peça ativa na montagem fica embaixo dos produtos dela; 2 cliques num deles voltam
+        if let Some(st) = self.asm.as_mut() {
+            crate::asm_estrutura::acima_da_peca(st, ui);
+        }
         // ---------- peça
         let r = ui
             .horizontal(|ui| {
@@ -8150,7 +8154,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         Some(crate::picking::Pick::CurveVtx { curve, .. }) => Some(curve),
                         _ => None,
                     };
-                    if let Some(id) = target.filter(|id| self.open.doc.feature(*id).is_some() || self.open.doc.reference(*id).is_some()) {
+                    // B439: na montagem o documento aberto é a vista composta, e o dono da face é o
+                    // componente (um coletor dela), não um comando: sem isto o duplo clique na peça
+                    // não a ativava
+                    let componente = |id: &Id| self.in_asm() && self.open.doc.collectors.iter().any(|c| c.id == *id);
+                    if let Some(id) = target.filter(|id| self.open.doc.feature(*id).is_some() || self.open.doc.reference(*id).is_some() || componente(id)) {
                         if edge_cmd.is_none() {
                             self.open_pending = Some(id);
                         }
