@@ -28,7 +28,14 @@ pub enum Acao {
     AbrirCaminho(PathBuf),
     /// componente da montagem que vai ocupar o lugar da peça aberta (B362)
     AtivarComponente(Id),
+    /// fechar a aba da frente (B363): pergunta pelo que ela tem por salvar
+    FecharDocumento,
     Sair,
+}
+
+/// Ações que encerram o documento da frente inteiro (peça, montagem e desenho dele).
+fn fecha_tudo(a: &Acao) -> bool {
+    matches!(a, Acao::Sair | Acao::FecharDocumento)
 }
 
 #[derive(Default)]
@@ -113,8 +120,12 @@ impl App {
 
     /// Executa `acao` já, ou pergunta antes quando há alterações que seriam perdidas.
     pub fn com_confirmacao(&mut self, acao: Acao) {
+        // B363: abrir, novo e exemplos vão para uma aba nova; o documento da frente não se perde
+        if self.abrir_em_aba(&acao) {
+            return;
+        }
         let perde = match acao {
-            Acao::Sair => self.algo_modificado(),
+            Acao::Sair | Acao::FecharDocumento => self.algo_modificado(),
             _ => self.modificado(PECA),
         };
         if perde {
@@ -134,7 +145,7 @@ impl App {
         self.salvar.confirmar.is_some()
     }
 
-    fn rodar_acao(&mut self, acao: Acao) {
+    pub(super) fn rodar_acao(&mut self, acao: Acao) {
         match acao {
             Acao::NovaPeca => {
                 self.load_doc(Document::new("Peça"), None, None);
@@ -166,7 +177,16 @@ impl App {
             }
             Acao::AbrirCaminho(p) => self.open_path(&p),
             Acao::AtivarComponente(id) => crate::asm_ui::ativar_peca(self, id),
-            Acao::Sair => self.salvar.pode_fechar = true,
+            Acao::FecharDocumento => self.fechar_ativo_sem_perguntar(),
+            Acao::Sair => match self.fundo_modificado() {
+                // B363: a aba da frente está resolvida; a próxima com alterações vem para a frente e pergunta
+                Some(id) => {
+                    self.fechar_ativo_sem_perguntar();
+                    self.trocar_documento(id);
+                    self.salvar.confirmar = Some(Acao::Sair);
+                }
+                None => self.salvar.pode_fechar = true,
+            },
         }
     }
 
@@ -305,9 +325,11 @@ impl App {
             self.salvar.externo = self.mudanca_externa(self.documento_ativo()) != MudancaExterna::Igual;
         }
         // pedido de fechar a janela com alterações por salvar
-        if ctx.input(|i| i.viewport().close_requested()) && !self.salvar.pode_fechar && self.algo_modificado() {
+        if ctx.input(|i| i.viewport().close_requested()) && !self.salvar.pode_fechar && (self.algo_modificado() || self.fundo_modificado().is_some()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            self.salvar.confirmar = Some(Acao::Sair);
+            if !self.confirmando() {
+                self.com_confirmacao(Acao::Sair);
+            }
         }
         if self.salvar.pode_fechar {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -320,7 +342,7 @@ impl App {
     fn janela_confirmar(&mut self, ctx: &egui::Context) {
         let Some(acao) = self.salvar.confirmar.clone() else { return };
         let (mut salvar, mut descartar, mut cancelar) = (false, false, false);
-        let nomes: Vec<String> = self.candidatos().into_iter().filter(|c| c.editado && (acao == Acao::Sair || c.id == PECA)).map(|c| c.nome).collect();
+        let nomes: Vec<String> = self.candidatos().into_iter().filter(|c| c.editado && (fecha_tudo(&acao) || c.id == PECA)).map(|c| c.nome).collect();
         egui::Modal::new(egui::Id::new("fenkra_confirmar_descarte")).show(ctx, |ui| {
             ui.set_max_width(420.);
             ui.heading(tr("Salvar as alterações?"));
@@ -343,7 +365,7 @@ impl App {
         } else if descartar {
             self.salvar.confirmar = None;
             self.open.modified = false;
-            if acao == Acao::Sair {
+            if fecha_tudo(&acao) {
                 if let Some(s) = self.asm.as_mut() {
                     s.modified = false;
                 }
@@ -354,7 +376,7 @@ impl App {
             self.rodar_acao(acao);
         } else if salvar {
             self.salvar.confirmar = None;
-            let ok = if acao == Acao::Sair { self.salvar_pendentes() } else {
+            let ok = if fecha_tudo(&acao) { self.salvar_pendentes() } else {
                 self.salvar_documento(PECA);
                 self.salvar.conflito.is_none() && !self.modificado(PECA)
             };

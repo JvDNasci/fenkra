@@ -36,6 +36,7 @@ mod exportar;
 mod visualizacao;
 mod controle_visual;
 mod janelas;
+mod docs_abertos;
 pub(crate) use visualizacao::abrir_no_navegador;
 mod importar;
 mod features;
@@ -373,6 +374,8 @@ pub struct App {
     pub st_falhas: Vec<fenkra_solidos::MemberFailure>,
     /// B80: comandos da linha da lista de corte sob o mouse ou clicada (realçados no 3D)
     pub st_cut_hi: Vec<Id>,
+    /// B363: documentos abertos em abas (os de fundo e a ordem da barra)
+    documentos: docs_abertos::Documentos,
 }
 
 /// Edição de um comando como "ambiente": só termina com Concluir (mantém) ou Cancelar (desfaz).
@@ -532,6 +535,7 @@ impl App {
             st_falhas: vec![],
             st_cut_hi: vec![],
             st_lib_sel: 0,
+            documentos: Default::default(),
         };
         app.started = !app.settings.show_start;
         // desenvolvimento: FENKRA_DEMO_EXEMPLO=<n> abre o exemplo n da tela inicial
@@ -8842,6 +8846,8 @@ impl eframe::App for App {
             return;
         }
 
+        // B363: troca de documento pedida no quadro anterior (abas, Ctrl+Tab), antes de copiar o estado
+        self.documentos_inicio_do_quadro(ctx);
         let before = self.open.doc.clone();
         self.doc_trocado = false;
         let sel_before = self.sel;
@@ -8850,6 +8856,7 @@ impl eframe::App for App {
         crate::desempenho::marca("copias");
 
         self.top(root);
+        self.barra_de_documentos(root);
         crate::desempenho::marca("top");
         self.hover_now.set(None);
         self.atualizar_conjunto();
