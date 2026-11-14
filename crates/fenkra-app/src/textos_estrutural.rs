@@ -248,4 +248,18 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Tabela por ponto", "Point table"),
     ("Colisão da tocha com o perfil e corte em linha comum ficam para uma fase posterior; G-code de máquina não é gerado.", "Torch collision with the profile and common-line cutting are left for a later phase; machine G-code is not generated."),
     ("Caminho de corte exportado", "Cutting path exported"),
+    ("Onde a tocha perfura e começa cada corte, em graus no perímetro a partir da costura.", "Where the torch pierces and starts each cut, in degrees around the perimeter from the seam."),
+    ("DXF…", "DXF…"),
+    // B176: medidas reais do tubo
+    ("Tubo real (medidas do lote)", "Real tube (batch measurements)"),
+    ("Diâmetro real", "Real diameter"),
+    ("Diâmetro externo medido do tubo redondo; 0 usa o nominal. Entra na curva de encaixe.", "Measured outer diameter of the round tube; 0 uses the nominal one. Used by the cope curve."),
+    ("Parede real", "Real wall"),
+    ("Espessura de parede medida; 0 usa a nominal. Entra na curva de encaixe.", "Measured wall thickness; 0 uses the nominal one. Used by the cope curve."),
+    ("Ovalização", "Ovality"),
+    ("Diâmetro máximo menos o mínimo do redondo; o relatório mostra quanto a ponta pode errar.", "Largest minus smallest diameter of the round tube; the report shows how far the end may be off."),
+    ("Raio de canto", "Corner radius"),
+    ("Raio externo dos cantos do tubo retangular; o relatório mostra a pele externa real.", "Outer corner radius of the rectangular tube; the report shows the real outer skin."),
+    ("Posição da costura de solda no perímetro; vira o zero da vista desenvolvida e do início do corte.", "Position of the weld seam on the perimeter; it becomes the zero of the developed view and of the cut start."),
+    ("Vista desenvolvida em DXF: tubo aberto, caminho com kerf, entrada e saída na camada CORTE, microjuntas tracejadas, ordem e sentido.", "Developed view as DXF: unrolled tube, path with kerf, lead-in and lead-out on the CORTE layer, dashed micro-joints, order and direction."),
 ];

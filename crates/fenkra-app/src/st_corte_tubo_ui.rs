@@ -11,7 +11,8 @@ use crate::i18n::tr;
 use crate::render::Camera;
 use eframe::egui::{self, RichText, Stroke};
 use fenkra_core::Id;
-use fenkra_solidos::st_caminho_tubo::{caminho_do_membro, CaminhoTubo, OpcoesCaminho};
+use fenkra_solidos::st_caminho_tubo::{caminho_do_membro_real, CaminhoTubo, OpcoesCaminho};
+use fenkra_solidos::st_tubo_real::{gravar, ler, TuboReal};
 use fenkra_solidos::st_encaixe_doc::encaixes_da_estrutura;
 use glam::Vec3;
 use std::sync::Arc;
@@ -73,6 +74,8 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
     let chave = e.membro.map(|m| (app.geracao(), m));
     let mut aberta = true;
     let mut csv = false;
+    let mut dxf = false;
+    let mut mudou_real: Option<(String, TuboReal)> = None;
     egui::Window::new(tr("Caminho de corte do tubo")).id(egui::Id::unique("janela_corte_tubo")).open(&mut aberta).default_size([560., 620.]).resizable(true).show(ctx, |ui| {
         if membros.is_empty() {
             ui.label(RichText::new(tr("Nenhum membro com ponta de encaixe: o caminho de corte sai da curva do encaixe.")).weak());
@@ -96,11 +99,30 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
                 campo(ui, "Microjunta", &mut e.opc.microjunta, 0.0..=10.0, " mm", "Comprimento de cada microjunta.");
                 campo(ui, "Velocidade", &mut e.opc.velocidade, 10.0..=50000.0, " mm/min", "Velocidade de corte da máquina para este material e espessura.");
                 campo(ui, "Perfuração", &mut e.opc.perfuracao, 0.0..=30.0, " s", "Tempo de cada perfuração.");
+                campo(ui, "Início", &mut e.opc.inicio, 0.0..=360.0, "°", "Onde a tocha perfura e começa cada corte, em graus no perímetro a partir da costura.");
             });
             ui.checkbox(&mut e.opc.inverter, tr("Sentido inverso")).on_hover_text(tr("Percorre a curva no outro sentido."));
         });
-        if e.chave != chave || e.opc != antes || e.caminho.is_none() {
-            e.caminho = e.membro.and_then(|m| membros.iter().find(|x| (x.feature, x.linha) == m)).and_then(|m| caminho_do_membro(m, &e.opc)).map(Arc::new);
+        // B176: medidas reais do lote, por designação (guardadas na peça)
+        let atual_m = e.membro.and_then(|m| membros.iter().find(|x| (x.feature, x.linha) == m));
+        let real = atual_m.map(|m| ler(app.doc(), &m.designacao)).unwrap_or_default();
+        if let Some(m) = atual_m {
+            let mut r = real;
+            egui::CollapsingHeader::new(tr("Tubo real (medidas do lote)")).id_salt("corte_tubo_real").default_open(false).show(ui, |ui| {
+                egui::Grid::new("corte_tubo_real_campos").num_columns(2).show(ui, |ui| {
+                    campo(ui, "Diâmetro real", &mut r.diametro, 0.0..=2000.0, " mm", "Diâmetro externo medido do tubo redondo; 0 usa o nominal. Entra na curva de encaixe.");
+                    campo(ui, "Parede real", &mut r.parede, 0.0..=100.0, " mm", "Espessura de parede medida; 0 usa a nominal. Entra na curva de encaixe.");
+                    campo(ui, "Ovalização", &mut r.ovalizacao, 0.0..=50.0, " mm", "Diâmetro máximo menos o mínimo do redondo; o relatório mostra quanto a ponta pode errar.");
+                    campo(ui, "Raio de canto", &mut r.raio_canto, 0.0..=100.0, " mm", "Raio externo dos cantos do tubo retangular; o relatório mostra a pele externa real.");
+                    campo(ui, "Costura", &mut r.costura, 0.0..=360.0, "°", "Posição da costura de solda no perímetro; vira o zero da vista desenvolvida e do início do corte.");
+                });
+            });
+            if r != real {
+                mudou_real = Some((m.designacao.clone(), r));
+            }
+        }
+        if e.chave != chave || e.opc != antes || e.caminho.as_ref().is_none_or(|c| c.real != real) {
+            e.caminho = atual_m.and_then(|m| caminho_do_membro_real(m, &e.opc, &real)).map(Arc::new);
             e.chave = chave;
         }
         let Some(c) = e.caminho.clone() else {
@@ -117,6 +139,9 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
             if ui.button(tr("CSV…")).on_hover_text(tr("Tabela por ponto: operação, etapa, X, giro A, posição no perímetro, bisel, vetor da tocha e se corta.")).clicked() {
                 csv = true;
             }
+            if ui.button(tr("DXF…")).on_hover_text(tr("Vista desenvolvida em DXF: tubo aberto, caminho com kerf, entrada e saída na camada CORTE, microjuntas tracejadas, ordem e sentido.")).clicked() {
+                dxf = true;
+            }
         });
         if e.tocando {
             e.t += ui.input(|i| i.stable_dt as f64) / 8.;
@@ -132,23 +157,46 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
         let (resp, p) = ui.allocate_painter(egui::vec2(ui.available_width(), 180.), egui::Sense::hover());
         let r = resp.rect;
         p.rect_stroke(r, 2., Stroke::new(1., ui.visuals().weak_text_color()), egui::StrokeKind::Inside);
-        let (xmin, xmax) = seq.iter().fold((f64::MAX, f64::MIN), |(a, b), (_, q)| (a.min(q.x), b.max(q.x)));
-        let (smin, smax) = seq.iter().fold((f64::MAX, f64::MIN), |(a, b), (_, q)| (a.min(q.s), b.max(q.s)));
-        let esc_x = (r.width() as f64 - 20.) / (xmax - xmin).max(1.);
-        let esc_s = (r.height() as f64 - 20.) / (smax - smin).max(1.);
-        let tela = |x: f64, s: f64| egui::pos2(r.left() + 10. + ((x - xmin) * esc_x) as f32, r.bottom() - 10. - ((s - smin) * esc_s) as f32);
-        let cores = [crate::theme::accent(ui.visuals()), crate::theme::st_ok()];
-        for w in seq.windows(2) {
-            let ((k0, a), (k1, b)) = (w[0], w[1]);
-            if k0 != k1 || (b.s - a.s).abs() > (smax - smin) * 0.5 {
-                continue;
-            }
-            let cor = cores[k0 % 2];
-            let st = if a.corta && b.corta { Stroke::new(2., cor) } else { Stroke::new(1., cor.gamma_multiply(0.35)) };
-            p.line_segment([tela(a.x, a.s), tela(b.x, b.s)], st);
+        // o mesmo desenho do DXF: o tubo aberto entre 0 e o perímetro, com o caminho partido na costura.
+        // Barra longa: as duas pontas ficam em quadros lado a lado, sem o meio vazio da barra.
+        let des = c.desenvolvido();
+        let per = c.perimetro.max(1.);
+        let faixas: Vec<(f64, f64)> = c
+            .operacoes
+            .iter()
+            .map(|o| o.pontos.iter().fold((f64::MAX, f64::MIN), |(a, b), q| (a.min(q.x), b.max(q.x))))
+            .map(|(a, b)| (a - 5., b + 5.))
+            .collect();
+        let n = faixas.len().max(1) as f32;
+        let larg = (r.width() - 20. - 10. * (n - 1.)) / n;
+        let quadro = |k: usize| egui::Rect::from_min_size(egui::pos2(r.left() + 10. + k as f32 * (larg + 10.), r.top() + 10.), egui::vec2(larg, r.height() - 20.));
+        let tela = |k: usize, x: f64, s: f64| {
+            let (x0, x1) = faixas[k];
+            let q = quadro(k);
+            let esc = ((q.width() as f64) / (x1 - x0).max(1.)).min(q.height() as f64 / per);
+            egui::pos2(q.left() + ((x - x0) * esc) as f32, q.bottom() - (s * esc) as f32)
+        };
+        let qual = |x: f64| faixas.iter().position(|&(a, b)| x >= a && x <= b);
+        let cor = crate::theme::accent(ui.visuals());
+        for (k, _) in faixas.iter().enumerate() {
+            let (x0, x1) = faixas[k];
+            p.line_segment([tela(k, x0, 0.), tela(k, x1, 0.)], Stroke::new(1., ui.visuals().weak_text_color()));
+            p.line_segment([tela(k, x0, per), tela(k, x1, per)], Stroke::new(1., ui.visuals().weak_text_color()));
         }
-        if let Some((_, q)) = seq.get(atual) {
-            p.circle_filled(tela(q.x, q.s), 5., crate::theme::st_warn());
+        for t in &des.tracos {
+            let st = match (t.camada, t.tracejado) {
+                (fenkra_solidos::st_dobra_corte::Camada::Corte, _) => Stroke::new(2., cor),
+                (_, true) => Stroke::new(1., cor.gamma_multiply(0.35)),
+                _ => continue,
+            };
+            for w in t.pts.windows(2) {
+                if let Some(k) = qual(w[0][0]) {
+                    p.line_segment([tela(k, w[0][0], w[0][1]), tela(k, w[1][0], w[1][1])], st);
+                }
+            }
+        }
+        if let Some((k, q)) = seq.get(atual) {
+            p.circle_filled(tela(*k, q.x, q.s.rem_euclid(per)), 5., crate::theme::st_warn());
         }
         // tabela por ponto (as primeiras linhas; o CSV leva todas)
         egui::CollapsingHeader::new(format!("{} ({} {})", tr("Tabela por ponto"), seq.len(), tr("pontos"))).id_salt("corte_tubo_tabela").show(ui, |ui| {
@@ -177,6 +225,21 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
         if let Some(c) = &e.caminho {
             if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("caminho_de_corte.csv").save_file() {
                 match std::fs::write(&p, c.csv()) {
+                    Ok(()) => app.toast(tr("Caminho de corte exportado"), false),
+                    Err(err) => app.toast(format!("{}: {err}", tr("Erro")), true),
+                }
+            }
+        }
+    }
+    if let Some((des, r)) = mudou_real {
+        let antes = app.open.doc.clone();
+        gravar(&mut app.open.doc, &des, &r);
+        app.push_undo_pub(antes);
+    }
+    if dxf {
+        if let Some(c) = &e.caminho {
+            if let Some(p) = rfd::FileDialog::new().add_filter("DXF", &["dxf"]).set_file_name("caminho_de_corte.dxf").save_file() {
+                match std::fs::write(&p, fenkra_solidos::st_dobra_saida::dxf(&c.desenvolvido())) {
                     Ok(()) => app.toast(tr("Caminho de corte exportado"), false),
                     Err(err) => app.toast(format!("{}: {err}", tr("Erro")), true),
                 }
