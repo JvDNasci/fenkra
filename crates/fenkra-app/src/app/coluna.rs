@@ -33,12 +33,18 @@ pub enum Conteudo {
     Comando,
     /// árvore aberta pela seta, com o comando ainda aberto
     ArvoreNoComando,
+    /// propriedades de um item escolhido (peça, parâmetros, anotação, vista, restrição): a árvore
+    /// fica em cima, para continuar escolhendo, e as propriedades embaixo
+    ArvoreEPropriedades,
 }
 
-/// Regra da coluna. `comando`: há comando aberto e o painel dele não está numa janela nativa.
-/// `quer_arvore`: a pessoa clicou na seta.
-pub fn conteudo(comando: bool, quer_arvore: bool, fechada: bool, minimizada: bool) -> Conteudo {
-    match (comando, quer_arvore) {
+/// Regra da coluna. `painel`: há painel para mostrar na coluna (comando ou propriedades), e ele não
+/// está numa janela nativa. `comando`: é um comando de verdade, e não só as propriedades de um item
+/// escolhido. `quer_arvore`: a pessoa clicou na seta.
+pub fn conteudo(painel: bool, comando: bool, quer_arvore: bool, fechada: bool, minimizada: bool) -> Conteudo {
+    match (painel, quer_arvore) {
+        // propriedades de uma seleção: com a árvore à vista, dividem a coluna com ela
+        (true, false) if !comando && !fechada && !minimizada => Conteudo::ArvoreEPropriedades,
         (true, false) => Conteudo::Comando,
         (true, true) => Conteudo::ArvoreNoComando,
         (false, _) if fechada => Conteudo::Nada,
@@ -49,6 +55,12 @@ pub fn conteudo(comando: bool, quer_arvore: bool, fechada: bool, minimizada: boo
 
 fn id_quer_arvore() -> egui::Id {
     egui::Id::unique("coluna_arvore_no_comando")
+}
+
+/// A árvore está à vista porque a pessoa clicou na seta, com um comando aberto: os cliques nela são
+/// para escolher entradas do comando.
+pub(super) fn arvore_pela_seta(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(id_quer_arvore())).unwrap_or(false)
 }
 
 /// Linha da seta: triângulo, rótulo e, à direita, um lembrete do que o clique faz. Toda a linha clica.
@@ -85,7 +97,12 @@ impl App {
         if self.sketch.is_some() {
             tr("Sketch").to_string()
         } else if let Some(s) = &self.session {
-            self.open.doc.name_of(s.id)
+            // B435: o tipo do recurso saiu do corpo do painel e fica no título, junto do nome
+            let nome = self.open.doc.name_of(s.id);
+            match self.open.doc.feature(s.id) {
+                Some(f) => format!("{} · {nome}", tr(crate::arvore_nomes::tipo_legivel(f.kind.type_name()))),
+                None => nome,
+            }
         } else if let Some(p) = self.asm.as_ref().and_then(|s| s.cmd.as_ref()).filter(|_| self.in_asm()) {
             tr(p.c.tipo.label()).to_string()
         } else if let Some(i) = self.pmi_pending.filter(|_| !self.in_asm()) {
@@ -147,17 +164,18 @@ impl App {
         }
     }
 
-    /// A coluna inteira. `comando`: há um comando aberto neste quadro.
-    pub(super) fn coluna_esquerda(&mut self, root: &mut egui::Ui, comando: bool) {
+    /// A coluna inteira. `painel`: há painel de comando ou de propriedades neste quadro. `comando`: é
+    /// um comando de verdade.
+    pub(super) fn coluna_esquerda(&mut self, root: &mut egui::Ui, painel: bool, comando: bool) {
         let ctx = root.ctx().clone();
-        let nativa = comando && !ctx.embed_viewports() && self.settings.painel("comando", Encaixe::Esquerda).encaixe == Encaixe::Janela;
-        let na_coluna = comando && !nativa;
+        let nativa = painel && !ctx.embed_viewports() && self.settings.painel("comando", Encaixe::Esquerda).encaixe == Encaixe::Janela;
+        let na_coluna = painel && !nativa;
         if !na_coluna {
             ctx.data_mut(|d| d.remove::<bool>(id_quer_arvore()));
         }
         // captura sem mouse: FENKRA_DEMO_SETA=1 abre a árvore pela seta com o comando aberto
         let quer = na_coluna && (ctx.data(|d| d.get_temp::<bool>(id_quer_arvore())).unwrap_or(false) || std::env::var("FENKRA_DEMO_SETA").is_ok());
-        let o_que = conteudo(na_coluna, quer, self.settings.arvore_fechada, self.settings.arvore_minimizada);
+        let o_que = conteudo(na_coluna, comando, quer, self.settings.arvore_fechada, self.settings.arvore_minimizada);
         let quadro = egui::Frame::new().fill(root.visuals().panel_fill);
         match o_que {
             Conteudo::Nada => {
@@ -198,6 +216,34 @@ impl App {
         }
     }
 
+    /// Linha do título do painel, com o X. Devolve se a pessoa pediu para fechar. O botão direito no
+    /// título leva o painel para uma janela do sistema (segunda tela).
+    fn titulo_do_painel(&mut self, ui: &mut egui::Ui, titulo: &str) -> bool {
+        let ctx = ui.ctx().clone();
+        let mut fechar = false;
+        let linha = ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), LINHA), egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if paineis::botao_fechar(ui, tr("Cancelar o comando")).clicked() {
+                fechar = true;
+            }
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                ui.add(egui::Label::new(RichText::new(titulo).strong()).truncate().selectable(false));
+            });
+        });
+        // segunda tela: o painel só deixa a coluna para uma janela do sistema
+        if !ctx.embed_viewports() {
+            linha.response.interact(egui::Sense::click()).context_menu(|ui| {
+                if ui.button(tr("Abrir numa janela própria")).on_hover_text(tr("Leva o painel para uma janela do sistema, que pode ir para outro monitor")).clicked() {
+                    let mut p = self.settings.painel("comando", Encaixe::Esquerda);
+                    p.encaixe = Encaixe::Janela;
+                    p.pos = None;
+                    self.settings.guardar_painel("comando", p);
+                    ui.close();
+                }
+            });
+        }
+        fechar
+    }
+
     fn conteudo_da_coluna(&mut self, ui: &mut egui::Ui, o_que: Conteudo) {
         let ctx = ui.ctx().clone();
         let titulo = self.titulo_do_comando();
@@ -207,29 +253,26 @@ impl App {
                     ctx.data_mut(|d| d.insert_temp(id_quer_arvore(), true));
                 }
                 ui.separator();
-                let mut fechar = false;
-                let linha = ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), LINHA), egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if paineis::botao_fechar(ui, tr("Cancelar o comando")).clicked() {
-                        fechar = true;
-                    }
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        ui.add(egui::Label::new(RichText::new(&titulo).strong()).truncate().selectable(false));
-                    });
-                });
-                // segunda tela: o painel só deixa a coluna para uma janela do sistema
-                if !ctx.embed_viewports() {
-                    linha.response.interact(egui::Sense::click()).context_menu(|ui| {
-                        if ui.button(tr("Abrir numa janela própria")).on_hover_text(tr("Leva o painel para uma janela do sistema, que pode ir para outro monitor")).clicked() {
-                            let mut p = self.settings.painel("comando", Encaixe::Esquerda);
-                            p.encaixe = Encaixe::Janela;
-                            p.pos = None;
-                            self.settings.guardar_painel("comando", p);
-                            ui.close();
-                        }
-                    });
-                }
+                let fechar = self.titulo_do_painel(ui, &titulo);
                 self.barras_do_comando(ui);
                 self.campos_do_comando(ui);
+                if fechar {
+                    self.fechar_comando();
+                }
+            }
+            Conteudo::ArvoreEPropriedades => {
+                // árvore em cima, propriedades embaixo: escolher outro item troca as propriedades
+                let tudo = ui.available_rect_before_wrap();
+                let meio = tudo.top() + (tudo.height() * 0.5).round();
+                self.arvore_na_coluna(ui, Rect::from_min_max(tudo.min, egui::pos2(tudo.right(), meio - 4.)));
+                ui.painter().hline(tudo.x_range(), meio, ui.visuals().widgets.noninteractive.bg_stroke);
+                let baixo = Rect::from_min_max(egui::pos2(tudo.left(), meio + 4.), tudo.max);
+                let mut dentro = ui.new_child(egui::UiBuilder::new().id_salt("propriedades_da_selecao").max_rect(baixo));
+                dentro.set_clip_rect(baixo.intersect(ui.clip_rect()));
+                let fechar = self.titulo_do_painel(&mut dentro, &titulo);
+                self.barras_do_comando(&mut dentro);
+                self.campos_do_comando(&mut dentro);
+                ui.allocate_rect(tudo, egui::Sense::hover());
                 if fechar {
                     self.fechar_comando();
                 }
@@ -363,19 +406,32 @@ mod tests {
     /// fechar o comando; sem comando vale o estado da árvore (aberta, minimizada no trilho, fechada).
     #[test]
     fn comando_toma_a_coluna_e_a_seta_alterna_com_a_arvore() {
-        assert_eq!(conteudo(false, false, false, false), Conteudo::Arvore);
-        assert_eq!(conteudo(true, false, false, false), Conteudo::Comando);
-        assert_eq!(conteudo(true, true, false, false), Conteudo::ArvoreNoComando);
+        assert_eq!(conteudo(false, false, false, false, false), Conteudo::Arvore);
+        assert_eq!(conteudo(true, true, false, false, false), Conteudo::Comando);
+        assert_eq!(conteudo(true, true, true, false, false), Conteudo::ArvoreNoComando);
         // a seta não sobrevive ao comando: sem comando, o pedido não muda nada
-        assert_eq!(conteudo(false, true, false, false), Conteudo::Arvore);
+        assert_eq!(conteudo(false, false, true, false, false), Conteudo::Arvore);
         // árvore minimizada ou fechada não esconde o comando nem a árvore pedida pela seta
         for (fechada, minimizada) in [(true, false), (false, true), (true, true)] {
-            assert_eq!(conteudo(true, false, fechada, minimizada), Conteudo::Comando);
-            assert_eq!(conteudo(true, true, fechada, minimizada), Conteudo::ArvoreNoComando);
+            assert_eq!(conteudo(true, true, false, fechada, minimizada), Conteudo::Comando);
+            assert_eq!(conteudo(true, true, true, fechada, minimizada), Conteudo::ArvoreNoComando);
         }
-        assert_eq!(conteudo(false, false, true, false), Conteudo::Nada);
-        assert_eq!(conteudo(false, false, false, true), Conteudo::Trilho);
-        assert_eq!(conteudo(false, false, true, true), Conteudo::Nada, "fechada vence minimizada");
+        assert_eq!(conteudo(false, false, false, true, false), Conteudo::Nada);
+        assert_eq!(conteudo(false, false, false, false, true), Conteudo::Trilho);
+        assert_eq!(conteudo(false, false, false, true, true), Conteudo::Nada, "fechada vence minimizada");
+    }
+
+    /// Propriedades de um item escolhido (peça, parâmetros, vista do desenho, restrição) não são um
+    /// comando: a árvore continua à vista, em cima, para escolher outro item. Com a árvore fechada ou
+    /// minimizada, as propriedades ficam com a coluna e a seta ainda traz a árvore.
+    #[test]
+    fn propriedades_da_selecao_dividem_a_coluna_com_a_arvore() {
+        assert_eq!(conteudo(true, false, false, false, false), Conteudo::ArvoreEPropriedades);
+        assert_eq!(conteudo(true, false, false, true, false), Conteudo::Comando);
+        assert_eq!(conteudo(true, false, false, false, true), Conteudo::Comando);
+        assert_eq!(conteudo(true, false, true, true, false), Conteudo::ArvoreNoComando);
+        // um comando de verdade nunca divide: ele toma a coluna
+        assert_ne!(conteudo(true, true, false, false, false), Conteudo::ArvoreEPropriedades);
     }
 
     /// A coluna reserva espaço de verdade: a área que sobra para a vista começa depois dela, e o

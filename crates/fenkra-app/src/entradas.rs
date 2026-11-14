@@ -264,6 +264,12 @@ pub fn legenda(k: &FeatureKind, destaque: Color32) -> Vec<(Color32, &'static str
     }
 }
 
+/// O quadro de entradas ainda pede algo à pessoa: há campo por preencher ou o comando escolhe corpos
+/// pelo clique. Com as entradas completas ele sai do painel do comando e fica em Propriedades (B435).
+pub fn pede_atencao(k: &FeatureKind) -> bool {
+    campo_ativo(k).is_some() || escolhe_corpos(k)
+}
+
 /// Faixa no topo do painel do comando aberto: campo ativo destacado, contador e legenda de cores.
 pub fn faixa(ui: &mut egui::Ui, id: Id, k: &FeatureKind) {
     let ativo = campo_ativo(k);

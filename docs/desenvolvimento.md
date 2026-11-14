@@ -125,6 +125,7 @@ preferências do usuário.
 | `FENKRA_DEMO_ACESSO=1` ou `gerada` | (B136) comando Escada e guarda-corpo aberto ao lado de uma plataforma, com a prévia das linhas no 3D; `gerada` já põe a escada de dois lances (4,4 m) na peça, sem o painel |
 | `FENKRA_DEMO_FOTO=<arquivo.png>` | grava a janela depois de 9 s e fecha o programa |
 | `FENKRA_DEMO_ARVORE=solta` | (B447) árvore solta e deslocada para a direita e para baixo: ela é cortada pela borda da coluna, sem desenhar sobre a área 3D |
+| `FENKRA_DEMO_PROPRIEDADES=1` | (B435) abre o painel Propriedades do comando aberto (nome, estado, suprimido, suprimir quando, aparência e o quadro de entradas) ou, sem comando, as propriedades da peça com as informações do modelo |
 | `FENKRA_DEMO_SETA=1` | (B433) com um comando aberto, mostra a coluna da esquerda como fica depois de clicar na seta: a árvore no lugar dos campos, com Concluir e Cancelar à vista |
 | `FENKRA_DEMO_POLIMENTO=<caso>` | abre uma peça de prova do polimento da superfície (B346): `esfera`, `cilindro`, `toro`, `superficie` (painel de dupla curvatura), `filete`, `bolso`, `filete_sup` |
 | `FENKRA_DEMO_QUALIDADE=<desvio>,<ângulo>` | força a malha de trabalho, por exemplo `0.02,45` (a mais grossa aceita); `FENKRA_EXIBIR` também aceita `sombreado` e `render` |

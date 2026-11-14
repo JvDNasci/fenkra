@@ -1020,67 +1020,28 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 ui.label(tr("Comando não existe mais."));
                 return;
             };
-            let names: Vec<String> = doc.params.iter().map(|p| p.name.clone()).chain(doc.references.iter().map(|r| r.name.clone())).collect();
-            {
-                let f = &mut doc.features[idx];
-                // cabeçalho: ícone, tipo, nome e selo de estado
-                egui::Frame::NONE.fill(ui.visuals().faint_bg_color).corner_radius(12.).inner_margin(10.).show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        let (r, _) = ui.allocate_exact_size(egui::vec2(38., 38.), egui::Sense::hover());
-                        let acc = crate::theme::accent(ui.visuals());
-                        ui.painter().rect_filled(r, 9., acc.gamma_multiply(0.18));
-                        ui.painter().rect_stroke(r, 9., egui::Stroke::new(1., acc.gamma_multiply(0.5)), egui::StrokeKind::Inside);
-                        ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, f.kind.icon(), egui::FontId::proportional(22.), acc);
-                        ui.vertical(|ui| {
-                            ui.label(RichText::new(tr(crate::arvore_nomes::tipo_legivel(f.kind.type_name()))).size(17.).strong());
-                            let mut n = f.name.clone();
-                            if ui.add(egui::TextEdit::singleline(&mut n).desired_width(150.)).changed() && !n.is_empty() && !names.contains(&n) {
-                                f.name = n;
-                            }
-                        });
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-                            let (t, c) = match &status {
-                                Some(Status::Error(_)) => ("ERRO", Color32::from_rgb(255, 110, 95)),
-                                Some(Status::Warning(_)) => ("AVISO", Color32::from_rgb(240, 195, 80)),
-                                Some(Status::Inactive) => ("INATIVO", Color32::from_gray(150)),
-                                _ => ("OK", crate::theme::st_ok()),
-                            };
-                            status_chip(ui, tr(t), c);
-                        });
-                    });
-                    match &status {
-                        Some(Status::Error(m)) => {
-                            ui.label(RichText::new(tr(m)).color(crate::theme::st_err()).small());
-                            let d = crate::erro_acao::diagnosticar(tipo_erro, &f.name, m);
-                            ui.label(RichText::new(format!("{}  💡 {}", d.codigo, tr(d.sugestao))).small().weak());
-                        }
-                        Some(Status::Warning(m)) => {
-                            ui.label(RichText::new(tr(m)).color(crate::theme::st_warn()).small());
-                        }
-                        Some(Status::Inactive) => {
-                            ui.label(RichText::new(tr("inativo (suprimido ou depois do marcador)")).weak().small());
-                        }
-                        _ => {}
-                    }
-                });
-                ui.horizontal(|ui| {
-                    crate::editor::check(ui, &mut f.suppressed, "suprimido");
-                    // só sketches têm olho próprio; sólidos aparecem pelo corpo (última feature)
-                    if matches!(f.kind, FeatureKind::Sketch(_)) {
-                        let mut vis = !f.hidden;
-                        if crate::editor::check(ui, &mut vis, "visível").changed() {
-                            f.hidden = !vis;
-                        }
-                    } else if ui.button(tr("🎨 Propriedades gráficas…")).clicked() {
-                        ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("fenkra_props"), f.id));
-                    }
-                });
-                crate::param_ui::suprimir_se(ui, &mut f.suppress_if, &doc_ro);
-                let _ = &tex_names;
+            // B435: o painel do comando mostra só suporte, modo, parâmetros e avançado. Nome, suprimido,
+            // aparência, "suprimir quando" e o quadro de entradas completas estão em Propriedades
+            // (`bloco_comum`). Aqui fica só o aviso que pede ação.
+            match &status {
+                Some(Status::Error(m)) => {
+                    ui.label(RichText::new(format!("✖ {}", tr(m))).color(crate::theme::st_err()).small());
+                    let d = crate::erro_acao::diagnosticar(tipo_erro, &doc.features[idx].name, m);
+                    ui.label(RichText::new(format!("{}  💡 {}", d.codigo, tr(d.sugestao))).small().weak());
+                }
+                Some(Status::Warning(m)) => {
+                    ui.label(RichText::new(format!("⚠ {}", tr(m))).color(crate::theme::st_warn()).small());
+                }
+                Some(Status::Inactive) => {
+                    ui.label(RichText::new(tr("inativo (suprimido ou depois do marcador)")).weak().small());
+                }
+                _ => {}
             }
+            let _ = &tex_names;
             let mut target = doc.features[idx].target;
             let mut kind = doc.features[idx].kind.clone();
-            if session.map(|s| s.0) == Some(id) {
+            // o quadro de entradas só aparece enquanto pede algo: campo por preencher ou corpo por escolher
+            if session.map(|s| s.0) == Some(id) && crate::entradas::pede_atencao(&kind) {
                 crate::entradas::faixa(ui, id, &kind);
             }
             tabs_begin_comando(ui, kind.type_name());
@@ -1109,9 +1070,14 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 replace_all(ui, doc, id);
             }
             ui.add_space(6.);
-            if ui.button(tr("🗑 Apagar…")).clicked() {
-                delete = Some(id);
-            }
+            ui.horizontal(|ui| {
+                if ui.button(tr("Propriedades…")).on_hover_text(tr("Nome, estado, suprimido, suprimir quando, aparência e o quadro de entradas deste recurso")).clicked() {
+                    ui.ctx().data_mut(|m| m.insert_temp(egui::Id::unique("fenkra_props"), id));
+                }
+                if ui.button(tr("🗑 Apagar…")).clicked() {
+                    delete = Some(id);
+                }
+            });
             tabs_end(ui);
         }
     }
@@ -1131,6 +1097,65 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     if let Some(id) = delete {
         app.ask_delete(id);
     }
+}
+
+/// O bloco comum a todo recurso (B435): tipo, nome, selo de estado, suprimido, visível (sketch) e
+/// "suprimir quando". Saiu do painel de cada comando e mora em Propriedades. `nomes`: os nomes já
+/// usados por parâmetros e referências, que o recurso não pode repetir.
+pub fn bloco_comum(ui: &mut egui::Ui, f: &mut Feature, nomes: &[String], status: Option<&Status>, doc_ro: &Document) {
+    egui::Frame::NONE.fill(ui.visuals().faint_bg_color).corner_radius(12.).inner_margin(10.).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            let (r, _) = ui.allocate_exact_size(egui::vec2(38., 38.), egui::Sense::hover());
+            let acc = crate::theme::accent(ui.visuals());
+            ui.painter().rect_filled(r, 9., acc.gamma_multiply(0.18));
+            ui.painter().rect_stroke(r, 9., egui::Stroke::new(1., acc.gamma_multiply(0.5)), egui::StrokeKind::Inside);
+            ui.painter().text(r.center(), egui::Align2::CENTER_CENTER, f.kind.icon(), egui::FontId::proportional(22.), acc);
+            ui.vertical(|ui| {
+                ui.label(RichText::new(tr(crate::arvore_nomes::tipo_legivel(f.kind.type_name()))).size(17.).strong());
+                let mut n = f.name.clone();
+                if ui.add(egui::TextEdit::singleline(&mut n).desired_width(150.)).changed() && nome_serve(&n, nomes) {
+                    f.name = n;
+                }
+            });
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                let (t, c) = match status {
+                    Some(Status::Error(_)) => ("ERRO", crate::theme::st_err()),
+                    Some(Status::Warning(_)) => ("AVISO", crate::theme::st_warn()),
+                    Some(Status::Inactive) => ("INATIVO", ui.visuals().weak_text_color()),
+                    _ => ("OK", crate::theme::st_ok()),
+                };
+                status_chip(ui, tr(t), c);
+            });
+        });
+        match status {
+            Some(Status::Error(m)) => {
+                ui.label(RichText::new(tr(m)).color(crate::theme::st_err()).small());
+            }
+            Some(Status::Warning(m)) => {
+                ui.label(RichText::new(tr(m)).color(crate::theme::st_warn()).small());
+            }
+            Some(Status::Inactive) => {
+                ui.label(RichText::new(tr("inativo (suprimido ou depois do marcador)")).weak().small());
+            }
+            _ => {}
+        }
+    });
+    ui.horizontal(|ui| {
+        check(ui, &mut f.suppressed, "suprimido");
+        // só sketches têm olho próprio; sólidos aparecem pelo corpo (última feature)
+        if matches!(f.kind, FeatureKind::Sketch(_)) {
+            let mut vis = !f.hidden;
+            if check(ui, &mut vis, "visível").changed() {
+                f.hidden = !vis;
+            }
+        }
+    });
+    crate::param_ui::suprimir_se(ui, &mut f.suppress_if, doc_ro);
+}
+
+/// O nome novo de um recurso vale se não está vazio e não repete parâmetro nem referência.
+pub fn nome_serve(novo: &str, nomes: &[String]) -> bool {
+    !novo.is_empty() && !nomes.iter().any(|n| n == novo)
 }
 
 /// Concluir, Cancelar e Excluir fora da rolagem: ficam à vista em comando de qualquer tamanho.

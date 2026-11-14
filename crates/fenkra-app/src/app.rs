@@ -4132,6 +4132,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     fn props_window(&mut self, ctx: &egui::Context) {
         let Some(t) = self.props_target else { return };
         let tex: Vec<String> = self.open.doc.textures.iter().map(|x| x.name.clone()).collect();
+        // B435: o bloco comum do recurso (nome, estado, suprimir) mora aqui, fora do painel do comando
+        let recurso = match t {
+            AppTarget::Feature(id) => Some((self.status_of(id).cloned(), self.open.doc.clone(), self.session.as_ref().is_some_and(|s| s.id == id))),
+            _ => None,
+        };
         let d = &mut self.open.doc;
         let name = match t {
             AppTarget::Part => d.name.clone(),
@@ -4143,7 +4148,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
             open = false;
         }
-        crate::paineis::encaixado(ctx, "props", format!("🎨 {} — {name}", tr("Propriedades gráficas")), &mut open, 300., |ui| {
+        crate::paineis::encaixado(ctx, "props", format!("{} — {name}", tr("Propriedades")), &mut open, 300., |ui| {
             if crate::app::done_bar(ui) {
                 ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
             }
@@ -4174,6 +4179,14 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         }
                     }
                     AppTarget::Feature(id) => {
+                        if let (Some((status, doc_ro, em_sessao)), Some(i)) = (&recurso, d.feature_index(id)) {
+                            let nomes: Vec<String> = d.params.iter().map(|p| p.name.clone()).chain(d.references.iter().map(|r| r.name.clone())).collect();
+                            editor::bloco_comum(ui, &mut d.features[i], &nomes, status.as_ref(), doc_ro);
+                            if *em_sessao {
+                                crate::entradas::faixa(ui, id, &d.features[i].kind);
+                            }
+                            editor::section(ui, "Propriedades gráficas");
+                        }
                         ui.label(RichText::new(tr("Cor das faces criadas por este comando (o corpo continua sendo um só).")).weak().small());
                         if let Some(f) = d.feature_mut(id) {
                             editor::appearance_opt(ui, "pg_feat", &mut f.appearance, &tex);
@@ -8813,7 +8826,15 @@ impl eframe::App for App {
             self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some() || self.sel.abre_painel(crate::pmi_minibar::open())
         };
         // B433: a coluna da esquerda (árvore ou painel do comando) reserva espaço; nada flutua sobre a peça
-        self.coluna_esquerda(root, active);
+        // comando de verdade toma a coluna; propriedades de uma seleção dividem a coluna com a árvore
+        let comando = if self.settings.bench == crate::settings::Bench::Desenho {
+            self.dwg.as_ref().is_some_and(|s| s.em_comando())
+        } else if self.in_asm() {
+            self.asm.as_ref().is_some_and(|s| s.cmd.is_some())
+        } else {
+            self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some()
+        };
+        self.coluna_esquerda(root, active, comando);
         // B434: recursos da bancada à direita, só ícones
         self.barra_direita(root);
         // `area`: onde os painéis encaixam (direita e base). A vista fica com o que sobra dela
@@ -9041,6 +9062,11 @@ impl eframe::App for App {
                 let tree_sel = self.sel;
                 if self.fill_from_selection(sid, Some(tree_sel)) {
                     self.sel = if self.open.doc.reference(sid).is_some() { Sel::Ref(sid) } else { Sel::Feature(sid) };
+                } else if coluna::arvore_pela_seta(ctx) {
+                    // B433: a árvore aberta pela seta serve para escolher entradas. Item que não preenche
+                    // nenhum campo não encerra o comando: a pessoa continua nele e é avisada
+                    self.sel = if self.open.doc.reference(sid).is_some() { Sel::Ref(sid) } else { Sel::Feature(sid) };
+                    self.toast(tr("Este item não preenche nenhum campo vazio do comando. Limpe o campo para trocar a entrada.").to_string(), false);
                 } else {
                     self.sair_da_sessao();
                 }

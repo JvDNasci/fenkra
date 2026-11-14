@@ -26,6 +26,10 @@ a peça.
    para escolher entradas, com Concluir e Cancelar ainda à vista, e outro clique volta aos campos. A
    largura é arrastável e fica nas preferências (`coluna_largura`). Árvore minimizada vira um trilho
    com a seta; fechada, a coluna some enquanto não houver comando.
+   Com a árvore aberta pela seta, o clique num item que não preenche nenhum campo vazio não encerra o
+   comando (fora dela, escolher outro item da árvore continua concluindo o comando aberto).
+   Propriedades de um item escolhido (peça, parâmetros, anotação, vista do desenho, restrição) não são
+   comando: a árvore fica na metade de cima da coluna e as propriedades na de baixo.
 2. **Painéis só na direita ou na base, reservando espaço** (`paineis.rs`). Não existe mais painel livre.
    `Encaixe::efetivo` leva o que foi salvo como livre ou na esquerda para a direita e o que estava no
    topo para a base; painel largo sem borda escolhida nasce na base. Arrastado para longe das bordas, o
@@ -64,6 +68,21 @@ padrão, porque o `config.json` só guarda o que difere do padrão e arquivo ant
   da coluna. Janela nativa em outro monitor continua onde estava.
 - `Encaixe::Livre`, `Topo` e `Esquerda` continuam no formato do arquivo, para um perfil antigo importado
   depois ainda ser lido; em uso, valem pela regra do item 2.
+
+## Topo, direita e base (B434) e painel enxuto (B435)
+
+- Topo de cerca de 26 px: menu num ícone, abas de bancada em ícones e, à direita, Propriedades e o
+  estado de versões/PLM. O nome do documento vai para o título da janela do sistema.
+- Recursos à direita, só ícones (`app/barras.rs`, `toolbar::Forma::Coluna`): uma coluna quando cabe,
+  duas quando não cabe, rolagem além disso. As docas antigas (topo, lateral esquerda, flutuante) valem
+  como "na barra"; só "oculta" continua sendo escolha.
+- Barra de baixo: recalculado, auto, avisos que pedem ação e a navegação (vista, projeção, modo de
+  exibição e filtro de seleção). Reconstruir, Scan e o passo a passo ficam em Editar > Histórico da
+  peça; versão do kernel, tempo de recálculo e objeto em trabalho ficam em Propriedades da peça.
+- O painel do comando mostra só suporte, modo, parâmetros e avançado. O bloco comum (tipo, nome, selo
+  de estado, suprimido, visível, suprimir quando) e o quadro de entradas completas ficam em
+  Propriedades (`editor::bloco_comum`). O quadro de entradas volta ao painel enquanto pede algo: campo
+  por preencher ou corpo por escolher.
 
 ## Consequências
 

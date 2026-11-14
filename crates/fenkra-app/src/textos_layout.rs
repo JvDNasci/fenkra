@@ -33,4 +33,8 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Grupos que não são do trabalho atual. Marque um grupo para deixá-lo sempre na barra.", "Groups that are not part of the current work. Check a group to keep it on the bar."),
     ("Scan ligado: vendo a peça até", "Scan on: viewing the part up to"),
     ("Informações do modelo", "Model information"),
+    // B435: painel do comando enxuto
+    ("Propriedades…", "Properties…"),
+    ("Nome, estado, suprimido, suprimir quando, aparência e o quadro de entradas deste recurso", "Name, state, suppressed, suppress when, appearance and the inputs box of this feature"),
+    ("Este item não preenche nenhum campo vazio do comando. Limpe o campo para trocar a entrada.", "This item does not fill any empty field of the command. Clear the field to change the input."),
 ];

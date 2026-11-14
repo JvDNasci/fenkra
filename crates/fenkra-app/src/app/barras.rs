@@ -72,6 +72,12 @@ impl App {
     /// Lado direito do topo: Propriedades e o estado de versões/PLM. Chamado num layout da direita
     /// para a esquerda.
     pub(super) fn auxiliares_do_topo(&mut self, ui: &mut egui::Ui) {
+        // captura sem mouse (B435): FENKRA_DEMO_PROPRIEDADES=1 abre Propriedades do comando aberto ou da seleção
+        let pronto = self.session.is_some() || std::env::var("FENKRA_ABRIR").is_err();
+        if pronto && self.props_target.is_none() && std::env::var("FENKRA_DEMO_PROPRIEDADES").is_ok() && ui.ctx().cumulative_frame_nr() > 30 && !ui.ctx().data(|d| d.get_temp::<bool>(egui::Id::unique("demo_propriedades")).unwrap_or(false)) {
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::unique("demo_propriedades"), true));
+            self.abrir_propriedades();
+        }
         self.estado_na_barra(ui);
         let dica = tr("Propriedades do que está selecionado: nome, estado, suprimir e aparência. Sem seleção, as propriedades da peça e as informações do modelo.");
         if botao_icone(ui, "aparencia", tr("Propriedades"), self.props_target.is_some()).on_hover_text(format!("{}\n{dica}", tr("Propriedades"))).clicked() {
