@@ -4123,14 +4123,7 @@ pub fn sim_window(app: &mut App, ctx: &egui::Context) {
     if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
         open = false;
     }
-    egui::Window::new(tr("▶ Simulação cinemática"))
-        .default_pos(crate::paineis::ao_lado_da_arvore(app.area_util))
-        .constrain_to(app.area_util)
-        .id(egui::Id::unique("janela_simulacao"))
-        .open(&mut open)
-        .default_width(460.)
-        .resizable(true)
-        .show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "simulacao", tr("▶ Simulação cinemática"), &mut open, 460., |ui| {
             if crate::app::done_bar(ui) {
                 ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
             }
@@ -4296,7 +4289,7 @@ pub fn bom_window(app: &mut App, ctx: &egui::Context) {
     let rows = bom(&st.asm, dir.as_deref(), level);
     let mut open = true;
     let (mut fix, mut export) = (false, false);
-    egui::Window::new(tr("▦ Lista de peças")).open(&mut open).default_width(460.).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "lista_pecas", tr("▦ Lista de peças"), &mut open, 460., |ui| {
         if crate::app::done_bar(ui) {
             st.bom_open = None;
         }
@@ -4390,7 +4383,7 @@ pub fn fasteners_window(app: &mut App, ctx: &egui::Context) {
             }
         });
     };
-    egui::Window::new(tr("🔩 Preencher furos com fixadores")).id(egui::Id::unique("janela_fixadores")).open(&mut open).default_width(400.).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "fixadores_furos", tr("🔩 Preencher furos com fixadores"), &mut open, 400., |ui| {
         if crate::app::done_bar(ui) {
             close = true;
         }
@@ -4636,7 +4629,7 @@ pub fn gears_window(app: &mut App, ctx: &egui::Context) {
     };
     // B281: com o eixo gráfico ligado o conteúdo passa da altura da tela; sem rolagem, o perfil lateral
     // e os recursos de seção ficavam cortados abaixo da borda
-    egui::Window::new(tr("⚙ Engrenagens")).id(egui::Id::unique("janela_engrenagens")).open(&mut open).default_width(430.).vscroll(true).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "engrenagens", tr("⚙ Engrenagens"), &mut open, 430., |ui| {
         if crate::app::done_bar(ui) {
             close = true;
         }

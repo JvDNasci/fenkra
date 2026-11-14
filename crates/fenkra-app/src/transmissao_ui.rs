@@ -800,7 +800,7 @@ pub fn janela(app: &mut App, ctx: &egui::Context) {
     let mut editar: Option<Id> = None;
     let registros: Vec<(Id, String)> = st.asm.transmissoes.iter().map(|r| (r.id, r.nome.clone())).collect();
     let layout = montar_layout(&t.elemento());
-    egui::Window::new(tr("⚙ Gerar elemento de transmissão")).id(egui::Id::new("janela_transmissao")).open(&mut open).default_width(500.).default_pos([16., 130.]).max_height(ctx.content_rect().height() - 170.).vscroll(true).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "transmissao", tr("⚙ Gerar elemento de transmissão"), &mut open, 500., |ui| {
         if crate::app::done_bar(ui) {
             fechar = true;
         }

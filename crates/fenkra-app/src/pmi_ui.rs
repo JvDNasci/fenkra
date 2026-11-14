@@ -2519,7 +2519,7 @@ pub fn style_window(app: &mut App, ctx: &egui::Context) {
     }
     let mut open = true;
     let mut done = false;
-    egui::Window::new(tr("🎨 Estilo geral das anotações 3D")).open(&mut open).default_width(380.).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "estilo_pmi", tr("🎨 Estilo geral das anotações 3D"), &mut open, 380., |ui| {
         done = crate::app::done_bar(ui);
         ui.label(RichText::new(tr("Vale para todas as anotações que deixam o item em 'padrão'. Cada anotação pode trocar o que quiser no próprio painel.")).weak().small());
         crate::pmi_draw::style_ui(ui, &mut app.settings.pmi_style, false);

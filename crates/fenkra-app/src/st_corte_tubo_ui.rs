@@ -73,7 +73,7 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
     let chave = e.membro.map(|m| (app.geracao(), m));
     let mut aberta = true;
     let mut csv = false;
-    egui::Window::new(tr("Caminho de corte do tubo")).id(egui::Id::unique("janela_corte_tubo")).open(&mut aberta).default_size([560., 620.]).resizable(true).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "corte_tubo", tr("Caminho de corte do tubo"), &mut aberta, 560., |ui| {
         if membros.is_empty() {
             ui.label(RichText::new(tr("Nenhum membro com ponta de encaixe: o caminho de corte sai da curva do encaixe.")).weak());
             return;

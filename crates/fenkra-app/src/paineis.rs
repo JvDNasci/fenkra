@@ -1,21 +1,24 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Painéis livres e encaixáveis sobre a viewport, que se comportam como janelas: minimizam, expandem,
-//! fecham (e reabrem pelo menu Exibir), arrastam, mostram a sombra de onde vão encaixar, redimensionam
-//! pelos quatro lados e cantos e guardam tudo por bancada nas preferências.
+//! Painéis encaixados, que reservam espaço: nenhum fica sobre a peça (ADR 0092, B433). Minimizam,
+//! expandem, fecham (e reabrem pelo menu Exibir), mudam de borda arrastados pelo título, mostram a sombra
+//! de onde vão encaixar, redimensionam e guardam tudo por bancada nas preferências.
 //!
-//! Código próprio em vez de biblioteca de docking: essas bibliotecas dividem a janela em áreas que
-//! empurram umas às outras, e aqui a viewport ocupa tudo e os painéis flutuam translúcidos por cima.
-//! O encaixe alinha o painel à borda e nunca reserva espaço; só painéis encaixados na mesma borda e no
-//! mesmo trecho dela se empilham para não se cobrirem. Cada painel é um `egui::Window` sem barra de
-//! título própria: o cabeçalho com os botões é desenhado aqui, para ter dica traduzida e ícones do tema.
+//! Só existem duas bordas para painel: a direita e a base. A esquerda é da coluna da árvore e do painel
+//! do comando (`app/coluna.rs`), o topo é a faixa fina auxiliar. Posição salva como livre, no topo ou na
+//! esquerda vale como direita ou base (`Encaixe::efetivo`), sem perder tamanho nem estado.
 //!
-//! Estado de cada painel (`Posicao`): onde está, em que borda, se está minimizado ou fechado e o
-//! tamanho que a pessoa escolheu. Os painéis também se registram a cada quadro, e o menu Exibir lista
-//! os que estão vivos para reabrir os fechados (`menu`).
+//! Código próprio em vez de biblioteca de docking. Cada painel continua sendo um `egui::Window` sem barra
+//! de título, preso à borda; o espaço é reservado um quadro depois: os painéis encaixados registram o
+//! retângulo (`marcar_encaixado`), `reservas` soma a faixa que eles ocupam e o app encolhe a área 3D
+//! nessa medida antes de desenhar a vista. Painéis na mesma borda e no mesmo trecho se empilham para
+//! dentro, e a faixa cresce junto.
 //!
-//! Porta aberta para segunda tela (B366): `Posicao` só guarda coordenadas e flags serializáveis e o
-//! conteúdo de cada painel é uma função de `&mut Ui`; um viewport nativo do egui pode receber o mesmo
-//! conteúdo no futuro, bastando um `Encaixe::Janela` com a posição na tela. Veja o ADR 0012.
+//! Estado de cada painel (`Posicao`): em que borda está, se está minimizado ou fechado e o tamanho que
+//! a pessoa escolheu. Os painéis também se registram a cada quadro, e o menu Exibir lista os que estão
+//! vivos para reabrir os fechados (`menu`).
+//!
+//! Segunda tela (B366): `Encaixe::Janela` leva o painel para uma janela nativa do sistema, o único jeito
+//! de um painel ficar solto. Veja os ADRs 0012 e 0092.
 
 use crate::settings::{Bench, Settings};
 use crate::theme;
@@ -26,8 +29,14 @@ use serde::{Deserialize, Serialize};
 const MARGEM: f32 = 8.;
 /// Distância do ponteiro até a borda para o encaixe valer.
 const ALCANCE: f32 = 44.;
-/// Largura da faixa da árvore: o encaixe à esquerda fica ao lado dela.
-pub const FAIXA_ARVORE: f32 = 290.;
+/// A árvore tem coluna própria (B433): a área dos painéis já começa depois dela.
+pub const FAIXA_ARVORE: f32 = 0.;
+/// Largura padrão da coluna da esquerda (árvore e painel do comando).
+pub const LARGURA_COLUNA: f32 = 320.;
+/// Painel mais largo que isto nasce na base, e não na direita, quando não tem borda escolhida.
+const LARGO: f32 = 520.;
+/// Fração máxima da área que os painéis encaixados podem reservar em cada sentido.
+const RESERVA_MAX: f32 = 0.6;
 /// Altura reservada ao cubo de vistas no canto direito.
 pub const FAIXA_CUBO: f32 = 128.;
 /// Menor tamanho externo de um painel aberto.
@@ -55,6 +64,25 @@ impl Encaixe {
     /// Topo e base são bordas horizontais; esquerda, direita e livre compartilham o formato vertical.
     fn horizontal(self) -> bool {
         matches!(self, Encaixe::Topo | Encaixe::Base)
+    }
+
+    /// Borda em que o painel fica de fato (ADR 0092): só direita, base ou janela nativa. O que foi salvo
+    /// como livre ou na esquerda vai para a direita, e o que estava no topo vai para a base.
+    pub fn efetivo(self) -> Encaixe {
+        match self {
+            Encaixe::Livre | Encaixe::Esquerda => Encaixe::Direita,
+            Encaixe::Topo => Encaixe::Base,
+            e => e,
+        }
+    }
+
+    /// Como `efetivo`, mas painel largo sem borda escolhida nasce na base.
+    pub fn efetivo_para(self, largura: f32) -> Encaixe {
+        if self == Encaixe::Livre && largura >= LARGO {
+            Encaixe::Base
+        } else {
+            self.efetivo()
+        }
     }
 }
 
@@ -120,20 +148,15 @@ pub fn dentro(pos: Pos2, tam: Vec2, area: Rect) -> Pos2 {
     egui::pos2(eixo(pos.x, tam.x, area.left(), area.right()), eixo(pos.y, tam.y, area.top(), area.bottom()))
 }
 
-/// Borda de encaixe perto do ponteiro. A esquerda conta a partir da faixa da árvore.
+/// Borda de encaixe perto do ponteiro: só a direita e a base recebem painel (ADR 0092).
 pub fn borda_perto(p: Pos2, area: Rect) -> Option<Encaixe> {
     if !area.expand(ALCANCE).contains(p) {
         return None;
     }
-    let esquerda = area.left() + FAIXA_ARVORE;
     if p.x > area.right() - ALCANCE {
         Some(Encaixe::Direita)
-    } else if p.y < area.top() + ALCANCE {
-        Some(Encaixe::Topo)
     } else if p.y > area.bottom() - ALCANCE {
         Some(Encaixe::Base)
-    } else if p.x < esquerda + ALCANCE {
-        Some(Encaixe::Esquerda)
     } else {
         None
     }
@@ -143,12 +166,10 @@ pub fn borda_perto(p: Pos2, area: Rect) -> Option<Encaixe> {
 /// solto, para dois painéis poderem dividir a mesma borda. Nunca sai de `area`.
 pub fn colocar(posicao: Posicao, padrao: Pos2, tam: Vec2, area: Rect) -> Pos2 {
     let base = posicao.pos.map_or(padrao, |[x, y]| egui::pos2(x, y));
-    let alvo = match posicao.encaixe {
-        Encaixe::Livre | Encaixe::Janela => base,
-        Encaixe::Esquerda => egui::pos2(area.left() + FAIXA_ARVORE + MARGEM, base.y),
-        Encaixe::Direita => egui::pos2(area.right() - tam.x - MARGEM, base.y),
-        Encaixe::Topo => egui::pos2(base.x, area.top() + MARGEM),
+    let alvo = match posicao.encaixe.efetivo() {
+        Encaixe::Janela => base,
         Encaixe::Base => egui::pos2(base.x, area.bottom() - tam.y - MARGEM),
+        _ => egui::pos2(area.right() - tam.x - MARGEM, base.y),
     };
     dentro(alvo, tam, area)
 }
@@ -157,21 +178,20 @@ pub fn colocar(posicao: Posicao, padrao: Pos2, tam: Vec2, area: Rect) -> Pos2 {
 /// borda e no mesmo trecho dela: ele se afasta da borda, para dentro, até caber ao lado deles.
 pub fn colocar_empilhado(posicao: Posicao, padrao: Pos2, tam: Vec2, area: Rect, outros: &[(Encaixe, Rect)]) -> Pos2 {
     let mut p = colocar(posicao, padrao, tam, area);
-    if posicao.encaixe == Encaixe::Livre {
+    let meu_encaixe = posicao.encaixe.efetivo();
+    if meu_encaixe == Encaixe::Janela {
         return p;
     }
     for _ in 0..outros.len() + 1 {
         let meu = Rect::from_min_size(p, tam);
         let mut mudou = false;
-        for (e, o) in outros.iter().filter(|(e, _)| *e == posicao.encaixe) {
+        for (e, o) in outros.iter().filter(|(e, _)| *e == meu_encaixe) {
             let cruza = if e.horizontal() { meu.x_range().intersects(o.x_range()) } else { meu.y_range().intersects(o.y_range()) };
             if !cruza {
                 continue;
             }
             let novo = match e {
                 Encaixe::Direita if meu.right() > o.left() - MARGEM => Some(egui::pos2(o.left() - MARGEM - tam.x, p.y)),
-                Encaixe::Esquerda if meu.left() < o.right() + MARGEM => Some(egui::pos2(o.right() + MARGEM, p.y)),
-                Encaixe::Topo if meu.top() < o.bottom() + MARGEM => Some(egui::pos2(p.x, o.bottom() + MARGEM)),
                 Encaixe::Base if meu.bottom() > o.top() - MARGEM => Some(egui::pos2(p.x, o.top() - MARGEM - tam.y)),
                 _ => None,
             };
@@ -190,13 +210,11 @@ pub fn colocar_empilhado(posicao: Posicao, padrao: Pos2, tam: Vec2, area: Rect, 
 
 /// Faixa desenhada como guia enquanto o painel é arrastado perto de uma borda.
 pub fn faixa_da_guia(e: Encaixe, tam: Vec2, area: Rect) -> Option<Rect> {
-    let (x0, x1, y0, y1) = (area.left() + FAIXA_ARVORE, area.right(), area.top(), area.bottom());
+    let (x0, x1, y0, y1) = (area.left(), area.right(), area.top(), area.bottom());
     Some(match e {
-        Encaixe::Livre | Encaixe::Janela => return None,
-        Encaixe::Esquerda => Rect::from_min_max(egui::pos2(x0, y0), egui::pos2(x0 + tam.x + 2. * MARGEM, y1)),
         Encaixe::Direita => Rect::from_min_max(egui::pos2(x1 - tam.x - 2. * MARGEM, y0), egui::pos2(x1, y1)),
-        Encaixe::Topo => Rect::from_min_max(egui::pos2(x0, y0), egui::pos2(x1, y0 + tam.y + 2. * MARGEM)),
         Encaixe::Base => Rect::from_min_max(egui::pos2(x0, y1 - tam.y - 2. * MARGEM), egui::pos2(x1, y1)),
+        _ => return None,
     })
 }
 
@@ -278,7 +296,7 @@ fn mostrar_janela<R>(ctx: &egui::Context, cfg: &Painel, posicao: Posicao, conteu
             ui.horizontal(|ui| {
                 ui.label(egui::RichText::new(cfg.titulo.as_str()).small().strong());
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.small_button(tr("Voltar para a janela principal")).on_hover_text(tr("O painel volta a flutuar sobre a vista; arrastar esta janela de volta para a principal faz o mesmo")).clicked() {
+                    if ui.small_button(tr("Voltar para a janela principal")).on_hover_text(tr("O painel volta a encaixar na janela principal; arrastar esta janela de volta para ela faz o mesmo")).clicked() {
                         voltar = true;
                     }
                 });
@@ -305,7 +323,7 @@ fn mostrar_janela<R>(ctx: &egui::Context, cfg: &Painel, posicao: Posicao, conteu
     }
     let de_volta = matches!((principal, externa), (Some(p), Some(o)) if voltou_para_dentro(p, o));
     if voltar || fechou || de_volta {
-        n.encaixe = Encaixe::Livre;
+        n.encaixe = Encaixe::Direita;
         n.pos = match (principal, externa) {
             (Some(p), Some(o)) if de_volta => {
                 let q = de_volta_na_janela(p, o);
@@ -321,10 +339,10 @@ fn mostrar_janela<R>(ctx: &egui::Context, cfg: &Painel, posicao: Posicao, conteu
     saida
 }
 
-/// Quadro translúcido dos painéis, nas cores do tema.
+/// Quadro dos painéis, nas cores do tema. Opaco e sem sombra: o painel não fica mais sobre a peça.
 pub fn quadro(style: &egui::Style) -> egui::Frame {
-    let mut q = egui::Frame::window(style).fill(style.visuals.window_fill.gamma_multiply(0.93)).inner_margin(egui::Margin::same(8));
-    q.shadow.color = q.shadow.color.gamma_multiply(0.5);
+    let mut q = egui::Frame::window(style).inner_margin(egui::Margin::same(8));
+    q.shadow = egui::Shadow::NONE;
     q
 }
 
@@ -382,6 +400,26 @@ type Docado = (String, Encaixe, Rect, u64, u8);
 fn encaixados(ctx: &egui::Context, nr: u64, nome: &str, ordem: u8) -> Vec<(Encaixe, Rect)> {
     let todos = ctx.data(|d| d.get_temp::<Vec<Docado>>(id_docados())).unwrap_or_default();
     todos.into_iter().filter(|(n, _, _, q, o)| n != nome && ((*q == nr && *o <= ordem) || (*q + 1 == nr && *o < ordem))).map(|(_, e, r, _, _)| (e, r)).collect()
+}
+
+/// Faixas que os painéis encaixados ocuparam no quadro anterior, a partir da direita e da base de
+/// `area`: `(largura, altura)`. O app tira essas faixas da área 3D, e assim o painel reserva espaço em
+/// vez de cobrir a peça. Limitadas, para a vista nunca sumir.
+pub fn reservas(ctx: &egui::Context, area: Rect) -> (f32, f32) {
+    let nr = ctx.cumulative_frame_nr();
+    let todos = ctx.data(|d| d.get_temp::<Vec<Docado>>(id_docados())).unwrap_or_default();
+    let (mut direita, mut base) = (0f32, 0f32);
+    for (_, e, r, q, _) in todos {
+        if q + 1 < nr {
+            continue;
+        }
+        match e {
+            Encaixe::Direita => direita = direita.max(area.right() - r.left() + MARGEM),
+            Encaixe::Base => base = base.max(area.bottom() - r.top() + MARGEM),
+            _ => {}
+        }
+    }
+    (direita.clamp(0., area.width() * RESERVA_MAX), base.clamp(0., area.height() * RESERVA_MAX))
 }
 
 fn marcar_encaixado(ctx: &egui::Context, nome: &str, e: Encaixe, r: Rect, nr: u64, ordem: u8) {
@@ -474,6 +512,11 @@ fn botao_janela(ui: &mut egui::Ui, icone: Icone, dica: &str) -> egui::Response {
     }
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, dica));
     resp.on_hover_text(dica)
+}
+
+/// Botão de fechar no desenho dos painéis, para quem monta o próprio cabeçalho (coluna da esquerda).
+pub fn botao_fechar(ui: &mut egui::Ui, dica: &str) -> egui::Response {
+    botao_janela(ui, Icone::Fechar, dica)
 }
 
 /// Cabeçalho: título à esquerda, minimizar/expandir e fechar à direita. Duplo clique no título
@@ -611,10 +654,19 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
         if !ctx.embed_viewports() {
             return mostrar_janela(ctx, cfg, posicao, conteudo);
         }
-        // sistema sem janelas nativas: o painel fica flutuando dentro da principal
-        posicao.encaixe = Encaixe::Livre;
+        // sistema sem janelas nativas: o painel fica encaixado na principal
+        posicao.encaixe = Encaixe::Direita;
         posicao.pos = None;
     }
+    // ADR 0092: nenhum painel fica livre; o que não tem borda válida vai para a direita ou a base
+    posicao.encaixe = posicao.encaixe.efetivo_para(posicao.largura.unwrap_or(cfg.largura));
+    // os painéis da base ficam à esquerda da faixa que os da direita reservam
+    let area = if posicao.encaixe == Encaixe::Base {
+        let (direita, _) = reservas(ctx, area);
+        Rect::from_min_max(area.min, egui::pos2((area.right() - direita).max(area.left() + LARGURA_MIN), area.bottom()))
+    } else {
+        area
+    };
     let id = Id::unique(("painel", cfg.nome.as_str(), op.variante));
     let (id_arrasto, id_redim, id_rect, id_extra, id_camada) = (id.with("arrasto"), id.with("redim"), id.with("rect"), id.with("extra"), id.with("camada"));
     let arrastando = ctx.data(|d| d.get_temp::<bool>(id_arrasto)).unwrap_or(false);
@@ -780,7 +832,8 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
             ctx.data_mut(|d| d.remove::<bool>(id_arrasto));
             saida.solto_em = borda;
             let mut n = base;
-            n.encaixe = borda.unwrap_or_default();
+            // solto longe das bordas, volta para a borda em que estava: painel não fica livre
+            n.encaixe = borda.unwrap_or(posicao.encaixe);
             n.pos = Some([rect.min.x, rect.min.y]);
             // B366: solto fora da janela principal vira janela nativa, no ponto em que o mouse soltou
             if let (true, Some(p), false) = (soltou_fora(ponteiro, ctx.content_rect()), ponteiro, ctx.embed_viewports()) {
@@ -794,11 +847,73 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
             saida.movido = Some(n);
         }
         ctx.data_mut(|d| d.insert_temp(Id::unique(("painel_previa", cfg.nome.as_str())), None::<Rect>));
-        if posicao.encaixe != Encaixe::Livre {
-            marcar_encaixado(ctx, &cfg.nome, posicao.encaixe, rect, nr, ordem);
-        }
+        marcar_encaixado(ctx, &cfg.nome, posicao.encaixe, rect, nr, ordem);
     }
     saida
+}
+
+// ---------------------------------------------------------------------------------------------
+// Janelas de ferramenta sem acesso às preferências (B433)
+
+/// O que o app publica a cada quadro para `encaixado`: a área dos painéis e as posições guardadas.
+#[derive(Clone, Default)]
+struct Publicado {
+    area: Option<Rect>,
+    posicoes: Vec<(String, Posicao)>,
+    mudou: Vec<(String, Posicao)>,
+}
+
+fn id_publicado() -> Id {
+    Id::unique("paineis_publicado")
+}
+
+/// Início do quadro: a área dos painéis e as posições da bancada atual ficam à mão de `encaixado`.
+pub fn publicar(ctx: &egui::Context, area: Rect, s: &Settings) {
+    let posicoes = s.paineis.iter().filter(|p| p.bancada == s.bench).map(|p| (p.nome.clone(), p.posicao)).collect();
+    ctx.data_mut(|d| d.insert_temp(id_publicado(), Publicado { area: Some(area), posicoes, mudou: vec![] }));
+}
+
+/// Fim do quadro: guarda nas preferências o que `encaixado` mudou.
+pub fn recolher(ctx: &egui::Context, s: &mut Settings) {
+    let mudou = ctx.data_mut(|d| d.get_temp_mut_or_default::<Publicado>(id_publicado()).mudou.split_off(0));
+    for (nome, p) in mudou {
+        s.guardar_painel(&nome, p);
+    }
+}
+
+/// Área em que os painéis encaixam neste quadro (entre a coluna da esquerda e a borda direita, do topo
+/// fino à barra de baixo). Fora do app (testes), a tela toda.
+pub fn area_dos_paineis(ctx: &egui::Context) -> Rect {
+    ctx.data(|d| d.get_temp::<Publicado>(id_publicado())).and_then(|p| p.area).unwrap_or_else(|| ctx.content_rect())
+}
+
+/// Janela de ferramenta encaixada, para o código que só tem o `Context` e uma chave de aberto. Troca
+/// direta de `egui::Window::new(titulo).open(&mut aberto).default_width(l).show(ctx, ..)`: a janela
+/// deixa de flutuar sobre a peça e passa a encaixar na direita (ou na base, se for larga), reservando
+/// espaço. O X fecha (`aberto = false`); a borda e o tamanho ficam nas preferências.
+pub fn encaixado<R>(ctx: &egui::Context, nome: &str, titulo: impl Into<String>, aberto: &mut bool, largura: f32, conteudo: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
+    if !*aberto {
+        return None;
+    }
+    let area = area_dos_paineis(ctx);
+    let guardada = ctx.data(|d| d.get_temp::<Publicado>(id_publicado())).and_then(|p| p.posicoes.iter().find(|(n, _)| n == nome).map(|(_, p)| *p));
+    let posicao = Posicao { fechado: false, ..guardada.unwrap_or_default() };
+    let cfg = Painel { nome: nome.to_string(), titulo: titulo.into(), padrao: egui::pos2(area.left() + MARGEM, area.top() + MARGEM), largura, redimensiona: true };
+    let saida = mostrar(ctx, area, &cfg, posicao, conteudo);
+    if let Some(mut p) = saida.movido {
+        if std::mem::take(&mut p.fechado) {
+            *aberto = false;
+        }
+        ctx.data_mut(|d| {
+            let pb = d.get_temp_mut_or_default::<Publicado>(id_publicado());
+            match pb.posicoes.iter_mut().find(|(n, _)| n == nome) {
+                Some(x) => x.1 = p,
+                None => pb.posicoes.push((nome.to_string(), p)),
+            }
+            pb.mudou.push((nome.to_string(), p));
+        });
+    }
+    saida.conteudo
 }
 
 /// Espaço que resta da viewport para posições padrão.
@@ -887,10 +1002,11 @@ mod tests {
     fn borda_so_vale_perto_dela() {
         let t = tela();
         assert_eq!(borda_perto(pos2(1190., 400.), t), Some(Encaixe::Direita));
-        assert_eq!(borda_perto(pos2(700., 105.), t), Some(Encaixe::Topo));
         assert_eq!(borda_perto(pos2(700., 795.), t), Some(Encaixe::Base));
-        assert_eq!(borda_perto(pos2(FAIXA_ARVORE + 10., 400.), t), Some(Encaixe::Esquerda));
         assert_eq!(borda_perto(pos2(700., 400.), t), None);
+        // ADR 0092: o topo é da faixa auxiliar e a esquerda é da coluna da árvore; painel não encaixa lá
+        assert_eq!(borda_perto(pos2(700., 105.), t), None);
+        assert_eq!(borda_perto(pos2(10., 400.), t), None);
     }
 
     #[test]
@@ -943,10 +1059,17 @@ mod tests {
         assert_eq!(colocar_empilhado(longe, pos2(0., 0.), vec2(300., 100.), tela(), &[(Encaixe::Direita, a)]).x, 1200. - 300. - MARGEM);
         // outra borda não conta
         assert_eq!(colocar_empilhado(na_direita, pos2(0., 0.), t, tela(), &[(Encaixe::Esquerda, a)]), colocar(na_direita, pos2(0., 0.), t, tela()));
-        // em cima, empilha para baixo
-        let topo = Rect::from_min_size(pos2(400., 100. + MARGEM), vec2(500., 60.));
+        // posição salva no topo vale como base (ADR 0092) e empilha com os painéis da base
+        let na_base = Rect::from_min_size(pos2(400., 800. - MARGEM - 60.), vec2(500., 60.));
         let sob = Posicao { encaixe: Encaixe::Topo, pos: Some([500., 0.]), ..Default::default() };
-        assert_eq!(colocar_empilhado(sob, pos2(0., 0.), vec2(200., 80.), tela(), &[(Encaixe::Topo, topo)]).y, topo.bottom() + MARGEM);
+        assert_eq!(colocar(sob, pos2(0., 0.), vec2(200., 80.), tela()).y, 800. - MARGEM - 80.);
+        assert_eq!(colocar_empilhado(sob, pos2(0., 0.), vec2(200., 80.), tela(), &[(Encaixe::Base, na_base)]).y, na_base.top() - MARGEM - 80.);
+        // salva como livre ou na esquerda vale como direita, e empilha com os painéis da direita
+        for e in [Encaixe::Livre, Encaixe::Esquerda] {
+            let velha = Posicao { encaixe: e, pos: Some([40., 300.]), ..Default::default() };
+            assert_eq!(colocar(velha, pos2(0., 0.), t, tela()), pos2(1200. - 300. - MARGEM, 300.), "{e:?}");
+            assert_eq!(colocar_empilhado(velha, pos2(0., 0.), t, tela(), &[(Encaixe::Direita, a)]), pos2(a.left() - MARGEM - 300., 300.), "{e:?}");
+        }
         // em baixo, empilha para cima
         let base = Rect::from_min_size(pos2(400., 800. - MARGEM - 60.), vec2(500., 60.));
         let sobre = Posicao { encaixe: Encaixe::Base, pos: Some([500., 0.]), ..Default::default() };
@@ -1074,13 +1197,10 @@ mod tests {
 
     #[test]
     fn arrastar_pelo_titulo_ate_cada_borda_mostra_a_sombra_e_encaixa() {
-        for (alvo, esperado) in [
-            (pos2(1195., 500.), Encaixe::Direita),
-            (pos2(700., 105.), Encaixe::Topo),
-            (pos2(700., 795.), Encaixe::Base),
-            (pos2(FAIXA_ARVORE + 10., 450.), Encaixe::Esquerda),
-        ] {
+        for (alvo, esperado) in [(pos2(1195., 500.), Encaixe::Direita), (pos2(700., 795.), Encaixe::Base)] {
             let mut b = Banco::novo("teste");
+            // parte da borda oposta, para o arraste trocar mesmo de borda
+            b.posicao.encaixe = if esperado == Encaixe::Direita { Encaixe::Base } else { Encaixe::Direita };
             let r = b.assentar();
             let de = titulo_de(r);
             b.apertar(de);
@@ -1093,10 +1213,7 @@ mod tests {
             assert!((sombra.size() - tam).length() < 1., "{sombra:?}");
             match esperado {
                 Encaixe::Direita => assert!((sombra.right() - (tela().right() - MARGEM)).abs() < 1., "{sombra:?}"),
-                Encaixe::Topo => assert!((sombra.top() - (tela().top() + MARGEM)).abs() < 1., "{sombra:?}"),
-                Encaixe::Base => assert!((sombra.bottom() - (tela().bottom() - MARGEM)).abs() < 1., "{sombra:?}"),
-                Encaixe::Esquerda => assert!((sombra.left() - (tela().left() + FAIXA_ARVORE + MARGEM)).abs() < 1., "{sombra:?}"),
-                Encaixe::Livre | Encaixe::Janela => unreachable!(),
+                _ => assert!((sombra.bottom() - (tela().bottom() - MARGEM)).abs() < 1., "{sombra:?}"),
             }
             b.soltar(alvo);
             assert_eq!(b.posicao.encaixe, esperado);
@@ -1107,26 +1224,150 @@ mod tests {
             assert!(tela().contains_rect(r.shrink(0.5)), "{r:?}");
             match esperado {
                 Encaixe::Direita => assert!((r.right() - (tela().right() - MARGEM)).abs() < 1.5, "{r:?}"),
-                Encaixe::Topo => assert!((r.top() - (tela().top() + MARGEM)).abs() < 1.5, "{r:?}"),
-                Encaixe::Base => assert!((r.bottom() - (tela().bottom() - MARGEM)).abs() < 1.5, "{r:?}"),
-                _ => assert!((r.left() - (tela().left() + FAIXA_ARVORE + MARGEM)).abs() < 1.5, "{r:?}"),
+                _ => assert!((r.bottom() - (tela().bottom() - MARGEM)).abs() < 1.5, "{r:?}"),
             }
         }
     }
 
+    /// ADR 0092: o topo e a esquerda não recebem painel. Arrastado até lá, ele não mostra sombra de
+    /// encaixe e volta para a borda em que estava.
     #[test]
-    fn soltar_no_meio_deixa_o_painel_livre_onde_foi_solto() {
+    fn topo_e_esquerda_nao_recebem_painel() {
+        for alvo in [pos2(700., 105.), pos2(10., 450.)] {
+            let mut b = Banco::novo("teste");
+            let r = b.assentar();
+            let de = titulo_de(r);
+            b.apertar(de);
+            for k in 1..=4 {
+                b.mover(de + (alvo - de) * (k as f32 / 4.));
+            }
+            assert!(previa_de(&b.ctx, "teste").is_none(), "sem sombra em {alvo:?}");
+            b.soltar(alvo);
+            assert_eq!(b.posicao.encaixe, Encaixe::Direita, "{alvo:?}");
+            assert_eq!(b.solto, None);
+            let n = b.assentar();
+            assert!((n.right() - (tela().right() - MARGEM)).abs() < 1.5, "volta para a direita: {n:?}");
+        }
+    }
+
+    #[test]
+    fn soltar_no_meio_devolve_o_painel_a_borda_em_que_estava() {
         let mut b = Banco::novo("teste");
+        // painel que nunca teve borda (ou foi salvo livre) nasce na direita
+        assert_eq!(b.posicao.encaixe, Encaixe::Livre);
         let r = b.assentar();
+        assert!((r.right() - (tela().right() - MARGEM)).abs() < 1.5, "{r:?}");
         b.arrastar(titulo_de(r), pos2(700., 450.));
-        assert_eq!(b.posicao.encaixe, Encaixe::Livre);
+        assert_eq!(b.posicao.encaixe, Encaixe::Direita, "nenhum painel fica livre sobre a peça");
         let n = b.assentar();
-        assert!((n.min - (r.min + (pos2(700., 450.) - titulo_de(r)))).length() < 2., "{n:?} de {r:?}");
-        // e sai de lá encaixado, sem sobrar sombra
-        b.arrastar(titulo_de(n), pos2(1195., 500.));
-        assert_eq!(b.posicao.encaixe, Encaixe::Direita);
-        b.arrastar(titulo_de(b.rect.expect("r")), pos2(700., 450.));
-        assert_eq!(b.posicao.encaixe, Encaixe::Livre);
+        assert!((n.right() - (tela().right() - MARGEM)).abs() < 1.5, "continua na borda: {n:?}");
+        // ao longo da borda ele fica onde foi solto
+        assert!((n.top() - (r.top() + (450. - titulo_de(r).y))).abs() < 2., "{n:?} de {r:?}");
+        // vai para a base e, solto no meio de novo, continua na base
+        b.arrastar(titulo_de(n), pos2(700., 795.));
+        assert_eq!(b.posicao.encaixe, Encaixe::Base);
+        let embaixo = b.assentar();
+        b.arrastar(titulo_de(embaixo), pos2(600., 450.));
+        assert_eq!(b.posicao.encaixe, Encaixe::Base);
+        let n = b.assentar();
+        assert!((n.bottom() - (tela().bottom() - MARGEM)).abs() < 1.5, "{n:?}");
+    }
+
+    /// B433: o painel encaixado reserva espaço. A faixa que ele ocupa sai da área 3D no quadro
+    /// seguinte, a base fica à esquerda da faixa da direita, painel fechado não reserva nada e a
+    /// reserva nunca passa do limite.
+    #[test]
+    fn painel_encaixado_reserva_espaco_e_nao_cobre_a_vista() {
+        let mut b = Banco::novo("teste");
+        assert_eq!(reservas(&b.ctx, tela()), (0., 0.), "sem painel, nada reservado");
+        let r = b.assentar();
+        let (direita, base) = reservas(&b.ctx, tela());
+        assert!((direita - (r.width() + 2. * MARGEM)).abs() < 1.5, "{direita} para {r:?}");
+        assert_eq!(base, 0.);
+        // a área que sobra para a vista não toca o painel
+        let vista = Rect::from_min_max(tela().min, pos2(tela().right() - direita, tela().bottom() - base));
+        assert!(!vista.intersects(r), "{vista:?} contra {r:?}");
+        // um painel na base, com o da direita presente: fica à esquerda da faixa da direita
+        let outro = Painel { nome: "base".into(), titulo: "B".into(), padrao: pos2(0., 0.), largura: 700., redimensiona: true };
+        let mut rb = None;
+        for _ in 0..4 {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0., 0.), vec2(1200., 800.))), ..Default::default() };
+            let (cfg, posicao) = (&b.cfg, b.posicao);
+            passo_ui(&b.ctx, raw, |ui| {
+                let ctx = ui.ctx().clone();
+                mostrar(&ctx, tela(), cfg, posicao, |ui| ui.label("direita"));
+                // largo e sem borda escolhida: nasce na base
+                rb = mostrar(&ctx, tela(), &outro, Posicao::default(), |ui| ui.label("base")).rect;
+            });
+        }
+        let rb = rb.expect("base");
+        let (direita, base) = reservas(&b.ctx, tela());
+        assert!((rb.bottom() - (tela().bottom() - MARGEM)).abs() < 1.5, "{rb:?}");
+        assert!(rb.right() <= tela().right() - direita + 0.5, "a base não entra na faixa da direita: {rb:?}, faixa {direita}");
+        assert!((base - (rb.height() + 2. * MARGEM)).abs() < 1.5, "{base} para {rb:?}");
+        let vista = Rect::from_min_max(tela().min, pos2(tela().right() - direita, tela().bottom() - base));
+        assert!(!vista.intersects(rb) && !vista.intersects(r), "{vista:?}");
+        assert!(vista.width() > 300. && vista.height() > 300., "a vista continua grande: {vista:?}");
+        // some o painel, some a reserva
+        for _ in 0..3 {
+            passo_ui(&b.ctx, egui::RawInput { screen_rect: Some(tela()), ..Default::default() }, |_| {});
+        }
+        assert_eq!(reservas(&b.ctx, tela()), (0., 0.));
+        // e a reserva tem teto: a vista nunca some
+        marcar_encaixado(&b.ctx, "enorme", Encaixe::Direita, Rect::from_min_max(pos2(10., 100.), pos2(1192., 800.)), b.ctx.cumulative_frame_nr(), 1);
+        assert!(reservas(&b.ctx, tela()).0 <= tela().width() * RESERVA_MAX + 0.1);
+    }
+
+    /// B433: janela de ferramenta que só tem o `Context` também encaixa e reserva; o X devolve a chave
+    /// de aberto, e a borda escolhida chega às preferências pelo `recolher`.
+    #[test]
+    fn janela_de_ferramenta_encaixa_fecha_e_guarda_a_borda() {
+        let ctx = egui::Context::default();
+        let mut s = prefs(Bench::Estrutural);
+        let mut aberto = true;
+        let mut rect = None;
+        let quadro = |s: &mut Settings, aberto: &mut bool, evs: Vec<egui::Event>| {
+            let raw = egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0., 0.), vec2(1200., 800.))), events: evs, ..Default::default() };
+            let mut dentro = None;
+            passo_ui(&ctx, raw, |ui| {
+                let ctx = ui.ctx().clone();
+                publicar(&ctx, tela(), s);
+                dentro = encaixado(&ctx, "lista", "Lista", aberto, 260., |ui| ui.label("linha").rect);
+                recolher(&ctx, s);
+            });
+            dentro
+        };
+        for _ in 0..4 {
+            rect = quadro(&mut s, &mut aberto, vec![]).or(rect);
+        }
+        assert!(rect.is_some(), "o conteúdo foi desenhado");
+        assert_eq!(area_dos_paineis(&ctx), tela());
+        let (direita, _) = reservas(&ctx, tela());
+        assert!(direita > 260., "reservou a faixa da direita: {direita}");
+        // arrasta pelo título até a base: a borda nova vai para as preferências
+        let r = ctx.data(|d| d.get_temp::<Rect>(Id::unique(("painel", "lista", 0u8)).with("rect"))).expect("rect do painel");
+        let de = titulo_de(r);
+        quadro(&mut s, &mut aberto, vec![egui::Event::PointerMoved(de)]);
+        quadro(&mut s, &mut aberto, mouse(de, true));
+        let ate = pos2(600., 795.);
+        for k in 1..=4 {
+            quadro(&mut s, &mut aberto, vec![egui::Event::PointerMoved(de + (ate - de) * (k as f32 / 4.))]);
+        }
+        quadro(&mut s, &mut aberto, mouse(ate, false));
+        quadro(&mut s, &mut aberto, vec![]);
+        assert_eq!(s.painel("lista", Encaixe::Livre).encaixe, Encaixe::Base);
+        // o X fecha pela chave de quem chamou, sem deixar o painel marcado como fechado
+        for _ in 0..3 {
+            quadro(&mut s, &mut aberto, vec![]);
+        }
+        let r = ctx.data(|d| d.get_temp::<Rect>(Id::unique(("painel", "lista", 0u8)).with("rect"))).expect("rect do painel");
+        let x = botao_fechar(r);
+        quadro(&mut s, &mut aberto, vec![egui::Event::PointerMoved(x)]);
+        quadro(&mut s, &mut aberto, mouse(x, true));
+        quadro(&mut s, &mut aberto, mouse(x, false));
+        assert!(!aberto, "o X fecha a janela");
+        assert!(!s.painel("lista", Encaixe::Livre).fechado);
+        assert!(quadro(&mut s, &mut aberto, vec![]).is_none(), "fechada não desenha");
     }
 
     #[test]
@@ -1244,12 +1485,13 @@ mod tests {
             let de = alca(antes, lados);
             b.arrastar(de, de + d);
             let depois = b.assentar();
+            // o painel está encaixado na direita: a borda direita fica presa e ele cresce para dentro
             let mut esperado = antes;
             if lados[0] {
                 esperado.min.x += d.x;
             }
             if lados[1] {
-                esperado.max.x += d.x;
+                esperado.min.x -= d.x;
             }
             if lados[2] {
                 esperado.min.y += d.y;

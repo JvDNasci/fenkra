@@ -89,7 +89,7 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
     let mut e: Estado = ctx.data(|d| d.get_temp(id_estado())).unwrap_or_default();
     let mut open = true;
     let mut concluir = false;
-    egui::Window::new(tr("Escada e guarda-corpo")).id(egui::Id::unique("janela_st_acesso")).open(&mut open).default_size([380., 520.]).resizable(true).show(ctx, |ui| {
+    crate::paineis::encaixado(ctx, "st_acesso", tr("Escada e guarda-corpo"), &mut open, 380., |ui| {
         concluir = crate::app::done_bar(ui);
         ui.horizontal(|ui| {
             ui.selectable_value(&mut e.modo, Modo::Escada, tr("Escada")).on_hover_text(tr("Escada de degraus com longarinas, descansos a cada 3 m de altura e guarda-corpo dos dois lados."));

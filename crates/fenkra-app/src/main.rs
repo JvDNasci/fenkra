@@ -230,6 +230,7 @@ mod textos_solidos;
 mod textos_edicao_direta;
 mod textos_dfm;
 mod textos_paineis;
+mod textos_layout;
 mod textos_arvore_soltura;
 mod dfm_ui;
 mod sup_inclinacao;
