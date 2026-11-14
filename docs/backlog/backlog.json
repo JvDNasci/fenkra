@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 107250,
+ "tokens_total_k": 107360,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -18,13 +18,13 @@
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 30.2
+   "pct": 30.1
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 23170,
-   "pct": 21.6
+   "tokens_k": 23280,
+   "pct": 21.7
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
@@ -7401,7 +7401,7 @@
    "tokens_k": 80,
    "teste": "Auto + Visual",
    "area": "Estrutural",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -7417,7 +7417,7 @@
    "tokens_k": 80,
    "teste": "Auto + Visual",
    "area": "Montagem",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -7433,7 +7433,7 @@
    "tokens_k": 80,
    "teste": "Auto + Manual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -7465,7 +7465,7 @@
    "tokens_k": 80,
    "teste": "Auto + Manual",
    "area": "PMI",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -7481,7 +7481,7 @@
    "tokens_k": 60,
    "teste": "Auto + Manual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -7515,6 +7515,38 @@
    "area": "Interface",
    "status": "a fazer",
    "pct": 0.1
+  },
+  {
+   "id": "B452",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "PLM: links de peça (external path + uid) ignorados por Salvar como, pacote e onde-usado",
+   "oque": "Achado do B445: relacoes::referencias_do_json não lê os links reais de peça, que ficam em external[] com path e uid. Por isso Salvar como, o pacote do projeto e o onde-usado não seguem esses links. Corrigir a leitura e testar com montagem de peça com link externo: salvar como, empacotar e onde-usado acham a dependência.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 60,
+   "teste": "Auto",
+   "area": "PLM",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B453",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Testes instáveis sob carga: isolar estado compartilhado",
+   "oque": "Em 13 e 14/11 falharam, só quando a suíte roda em paralelo e a máquina está carregada, testes que passam sozinhos: desempenho::contador_ligado_pede_so_a_conferencia, medir_quadros::relogios_do_sistema_andam, config_camadas::documento_sobrepoe_grava_no_arquivo_e_solta, plm::medidas_de_uma_caixa_saem_do_recalculo e o corpus de chapa perto de 60 s. Achar o estado compartilhado (arquivo temporário fixo, variável de ambiente, relógio) e isolar cada teste; a suíte tem de passar inteira sob carga.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 50,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.0
   }
  ]
 }
