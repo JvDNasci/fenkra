@@ -204,7 +204,7 @@ impl Alvo {
 }
 
 /// Inserção em andamento: o item escolhido segue o cursor até um furo.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Insercao {
     /// o botão do mouse segue apertado desde a tabela: soltar decide
     pub arrastando: bool,
@@ -238,6 +238,9 @@ pub struct Estado {
     furos: Option<Vec<FuroAlvo>>,
     /// a ficha pediu foco (Alt ao soltar): o painel rola até ela
     pub foco_ficha: bool,
+    /// a montagem ainda não tem arquivo (copiado do estado a cada quadro): o painel avisa que inserir
+    /// pede para salvar antes (B450)
+    pub sem_pasta: bool,
 }
 
 impl Default for Estado {
@@ -262,6 +265,7 @@ impl Default for Estado {
             inverter: false,
             furos: None,
             foco_ficha: false,
+            sem_pasta: false,
         }
     }
 }
@@ -333,6 +337,7 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
     let cfg = Painel { nome: PAINEL.into(), titulo: tr("Biblioteca de normas").to_string(), padrao: paineis::ao_lado_da_arvore(area), largura: 380., redimensiona: true };
     let posicao = app.settings.painel(PAINEL, Encaixe::Esquerda);
     let mut fechar = false;
+    est.sem_pasta = app.asm.as_ref().is_some_and(|s| s.dir().is_none());
     let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
         fechar = crate::app::done_bar(ui);
         conteudo(ui, &mut est);
@@ -340,6 +345,7 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
     if let Some(p) = saida.movido {
         app.settings.guardar_painel(PAINEL, p);
     }
+    pedir_pasta(app, &mut est, crate::asm_ui::save);
     if fechar {
         est.inserindo = None;
         salvar_prefs(&est.prefs);
@@ -634,7 +640,9 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
             est.adicionar_agora = true;
         }
     });
-    if est.inserindo.is_some() {
+    if est.sem_pasta {
+        ui.label(RichText::new(tr("A montagem ainda não tem arquivo: ao inserir, o Fenkra pede para salvá-la, porque as peças dos itens são gravadas na pasta dela.")).small().color(crate::theme::st_warn()));
+    } else if est.inserindo.is_some() {
         ui.label(RichText::new(tr(est.alvo.ajuda())).small().weak());
     }
 }
@@ -953,6 +961,71 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
     }
     for (texto, i) in notas {
         p.text(Pos2::new(rect.left() + 120., rect.top() + 8. + i as f32 * 16.), egui::Align2::LEFT_TOP, texto, fonte.clone(), cor_texto);
+    }
+}
+
+// ---------------------------------------------------------------- montagem sem arquivo (B450)
+
+/// Pedido do painel que depende da pasta da montagem: as peças dos itens são gravadas nela.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Pendente {
+    /// Furo, Ponto ou Solto (ou o arrasto da tabela): armar o fantasma
+    Armar(Alvo),
+    /// o botão "Adicionar à montagem"
+    Adicionar,
+}
+
+/// Larga o que estiver armado: nada segue o cursor nem entra no próximo quadro.
+pub fn desarmar(est: &mut Estado) {
+    est.inserindo = None;
+    est.adicionar_agora = false;
+    est.furos = None;
+}
+
+/// Sem pasta, o pedido do painel não vira fantasma: ele é suspenso até a montagem ter arquivo. Antes
+/// o fantasma armava assim mesmo, seguia o cursor e nenhum clique o punha, só um aviso que ninguém
+/// conseguia ler (B450). Devolve o pedido suspenso, ou `None` se não havia pedido ou a pasta existe.
+pub fn suspender_sem_pasta(est: &mut Estado, tem_pasta: bool) -> Option<Pendente> {
+    if tem_pasta {
+        return None;
+    }
+    let pedido = if est.adicionar_agora {
+        Some(Pendente::Adicionar)
+    } else {
+        est.inserindo.map(|_| Pendente::Armar(est.alvo))
+    };
+    if pedido.is_some() {
+        desarmar(est);
+    }
+    pedido
+}
+
+/// Depois do diálogo de salvar: com a montagem salva, o pedido segue (o fantasma arma, sem arrasto,
+/// porque o botão foi solto durante o diálogo); sem ela, nada fica armado e o aviso diz o porquê.
+pub fn retomar(est: &mut Estado, pedido: Pendente, salvou: bool) -> Aviso {
+    if !salvou {
+        return Some((tr("A montagem não foi salva, então o item não entrou. As peças dos itens da biblioteca são gravadas na pasta da montagem.").to_string(), true));
+    }
+    match pedido {
+        Pendente::Armar(alvo) => {
+            est.alvo = alvo;
+            est.inserindo = Some(Insercao { arrastando: false });
+        }
+        Pendente::Adicionar => est.adicionar_agora = true,
+    }
+    None
+}
+
+/// Montagem sem arquivo e pedido de inserir: abre o "Salvar como" da montagem (`salvar`) e, salva ela,
+/// o pedido segue. `salvar` é o `asm_ui::save` na janela; os testes passam um que grava sem diálogo.
+pub fn pedir_pasta(app: &mut App, est: &mut Estado, salvar: impl FnOnce(&mut App)) {
+    let tem_pasta = |app: &App| app.asm.as_ref().is_some_and(|s| s.dir().is_some());
+    let Some(pedido) = suspender_sem_pasta(est, tem_pasta(app)) else { return };
+    salvar(app);
+    let salvou = tem_pasta(app);
+    est.sem_pasta = !salvou;
+    if let Some((msg, erro)) = retomar(est, pedido, salvou) {
+        app.toast(msg, erro);
     }
 }
 
@@ -1700,5 +1773,112 @@ mod tests {
         assert!(novo.placement.origin.iter().zip(pt).all(|(a, b)| (a - b).abs() < 1e-6) && (novo.placement.origin[2] - 40.).abs() < 0.01, "{:?} {pt:?}", novo.placement.origin);
         // sem a malha da cópia, o raio só veria a placa da origem: a segunda placa não existiria para ele
         assert!(avulso::ponto_na_cena(st.view.as_ref().unwrap().bodies.iter().map(|b| (&b.mesh, fenkra_montagem::Placement::default())), d3(cam.ray(tela(), px).0), d3(cam.ray(tela(), px).1)).is_none_or(|(p, _)| (p[2] - 40.).abs() > 0.01));
+    }
+
+    // ---------------------------------------------------------------- B450: montagem sem arquivo
+
+    #[test]
+    fn sem_pasta_nenhum_pedido_vira_fantasma() {
+        for (alvo, botao) in [(Alvo::Furo, false), (Alvo::Ponto, false), (Alvo::Solto, false), (Alvo::Solto, true)] {
+            let mut est = Estado { familia: Some("iso7089".into()), tamanho: Some("M6".into()), ..Default::default() };
+            if botao {
+                est.adicionar_agora = true;
+            } else {
+                est.alvo = alvo;
+                est.inserindo = Some(Insercao { arrastando: true });
+            }
+            let esperado = if botao { Pendente::Adicionar } else { Pendente::Armar(alvo) };
+            assert_eq!(suspender_sem_pasta(&mut est, false), Some(esperado));
+            assert!(est.inserindo.is_none() && !est.adicionar_agora, "nada segue o cursor nem entra sozinho");
+            // desistiu do diálogo: continua sem nada armado, e o aviso diz por quê
+            let aviso = retomar(&mut est, esperado, false);
+            assert!(aviso.as_ref().is_some_and(|a| a.1 && a.0.contains("não foi salva")), "{aviso:?}");
+            assert!(est.inserindo.is_none() && !est.adicionar_agora);
+            // salvou: o pedido segue, sem arrasto (o botão foi solto durante o diálogo)
+            assert_eq!(retomar(&mut est, esperado, true), None);
+            if botao {
+                assert!(est.adicionar_agora);
+            } else {
+                assert_eq!((est.inserindo, est.alvo), (Some(Insercao { arrastando: false }), alvo));
+            }
+        }
+        // com pasta nada muda
+        let mut est = Estado { inserindo: Some(Insercao { arrastando: false }), ..Default::default() };
+        assert_eq!(suspender_sem_pasta(&mut est, true), None);
+        assert!(est.inserindo.is_some());
+    }
+
+    /// Aplicativo de verdade com uma montagem nova, ainda sem arquivo.
+    fn app_sem_arquivo(nome: &str) -> (App, std::path::PathBuf) {
+        std::env::set_var("FENKRA_DEMO_TESTE", "1");
+        let d = std::env::temp_dir().join(format!("fenkra_b450_{nome}_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).expect("pasta");
+        let ctx = egui::Context::default();
+        let mut app = App::new(&eframe::CreationContext::_new_kittest(ctx));
+        app.asm = Some(AsmState::new(Assembly::new("Conjunto"), None));
+        app.settings.bench = crate::settings::Bench::Montagem;
+        (app, d)
+    }
+
+    #[test]
+    fn adicionar_sem_arquivo_pede_para_salvar_e_depois_o_item_entra() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut app, d) = app_sem_arquivo("adicionar");
+        let mut est = Estado { familia: Some("iso7089".into()), tamanho: Some("M6".into()), adicionar_agora: true, ..Default::default() };
+        let mut pediu = 0;
+        // o "Salvar como" escolhe conjunto.fka na pasta; o resto é o salvar de sempre
+        pedir_pasta(&mut app, &mut est, |app| {
+            pediu += 1;
+            app.asm.as_mut().unwrap().file = Some(d.join("conjunto.fka"));
+            crate::asm_ui::save(app);
+        });
+        assert_eq!(pediu, 1, "o diálogo de salvar abriu uma vez");
+        assert!(d.join("conjunto.fka").exists(), "a montagem foi gravada");
+        assert!(est.adicionar_agora && !est.sem_pasta, "o pedido segue");
+        let st = app.asm.as_mut().unwrap();
+        let aviso = adicionar_agora(st, &mut est, &Camera::default());
+        assert!(aviso.as_ref().is_some_and(|a| !a.1), "{aviso:?}");
+        assert_eq!(pecas(st), 1, "a arruela entrou");
+        assert!(d.join("fixadores").join("iso7089_M6.fkp").exists(), "a peça da biblioteca foi gravada na pasta da montagem");
+        st.refresh();
+        let v = st.view.as_ref().expect("vista");
+        assert_eq!(v.bodies.len(), 1);
+        let vol: f64 = v.bodies.iter().map(|b| b.mass.volume).sum();
+        // ISO 7089 M6: d1 6,4, d2 12, h 1,6 → π/4·(12² − 6,4²)·1,6 ≈ 129,5 mm³
+        assert!((vol - 129.5).abs() < 3., "volume da arruela: {vol}");
+        let _ = std::fs::remove_dir_all(d);
+    }
+
+    #[test]
+    fn solto_sem_arquivo_desistindo_do_dialogo_nao_deixa_fantasma() {
+        let (mut app, d) = app_sem_arquivo("desiste");
+        let mut est = armar(Alvo::Solto, "iso7089", "M6", None);
+        est.inserindo = Some(Insercao { arrastando: true });
+        pedir_pasta(&mut app, &mut est, |_| {});
+        assert!(est.inserindo.is_none() && !est.adicionar_agora, "nada segue o cursor");
+        assert!(est.sem_pasta, "o painel segue avisando que falta o arquivo");
+        assert!(app.asm.as_ref().unwrap().file.is_none());
+        assert_eq!(pecas(app.asm.as_ref().unwrap()), 0);
+        // salvando agora, o modo Solto arma e o clique põe a arruela
+        pedir_pasta(&mut app, &mut est, |_| unreachable!("sem pedido, sem diálogo"));
+        est.alvo = Alvo::Solto;
+        est.inserindo = Some(Insercao { arrastando: false });
+        pedir_pasta(&mut app, &mut est, |app| {
+            app.asm.as_mut().unwrap().file = Some(d.join("conjunto.fka"));
+            crate::asm_ui::save(app);
+        });
+        assert_eq!(est.inserindo, Some(Insercao { arrastando: false }));
+        let st = app.asm.as_mut().unwrap();
+        if fenkra_kernel::AVAILABLE {
+            let ctx = egui::Context::default();
+            quadro(&ctx, st, &mut est, vec![]);
+            let aviso = clicar(&ctx, st, &mut est, egui::pos2(400., 300.));
+            assert!(aviso.as_ref().is_some_and(|a| !a.1), "{aviso:?}");
+            assert_eq!(pecas(st), 1);
+        }
+        let _ = std::fs::remove_dir_all(d);
     }
 }

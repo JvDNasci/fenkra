@@ -7881,18 +7881,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let dt = ctx.input(|i| i.stable_dt).min(0.1) as f64;
         self.toasts.retain_mut(|t| {
             t.1 += dt;
-            t.1 < 4.0
+            t.1 < crate::avisos::duracao(&t.0)
         });
         if self.toasts.is_empty() {
             return;
         }
-        egui::Area::new(egui::Id::unique("toasts")).anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0., -80.)).show(ctx, |ui| {
-            for (m, _, err) in &self.toasts {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.label(RichText::new(m).color(if *err { Color32::from_rgb(255, 140, 120) } else { Color32::from_rgb(160, 220, 160) }));
-                });
-            }
-        });
+        crate::avisos::desenhar(ctx, &self.toasts);
         ctx.request_repaint();
     }
 }
