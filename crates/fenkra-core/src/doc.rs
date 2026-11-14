@@ -4506,9 +4506,18 @@ impl Document {
     }
 
     /// Move um item da árvore de geometria (elemento, sketch livre ou pasta) para a pasta `to`.
+    /// Pasta de comandos aceita comando do mesmo corpo, com a ordem validada (B446,
+    /// [`Self::soltar_em_pasta`]).
     pub fn move_to_folder(&mut self, item: Id, to: Id) -> Result<(), DocError> {
-        if self.folder(to).is_none_or(|f| f.kind != FolderKind::Geometria) {
-            return Err(DocError::Incompatible);
+        match self.folder(to).map(|f| f.kind) {
+            None => return Err(DocError::NotFound),
+            Some(FolderKind::Comandos) => {
+                return self.soltar_em_pasta(item, to).map_err(|e| match e {
+                    crate::arvore_soltura::RecusaSoltura::Ordem(n) => DocError::Order(n),
+                    _ => DocError::Incompatible,
+                })
+            }
+            Some(FolderKind::Geometria) => {}
         }
         if let Some(r) = self.references.iter_mut().find(|r| r.id == item) {
             r.folder = Some(to);

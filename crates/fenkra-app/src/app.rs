@@ -5038,6 +5038,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     fn tree(&mut self, ui: &mut egui::Ui) {
+        crate::arvore_soltura_ui::inicio_do_quadro(ui.ctx());
         *self.stale_set.borrow_mut() = self.compute_stale();
         // ordem das linhas do quadro anterior (para o Shift+clique)
         let prev = std::mem::take(&mut *self.tree_order.borrow_mut());
@@ -5221,6 +5222,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     crate::tree_ui::icone(ui, "coletor");
                     let txt = if active { RichText::new(format!("{} {}", c.name, tr("(ativo)"))).strong() } else { RichText::new(&c.name) };
                     let resp = self.row_label(ui, c.id, &c.name, sel == Sel::Collector(c.id), txt, &mut actions);
+                    // B446: soltar no corpo move o comando para ele, ou diz por que não
+                    crate::arvore_soltura_ui::ligar(ui, &resp, &doc, crate::arvore_soltura_ui::Alvo::Corpo(c.id), &mut actions);
                     if resp.clicked() {
                         new_sel = Some(Sel::Collector(c.id));
                     }
@@ -5298,6 +5301,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                                     let t = if oculta || !c.visible { RichText::new(name.as_str()).weak() } else { RichText::new(name.as_str()) };
                                     ui.selectable_label(self.sel == Sel::Folder(fid), t)
                                 });
+                                // B446: a pasta de comandos recebe comandos do mesmo corpo
+                                crate::arvore_soltura_ui::ligar(ui, &h.cabeca, &doc, crate::arvore_soltura_ui::Alvo::Pasta(fid), &mut actions);
                                 let h = h.corpo(ui, |ui| {
                                     for (j, g) in feats.iter().filter(|(_, g)| g.folder == Some(fid)) {
                                         self.feature_row(ui, &doc, *j, g, &mut new_sel, &mut actions);
@@ -5335,6 +5340,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         for fo in doc.folders.iter().filter(|fo| fo.kind == FolderKind::Comandos && !doc.features.iter().any(|f| f.folder == Some(fo.id))) {
             crate::tree_ui::marca(ui);
             let r = pick(ui, Sel::Folder(fo.id), RichText::new(format!("🗀 {} (vazia)", fo.name)).weak());
+            crate::arvore_soltura_ui::ligar(ui, &r, &doc, crate::arvore_soltura_ui::Alvo::Pasta(fo.id), &mut actions);
             if r.clicked() {
                 new_sel = Some(Sel::Folder(fo.id));
             }
@@ -5354,7 +5360,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let vazios: Vec<&str> = GRUPOS.iter().filter(visivel).filter(|k| !cheio(k)).copied().collect();
         if !vazios.is_empty() {
             let titulo = RichText::new(format!("{} ({})", tr("Grupos vazios"), vazios.len())).weak();
-            let _ = crate::tree_ui::grupo(ui, "arvore_vazios", None, titulo, false).corpo(ui, |ui| {
+            let g = crate::tree_ui::grupo(ui, "arvore_vazios", None, titulo, false);
+            crate::arvore_soltura_ui::ligar(ui, &g.cabeca, &doc, crate::arvore_soltura_ui::Alvo::Grupo("vazios"), &mut actions);
+            let _ = g.corpo(ui, |ui| {
                 for k in vazios {
                     self.secao_da_arvore(ui, k, &doc, sel, &mut new_sel, &mut actions);
                 }
@@ -5362,6 +5370,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         }
         });
 
+        // B446: soltar não é clicar no alvo
+        if crate::arvore_soltura_ui::soltando(ui.ctx()) {
+            new_sel = None;
+        }
         if let Some(s) = new_sel {
             self.sel = s;
         }
@@ -5377,6 +5389,20 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
 
     /// Uma seção que pode estar vazia: a mesma, com conteúdo ou dentro de "Grupos vazios".
     fn secao_da_arvore(&mut self, ui: &mut egui::Ui, k: &str, doc: &Document, sel: Sel, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
+        // B446: a cabeça de cada grupo também é alvo de soltura (aceita o que guarda, recusa o resto)
+        let topo = ui.cursor().top();
+        let chave: &'static str = match k {
+            "externas" => "externas",
+            "publicacoes" => "publicacoes",
+            "pmi" => "pmi",
+            "capturas" => "capturas",
+            _ => "parametros",
+        };
+        self.secao_da_arvore_sem_alvo(ui, k, doc, sel, new_sel, actions);
+        crate::arvore_soltura_ui::ligar_cabeca(ui, topo, chave, doc, actions);
+    }
+
+    fn secao_da_arvore_sem_alvo(&mut self, ui: &mut egui::Ui, k: &str, doc: &Document, sel: Sel, new_sel: &mut Option<Sel>, actions: &mut Vec<TreeAction>) {
         match k {
             "externas" => self.secao_externas(ui, doc, new_sel, actions),
             "publicacoes" => self.secao_publicacoes(ui, doc, new_sel, actions),
@@ -5555,6 +5581,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 crate::tree_ui::marca(ui);
                 let mut r = self.row_label(ui, p.id, &p.name, sel == Sel::Params && self.multi.borrow().contains(&p.id), RichText::new(format!("{}{} = {v}{}", if p.published { "📤 " } else { "" }, p.name, if aviso.is_some() { " ⚠" } else { "" })), actions);
                 r = drag_item(ui, r, p.id, self.renaming != Some(p.id));
+                // B446: parâmetro solto sobre outro vai para o lugar dele
+                crate::arvore_soltura_ui::ligar(ui, &r, doc, crate::arvore_soltura_ui::Alvo::Parametro(p.id), actions);
                 if let Some(m) = aviso {
                     r = r.on_hover_text(m);
                 }
@@ -5642,13 +5670,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if r.double_clicked() {
                     actions.push(TreeAction::StartRename(fo.id));
                 }
-                // soltar um item arrastado aqui move para esta pasta
-                if let Some(p) = r.dnd_release_payload::<DragItem>() {
-                    actions.push(TreeAction::MoveTo(p.0, fo.id));
-                }
-                if r.dnd_hover_payload::<DragItem>().is_some() {
-                    ui.painter().rect_stroke(r.rect.expand(2.), 3., egui::Stroke::new(1.5, crate::theme::accent(ui.visuals())), egui::StrokeKind::Outside);
-                }
+                // soltar um item arrastado aqui move para esta pasta (B446: ou diz por que não)
+                crate::arvore_soltura_ui::ligar(ui, &r, doc, crate::arvore_soltura_ui::Alvo::Pasta(fo.id), actions);
                 if r.clicked() {
                     *new_sel = Some(Sel::Folder(fo.id));
                 }
@@ -5754,7 +5777,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         if r.hovered() {
             self.hover_now.set(Some(id));
         }
-        if r.clicked() {
+        if r.clicked() && !crate::arvore_soltura_ui::soltando(ui.ctx()) {
             // Ctrl soma/tira, Shift seleciona a faixa desde o último clicado, sem tecla = só este
             let (ctrl, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
             let mut m = self.multi.borrow_mut();
@@ -5943,7 +5966,14 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         if let Some(p) = resp.dnd_release_payload::<DragItem>() {
             if p.0 != f.id && doc.feature(p.0).is_some() {
                 actions.push(TreeAction::Move(p.0, i));
+            } else if p.0 != f.id {
+                // B446: o que não é comando não cai em silêncio
+                actions.push(TreeAction::SolturaRecusada(crate::arvore_soltura_ui::motivo(&fenkra_core::RecusaSoltura::NaoEComando)));
             }
+        }
+        if resp.dnd_hover_payload::<DragItem>().is_some_and(|p| p.0 != f.id && doc.feature(p.0).is_none()) {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::NoDrop);
+            resp.show_tooltip_text(crate::arvore_soltura_ui::motivo(&fenkra_core::RecusaSoltura::NaoEComando));
         }
         let origem = resp.dnd_hover_payload::<DragItem>().filter(|p| p.0 != f.id).and_then(|p| doc.features.iter().position(|x| x.id == p.0));
         if let Some(de) = origem {
@@ -6099,13 +6129,25 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     f.suppressed = !f.suppressed
                 }
             }
-            TreeAction::ToFolder(id, fo) => {
-                if let Some(f) = d.feature_mut(id) {
-                    f.folder = fo
+            TreeAction::ToFolder(id, Some(fo)) => {
+                // B446: as mesmas regras do arraste (corpo da pasta e ordem válida)
+                if let Err(e) = d.soltar_em_pasta(id, fo) {
+                    self.toast(crate::arvore_soltura_ui::motivo(&e), true);
                 }
             }
+            TreeAction::ToFolder(id, None) => {
+                if let Some(f) = d.feature_mut(id) {
+                    f.folder = None
+                }
+            }
+            TreeAction::Soltar(item, alvo) => match crate::arvore_soltura_ui::aplicar(d, item, alvo) {
+                Ok(()) => self.sel = self.sel_for(item),
+                Err(e) => self.toast(crate::arvore_soltura_ui::motivo(&e), true),
+            },
+            TreeAction::SolturaRecusada(m) => self.toast(m, true),
             TreeAction::Move(id, to) => {
-                if let Err(e) = d.move_feature(id, to) {
+                // contêiner ordenado continua em bloco (B59)
+                if let Err(e) = d.reordenar_comando(id, to) {
                     self.toast(e.to_string(), true);
                 }
             }
@@ -8530,6 +8572,10 @@ fn eye(ui: &mut egui::Ui, hidden: bool) -> bool {
 }
 
 pub(crate) enum TreeAction {
+    /// B446: item arrastado solto num alvo que aceita (pasta, corpo, parâmetro, grupo)
+    Soltar(Id, crate::arvore_soltura_ui::Alvo),
+    /// B446: soltura recusada; o texto é o motivo, já traduzido
+    SolturaRecusada(String),
     ObjetoTrabalho(Id),
     AtualizarAte(Id),
     NovoConteiner(OrdemConteiner),
