@@ -90,6 +90,8 @@ pub struct EntradaDobra {
     pub k: Option<f64>,
     pub retorno: Option<f64>,
     pub folga_raiz: Option<f64>,
+    /// folga de dobra dos rasgos em V (B442), informada no nó
+    pub folga_dobra: Option<f64>,
     pub rasgos: usize,
     pub gomos: usize,
     /// tubo retangular: 0 = a largura fica no plano da dobra, 1 = a altura
@@ -129,8 +131,12 @@ pub struct ResultadoDobra {
     pub angulo_maquina: f64,
     /// raio de centro mínimo pelo alongamento admissível
     pub raio_min_alongamento: Option<f64>,
-    /// aberturas e passos dos modos em V (B328): lado do V, abertura, passo
+    /// aberturas e passos dos modos em V (B328): lado do V, abertura, passo. A abertura é a que se
+    /// corta na parede interna, já com as folgas de dobra e de solda (B442)
     pub abertura_v: Option<f64>,
+    /// largura do rasgo no vértice (na face interna da placa): a folga de solda vista no tubo
+    /// aberto, `e / cos(φ/2)`; zero sem folga de solda (o V termina em ponta)
+    pub fundo_v: Option<f64>,
     pub lado_v: Option<f64>,
     pub passo_v: Option<f64>,
     /// folga plana no alto do corte do canto com gabarito (B333) e comprimento plano da placa
@@ -148,9 +154,12 @@ pub struct ResultadoDobra {
     pub juntas_gomos: usize,
     /// o modo gera geometria própria no 3D?
     pub geometria_pronta: bool,
-    /// número de rasgos em V (modos de corte) e folga de raiz usada no canto com gabarito
+    /// número de rasgos em V (modos de corte) e folga de solda (raiz) usada no V e no canto com
+    /// gabarito
     pub rasgos: usize,
     pub folga_raiz: f64,
+    /// folga de dobra usada em cada rasgo em V (B442): o quanto a abertura cresce na parede interna
+    pub folga_dobra: f64,
     /// origem dos valores usados (campo, origem)
     pub origens: Vec<(String, String)>,
     /// avisos; vazios = tudo dentro das regras
@@ -285,6 +294,38 @@ pub fn calcular(e: &EntradaDobra) -> ResultadoDobra {
                 _ => Valor { v: 0.5, origem: "padrão geométrico: neutra no meio da parede, sem fonte".into() },
             };
             r.origens.push(("K da placa".into(), k.origem.clone()));
+            // folgas (B442): nó > regra > zero. A de dobra alarga a abertura no alto do rasgo (o
+            // vértice fica onde está); a de solda afasta as duas faces por igual, então no tubo
+            // aberto cada lado do V recua e/(2·cos(φ/2)) e o vértice vira um fundo reto
+            let solda = match (e.folga_raiz, regra.and_then(|x| x.folga_raiz)) {
+                (Some(v), _) => Some((v, "informado no nó".to_string())),
+                (None, Some(v)) => Some((v, da_regra("folga de solda"))),
+                _ => None,
+            };
+            let dobra = match (e.folga_dobra, regra.and_then(|x| x.folga)) {
+                (Some(v), _) => Some((v, "informado no nó".to_string())),
+                (None, Some(v)) => Some((v, da_regra("folga"))),
+                _ => None,
+            };
+            if let Some((v, origem)) = solda {
+                r.folga_raiz = v;
+                r.origens.push(("folga de solda".into(), origem));
+            }
+            if let Some((v, origem)) = dobra {
+                r.folga_dobra = v;
+                r.origens.push(("folga de dobra".into(), origem));
+            }
+            if r.folga_raiz < 0. || r.folga_dobra < 0. {
+                r.erros.push("as folgas de dobra e de solda não podem ser negativas".into());
+                return r;
+            }
+            // meia abertura do V geométrico em φ/2 → (abertura cortada, fundo, lado)
+            let (fd, fs) = (r.folga_dobra, r.folga_raiz);
+            let rasgo = |meio: f64| {
+                let w = 2. * (h - t) * meio.tan() + fd;
+                let fundo = fs / meio.cos();
+                (w + fundo, fundo, (h - t).hypot(w / 2.))
+            };
             if n == 1 {
                 let ba = th * (ri + k.v * t);
                 let ossb = (ri + t) * hf.tan();
@@ -292,8 +333,10 @@ pub fn calcular(e: &EntradaDobra) -> ResultadoDobra {
                 r.deducao = 2. * ossb - ba;
                 r.tangente = (ossb - (h / 2.) * hf.tan()).max(0.);
                 r.ajuste_corte = h * hf.tan() - r.deducao;
-                r.abertura_v = Some(2. * (h - t) * hf.tan());
-                r.lado_v = Some((h - t) / hf.cos());
+                let (w, fundo, lado) = rasgo(hf);
+                r.abertura_v = Some(w);
+                r.fundo_v = Some(fundo);
+                r.lado_v = Some(lado);
                 r.solda = Some(2. * (h - t) / hf.cos() + b);
                 let eps = t / (2. * ri + t);
                 r.alongamento = Some(eps);
@@ -314,13 +357,16 @@ pub fn calcular(e: &EntradaDobra) -> ResultadoDobra {
                 let phi = th / n as f64;
                 let rp = e.raio;
                 let passo = 2. * rp * (phi / 2.).sin();
-                let w = 2. * (h - t) * (phi / 2.).tan();
+                let (w, fundo, lado) = rasgo(phi / 2.);
                 let rp_min = (h - t) / (phi / 2.).cos();
                 r.passo_v = Some(passo);
                 r.abertura_v = Some(w);
-                r.lado_v = Some((h - t) / (phi / 2.).cos());
+                r.fundo_v = Some(fundo);
+                r.lado_v = Some(lado);
                 if rp + ep < rp_min {
                     r.erros.push(format!("V múltiplo: o raio das articulações {rp:.2} mm é menor que o mínimo {rp_min:.2} mm (as sobras entre os V somem; canto vivo só por V comum)"));
+                } else if w > passo + ep {
+                    r.erros.push(format!("V múltiplo: com as folgas, a abertura de cada rasgo ({w:.2} mm) passa do passo entre eles ({passo:.2} mm) e os rasgos se encostam na parede interna; diminua as folgas ou aumente o raio"));
                 }
                 if let Some(m) = regra.and_then(|x| x.raio_min_articulacao) {
                     if rp + ep < m {
@@ -382,12 +428,12 @@ pub fn calcular(e: &EntradaDobra) -> ResultadoDobra {
             r.folga_plana = Some(placa - 2. * rf * hf.sin());
             let raiz = match (e.folga_raiz, regra.and_then(|x| x.folga_raiz)) {
                 (Some(v), _) => Some((v, "informado no nó".to_string())),
-                (None, Some(v)) => Some((v, da_regra("folga de raiz"))),
+                (None, Some(v)) => Some((v, da_regra("folga de solda"))),
                 _ => None,
             };
             if let Some((g, origem)) = raiz {
                 r.folga_raiz = g;
-                r.origens.push(("folga de raiz".into(), origem));
+                r.origens.push(("folga de solda".into(), origem));
                 let a = (g / (2. * rf)).clamp(-1., 1.).asin();
                 r.folga_plana = Some(placa - 2. * rf * (hf - a).sin());
             }
@@ -467,7 +513,8 @@ pub fn entrada_do_no(b: &TubeBend, tipo: SectionKind, dims: &[f64], theta: f64, 
         regra,
         k: n(&b.k, "K")?,
         retorno: n(&b.springback, "retorno elástico")?,
-        folga_raiz: n(&b.root_gap, "folga de raiz")?,
+        folga_raiz: n(&b.root_gap, "folga de solda")?,
+        folga_dobra: n(&b.bend_gap, "folga de dobra")?,
         rasgos: n(&b.cuts, "rasgos")?.map(|v| v.round().max(1.) as usize).unwrap_or(1),
         gomos: n(&b.segments, "gomos")?.map(|v| v.round().max(1.) as usize).unwrap_or(1),
         plano: b.plane_dim,
@@ -541,7 +588,7 @@ mod tests {
     use super::*;
 
     fn entrada(tipo: SectionKind, dims: &[f64], theta: f64, modo: BendMode, raio: f64) -> EntradaDobra {
-        EntradaDobra { tipo, dims: dims.to_vec(), theta, modo, raio, regra: None, k: None, retorno: None, folga_raiz: None, rasgos: 1, gomos: 1, plano: 0 }
+        EntradaDobra { tipo, dims: dims.to_vec(), theta, modo, raio, regra: None, k: None, retorno: None, folga_raiz: None, folga_dobra: None, rasgos: 1, gomos: 1, plano: 0 }
     }
 
     #[test]

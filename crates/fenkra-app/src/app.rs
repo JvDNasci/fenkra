@@ -926,6 +926,12 @@ impl App {
                 if let Some((modo, raio, rasgos)) = modo_v {
                     for b in [&mut b1, &mut b2] {
                         *b = TubeBend { mode: modo, radius: s(raio), cuts: s(rasgos), ..Default::default() };
+                        // B442: FENKRA_DEMO_FOLGA=<dobra>,<solda> preenche as folgas do corte
+                        if let Ok(f) = std::env::var("FENKRA_DEMO_FOLGA") {
+                            let mut p = f.split(',');
+                            b.bend_gap = p.next().unwrap_or("").trim().to_string();
+                            b.root_gap = p.next().unwrap_or("").trim().to_string();
+                        }
                     }
                 }
                 m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b1) });

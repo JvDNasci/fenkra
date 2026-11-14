@@ -79,7 +79,7 @@ mod tests {
     use fenkra_core::SectionKind;
 
     fn tubo(modo: BendMode, raio: f64, rasgos: usize) -> TuboDobrado {
-        let e = EntradaDobra { tipo: SectionKind::TuboQuadrado, dims: vec![30., 1.2], theta: 90., modo, raio, regra: None, k: None, retorno: None, folga_raiz: None, rasgos, gomos: 1, plano: 0 };
+        let e = EntradaDobra { tipo: SectionKind::TuboQuadrado, dims: vec![30., 1.2], theta: 90., modo, raio, regra: None, k: None, retorno: None, folga_raiz: None, folga_dobra: None, rasgos, gomos: 1, plano: 0 };
         let r = calcular(&e);
         let inicio = 200. - r.tangente;
         let fim = inicio + r.arco;

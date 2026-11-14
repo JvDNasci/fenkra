@@ -132,6 +132,14 @@ pub fn editor_do_no(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMem
     .response
     .on_hover_text(tr(modo_dica(bend.mode)));
     campo(ui, rotulo_do_raio(bend.mode), dica_do_raio(bend.mode), &mut bend.radius, vars, "mm", "obrigatório");
+    // B442: folgas do corte, à vista (mudam a prévia 3D, o tubo aberto e a régua de marcação)
+    let vazio = if bend.rule.is_empty() { "0" } else { "da regra" };
+    if matches!(bend.mode, BendMode::VComum | BendMode::CorteDobradeira) {
+        campo(ui, "Folga de dobra", "Quanto cada rasgo em V abre a mais na parede interna, com o tubo aberto. O vértice fica no lugar: ao fechar sobra uma cunha e as faces não se travam. Vazio usa a folga da regra; sem regra, zero.", &mut bend.bend_gap, vars, "mm", vazio);
+    }
+    if matches!(bend.mode, BendMode::VComum | BendMode::CorteDobradeira | BendMode::VComRaio) {
+        campo(ui, "Folga de solda", "Abertura entre as faces depois de fechar, para o cordão de solda entrar. No tubo aberto, cada lado do corte recua metade dela; no V o vértice vira um fundo reto. Vazio usa a folga de raiz da regra; sem regra, zero.", &mut bend.root_gap, vars, "mm", vazio);
+    }
     if kind == SectionKind::TuboRetangular && !primeira {
         ui.label(RichText::new(tr("A seção segue a da dobra anterior; o lado no plano vem da primeira dobra do tubo.")).weak().small());
     } else if kind == SectionKind::TuboRetangular {
@@ -170,9 +178,6 @@ pub fn editor_do_no(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMem
         campo(ui, "Retorno elástico", "Quanto a máquina dobra além do ângulo pedido, em graus. Vazio usa o da regra; sem regra, zero.", &mut bend.springback, vars, "°", "da regra");
         if matches!(bend.mode, BendMode::VComum | BendMode::CorteDobradeira) {
             campo(ui, "Rasgos em V", "Número de rasgos. 1 é o V comum; mais de um é o V múltiplo, em que o raio vira o da linha de articulações.", &mut bend.cuts, vars, "", "1");
-        }
-        if bend.mode == BendMode::VComRaio {
-            campo(ui, "Folga de raiz", "Folga de raiz da solda do canto com gabarito. Vazio usa a da regra.", &mut bend.root_gap, vars, "mm", "da regra");
         }
         if bend.mode == BendMode::CorteSimples && kind == SectionKind::TuboRedondo {
             campo(ui, "Gomos", "Número de juntas do tubo redondo. 1 é uma esquadria; mais juntas aproximam a curva (só entram na lista de corte).", &mut bend.segments, vars, "", "1");
@@ -221,7 +226,10 @@ pub fn resultado_ui(ui: &mut egui::Ui, r: &ResultadoDobra, inicio: f64, fim: f64
         linha(ui, "Folga plana do corte", format!("{} mm", fmt(v)), "Abertura no alto do corte das laterais com a peça ainda plana; fecha a zero ao dobrar.");
     }
     if let (Some(w), Some(l)) = (r.abertura_v, r.lado_v) {
-        linha(ui, "Abertura / lado do V", format!("{} / {} mm", fmt(w), fmt(l)), "Abertura do V na face e comprimento do seu lado.");
+        linha(ui, "Abertura / lado do V", format!("{} / {} mm", fmt(w), fmt(l)), "Abertura do V na face e comprimento do seu lado, já com as folgas de dobra e de solda.");
+    }
+    if let Some(f) = r.fundo_v.filter(|f| *f > 1e-9) {
+        linha(ui, "Fundo do V", format!("{} mm", fmt(f)), "Largura do rasgo no vértice, na face interna da placa: a folga de solda vista no tubo aberto (folga ÷ cos da metade do ângulo do V).");
     }
     if let Some(p) = r.passo_v {
         linha(ui, "Passo entre rasgos", format!("{} mm", fmt(p)), "Distância entre os centros de dois V seguidos (V múltiplo).");
@@ -257,7 +265,7 @@ pub fn resultado_ui(ui: &mut egui::Ui, r: &ResultadoDobra, inicio: f64, fim: f64
         ui.label(RichText::new(format!("⚠ {a}")).color(theme::st_warn()));
     }
     if !r.origens.is_empty() {
-        egui::CollapsingHeader::new(tr("De onde vêm os valores")).id_salt(("st_dobra_origens", r.arco.to_bits())).show(ui, |ui| {
+        egui::CollapsingHeader::new(tr("De onde vêm os valores")).id_salt(("st_dobra_origens", r.arco.to_bits(), inicio.to_bits())).show(ui, |ui| {
             for (campo, origem) in &r.origens {
                 ui.label(RichText::new(format!("{}: {}", tr(campo), tr(origem))).weak().small());
             }
@@ -393,10 +401,10 @@ pub fn janela_regras(app: &mut App, ctx: &egui::Context) {
         commit |= campo(ui, "Raio mínimo em múltiplos", "Raio de centro mínimo como múltiplo do diâmetro (redondo) ou da dimensão no plano da dobra.", &mut r.min_radius_x, vars, "×", "");
         commit |= campo(ui, "Deslocamento da neutra", "Quanto a linha neutra se desloca para dentro da curva, em mm. Encurta o comprimento desenvolvido.", &mut r.neutral_shift, vars, "mm", "");
         commit |= campo(ui, "Retorno elástico", "Graus que a máquina dobra além do ângulo pedido.", &mut r.springback, vars, "°", "");
-        commit |= campo(ui, "Folga", "Folga em mm usada pelo processo.", &mut r.clearance, vars, "mm", "");
+        commit |= campo(ui, "Folga de dobra", "Quanto cada rasgo em V abre a mais na parede interna, em mm, para as faces não se travarem ao fechar.", &mut r.clearance, vars, "mm", "");
         commit |= campo(ui, "Alongamento admissível", "Alongamento máximo da fibra externa, em fração (0,25 = 25%). Dá o raio mínimo de centro (meia dimensão ÷ alongamento).", &mut r.max_strain, vars, "", "");
         commit |= campo(ui, "K da placa", "Fator K da placa externa nos modos em V.", &mut r.plate_k, vars, "", "");
-        commit |= campo(ui, "Folga de raiz", "Folga de raiz da solda no canto com gabarito, em mm.", &mut r.root_gap, vars, "mm", "");
+        commit |= campo(ui, "Folga de solda", "Abertura entre as faces depois de fechar, para o cordão, em mm. Vale no V e no canto com gabarito.", &mut r.root_gap, vars, "mm", "");
         commit |= campo(ui, "Raio mínimo da articulação", "Raio mínimo da linha de articulações do V múltiplo, em mm.", &mut r.min_hinge_radius, vars, "mm", "");
         ui.horizontal(|ui| {
             ui.add_sized([150., 18.], egui::Label::new(tr("Fonte dos valores"))).on_hover_text(tr("De onde vêm os números: ensaio, norma aberta, regra interna. Aparece ao lado do aviso."));
