@@ -97,7 +97,7 @@ macro_rules! modelos {
 
 // Lista gerada a partir de assets/icons2 (scripts/gerar_icones2.py).
 modelos!(
-    "menu", "banc_solidos", "banc_superficies", "banc_montagem", "banc_chapa", "banc_estrutural", "banc_desenho",
+    "menu", "banc_solidos", "banc_superficies", "banc_montagem", "banc_chapa", "banc_estrutural", "banc_desenho", "cena",
     "asm_chaveta", "asm_calculo", "asm_conjunto", "asm_regras_cor", "pmi_captura", "pmi_captura_modelo",
     "edit_mover_face", "edit_apagar_face", "edit_deslocar_face", "edit_raio_filete",
     "curso", "mapa_macro", "perfil_fluxo", "comparar", "estado_conflito", "estado_editado", "estado_leitura", "estado_liberada", "estado_sem_revisao",

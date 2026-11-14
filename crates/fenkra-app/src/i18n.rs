@@ -43,6 +43,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_qualidade_sup::TEXTOS.iter())
             .chain(crate::textos_malha::TEXTOS.iter())
             .chain(crate::textos_efeitos::TEXTOS.iter())
+            .chain(crate::textos_cena::TEXTOS.iter())
             .chain(crate::textos_projeto::TEXTOS.iter())
             .chain(crate::textos_desenho::TEXTOS.iter())
             .chain(crate::textos_desenho_cotas::TEXTOS.iter())

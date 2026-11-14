@@ -776,6 +776,10 @@ ic("banc_estrutural", B=L((24, 11), (24, 37)), R=L((12, 10), (36, 10)) + L((12, 
 ic("banc_desenho", B=Q(8, 9, 32, 30), R=Q(13, 14, 12, 9) + L((30, 39), (30, 32), (40, 32)))
 SO_INTERFACE |= {"menu", "banc_solidos", "banc_superficies", "banc_montagem", "banc_chapa", "banc_estrutural", "banc_desenho"}
 
+# B182: cena de apresentação: a peça sobre o chão (o que existia) e a luz que a cena acrescenta
+ic("cena", B=CUBO(18, 14, 12, 6, 12) + E(18, 40, 15, 4), R=C(38, 11, 4) + "M38 2v2M38 18v2M29 11h2M45 11h2M32 5l1.5 1.5M42.5 15.5L44 17M32 17l1.5-1.5M42.5 6.5L44 5")
+SO_INTERFACE |= {"cena"}
+
 
 # ---------- saída ----------
 

@@ -10,6 +10,7 @@
 
 pub mod aba_unif;
 pub mod arvore_soltura;
+pub mod cena;
 pub mod config;
 pub mod configuracoes;
 pub mod doc;

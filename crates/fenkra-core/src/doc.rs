@@ -4200,6 +4200,9 @@ pub struct Document {
     /// imagens de textura usadas nas aparências (até 8)
     #[serde(default)]
     pub textures: Vec<TextureRef>,
+    /// cena de apresentação (B182): câmera ativa, luzes, ambiente e aparências; ausente = de fábrica
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cena: Option<crate::cena::Cena>,
     /// parâmetros de chapa metálica (espessura, raio, fator K, estado planificado)
     #[serde(default)]
     pub sheet: Option<SheetParams>,
@@ -4284,6 +4287,7 @@ impl Document {
             apelidos_publicacao: vec![],
             views: vec![],
             textures: vec![],
+            cena: None,
             sheet: None,
             tabela: Default::default(),
             sheet_styles: vec![],
