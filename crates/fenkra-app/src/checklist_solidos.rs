@@ -106,6 +106,11 @@ const TIPO: &[(&str, &str, bool)] = &[
     ("xf_girar", "MoveBody", true),
     ("xf_simetria", "MoveBody", false),
     ("xf_afinidade", "MoveBody", true),
+    ("pl_boss", "Plastico", true),
+    ("pl_snap", "Plastico", true),
+    ("pl_grelha", "Plastico", true),
+    ("pl_lip", "Plastico", true),
+    ("pl_ranhura", "Plastico", true),
 ];
 
 /// Comandos das barras Sólidos, Acabamento e Padrões, sem repetir.
@@ -237,7 +242,7 @@ mod tests {
         "ext_simetrico", "ext_ate_plano", "ext_saida_filete", "ext_cego", "ranhura", "nervura", "rasgo_varrido", "multisecoes", "multisecoes_remover", "prim_toro", "prim_cunha", "prim_prisma",
         "bool_unir", "bool_subtrair", "bool_intersecao", "furo_rebaixado", "furo_escareado", "furo_roscado", "filete_variavel", "filete_face_face", "filete_completo", "arestas_todas", "chanfro_dist_dist",
         "chanfro_dist_angulo", "chanfro_dist", "edit_mover_face", "edit_apagar_face", "edit_deslocar_face", "edit_raio_filete", "padrao_circular", "padrao_pontos", "espelho", "escala", "xf_mover", "xf_girar",
-        "xf_simetria", "xf_afinidade",
+        "xf_simetria", "xf_afinidade", "pl_boss", "pl_snap", "pl_grelha", "pl_lip", "pl_ranhura",
         // sem alça 3D da grandeza principal (ângulo da saída, comprimento da rosca)
         "saida", "rosca",
     ];
