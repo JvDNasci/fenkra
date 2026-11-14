@@ -158,3 +158,47 @@ fn encaixe_de_tubo_quadrado_vira_contorno_ak() {
     let ak = t.lines().skip_while(|l| *l != "AK").skip(1).take_while(|l| l.starts_with("  ")).count();
     assert_eq!(ak, tr.contornos.iter().map(|c| c.1.len()).sum::<usize>());
 }
+
+/// Viga W200 que chega a uma viga principal W310 com as faces de cima alinhadas (âncora no meio de
+/// cima): o encaixe recorta a mesa de cima da W200 (entalhe) e o NC1 leva o AK das três faces.
+#[test]
+fn entalhe_de_perfil_i_vira_contorno_ak() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let mut d = Document::new("Entalhe");
+    let p = linha(&mut d, [0., 0., 0.], [1000., 0., 0.]);
+    let mut principal = membro(vec![p], "Perfil W", "W310", SectionKind::PerfilI, &["310", "165", "5.8", "9.7"], CornerMode::Nenhum);
+    principal.anchor = 2;
+    d.add_feature(FeatureKind::StructMember(principal));
+    let v = linha(&mut d, [500., 0., 0.], [500., 800., 0.]);
+    let mut viga = membro(vec![v], "Perfil W", "W200x15", SectionKind::PerfilI, &["200", "100", "4.3", "5.2"], CornerMode::Encaixe);
+    viga.anchor = 2;
+    d.add_feature(FeatureKind::StructMember(viga));
+    let r = recompute(&d);
+    assert!(r.status.values().all(|s| *s == Status::Ok), "{:?}", r.status);
+    let pecas = pecas_nc(&d);
+    let v = pecas.iter().find(|p| p.designacao == "W200x15").expect("viga");
+    // a viga para na face da alma da principal (tw/2 = 2,9) e a mesa de cima dela, que bate na mesa
+    // da principal (tf = 9,7), recua até a borda dessa mesa (b/2 = 82,5): entalhe de 79,6 × 9,7
+    let area = 2. * 100. * 5.2 + (200. - 2. * 5.2) * 4.3;
+    let tirado = (82.5 - 2.9) * (100. * 5.2 + (9.7 - 5.2) * 4.3);
+    let vol = area * (800. - 2.9) - tirado;
+    assert!((v.forma.mass().volume - vol).abs() / vol < 1e-4, "{} {vol}", v.forma.mass().volume);
+    assert!(v.faltas.is_empty(), "{:?}", v.faltas);
+    let face = |c: char| v.contornos.iter().find(|x| x.0 == c).map(|x| x.1.clone()).unwrap_or_else(|| panic!("face {c}: {:?}", v.contornos));
+    let perto = |a: &[[f64; 2]], b: &[[f64; 2]]| a.len() == b.len() && a.iter().zip(b).all(|(p, q)| (p[0] - q[0]).abs() < 0.03 && (p[1] - q[1]).abs() < 0.03);
+    let c = 800. - 2.9;
+    let e = 82.5 - 2.9;
+    // alma (vista de lado): o degrau do entalhe no canto de cima do início
+    let alma = face('v');
+    let esperado = [[0., 0.], [c, 0.], [c, 200.], [e, 200.], [e, 200. - 9.7], [0., 200. - 9.7], [0., 0.]];
+    assert!(perto(&alma, &esperado), "{alma:?}");
+    // mesa de cima: começa recuada; mesa de baixo: inteira
+    assert!(perto(&face('o'), &[[e, 0.], [c, 0.], [c, 100.], [e, 100.], [e, 0.]]), "{:?}", face('o'));
+    assert!(perto(&face('u'), &[[0., 0.], [c, 0.], [c, 100.], [0., 100.], [0., 0.]]), "{:?}", face('u'));
+    let t = nc1(v, "p", "p");
+    let ak = t.lines().skip_while(|l| *l != "AK").skip(1).take_while(|l| l.starts_with("  ")).count();
+    assert_eq!(ak, 7 + 5 + 5, "{t}");
+    assert!(t.contains("  v       0.00u       0.00"), "{t}");
+}
