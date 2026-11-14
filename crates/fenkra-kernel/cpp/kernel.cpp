@@ -46,6 +46,12 @@
 #include <ShapeAnalysis_FreeBounds.hxx>
 #include <ShapeFix_Shape.hxx>
 #include <ShapeFix_Solid.hxx>
+#include <ShapeFix_Face.hxx>
+#include <GeomAPI_IntSS.hxx>
+#include <GeomAPI_ProjectPointOnCurve.hxx>
+#include <Geom_ConicalSurface.hxx>
+#include <Geom_SphericalSurface.hxx>
+#include <Geom_ToroidalSurface.hxx>
 #include <TopTools_HSequenceOfShape.hxx>
 #include <TopoDS_Iterator.hxx>
 #include <Geom_RectangularTrimmedSurface.hxx>

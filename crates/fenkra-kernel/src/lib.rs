@@ -987,6 +987,15 @@ mod imp {
         pub fn from_mesh(tris: &[f64], solid: bool) -> KResult<Shape> {
             b::mesh_shape(tris, solid).map(Shape).map_err(err)
         }
+        /// B169: B-rep híbrido da malha: faces analíticas das regiões reconhecidas e triângulos no resto
+        /// (formato em `mesh_hybrid`, `hybrid.inc`).
+        pub fn from_mesh_hybrid(vertices: &[f64], facetas: &[u32], regioes: &[f64], lacos: &[i64], tol: f64, solid: bool) -> KResult<Shape> {
+            b::mesh_hybrid(vertices, facetas, regioes, lacos, tol, solid).map(Shape).map_err(err)
+        }
+        /// Faces por tipo de superfície: plano, cilindro, cone, esfera, toro e outras.
+        pub fn face_types(&self) -> KResult<Vec<u32>> {
+            Ok(b::face_types(&self.0))
+        }
         pub fn is_solid(&self) -> bool {
             b::is_solid(&self.0)
         }
@@ -1517,6 +1526,12 @@ mod imp {
             no()
         }
         pub fn from_mesh(_: &[f64], _: bool) -> KResult<Shape> {
+            no()
+        }
+        pub fn from_mesh_hybrid(_: &[f64], _: &[u32], _: &[f64], _: &[i64], _: f64, _: bool) -> KResult<Shape> {
+            no()
+        }
+        pub fn face_types(&self) -> KResult<Vec<u32>> {
             no()
         }
         pub fn is_solid(&self) -> bool {

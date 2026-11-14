@@ -20,6 +20,9 @@ pub mod analise;
 pub mod loft;
 pub mod importacao;
 pub mod corpo_malha;
+pub mod malha_primitivas;
+#[cfg(test)]
+mod malha_primitivas_tests;
 pub mod mesh_io;
 pub mod structural;
 pub mod perfis_catalogo;

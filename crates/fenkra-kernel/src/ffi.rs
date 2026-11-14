@@ -315,6 +315,8 @@ pub mod bridge {
         fn close_surface(s: &Shape, tol: f64) -> Result<UniquePtr<Shape>>;
         fn volume_cells(s: &Shape, exclude: &[f64]) -> Result<UniquePtr<Shape>>;
         fn mesh_shape(tris: &[f64], solid: bool) -> Result<UniquePtr<Shape>>;
+        fn mesh_hybrid(vertices: &[f64], facetas: &[u32], regioes: &[f64], lacos: &[i64], tol: f64, solid: bool) -> Result<UniquePtr<Shape>>;
+        fn face_types(s: &Shape) -> Vec<u32>;
         fn is_solid(s: &Shape) -> bool;
         fn affinity(
             s: &Shape, ox: f64, oy: f64, oz: f64, xx: f64, xy: f64, xz: f64, nx: f64, ny: f64, nz: f64, fx: f64, fy: f64, fz: f64,

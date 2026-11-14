@@ -334,33 +334,38 @@ impl Ctx<'_> {
                 }
                 self.por_corpo(f, chave, e)
             }
-            MeshOpKind::ParaBrep { solid } => {
+            MeshOpKind::ParaBrep { solid, modo, tol } => {
                 let c = self.corpo_de(f.target)?;
                 let n = c.entrada.malha.tris.len();
                 if n > LIMITE_BREP {
                     return Err(format!("malha grande demais para virar sólido ({n} triângulos; máximo {LIMITE_BREP}): decime antes"));
                 }
+                // B169: facetado com as coplanares fundidas, ou primitivas reconhecidas (B-rep híbrido)
+                let tol = if tol.trim().is_empty() { 0. } else { ev(tol, &self.vars, "tolerância")? };
+                let malha = c.entrada.malha.clone();
                 let mut forma: Option<Shape> = None;
-                for p in c.entrada.malha.componentes() {
-                    let tris: Vec<f64> = p.tris.iter().flat_map(|t| t.iter().flat_map(|i| p.pos[*i as usize])).collect();
-                    let s = Shape::from_mesh(&tris, *solid && p.fechada()).map_err(|e| e.0)?;
+                let mut resumo: Vec<String> = vec![];
+                for p in malha.componentes() {
+                    let (s, r) = crate::malha_primitivas::converter(&p, *modo, tol, *solid && p.fechada())?;
+                    resumo.push(r);
                     forma = Some(match forma {
                         Some(f) => f.compound(&s),
                         None => s,
                     });
                 }
                 let s = forma.ok_or("a malha não tem triângulos")?;
+                let relatorio = format!("{}; desvio máximo malha × sólido {:.4} mm", resumo.join(" + "), crate::malha_primitivas::desvio_maximo(&malha, &s));
                 self.malhas.remove(&f.target);
                 if s.is_solid() {
                     self.apply(f.target, s, BoolOp::Add, f.id)?;
-                    Ok(Some(format!("{n} triângulos → sólido")))
+                    Ok(Some(format!("{n} triângulos → sólido: {relatorio}")))
                 } else {
                     let r = match self.body(f.target) {
                         Some(b) => b.compound(&s),
                         None => s,
                     };
                     self.bodies.insert(f.target, fresh_body(r, f.id));
-                    Ok(Some(format!("{n} triângulos → superfície aberta (a malha não fecha um volume)")))
+                    Ok(Some(format!("{n} triângulos → superfície aberta (a malha não fecha um volume): {relatorio}")))
                 }
             }
             MeshOpKind::DeBrep { desvio, angulo } => {
@@ -708,14 +713,14 @@ mod testes {
         }
         let mut d = Document::new("m");
         corpo(&mut d, &caixa([10., 10., 10.], [0.; 3]));
-        let id = d.add_feature(FeatureKind::MeshOp(MeshOp { op: MeshOpKind::ParaBrep { solid: true } }));
+        let id = d.add_feature(FeatureKind::MeshOp(MeshOp { op: MeshOpKind::ParaBrep { solid: true, modo: Default::default(), tol: String::new() } }));
         let mut cache = Cache::default();
         for _ in 0..2 {
             // a segunda volta reaproveita o sólido e não pode deixar a malha junto
             let r = recompute_cached(&d, &mut cache);
             assert_eq!(r.bodies.len(), 1);
             assert!((r.bodies[0].mass.volume - 1000.).abs() < 1e-6);
-            assert_eq!(r.bodies[0].faces, 12);
+            assert_eq!(r.bodies[0].faces, 6, "B169: os doze triângulos se fundem nas seis faces da caixa");
         }
         assert!(final_shape(&d).is_some_and(|s| s.is_solid()));
         d.add_feature(FeatureKind::MeshOp(MeshOp { op: MeshOpKind::DeBrep { desvio: "0.01".into(), angulo: "15".into() } }));
@@ -728,7 +733,7 @@ mod testes {
 
         let mut g = Document::new("g");
         corpo(&mut g, &placa(330));
-        g.add_feature(FeatureKind::MeshOp(MeshOp { op: MeshOpKind::ParaBrep { solid: true } }));
+        g.add_feature(FeatureKind::MeshOp(MeshOp { op: MeshOpKind::ParaBrep { solid: true, modo: Default::default(), tol: String::new() } }));
         let r = recompute(&g);
         assert!(matches!(&r.status[&g.features[1].id], Status::Error(e) if e.contains("decime")), "{:?}", r.status[&g.features[1].id]);
     }

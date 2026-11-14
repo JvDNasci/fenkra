@@ -82,13 +82,30 @@ pub struct MeshBoolean {
     pub keep_tool: bool,
 }
 
+/// Como a malha vira sólido (B169).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum ModoBrep {
+    /// uma face plana por triângulo, costuradas, com as coplanares fundidas
+    #[default]
+    Facetado,
+    /// planos, cilindros, cones, esferas e toros reconhecidos viram faces analíticas; o resto fica triangular
+    Primitivas,
+}
+
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub enum MeshOpKind {
     Reparar(MeshRepair),
     Decimar(MeshDecimate),
     Booleana(MeshBoolean),
-    /// o corpo de malha vira B-rep facetado: é o único caminho com teto de triângulos
-    ParaBrep { solid: bool },
+    /// o corpo de malha vira B-rep (facetado ou com primitivas): é o único caminho com teto de triângulos
+    ParaBrep {
+        solid: bool,
+        #[serde(default)]
+        modo: ModoBrep,
+        /// tolerância do ajuste das primitivas, em mm; vazio ou zero, automática
+        #[serde(default)]
+        tol: String,
+    },
     /// o corpo B-rep do coletor vira corpo de malha
     DeBrep { desvio: String, angulo: String },
 }
@@ -115,7 +132,11 @@ impl MeshOpKind {
                 exprs(&mut d.desvio);
             }
             MeshOpKind::Booleana(b) => ids(&mut b.tool),
-            MeshOpKind::ParaBrep { .. } => {}
+            MeshOpKind::ParaBrep { tol, .. } => {
+                if !tol.is_empty() {
+                    exprs(tol);
+                }
+            }
             MeshOpKind::DeBrep { desvio, angulo } => {
                 exprs(desvio);
                 exprs(angulo);

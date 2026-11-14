@@ -133,6 +133,8 @@ std::unique_ptr<Shape> thicken(const Shape& s, double t1, double t2);
 std::unique_ptr<Shape> close_surface(const Shape& s, double tol);
 std::unique_ptr<Shape> volume_cells(const Shape& s, rust::Slice<const double> exclude);
 std::unique_ptr<Shape> mesh_shape(rust::Slice<const double> tris, bool solid);
+std::unique_ptr<Shape> mesh_hybrid(rust::Slice<const double> vertices, rust::Slice<const uint32_t> facetas, rust::Slice<const double> regioes, rust::Slice<const int64_t> lacos, double tol, bool solid);
+rust::Vec<uint32_t> face_types(const Shape& s);
 bool is_solid(const Shape& s);
 std::unique_ptr<Shape> affinity(const Shape& s, double ox, double oy, double oz, double xx, double xy, double xz, double nx, double ny, double nz,
                                 double fx, double fy, double fz);

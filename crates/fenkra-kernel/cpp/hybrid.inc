@@ -1055,4 +1055,325 @@ rust::Vec<double> ray_hits(const Shape& s, double px, double py, double pz, doub
     });
 }
 
+// ---------- B169: malha → B-rep híbrido (faces analíticas onde houve ajuste, triangulares onde não)
+//
+// O Rust reconhece as regiões e encaixa os vértices (`malha_primitivas.rs`). Aqui:
+// - cada vértice da malha vira um TopoDS_Vertex compartilhado, para os laços fecharem;
+// - cada trecho de borda entre duas regiões analíticas tenta a interseção das duas superfícies
+//   (GeomAPI_IntSS): vale a curva que passa por todos os vértices do trecho; senão, segmentos retos;
+// - a face analítica nasce da superfície e dos laços; o ShapeFix_Face cria as curvas paramétricas,
+//   decide o laço externo e põe a costura que falta no cilindro, no cone e no toro;
+// - triângulo sem ajuste vira face plana;
+// - tudo é costurado, vira sólido quando fecha, e as faces coplanares do mesmo domínio se unem.
+
+namespace {
+
+Handle(Geom_Surface) superficie_da_regiao(const double* r) {
+    const int tipo = int(r[0] + 0.5);
+    const gp_Pnt o(r[1], r[2], r[3]);
+    const gp_Dir ax(r[4], r[5], r[6]);
+    gp_Vec xv(r[7], r[8], r[9]);
+    xv = xv - gp_Vec(ax) * xv.Dot(gp_Vec(ax));
+    if (xv.Magnitude() < 1e-9) throw std::runtime_error("direção de referência nula");
+    const gp_Ax3 a3(o, ax, gp_Dir(xv));
+    switch (tipo) {
+        case 0: return new Geom_Plane(a3);
+        case 1: return new Geom_CylindricalSurface(a3, r[10]);
+        case 2: return new Geom_ConicalSurface(a3, r[10], 0.0);  // raio zero na origem: a origem é o ápice
+        case 3: return new Geom_SphericalSurface(a3, r[10]);
+        case 4: return new Geom_ToroidalSurface(a3, r[10], r[11]);
+    }
+    throw std::runtime_error("tipo de superfície desconhecido");
+}
+
+// Curva da interseção que passa por todos os pontos dentro de `tol`.
+Handle(Geom_Curve) curva_comum(const Handle(Geom_Surface)& a, const Handle(Geom_Surface)& b, const std::vector<gp_Pnt>& pts, double tol) {
+    try {
+        GeomAPI_IntSS in(a, b, 1e-7);
+        if (!in.IsDone()) return nullptr;
+        for (int i = 1; i <= in.NbLines(); ++i) {
+            Handle(Geom_Curve) c = in.Line(i);
+            bool todos = true;
+            for (const gp_Pnt& p : pts) {
+                GeomAPI_ProjectPointOnCurve pr(p, c);
+                if (pr.NbPoints() == 0 || pr.LowerDistance() > tol) {
+                    todos = false;
+                    break;
+                }
+            }
+            if (todos) return c;
+        }
+    } catch (const Standard_Failure&) {
+    }
+    return nullptr;
+}
+
+// As duas superfícies são tangentes em `p`? Ali a interseção é instável (o filete que encosta no
+// plano): a aresta fica pelos vértices da malha.
+bool tangentes_em(const Handle(Geom_Surface)& a, const Handle(Geom_Surface)& b, const gp_Pnt& p) {
+    auto normal = [&](const Handle(Geom_Surface)& s, gp_Vec& n) {
+        GeomAPI_ProjectPointOnSurf pr(p, s);
+        if (pr.NbPoints() == 0) return false;
+        double u, v;
+        pr.LowerDistanceParameters(u, v);
+        GeomLProp_SLProps sl(s, u, v, 1, 1e-9);
+        if (!sl.IsNormalDefined()) return false;
+        n = gp_Vec(sl.Normal());
+        return true;
+    };
+    gp_Vec na, nb;
+    if (!normal(a, na) || !normal(b, nb)) return true;
+    return std::abs(na.Dot(nb)) > std::cos(5.0 * M_PI / 180.0);
+}
+
+double parametro(const Handle(Geom_Curve)& c, const gp_Pnt& p) {
+    GeomAPI_ProjectPointOnCurve pr(p, c);
+    if (pr.NbPoints() == 0) throw std::runtime_error("ponto fora da curva de interseção");
+    return pr.LowerDistanceParameter();
+}
+
+// Aresta sobre a curva de `va` a `vb`, passando perto de `meio`. Fechada quando va == vb.
+TopoDS_Edge aresta_na_curva(const Handle(Geom_Curve)& c, const TopoDS_Vertex& va, const TopoDS_Vertex& vb, const gp_Pnt& meio, bool fechada, double tol) {
+    const gp_Pnt pa = BRep_Tool::Pnt(va), pb = BRep_Tool::Pnt(vb);
+    double ua = parametro(c, pa), ub = parametro(c, pb), um = parametro(c, meio);
+    bool reverso = false;
+    if (c->IsPeriodic()) {
+        const double T = c->Period();
+        auto norm = [&](double u) {
+            while (u < ua) u += T;
+            while (u >= ua + T) u -= T;
+            return u;
+        };
+        um = norm(um);
+        if (fechada) {
+            ub = ua + T;
+            reverso = um - ua > T / 2;
+        } else {
+            ub = norm(ub);
+            if (um > ub) {
+                // o trecho vai para trás: de ub − T até ua, e a aresta é usada ao contrário
+                std::swap(ua, ub);
+                ua -= T;
+                reverso = true;
+            }
+        }
+    } else {
+        if (fechada) throw std::runtime_error("curva aberta num laço fechado");
+        if (ua > ub) {
+            std::swap(ua, ub);
+            reverso = true;
+        }
+    }
+    BRep_Builder bb;
+    TopoDS_Edge e;
+    bb.MakeEdge(e, c, tol);
+    TopoDS_Vertex v1 = reverso ? vb : va, v2 = reverso ? va : vb;
+    bb.Add(e, TopoDS::Vertex(v1.Oriented(TopAbs_FORWARD)));
+    bb.Add(e, TopoDS::Vertex(v2.Oriented(TopAbs_REVERSED)));
+    bb.Range(e, ua, ub);
+    BRepLib::UpdateTolerances(e);
+    if (reverso) e.Reverse();
+    return e;
+}
+
+TopoDS_Face face_triangular(const TopoDS_Vertex& a, const TopoDS_Vertex& b, const TopoDS_Vertex& c) {
+    BRepBuilderAPI_MakePolygon pg(a, b, c, Standard_True);
+    if (!pg.IsDone()) return TopoDS_Face();
+    BRepBuilderAPI_MakeFace mf(pg.Wire(), Standard_True);
+    return mf.IsDone() ? mf.Face() : TopoDS_Face();
+}
+
+TopoDS_Shape fechar_e_validar(const TopoDS_Shape& costurada, bool solid) {
+    // tolerâncias de vértice e aresta e o mesmo parâmetro entre curva 3D e paramétrica
+    ShapeFix_Shape sfs(costurada);
+    sfs.Perform();
+    TopoDS_Shape r = sfs.Shape();
+    if (solid) {
+        TopExp_Explorer se(r, TopAbs_SHELL);
+        TopoDS_Shell sh;
+        if (!se.More()) {
+            // uma face só, fechada em si (esfera ou toro inteiro): a costura não faz casca
+            BRep_Builder bb;
+            bb.MakeShell(sh);
+            int nf = 0;
+            for (TopExp_Explorer fe(r, TopAbs_FACE); fe.More(); fe.Next()) bb.Add(sh, fe.Current()), ++nf;
+            if (nf == 0) throw std::runtime_error("a costura não formou casca");
+            sh.Closed(BRep_Tool::IsClosed(sh));
+        } else {
+            sh = TopoDS::Shell(se.Current());
+            se.Next();
+        }
+        if (se.More()) throw std::runtime_error("a costura deixou mais de uma casca");
+        if (!BRep_Tool::IsClosed(sh)) throw std::runtime_error("a casca costurada não fecha");
+        BRepBuilderAPI_MakeSolid ms(sh);
+        if (!ms.IsDone()) throw std::runtime_error("não foi possível fechar o sólido");
+        Handle(ShapeFix_Solid) fx = new ShapeFix_Solid(ms.Solid());
+        fx->Perform();
+        r = fx->Solid();
+        GProp_GProps g;
+        BRepGProp::VolumeProperties(r, g);
+        if (g.Mass() < 0) r.Reverse();
+    }
+    BRepCheck_Analyzer an(r);
+    if (!an.IsValid()) {
+        // diz quais faces quebram, por tipo de superfície, para o relatório
+        int ruins[7] = {0, 0, 0, 0, 0, 0, 0};
+        for (TopExp_Explorer fe(r, TopAbs_FACE); fe.More(); fe.Next()) {
+            BRepCheck_Analyzer af(fe.Current());
+            if (af.IsValid()) continue;
+            switch (BRepAdaptor_Surface(TopoDS::Face(fe.Current())).GetType()) {
+                case GeomAbs_Plane: ruins[0]++; break;
+                case GeomAbs_Cylinder: ruins[1]++; break;
+                case GeomAbs_Cone: ruins[2]++; break;
+                case GeomAbs_Sphere: ruins[3]++; break;
+                case GeomAbs_Torus: ruins[4]++; break;
+                default: ruins[5]++;
+            }
+        }
+        std::ostringstream o;
+        o << "o B-rep montado não é válido (faces ruins: " << ruins[0] << " planas, " << ruins[1] << " cilíndricas, " << ruins[2] << " cônicas, " << ruins[3] << " esféricas, " << ruins[4] << " tóricas, " << ruins[5] << " outras)";
+        throw std::runtime_error(o.str());
+    }
+    return r;
+}
+
+TopoDS_Shape unir_coplanares(const TopoDS_Shape& s, bool solid) {
+    try {
+        ShapeUpgrade_UnifySameDomain u(s, Standard_True, Standard_True, Standard_True);
+        u.Build();
+        TopoDS_Shape r = u.Shape();
+        BRepCheck_Analyzer an(r);
+        if (!an.IsValid()) return s;
+        if (solid && !TopExp_Explorer(r, TopAbs_SOLID).More()) return s;
+        return r;
+    } catch (const Standard_Failure&) {
+        return s;
+    }
+}
+
+}  // namespace
+
+// vertices: 3 por vértice; facetas: 3 índices por triângulo sem ajuste; regioes: 12 números por região
+// (tipo, origem, eixo, referência, dois números); lacos: por região, nº de laços e, por laço, nº de
+// trechos seguido de pares (vértice, região do outro lado ou −1).
+std::unique_ptr<Shape> mesh_hybrid(rust::Slice<const double> vertices, rust::Slice<const uint32_t> facetas, rust::Slice<const double> regioes,
+                                   rust::Slice<const int64_t> lacos, double tol, bool solid) {
+    return guard("malha → B-rep híbrido", [&] {
+        const size_t nv = vertices.size() / 3, nr = regioes.size() / 12;
+        std::vector<TopoDS_Vertex> vs(nv);
+        BRep_Builder bb;
+        for (size_t i = 0; i < nv; ++i) bb.MakeVertex(vs[i], gp_Pnt(vertices[3 * i], vertices[3 * i + 1], vertices[3 * i + 2]), tol);
+        auto ponto = [&](int64_t i) {
+            if (i < 0 || size_t(i) >= nv) throw std::runtime_error("vértice fora da malha");
+            return gp_Pnt(vertices[3 * i], vertices[3 * i + 1], vertices[3 * i + 2]);
+        };
+        std::vector<Handle(Geom_Surface)> sup(nr);
+        for (size_t k = 0; k < nr; ++k) sup[k] = superficie_da_regiao(&regioes[12 * k]);
+
+        BRepBuilderAPI_Sewing sw(std::max(tol * 20, 1e-5));
+        size_t faces = 0, pos = 0;
+        auto ler = [&]() {
+            if (pos >= lacos.size()) throw std::runtime_error("descrição dos laços incompleta");
+            return lacos[pos++];
+        };
+        for (size_t k = 0; k < nr; ++k) {
+            const int64_t nl = ler();
+            TopoDS_Face f;
+            bb.MakeFace(f, sup[k], tol);
+            if (nl == 0) {
+                // superfície fechada sem borda (esfera ou toro inteiro)
+                f = BRepBuilderAPI_MakeFace(sup[k], Precision::Confusion()).Face();
+            }
+            for (int64_t l = 0; l < nl; ++l) {
+                const int64_t n = ler();
+                std::vector<int64_t> v(static_cast<size_t>(n)), viz(static_cast<size_t>(n));
+                for (int64_t i = 0; i < n; ++i) v[size_t(i)] = ler(), viz[size_t(i)] = ler();
+                // trechos: onde a região do outro lado muda
+                std::vector<size_t> cortes;
+                for (size_t i = 0; i < v.size(); ++i)
+                    if (viz[i] != viz[(i + v.size() - 1) % v.size()]) cortes.push_back(i);
+                TopoDS_Wire w;
+                bb.MakeWire(w);
+                auto segmentos = [&](size_t i0, size_t cont) {
+                    for (size_t j = 0; j < cont; ++j) {
+                        const size_t a = (i0 + j) % v.size(), b = (i0 + j + 1) % v.size();
+                        if (v[a] == v[b]) continue;
+                        BRepBuilderAPI_MakeEdge me(vs[size_t(v[a])], vs[size_t(v[b])]);
+                        if (me.IsDone()) bb.Add(w, me.Edge());
+                    }
+                };
+                auto trecho = [&](size_t i0, size_t cont, bool fechado) {
+                    const int64_t nb = viz[i0];
+                    bool feito = false;
+                    if (nb >= 0 && size_t(nb) < nr && cont >= 1) {
+                        std::vector<gp_Pnt> pts;
+                        for (size_t j = 0; j <= cont; ++j) pts.push_back(ponto(v[(i0 + j) % v.size()]));
+                        Handle(Geom_Curve) c;
+                        if (!tangentes_em(sup[k], sup[size_t(nb)], pts[pts.size() / 2])) c = curva_comum(sup[k], sup[size_t(nb)], pts, tol * 10);
+                        if (!c.IsNull()) {
+                            try {
+                                const size_t a = i0 % v.size(), b = (i0 + cont) % v.size();
+                                const gp_Pnt meio = pts[pts.size() / 2];
+                                bb.Add(w, aresta_na_curva(c, vs[size_t(v[a])], vs[size_t(v[b])], meio, fechado, tol));
+                                feito = true;
+                            } catch (const std::exception&) {
+                            } catch (const Standard_Failure&) {
+                            }
+                        }
+                    }
+                    if (!feito) segmentos(i0, cont);
+                };
+                if (cortes.empty()) {
+                    trecho(0, v.size(), true);
+                } else {
+                    for (size_t c = 0; c < cortes.size(); ++c) {
+                        const size_t i0 = cortes[c], i1 = cortes[(c + 1) % cortes.size()];
+                        trecho(i0, (i1 + v.size() - i0 - 1) % v.size() + 1, false);
+                    }
+                }
+                bb.Add(f, w);
+            }
+            if (nl > 0) {
+                ShapeFix_Face sff(f);
+                sff.SetPrecision(tol);
+                sff.SetMaxTolerance(std::max(tol * 1000, 0.1));
+                sff.Perform();
+                f = sff.Face();
+            }
+            sw.Add(f);
+            ++faces;
+        }
+        for (size_t i = 0; i + 2 < facetas.size(); i += 3) {
+            const uint32_t a = facetas[i], b = facetas[i + 1], c = facetas[i + 2];
+            if (a >= nv || b >= nv || c >= nv) throw std::runtime_error("triângulo fora da malha");
+            TopoDS_Face f = face_triangular(vs[a], vs[b], vs[c]);
+            if (!f.IsNull()) sw.Add(f), ++faces;
+        }
+        if (faces == 0) throw std::runtime_error("nada para montar");
+        sw.Perform();
+        TopoDS_Shape r = fechar_e_validar(sw.SewedShape(), solid);
+        return wrap(unir_coplanares(r, solid));
+    });
+}
+
+// Faces por tipo de superfície: plano, cilindro, cone, esfera, toro, outras.
+rust::Vec<uint32_t> face_types(const Shape& s) {
+    rust::Vec<uint32_t> out;
+    for (int i = 0; i < 6; ++i) out.push_back(0);
+    TopTools_IndexedMapOfShape faces;
+    TopExp::MapShapes(s.s, TopAbs_FACE, faces);
+    for (int i = 1; i <= faces.Extent(); ++i) {
+        BRepAdaptor_Surface a(TopoDS::Face(faces(i)));
+        switch (a.GetType()) {
+            case GeomAbs_Plane: out[0]++; break;
+            case GeomAbs_Cylinder: out[1]++; break;
+            case GeomAbs_Cone: out[2]++; break;
+            case GeomAbs_Sphere: out[3]++; break;
+            case GeomAbs_Torus: out[4]++; break;
+            default: out[5]++;
+        }
+    }
+    return out;
+}
+
 }  // namespace fenkra

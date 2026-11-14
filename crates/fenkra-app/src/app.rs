@@ -642,6 +642,10 @@ impl App {
             Ok("dfm") => app.settings.display = crate::render::DisplayMode::Dfm,
             _ => {}
         }
+        // B180: FENKRA_DEMO_ANALISE ajusta zebra, isofotas, curvatura e o plano de corte
+        if let Ok(v) = std::env::var("FENKRA_DEMO_ANALISE") {
+            crate::sup_qualidade::demo(&v, &mut app.settings);
+        }
         // desenvolvimento: FENKRA_DEMO_POLIMENTO=<caso> abre uma peça de prova do polimento (B346)
         if let Some(q) = crate::demo_polimento::qualidade() {
             app.settings.graficos.preset = fenkra_core::PresetMalha::Personalizada;
@@ -7386,7 +7390,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 crate::demo_polimento::giro(&ctx, vp);
                 let mut style = self.settings.style();
                 style.navegando = vp.navegando();
-                style.mapa = crate::sup_inclinacao::escala_do_mapa(&self.settings, &ctx.global_style().visuals).map(|e| e.gpu());
+                style.mapa = crate::sup_inclinacao::escala_do_mapa(&self.settings, &ctx.global_style().visuals).map(|e| e.gpu()).or_else(|| crate::sup_qualidade::mapa_das_listras(&self.settings));
                 // B06: corte de seção para ver a parede da casca aberta
                 let casca = self.session.as_ref().and_then(|s| self.open.doc.feature(s.id)).is_some_and(|f| matches!(f.kind, FeatureKind::Shell(_)));
                 if casca && ctx.data(|d| d.get_temp::<bool>(crate::previa::chave_secao())).unwrap_or(false) {
@@ -7394,6 +7398,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 }
                 // B274: corte no plano do sketch em edição, só para ver
                 if let Some(p) = self.sketch.as_ref().and_then(|e| e.plano_de_corte(vp.camera.eye())) {
+                    style.secao = Some(p);
+                }
+                // B180: plano de corte dinâmico das análises de superfície
+                if let Some(p) = crate::sup_qualidade::plano(&self.settings, vp.bounds) {
                     style.secao = Some(p);
                 }
                 if style.simplificar && style.navegando {
@@ -9150,6 +9158,9 @@ impl eframe::App for App {
                 };
                 let mut s = crate::medir_quadros::fase("cena", || scene::build(scene_doc, r, &opts));
                 crate::dfm_ui::decorar(&self.settings, r, &ctx.global_style().visuals, &mut s);
+                if asm_view.is_none() {
+                    crate::sup_qualidade::decorar(&self.settings, scene_doc, self.gen_done, &ctx.global_style().visuals, &mut s);
+                }
                 crate::saida_faces::decorar(&self.settings, r, &ctx.global_style().visuals, &mut s);
                 crate::comparar_ui::decorar(&ctx.global_style().visuals, &mut s);
                 if let Some(sess) = self.session.as_mut().filter(|_| asm_view.is_none()) {
