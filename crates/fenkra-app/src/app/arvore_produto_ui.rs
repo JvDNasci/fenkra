@@ -488,7 +488,7 @@ fn barra(ui: &mut egui::Ui, st: &mut ArvoreUi, acoes: &mut Vec<Acao>, atualizar:
         ui.separator();
         ui.label(tr("Níveis"));
         let antes = st.niveis;
-        ui.add(egui::DragValue::new(&mut st.niveis).range(1..=12)).on_hover_text(tr("Quantos níveis aparecem abertos. Clique num nó para abrir ou fechar só ele."));
+        ui.add(crate::ui_ext::dv(&mut st.niveis).range(1..=12)).on_hover_text(tr("Quantos níveis aparecem abertos. Clique num nó para abrir ou fechar só ele."));
         if st.niveis != antes {
             st.abertos.clear();
             st.fechados.clear();
