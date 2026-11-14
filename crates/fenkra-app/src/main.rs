@@ -213,6 +213,7 @@ mod asm_fixadores;
 mod asm_conjunto;
 mod asm_chaveta;
 mod calculo_ui;
+mod calculo_rotativos_ui;
 mod textos_calculo;
 mod textos_chaveta;
 mod asm_encaixe;

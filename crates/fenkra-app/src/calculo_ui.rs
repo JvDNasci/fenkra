@@ -28,15 +28,24 @@ pub enum Aba {
     Ajuste,
     Mola,
     Viga,
+    /// B111
+    Rolamento,
+    Engrenagem,
+    Estriado,
 }
 
 impl Aba {
+    pub const TODAS: [Aba; 7] = [Aba::Parafuso, Aba::Ajuste, Aba::Mola, Aba::Viga, Aba::Rolamento, Aba::Engrenagem, Aba::Estriado];
+
     fn rotulo(self) -> &'static str {
         match self {
             Aba::Parafuso => "Parafuso",
             Aba::Ajuste => "Ajuste forçado",
             Aba::Mola => "Mola",
             Aba::Viga => "Viga",
+            Aba::Rolamento => "Rolamento",
+            Aba::Engrenagem => "Engrenagem",
+            Aba::Estriado => "Estriado",
         }
     }
 }
@@ -69,11 +78,13 @@ pub struct Estado {
     /// seção da viga e as suas duas medidas
     pub secao: usize,
     pub dims: [f64; 2],
+    /// rolamento, engrenagem e estriado (B111)
+    pub rot: crate::calculo_rotativos_ui::EstadoRotativos,
 }
 
 impl Default for Estado {
     fn default() -> Self {
-        Estado { aba: Aba::Parafuso, parafuso: Default::default(), ajuste: Default::default(), mola: Default::default(), viga: Default::default(), secao: 0, dims: [20., 40.] }
+        Estado { aba: Aba::Parafuso, parafuso: Default::default(), ajuste: Default::default(), mola: Default::default(), viga: Default::default(), secao: 0, dims: [20., 40.], rot: Default::default() }
     }
 }
 
@@ -94,14 +105,14 @@ pub fn abrir(st: &mut AsmState) {
 }
 
 /// Linha de entrada: rótulo com a dica, e o campo numérico.
-fn campo(ui: &mut egui::Ui, rotulo: &str, dica: &str, v: &mut f64, faixa: std::ops::RangeInclusive<f64>, sufixo: &str) {
+pub(crate) fn campo(ui: &mut egui::Ui, rotulo: &str, dica: &str, v: &mut f64, faixa: std::ops::RangeInclusive<f64>, sufixo: &str) {
     ui.label(tr(rotulo)).on_hover_text(tr(dica));
     ui.add(crate::ui_ext::dv(v).range(faixa).speed(0.5).suffix(sufixo).dica(tr(dica)));
     ui.end_row();
 }
 
 /// Linha de resultado: rótulo com a explicação e o valor, na cor dada.
-fn saida(ui: &mut egui::Ui, rotulo: &str, dica: &str, valor: String, cor: Option<Color32>) {
+pub(crate) fn saida(ui: &mut egui::Ui, rotulo: &str, dica: &str, valor: String, cor: Option<Color32>) {
     ui.label(tr(rotulo)).on_hover_text(tr(dica));
     let t = RichText::new(valor).strong();
     ui.label(match cor {
@@ -111,7 +122,7 @@ fn saida(ui: &mut egui::Ui, rotulo: &str, dica: &str, valor: String, cor: Option
     ui.end_row();
 }
 
-fn cor_fs(fs: f64, exigido: f64) -> Color32 {
+pub(crate) fn cor_fs(fs: f64, exigido: f64) -> Color32 {
     if fs >= exigido {
         crate::theme::st_ok()
     } else {
@@ -119,7 +130,7 @@ fn cor_fs(fs: f64, exigido: f64) -> Color32 {
     }
 }
 
-fn avisos(ui: &mut egui::Ui, lista: &[String]) {
+pub(crate) fn avisos(ui: &mut egui::Ui, lista: &[String]) {
     for a in lista {
         ui.label(RichText::new(format!("⚠ {}", tr(a))).small().color(crate::theme::st_warn()));
     }
@@ -204,7 +215,7 @@ fn aba_parafuso(ui: &mut egui::Ui, e: &mut Estado, aplicar: &mut Option<String>,
     }
 }
 
-fn material(ui: &mut egui::Ui, id: &str, m: &mut Material) {
+pub(crate) fn material(ui: &mut egui::Ui, id: &str, m: &mut Material) {
     egui::ComboBox::from_id_salt(id).selected_text(tr(m.nome)).show_ui(ui, |ui| {
         for x in MATERIAIS {
             if ui.selectable_label(x.nome == m.nome, tr(x.nome)).clicked() {
@@ -459,13 +470,15 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
     let mut fechar = false;
     let mut aplicar = None;
     let mut inserir = None;
+    let mut gravar_camada = false;
+    let mut aviso_camada = crate::calculo_rotativos_ui::ler_camada(&mut est.rot, st.dir().as_deref()).err().map(|m| (m, true));
     let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
         if crate::app::done_bar(ui) {
             fechar = true;
         }
         ui.label(RichText::new(tr(AVISO_PRELIMINAR)).small().color(crate::theme::st_warn()));
-        ui.horizontal(|ui| {
-            for a in [Aba::Parafuso, Aba::Ajuste, Aba::Mola, Aba::Viga] {
+        ui.horizontal_wrapped(|ui| {
+            for a in Aba::TODAS {
                 if ui.selectable_label(est.aba == a, tr(a.rotulo())).clicked() {
                     est.aba = a;
                 }
@@ -477,12 +490,22 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
             Aba::Ajuste => aba_ajuste(ui, &mut est, &mut inserir),
             Aba::Mola => aba_mola(ui, &mut est, &mut inserir),
             Aba::Viga => aba_viga(ui, &mut est, &mut inserir),
+            Aba::Rolamento => gravar_camada = crate::calculo_rotativos_ui::aba_rolamento(ui, &mut est.rot),
+            Aba::Engrenagem => crate::calculo_rotativos_ui::aba_engrenagem(ui, &mut est.rot),
+            Aba::Estriado => crate::calculo_rotativos_ui::aba_estriado(ui, &mut est.rot),
         });
     });
     if let Some(p) = saida.movido {
         app.settings.guardar_painel(PAINEL, p);
     }
-    let mut aviso = None;
+    let mut aviso = aviso_camada.take();
+    if gravar_camada {
+        let dir = app.asm.as_ref().and_then(|st| st.dir());
+        aviso = Some(match crate::calculo_rotativos_ui::gravar_camada(&mut est.rot, dir.as_deref()) {
+            Ok(p) => (format!("{}: {}", tr("Camada do fabricante gravada"), p.display()), false),
+            Err(m) => (tr(&m).to_string(), true),
+        });
+    }
     if let Some(t) = aplicar {
         let st = app.asm.as_mut().expect("montagem aberta");
         aviso = Some(match ajustar_pilha(st, &t) {
@@ -512,8 +535,26 @@ pub fn demo(st: &mut AsmState, nome: &str) {
         "calculo_ajuste" => Aba::Ajuste,
         "calculo_mola" => Aba::Mola,
         "calculo_viga" => Aba::Viga,
+        "calculo_rolamento" => Aba::Rolamento,
+        "calculo_engrenagem" => Aba::Engrenagem,
+        "calculo_estriado" => Aba::Estriado,
         _ => Aba::Parafuso,
     };
+    if e.aba == Aba::Rolamento {
+        // dado de exemplo, como a pessoa o escreveria a partir de um catálogo (não é dado embutido)
+        e.rot.camada_lida = true;
+        e.rot.rolamento.dados = fenkra_solidos::calculo_rotativos::DadosFabricante { designacao: "6005".into(), fonte: "exemplo da demonstração".into(), c: 10_000., c0: 5_000., ..Default::default() };
+        e.rot.rolamento.fr = 1500.;
+    }
+    if nome == "calculo_inserido" {
+        // B110: mola, eixo e cubo do ajuste e a barra da viga já inseridos na montagem
+        for q in [Inserir::Mola, Inserir::Ajuste] {
+            if let Err(m) = inserir_pecas(st, &e, q) {
+                st.aviso = Some((m, true));
+            }
+        }
+        e.aba = Aba::Mola;
+    }
     st.calculo = Some(e);
 }
 
@@ -582,7 +623,7 @@ mod tests {
 
     #[test]
     fn todo_rotulo_de_aba_e_toda_classe_existem() {
-        for a in [Aba::Parafuso, Aba::Ajuste, Aba::Mola, Aba::Viga] {
+        for a in Aba::TODAS {
             assert!(!a.rotulo().is_empty());
         }
         assert!(AJUSTES.iter().all(|a| fenkra_tolerancias_ok(a)));

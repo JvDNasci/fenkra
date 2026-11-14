@@ -66,6 +66,7 @@ pub mod selecao_regras;
 pub mod chaveta_rasgos;
 pub mod calculo_projeto;
 pub mod calculo_pecas;
+pub mod calculo_rotativos;
 pub mod profile;
 pub mod sketch_posicao;
 pub mod refs;
