@@ -56,7 +56,27 @@ fn seg(s: Seg) -> Seg2 {
 
 /// Plano do sketch sobre o plano-base, com a origem e a orientação próprias.
 pub fn posiciona(f: Frame, p: &SketchPos) -> Frame {
-    let (mut h, mut v) = (f.x, f.y());
+    posiciona_em(f, p, None, None).unwrap_or(f)
+}
+
+/// Plano do sketch com a origem e a direção de H vindas de referências (B437). `o3` é a origem no
+/// espaço e `h3` a direção que H segue; as duas são projetadas no plano-base. Sem elas, vale o plano-
+/// base, como nos arquivos antigos. O deslocamento `p.origem` anda nos eixos já orientados, antes de
+/// trocar e inverter: assim inverter um eixo não leva a origem para outro lugar.
+pub fn posiciona_em(f: Frame, p: &SketchPos, o3: Option<[f64; 3]>, h3: Option<[f64; 3]>) -> Result<Frame, String> {
+    use crate::geo3d::{add, dot, mul, sub, unit};
+    let n = f.normal;
+    let base = match o3 {
+        Some(q) => sub(q, mul(n, dot(sub(q, f.origin), n))),
+        None => f.origin,
+    };
+    let h0 = match h3 {
+        Some(d) => unit(sub(d, mul(n, dot(d, n)))).ok_or("a direção escolhida para H é perpendicular ao plano do sketch")?,
+        None => f.x,
+    };
+    let v0 = fenkra_kernel::cross(n, h0);
+    let origin = add(base, add(mul(h0, p.origem[0]), mul(v0, p.origem[1])));
+    let (mut h, mut v) = (h0, v0);
     if p.trocar {
         std::mem::swap(&mut h, &mut v);
     }
@@ -67,7 +87,7 @@ pub fn posiciona(f: Frame, p: &SketchPos) -> Frame {
         v = v.map(|x| -x);
     }
     let normal = [h[1] * v[2] - h[2] * v[1], h[2] * v[0] - h[0] * v[2], h[0] * v[1] - h[1] * v[0]];
-    Frame { origin: f.point(p.origem[0], p.origem[1]), x: h, normal }
+    Ok(Frame { origin, x: h, normal })
 }
 
 /// Plano do sketch na forma que a projeção exata usa.
@@ -92,6 +112,13 @@ pub fn eval_sketch(data: &SketchData, vars: &Vars) -> Result<EvalSketch, String>
     out.points = sk.hole_points();
     out.pts = sk.points.iter().map(|p| (p.id, [p.x, p.y])).collect();
     for c in &sk.curves {
+        // os eixos servem de eixo de revolução, mas não se desenham fora do editor
+        if sk.e_eixo(c.id) {
+            if let Curve::Line { a, b } = c.geom {
+                out.lines.insert(c.id, (sk.pos(a), sk.pos(b)));
+            }
+            continue;
+        }
         let pts = match c.geom {
             Curve::Line { a, b } => {
                 out.lines.insert(c.id, (sk.pos(a), sk.pos(b)));

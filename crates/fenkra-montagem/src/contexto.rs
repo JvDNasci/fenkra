@@ -21,31 +21,43 @@ pub fn instancias(a: &Assembly, comp: Id) -> usize {
 
 /// Arquivo de uma peça nova: nome e pasta são obrigatórios, e o arquivo não pode existir.
 pub fn arquivo_novo(pasta: &Path, nome: &str) -> Result<PathBuf, String> {
+    arquivo_livre(pasta, nome, "fkp", ["dê um nome à peça", "escolha a pasta da peça", "já existe uma peça com este nome nesta pasta"])
+}
+
+/// Arquivo de um produto novo (subconjunto vazio, B439), com as mesmas regras da peça nova.
+pub fn produto_novo(pasta: &Path, nome: &str) -> Result<PathBuf, String> {
+    arquivo_livre(pasta, nome, "fka", ["dê um nome ao produto", "escolha a pasta do produto", "já existe um produto com este nome nesta pasta"])
+}
+
+/// `erros`: sem nome, sem pasta e arquivo que já existe.
+fn arquivo_livre(pasta: &Path, nome: &str, ext: &str, erros: [&str; 3]) -> Result<PathBuf, String> {
     let nome = nome.trim();
     if nome.is_empty() {
-        return Err("dê um nome à peça".into());
+        return Err(erros[0].into());
     }
     if nome.chars().any(|c| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|')) {
         return Err("o nome tem caracteres que não valem em arquivo".into());
     }
     if pasta.as_os_str().is_empty() || !pasta.is_dir() {
-        return Err("escolha a pasta da peça".into());
+        return Err(erros[1].into());
     }
-    let f = pasta.join(format!("{nome}.fkp"));
+    let f = pasta.join(format!("{nome}.{ext}"));
     if f.exists() {
-        return Err("já existe uma peça com este nome nesta pasta".into());
+        return Err(erros[2].into());
     }
     Ok(f)
 }
 
-/// Junta o que está à volta do componente ativo, no sistema dele. `vistas` são as malhas do
-/// conjunto, cada uma no sistema da montagem a que `pl` se refere; `fora` é o próprio ativo.
-pub fn vista_no_sistema(vistas: &[&RecomputeResult], fora: Id, pl: &Placement) -> RecomputeResult {
+/// Junta o que está à volta do componente ativo, no sistema dele. `vista` são as malhas da montagem
+/// a que `pl` se refere, e `fora` é o próprio ativo dentro dela. `acima` é o contexto que essa
+/// montagem já recebeu dos níveis de cima, no mesmo sistema: entra inteiro, porque os ids de lá são
+/// de outro arquivo e podem repetir o do ativo (B439: o subproduto e a mãe numeram os componentes
+/// cada um a partir do mesmo começo, e a peça da mãe com o mesmo id sumia do contexto).
+pub fn vista_no_sistema(vista: Option<&RecomputeResult>, acima: Option<&RecomputeResult>, fora: Id, pl: &Placement) -> RecomputeResult {
     let inv = pl.inverse();
-    let bodies: Vec<BodyResult> = vistas
-        .iter()
-        .flat_map(|v| v.bodies.iter())
-        .filter(|b| b.collector != fora)
+    let proprias = vista.into_iter().flat_map(|v| v.bodies.iter()).filter(|b| b.collector != fora);
+    let bodies: Vec<BodyResult> = proprias
+        .chain(acima.into_iter().flat_map(|v| v.bodies.iter()))
         .map(|b| BodyResult { collector: b.collector, color: b.color, mesh: transformed(&b.mesh, &inv), mass: b.mass, faces: b.faces, face_owner: b.face_owner.clone(), face_role: b.face_role.clone() })
         .collect();
     crate::view::resultado_de(bodies)
@@ -132,8 +144,11 @@ mod tests {
         let mut cache = PartCache::default();
         let (_, v) = crate::view::compose(&a, Some(&d), &mut cache, &mut vec![]);
         let x0 = v.bodies.iter().find(|b| b.collector == outro).unwrap().mesh.positions[0];
-        let c = vista_no_sistema(&[&v], ativo, &a.node(ativo).unwrap().placement);
+        let c = vista_no_sistema(Some(&v), None, ativo, &a.node(ativo).unwrap().placement);
         assert_eq!(c.bodies.len(), 1, "o ativo não entra no próprio contexto");
         assert!((c.bodies[0].mesh.positions[0] - (x0 - 100.)).abs() < 1e-3);
+        // o contexto de cima entra inteiro, mesmo com um corpo de id igual ao do ativo
+        let c2 = vista_no_sistema(Some(&v), Some(&v), ativo, &a.node(ativo).unwrap().placement);
+        assert_eq!(c2.bodies.len(), 3);
     }
 }

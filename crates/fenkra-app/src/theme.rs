@@ -530,6 +530,20 @@ pub fn papel_alvo() -> Color32 {
     c(cor_papel(Papel::Alvo, dark_now(), paleta_segura()))
 }
 
+/// Eixos H e V do sketch (B437): as cores de X e Y, mais claras no fundo escuro; com a paleta
+/// segura, laranja e azul, que nenhum tipo comum de daltonismo confunde.
+pub fn eixo_sketch(v: bool) -> Color32 {
+    let cor = match (v, dark_now(), paleta_segura()) {
+        (false, _, true) => [230, 140, 30],
+        (true, _, true) => [70, 140, 235],
+        (false, true, false) => [235, 95, 95],
+        (false, false, false) => [200, 40, 40],
+        (true, true, false) => [95, 205, 110],
+        (true, false, false) => [30, 140, 50],
+    };
+    c(cor)
+}
+
 /// Cor que vem de um dado da pessoa (uma regra, a aparência de um furo), não do tema.
 pub fn cor_do_dado(c: [u8; 3]) -> Color32 {
     Color32::from_rgb(c[0], c[1], c[2])

@@ -137,6 +137,7 @@ pub fn painel_inclinacao(app: &mut App, ctx: &egui::Context, area: Rect) {
                 ui.label(RichText::new(tr(nome)).small().weak());
             });
         }
+        crate::saida_faces::secao(ui);
         crate::sup_qualidade::controles_do_corte(ui, &mut s.analise_sup);
     });
 }
