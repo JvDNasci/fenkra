@@ -92,5 +92,8 @@ padrão, porque o `config.json` só guarda o que difere do padrão e arquivo ant
   vista. Não se percebe em uso, e evita reescrever cada painel como área fixa.
 - A área 3D muda de tamanho quando um painel abre ou fecha. A câmera não muda; a peça só é reenquadrada
   se a pessoa pedir.
-- O cubo de vistas é o único elemento sobre a área 3D.
+- Sobre a área 3D ficam o cubo de vistas, pequeno, no canto, e o que pertence à própria manipulação:
+  alças, rótulos da prévia e avisos passageiros. Ainda sobram três controles de canto, a migrar para as
+  barras: "Símbolos" (montagem), "Espelhar a seção" e "Alinhar à aresta" (estrutural) e o seletor de
+  folha (desenho).
 - Dois painéis no mesmo trecho da direita ficam lado a lado e a faixa cresce; não há abas.

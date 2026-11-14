@@ -3355,7 +3355,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         }
         let mut open = true;
         let mut run = false;
-        egui::Window::new(tr("⚡ Automação (macros)")).open(&mut open).default_width(560.).default_height(520.).show(ctx, |ui| {
+        crate::paineis::encaixado(ctx, "macros", tr("⚡ Automação (macros)"), &mut open, 500., |ui| {
             ui.horizontal(|ui| {
                 if ui.button(RichText::new(tr("▶ Executar")).strong()).clicked() {
                     run = true;
