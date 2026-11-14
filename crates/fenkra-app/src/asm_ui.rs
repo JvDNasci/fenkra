@@ -293,6 +293,10 @@ pub struct AsmState {
     pub(crate) aviso: Option<(String, bool)>,
     // ---- simulação
     pub sim_open: bool,
+    /// posições nomeadas: área 3D e exportação em andamento (B123)
+    pub posicoes_ui: crate::asm_posicoes::Estado,
+    /// estudo de movimento: ponto acompanhado e análise guardada (B121)
+    pub estudo: crate::asm_estudo::Estudo,
     pub sim_frames: Vec<kin::Frame>,
     pub sim_t: f64,
     pub sim_t1: f64,
@@ -301,7 +305,7 @@ pub struct AsmState {
     /// componente cuja velocidade/aceleração é mostrada
     pub sim_track: Option<Id>,
     /// posições antes de tocar a simulação (voltam ao fechar)
-    sim_rest: Option<Vec<(Id, Placement)>>,
+    pub(crate) sim_rest: Option<Vec<(Id, Placement)>>,
     // ---- exibição (estados de exibição)
     /// estado de exibição em uso (visibilidade, cores, explosão)
     pub live: fenkra_montagem::display::DisplayState,
@@ -426,6 +430,8 @@ impl AsmState {
             drag_start: None,
             snapshot: None,
             sim_open: false,
+            posicoes_ui: Default::default(),
+            estudo: Default::default(),
             sim_frames: vec![],
             sim_t: 0.,
             sim_t1: 2.,
@@ -635,6 +641,11 @@ impl AsmState {
         self.compondo = true;
         self.envio_pendente = false;
         self.ultimo_envio = Some(std::time::Instant::now());
+    }
+
+    /// A vista mostra a montagem de agora: nada para recompor nem a caminho.
+    pub fn vista_em_dia(&self) -> bool {
+        !self.dirty && !self.envio_pendente && !self.compondo
     }
 
     /// Progresso da composição em andamento: componentes prontos e total.
@@ -2831,6 +2842,10 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     if st.cmd.is_some() {
         return crate::asm_cmd::painel(app, ui);
     }
+    // B121: o estudo de movimento é um comando da coluna da esquerda
+    if st.sim_open {
+        return crate::asm_estudo::painel(app, ui);
+    }
     let sel = st.sel;
     let mut editar_repeticao = None;
     if let Some(s) = sel {
@@ -3406,7 +3421,7 @@ impl AsmState {
     /// Há algo em edição (o painel de edição toma o lugar da árvore, como nos outros módulos)?
     /// Escolher um componente só o seleciona; restrições, juntas e recursos abrem a edição.
     pub fn editing(&self) -> bool {
-        self.cmd.is_some() || self.props || self.sel.is_some_and(|s| !self.asm.nodes.iter().any(|n| n.id == s) && !(crate::pmi_minibar::open() && self.asm.pmi.iter().any(|p| p.id == s)))
+        self.cmd.is_some() || self.sim_open || self.props || self.sel.is_some_and(|s| !self.asm.nodes.iter().any(|n| n.id == s) && !(crate::pmi_minibar::open() && self.asm.pmi.iter().any(|p| p.id == s)))
     }
 
     /// Componentes das seleções da viewport (sem repetir, na ordem do clique).
@@ -4183,6 +4198,8 @@ pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::re
         return;
     }
     eixos_da_serie(st, ui, rect, cam);
+    st.posicoes_ui.area_3d = Some(rect);
+    crate::asm_estudo::no_3d(st, ui, rect, cam);
     // restrição rápida: dois elementos de peças diferentes escolhidos (opções calculadas depois
     // da viewport; o clique vira ação aplicada lá)
     if !st.view_only && st.cmd.is_none() && app.picks.len() == 2 && st.quick.as_ref().is_some_and(|q| q.0 == app.picks) {
@@ -4214,168 +4231,10 @@ pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::re
 
 // ============================================================== simulação
 
-/// Janela de simulação: leis no tempo, quadros, reprodução, análise de GDL e gráfico de
-/// velocidade/aceleração do componente acompanhado.
+/// Estudo de movimento a cada quadro (B121): o painel fica na coluna da esquerda
+/// ([`crate::asm_estudo::painel`]); aqui só a reprodução e a exportação andam.
 pub fn sim_window(app: &mut App, ctx: &egui::Context) {
-    let Some(st) = app.asm.as_mut() else { return };
-    if !st.sim_open {
-        return;
-    }
-    let mut open = true;
-    let (sem, com) = kin::analyze(&st.asm);
-    let mut compute = false;
-    let mut restore = false;
-    let fechar = egui::Id::unique(("concluir_janela", "asm_ui.rs5"));
-    if ctx.data_mut(|m| m.remove_temp::<bool>(fechar)).unwrap_or(false) {
-        open = false;
-    }
-    crate::paineis::encaixado(ctx, "simulacao", tr("▶ Simulação cinemática"), &mut open, 460., |ui| {
-            if crate::app::done_bar(ui) {
-                ui.ctx().data_mut(|m| m.insert_temp(fechar, true));
-            }
-            let ok = com == 0;
-            ui.label(RichText::new(format!("Mecanismo: {sem} GDL sem comandos · {com} com os comandos")).strong());
-            ui.label(
-                RichText::new(if ok {
-                    tr("✔ cada grau de liberdade tem comando: pode simular")
-                } else if com > 0 {
-                    tr("⚠ faltam comandos: o que sobra fica parado na posição atual")
-                } else {
-                    tr("")
-                })
-                .color(if ok { Color32::from_rgb(120, 210, 130) } else { crate::theme::st_warn() }),
-            );
-            crate::transmissao_ui::cadeia_na_simulacao(ui, st);
-            crate::editor::section(ui, "Comandos (leis no tempo t, em segundos)");
-            for j in st.asm.joints.iter_mut().filter(|j| !j.suppressed) {
-                let (ca, cl) = j.kind.drives();
-                if !(ca || cl) {
-                    continue;
-                }
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new(&j.name).small());
-                    if ca {
-                        let mut on = j.drive_angle.is_some();
-                        if ui.checkbox(&mut on, "°").changed() {
-                            j.drive_angle = on.then(|| "90*t".to_string());
-                        }
-                        if let Some(e) = &mut j.drive_angle {
-                            ui.add(egui::TextEdit::singleline(e).desired_width(110.));
-                        }
-                    }
-                    if cl {
-                        let mut on = j.drive_len.is_some();
-                        if ui.checkbox(&mut on, "mm").changed() {
-                            j.drive_len = on.then(|| "10*t".to_string());
-                        }
-                        if let Some(e) = &mut j.drive_len {
-                            ui.add(egui::TextEdit::singleline(e).desired_width(110.));
-                        }
-                    }
-                });
-            }
-            ui.horizontal(|ui| {
-                ui.label(tr("Duração"));
-                { let __r = ui.add(crate::ui_ext::dv(&mut st.sim_t1).range(0.01..=600.0).suffix(" s").speed(0.1)); crate::ui_ext::wheel(ui, &__r, &mut st.sim_t1); __r };
-                ui.label(tr("Quadros"));
-                { let __r = ui.add(crate::ui_ext::dv(&mut st.sim_steps).range(2..=2000)); crate::ui_ext::wheel(ui, &__r, &mut st.sim_steps); __r };
-                if ui.button(tr("⏺ Calcular quadros")).clicked() {
-                    compute = true;
-                }
-            });
-            if !st.sim_frames.is_empty() {
-                let fails = st.sim_frames.iter().filter(|f| !f.ok).count();
-                ui.label(RichText::new(format!("{} quadros{}", st.sim_frames.len(), if fails > 0 { format!(" · {fails} sem solução (trava ou fim de curso)") } else { String::new() })).small());
-                ui.horizontal(|ui| {
-                    if ui.button(if st.sim_play { "⏸" } else { "▶" }).clicked() {
-                        st.sim_play = !st.sim_play;
-                    }
-                    if ui.button("⏮").clicked() {
-                        st.sim_t = 0.;
-                    }
-                    let t1 = st.sim_t1;
-                    ui.add(crate::ui_ext::slider(&mut st.sim_t, 0.0..=t1).text("t (s)"));
-                    if ui.button(tr("Repor")).on_hover_text(tr("volta às posições de antes da simulação")).clicked() {
-                        restore = true;
-                    }
-                });
-                // gráfico de velocidade e aceleração do componente acompanhado
-                let comps: Vec<(Id, String)> = st.asm.nodes.iter().filter(|n| !matches!(n.kind, NodeKind::Group)).map(|n| (n.id, n.name.clone())).collect();
-                egui::ComboBox::from_id_salt("sim_track").selected_text(st.sim_track.map(|c| st.asm.name_of(c)).unwrap_or_else(|| tr("acompanhar componente…").into())).show_ui(ui, |ui| {
-                    for (id, n) in &comps {
-                        ui.selectable_value(&mut st.sim_track, Some(*id), n);
-                    }
-                });
-                if let Some(c) = st.sim_track {
-                    let k = kin::kinematics_of(&st.sim_frames, c, [0.; 3]);
-                    let vmax = k.iter().map(|x| x.2).fold(1e-9, f64::max);
-                    let amax = k.iter().map(|x| x.3).fold(1e-9, f64::max);
-                    let (r, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 120.), egui::Sense::hover());
-                    let p = ui.painter_at(r);
-                    p.rect_filled(r, 4., ui.visuals().extreme_bg_color);
-                    let to = |t: f64, v: f64, m: f64| egui::pos2(r.left() + (t / st.sim_t1.max(1e-9)) as f32 * r.width(), r.bottom() - 6. - (v / m) as f32 * (r.height() - 12.));
-                    p.add(egui::Shape::line(k.iter().map(|x| to(x.0, x.2, vmax)).collect(), egui::Stroke::new(2., Color32::from_rgb(90, 180, 255))));
-                    p.add(egui::Shape::line(k.iter().map(|x| to(x.0, x.3, amax)).collect(), egui::Stroke::new(1.5, Color32::from_rgb(255, 160, 80))));
-                    let xt = r.left() + (st.sim_t / st.sim_t1.max(1e-9)) as f32 * r.width();
-                    p.line_segment([egui::pos2(xt, r.top()), egui::pos2(xt, r.bottom())], egui::Stroke::new(1., Color32::GRAY));
-                    let now = k.iter().min_by(|a, b| (a.0 - st.sim_t).abs().total_cmp(&(b.0 - st.sim_t).abs()));
-                    if let Some(n) = now {
-                        ui.label(RichText::new(format!("v = {} mm/s (azul, máx {}) · a = {} mm/s² (laranja, máx {})", fmt(n.2), fmt(vmax), fmt(n.3), fmt(amax))).small());
-                    }
-                }
-            } else {
-                ui.label(RichText::new(tr("Defina os comandos e calcule os quadros; depois toque ou arraste o tempo.")).weak().small());
-            }
-        });
-    if compute {
-        if st.sim_rest.is_none() {
-            st.sim_rest = Some(st.asm.nodes.iter().map(|n| (n.id, n.placement)).collect());
-        }
-        let (t1, n) = (st.sim_t1, st.sim_steps);
-        st.sim_frames = kin::simulate(&mut st.asm, 0., t1, n);
-        st.sim_t = 0.;
-        st.sim_play = true;
-    }
-    // reprodução: põe as posições do quadro do tempo atual
-    if !st.sim_frames.is_empty() {
-        if st.sim_play {
-            st.sim_t += ctx.input(|i| i.stable_dt) as f64;
-            if st.sim_t > st.sim_t1 {
-                st.sim_t = 0.;
-            }
-            ctx.request_repaint();
-        }
-        let f = st.sim_frames.iter().min_by(|a, b| (a.t - st.sim_t).abs().total_cmp(&(b.t - st.sim_t).abs())).cloned();
-        if let Some(f) = f {
-            let mut changed = false;
-            for n in &mut st.asm.nodes {
-                if let Some(p) = f.placements.get(&n.id) {
-                    if n.placement != *p {
-                        n.placement = *p;
-                        changed = true;
-                    }
-                }
-            }
-            if changed {
-                st.dirty = true;
-            }
-        }
-    }
-    if restore || !open {
-        if let Some(rest) = st.sim_rest.take() {
-            for (id, p) in rest {
-                if let Some(n) = st.asm.node_mut(id) {
-                    n.placement = p;
-                }
-            }
-            st.dirty = true;
-        }
-        st.sim_frames.clear();
-        st.sim_play = false;
-    }
-    if !open {
-        st.sim_open = false;
-    }
+    crate::asm_estudo::reproducao(app, ctx);
 }
 
 // ============================================================== exibição

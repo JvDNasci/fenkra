@@ -3219,6 +3219,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             self.finish_sketch();
         } else if let Some(st) = self.asm.as_mut().filter(|s| s.cmd.is_some()) {
             st.cmd = None;
+        } else if let Some(st) = self.asm.as_mut().filter(|s| s.sim_open) {
+            crate::asm_estudo::fechar(st);
         } else {
             self.sel = Sel::None;
         }
@@ -8880,7 +8882,7 @@ impl eframe::App for App {
         let comando = if self.settings.bench == crate::settings::Bench::Desenho {
             self.dwg.as_ref().is_some_and(|s| s.em_comando())
         } else if self.in_asm() {
-            self.asm.as_ref().is_some_and(|s| s.cmd.is_some())
+            self.asm.as_ref().is_some_and(|s| s.cmd.is_some() || s.sim_open)
         } else {
             self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some()
         };

@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 /// Cores fixas toleradas por arquivo. Arquivo fora da lista não pode ter nenhuma.
 const CORES_FIXAS: &[(&str, usize)] = &[
     ("app.rs", 42),
-    ("asm_ui.rs", 13),
+    ("asm_ui.rs", 4),
     ("dwg_ui.rs", 12),
     ("editor.rs", 10),
     ("feat_ui.rs", 4),
