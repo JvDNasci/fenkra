@@ -34,6 +34,8 @@ mod demo_folha2d;
 mod estado_doc;
 mod exportar;
 mod visualizacao;
+mod controle_visual;
+mod janelas;
 pub(crate) use visualizacao::abrir_no_navegador;
 mod importar;
 mod features;
@@ -3906,14 +3908,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     if ui.checkbox(&mut arvore, tr("Árvore")).changed() {
                         self.settings.arvore_fechada = !arvore;
                     }
-                    ui.menu_button(tr("Estilo de exibição"), |ui| {
-                        for m in crate::render::DisplayMode::ALL {
-                            ui.radio_value(&mut self.settings.display, m, m.label());
-                        }
+                    // B440: projeção, estilo, esconder/mostrar e ambiente de ocultos num lugar só
+                    ui.menu_button(tr("Controle visual"), |ui| {
+                        let mut acts = vec![];
+                        self.controle_visual(ui, &mut acts);
+                        acts.into_iter().for_each(|a| self.act(a));
                     });
-                    if ui.checkbox(&mut self.hidden_env, tr("Ambiente de ocultos   Shift+H")).changed() {
-                        self.scene_dirty = true;
-                    }
                     ui.menu_button(tr("Barras de ferramentas"), |ui| {
                         for g in crate::settings::Group::ALL {
                             ui.menu_button(g.label(), |ui| {
@@ -3964,6 +3964,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         ui.close();
                     }
                 });
+                // B440: documentos abertos e arranjo das janelas
+                ui.menu_button(tr("Janela"), |ui| self.menu_janela(ui));
                 ui.menu_button(tr("Ajuda"), |ui| {
                     if ui.button(tr("Curso…")).clicked() {
                         self.curso_ui.aberto = true;
@@ -7238,7 +7240,6 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 !roda_aberta && resp.dragged_by(egui::PointerButton::Secondary),
             );
             let sketching = self.sketch.is_some();
-            use crate::settings::NavStyle as N;
             // (girar, mover, zoom arrastando) conforme o estilo de navegação escolhido
             // Ctrl + arrastar com o esquerdo = seleção em caixa (fora do sketch)
             if resp.drag_started_by(egui::PointerButton::Primary) && (ctrl || self.settings.box_mode > 0 || self.selecao_extra.laco_ligado || crate::asm_conjunto::cerca_ligada(&self.asm)) && !sketching {
@@ -7246,16 +7247,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
             let boxing = self.box_start.is_some();
             let left = left && !boxing;
-            let (orbit, pan, zoom_drag) = match self.settings.nav {
-                N::Fenkra => ((left && !shift && !sketching) || mid, right || (shift && left), false),
-                N::MeioGira => (mid && !ctrl, mid && ctrl, false),
-                N::ShiftMeioGira => (mid && shift, mid && !shift, false),
-                N::MeioMove => (mid && right_down, mid && !right_down, false),
-                N::Blender => (mid && !shift && !ctrl, mid && shift, mid && ctrl),
-                N::DireitoGira => (right && !ctrl, (right && ctrl) || mid, false),
-                N::FreeCad => (mid && (left_down || right_down), mid && !left_down && !right_down, false),
-                N::DireitoGiraShift => (right && !shift && !ctrl, right && shift, right && ctrl),
-            };
+            // B440: o perfil só escolhe a ação; a movimentação abaixo é a mesma em todos
+            let gesto = crate::nav_perfil::Gesto { esq: left, meio: mid, dir: right, esq_preso: left_down, dir_preso: right_down, shift, ctrl, sketch: sketching };
+            let acao = crate::nav_perfil::acao(self.settings.nav, gesto);
+            use crate::nav_perfil::Acao;
+            let (orbit, pan, zoom_drag) = (acao == Acao::Girar, acao == Acao::Mover, acao == Acao::Zoom);
             if pan || orbit || zoom_drag || (resp.hovered() && scroll != 0.) {
                 vp.stop_anim();
             }
@@ -7293,7 +7289,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             let ponteiro_na_vista = ctx.input(|i| i.pointer.latest_pos()).filter(|p| rect.contains(*p));
             let arrastando_alca = ctx.dragged_id().is_some_and(|id| id != resp.id) && ponteiro_na_vista.is_some();
             if (resp.hovered() || arrastando_alca) && scroll != 0. {
-                let inv = self.settings.invert_zoom != (self.settings.nav == N::MeioGira);
+                let inv = crate::nav_perfil::roda_invertida(self.settings.nav, self.settings.invert_zoom);
                 let sc = if inv { scroll } else { -scroll };
                 let nova = (vp.camera.dist * (sc * 0.0015).exp()).clamp(0.5, 1e6);
                 crate::curso::anotar("zoom");
@@ -9716,6 +9712,8 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                     }
                 });
                 ui.label(RichText::new(s.nav.help()).weak().small());
+                // B440: o que cada botão faz no perfil, tirado da mesma função que move a câmera
+                crate::nav_perfil::tabela_ui(ui, s.nav, s.invert_zoom);
                 ui.checkbox(&mut s.invert_zoom, tr("inverter o sentido do zoom"));
                 ui.checkbox(&mut s.zoom_no_cursor, tr("zoom em direção ao cursor")).on_hover_text(tr("A roda aproxima o ponto sob o cursor, também enquanto uma alça 3D é arrastada. Desligado, o zoom fecha sobre o centro da vista."));
                 ui.separator();

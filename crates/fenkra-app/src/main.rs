@@ -250,6 +250,8 @@ mod textos_paineis;
 mod textos_layout;
 mod textos_comandos;
 mod textos_proximo;
+mod textos_opcoes;
+mod nav_perfil;
 mod textos_sketch_origem;
 mod textos_arvore_soltura;
 mod dfm_ui;
