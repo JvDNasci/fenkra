@@ -1216,6 +1216,7 @@ pub(crate) fn ativar_peca(app: &mut App, id: Id) {
 fn entrar_na_peca(app: &mut App, id: Id, f: PathBuf, d: Document) {
     let guardado = app.guardar_aberto();
     let Some(st) = app.asm.as_mut() else { return };
+    largar_comandos_armados(st);
     st.doc_de_fora = Some(guardado);
     st.doc_ao_entrar = Some(d.clone());
     st.editing_part = Some((id, f.clone()));
@@ -1233,6 +1234,16 @@ fn entrar_na_peca(app: &mut App, id: Id, f: PathBuf, d: Document) {
     // o que está na tela é da peça que saiu: melhor a vista vazia até o cálculo desta chegar
     app.result = None;
     app.settings.bench = bancada;
+}
+
+/// Comandos que põem algo na vista a cada clique (Inserir peça, item da biblioteca) não atravessam a
+/// ida para a peça ativa nem para o subconjunto: o estado deles ficava guardado com a montagem e
+/// voltava armado, sem perguntar (B450). Quem volta encontra a montagem sem nada na mão.
+pub(crate) fn largar_comandos_armados(st: &mut AsmState) {
+    crate::asm_inserir::encerrar_ao_sair(st);
+    if let Some(c) = st.catalogo.as_mut() {
+        crate::biblioteca_ui::desarmar(c);
+    }
 }
 
 /// Abre a geometria da montagem como o que está ativo: sketches, pontos, eixos e planos se fazem
@@ -1257,6 +1268,7 @@ fn ativar_subconjunto(app: &mut App, id: Id, path: &str) {
     let mut filho = AsmState::new(sub, Some(full));
     filho.vista_contexto = Some(ctx);
     let mut mae = app.asm.take().unwrap();
+    largar_comandos_armados(&mut mae);
     filho.pais = std::mem::take(&mut mae.pais);
     filho.pais.push(mae);
     filho.solve();
