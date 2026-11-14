@@ -22,6 +22,7 @@ type Vars = HashMap<String, f64>;
 pub enum Tipo {
     Boss,
     Snap,
+    Grelha,
 }
 
 /// Comando novo: nasce com as fórmulas da regra quando a peça tem uma.
@@ -30,6 +31,7 @@ pub fn criar(doc: &Document, t: Tipo, sketch: Id) -> FeatureKind {
     FeatureKind::Plastico(match t {
         Tipo::Boss => RecursoPlastico::Boss(Boss::novo(sketch, r)),
         Tipo::Snap => RecursoPlastico::Snap(Snap::novo(sketch, r)),
+        Tipo::Grelha => RecursoPlastico::Grelha(Grelha::novo(sketch, r)),
     })
 }
 
@@ -37,6 +39,7 @@ pub fn icone(p: &RecursoPlastico) -> &'static str {
     match p {
         RecursoPlastico::Boss(_) => "pl_boss",
         RecursoPlastico::Snap(_) => "pl_snap",
+        RecursoPlastico::Grelha(_) => "pl_grelha",
     }
 }
 
@@ -131,6 +134,21 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, idx: usize, p: &mut RecursoPlas
             }
             nota(ui, "Deformação = 1,5 x espessura x gancho / braço², com o braço da raiz até a face de retenção. Acima da admissível a árvore avisa.");
         }
+        RecursoPlastico::Grelha(g) => {
+            section(ui, "Suporte");
+            crate::feat_ui::sketch_pick(ui, "pl_grelha_sk", "Região", doc, idx, &mut g.sketch);
+            nota(ui, "O perfil fechado do sketch, menos a borda, é vazado através da parede; ficam as barras.");
+            check(ui, &mut g.reverse, "para o lado da normal do plano");
+            section(ui, "Parâmetros");
+            expr(ui, "Borda da grelha", &mut g.borda, vars, "mm");
+            expr(ui, "Passo das barras", &mut g.passo, vars, "mm");
+            crate::plastico_ui::campo(ui, regra, "Largura da barra", &mut g.nervura, Grandeza::Nervura, vars, "mm");
+            expr(ui, "Ângulo das barras", &mut g.angulo, vars, "°");
+            check(ui, &mut g.cruzada, "barras cruzadas");
+            section(ui, "Avançado");
+            opcional(ui, "profundidade própria", "Profundidade da grelha", &mut g.profundidade, "2", vars, "mm");
+            nota(ui, "Sem profundidade própria, a grelha atravessa a parede no centro da região e para no vão de dentro.");
+        }
     }
 }
 
@@ -150,6 +168,12 @@ pub fn itens() -> Vec<crate::toolbar::Item> {
         brief: "Snap-fit em balanço",
         advanced: "Viga com gancho em cada linha do sketch, com espessura e filete da raiz vindos da regra plástica; confere a deformação na raiz contra a admissível do material.",
         act: Act::Cmd(Cmd::Plastico(Tipo::Snap)),
+    }, Item {
+        icon: "pl_grelha",
+        name: "Grelha",
+        brief: "Grelha de ventilação",
+        advanced: "Vaza a região fechada do sketch através da parede, com borda cheia e barras paralelas ou cruzadas da largura da nervura da regra plástica.",
+        act: Act::Cmd(Cmd::Plastico(Tipo::Grelha)),
     }]
 }
 
@@ -167,6 +191,18 @@ pub fn seta(r: &fenkra_solidos::RecomputeResult, p: &RecursoPlastico) -> Option<
             let b = glam::Vec3::from(*s.lines.get(1)?);
             Some(((a + b) / 2., if sn.reverse { -n } else { n }, sn.comprimento.clone(), "Comprimento do snap"))
         }
+        RecursoPlastico::Grelha(g) => {
+            // a seta sai do centro da região, na direção perpendicular às barras, e muda o passo
+            if s.lines.is_empty() {
+                return None;
+            }
+            let c = s.lines.iter().fold(glam::Vec3::ZERO, |a, p| a + glam::Vec3::from(*p)) / s.lines.len() as f32;
+            let th = fenkra_core::expr::eval_str(&g.angulo, &HashMap::new()).unwrap_or(0.).to_radians() as f32;
+            let x = glam::Vec3::from(s.frame.x.map(|v| v as f32));
+            let y = n.cross(x);
+            let e = x * th.cos() + y * th.sin();
+            Some((c, n.cross(e), g.passo.clone(), "Passo das barras"))
+        }
     }
 }
 
@@ -174,5 +210,6 @@ pub fn definir_seta(p: &mut RecursoPlastico, valor: String) {
     match p {
         RecursoPlastico::Boss(b) => b.altura = valor,
         RecursoPlastico::Snap(s) => s.comprimento = valor,
+        RecursoPlastico::Grelha(g) => g.passo = valor,
     }
 }

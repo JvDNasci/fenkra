@@ -11,7 +11,7 @@
 //! entram sozinhas quando a altura passa de 3 diâmetros. Tudo é unido ao corpo do coletor.
 
 use super::*;
-use fenkra_core::recurso_plastico::{Boss, RecursoPlastico, Snap, BOSS_NERVURA_DIAMETROS};
+use fenkra_core::recurso_plastico::{Boss, Grelha, RecursoPlastico, Snap, BOSS_NERVURA_DIAMETROS};
 use fenkra_kernel::Seg2;
 
 /// Medidas do boss já avaliadas e conferidas.
@@ -243,6 +243,53 @@ pub fn snap_solido(m: &SnapMedidas, a: V3, b: V3, n: V3, lado: bool) -> Result<S
     face.extrude(dir, larg, 0.).map_err(k)
 }
 
+/// Medidas da grelha já avaliadas.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GrelhaMedidas {
+    pub borda: f64,
+    pub passo: f64,
+    pub nervura: f64,
+    pub angulo: f64,
+    /// `None` = atravessa a parede
+    pub profundidade: Option<f64>,
+}
+
+pub fn grelha_medidas(g: &Grelha, vars: &Vars) -> Result<GrelhaMedidas, String> {
+    let m = GrelhaMedidas {
+        borda: ev(&g.borda, vars, "borda da grelha")?,
+        passo: ev(&g.passo, vars, "passo da grelha")?,
+        nervura: ev(&g.nervura, vars, "barra da grelha")?,
+        angulo: opcional(&g.angulo, vars, "ângulo das barras", 0.)?,
+        profundidade: if g.profundidade.trim().is_empty() { None } else { Some(ev(&g.profundidade, vars, "profundidade da grelha")?) },
+    };
+    if m.borda < 0. {
+        return Err("a borda da grelha não pode ser negativa".into());
+    }
+    if !(m.nervura > 0. && m.passo > m.nervura) {
+        return Err("o passo da grelha precisa ser maior que a largura das barras".into());
+    }
+    if m.profundidade.is_some_and(|p| p <= 0.) {
+        return Err("a profundidade da grelha precisa ser positiva".into());
+    }
+    Ok(m)
+}
+
+/// Barras retas de largura `w`, com eixo a cada `passo` a partir de `c` na direção `f`, ao longo de `e`,
+/// cobrindo um quadrado de meia diagonal `meia`, empurradas por `v`.
+fn barras(c: V3, e: V3, f: V3, passo: f64, w: f64, meia: f64, v: V3) -> Result<Shape, String> {
+    let k = |e: KernelError| e.0;
+    let n = (meia / passo).ceil() as i64 + 1;
+    let mut s = Shape::empty();
+    for i in -n..=n {
+        let o = geo3d::add(c, geo3d::mul(f, i as f64 * passo));
+        let p = |a: f64, b: f64| geo3d::add(o, geo3d::add(geo3d::mul(e, a), geo3d::mul(f, b)));
+        let quad = [p(-meia, -w / 2.), p(meia, -w / 2.), p(meia, w / 2.), p(-meia, w / 2.)];
+        let b = Shape::poly_prism(&quad, v).map_err(k)?;
+        s = if s.is_null() { b } else { s.boolean(&b, Bool::Fuse).map_err(k)? };
+    }
+    Ok(s)
+}
+
 fn cruz(a: V3, b: V3) -> V3 {
     [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]
 }
@@ -279,6 +326,7 @@ impl Ctx<'_> {
         match p {
             RecursoPlastico::Boss(b) => self.plastico_boss(f, b),
             RecursoPlastico::Snap(s) => self.plastico_snap(f, s),
+            RecursoPlastico::Grelha(g) => self.plastico_grelha(f, g),
         }
     }
 
@@ -299,6 +347,48 @@ impl Ctx<'_> {
         let aviso = (m.nervuras == 0 && m.altura > BOSS_NERVURA_DIAMETROS * 2. * m.r_topo + 1e-9)
             .then(|| format!("boss com altura de {:.3} mm passa de {} diâmetros sem nervuras de apoio", m.altura, BOSS_NERVURA_DIAMETROS));
         Ok(aviso)
+    }
+
+    fn plastico_grelha(&mut self, f: &Feature, g: &Grelha) -> Result<Option<String>, String> {
+        let k = |e: KernelError| e.0;
+        let (frame, sk) = self.sketch(g.sketch)?;
+        if sk.loops.is_empty() {
+            return Err("o sketch da grelha precisa de um perfil fechado (a região vazada)".into());
+        }
+        let m = grelha_medidas(g, &self.vars)?;
+        let regiao = Shape::face(&frame, &sk.loops).map_err(k)?;
+        let abertura = if m.borda > 0. { regiao.offset_face(-m.borda).map_err(|e| format!("a borda de {} mm não cabe na região da grelha: {}", m.borda, e.0))? } else { regiao };
+        let (lo, hi) = abertura.bbox().ok_or("região da grelha vazia")?;
+        let c = [0, 1, 2].map(|i| (lo[i] + hi[i]) / 2.);
+        let meia = geo3d::dist(lo, hi) / 2. + m.passo;
+        let dir = if g.reverse { frame.normal } else { frame.normal.map(|x| -x) };
+        // sem profundidade: atravessa a parede no centro da região e para no meio do vão seguinte
+        let prof = match m.profundidade {
+            Some(p) => p,
+            None => {
+                let corpo = self.body(f.target).ok_or("a grelha precisa de um corpo para vazar")?;
+                let mut t: Vec<f64> = corpo.ray_hits(c, dir).map_err(k)?.into_iter().filter(|t| *t > 1e-6).collect();
+                t.sort_by(|a, b| a.total_cmp(b));
+                match t.as_slice() {
+                    [] => return Err("a grelha não encontra a parede na direção do vazado — use 'para o lado da normal'".into()),
+                    [saida] => saida + 1.,
+                    [saida, volta, ..] => (saida + volta) / 2.,
+                }
+            }
+        };
+        // as barras passam um pouco das duas faces do vazado, para a booleana não ter face coincidente
+        let v = geo3d::mul(dir, prof + 2.);
+        let c0 = geo3d::sub(c, dir);
+        let mut tool = abertura.extrude(dir, prof, 0.).map_err(k)?;
+        let th = m.angulo.to_radians();
+        let e = geo3d::add(geo3d::mul(frame.x, th.cos()), geo3d::mul(frame.y(), th.sin()));
+        let fy = cruz(frame.normal, e);
+        tool = tool.boolean(&barras(c0, e, fy, m.passo, m.nervura, meia, v)?, Bool::Cut).map_err(k)?;
+        if g.cruzada {
+            tool = tool.boolean(&barras(c0, fy, e, m.passo, m.nervura, meia, v)?, Bool::Cut).map_err(k)?;
+        }
+        self.apply(f.target, tool, BoolOp::Cut, f.id)?;
+        Ok(None)
     }
 
     fn plastico_snap(&mut self, f: &Feature, s: &Snap) -> Result<Option<String>, String> {

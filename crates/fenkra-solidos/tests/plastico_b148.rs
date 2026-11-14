@@ -305,3 +305,83 @@ fn snap_acima_da_deformacao_admissivel_avisa_na_arvore() {
         s => panic!("esperava erro, veio {s:?}"),
     }
 }
+
+// ------------------------------------------------------------------ grelha
+
+/// Placa 40 x 30 x 5 e a região da grelha de (5, 5) a (35, 25) no plano XY (face de baixo).
+fn placa_grelha(regra: Option<RegraPlastica>) -> (Document, Id) {
+    let mut d = Document::new("placa_grelha");
+    d.plastico = regra;
+    let a = sk_rect(&mut d, XY, [0., 0.], [40., 30.]);
+    d.add_feature(ext(a, BoolOp::Add, "5"));
+    let g = sk_rect(&mut d, XY, [5., 5.], [35., 25.]);
+    (d, g)
+}
+
+fn add_grelha(d: &mut Document, g: Grelha) -> Id {
+    d.add_feature(FeatureKind::Plastico(RecursoPlastico::Grelha(g)))
+}
+
+fn grelha_de(d: &mut Document, id: Id) -> &mut Grelha {
+    match &mut d.features.iter_mut().find(|f| f.id == id).unwrap().kind {
+        FeatureKind::Plastico(RecursoPlastico::Grelha(g)) => g,
+        _ => unreachable!(),
+    }
+}
+
+#[test]
+fn grelha_vaza_a_parede_e_deixa_as_barras_da_regra() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let r = abs();
+    let (mut d, sk) = placa_grelha(Some(r.clone()));
+    let mut g = Grelha::novo(sk, Some(&r));
+    assert_eq!(g.nervura, "plastico_nervura");
+    g.reverse = true;
+    let id = add_grelha(&mut d, g);
+    // abertura 26 x 16 (borda 2); barras de 1,2 com eixo em y = 10, 15 e 20, atravessando os 5 mm
+    let v = 6000. - 5. * 26. * (16. - 3. * 1.2);
+    confere("grelha", &d, &esperado(v, [40., 30., 5.], [0.; 3]));
+    // cruzada: barras também em x = 10, 15, 20, 25 e 30
+    grelha_de(&mut d, id).cruzada = true;
+    confere("grelha cruzada", &d, &esperado(6000. - 5. * (26. - 5. * 1.2) * (16. - 3. * 1.2), [40., 30., 5.], [0.; 3]));
+    // a 90 graus, só as barras em x
+    grelha_de(&mut d, id).cruzada = false;
+    grelha_de(&mut d, id).angulo = "90".into();
+    confere("grelha a 90°", &d, &esperado(6000. - 5. * 16. * (26. - 5. * 1.2), [40., 30., 5.], [0.; 3]));
+    // a parede da regra mais grossa engrossa as barras (0,6 x 3 = 1,8)
+    grelha_de(&mut d, id).angulo = "0".into();
+    d.plastico.as_mut().unwrap().espessura = 3.;
+    confere("barra da regra nova", &d, &esperado(6000. - 5. * 26. * (16. - 3. * 1.8), [40., 30., 5.], [0.; 3]));
+}
+
+#[test]
+fn grelha_com_barra_fora_da_regra_avisa_e_passo_ruim_e_erro() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let mut r = abs();
+    r.avancado = true;
+    let (mut d, sk) = placa_grelha(Some(r));
+    let mut g = Grelha::novo(sk, d.plastico.as_ref());
+    g.reverse = true;
+    g.nervura = "2".into(); // passa de 75% da parede de 2 mm
+    let id = add_grelha(&mut d, g);
+    match recompute(&d).status.get(&id) {
+        Some(Status::Warning(m)) => assert!(m.contains("barra da grelha") && m.contains("chupa"), "{m}"),
+        s => panic!("esperava aviso da regra, veio {s:?}"),
+    }
+    grelha_de(&mut d, id).passo = "1.5".into();
+    match recompute(&d).status.get(&id) {
+        Some(Status::Error(m)) => assert!(m.contains("passo da grelha"), "{m}"),
+        s => panic!("esperava erro, veio {s:?}"),
+    }
+    // vazando para o lado sem material, a grelha não acha a parede
+    grelha_de(&mut d, id).passo = "5".into();
+    grelha_de(&mut d, id).reverse = false;
+    match recompute(&d).status.get(&id) {
+        Some(Status::Error(m)) => assert!(m.contains("não encontra a parede"), "{m}"),
+        s => panic!("esperava erro, veio {s:?}"),
+    }
+}

@@ -17,6 +17,7 @@ use serde::{Deserialize, Serialize};
 pub enum RecursoPlastico {
     Boss(Boss),
     Snap(Snap),
+    Grelha(Grelha),
 }
 
 /// Boss: pino oco para parafuso ou inserto, em cada ponto do sketch, crescendo pela normal do plano.
@@ -126,6 +127,47 @@ impl Snap {
     }
 }
 
+/// Grelha de ventilação: a região fechada do sketch, menos a borda, é vazada através da parede, e
+/// ficam barras (nervuras) paralelas com o passo pedido, opcionalmente cruzadas.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Grelha {
+    /// o perfil fechado deste sketch é a região da grelha
+    pub sketch: Id,
+    /// faixa cheia que fica junto ao contorno, mm
+    pub borda: String,
+    /// distância entre os eixos das barras, mm
+    pub passo: String,
+    /// largura de cada barra
+    pub nervura: String,
+    /// direção das barras no plano, graus a partir do X do sketch
+    #[serde(default)]
+    pub angulo: String,
+    /// barras também na direção perpendicular
+    #[serde(default)]
+    pub cruzada: bool,
+    /// profundidade do vazado; vazio = atravessa a parede (até sair do material)
+    #[serde(default)]
+    pub profundidade: String,
+    /// vaza para o lado da normal do plano (o padrão entra contra a normal)
+    #[serde(default)]
+    pub reverse: bool,
+}
+
+impl Grelha {
+    pub fn novo(sketch: Id, regra: Option<&RegraPlastica>) -> Grelha {
+        Grelha {
+            sketch,
+            borda: "2".into(),
+            passo: "5".into(),
+            nervura: if regra.is_some() { RegraPlastica::formula(Grandeza::Nervura).to_string() } else { "1.2".into() },
+            angulo: "0".into(),
+            cruzada: false,
+            profundidade: String::new(),
+            reverse: false,
+        }
+    }
+}
+
 /// Altura acima da qual o boss pede nervuras, em diâmetros.
 pub const BOSS_NERVURA_DIAMETROS: f64 = 3.;
 
@@ -134,6 +176,7 @@ impl RecursoPlastico {
         match self {
             RecursoPlastico::Boss(_) => "Boss",
             RecursoPlastico::Snap(_) => "Snap-fit",
+            RecursoPlastico::Grelha(_) => "Grelha",
         }
     }
 
@@ -141,6 +184,7 @@ impl RecursoPlastico {
         match self {
             RecursoPlastico::Boss(_) => "⊚",
             RecursoPlastico::Snap(_) => "↾",
+            RecursoPlastico::Grelha(_) => "▥",
         }
     }
 
@@ -148,6 +192,7 @@ impl RecursoPlastico {
         match self {
             RecursoPlastico::Boss(b) => b.sketch,
             RecursoPlastico::Snap(s) => s.sketch,
+            RecursoPlastico::Grelha(g) => g.sketch,
         }
     }
 
@@ -168,6 +213,14 @@ impl RecursoPlastico {
                     exprs(e)
                 }
             }
+            RecursoPlastico::Grelha(g) => {
+                ids(&mut g.sketch);
+                for e in [&mut g.borda, &mut g.passo, &mut g.nervura, &mut g.angulo, &mut g.profundidade] {
+                    if !e.trim().is_empty() {
+                        exprs(e)
+                    }
+                }
+            }
         }
     }
 
@@ -176,6 +229,7 @@ impl RecursoPlastico {
         match self {
             RecursoPlastico::Boss(b) => vec![(Grandeza::Saida, b.saida.as_str(), "saída do boss"), (Grandeza::Raio, b.raio.as_str(), "filete da base"), (Grandeza::Nervura, b.nervura_esp.as_str(), "nervura do boss")],
             RecursoPlastico::Snap(s) => vec![(Grandeza::Parede, s.espessura.as_str(), "espessura do snap"), (Grandeza::Raio, s.raio.as_str(), "filete da raiz")],
+            RecursoPlastico::Grelha(g) => vec![(Grandeza::Nervura, g.nervura.as_str(), "barra da grelha")],
         }
     }
 
@@ -184,6 +238,7 @@ impl RecursoPlastico {
         match self {
             RecursoPlastico::Boss(b) => vec![(Grandeza::Saida, &mut b.saida), (Grandeza::Raio, &mut b.raio), (Grandeza::Nervura, &mut b.nervura_esp)],
             RecursoPlastico::Snap(s) => vec![(Grandeza::Parede, &mut s.espessura), (Grandeza::Raio, &mut s.raio)],
+            RecursoPlastico::Grelha(g) => vec![(Grandeza::Nervura, &mut g.nervura)],
         }
     }
 }

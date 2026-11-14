@@ -67,6 +67,17 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
             sn.gancho = s("1.5");
             Some(DemoPrevia::Comando(FeatureKind::Plastico(recurso_plastico::RecursoPlastico::Snap(sn))))
         }
+        "grelha" => {
+            // grelha na parede lateral maior (y = -20), vazando para dentro
+            caixa(doc);
+            let sk = sketch(doc, PlaneRef::Origin(OriginPlane::XZ), &|data, al| {
+                data.add_rect(&mut &mut *al, [-18., 6.], [18., 24.], false);
+            });
+            let mut g = recurso_plastico::Grelha::novo(sk, doc.plastico.as_ref());
+            g.profundidade = s("30");
+            g.cruzada = true;
+            Some(DemoPrevia::Comando(FeatureKind::Plastico(recurso_plastico::RecursoPlastico::Grelha(g))))
+        }
         _ => None,
     }
 }
