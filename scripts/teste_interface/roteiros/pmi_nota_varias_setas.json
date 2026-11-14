@@ -1,0 +1,16 @@
+{
+  "descricao": "B448, exemplo Placa paramétrica (vista inicial, janela maximizada 1920x1009). Seleciona Placa na árvore, abre Mais › Nota (o menu deve fechar e o painel Nota deve abrir com Texto e Alvos, sem as propriedades da Placa), soma três alvos com Ctrl, Ctrl e Shift (a nota ainda não existe), escreve o texto no painel e cria com OK (no campo de texto, Enter quebra a linha): uma nota com três setas.",
+  "passos": [
+    {"acao": "clicar", "x": 95, "y": 459, "nome": "placa_na_arvore"},
+    {"acao": "clicar", "x": 1629, "y": 65, "nome": "abre_mais", "foto": false},
+    {"acao": "clicar", "x": 1126, "y": 150, "nome": "escolhe_nota", "foto": false},
+    {"acao": "mover", "x": 700, "y": 950, "esperar": 1, "nome": "menu_fechado_painel_nota"},
+    {"acao": "clicar", "x": 700, "y": 500, "mods": ["ctrl"], "nome": "alvo1_ctrl", "foto": false},
+    {"acao": "clicar", "x": 1316, "y": 600, "mods": ["ctrl"], "nome": "alvo2_ctrl", "foto": false},
+    {"acao": "clicar", "x": 1080, "y": 860, "mods": ["shift"], "nome": "alvo3_shift_sem_nota"},
+    {"acao": "clicar", "x": 700, "y": 240, "nome": "campo_texto", "foto": false},
+    {"acao": "digitar", "texto": "Quebrar cantos", "nome": "texto", "foto": false},
+    {"acao": "clicar", "x": 329, "y": 370, "nome": "ok_cria"},
+    {"acao": "mover", "x": 1500, "y": 950, "esperar": 1, "nome": "nota_tres_setas"}
+  ]
+}
