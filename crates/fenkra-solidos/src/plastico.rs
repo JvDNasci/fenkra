@@ -26,6 +26,8 @@ pub fn campos(k: &FeatureKind) -> Vec<(Grandeza, &str, &'static str)> {
         FeatureKind::Stiffener(s) => vec![(Grandeza::Nervura, s.thickness.as_str(), "espessura")],
         FeatureKind::Draft(d) => vec![(Grandeza::Saida, d.angle.as_str(), "ângulo")],
         FeatureKind::Fillet(f) if matches!(f.mode, EdgeMode::Constant) => vec![(Grandeza::Raio, f.value.as_str(), "raio")],
+        // B148: boss, snap-fit, grelha e lip
+        FeatureKind::Plastico(p) => p.campos_regra(),
         _ => vec![],
     }
 }

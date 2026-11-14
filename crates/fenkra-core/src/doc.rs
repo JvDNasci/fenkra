@@ -1859,6 +1859,8 @@ pub enum FeatureKind {
     StructGusset(StructGusset),
     /// Estrutural: cordão de solda entre dois conjuntos de faces (cosmético ou sólido).
     StructWeld(StructWeld),
+    /// B148: recurso de plástico (boss, snap-fit, grelha, lip) seguindo a regra plástica da peça.
+    Plastico(crate::recurso_plastico::RecursoPlastico),
 }
 
 fn niveis_padrao() -> u8 {
@@ -2984,6 +2986,7 @@ impl FeatureKind {
             Mirror(_) => "Espelho",
             Scale(_) => "Escala",
             Stiffener(_) => "Reforço",
+            Plastico(p) => p.nome(),
             Thread(_) => "Rosca",
             Combine(c) => match c.op {
                 BoolOp::Add => "Unir",
@@ -3057,6 +3060,7 @@ impl FeatureKind {
             Mirror(_) => "⇋",
             Scale(_) => "⤢",
             Stiffener(_) => "┃",
+            Plastico(p) => p.simbolo(),
             Thread(_) => "⌇",
             Combine(_) => "⊕",
             SplitBody(_) => "⫽",
@@ -3266,6 +3270,7 @@ impl FeatureKind {
                 exprs(&mut st.thickness);
                 exprs(&mut st.depth)
             }
+            Plastico(p) => p.walk(ids, exprs),
             Thread(t) => {
                 exprs(&mut t.length);
                 exprs(&mut t.start);
@@ -5036,6 +5041,7 @@ impl Document {
             Sweep(w) => vec![w.sketch],
             Loft(l) => l.sections.clone(),
             Stiffener(s) => vec![s.sketch],
+            Plastico(p) => vec![p.sketch()],
             Hole(h) => vec![h.sketch],
             SplitBody(s) => sref(&s.surface).into_iter().collect(),
             ThickSurface(t) => sref(&t.surface).into_iter().collect(),

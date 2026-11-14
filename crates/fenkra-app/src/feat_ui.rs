@@ -16,7 +16,7 @@ type Vars = HashMap<String, f64>;
 pub fn is_shape(k: &FeatureKind) -> bool {
     matches!(
         k,
-        FeatureKind::Extrude(_) | FeatureKind::Revolve(_) | FeatureKind::Hole(_) | FeatureKind::Sweep(_) | FeatureKind::Loft(_) | FeatureKind::Primitive(_) | FeatureKind::Stiffener(_) | FeatureKind::Thickness(_)
+        FeatureKind::Extrude(_) | FeatureKind::Revolve(_) | FeatureKind::Hole(_) | FeatureKind::Sweep(_) | FeatureKind::Loft(_) | FeatureKind::Primitive(_) | FeatureKind::Stiffener(_) | FeatureKind::Thickness(_) | FeatureKind::Plastico(_)
     )
 }
 
@@ -1080,6 +1080,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             crate::editor::check(ui, &mut m.solid, "fechar em sólido quando a malha for fechada");
             ui.label(RichText::new(tr("Cada triângulo vira uma face plana; malhas grandes ficam pesadas (máx. 200 mil triângulos).")).weak().small());
         }
+        FeatureKind::Plastico(p) => crate::plastico_rec_ui::painel(ui, doc, idx, p, vars),
         FeatureKind::LinkedBody(_) => {
             section(ui, "Corpo ligado");
             ui.label(RichText::new(tr("Cópia do corpo de outra peça (link). Nas peças geradas da estrutura o link é congelado: para atualizar, gere a montagem de novo na bancada Estrutural.")).weak().small());

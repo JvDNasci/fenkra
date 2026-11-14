@@ -117,6 +117,7 @@ fn handle_for(app: &App, id: Id) -> Option<Linear> {
                 let n = v3(info.dir);
                 (info.kind == 0).then_some(Linear { base: v3(p), dir: if t.remove { -n } else { n }, k: 1., expr: t.value.clone(), label: "Espessura" })
             }
+            FeatureKind::Plastico(p) => crate::plastico_rec_ui::seta(r, p).map(|(base, dir, expr, label)| Linear { base, dir, k: 1., expr, label }),
             FeatureKind::Stiffener(s) => {
                 let (c, n) = sketch_center(r, s.sketch)?;
                 Some(Linear { base: c, dir: if s.reverse { n } else { -n }, k: 1., expr: s.depth.clone(), label: "Profundidade" })
@@ -333,6 +334,7 @@ fn write_value(app: &mut App, id: Id, value: String) {
                 _ => {}
             },
             FeatureKind::Stiffener(s) => s.depth = value,
+            FeatureKind::Plastico(p) => crate::plastico_rec_ui::definir_seta(p, value),
             FeatureKind::Thickness(t) => t.value = value,
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => o.value = value,
             FeatureKind::Shell(sh) => sh.thickness = value,
