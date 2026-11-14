@@ -1,4 +1,4 @@
-# ADR 0093 — Coluna à esquerda e painéis que reservam espaço
+# ADR 0094 — Coluna à esquerda e painéis que reservam espaço
 
 Estado: aceito (14/11/2026). Revoga a premissa de "painéis livres sobre a viewport" do ADR 0012 e do
 padrão de interface B319. Itens: B433, B434, B435 e B447.

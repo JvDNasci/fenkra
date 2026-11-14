@@ -27,6 +27,12 @@ depurar. Escreva com suas palavras, sem copiar texto ou imagem, e registre as fo
 
 Preencha com o que for aprendido. Cada regra leva o motivo.
 
+- Origem e eixos H/V são entidades fixas do sketch (`SketchData.eixos`, ADR 0092). Ferramenta nova que
+  apaga, move, apara ou lista "as linhas do sketch" filtra `e_eixo` / `e_da_origem`: senão ela age nos
+  eixos ou pega a linha errada (eles entram no fim de `curves`).
+- Posição do sketch por referência usa `LinkSrc` e é resolvida no recálculo (`sketch_posicao.rs`). Referência
+  perdida volta para a automática com aviso, nunca erro: o sketch derrubaria a peça inteira.
+
 ## Como verificar
 
 `cargo test -p <crate> <filtro>`, com documento montado em código conferindo status, volume e caixa
@@ -39,6 +45,9 @@ Consulte solidos, superficies quando a mudança atravessar a fronteira da área.
 ## Armadilhas
 
 Registre aqui erros que se repetiram.
+
+- Pontas a 10 m (eixos) levadas à tela por `cam.project` somem na perspectiva (caem atrás da câmera). Projete
+  pontos perto do meio (`perto_do_meio`) e estenda na tela.
 
 ## Ao terminar
 

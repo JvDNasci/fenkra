@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Barras da tela (B434, ADR 0093): topo fino só com o auxiliar, recursos à direita só com ícones e
+//! Barras da tela (B434, ADR 0094): topo fino só com o auxiliar, recursos à direita só com ícones e
 //! navegação embaixo.
 //!
 //! - **Topo** (cerca de 26 px): menu num ícone, abas de bancada em ícones e, à direita, Propriedades e o

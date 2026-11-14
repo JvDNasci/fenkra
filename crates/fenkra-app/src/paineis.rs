@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Painéis encaixados, que reservam espaço: nenhum fica sobre a peça (ADR 0093, B433). Minimizam,
+//! Painéis encaixados, que reservam espaço: nenhum fica sobre a peça (ADR 0094, B433). Minimizam,
 //! expandem, fecham (e reabrem pelo menu Exibir), mudam de borda arrastados pelo título, mostram a sombra
 //! de onde vão encaixar, redimensionam e guardam tudo por bancada nas preferências.
 //!
@@ -18,7 +18,7 @@
 //! vivos para reabrir os fechados (`menu`).
 //!
 //! Segunda tela (B366): `Encaixe::Janela` leva o painel para uma janela nativa do sistema, o único jeito
-//! de um painel ficar solto. Veja os ADRs 0012 e 0093.
+//! de um painel ficar solto. Veja os ADRs 0012 e 0094.
 
 use crate::settings::{Bench, Settings};
 use crate::theme;
@@ -66,7 +66,7 @@ impl Encaixe {
         matches!(self, Encaixe::Topo | Encaixe::Base)
     }
 
-    /// Borda em que o painel fica de fato (ADR 0093): só direita, base ou janela nativa. O que foi salvo
+    /// Borda em que o painel fica de fato (ADR 0094): só direita, base ou janela nativa. O que foi salvo
     /// como livre ou na esquerda vai para a direita, e o que estava no topo vai para a base.
     pub fn efetivo(self) -> Encaixe {
         match self {
@@ -148,7 +148,7 @@ pub fn dentro(pos: Pos2, tam: Vec2, area: Rect) -> Pos2 {
     egui::pos2(eixo(pos.x, tam.x, area.left(), area.right()), eixo(pos.y, tam.y, area.top(), area.bottom()))
 }
 
-/// Borda de encaixe perto do ponteiro: só a direita e a base recebem painel (ADR 0093).
+/// Borda de encaixe perto do ponteiro: só a direita e a base recebem painel (ADR 0094).
 pub fn borda_perto(p: Pos2, area: Rect) -> Option<Encaixe> {
     if !area.expand(ALCANCE).contains(p) {
         return None;
@@ -658,7 +658,7 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
         posicao.encaixe = Encaixe::Direita;
         posicao.pos = None;
     }
-    // ADR 0093: nenhum painel fica livre; o que não tem borda válida vai para a direita ou a base
+    // ADR 0094: nenhum painel fica livre; o que não tem borda válida vai para a direita ou a base
     posicao.encaixe = posicao.encaixe.efetivo_para(posicao.largura.unwrap_or(cfg.largura));
     // os painéis da base ficam à esquerda da faixa que os da direita reservam
     let area = if posicao.encaixe == Encaixe::Base {
@@ -1010,7 +1010,7 @@ mod tests {
         assert_eq!(borda_perto(pos2(1190., 400.), t), Some(Encaixe::Direita));
         assert_eq!(borda_perto(pos2(700., 795.), t), Some(Encaixe::Base));
         assert_eq!(borda_perto(pos2(700., 400.), t), None);
-        // ADR 0093: o topo é da faixa auxiliar e a esquerda é da coluna da árvore; painel não encaixa lá
+        // ADR 0094: o topo é da faixa auxiliar e a esquerda é da coluna da árvore; painel não encaixa lá
         assert_eq!(borda_perto(pos2(700., 105.), t), None);
         assert_eq!(borda_perto(pos2(10., 400.), t), None);
     }
@@ -1065,7 +1065,7 @@ mod tests {
         assert_eq!(colocar_empilhado(longe, pos2(0., 0.), vec2(300., 100.), tela(), &[(Encaixe::Direita, a)]).x, 1200. - 300. - MARGEM);
         // outra borda não conta
         assert_eq!(colocar_empilhado(na_direita, pos2(0., 0.), t, tela(), &[(Encaixe::Esquerda, a)]), colocar(na_direita, pos2(0., 0.), t, tela()));
-        // posição salva no topo vale como base (ADR 0093) e empilha com os painéis da base
+        // posição salva no topo vale como base (ADR 0094) e empilha com os painéis da base
         let na_base = Rect::from_min_size(pos2(400., 800. - MARGEM - 60.), vec2(500., 60.));
         let sob = Posicao { encaixe: Encaixe::Topo, pos: Some([500., 0.]), ..Default::default() };
         assert_eq!(colocar(sob, pos2(0., 0.), vec2(200., 80.), tela()).y, 800. - MARGEM - 80.);
@@ -1235,7 +1235,7 @@ mod tests {
         }
     }
 
-    /// ADR 0093: o topo e a esquerda não recebem painel. Arrastado até lá, ele não mostra sombra de
+    /// ADR 0094: o topo e a esquerda não recebem painel. Arrastado até lá, ele não mostra sombra de
     /// encaixe e volta para a borda em que estava.
     #[test]
     fn topo_e_esquerda_nao_recebem_painel() {

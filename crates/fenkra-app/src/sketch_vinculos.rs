@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Vínculos da geometria externa e posição do sketch no painel (B97).
+//! Vínculos da geometria externa no painel (B97). A posição do sketch está em `sketch_posicao_ui`.
 //!
 //! Cada vínculo guarda a origem e um estado: em dia, isolado ou quebrado. Trocar o estado não pede
 //! para escolher a origem de novo: isolar só para de acompanhar, e um vínculo quebrado volta sozinho
@@ -94,14 +94,14 @@ enum Acao {
     Soltar(Id),
 }
 
-/// Política, lista de vínculos e posição do sketch.
+/// Política e lista de vínculos.
 pub fn painel(app: &mut App, ui: &mut egui::Ui) {
     let Some(id) = app.sketch.as_ref().map(|e| e.feature) else { return };
     let quebrados: Vec<Id> = app.result.as_ref().and_then(|r| r.sketches.iter().find(|v| v.feature == id)).map(|v| v.link_quebrados.clone()).unwrap_or_default();
     let Some(FeatureKind::Sketch(s)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) else { return };
     let d = &mut s.data;
     let mut acao = None;
-    let titulo = if quebrados.is_empty() { tr("Geometria externa e posição").to_string() } else { format!("{} (→✕ {})", tr("Geometria externa e posição"), quebrados.len()) };
+    let titulo = if quebrados.is_empty() { tr("Geometria externa").to_string() } else { format!("{} (→✕ {})", tr("Geometria externa"), quebrados.len()) };
     egui::CollapsingHeader::new(titulo).id_salt("sk_vinculos").default_open(!quebrados.is_empty() || crate::sketch_demo::abre_vinculos()).show(ui, |ui| {
         ui.label(RichText::new(tr("Política da geometria nova")).strong());
         ui.horizontal_wrapped(|ui| {
@@ -128,20 +128,7 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
                 }
             });
         }
-        ui.add_space(4.);
-        ui.label(RichText::new(tr("Posição do sketch")).strong());
-        ui.horizontal(|ui| {
-            let r = ui.add(crate::ui_ext::dv(&mut d.pos.origem[0]).speed(0.5).prefix(format!("{} ", tr("origem H"))));
-            crate::ui_ext::wheel(ui, &r, &mut d.pos.origem[0]);
-            let r = ui.add(crate::ui_ext::dv(&mut d.pos.origem[1]).speed(0.5).prefix(format!("{} ", tr("origem V"))));
-            crate::ui_ext::wheel(ui, &r, &mut d.pos.origem[1]);
-        });
-        ui.horizontal_wrapped(|ui| {
-            let dica = tr("Trocar ou inverter um eixo só vira a normal: a extrusão passa para o outro lado.");
-            ui.checkbox(&mut d.pos.trocar, tr("Trocar H e V")).on_hover_text(dica);
-            ui.checkbox(&mut d.pos.inverter_h, tr("Inverter H")).on_hover_text(dica);
-            ui.checkbox(&mut d.pos.inverter_v, tr("Inverter V")).on_hover_text(dica);
-        });
+        // a posição do sketch ficou no painel "Origem e eixos" (B437)
     });
     match acao {
         Some(Acao::Politica(l, p)) => {

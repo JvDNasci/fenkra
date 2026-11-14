@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Coluna da esquerda (B433, ADR 0093): a árvore e o painel do comando dividem uma coluna que reserva
+//! Coluna da esquerda (B433, ADR 0094): a árvore e o painel do comando dividem uma coluna que reserva
 //! espaço. A área 3D começa depois dela, então nada cobre a peça.
 //!
 //! Sem comando aberto, a coluna mostra a árvore. Ao abrir um comando, o painel dele toma a coluna e a

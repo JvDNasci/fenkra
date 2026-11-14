@@ -416,7 +416,7 @@ impl Graficos {
 pub const LAYOUT_VERSAO: u8 = 2;
 
 /// O que a pessoa tinha arrumado antes de uma migração de layout. Fica no arquivo de preferências,
-/// para nada se perder e para a disposição antiga poder ser consultada (ADR 0093).
+/// para nada se perder e para a disposição antiga poder ser consultada (ADR 0094).
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LayoutAnterior {
@@ -442,7 +442,7 @@ pub struct Settings {
     /// até que versão do layout estas preferências já foram migradas (`migrar_layout`). O padrão é
     /// zero porque o `config.json` só guarda o que difere do padrão: arquivo antigo não traz a chave
     pub layout_versao: u8,
-    /// a disposição como estava antes da migração de layout, guardada inteira (ADR 0093)
+    /// a disposição como estava antes da migração de layout, guardada inteira (ADR 0094)
     pub layout_anterior: Option<LayoutAnterior>,
     /// últimas opções do preparo de impressão
     #[serde(default)]
@@ -764,7 +764,7 @@ impl Settings {
         self
     }
 
-    /// Leva a disposição salva para o layout atual (ADR 0093), sem perder nada: a disposição antiga
+    /// Leva a disposição salva para o layout atual (ADR 0094), sem perder nada: a disposição antiga
     /// fica inteira em `layout_anterior`, e cada painel guarda tamanho, minimizado e fechado.
     ///
     /// Versão 2 (B434): as barras de comandos que estavam no topo, na lateral esquerda ou flutuando vão
@@ -845,7 +845,7 @@ impl Settings {
     }
 
     /// Onde o grupo fica: na barra dele (recursos à direita; vista e seleção embaixo) ou oculto. Doca
-    /// antiga (topo, lateral esquerda, flutuante) vale como "na barra" (ADR 0093).
+    /// antiga (topo, lateral esquerda, flutuante) vale como "na barra" (ADR 0094).
     pub fn dock(&self, g: Group) -> Dock {
         match self.docks.iter().find(|(x, _)| *x == g).map(|(_, d)| *d) {
             Some(Dock::Oculta) => Dock::Oculta,
@@ -892,7 +892,7 @@ impl Settings {
 mod tests {
     use super::*;
 
-    /// B433/ADR 0093: a disposição salva migra para o layout novo sem perder nada. Painel livre vai
+    /// B433/ADR 0094: a disposição salva migra para o layout novo sem perder nada. Painel livre vai
     /// para a direita, o largo e o do topo vão para a base, janela nativa continua; tamanho, minimizado
     /// e fechado ficam; a largura do painel do comando vira a da coluna; a disposição antiga fica
     /// guardada inteira; migrar duas vezes não muda mais nada.
