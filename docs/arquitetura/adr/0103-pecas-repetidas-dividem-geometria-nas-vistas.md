@@ -43,6 +43,28 @@ A HLR exata do OpenCASCADE segue lenta com superfícies livres: o algoritmo trat
 não divide trabalho entre cópias. Ela continua em processos (ADR 0080), em segundo plano, e fica no disco
 (ADR 0085) para as próximas aberturas.
 
+6. Vistas de conjunto (`.fka`) saem da projeção poligonal do OpenCASCADE (`HLRBRep_PolyAlgo`) com malha fina
+   (desvio 0,0004 do maior lado), uma thread por vista, e essa é a resposta definitiva: não há mais prévia seguida
+   de exata. A exata (processos, ADR 0080) fica sob demanda: `definir_hlr_exata_no_conjunto(true)` ou
+   `FENKRA_HLR_EXATA=1`. Peça única e corte seguem pela exata. O resultado vai ao disco com a chave da vista mais
+   o sufixo `p`; a exata guardada, se existir, vale primeiro.
+   Descartadas: HLR por peça distinta transformada por instância (a oclusão entre peças pede refazer nas
+   sobreposições, o que custa o que se queria evitar, e a poligonal já bate com a exata) e HLR exata em threads
+   (estado global do OpenCASCADE, ver ADR 0080).
+7. O volume do conjunto é medido numa thread ao lado da projeção, no mesmo lote: a legenda o recebe junto das
+   linhas, sem esperar a exata.
+
+## Medição da rodada seguinte (mesmo conjunto, release)
+
+| Etapa | Antes | Depois |
+|---|---|---|
+| Quatro vistas até a resposta definitiva (com volume) | 14 s só a prévia, sem volume; exata 51 a 94 s em processos | 9,8 s, definitivas e com volume |
+| Poligonal pura das quatro vistas (malha incluída) | n/d | 6,1 s (desvio 0,0004 ou 0,0001) |
+
+Cobertura contra a exata (amostras a cada 0,25 mm, grade de 0,5 mm): 100% das linhas visíveis da exata estão na
+poligonal nas quatro vistas, e 99,9 a 100% da poligonal está na exata (conjunto pesado e leve). A poligonal tem
+2 a 3 vezes mais polilinhas (segmentos pela malha), sobre as mesmas arestas.
+
 ## Conferência
 
 - Volume, área e centro do conjunto batem com a soma das peças medidas uma a uma (erro relativo < 1e-6).
@@ -54,4 +76,5 @@ não divide trabalho entre cópias. Ela continua em processos (ADR 0080), em seg
 - Instâncias de uma peça repetida dividem a TShape: quem mudar uma forma no lugar (`BRepTools::Clean`, correção
   de tolerância) muda todas as cópias. As operações de modelagem produzem formas novas, então isso não ocorre
   hoje; a montagem só lê.
-- A legenda mostra o volume da montagem depois da exata, não na prévia.
+- Linhas de conjunto são poligonais por padrão: segmentos retos de malha fina em vez de curvas exatas. Quem precisar da curva exata (exportação, cotas sobre arestas) liga a exata sob demanda.
+- O volume e a projeção rodam juntos sobre a mesma topologia, só leitura; conferido pelos testes do conjunto.

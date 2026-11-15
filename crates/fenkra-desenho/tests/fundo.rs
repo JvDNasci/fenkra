@@ -10,6 +10,9 @@ use fenkra_montagem::{Assembly, NodeKind, Placement};
 use std::time::{Duration, Instant};
 
 fn montar(nome: &str, pecas: usize) -> (std::path::PathBuf, Source) {
+    // estes testes conferem o caminho da projeção exata (prévia, processos, disco); o padrão das
+    // vistas de conjunto é a poligonal (B393, ADR 0103), coberta em conjunto_sintetico_b393.rs
+    fenkra_desenho::source::definir_hlr_exata_no_conjunto(true);
     let dir = std::env::temp_dir().join(format!("{nome}_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("placa.fkp"), fenkra_solidos::example_document().to_json()).unwrap();

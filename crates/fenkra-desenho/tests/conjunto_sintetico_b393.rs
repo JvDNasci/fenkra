@@ -133,6 +133,8 @@ fn pelo_fundo(dir: &std::path::Path, src: &Source, esperar_exata: bool) -> (std:
         if previa.is_none() && ps.iter().all(|p| p.previa || (!p.calculando && !p.lines.is_empty())) {
             previa = Some(t0.elapsed());
             if !esperar_exata {
+                // a legenda tem o volume já na primeira resposta, sem esperar a exata (B393)
+                assert!(m.volume(src) > 0., "volume do conjunto ausente na resposta das vistas");
                 return (previa.unwrap(), None, ps.into_iter().map(|p| p.lines).collect());
             }
         }
@@ -153,8 +155,9 @@ fn previa_das_quatro_vistas_do_conjunto_pesado_em_segundos() {
     }
     let (dir, src) = montar("fenkra_conjunto_pesado_b393", true);
     let (previa, _, linhas) = pelo_fundo(&dir, &src, false);
-    println!("prévia das quatro: {previa:?}; linhas visíveis/ocultas: {:?}", linhas.iter().map(|l| contar(l)).collect::<Vec<_>>());
-    assert!(previa.as_secs() < 60, "prévia em {previa:?}");
+    println!("vistas das quatro: {previa:?}; linhas visíveis/ocultas: {:?}", linhas.iter().map(|l| contar(l)).collect::<Vec<_>>());
+    // B393: a vista de conjunto sai da projeção poligonal fina e já é a definitiva (14 s antes, só a prévia)
+    assert!(previa.as_secs() < 60, "vistas em {previa:?}");
     for (d, l) in VISTAS.iter().zip(&linhas) {
         let (v, o) = contar(l);
         assert!(v > 100 && o == 0, "{d:?}: {v} visíveis, {o} ocultas");
@@ -198,8 +201,16 @@ fn previa_e_exata_do_conjunto_leve_tem_as_mesmas_linhas() {
         assert!(rec > 0.95, "{d:?}: a prévia perdeu linhas da exata ({:.1}% presentes)", rec * 100.);
         assert!(pre > 0.90, "{d:?}: a prévia tem linha que a exata não tem ({:.1}% presentes)", pre * 100.);
     }
-    // a vista final do fundo é a exata: tem linhas em toda vista
+    // a vista final do fundo (poligonal fina, ADR 0103) tem linhas em toda vista e cobre as da exata
     assert!(linhas.iter().all(|l| contar(l).0 > 100));
+    for (d, l) in VISTAS.iter().zip(&linhas) {
+        let a = Axes::of(*d);
+        let ex: L = forma.hlr(a.toward, a.x, false).unwrap();
+        let (rec, pre) = cobertura(&ex, l, &[0u8, 1, 2]);
+        println!("{d:?}: poligonal do fundo: {:.1}% da exata presentes, {:.1}% dela na exata", rec * 100., pre * 100.);
+        assert!(rec >= 0.99, "{d:?}: a poligonal perdeu linhas da exata ({:.1}% presentes)", rec * 100.);
+        assert!(pre >= 0.97, "{d:?}: a poligonal tem linha que a exata não tem ({:.1}%)", pre * 100.);
+    }
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -213,5 +224,41 @@ fn medir_conjunto_pesado_previa_e_exata() {
     let (dir, src) = montar("fenkra_conjunto_medir_b393", true);
     let (previa, exata, _) = pelo_fundo(&dir, &src, true);
     println!("prévia {previa:?}, exata {exata:?}");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Medição manual (B393 resto): HLR poligonal (malha fina) contra a exata no conjunto pesado.
+/// `--ignored --nocapture`. Variável `B393_DESVIOS` = lista de frações do tamanho (padrão 0.0004).
+#[test]
+#[ignore]
+fn medir_poligonal_contra_exata() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let (dir, src) = montar("fenkra_conjunto_poli_b393", true);
+    let (_, exata, linhas_exatas) = pelo_fundo(&dir, &src, true);
+    println!("exata (processos): {exata:?}");
+    let mut m = Models::new(Some(dir.clone()));
+    let forma = m.load(&src).shape.clone().expect("forma");
+    let (lo, hi) = forma.bbox().unwrap();
+    let big = (0..3).map(|k| hi[k] - lo[k]).fold(0., f64::max);
+    let fracoes: Vec<f64> = std::env::var("B393_DESVIOS").ok().map(|s| s.split(',').filter_map(|x| x.parse().ok()).collect()).unwrap_or(vec![0.0004]);
+    for fr in fracoes {
+        let vistas: Vec<_> = VISTAS
+            .iter()
+            .map(|d| {
+                let a = Axes::of(*d);
+                fenkra_kernel::VistaHlr { forma: &forma, para: a.toward, x: a.x, ocultas: false, prioridade_baixa: false }
+            })
+            .collect();
+        let t = Instant::now();
+        let r = fenkra_kernel::hlr_varias(&vistas, Some(big * fr));
+        println!("poligonal desvio {fr}: {:?}", t.elapsed());
+        for ((d, r), ex) in VISTAS.iter().zip(r).zip(&linhas_exatas) {
+            let l = r.expect("poligonal");
+            let (rec, pre) = cobertura(ex, &l, &[0u8, 1, 2]);
+            println!("  {d:?}: linhas {:?} (exata {:?}); da exata na poligonal {:.1}%; da poligonal na exata {:.1}%", contar(&l), contar(ex), rec * 100., pre * 100.);
+        }
+    }
     let _ = std::fs::remove_dir_all(dir);
 }

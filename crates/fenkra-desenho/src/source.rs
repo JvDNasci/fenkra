@@ -749,20 +749,58 @@ impl Models {
             })
             .collect();
         let mut do_disco: Vec<Option<crate::hlr_disco::Linhas>> = chaves.iter().map(|k| k.as_deref().and_then(crate::hlr_disco::ler)).collect();
+        // B393: vistas de conjunto saem da projeção poligonal fina (ADR 0103), a menos que a exata seja pedida
+        let poli = poligonal_no_conjunto() && l.pedidos.iter().all(|p| e_montagem(&p.vista.source.path));
+        let chaves_p: Vec<Option<String>> = chaves.iter().map(|k| k.as_ref().map(|k| format!("{k}p"))).collect();
+        if poli {
+            for (d, k) in do_disco.iter_mut().zip(&chaves_p) {
+                if d.is_none() {
+                    *d = k.as_deref().and_then(crate::hlr_disco::ler);
+                }
+            }
+        }
         // as linhas ocultas contam como um passo a mais na barra
         ctl.somar_total(1);
         let t_hlr = std::time::Instant::now();
         let hlrs: Vec<&Hlr> = etapas.iter().zip(&do_disco).filter_map(|(e, d)| if let (Etapa::Hlr(h), None) = (e, d) { Some(&**h) } else { None }).collect();
         let vistas: Vec<_> = hlrs.iter().map(|h| fenkra_kernel::VistaHlr { forma: &h.alvo, para: h.axes.toward, x: h.axes.x, ocultas: h.hidden, prioridade_baixa: true }).collect();
         // desvio da malha da prévia: fino o bastante para os furos da folha saírem redondos
-        let desvio = l.previa.then(|| hlrs.iter().map(|h| h.tamanho).fold(0., f64::max) * DESVIO_DA_PREVIA);
+        let tamanho = hlrs.iter().map(|h| h.tamanho).fold(0., f64::max);
+        let desvio = (l.previa && !poli).then(|| tamanho * DESVIO_DA_PREVIA);
+        // volume do conjunto em paralelo com a projeção poligonal: a legenda não espera pela exata
+        let a_medir: Vec<(crate::fundo::Fonte, fenkra_kernel::Shape)> = if poli {
+            let mut v: Vec<(crate::fundo::Fonte, fenkra_kernel::Shape)> = vec![];
+            for p in &l.pedidos {
+                let fonte = self.fonte_de(&p.vista.source);
+                if self.volumes.contains_key(&fonte) || v.iter().any(|(f, _)| *f == fonte) {
+                    continue;
+                }
+                if let Some(s) = self.load(&p.vista.source).shape.clone() {
+                    v.push((fonte, s));
+                }
+            }
+            v
+        } else {
+            vec![]
+        };
         // a exata vai um processo por vista; sem o executável, uma depois da outra aqui
         let cancelar = ctl.bandeira();
-        let processos = if desvio.is_none() { crate::hlr_processos::exatas(&vistas, Some(&*cancelar)) } else { None };
+        let processos = if desvio.is_none() && !poli { crate::hlr_processos::exatas(&vistas, Some(&*cancelar)) } else { None };
         // B393: a prévia sai do mapa de profundidade (ADR 0089): a malha da forma é feita uma vez
         // (o malhador já usa várias threads) e cada vista é projetada numa thread, sem OpenCASCADE
         let rapida = desvio.map(|d| linhas_rapidas(&hlrs, d / DESVIO_DA_PREVIA * DESVIO_DA_RAPIDA));
-        let mut linhas = processos.or(rapida).unwrap_or_else(|| fenkra_kernel::hlr_varias(&vistas, desvio)).into_iter();
+        let (mut linhas, medidos) = std::thread::scope(|sc| {
+            let vol = (!a_medir.is_empty()).then(|| {
+                let formas = FormasMedidas(a_medir);
+                sc.spawn(move || formas.medir())
+            });
+            let linhas = if poli { Some(fenkra_kernel::hlr_varias(&vistas, Some(tamanho * DESVIO_DA_POLIGONAL))) } else { None };
+            let linhas = linhas.or(processos).or(rapida).unwrap_or_else(|| fenkra_kernel::hlr_varias(&vistas, desvio));
+            (linhas.into_iter(), vol.and_then(|t| t.join().ok()).unwrap_or_default())
+        });
+        for (f, v) in medidos {
+            self.volumes.insert(f, v);
+        }
         drop(vistas);
         if medir {
             eprintln!("[desenho] lote de {} ({}): preparar+carga {:?}, linhas {:?}", l.pedidos.len(), if l.previa { "prévia" } else { "exata" }, t_hlr - t0, t_hlr.elapsed());
@@ -777,20 +815,22 @@ impl Models {
                 (Etapa::Hlr(h), Some(g)) => concluir(*h, Ok(g)),
                 (Etapa::Hlr(h), None) => {
                     let r = linhas.next().unwrap_or_else(|| Err(fenkra_kernel::KernelError("sem resultado".into())));
-                    if let (false, Ok(v), Some(k)) = (l.previa, &r, &chaves[i]) {
+                    if let (true, Ok(v), Some(k)) = (poli, &r, &chaves_p[i]) {
+                        crate::hlr_disco::gravar(k, v);
+                    } else if let (false, Ok(v), Some(k)) = (l.previa, &r, &chaves[i]) {
                         crate::hlr_disco::gravar(k, v);
                     }
                     concluir(*h, r)
                 }
             };
             // a exata do disco já é a definitiva: não há prévia a refinar
-            proj.previa = l.previa && proj.error.is_none() && !veio_do_disco;
+            proj.previa = l.previa && !poli && proj.error.is_none() && !veio_do_disco;
             let fonte = self.fonte_de(&p.vista.source);
             let guardado = self.volumes.get(&fonte).copied();
             let t_vol = std::time::Instant::now();
             // B393: a prévia não espera pelo volume (segundos no conjunto de peças com superfície livre);
             // ele vem junto da exata, e só os campos da legenda dependem dele
-            let sem_volume = l.previa && guardado.is_none();
+            let sem_volume = l.previa && !poli && guardado.is_none();
             let (arquivos, volume, nomes) = {
                 let ld = self.load(&p.vista.source);
                 (ld.files.clone(), if sem_volume { 0. } else { guardado.unwrap_or_else(|| ld.shape.as_ref().map_or(0., |s| s.mass().volume)) }, ld.piece_names.clone())
@@ -1161,6 +1201,31 @@ const DESVIO_DA_PREVIA: f64 = 0.0004;
 /// malha (0,35 rad) já deixa cada furo com 18 lados ou mais; o desvio linear maior só tira triângulos
 /// das superfícies grandes e curvas, que eram a maior parte do tempo da prévia no kart.
 const DESVIO_DA_RAPIDA: f64 = 0.0015;
+/// Desvio da malha da projeção poligonal das vistas de conjunto (B393, ADR 0103). Cobre 100% das
+/// linhas da exata a 0,5 mm no conjunto sintético; 0,0001 não muda isso e só soma triângulos.
+const DESVIO_DA_POLIGONAL: f64 = 0.0004;
+
+/// Cópias (mesma topologia, contagem de referências atômica) que uma só thread mede enquanto a
+/// outra projeta; o volume só lê a geometria.
+struct FormasMedidas(Vec<(crate::fundo::Fonte, fenkra_kernel::Shape)>);
+unsafe impl Send for FormasMedidas {}
+impl FormasMedidas {
+    fn medir(self) -> Vec<(crate::fundo::Fonte, f64)> {
+        self.0.iter().map(|(f, s)| (f.clone(), s.mass().volume)).collect()
+    }
+}
+
+static EXATA_NO_CONJUNTO: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Pede a projeção exata (processos, minutos) também para as vistas de conjunto, em vez da
+/// poligonal fina (segundos). Também vale `FENKRA_HLR_EXATA=1`.
+pub fn definir_hlr_exata_no_conjunto(exata: bool) {
+    EXATA_NO_CONJUNTO.store(exata, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn poligonal_no_conjunto() -> bool {
+    !EXATA_NO_CONJUNTO.load(std::sync::atomic::Ordering::Relaxed) && std::env::var_os("FENKRA_HLR_EXATA").is_none()
+}
 
 /// Uma vista preparada: pronta ou esperando as linhas ocultas.
 enum Etapa {
