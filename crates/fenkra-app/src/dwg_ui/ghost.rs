@@ -94,6 +94,11 @@ pub(super) fn apply_style(st: &DwgState, t: &mut Drawing, ids: &[Id]) {
     }
 }
 
+/// A folha já tem vista de projeção (a escala automática então herda a delas).
+fn tem_vista_na_folha(st: &DwgState) -> bool {
+    st.d.views.iter().any(|v| v.sheet == st.sheet && matches!(v.kind, ViewKind::Standard(_) | ViewKind::Projected { .. } | ViewKind::Camera { .. } | ViewKind::Flat))
+}
+
 /// As vistas que a ferramenta criaria em `at`, num desenho de rascunho (e os ids delas).
 pub fn new_views(st: &mut DwgState, tool: u8, at: V2) -> Option<(Drawing, Vec<Id>)> {
     let src = st.source.clone()?;
@@ -106,6 +111,13 @@ pub fn new_views(st: &mut DwgState, tool: u8, at: V2) -> Option<(Drawing, Vec<Id
             // superior e isométrica não se encostam, na escala escolhida
             let mut g = scratch(st, 1);
             let gap = fenkra_desenho::conjunto::distancia(&mut g, &mut st.models, sheet, &src, sc, 25.).max(40.);
+            // B473: na escala automática o conjunto inteiro fica dentro da moldura e fora do carimbo
+            let at = if st.scale_auto && !tem_vista_na_folha(st) {
+                let (_, caixa) = options::conjunto_auto(st, &src);
+                fenkra_desenho::conjunto::centro_dentro(at, caixa, fenkra_desenho::conjunto::area_util(&st.d, sheet))
+            } else {
+                at
+            };
             t.add_standard_set(sheet, src, at, sc, gap)
         }
         c::ISO => vec![t.add_view(sheet, src, ViewKind::Standard(Dir::Iso), at, sc)],
