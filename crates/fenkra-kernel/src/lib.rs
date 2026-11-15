@@ -656,6 +656,13 @@ mod imp {
             let (k, p) = x.params();
             b::transform_shape(&self.0, k, &p).map(Shape).map_err(err)
         }
+        /// Como `transformed`, mas translação e rotação só somam uma posição à mesma geometria, sem
+        /// copiá-la: instâncias de uma peça repetida dividem a malha e a memória (B393). Espelho e
+        /// escala copiam.
+        pub fn moved(&self, x: Xform) -> KResult<Shape> {
+            let (k, p) = x.params();
+            b::move_shape(&self.0, k, &p).map(Shape).map_err(err)
+        }
         pub fn transformed_tagged(&self, x: Xform, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
             let (k, p) = x.params();
             let mut out = vec![];
@@ -1342,6 +1349,9 @@ mod imp {
             no()
         }
         pub fn transformed(&self, _: Xform) -> KResult<Shape> {
+            no()
+        }
+        pub fn moved(&self, _: Xform) -> KResult<Shape> {
             no()
         }
         pub fn transformed_tagged(&self, _: Xform, _: &[i32]) -> KResult<(Shape, Vec<i32>)> {

@@ -159,6 +159,18 @@ std::unique_ptr<Shape> transform_shape(const Shape& s, uint8_t kind, rust::Slice
     return guard("transformação", [&] { return wrap(BRepBuilderAPI_Transform(s.s, trsf_of(kind, p), Standard_True).Shape()); });
 }
 
+// B393: leva a forma a outra posição sem copiar a geometria: a nova forma guarda a mesma TShape com
+// uma `TopLoc_Location` a mais. Peças repetidas de uma montagem dividem a geometria e a malha (o
+// malhador faz uma vez por TShape, e a memória e a gravação em disco não crescem com as cópias).
+// Só vale para movimento rígido (translação e rotação); espelho e escala copiam, como sempre.
+std::unique_ptr<Shape> move_shape(const Shape& s, uint8_t kind, rust::Slice<const double> p) {
+    if (kind > 1) return transform_shape(s, kind, p);
+    return guard("movimento", [&] {
+        if (s.s.IsNull()) throw std::runtime_error("forma vazia");
+        return wrap(s.s.Moved(TopLoc_Location(trsf_of(kind, p))));
+    });
+}
+
 std::unique_ptr<Shape> transform_t(const Shape& s, uint8_t kind, rust::Slice<const double> p, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
     return guard("transformação", [&] {
         BRepBuilderAPI_Transform mk(s.s, trsf_of(kind, p), Standard_True);

@@ -66,6 +66,7 @@ std::unique_ptr<Shape> extrude_until(const Shape& face, double dx, double dy, do
 std::unique_ptr<Shape> chamfer_all_t(const Shape& s, double d, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 
 std::unique_ptr<Shape> transform_shape(const Shape& s, uint8_t kind, rust::Slice<const double> p);
+std::unique_ptr<Shape> move_shape(const Shape& s, uint8_t kind, rust::Slice<const double> p);
 std::unique_ptr<Shape> transform_t(const Shape& s, uint8_t kind, rust::Slice<const double> p, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> spine, uint8_t mode);
 std::unique_ptr<Shape> loft_tool(const Shape& sections, bool ruled, bool closed, bool alinhar);

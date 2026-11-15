@@ -1301,6 +1301,12 @@ static void refinar_por_curvatura(std::vector<NoFace>& nos, std::vector<std::arr
 static MeshData malha_da_forma(const TopoDS_Shape& forma, double deflection, double angle, double curv_tol, double k_ref) {
         MeshData m;
         if (forma.IsNull()) return m;
+        // B393: com FENKRA_MEDIR_MALHA, quanto leva cada etapa da malha (stderr)
+        const bool medir = std::getenv("FENKRA_MEDIR_MALHA") != nullptr;
+        const auto t_ini = std::chrono::steady_clock::now();
+        const auto marca = [&](const char* etapa) {
+            if (medir) fprintf(stderr, "[malha] %s: %.1f ms\n", etapa, std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t_ini).count());
+        };
         // mesma ordem de faces usada pelas etiquetas (IndexedMap)
         TopTools_IndexedMapOfShape fmap;
         TopExp::MapShapes(forma, TopAbs_FACE, fmap);
@@ -1320,21 +1326,69 @@ static MeshData malha_da_forma(const TopoDS_Shape& forma, double deflection, dou
         }
         // malha pela metade não pode ir para o cache nem para a tela
         falhar_se_cancelado();
+        marca("BRepMesh");
 
+        struct CalcFace {
+            std::vector<NoFace> nos;
+            std::vector<std::array<int, 3>> tris;
+        };
+        std::map<std::pair<const void*, int>, std::optional<CalcFace>> repetidas;
+        std::map<std::pair<const void*, int>, std::array<double, 8>> assinaturas;
         for (int fi = 1; fi <= fmap.Extent(); ++fi) {
             m.face_ranges.push_back(static_cast<uint32_t>(m.indices.size()));
             const TopoDS_Face& face = TopoDS::Face(fmap(fi));
+            const gp_Trsf mover = face.Location().Transformation();
+            const bool rigido = std::abs(mover.ScaleFactor() - 1.) < 1e-12 && !mover.IsNegative() && !face.TShape().IsNull();
             {
+                // a assinatura (área por integração, projeção do centroide) é o custo maior da face;
+                // a instância repetida leva a da origem por movimento rígido (B393)
                 double sig[8];
-                face_signature(face, sig);
+                if (rigido) {
+                    const auto chave = std::make_pair(face.TShape().get(), int(face.Orientation()));
+                    auto it = assinaturas.find(chave);
+                    if (it == assinaturas.end()) {
+                        std::array<double, 8> base;
+                        face_signature(TopoDS::Face(face.Located(TopLoc_Location())), base.data());
+                        it = assinaturas.emplace(chave, base).first;
+                    }
+                    std::copy(it->second.begin(), it->second.end(), sig);
+                    if (!face.Location().IsIdentity()) {
+                        const int tipo = int(sig[0]);
+                        // plano: normal da face; cilindro, cone e toro: eixo, sem sentido (a maior
+                        // componente fica positiva); esfera e livre não guardam direção
+                        if (tipo == 0 || tipo == 1 || tipo == 2 || tipo == 4) {
+                            gp_Dir n(sig[1], sig[2], sig[3]);
+                            n.Transform(mover);
+                            if (tipo != 0) {
+                                const double ax = std::abs(n.X()), ay = std::abs(n.Y()), az = std::abs(n.Z());
+                                const double big = ax >= ay && ax >= az ? n.X() : (ay >= az ? n.Y() : n.Z());
+                                if (big < 0) n.Reverse();
+                            }
+                            sig[1] = n.X();
+                            sig[2] = n.Y();
+                            sig[3] = n.Z();
+                        }
+                        gp_Pnt q(sig[5], sig[6], sig[7]);
+                        q.Transform(mover);
+                        sig[5] = q.X();
+                        sig[6] = q.Y();
+                        sig[7] = q.Z();
+                    }
+                } else {
+                    face_signature(face, sig);
+                }
                 for (double x : sig) m.face_info.push_back(x);
             }
+            // B393: peças repetidas de uma montagem dividem a TShape (`move_shape`), e normal e
+            // curvatura de cada nó vêm da superfície exata (a parte lenta da malha, 53 s no conjunto de
+            // 84 peças). Calcula-se uma vez na posição de origem e as outras instâncias só levam o
+            // resultado por movimento rígido. Espelho e escala seguem o caminho de sempre.
+            const auto calcular = [&](const TopoDS_Face& face) -> std::optional<CalcFace> {
             TopLoc_Location loc;
             Handle(Poly_Triangulation) tri = BRep_Tool::Triangulation(face, loc);
-            if (tri.IsNull()) continue;
+            if (tri.IsNull()) return std::optional<CalcFace>();
             const gp_Trsf tr = loc.Transformation();
             const bool rev = face.Orientation() == TopAbs_REVERSED;
-            const uint32_t base = static_cast<uint32_t>(m.positions.size() / 3);
             const int nn = tri->NbNodes();
             std::vector<gp_Vec> nrm(nn, gp_Vec(0, 0, 0));
             std::vector<NoFace> nos(nn);
@@ -1379,6 +1433,32 @@ static MeshData malha_da_forma(const TopoDS_Shape& forma, double deflection, dou
                     nos[i].n = nrm[i];
                 }
             }
+            return CalcFace{std::move(nos), std::move(tris)};
+            };
+            std::optional<CalcFace> calc;
+            if (rigido) {
+                const auto chave = std::make_pair(face.TShape().get(), int(face.Orientation()));
+                auto it = repetidas.find(chave);
+                if (it == repetidas.end()) {
+                    // na origem (sem a posição da instância): a face sem `Location`
+                    it = repetidas.emplace(chave, calcular(TopoDS::Face(face.Located(TopLoc_Location())))).first;
+                }
+                if (it->second) {
+                    calc = it->second;
+                    if (!face.Location().IsIdentity()) {
+                        for (NoFace& no : calc->nos) {
+                            no.p.Transform(mover);
+                            no.n.Transform(mover);
+                        }
+                    }
+                }
+            } else {
+                calc = calcular(face);
+            }
+            if (!calc) continue;
+            const uint32_t base = static_cast<uint32_t>(m.positions.size() / 3);
+            const std::vector<NoFace>& nos = calc->nos;
+            const std::vector<std::array<int, 3>>& tris = calc->tris;
             for (const auto& t : tris) {
                 for (int i : t) m.indices.push_back(base + i);
             }
@@ -1395,6 +1475,7 @@ static MeshData malha_da_forma(const TopoDS_Shape& forma, double deflection, dou
             }
         }
 
+        marca("faces");
         TopTools_IndexedMapOfShape edges;
         TopExp::MapShapes(forma, TopAbs_EDGE, edges);
         // arestas de costura (seam) de cilindros/cones: existem na topologia mas não são arestas visuais
@@ -1458,12 +1539,14 @@ static MeshData malha_da_forma(const TopoDS_Shape& forma, double deflection, dou
                 for (double v : {p.X(), p.Y(), p.Z(), q.X(), q.Y(), q.Z()}) m.edges.push_back(float(v));
             }
         }
+        marca("arestas");
         TopTools_IndexedMapOfShape verts;
         TopExp::MapShapes(forma, TopAbs_VERTEX, verts);
         for (int i = 1; i <= verts.Extent(); ++i) {
             gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(verts(i)));
             for (double v : {p.X(), p.Y(), p.Z()}) m.vertices.push_back(float(v));
         }
+        marca("vértices");
         return m;
 }
 
@@ -1493,9 +1576,63 @@ rust::Vec<double> bounding_box(const Shape& s) {
     return v;
 }
 
+// B393: volume, área e centro de uma montagem de peças repetidas. Cada sólido distinto (mesma TShape)
+// é integrado uma vez, na origem, e as instâncias entram pelo centro movido pela posição: o volume e a
+// área não mudam com o movimento. Só vale quando todas as faces estão em sólidos; senão devolve falso e
+// a integração segue o caminho de sempre.
+static bool massa_por_solido(const TopoDS_Shape& forma, double out[5]) {
+    if (!TopExp_Explorer(forma, TopAbs_SOLID).More()) return false;
+    if (TopExp_Explorer(forma, TopAbs_SHELL, TopAbs_SOLID).More() || TopExp_Explorer(forma, TopAbs_FACE, TopAbs_SOLID).More()) return false;
+    struct Base {
+        double volume, area;
+        gp_Pnt centro;
+    };
+    std::map<std::pair<const void*, int>, Base> bases;
+    double vol = 0, area = 0, mx = 0, my = 0, mz = 0;
+    for (TopExp_Explorer ex(forma, TopAbs_SOLID); ex.More(); ex.Next()) {
+        const TopoDS_Shape& so = ex.Current();
+        const gp_Trsf mover = so.Location().Transformation();
+        if (std::abs(mover.ScaleFactor() - 1.) > 1e-12 || mover.IsNegative() || so.TShape().IsNull()) return false;
+        const auto chave = std::make_pair(so.TShape().get(), int(so.Orientation()));
+        auto it = bases.find(chave);
+        if (it == bases.end()) {
+            const TopoDS_Shape local = so.Located(TopLoc_Location());
+            GProp_GProps vp, sp;
+            BRepGProp::VolumeProperties(local, vp);
+            BRepGProp::SurfaceProperties(local, sp);
+            it = bases.emplace(chave, Base{vp.Mass(), sp.Mass(), vp.CentreOfMass()}).first;
+        }
+        gp_Pnt c = it->second.centro;
+        c.Transform(mover);
+        vol += it->second.volume;
+        area += it->second.area;
+        mx += it->second.volume * c.X();
+        my += it->second.volume * c.Y();
+        mz += it->second.volume * c.Z();
+    }
+    out[0] = vol;
+    out[1] = area;
+    // sem volume (sólidos degenerados) o centro ponderado não existe: cai no caminho de sempre
+    if (std::abs(vol) < 1e-12) return false;
+    out[2] = mx / vol;
+    out[3] = my / vol;
+    out[4] = mz / vol;
+    return true;
+}
+
 rust::Vec<double> mass_props(const Shape& s) {
     rust::Vec<double> v;
     if (s.s.IsNull()) return v;
+    {
+        double r[5];
+        // só compensa com várias instâncias; sólido único segue direto
+        TopTools_IndexedMapOfShape sol;
+        TopExp::MapShapes(s.s, TopAbs_SOLID, sol);
+        if (sol.Extent() > 1 && massa_por_solido(s.s, r)) {
+            for (double x : r) v.push_back(x);
+            return v;
+        }
+    }
     GProp_GProps vp, sp;
     BRepGProp::VolumeProperties(s.s, vp);
     BRepGProp::SurfaceProperties(s.s, sp);
