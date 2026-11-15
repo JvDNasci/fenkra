@@ -180,6 +180,17 @@ impl App {
                         }
                     }
                 }
+                // B60: campos de outro comando ou de uma referência da peça (ferramenta da booleana,
+                // plano de término)
+                if !cota {
+                    match g.roteiro.aplicar_doc(&mut self.open.doc, t) {
+                        Ok(m) => mudou |= m,
+                        Err(e) => {
+                            eprintln!("gravar: {e}");
+                            std::process::exit(3);
+                        }
+                    }
+                }
                 if mudou {
                     self.request_recompute();
                     self.scene_dirty = true;
@@ -274,16 +285,19 @@ mod testes {
                 assert_ne!(a, b, "{nome}: o roteiro não move nada");
                 continue;
             }
-            let (_, kind) = casos::montar(&r.caso).unwrap_or_else(|| panic!("{nome}: caso {} desconhecido", r.caso));
+            let (doc, kind) = casos::montar(&r.caso).unwrap_or_else(|| panic!("{nome}: caso {} desconhecido", r.caso));
             let base = serde_json::to_value(&kind).unwrap();
             let mut ini = base.clone();
             let mut fim = base.clone();
             r.aplicar(&mut ini, 0.).unwrap_or_else(|e| panic!("{nome}: {e}"));
             r.aplicar(&mut fim, r.duracao).unwrap_or_else(|e| panic!("{nome}: {e}"));
-            assert_ne!(ini, fim, "{nome}: o roteiro não move nada");
             let k0: FeatureKind = serde_json::from_value(ini).unwrap_or_else(|e| panic!("{nome}: valor inicial inválido: {e}"));
             let k1: FeatureKind = serde_json::from_value(fim).unwrap_or_else(|e| panic!("{nome}: valor final inválido: {e}"));
-            assert_ne!(k0, k1);
+            // B60: o que se move pode ser um comando ou uma referência da peça do caso
+            let (mut d0, mut d1) = (doc.clone(), doc);
+            r.aplicar_doc(&mut d0, 0.).unwrap_or_else(|e| panic!("{nome}: {e}"));
+            r.aplicar_doc(&mut d1, r.duracao).unwrap_or_else(|e| panic!("{nome}: {e}"));
+            assert!(k0 != k1 || d0 != d1, "{nome}: o roteiro não move nada");
         }
     }
 
@@ -292,23 +306,36 @@ mod testes {
     #[test]
     fn cada_roteiro_recalcula_nos_extremos_e_muda_o_volume() {
         let roteiros = midia::ler_roteiros(&midia::pasta_docs().join("roteiros")).expect("roteiros");
+        let mut falhas = vec![];
         for (_, r) in roteiros {
             // as cotas não mudam o sólido (o caso de cota tem teste próprio em `casos`)
             let Some((doc0, kind)) = casos::montar(&r.caso) else { continue };
             let base = serde_json::to_value(&kind).unwrap();
             let mut vol = vec![];
+            let mut centro = vec![];
             for t in [0., r.duracao] {
                 let mut v = base.clone();
                 r.aplicar(&mut v, t).unwrap();
                 let mut d = doc0.clone();
+                r.aplicar_doc(&mut d, t).unwrap();
                 let id = d.add_feature(serde_json::from_value(v).unwrap());
                 let res = fenkra_solidos::recompute(&d);
-                assert!(!matches!(res.status.get(&id), Some(fenkra_solidos::Status::Error(_)) | None), "{}: erro em t={t}: {:?}", r.comando, res.status.get(&id));
+                if matches!(res.status.get(&id), Some(fenkra_solidos::Status::Error(_)) | None) || res.status.values().any(|s| matches!(s, fenkra_solidos::Status::Error(_))) {
+                    falhas.push(format!("{}: erro em t={t}: {:?}", r.comando, res.status));
+                }
                 vol.push(res.bodies.iter().map(|b| b.mass.volume).sum::<f64>());
+                let c = res.bodies.iter().fold([0.; 3], |a, b| [a[0] + b.mass.center[0] * b.mass.volume, a[1] + b.mass.center[1] * b.mass.volume, a[2] + b.mass.center[2] * b.mass.volume]);
+                centro.push(c.map(|x| x / vol.last().unwrap().max(1e-9)));
             }
             // a rosca cosmética não altera o sólido: o comprimento aparece na prévia, não no volume
             let so_cosmetico = r.comando == "rosca";
-            assert!(so_cosmetico || (vol[0] - vol[1]).abs() > 1e-6 * vol[0].abs().max(1.), "{}: volume não muda ({vol:?})", r.comando);
+            // B60: mover e girar o corpo não mudam o volume: a mídia mostra o corpo saindo do lugar
+            let deslocou = (0..3).any(|k| (centro[0][k] - centro[1][k]).abs() > 0.1);
+            if !(so_cosmetico || deslocou || (vol[0] - vol[1]).abs() > 1e-6 * vol[0].abs().max(1.)) {
+                falhas.push(format!("{}: volume e posição não mudam ({vol:?})", r.comando));
+            }
         }
+        // todas as falhas numa mensagem só
+        assert!(falhas.is_empty(), "{falhas:#?}");
     }
 }

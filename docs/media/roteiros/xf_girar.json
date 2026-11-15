@@ -1,0 +1,35 @@
+{
+  "versao": 1,
+  "comando": "xf_girar",
+  "caso": "xf_girar",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    273,
+    0,
+    0,
+    6
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    422,
+    180,
+    540,
+    330
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/MoveBody/xf/Rotate/angle",
+      "de": 0,
+      "ate": 120,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}

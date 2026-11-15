@@ -17,6 +17,36 @@
       "altura": 220
     },
     {
+      "id": "bool_intersecao",
+      "hash_roteiro": "45bff9865b18b1ec",
+      "gif": "saida/bool_intersecao.gif",
+      "bytes_gif": 11964,
+      "hash_gif": "8bea84edef3c99fb",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "bool_subtrair",
+      "hash_roteiro": "d68cf080d5ebc569",
+      "gif": "saida/bool_subtrair.gif",
+      "bytes_gif": 7147,
+      "hash_gif": "5377763c4354f0c9",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "bool_unir",
+      "hash_roteiro": "e29ccac0838f4de2",
+      "gif": "saida/bool_unir.gif",
+      "bytes_gif": 15749,
+      "hash_gif": "12c34d5473be8b91",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
       "id": "casca",
       "hash_roteiro": "cbf1dda3907c455f",
       "gif": "saida/casca.gif",
@@ -37,11 +67,121 @@
       "altura": 220
     },
     {
+      "id": "chanfro_dist_angulo",
+      "hash_roteiro": "2ff87f5995c53932",
+      "gif": "saida/chanfro_dist_angulo.gif",
+      "bytes_gif": 28686,
+      "hash_gif": "d31c1d206bc8b7c6",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "chanfro_dist_dist",
+      "hash_roteiro": "ee7203aaac7432f8",
+      "gif": "saida/chanfro_dist_dist.gif",
+      "bytes_gif": 41301,
+      "hash_gif": "501575e411f0eff6",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "edit_deslocar_face",
+      "hash_roteiro": "550b646a5eb00962",
+      "gif": "saida/edit_deslocar_face.gif",
+      "bytes_gif": 39218,
+      "hash_gif": "dafa6ff8742028d6",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "edit_mover_face",
+      "hash_roteiro": "d0c44da2eba838d6",
+      "gif": "saida/edit_mover_face.gif",
+      "bytes_gif": 51698,
+      "hash_gif": "b0e83c6bff43f7e2",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "edit_raio_filete",
+      "hash_roteiro": "a86f55c84a4ce793",
+      "gif": "saida/edit_raio_filete.gif",
+      "bytes_gif": 23728,
+      "hash_gif": "e97d6d654fbe1e0a",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "escala",
+      "hash_roteiro": "2efb86db1c98a5f6",
+      "gif": "saida/escala.gif",
+      "bytes_gif": 58932,
+      "hash_gif": "9459f1f89652c279",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "espelho",
+      "hash_roteiro": "79f854dc576fac69",
+      "gif": "saida/espelho.gif",
+      "bytes_gif": 23314,
+      "hash_gif": "f8a4f2adb376d42b",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
       "id": "espessura",
       "hash_roteiro": "ca2918cccaa27cc9",
       "gif": "saida/espessura.gif",
       "bytes_gif": 64883,
       "hash_gif": "70babffb9a656929",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "ext_ate_plano",
+      "hash_roteiro": "73b412286c2b58a1",
+      "gif": "saida/ext_ate_plano.gif",
+      "bytes_gif": 56429,
+      "hash_gif": "cccb642aae338a53",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "ext_cego",
+      "hash_roteiro": "ce69aa30cb96b7d3",
+      "gif": "saida/ext_cego.gif",
+      "bytes_gif": 28877,
+      "hash_gif": "49c279f8b2acb48a",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "ext_saida_filete",
+      "hash_roteiro": "f146fba921e9dbb6",
+      "gif": "saida/ext_saida_filete.gif",
+      "bytes_gif": 43904,
+      "hash_gif": "ebe02e0e48c85c04",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "ext_simetrico",
+      "hash_roteiro": "0f5dd4e54fab9aa7",
+      "gif": "saida/ext_simetrico.gif",
+      "bytes_gif": 94738,
+      "hash_gif": "2be9085921d79c5f",
       "quadros": 36,
       "largura": 360,
       "altura": 220
@@ -57,6 +197,56 @@
       "altura": 220
     },
     {
+      "id": "filete_face_face",
+      "hash_roteiro": "b422570516b03e41",
+      "gif": "saida/filete_face_face.gif",
+      "bytes_gif": 30406,
+      "hash_gif": "1351fecc2741c3a0",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "filete_variavel",
+      "hash_roteiro": "ebbc00d7fbb316fa",
+      "gif": "saida/filete_variavel.gif",
+      "bytes_gif": 21727,
+      "hash_gif": "2c345e415661ffb6",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "furo_escareado",
+      "hash_roteiro": "a3a7c92bb096c523",
+      "gif": "saida/furo_escareado.gif",
+      "bytes_gif": 8916,
+      "hash_gif": "f64541189b6423a9",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "furo_rebaixado",
+      "hash_roteiro": "4d428e4a0ec0b853",
+      "gif": "saida/furo_rebaixado.gif",
+      "bytes_gif": 8761,
+      "hash_gif": "75fb5f1dd1adc8fa",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "furo_roscado",
+      "hash_roteiro": "5ea40f450441f32d",
+      "gif": "saida/furo_roscado.gif",
+      "bytes_gif": 9456,
+      "hash_gif": "85aa4622631b1ecd",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
       "id": "furo_simples",
       "hash_roteiro": "d2de6db6c7ad5611",
       "gif": "saida/furo_simples.gif",
@@ -67,11 +257,71 @@
       "altura": 220
     },
     {
+      "id": "padrao_circular",
+      "hash_roteiro": "329d8687a5b54d9a",
+      "gif": "saida/padrao_circular.gif",
+      "bytes_gif": 111132,
+      "hash_gif": "c2e01784fdd496aa",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
       "id": "padrao_linear",
       "hash_roteiro": "1adabf8f2f68dbe4",
       "gif": "saida/padrao_linear.gif",
       "bytes_gif": 76827,
       "hash_gif": "48128af9af24690a",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pl_boss",
+      "hash_roteiro": "0adab66ccae06a91",
+      "gif": "saida/pl_boss.gif",
+      "bytes_gif": 45815,
+      "hash_gif": "4c2aa5b2eb69f115",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pl_grelha",
+      "hash_roteiro": "4e2eb29cbb4bb4e1",
+      "gif": "saida/pl_grelha.gif",
+      "bytes_gif": 38068,
+      "hash_gif": "4b30b2948508da33",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pl_lip",
+      "hash_roteiro": "93fd902d21904156",
+      "gif": "saida/pl_lip.gif",
+      "bytes_gif": 47608,
+      "hash_gif": "24badaf74c7e3b98",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pl_ranhura",
+      "hash_roteiro": "3216d6c816ef2c46",
+      "gif": "saida/pl_ranhura.gif",
+      "bytes_gif": 34258,
+      "hash_gif": "ddeee3ef32a1bc54",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "pl_snap",
+      "hash_roteiro": "4dfd5b0296414804",
+      "gif": "saida/pl_snap.gif",
+      "bytes_gif": 53568,
+      "hash_gif": "6f0300490b787589",
       "quadros": 36,
       "largura": 360,
       "altura": 220
@@ -207,6 +457,26 @@
       "altura": 220
     },
     {
+      "id": "prim_prisma",
+      "hash_roteiro": "901d262e027daa3e",
+      "gif": "saida/prim_prisma.gif",
+      "bytes_gif": 75623,
+      "hash_gif": "8aa5a5bd11ae9ecd",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "ranhura",
+      "hash_roteiro": "122892f7643a3cf5",
+      "gif": "saida/ranhura.gif",
+      "bytes_gif": 25701,
+      "hash_gif": "91e7f47ee4ffeac8",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
       "id": "recorte",
       "hash_roteiro": "8f504e095c50d9b9",
       "gif": "saida/recorte.gif",
@@ -252,6 +522,46 @@
       "gif": "saida/saida.gif",
       "bytes_gif": 32484,
       "hash_gif": "012ed3bb016e933f",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "xf_afinidade",
+      "hash_roteiro": "1254c13856d8fe31",
+      "gif": "saida/xf_afinidade.gif",
+      "bytes_gif": 99609,
+      "hash_gif": "de57199248e0921d",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "xf_girar",
+      "hash_roteiro": "ff8c9cd03d7ec359",
+      "gif": "saida/xf_girar.gif",
+      "bytes_gif": 40515,
+      "hash_gif": "0bffe1a89114e70b",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "xf_mover",
+      "hash_roteiro": "ad9a3b8f9b13aa58",
+      "gif": "saida/xf_mover.gif",
+      "bytes_gif": 59340,
+      "hash_gif": "5b481be8cc2a7970",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
+      "id": "xf_simetria",
+      "hash_roteiro": "3131e1c570836a07",
+      "gif": "saida/xf_simetria.gif",
+      "bytes_gif": 14004,
+      "hash_gif": "57cc14fff92f8f2d",
       "quadros": 36,
       "largura": 360,
       "altura": 220

@@ -1,0 +1,35 @@
+{
+  "versao": 1,
+  "comando": "ranhura",
+  "caso": "ranhura",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    210,
+    0,
+    0,
+    20
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    422,
+    180,
+    540,
+    330
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/Revolve/angle",
+      "de": 20,
+      "ate": 360,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}

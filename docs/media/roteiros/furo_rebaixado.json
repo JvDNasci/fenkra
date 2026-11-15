@@ -1,0 +1,35 @@
+{
+  "versao": 1,
+  "comando": "furo_rebaixado",
+  "caso": "furo_rebaixado",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    262,
+    0,
+    0,
+    12
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    422,
+    180,
+    540,
+    330
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/Hole/kind/Rebaixado/diameter",
+      "de": 8,
+      "ate": 18,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}

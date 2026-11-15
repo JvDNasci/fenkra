@@ -1,0 +1,35 @@
+{
+  "versao": 1,
+  "comando": "pl_snap",
+  "caso": "pl_snap",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    62,
+    210,
+    0,
+    0,
+    8
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    422,
+    180,
+    540,
+    330
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/Plastico/Snap/comprimento",
+      "de": 12,
+      "ate": 24,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}
