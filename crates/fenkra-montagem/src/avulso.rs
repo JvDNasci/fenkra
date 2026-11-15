@@ -365,8 +365,62 @@ pub fn inserir_livre(asm: &mut Assembly, dir: &Path, lib: &Biblioteca, familia: 
 }
 
 /// Põe o item no furo, restrito. Erro com a frase do problema (tamanho que não serve, família
-/// desconhecida, furo cego invertido).
+/// desconhecida, furo cego invertido). Lê a peça do furo num cache só desta chamada; quem já tem um
+/// usa [`inserir_avulso_com`].
 pub fn inserir_avulso(asm: &mut Assembly, dir: &Path, lib: &Biblioteca, p: &ParamAvulso) -> Result<Inserido, String> {
+    inserir_avulso_com(asm, dir, lib, p, &mut PartCache::default())
+}
+
+/// Lado da peça das três restrições do item no furo, com as referências vivas (B461). Antes elas
+/// guardavam só a geometria lida na hora: apagar o furo deixava as três "OK", com o item no ar. Agora
+///
+/// - a concêntrica lembra a parede do furo (`Viva::Face`, pelo nome ou pelo ponto da parede);
+/// - a trava de giro lembra o plano pelo eixo dessa parede (`Viva::PlanoNoEixo`);
+/// - o contato lembra a face da boca (`Viva::Face`), que pode continuar existindo sem o furo.
+///
+/// Quando o furo some, a releitura marca as duas primeiras como perdidas, e a interface oferece
+/// Reancorar. Peça sem forma, ponto publicado ou face que não é a esperada: a referência fica fixa,
+/// como antes.
+fn vivas_no_furo(asm: &mut Assembly, dir: &Path, cache: &mut PartCache, furo: &FuroAlvo, entrada: V3, baixo: V3, restricoes: &[Id]) {
+    let Some(n) = asm.node(furo.comp) else { return };
+    let (NodeKind::Part { path }, pl) = (&n.kind, n.placement) else { return };
+    let Ok(lp) = cache.get(&full_path(Some(dir), path), true) else { return };
+    let (boca, sentido) = (pl.to_local(furo.boca), unit(pl.dir_to_local(furo.dir)));
+    let parede = crate::releitura::parede_do_furo(lp, boca, sentido, furo.diametro, furo.espessura);
+    // face da boca: um ponto logo fora do furo, que precisa cair num plano que passa pela entrada
+    let (entrada_l, fora) = (pl.to_local(entrada), unit(pl.dir_to_local(baixo)));
+    let boca_face = lp.shape.as_ref().and_then(|forma| {
+        let r = any_perp(fora);
+        let alvo: V3 = [0, 1, 2].map(|i| entrada_l[i] + r[i] * (furo.diametro * 0.5 + 0.5));
+        let (q, _) = forma.surface_near(alvo).ok()?;
+        let Geom::Plane { n, .. } = crate::load::geom_at(forma, q).ok()? else { return None };
+        (dot(unit(n), fora) > 0.999 && dot(sub(q, entrada_l), fora).abs() < 0.01).then_some(q)
+    });
+    let boca_viva = boca_face.and_then(|q| crate::releitura::viva_da_face(lp, q).map(|v| (q, v)));
+    for m in asm.mates.iter_mut().filter(|m| restricoes.contains(&m.id) && m.a.comp == furo.comp) {
+        match (&m.kind, m.a.geom, parede) {
+            (MateKind::Coincident { .. }, Geom::Axis { .. }, Some((q, viva))) => {
+                (m.a.pick, m.a.viva) = (Some(q), Some(viva));
+            }
+            (MateKind::Parallel, Geom::Plane { .. }, Some((q, viva))) => {
+                let chave = match viva {
+                    crate::releitura::Viva::Face { chave, .. } => chave,
+                    _ => None,
+                };
+                (m.a.pick, m.a.viva) = (Some(q), Some(crate::releitura::Viva::PlanoNoEixo { chave, eixo: fora, perdida: false }));
+            }
+            (MateKind::Contact, Geom::Plane { .. }, _) => {
+                if let Some((q, viva)) = boca_viva {
+                    (m.a.pick, m.a.viva) = (Some(q), Some(viva));
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+/// [`inserir_avulso`] com o cache de peças de quem chama (a interface já tem a peça do furo lida).
+pub fn inserir_avulso_com(asm: &mut Assembly, dir: &Path, lib: &Biblioteca, p: &ParamAvulso, cache: &mut PartCache) -> Result<Inserido, String> {
     let fam = lib.familia(&p.familia).ok_or_else(|| format!("família desconhecida: {}", p.familia))?;
     let t = fam.tamanho(&p.tamanho).ok_or_else(|| format!("{}: não existe o tamanho {}", fam.norma, p.tamanho))?;
     if !casa(fam, t, &p.furo) {
@@ -391,7 +445,8 @@ pub fn inserir_avulso(asm: &mut Assembly, dir: &Path, lib: &Biblioteca, p: &Para
     concentrico(asm, p.furo.comp, comp, eixo);
     trava_de_giro(asm, p.furo.comp, comp, eixo);
     apoio(asm, p.furo.comp, (entrada, baixo), comp, (entrada, u));
-    let restricoes = asm.mates.iter().map(|m| m.id).filter(|i| !antes.contains(i)).collect();
+    let restricoes: Vec<Id> = asm.mates.iter().map(|m| m.id).filter(|i| !antes.contains(i)).collect();
+    vivas_no_furo(asm, dir, cache, &p.furo, entrada, baixo, &restricoes);
     Ok(Inserido { comp, arquivo, nome, entrada, eixo: u, comprimento, restricoes })
 }
 
@@ -410,6 +465,148 @@ mod tests {
 
     fn param(furo: FuroAlvo, familia: &str, tamanho: &str) -> ParamAvulso {
         ParamAvulso { familia: familia.into(), tamanho: tamanho.into(), comprimento: None, furo, inverter: false, modo: ModoInsercao::Padrao }
+    }
+
+    /// A placa de `placa(10, 6,6)` com um segundo furo, de outro comando, em (15, 0). Sem `primeiro`,
+    /// o furo do centro foi apagado.
+    fn placa_dois_furos(primeiro: bool) -> fenkra_core::Document {
+        use fenkra_core::*;
+        let mut d = placa(10., 6.6, None);
+        let topo = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "10");
+        let mut s = SketchData::default();
+        let mut n = 7_100_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let p = s.add_point(&mut al, 15., 0.);
+        s.add_curve(&mut al, sketch::Curve::Point { p }, false);
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Datum(topo), data: s }));
+        d.add_feature(FeatureKind::Hole(Hole { sketch: sk, kind: HoleKind::Simples, diameter: "6.6".into(), depth: Extent::ThroughAll, thread: None, thread_modeled: false, standard: None, points: vec![], dir: None, reverse: false, tip: None, taper: "0".into(), left_hand: false, extra: Default::default() }));
+        if !primeiro {
+            let i = d.features.iter().position(|f| matches!(f.kind, FeatureKind::Hole(_))).unwrap();
+            d.features.remove(i);
+        }
+        d
+    }
+
+    #[test]
+    fn furo_apagado_deixa_as_restricoes_do_parafuso_perdidas_e_reancorar_leva_ao_outro_furo() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use crate::releitura::{perdida, reancorar, Viva};
+        // B461: com o furo apagado, as três restrições do parafuso seguiam "OK", sem aviso nem Reancorar
+        let dir = pasta("avulso_furo_apagado");
+        let arq = dir.join("placa.fkp");
+        std::fs::write(&arq, placa_dois_furos(true).to_json()).unwrap();
+        let mut a = Assembly::new("Furo apagado");
+        let c = a.add_component("Placa", NodeKind::Part { path: "placa.fkp".into() }, Placement::default(), None);
+        let mut cache = PartCache::default();
+        let furos = furos_do_mundo(&a, Some(&dir), &mut cache, &[]);
+        let f = furos.iter().find(|f| f.boca[0].hypot(f.boca[1]) < 1e-6).expect("furo do centro").clone();
+        let r = inserir_avulso_com(&mut a, &dir, biblioteca::publica(), &param(f, "iso4762", "M6"), &mut cache).unwrap();
+        assert_eq!(r.restricoes.len(), 3);
+        let rep = solve::solve(&mut a);
+        assert!(rep.converged && rep.dof == 0, "{rep:?}");
+        let mate = |a: &Assembly, k: &str| a.mates.iter().find(|m| r.restricoes.contains(&m.id) && m.kind.label() == k).unwrap().clone();
+        let (eixo, trava, contato) = (mate(&a, "Coincidência"), mate(&a, "Paralelismo"), mate(&a, "Contato"));
+        // o lado da placa lembra a parede do furo, o plano pelo eixo dela e a face da boca
+        assert!(matches!(eixo.a.viva, Some(Viva::Face { perdida: false, .. })) && eixo.a.pick.is_some(), "{:?}", eixo.a);
+        assert!(matches!(trava.a.viva, Some(Viva::PlanoNoEixo { perdida: false, .. })), "{:?}", trava.a);
+        assert!(matches!(contato.a.viva, Some(Viva::Face { perdida: false, .. })), "{:?}", contato.a);
+        // vista: placa com dois furos + parafuso no centro
+        let vista = |a: &Assembly, cache: &mut PartCache| {
+            let comp = crate::view::compor(a, Some(&dir), cache, &mut vec![], None).unwrap();
+            let st: Vec<_> = comp.result.status.values().filter(|s| matches!(s, fenkra_solidos::Status::Error(_))).collect();
+            assert!(st.is_empty(), "{st:?}");
+            let vols: Vec<f64> = comp.result.bodies.iter().map(|b| b.mass.volume).collect();
+            (vols, comp.caixas.clone())
+        };
+        let (v0, cx0) = vista(&a, &mut cache);
+        let furo_vol = std::f64::consts::PI * 3.3 * 3.3 * 10.;
+        assert_eq!(v0.len(), 2);
+        assert!((v0[0] - (60. * 60. * 10. - 2. * furo_vol)).abs() < 2., "placa com dois furos: {}", v0[0]);
+        let centro = |c: &([f32; 3], [f32; 3])| [(c.0[0] + c.1[0]) as f64 / 2., (c.0[1] + c.1[1]) as f64 / 2.];
+        let c0 = centro(&cx0[1]);
+        assert!(c0[0].hypot(c0[1]) < 0.05 && cx0[1].1[2] > 10. && cx0[1].0[2] < 10., "parafuso no furo do centro: {:?}", cx0[1]);
+        // releitura sem mudança: nada perdido, nada se mexe
+        crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
+        for (antes, m) in [&eixo, &trava, &contato].into_iter().zip([mate(&a, "Coincidência"), mate(&a, "Paralelismo"), mate(&a, "Contato")]) {
+            assert!(!perdida(&m.a), "{:?}", m.a);
+            assert_eq!(antes.a.geom, m.a.geom, "a mesma parede dá a mesma geometria");
+        }
+        // apagar o furo do centro: a concêntrica e a trava ficam perdidas; o contato segue na face de cima
+        std::fs::write(&arq, placa_dois_furos(false).to_json()).unwrap();
+        cache.forget(&arq);
+        crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
+        let (e1, t1, k1) = (mate(&a, "Coincidência"), mate(&a, "Paralelismo"), mate(&a, "Contato"));
+        assert!(perdida(&e1.a), "a parede do furo sumiu: {:?}", e1.a);
+        assert!(perdida(&t1.a), "o eixo do furo sumiu: {:?}", t1.a);
+        assert!(!perdida(&k1.a), "a face de cima continua: {:?}", k1.a);
+        assert_eq!((e1.a.geom, t1.a.geom), (eixo.a.geom, trava.a.geom), "segue com a última geometria boa");
+        assert!(solve::solve(&mut a).converged);
+        let (v1, cx1) = vista(&a, &mut cache);
+        assert!((v1[0] - v0[0] - furo_vol).abs() < 2., "o furo do centro fechou: {} → {}", v0[0], v1[0]);
+        assert!((0..3).all(|i| (cx1[1].0[i] - cx0[1].0[i]).abs() < 1e-3), "o parafuso fica onde estava: {:?}", cx1[1]);
+        // Reancorar: a parede do outro furo, clicada como a interface clica
+        let (q, viva) = {
+            let lp = cache.get(&arq, true).unwrap();
+            let q = [15. + 3.3, 0., 5.];
+            (q, crate::releitura::viva_da_face(lp, q))
+        };
+        let geom = crate::load::geom_at(cache.get(&arq, true).unwrap().shape.as_ref().unwrap(), q).unwrap();
+        let nova = MateRef { comp: c, geom, pick: Some(q), viva };
+        reancorar(&mut a, e1.id, true, nova).unwrap();
+        reancorar(&mut a, t1.id, true, nova).unwrap();
+        let t2 = mate(&a, "Paralelismo");
+        assert!(matches!(t2.a.viva, Some(Viva::PlanoNoEixo { perdida: false, .. })) && matches!(t2.a.geom, Geom::Plane { .. }), "a trava vira plano pelo eixo novo: {:?}", t2.a);
+        let rep = solve::solve(&mut a);
+        assert!(rep.converged && rep.dof == 0, "{rep:?}");
+        crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
+        assert!(r.restricoes.iter().all(|id| a.mates.iter().find(|m| m.id == *id).is_some_and(|m| !perdida(&m.a))), "nada perdido depois de reancorar");
+        let (v2, cx2) = vista(&a, &mut cache);
+        assert!((v2[1] - v0[1]).abs() < 1e-6, "o mesmo parafuso");
+        let c2 = centro(&cx2[1]);
+        assert!((c2[0] - 15.).abs() < 0.05 && c2[1].abs() < 0.05, "no furo de (15, 0): {:?}", cx2[1]);
+        assert!(((cx2[1].1[2] - cx2[1].0[2]) - (cx0[1].1[2] - cx0[1].0[2])).abs() < 1e-3 && (cx2[1].1[2] - cx0[1].1[2]).abs() < 1e-3, "sem virar nem subir: {:?}", cx2[1]);
+    }
+
+    #[test]
+    fn furo_rebaixado_apagado_tambem_avisa() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use crate::releitura::{perdida, Viva};
+        // a placa de exemplo tem rebaixo de 6,4 numa placa de 10: no meio da espessura fica a boca larga,
+        // e a parede do furo de passagem só aparece mais fundo
+        let dir = pasta("avulso_rebaixo_apagado");
+        let arq = dir.join("placa.fkp");
+        let rebaixo = fenkra_core::HoleKind::Rebaixado { diameter: "11".into(), depth: "6.4".into() };
+        let doc = crate::fixadores::tests::placa_com_boca(10., 6.6, None, rebaixo);
+        std::fs::write(&arq, doc.to_json()).unwrap();
+        let mut a = Assembly::new("Rebaixo");
+        a.add_component("Placa", NodeKind::Part { path: "placa.fkp".into() }, Placement::default(), None);
+        let mut cache = PartCache::default();
+        let furos = furos_do_mundo(&a, Some(&dir), &mut cache, &[]);
+        let f = furos.first().expect("o furo rebaixado").clone();
+        let r = inserir_avulso_com(&mut a, &dir, biblioteca::publica(), &param(f, "iso4762", "M6"), &mut cache).unwrap();
+        let rep = solve::solve(&mut a);
+        assert!(rep.converged && rep.dof == 0, "{rep:?}");
+        let eixo = |a: &Assembly| a.mates.iter().find(|m| r.restricoes.contains(&m.id) && matches!(m.kind, MateKind::Coincident { .. })).unwrap().a;
+        assert!(matches!(eixo(&a).viva, Some(Viva::Face { perdida: false, .. })), "{:?}", eixo(&a));
+        let comp = crate::view::compor(&a, Some(&dir), &mut cache, &mut vec![], None).unwrap();
+        assert_eq!(comp.result.bodies.len(), 2);
+        let (lo, hi) = comp.caixas[1];
+        assert!(((lo[0] + hi[0]) / 2.).abs() < 0.05 && ((lo[1] + hi[1]) / 2.).abs() < 0.05, "no eixo do furo: {lo:?} {hi:?}");
+        let mut sem = doc.clone();
+        sem.features.retain(|x| !matches!(x.kind, fenkra_core::FeatureKind::Hole(_)));
+        std::fs::write(&arq, sem.to_json()).unwrap();
+        cache.forget(&arq);
+        crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
+        assert!(perdida(&eixo(&a)), "{:?}", eixo(&a));
+        let macica: f64 = crate::view::compor(&a, Some(&dir), &mut cache, &mut vec![], None).unwrap().result.bodies[0].mass.volume;
+        assert!((macica - 60. * 60. * 10.).abs() < 1., "placa sem furo: {macica}");
     }
 
     #[test]

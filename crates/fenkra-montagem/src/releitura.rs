@@ -55,6 +55,16 @@ pub enum Viva {
         #[serde(default)]
         perdida: bool,
     },
+    /// plano que contém o eixo de uma face de revolução, como a parede de um furo (B461): a trava de
+    /// giro do item da biblioteca posto no furo. A face se acha como em `Face` (o nome, ou o ponto
+    /// clicado em `MateRef::pick`); o plano gira e anda com o eixo dela. `eixo` é o sentido lido por
+    /// último, que o plano sozinho não guarda. `perdida`: a face sumiu, o furo não existe mais
+    PlanoNoEixo {
+        chave: Option<FaceKey>,
+        eixo: V3,
+        #[serde(default)]
+        perdida: bool,
+    },
 }
 
 /// Distância do ponto clicado até a face para ele ainda contar como "sobre a face" (mm). Cobre o
@@ -63,7 +73,53 @@ const NA_FACE: f64 = 0.5;
 
 /// A referência perdeu a face ou a aresta em que nasceu?
 pub fn perdida(r: &MateRef) -> bool {
-    matches!(r.viva, Some(Viva::Face { perdida: true, .. } | Viva::ArestaNomeada { perdida: true, .. }))
+    matches!(r.viva, Some(Viva::Face { perdida: true, .. } | Viva::ArestaNomeada { perdida: true, .. } | Viva::PlanoNoEixo { perdida: true, .. }))
+}
+
+/// Plano pelo eixo (`o`, `d`) com a normal mais perto de `n`: a normal perde a parte ao longo do eixo,
+/// e o ponto é o pé de `p` no eixo.
+fn plano_pelo_eixo(p: V3, n: V3, o: V3, d: V3) -> Geom {
+    let d = unit(d);
+    let resto = sub(n, d.map(|x| x * dot(n, d)));
+    let n = if norm(resto) < 1e-9 { any_perp(d) } else { unit(resto) };
+    let t = dot(sub(p, o), d);
+    Geom::Plane { p: [0, 1, 2].map(|i| o[i] + d[i] * t), n }
+}
+
+/// Parede do furo de boca `boca`, sentido `dir`, diâmetro e espessura dados (sistema da peça), para
+/// as restrições de um item posto nele se reencontrarem (B461). Devolve um ponto da parede e a
+/// referência viva dela, só quando a face ali é mesmo um cilindro no eixo do furo; senão `None`, e a
+/// restrição fica com a geometria fixa, como antes.
+pub fn parede_do_furo(lp: &LoadedPart, boca: V3, dir: V3, diametro: f64, espessura: f64) -> Option<(V3, Viva)> {
+    if diametro <= 0. || espessura <= 0. {
+        return None;
+    }
+    let forma = lp.shape.as_ref()?;
+    let d = unit(dir);
+    let r = any_perp(d);
+    // várias profundidades, da funda para a rasa: no furo rebaixado ou escareado, a metade de cima é a
+    // boca larga, e a parede do furo de passagem fica embaixo
+    let mut coaxial = None;
+    for t in [0.75, 0.5, 0.9, 0.3, 0.1] {
+        let alvo: V3 = [0, 1, 2].map(|i| boca[i] + d[i] * espessura * t + r[i] * diametro * 0.5);
+        // o diâmetro da tabela pode ser o nominal da rosca: o ponto vai até a superfície de verdade
+        let Ok((q, _)) = forma.surface_near(alvo) else { continue };
+        let Ok(Geom::Axis { p: o, d: e }) = geom_at(forma, q) else { continue };
+        let e = unit(e);
+        let ate_eixo = |p: V3| {
+            let v = sub(p, o);
+            norm(sub(v, e.map(|x| x * dot(v, e))))
+        };
+        if norm(cross(e, d)) > 1e-3 || ate_eixo(boca) > 0.05 {
+            continue;
+        }
+        if (ate_eixo(q) - diametro * 0.5).abs() < 0.3 {
+            return Some((q, viva_da_face(lp, q)?));
+        }
+        coaxial = coaxial.or(Some(q));
+    }
+    let q = coaxial?;
+    Some((q, viva_da_face(lp, q)?))
 }
 
 /// Troca o elemento A (`lado_a`) ou B da restrição por `nova`, escolhida de novo pelo usuário na
@@ -74,6 +130,20 @@ pub fn reancorar(a: &mut Assembly, mate: Id, lado_a: bool, nova: MateRef) -> Res
     if nova.comp != velha.comp {
         return Err("escolha o elemento novo na mesma peça".into());
     }
+    // trava de giro de um item no furo (B461): clicar na parede do furo novo põe o plano no eixo dele
+    let nova = match (velha.viva, velha.geom, nova.geom) {
+        (Some(Viva::PlanoNoEixo { .. }), Geom::Plane { p, n }, Geom::Axis { p: o, d }) => {
+            let chave = match nova.viva {
+                Some(Viva::Face { chave, .. }) => chave,
+                _ => None,
+            };
+            MateRef { comp: nova.comp, geom: plano_pelo_eixo(p, n, o, d), pick: nova.pick, viva: Some(Viva::PlanoNoEixo { chave, eixo: unit(d), perdida: false }) }
+        }
+        // eixo novo no sentido do velho: a parede de um furo não tem sentido próprio, e o item preso
+        // nela viraria de ponta-cabeça
+        (_, Geom::Axis { d: d0, .. }, Geom::Axis { p, d }) if dot(d, d0) < 0. => MateRef { geom: Geom::Axis { p, d: d.map(|x| -x) }, ..nova },
+        _ => nova,
+    };
     let (ga, gb) = if lado_a { (nova.geom, outra.geom) } else { (outra.geom, nova.geom) };
     if !par_valido(&m.kind, &ga, &gb) {
         return Err("este elemento não serve para esta restrição".into());
@@ -178,6 +248,17 @@ fn geom_da_face(lp: &LoadedPart, bi: usize, j: usize, antes: &Geom) -> Option<Ge
             let s = dot(sub(p0, p), n);
             Geom::Plane { p: if s.abs() < 1e-9 { p0 } else { [0, 1, 2].map(|i| p0[i] - n[i] * s) }, n }
         }
+        // eixo de cilindro não tem sentido próprio: fica o de antes, senão a peça presa nele vira de
+        // ponta-cabeça. O ponto é o de antes levado até o eixo novo, pelo mesmo motivo do plano
+        Geom::Axis { p: o, d } => match *antes {
+            Geom::Axis { p: p0, d: d0 } => {
+                let d = if dot(d, d0) < 0. { d.map(|x| -x) } else { d };
+                let t = dot(sub(p0, o), d);
+                let pe: V3 = [0, 1, 2].map(|i| o[i] + d[i] * t);
+                Geom::Axis { p: if norm(sub(pe, p0)) < 1e-9 { p0 } else { pe }, d }
+            }
+            _ => Geom::Axis { p: o, d },
+        },
         g => g,
     })
 }
@@ -233,6 +314,16 @@ fn ler_face(r: &MateRef, lp: &LoadedPart, chave: Option<FaceKey>) -> Option<Lida
     let m = &lp.result.bodies[bi].mesh;
     let pick = r.pick.filter(|q| distancia_a_face(m, j, *q) > NA_FACE).and_then(|_| m.face_info.get(j).map(|i| i.point));
     Some((g, Some(Viva::Face { chave, perdida: false }), pick))
+}
+
+/// Leitura do plano pelo eixo da face de revolução: a face se lê como uma referência de eixo comum,
+/// e o plano segue o eixo achado. Face sumida ou que deixou de ser de revolução: perdida.
+fn ler_plano_no_eixo(r: &MateRef, lp: &LoadedPart, chave: Option<FaceKey>, eixo: V3) -> Option<Lida> {
+    let Geom::Plane { p, n } = r.geom else { return None };
+    let perdeu = Some((r.geom, Some(Viva::PlanoNoEixo { chave, eixo, perdida: true }), None));
+    let parede = MateRef { comp: r.comp, geom: Geom::Axis { p, d: eixo }, pick: r.pick, viva: None };
+    let Some((Geom::Axis { p: o, d }, Some(Viva::Face { chave: nova, perdida: false }), pick)) = ler_face(&parede, lp, chave) else { return perdeu };
+    Some((plano_pelo_eixo(p, n, o, d), Some(Viva::PlanoNoEixo { chave: nova, eixo: d, perdida: false }), pick))
 }
 
 /// Leitura da aresta entre duas faces nomeadas.
@@ -322,6 +413,7 @@ fn ler_na_peca(r: &MateRef, lp: &LoadedPart) -> Option<Lida> {
         Some(Viva::Vertice) => Some((Geom::Point(vertice_perto(&ms, p)?), r.viva, None)),
         Some(Viva::Encaixe { .. } | Viva::Geometria { .. }) => None,
         Some(Viva::Face { chave, .. }) => ler_face(r, lp, chave),
+        Some(Viva::PlanoNoEixo { chave, eixo, .. }) => ler_plano_no_eixo(r, lp, chave, eixo),
         // arquivo antigo, só com o ponto clicado: a primeira leitura já guarda o nome da face
         None => ler_face(r, lp, None),
     }

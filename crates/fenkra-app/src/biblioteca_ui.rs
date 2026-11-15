@@ -1175,7 +1175,7 @@ fn quadro_da_insercao(st: &mut crate::asm_ui::AsmState, est: &mut Estado, ui: &m
     let modificada = st.modified;
     st.push_undo();
     let p = ParamAvulso { familia: fam.id.clone(), tamanho: t.designacao.clone(), comprimento: comp, furo, inverter: est.inverter, modo: est.modo };
-    match avulso::inserir_avulso(&mut st.asm, &dir, biblioteca::publica(), &p) {
+    match avulso::inserir_avulso_com(&mut st.asm, &dir, biblioteca::publica(), &p, &mut st.cache) {
         Ok(r) => {
             st.solve();
             est.furos = None;
@@ -1399,6 +1399,28 @@ pub fn texto_candidato(c: &Candidato) -> (String, Color32) {
     }
 }
 
+/// `FENKRA_DEMO_ASM=biblioteca_furo_perdido` (B461): M6 no primeiro furo da placa base; depois os furos
+/// saem da peça e a concêntrica do parafuso fica selecionada, marcada como perdida.
+fn demo_furo_perdido(st: &mut crate::asm_ui::AsmState) {
+    let Some(dir) = st.dir() else { return };
+    let (Some(fam), Some(t)) = (biblioteca::familia("iso4762"), biblioteca::familia("iso4762").and_then(|x| x.tamanho("M6"))) else { return };
+    let furos = avulso::furos_do_mundo(&st.asm, Some(&dir), &mut st.cache, &[]);
+    let Some(f) = furos.into_iter().find(|f| avulso::casa(fam, t, f)) else { return };
+    let p = ParamAvulso { familia: "iso4762".into(), tamanho: "M6".into(), comprimento: None, furo: f, inverter: false, modo: ModoInsercao::Padrao };
+    let Ok(r) = avulso::inserir_avulso_com(&mut st.asm, &dir, biblioteca::publica(), &p, &mut st.cache) else { return };
+    st.solve();
+    // a peça perde os furos, como no Editar a peça › apagar › salvar › voltar
+    let arq = dir.join("placa.fkp");
+    let Some(mut doc) = std::fs::read_to_string(&arq).ok().and_then(|j| fenkra_core::Document::from_json(&j).ok()) else { return };
+    doc.features.retain(|x| !matches!(x.kind, fenkra_core::FeatureKind::Hole(_)));
+    let _ = std::fs::write(&arq, doc.to_json());
+    st.cache.forget(&arq);
+    fenkra_montagem::load::refresh_refs(&mut st.asm, &mut st.cache, Some(&dir));
+    st.solve();
+    st.sel = st.asm.mates.iter().find(|m| r.restricoes.contains(&m.id) && matches!(m.kind, fenkra_montagem::MateKind::Coincident { .. })).map(|m| m.id);
+    st.dirty = true;
+}
+
 /// `FENKRA_DEMO_ASM=biblioteca[_inserido|_ponto|_solto]`: o painel aberto com o parafuso M6 escolhido.
 /// Use `FENKRA_DEMO_PAINEL=rolar:x,y,dy` para rolar o painel. `_inserido` já traz um item em cada modo
 /// (furo, ponto e solto); `_ponto` e `_solto` armam o modo com o cursor parado, para ver o fantasma.
@@ -1427,7 +1449,7 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
                 if let (Some(fam), Some(t)) = (fam, t) {
                     if let Some(f) = furos.into_iter().find(|f| avulso::casa(fam, t, f)) {
                         let p = ParamAvulso { familia: "iso4762".into(), tamanho: "M6".into(), comprimento: None, furo: f, inverter: false, modo: est.modo };
-                        let _ = avulso::inserir_avulso(&mut st.asm, &dir, lib, &p);
+                        let _ = avulso::inserir_avulso_com(&mut st.asm, &dir, lib, &p, &mut st.cache);
                     }
                 }
                 // em ponto: no alto da primeira peça, de cima para baixo
@@ -1440,6 +1462,12 @@ pub fn demo(st: &mut crate::asm_ui::AsmState, nome: &str) {
                 st.solve();
                 st.dirty = true;
             }
+        }
+        // B461: parafuso posto no furo e o furo apagado na peça: a concêntrica fica selecionada, com a
+        // referência perdida e o Reancorar à vista
+        "biblioteca_furo_perdido" => {
+            demo_furo_perdido(st);
+            return;
         }
         // B396: ficha do rolamento 6010 aberta e os dois do kart (50×80 e 25×47) soltos ao lado
         "biblioteca_rolamento" => {
