@@ -1815,7 +1815,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let fade = if ready { (1. - (el - min_time) / 0.25).clamp(0., 1.) } else { 1. };
         egui::CentralPanel::default().frame(egui::Frame::NONE).show(root, |ui| {
             let rect = ui.max_rect();
-            paint_backdrop(ui.painter(), rect, el, false);
+            // B455: o mesmo fundo calmo da tela inicial, parado
+            crate::tela_inicial::fundo(ui.painter(), rect, &crate::inicio_tema::Paleta::atual(), 0.);
             let painter = ui.painter().with_clip_rect(rect);
             let c = rect.center() - egui::vec2(0., 40.);
             let appear = ease_out((el / 0.6).min(1.));
@@ -1855,161 +1856,39 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         true
     }
 
-    /// Tela inicial: marca, começar, recentes (arquivos e projetos) e galeria de exemplos com prévia 3D girando.
+    /// Tela inicial (B455): desenho em `tela_inicial.rs`; aqui só se executa a escolha da pessoa.
     fn start_screen(&mut self, root: &mut egui::Ui) {
+        use crate::tela_inicial::Escolha;
         let mut action: Option<u8> = None;
         let mut recent_open: Option<String> = None;
         let mut file_open: Option<String> = None;
         let mut example: Option<usize> = None;
-        let pal = crate::inicio_tema::Paleta::atual();
-        let accent = pal.destaque;
-        // B335: movimento contínuo só sem "reduzir movimento", sem modo leve e com animações ligadas
-        let animar = crate::inicio_tema::movimento_permitido(self.settings.animacoes, self.settings.acessibilidade.reduzir_movimento, self.settings.modo_leve);
+        let ligada = crate::tela_inicial::animacao_ligada(crate::tela_inicial::contexto_de(&self.settings));
         let (now, dt) = root.ctx().input(|i| (i.time, i.stable_dt.min(0.1)));
         let t0 = *self.start_t0.get_or_insert(now);
-        let el_real = (now - t0) as f32;
-        // B222: a entrada anima por um tempo limitado e depois congela; parada, a tela não pede mais quadros
-        let entrada = 0.25 + 0.07 * crate::examples::all().len() as f32 + 0.8;
-        let el = if animar { el_real } else { el_real.min(entrada) };
         let ex_meta: Vec<(&'static str, &'static str, crate::settings::Bench)> = crate::examples::all().into_iter().map(|e| (e.name, e.desc, e.bench)).collect();
-        egui::CentralPanel::default().frame(egui::Frame::NONE.inner_margin(12.)).show(root, |ui| {
-            paint_backdrop(ui.painter(), ui.max_rect().expand(12.), el, animar);
-            // tudo entra deslizando de leve
-            let k_in = ease_out((el / 0.7).min(1.));
-            ui.set_opacity(k_in);
-            egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| {
-                ui.add_space(26. + 18. * (1. - k_in));
-                // ---------- marca
-                ui.vertical_centered(|ui| {
-                    let (r, _) = ui.allocate_exact_size(egui::vec2(160., 132.), egui::Sense::hover());
-                    let c = r.center();
-                    let painter = ui.painter();
-                    ring(painter, c, 64., el * 0.8, 1.7, 2., accent.gamma_multiply(0.85));
-                    ring(painter, c, 72., -el * 0.5 + 2., 0.8, 1.2, accent.gamma_multiply(0.35));
-                    let bob = (el * 1.6).sin() * 2.;
-                    egui::Image::new(egui::include_image!("../../../assets/app/fenix-256.png")).corner_radius(20.).paint_at(ui, Rect::from_center_size(c + egui::vec2(0., bob), egui::vec2(104., 104.)));
-                    let (wr, _) = ui.allocate_exact_size(egui::vec2(420., 40.), egui::Sense::hover());
-                    wordmark(ui.painter(), wr.center(), 32., ui.visuals().strong_text_color(), accent);
-                    ui.label(RichText::new(tr(BRAND_TAGLINE)).weak());
-                    ui.label(RichText::new(concat!("CAD paramétrico open source · v", env!("CARGO_PKG_VERSION"))).weak().small());
-                    ui.add_space(6.);
-                    crate::arabesco::fio_da_marca(ui);
-                    ui.add_space(12.);
-                });
-                let w = 1080.0f32.min(ui.available_width() - 24.);
-                ui.horizontal(|ui| {
-                    ui.add_space(((ui.available_width() - w) / 2.).max(0.));
-                    ui.vertical(|ui| {
-                        ui.set_width(w);
-                        // ---------- começar
-                        section_title(ui, "Começar", accent);
-                        ui.horizontal_wrapped(|ui| {
-                            let big = |ui: &mut egui::Ui, icon: &str, name: &str, brief: &str| crate::icons::tool_button(ui, icon, name, 54., true, false, brief, "");
-                            if self.inicio_pelo_menu && ui.button(RichText::new(format!("↩ {}", tr("Voltar ao trabalho"))).size(15.)).on_hover_text(tr("Volta ao documento aberto sem mudar nada")).clicked() {
-                                self.started = true;
-                            }
-                            if big(ui, "novo_projeto", "Novo projeto", "Cria uma pasta de projeto com versões e revisões").clicked() {
-                                action = Some(0);
-                            }
-                            if big(ui, "abrir_projeto", "Abrir projeto", "Abre uma pasta de projeto existente").clicked() {
-                                action = Some(1);
-                            }
-                            if big(ui, "nova_peca", "Nova peça", "Peça avulsa, fora de projeto").clicked() {
-                                action = Some(2);
-                            }
-                            if big(ui, "abrir_projeto", "Abrir peça", "Abre um arquivo .fkp").clicked() {
-                                action = Some(3);
-                            }
-                            if big(ui, "asm_nova", "Nova montagem", "Começa uma montagem vazia (arquivo .fka).").clicked() {
-                                action = Some(5);
-                            }
-                            if big(ui, "des_novo", "Novo desenho", "Folha de detalhamento 2D (arquivo .fkd)").clicked() {
-                                action = Some(6);
-                            }
-                        });
-                        ui.add_space(14.);
-                        crate::arabesco::separador(ui);
-                        let narrow = w < 820.;
-                        let left_w = if narrow { w } else { 330. };
-                        let mut recents = |ui: &mut egui::Ui| {
-                            ui.set_width(left_w);
-                            section_title(ui, "Recentes", accent);
-                            if self.settings.recent_files.is_empty() && self.settings.recent.is_empty() {
-                                crate::arabesco::vazio_com_texto(ui, RichText::new(tr("nenhum ainda — abra um exemplo ao lado")).weak());
-                            }
-                            for f in self.settings.recent_files.clone() {
-                                let path = std::path::Path::new(&f);
-                                if !path.exists() {
-                                    continue;
-                                }
-                                let ext = path.extension().map(|e| e.to_string_lossy().to_lowercase()).unwrap_or_default();
-                                let (icon, kind) = match ext.as_str() {
-                                    "fka" => ("asm_nova", "Montagem"),
-                                    "fkd" => ("des_novo", "Desenho"),
-                                    _ => ("nova_peca", "Peça"),
-                                };
-                                let pv = (ext == "fkp").then(|| {
-                                    let ff = f.clone();
-                                    self.previews.get(&format!("arq:{f}"), move || std::fs::read_to_string(&ff).ok().and_then(|s| Document::from_json(&s).ok()))
-                                }).flatten();
-                                if recent_row(ui, &f, icon, kind, pv.as_deref(), el, accent).clicked() {
-                                    file_open = Some(f.clone());
-                                }
-                            }
-                            for r in self.settings.recent.clone() {
-                                if recent_row(ui, &r, "pasta", "Projeto", None, el, accent).clicked() {
-                                    recent_open = Some(r.clone());
-                                }
-                            }
-                            ui.add_space(10.);
-                            ui.checkbox(&mut self.settings.show_start, tr("mostrar esta tela ao iniciar"));
-                        };
-                        let mut gallery = |ui: &mut egui::Ui| {
-                            section_title(ui, "Exemplos", accent);
-                            ui.horizontal_wrapped(|ui| {
-                                ui.spacing_mut().item_spacing = egui::vec2(12., 12.);
-                                for (i, (name, desc, bench)) in ex_meta.iter().enumerate() {
-                                    let key = format!("ex:{i}");
-                                    let pv = self.previews.get(&key, move || crate::examples::all().into_iter().nth(i).map(|e| e.doc));
-                                    let spin = self.card_spin.entry(key.clone()).or_insert(i as f32 * 0.9);
-                                    let delay = 0.25 + i as f32 * 0.07;
-                                    let appear = ease_out(((el - delay) / 0.5).clamp(0., 1.));
-                                    let r = example_card(ui, &key, name, desc, *bench, pv.as_deref(), *spin, appear, accent);
-                                    let hot = ui.ctx().animate_bool(egui::Id::unique(("card_hot", &key)), r.hovered());
-                                    // a miniatura só gira com o mouse em cima (B222: parada, não gasta quadros)
-                                    if hot > 0.001 {
-                                        *spin += dt * (0.35 + 1.6 * hot);
-                                        ui.ctx().request_repaint();
-                                    }
-                                    if r.clicked() {
-                                        example = Some(i);
-                                    }
-                                }
-                            });
-                        };
-                        if narrow {
-                            gallery(ui);
-                            ui.add_space(14.);
-                            recents(ui);
-                        } else {
-                            ui.horizontal_top(|ui| {
-                                ui.vertical(|ui| recents(ui));
-                                ui.add_space(24.);
-                                ui.vertical(|ui| gallery(ui));
-                            });
-                        }
-                    });
-                });
-                ui.add_space(24.);
-            });
-        });
-        if el_real < entrada && !animar {
-            root.ctx().request_repaint();
-        } else if animar {
-            // deriva lenta a 30 quadros por segundo; janela sem foco ou minimizada não pede quadro
-            if root.ctx().input(|i| i.viewport().focused.unwrap_or(true) && !i.viewport().minimized.unwrap_or(false)) {
-                root.ctx().request_repaint_after(std::time::Duration::from_millis(crate::inicio_tema::QUADRO_MS));
-            }
+        let arquivos = self.settings.recent_files.clone();
+        let projetos = self.settings.recent.clone();
+        let entrada = crate::tela_inicial::Entrada {
+            pal: crate::inicio_tema::Paleta::atual(),
+            ligada,
+            t: (now - t0) as f32,
+            dt,
+            voltar: self.inicio_pelo_menu,
+            arquivos: &arquivos,
+            projetos: &projetos,
+            mostrar_ao_iniciar: &mut self.settings.show_start,
+            previews: &self.previews,
+            giro: &mut self.card_spin,
+            exemplos: &ex_meta,
+        };
+        match crate::tela_inicial::mostrar(root, entrada) {
+            Some(Escolha::Voltar) => self.started = true,
+            Some(Escolha::Comecar(c)) => action = Some(c),
+            Some(Escolha::Projeto(r)) => recent_open = Some(r),
+            Some(Escolha::Arquivo(f)) => file_open = Some(f),
+            Some(Escolha::Exemplo(i)) => example = Some(i),
+            None => {}
         }
         if let Some(r) = recent_open {
             self.open_project_at(std::path::Path::new(&r));
@@ -9341,126 +9220,6 @@ fn wordmark(p: &egui::Painter, c: egui::Pos2, size: f32, text: Color32, accent: 
     p.add(egui::Shape::mesh(m));
 }
 
-fn section_title(ui: &mut egui::Ui, t: &str, accent: Color32) {
-    ui.horizontal(|ui| {
-        let (r, _) = ui.allocate_exact_size(egui::vec2(4., 16.), egui::Sense::hover());
-        ui.painter().rect_filled(r, 2., accent);
-        ui.label(RichText::new(tr(t)).strong().size(15.));
-    });
-    ui.add_space(4.);
-}
-
-/// Linha de um arquivo/projeto recente (ícone ou prévia girando, nome, tipo e pasta).
-fn recent_row(ui: &mut egui::Ui, path: &str, icon: &str, kind: &str, pv: Option<&crate::examples::Preview>, t: f32, accent: Color32) -> egui::Response {
-    let p = std::path::Path::new(path);
-    let name = p.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or(path.to_string());
-    let dir = p.parent().map(|d| d.to_string_lossy().to_string()).unwrap_or_default();
-    let w = ui.available_width();
-    let (r, resp) = ui.allocate_exact_size(egui::vec2(w, 46.), egui::Sense::click());
-    // B321: anel de foco quando o Tab chega aqui
-    let resp = crate::teclado::anel(ui, resp);
-    let hot = ui.ctx().animate_bool(egui::Id::unique(("recent_hot", path)), resp.hovered());
-    let v = ui.visuals();
-    let bg = v.faint_bg_color.lerp_to_gamma(accent, 0.18 * hot);
-    let painter = ui.painter();
-    painter.rect_filled(r.shrink2(egui::vec2(0., 2.)), 8., bg.gamma_multiply(0.4 + 0.6 * hot));
-    if hot > 0. {
-        painter.rect_filled(Rect::from_min_size(r.min + egui::vec2(0., 8.), egui::vec2(3., r.height() - 16.)), 2., accent.gamma_multiply(hot));
-    }
-    let ir = Rect::from_center_size(egui::pos2(r.left() + 26., r.center().y), egui::vec2(38., 38.));
-    match pv {
-        Some(pv) => crate::examples::paint_preview(painter, ir, pv, t * 0.5 + hot * 1.5),
-        None => {
-            egui::Image::new(crate::icons::get(icon)).paint_at(ui, Rect::from_center_size(ir.center(), egui::vec2(26., 26.)));
-        }
-    }
-    let painter = ui.painter();
-    let tx = r.left() + 54. + 3. * hot;
-    painter.text(egui::pos2(tx, r.top() + 14.), egui::Align2::LEFT_CENTER, &name, egui::FontId::proportional(13.5), v.strong_text_color());
-    let chip = painter.layout_no_wrap(tr(kind).to_string(), egui::FontId::proportional(10.), accent);
-    let cr = Rect::from_min_size(egui::pos2(tx, r.top() + 25.), chip.size() + egui::vec2(10., 4.));
-    painter.rect_filled(cr, 6., accent.gamma_multiply(0.16));
-    painter.galley(cr.min + egui::vec2(5., 2.), chip, accent);
-    let room = (r.right() - cr.right() - 14.).max(10.);
-    let mut d = dir.clone();
-    let max_chars = (room / 6.).max(6.) as usize;
-    if d.chars().count() > max_chars {
-        d = format!("…{}", d.chars().rev().take(max_chars).collect::<Vec<_>>().into_iter().rev().collect::<String>());
-    }
-    painter.text(egui::pos2(cr.right() + 8., cr.center().y), egui::Align2::LEFT_CENTER, d, egui::FontId::proportional(10.5), v.weak_text_color());
-    resp.on_hover_text(path).on_hover_cursor(egui::CursorIcon::PointingHand)
-}
-
-/// Cartão de exemplo com prévia 3D girando; sobe e acende ao passar o mouse.
-#[allow(clippy::too_many_arguments)]
-fn example_card(ui: &mut egui::Ui, key: &str, name: &str, desc: &str, bench: crate::settings::Bench, pv: Option<&crate::examples::Preview>, spin: f32, appear: f32, accent: Color32) -> egui::Response {
-    let size = egui::vec2(220., 212.);
-    let (r0, resp) = ui.allocate_exact_size(size, egui::Sense::click());
-    // B321: anel de foco quando o Tab chega aqui
-    let resp = crate::teclado::anel(ui, resp);
-    let hot = ui.ctx().animate_bool(egui::Id::unique(("card_hot", key)), resp.hovered());
-    let lift = 5. * hot + 16. * (1. - appear);
-    let r = r0.translate(egui::vec2(0., -lift + 5.));
-    let v = ui.visuals().clone();
-    let painter = ui.painter().with_clip_rect(ui.clip_rect());
-    let op = appear;
-    // sombra
-    for k in 0..6 {
-        let e = 2. + k as f32 * 2.5 * (0.5 + hot);
-        painter.rect_filled(r.translate(egui::vec2(0., 3. + 2. * hot)).expand(e), 12. + e, Color32::from_black_alpha(((if v.dark_mode { 16. } else { 7. }) * op) as u8));
-    }
-    painter.rect_filled(r, 12., v.window_fill.gamma_multiply(op));
-    // área da prévia com degradê
-    let pr = Rect::from_min_size(r.min + egui::vec2(8., 8.), egui::vec2(r.width() - 16., 128.));
-    let pal = crate::inicio_tema::Paleta::atual();
-    let (a, b) = (pal.mini_topo, pal.mini_base);
-    let mut m = egui::Mesh::default();
-    m.colored_vertex(pr.left_top(), a.gamma_multiply(op));
-    m.colored_vertex(pr.right_top(), a.gamma_multiply(op));
-    m.colored_vertex(pr.right_bottom(), b.gamma_multiply(op));
-    m.colored_vertex(pr.left_bottom(), b.gamma_multiply(op));
-    m.add_triangle(0, 1, 2);
-    m.add_triangle(0, 2, 3);
-    painter.add(egui::Shape::mesh(m));
-    // sombra da peça no "chão"
-    painter.add(egui::Shape::ellipse_filled(pr.center_bottom() - egui::vec2(0., 14.), egui::vec2(60. + 6. * hot, 7.), Color32::from_black_alpha((40. * op) as u8)));
-    match pv {
-        Some(pv) if op > 0.95 => crate::examples::paint_preview(&painter.with_clip_rect(pr), pr.shrink(6.), pv, spin),
-        _ => {
-            // carregando: anel girando
-            let t = ui.input(|i| i.time) as f32;
-            ring(&painter, pr.center(), 18., t * 3., 1.2, 2., accent.gamma_multiply(op));
-        }
-    }
-    use crate::settings::Bench as B;
-    let chip_txt = tr(match bench {
-        B::Chapa => "Chapa metálica",
-        B::Estrutural => "Estrutural",
-        B::FormaLivre => "Forma livre",
-        B::Superficies => "Superfícies",
-        B::Montagem => "Montagem",
-        B::Desenho => "Desenho",
-        B::Solidos => "Sólidos",
-    })
-    .to_string();
-    let chip = painter.layout_no_wrap(chip_txt, egui::FontId::proportional(10.), accent);
-    let cr = Rect::from_min_size(pr.left_top() + egui::vec2(6., 6.), chip.size() + egui::vec2(10., 4.));
-    painter.rect_filled(cr, 6., v.window_fill.gamma_multiply(0.85 * op));
-    painter.galley(cr.min + egui::vec2(5., 2.), chip, accent);
-    painter.text(egui::pos2(r.left() + 12., pr.bottom() + 16.), egui::Align2::LEFT_CENTER, tr(name), egui::FontId::proportional(14.), v.strong_text_color().gamma_multiply(op));
-    let g = painter.layout(tr(desc).to_string(), egui::FontId::proportional(11.), v.weak_text_color().gamma_multiply(op), r.width() - 24.);
-    painter.galley(egui::pos2(r.left() + 12., pr.bottom() + 28.), g, v.weak_text_color());
-    let stroke = if hot > 0.01 { egui::Stroke::new(1. + hot, accent.gamma_multiply(0.4 + 0.6 * hot)) } else { egui::Stroke::new(1., v.widgets.noninteractive.bg_stroke.color.gamma_multiply(op)) };
-    painter.rect_stroke(r, 12., stroke, egui::StrokeKind::Inside);
-    resp.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text(tr("abrir este exemplo"))
-}
-
-/// Fundo com profundidade (degradê, brilho, grade em perspectiva correndo e partículas) para a
-/// tela inicial e o carregamento.
-fn paint_backdrop(p: &egui::Painter, rect: Rect, t: f32, animar: bool) {
-    crate::inicio_tema::fundo(p, rect, &crate::inicio_tema::Paleta::atual(), t, animar);
-}
-
 /// Conteúdo de cada página da janela de configurações.
 /// Estilo de linha/ponto (contínua, tracejada, pontilhada etc.).
 pub fn line_style_ui(ui: &mut egui::Ui, st: &mut fenkra_core::LineStyle, lines: bool, points: bool) {
@@ -9623,6 +9382,7 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 ui.add(crate::ui_ext::slider(&mut s.acessibilidade.escala_fonte, 0.8..=1.6).text(tr("escala só da fonte"))).on_hover_text(tr("Aumenta ou diminui só o texto, além da escala da interface."));
                 ui.checkbox(&mut s.acessibilidade.paleta_segura, tr("cores seguras para daltonismo")).on_hover_text(tr("Troca verde e vermelho por azul e laranja em ok, aviso, erro e na prévia. Todo estado também tem símbolo."));
                 ui.checkbox(&mut s.acessibilidade.reduzir_movimento, tr("reduzir movimento")).on_hover_text(tr("A câmera salta em vez de deslizar e a interface não anima transições."));
+                crate::tela_inicial::opcao_ui(ui, s);
                 ui.add(crate::ui_ext::slider(&mut s.icon_size, 20.0..=48.0).text("tamanho dos ícones"));
                 ui.checkbox(&mut s.show_labels, tr("mostrar o nome embaixo dos ícones"));
                 ui.checkbox(&mut s.dica_simples, tr("dicas simples (sem animação nem passo a passo)")).on_hover_text(tr("A dica mostra só o nome e a frase do comando. Desligada, parar o mouse sobre um botão mostra também a animação e o passo a passo."));
