@@ -71,7 +71,7 @@ pub fn cabeca_de(f: &Familia) -> Cabeca {
         TipoFixador::ParafusoSextavado => Cabeca::Sextavada,
         TipoFixador::ParafusoCruz => Cabeca::Panela,
         TipoFixador::Rebite => Cabeca::Abaulada,
-        TipoFixador::PatimLinear | TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas | TipoFixador::TerminalRotular => Cabeca::Nenhuma,
+        TipoFixador::PatimLinear | TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas | TipoFixador::TerminalRotular | TipoFixador::FixacaoCilindro => Cabeca::Nenhuma,
         TipoFixador::Porca | TipoFixador::Arruela | TipoFixador::Rolamento | TipoFixador::Prisioneiro | TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear => Cabeca::Nenhuma,
     }
 }
@@ -79,7 +79,7 @@ pub fn cabeca_de(f: &Familia) -> Cabeca {
 /// Polegada quando a designação do tamanho não é métrica ("1/4-20 UNC", "#10-32", "-06").
 pub fn sistema_de(f: &Familia) -> Sistema {
     // rolamento se designa pela série ("6005"), mas as medidas são em milímetros
-    if matches!(f.tipo, TipoFixador::Rolamento | TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::PatimLinear | TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas | TipoFixador::TerminalRotular) {
+    if matches!(f.tipo, TipoFixador::Rolamento | TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::PatimLinear | TipoFixador::PorcaEsferas | TipoFixador::FusoEsferas | TipoFixador::TerminalRotular | TipoFixador::FixacaoCilindro) {
         return Sistema::Metrico;
     }
     // "M" seguido de algarismo: "MS21042L3" é polegada, embora comece com M
@@ -251,6 +251,7 @@ fn ordem_do_tipo(t: TipoFixador) -> u8 {
         TipoFixador::PorcaEsferas => 11,
         TipoFixador::FusoEsferas => 12,
         TipoFixador::TerminalRotular => 13,
+        TipoFixador::FixacaoCilindro => 14,
     }
 }
 
@@ -326,6 +327,39 @@ pub fn nome_da_cota(tipo: TipoFixador, simbolo: &str) -> &'static str {
         (TipoFixador::CilindroPneumatico, "EW") => "largura do olhal traseiro",
         (TipoFixador::CilindroPneumatico, "CD") => "diâmetro do pino do olhal",
         (TipoFixador::CilindroPneumatico, "D") => "diâmetro do tubo",
+        // fixações de cilindro (ISO 15552): pé, flange, munhão e garfo
+        (TipoFixador::FixacaoCilindro, "AB") => "diâmetro dos furos de fixação do pé",
+        (TipoFixador::FixacaoCilindro, "AH") => "do plano de apoio ao eixo do cilindro",
+        (TipoFixador::FixacaoCilindro, "AO") => "afastamento do furo à borda (catálogo)",
+        (TipoFixador::FixacaoCilindro, "AT") => "espessura da chapa do pé",
+        (TipoFixador::FixacaoCilindro, "AU") => "comprimento da chapa do pé",
+        (TipoFixador::FixacaoCilindro, "SA") => "entre furos de fixação, curso zero (catálogo)",
+        (TipoFixador::FixacaoCilindro, "TR") => "distância entre os furos de fixação do pé",
+        (TipoFixador::FixacaoCilindro, "US") => "largura do pé ou do munhão",
+        (TipoFixador::FixacaoCilindro, "XA") => "da face traseira ao pé, curso zero (catálogo)",
+        (TipoFixador::FixacaoCilindro, "XS") => "do pé ao furo, no sentido do eixo (catálogo)",
+        (TipoFixador::FixacaoCilindro, "E") => "lado do perfil do cilindro",
+        (TipoFixador::FixacaoCilindro, "FB") => "diâmetro dos furos do flange",
+        (TipoFixador::FixacaoCilindro, "MF") => "espessura do flange",
+        (TipoFixador::FixacaoCilindro, "R") => "distância do furo ao eixo (catálogo)",
+        (TipoFixador::FixacaoCilindro, "TF") => "distância entre os furos do flange",
+        (TipoFixador::FixacaoCilindro, "UF") => "lado do flange quadrado",
+        (TipoFixador::FixacaoCilindro, "W") => "ressalto do flange (catálogo)",
+        (TipoFixador::FixacaoCilindro, "ZF") => "da face do flange à ponta da haste, curso zero (catálogo)",
+        (TipoFixador::FixacaoCilindro, "C2") => "distância entre furos de fixação do munhão (catálogo)",
+        (TipoFixador::FixacaoCilindro, "C3") => "distância entre furos de fixação do munhão (catálogo)",
+        (TipoFixador::FixacaoCilindro, "TD") => "diâmetro dos munhões",
+        (TipoFixador::FixacaoCilindro, "TK") => "espessura do corpo do munhão",
+        (TipoFixador::FixacaoCilindro, "TL") => "comprimento de cada munhão",
+        (TipoFixador::FixacaoCilindro, "TM") => "largura do corpo, entre os munhões",
+        (TipoFixador::FixacaoCilindro, "XH") => "posição do munhão (catálogo)",
+        (TipoFixador::FixacaoCilindro, "XL") => "da face traseira ao munhão, curso zero (catálogo)",
+        (TipoFixador::FixacaoCilindro, "CD") => "diâmetro do pino do garfo",
+        (TipoFixador::FixacaoCilindro, "CB") => "folga interna entre as abas do garfo",
+        (TipoFixador::FixacaoCilindro, "FL") => "da face de apoio ao centro do pino",
+        (TipoFixador::FixacaoCilindro, "L") => "espessura do olhal que entra no garfo",
+        (TipoFixador::FixacaoCilindro, "MR") => "raio da ponta arredondada",
+        (TipoFixador::FixacaoCilindro, "UB") => "largura externa do garfo",
         (TipoFixador::TrilhoLinear, "WR") => "largura do trilho",
         (TipoFixador::TrilhoLinear, "HR") => "altura do trilho",
         (TipoFixador::TrilhoLinear, "D") => "diâmetro do escareado",
@@ -539,8 +573,8 @@ mod testes {
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Panela), ..Default::default() }), 1);
         // 5 porcas, 4 arruelas, 2 prisioneiros e os rolamentos (60, 62, 63, 68, 69, 160, 72, NU2 e 302) o cilindro ISO 15552 e o trilho HGR
         // e as três porcas aeronáuticas, o minicilindro ISO 6432 e a porca do nariz dele
-        // e o patim, a porca e o fuso de esferas (B46) e o terminal rotular (B397)
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 31);
+        // e o patim, a porca e o fuso de esferas (B46), o terminal rotular (B397) e as quatro fixações de cilindro (B45)
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 35);
         assert_eq!(f(Filtro { material: Some("Aço".into()), ..Default::default() }), familias().len());
         assert_eq!(f(Filtro { material: Some("Aço inoxidável".into()), ..Default::default() }), 0);
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 4);

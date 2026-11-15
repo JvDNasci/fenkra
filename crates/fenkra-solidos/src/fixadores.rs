@@ -99,6 +99,7 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
         "porca_esferas" => crate::guias::corpo_porca_esferas(&mut m, fam, t)?,
         "fuso_esferas" => crate::guias::corpo_fuso(&mut m, fam, t, l)?,
         "terminal_rotular" => crate::terminal_rotular::corpo(&mut m, fam, t)?,
+        "fixacao_pe" | "fixacao_flange" | "fixacao_munhao" | "fixacao_garfo" => crate::pneumatica_fixacoes::corpo(&mut m, fam, t)?,
         "rebite_universal" | "rebite_escareado" => crate::rebites::corpo(&mut m, fam, t, l)?,
         g => return Err(format!("{}: gerador '{g}' sem geometria", fam.id)),
     }
@@ -155,6 +156,8 @@ fn publicacoes(m: &mut Montador, fam: &Familia) -> Result<(), String> {
         (_, TipoFixador::FusoEsferas) => ("L", "0"),
         // terminal rotular: da ponta da rosca ao centro da esfera
         (_, TipoFixador::TerminalRotular) => ("-h", "0"),
+        // fixação de cilindro: a face de apoio fica em z = 0 e o eixo segue o Z
+        (_, TipoFixador::FixacaoCilindro) => ("10", "0"),
     };
     let ponto0 = PointRef::Origin;
     m.publicar("Eixo", RefKind::LineDir { point: ponto0, dir: AxisRef::Origin(OriginAxis::Z), start: inicio.into(), end: fim.into() });

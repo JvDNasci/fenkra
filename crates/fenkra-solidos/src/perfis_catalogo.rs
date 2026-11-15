@@ -11,6 +11,7 @@
 //! a linha ainda não foi cotejada, uma a uma, com a tabela impressa do fabricante. Só `DuasFontes`
 //! significa conferida em duas tabelas independentes; as linhas de tubo EN 10210 presentes nas duas tabelas colhidas (Eurocode Applied e AMESweb) têm esse nível.
 
+use crate::perfis_catalogo_gerdau as gerdau_dados;
 use crate::perfis_catalogo_tubos as tubos;
 use crate::structural::{self, Family};
 use fenkra_core::SectionKind;
@@ -24,6 +25,8 @@ pub enum Nivel {
     Coerente,
     /// conferida em duas tabelas independentes
     DuasFontes,
+    /// lida de uma tabela publicada do fabricante, sem segunda tabela independente (nível [C])
+    UmaFonte,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -47,6 +50,12 @@ pub struct Linha {
     /// segunda tabela independente que confere a linha (só em `DuasFontes`)
     pub fonte2: Option<&'static str>,
 }
+
+const GERDAU_FOLDER: (&str, &str) = ("Gerdau, folder Perfis Estruturais, Segmento Industrial: tabela de bitolas W e HP (ASTM A6)", "folder vigente, colhido em 2026-11-15");
+const GERDAU_US: &str = "Gerdau North America, Product Handbook V1.2, tabela H-Pile Properties (HP); a de British Steel (ASTM HP sections datasheet) confere h e b";
+/// Família do perfil HP (estaca H) e a do W nacional: a massa é a nominal da designação.
+pub const FAMILIA_HP: &str = "Perfil HP (AISC)";
+pub const FAMILIA_W_NAC: &str = "Perfil W (nacional)";
 
 const POL: f64 = 25.4;
 const POL2: f64 = 6.4516;
@@ -82,6 +91,25 @@ fn mm(grupo: &'static str, familia: &'static str, kind: SectionKind, des: &str, 
     Linha { grupo, familia, kind, designacao: des.into(), dims: d.to_vec(), area_cm2: a, massa_kg_m: m, fonte: f.0, edicao: f.1, nivel: Nivel::Coerente, fonte2: None }
 }
 
+/// W nacional (uma fonte, a tabela da Gerdau) e HP (Gerdau, handbook da Gerdau América do Norte e
+/// British Steel).
+fn gerdau() -> Vec<Linha> {
+    use SectionKind::PerfilI;
+    let mut v = vec![];
+    for (des, d, a, m) in gerdau_dados::GERDAU_W {
+        let mut l = mm("Gerdau / Aço Brasil", FAMILIA_W_NAC, PerfilI, des, d, *a, *m, GERDAU_FOLDER);
+        l.nivel = Nivel::UmaFonte;
+        v.push(l);
+    }
+    for (des, d, a, m) in gerdau_dados::GERDAU_HP {
+        let mut l = mm("AISC", FAMILIA_HP, PerfilI, des, d, *a, *m, GERDAU_FOLDER);
+        l.nivel = Nivel::DuasFontes;
+        l.fonte2 = Some(GERDAU_US);
+        v.push(l);
+    }
+    v
+}
+
 /// Todas as linhas do catálogo.
 pub fn linhas() -> Vec<Linha> {
     use SectionKind::*;
@@ -113,16 +141,8 @@ pub fn linhas() -> Vec<Linha> {
         c("C10x15.3", [10.0, 2.60, 0.240, 0.436], 4.48, 15.3),
         c("C12x20.7", [12.0, 2.94, 0.282, 0.501], 6.09, 20.7),
     ]);
-    // Laminados W nacionais (h, b, tw, tf em mm; A em cm²; kg/m)
-    let g = |des: &str, d: [f64; 4], a: f64, m: f64| mm("Gerdau / Aço Brasil", "Perfil W (nacional)", PerfilI, des, &d, a, m, NBR);
-    v.extend([
-        g("W150x13", [148., 100., 4.3, 4.9], 16.6, 13.0),
-        g("W200x26,6", [207., 133., 5.8, 8.4], 34.2, 26.6),
-        g("W360x32,9", [349., 127., 5.8, 8.5], 42.1, 32.9),
-        g("W360x51", [355., 171., 7.2, 11.6], 64.8, 51.0),
-        g("W460x52", [450., 152., 7.6, 10.8], 66.6, 52.0),
-        g("W530x66", [525., 165., 8.9, 11.4], 83.6, 66.0),
-    ]);
+    // Laminados W nacionais e HP: tabela de bitolas do folder da Gerdau, lida por script
+    v.extend(gerdau());
     let u = |des: &str, d: [f64; 4], a: f64, m: f64| mm("Gerdau / Aço Brasil", "Perfil U (nacional)", PerfilU, des, &d, a, m, NBR);
     v.extend([u("U 76,2x6,1", [76.2, 35.8, 4.32, 6.93], 7.78, 6.1), u("U 101,6x7,95", [101.6, 40.2, 4.57, 7.52], 10.1, 7.95), u("U 152,4x12,2", [152.4, 48.8, 5.08, 8.71], 15.5, 12.2)]);
     // EN 10365: IPE (h, b, tw, tf)
@@ -393,7 +413,9 @@ mod tests {
                 continue;
             }
             let erro = (calc - l.massa_kg_m).abs() / l.massa_kg_m;
-            if erro > 0.01 {
+            // W nacional e HP: massa nominal da designação, arredondada pelo fabricante (até 3,5 %)
+            let lim = if l.familia == FAMILIA_W_NAC || l.familia == FAMILIA_HP { 0.035 } else { 0.01 };
+            if erro > lim {
                 falhas.push(format!("{} {}: área {} cm² dá {calc:.2} kg/m, publicado {} ({:.2} %)", l.familia, l.designacao, l.area_cm2, l.massa_kg_m, erro * 100.));
             }
         }
@@ -482,5 +504,87 @@ mod tests {
         // lb/ft → kg/m: W8x31 = 46,13 kg/m
         assert!((massa_linear("Perfil W (AISC)", "W8x31").unwrap() - 46.13).abs() < 0.01);
         assert!(massa_linear("IPE", "IPE 999").is_none());
+    }
+
+    /// Segunda fonte do HP: handbook da Gerdau América do Norte (tabela H-Pile Properties:
+    /// área cm², d, bf, tw, tf em mm) e British Steel (h, b em mm; a área dela inclui outros raios de
+    /// concordância e fica até 3 % acima).
+    const HP_SEGUNDA: [(&str, f64, [f64; 4], [f64; 2], f64); 7] = [
+        ("HP200x53", 68.4, [204., 207., 11.3, 11.3], [204., 207.7], 68.8),
+        ("HP250x62", 79.8, [246., 256., 10.5, 10.7], [246., 256.], 81.3),
+        ("HP250x85", 109.0, [254., 259., 14.4, 14.4], [254., 260.], 111.0),
+        ("HP310x79", 99.8, [299., 306., 11.0, 11.0], [299., 306.], 101.0),
+        ("HP310x93", 119.0, [303., 308., 13.1, 13.1], [303., 308.], 120.0),
+        ("HP310x110", 141.0, [308., 310., 15.4, 15.4], [308., 310.], 142.0),
+        ("HP310x125", 159.0, [312., 312., 17.4, 17.4], [312., 312.], 160.0),
+    ];
+
+    /// B27: cada HP bate com as duas outras tabelas (dimensões a 1 mm, área a 1,5 % do handbook e a 3 %
+    /// da British Steel) e carrega as duas fontes.
+    #[test]
+    fn hp_confere_com_as_outras_tabelas() {
+        let ls: Vec<Linha> = linhas().into_iter().filter(|l| l.familia == FAMILIA_HP).collect();
+        assert_eq!(ls.len(), HP_SEGUNDA.len());
+        for (des, a2, d2, hb, a3) in HP_SEGUNDA {
+            let l = buscar(FAMILIA_HP, des).unwrap_or_else(|| panic!("falta {des}"));
+            assert_eq!(l.nivel, Nivel::DuasFontes, "{des}");
+            assert!(l.fonte2.is_some(), "{des}");
+            for i in 0..4 {
+                assert!((l.dims[i] - d2[i]).abs() <= 1.0, "{des} cota {i}: {} contra {}", l.dims[i], d2[i]);
+            }
+            assert!((l.dims[0] - hb[0]).abs() <= 1.0 && (l.dims[1] - hb[1]).abs() <= 1.0, "{des} contra British Steel");
+            assert!((l.area_cm2 - a2).abs() / a2 <= 0.015, "{des}: área {} contra handbook {a2}", l.area_cm2);
+            assert!((l.area_cm2 - a3).abs() / a3 <= 0.03, "{des}: área {} contra British Steel {a3}", l.area_cm2);
+        }
+        // HP310x110 = 110 kg/m (HP12x74)
+        assert!((massa_linear(FAMILIA_HP, "HP310x110").unwrap() - 110.0).abs() < 1e-9);
+    }
+
+    /// B27: W nacional lido da tabela da Gerdau: 81 linhas, uma fonte, a designação é a massa nominal e
+    /// a massa fica a 3,5 % de área × 7,85; h e abas coerentes com a série.
+    #[test]
+    fn w_nacional_da_gerdau_uma_fonte() {
+        let ls: Vec<Linha> = linhas().into_iter().filter(|l| l.familia == FAMILIA_W_NAC).collect();
+        assert_eq!(ls.len(), 81);
+        for l in &ls {
+            assert_eq!(l.nivel, Nivel::UmaFonte, "{}", l.designacao);
+            assert!(l.fonte2.is_none());
+            // "W200x26,6": a massa nominal é o número depois do x
+            let nominal: f64 = l.designacao.split('x').nth(1).unwrap().replace(',', ".").parse().unwrap();
+            assert!((nominal - l.massa_kg_m).abs() < 1e-9, "{}", l.designacao);
+            // a altura da designação (150, 200, ...) é a da série e a seção real fica a 12 % dela (as mais pesadas crescem)
+            let serie: f64 = l.designacao[1..].split('x').next().unwrap().parse().unwrap();
+            assert!((l.dims[0] - serie).abs() / serie <= 0.12, "{}: d {}", l.designacao, l.dims[0]);
+        }
+        let l = buscar(FAMILIA_W_NAC, "W360x51").unwrap();
+        assert_eq!((l.dims.clone(), l.area_cm2), (vec![355., 171., 7.2, 11.6], 64.8));
+    }
+
+    /// B27: sólido de 1 m extrudado da seção de cada família nova: válido, volume igual à área da seção
+    /// desenhada vezes 1 m (que fica a 6 % da publicada) e caixa envolvente d × bf × 1000.
+    #[test]
+    fn solido_de_cada_familia_nova() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        use fenkra_kernel::{Frame, Shape};
+        for (fam, des) in [(FAMILIA_HP, "HP250x62"), (FAMILIA_HP, "HP310x125"), (FAMILIA_W_NAC, "W360x51"), (FAMILIA_W_NAC, "W610x174")] {
+            let l = buscar(fam, des).unwrap();
+            let (loops, ..) = structural::section(l.kind, &l.dims).unwrap();
+            let fr = Frame { origin: [0., 0., 0.], x: [1., 0., 0.], normal: [0., 0., 1.] };
+            let sol = Shape::face(&fr, &loops).unwrap().extrude([0., 0., 1.], 1000., 0.).unwrap();
+            assert!(sol.is_valid(), "{des}");
+            let a = area_da_secao_cm2(l.kind, &l.dims).unwrap();
+            let vol = sol.mass().volume;
+            assert!((vol - a * 100. * 1000.).abs() / vol < 1e-3, "{des}: volume {vol}");
+            assert!((vol / 1e6 * 1e3 * 7.85 / 1e3 - l.massa_kg_m).abs() / l.massa_kg_m < 0.07, "{des}: massa do sólido contra a publicada");
+            let (lo, hi) = sol.bbox().unwrap();
+            let ext = [hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]];
+            let mut ab = [ext[0], ext[1]];
+            ab.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            let mut esp = [l.dims[0], l.dims[1]];
+            esp.sort_by(|a, b| a.partial_cmp(b).unwrap());
+            assert!((ab[0] - esp[0]).abs() < 0.1 && (ab[1] - esp[1]).abs() < 0.1 && (ext[2] - 1000.).abs() < 0.1, "{des}: {ext:?}");
+        }
     }
 }

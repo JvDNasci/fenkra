@@ -1,0 +1,175 @@
+{
+ "id": "festo_dnc",
+ "nome": "Cilindro padrão DNC do fabricante (série própria, ISO 15552)",
+ "norma": "ISO 15552 (série do fabricante)",
+ "revisao": "2018",
+ "versao": 1,
+ "gerador": "cilindro_pneumatico",
+ "tipo": "cilindro_pneumatico",
+ "nivel": "B",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Festo, cilindros padrão DNC ISO 15552, catálogo 2014/01 (tabela de dimensões da versão básica)",
+   "url": "https://ftp.festo.com/Public/PNEUMATIC/SOFTWARE_SERVICE/Documentation/2014/EN/DNC_EN.PDF"
+  }
+ ],
+ "campos": [
+  "MM",
+  "KK",
+  "P",
+  "TG",
+  "WH",
+  "B",
+  "AM",
+  "L8",
+  "RT",
+  "E"
+ ],
+ "comprimentos": [
+  10,
+  25,
+  50,
+  80,
+  100,
+  125,
+  160,
+  200,
+  250,
+  320,
+  400,
+  500,
+  800,
+  1000,
+  1500,
+  2000
+ ],
+ "tamanhos": [
+  {
+   "designacao": "Ø32",
+   "d_nominal": 32,
+   "valores": {
+    "MM": 12,
+    "KK": 10,
+    "P": 1.25,
+    "TG": 32.5,
+    "WH": 26,
+    "B": 30,
+    "AM": 22,
+    "L8": 94,
+    "RT": 6,
+    "E": 45
+   },
+   "confirmado_por": 1,
+   "nota": "Medidas do catálogo do fabricante (cilindro padrão DNC, versão básica): MM, KK, AM, B, E, TG, WH, RT e L8 (a cota L2 do catálogo; ZJ = L8 + WH confere em todas as bitolas). E do fabricante é o perfil dele, diferente do máximo da norma usado na camada pública."
+  },
+  {
+   "designacao": "Ø40",
+   "d_nominal": 40,
+   "valores": {
+    "MM": 16,
+    "KK": 12,
+    "P": 1.25,
+    "TG": 38,
+    "WH": 30,
+    "B": 35,
+    "AM": 24,
+    "L8": 105,
+    "RT": 6,
+    "E": 54
+   },
+   "confirmado_por": 1,
+   "nota": "Medidas do catálogo do fabricante (cilindro padrão DNC, versão básica): MM, KK, AM, B, E, TG, WH, RT e L8 (a cota L2 do catálogo; ZJ = L8 + WH confere em todas as bitolas). E do fabricante é o perfil dele, diferente do máximo da norma usado na camada pública."
+  },
+  {
+   "designacao": "Ø50",
+   "d_nominal": 50,
+   "valores": {
+    "MM": 20,
+    "KK": 16,
+    "P": 1.5,
+    "TG": 46.5,
+    "WH": 37,
+    "B": 40,
+    "AM": 32,
+    "L8": 106,
+    "RT": 8,
+    "E": 64
+   },
+   "confirmado_por": 1,
+   "nota": "Medidas do catálogo do fabricante (cilindro padrão DNC, versão básica): MM, KK, AM, B, E, TG, WH, RT e L8 (a cota L2 do catálogo; ZJ = L8 + WH confere em todas as bitolas). E do fabricante é o perfil dele, diferente do máximo da norma usado na camada pública."
+  },
+  {
+   "designacao": "Ø63",
+   "d_nominal": 63,
+   "valores": {
+    "MM": 20,
+    "KK": 16,
+    "P": 1.5,
+    "TG": 56.5,
+    "WH": 37,
+    "B": 45,
+    "AM": 32,
+    "L8": 121,
+    "RT": 8,
+    "E": 75
+   },
+   "confirmado_por": 1,
+   "nota": "Medidas do catálogo do fabricante (cilindro padrão DNC, versão básica): MM, KK, AM, B, E, TG, WH, RT e L8 (a cota L2 do catálogo; ZJ = L8 + WH confere em todas as bitolas). E do fabricante é o perfil dele, diferente do máximo da norma usado na camada pública."
+  },
+  {
+   "designacao": "Ø80",
+   "d_nominal": 80,
+   "valores": {
+    "MM": 25,
+    "KK": 20,
+    "P": 1.5,
+    "TG": 72,
+    "WH": 46,
+    "B": 45,
+    "AM": 40,
+    "L8": 128,
+    "RT": 10,
+    "E": 93
+   },
+   "confirmado_por": 1,
+   "nota": "Medidas do catálogo do fabricante (cilindro padrão DNC, versão básica): MM, KK, AM, B, E, TG, WH, RT e L8 (a cota L2 do catálogo; ZJ = L8 + WH confere em todas as bitolas). E do fabricante é o perfil dele, diferente do máximo da norma usado na camada pública."
+  },
+  {
+   "designacao": "Ø100",
+   "d_nominal": 100,
+   "valores": {
+    "MM": 25,
+    "KK": 20,
+    "P": 1.5,
+    "TG": 89,
+    "WH": 51,
+    "B": 55,
+    "AM": 40,
+    "L8": 138,
+    "RT": 10,
+    "E": 110
+   },
+   "confirmado_por": 1,
+   "nota": "Medidas do catálogo do fabricante (cilindro padrão DNC, versão básica): MM, KK, AM, B, E, TG, WH, RT e L8 (a cota L2 do catálogo; ZJ = L8 + WH confere em todas as bitolas). E do fabricante é o perfil dele, diferente do máximo da norma usado na camada pública."
+  },
+  {
+   "designacao": "Ø125",
+   "d_nominal": 125,
+   "valores": {
+    "MM": 32,
+    "KK": 27,
+    "P": 2,
+    "TG": 110,
+    "WH": 65,
+    "B": 60,
+    "AM": 54,
+    "L8": 160,
+    "RT": 12,
+    "E": 134
+   },
+   "confirmado_por": 1,
+   "nota": "Medidas do catálogo do fabricante (cilindro padrão DNC, versão básica): MM, KK, AM, B, E, TG, WH, RT e L8 (a cota L2 do catálogo; ZJ = L8 + WH confere em todas as bitolas). E do fabricante é o perfil dele, diferente do máximo da norma usado na camada pública."
+  }
+ ]
+}

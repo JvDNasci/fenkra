@@ -970,6 +970,14 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
             notas.push((format!("dk {}", fmt(dk)), 1.));
             notas.push((format!("h {}", fmt(h)), 2.));
         }
+        TipoFixador::FixacaoCilindro => {
+            // esquema em planta: a chapa principal e o eixo do cilindro; as cotas saem na lista ao lado
+            let lado = valor("UF").or(valor("US")).or(valor("UB")).unwrap_or(d * 2.);
+            let esc = (90. / lado as f32).min(1.5);
+            let c = Pos2::new(rect.left() + 55., rect.top() + 55.);
+            p.rect_stroke(Rect::from_center_size(c, egui::vec2(lado as f32 * esc, lado as f32 * esc)), 0., traco, egui::StrokeKind::Middle);
+            p.line_segment([Pos2::new(c.x - lado as f32 * esc / 2. - 6., c.y), Pos2::new(c.x + lado as f32 * esc / 2. + 6., c.y)], fino);
+        }
         TipoFixador::Arruela => {
             let (d1, d2, h) = (valor("d1").unwrap_or(d), valor("d2").unwrap_or(d * 2.), valor("h").unwrap_or(d * 0.2));
             let esc = ((rect.width() * 0.5 - 20.) / d2 as f32).min(40. / h as f32);

@@ -1,0 +1,141 @@
+{
+ "id": "iso15552_flange",
+ "nome": "Flange de fixação de cilindro ISO 15552 (MF1/MF2)",
+ "norma": "ISO 15552",
+ "revisao": "2018",
+ "versao": 1,
+ "gerador": "fixacao_flange",
+ "tipo": "fixacao_cilindro",
+ "nivel": "B",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Festo, cilindros padrão DNC ISO 15552, catálogo 2014/01 (acessórios: dimensões das fixações)",
+   "url": "https://ftp.festo.com/Public/PNEUMATIC/SOFTWARE_SERVICE/Documentation/2014/EN/DNC_EN.PDF"
+  }
+ ],
+ "campos": [
+  "E",
+  "FB",
+  "MF",
+  "R",
+  "TF",
+  "UF",
+  "W",
+  "ZF"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "Ø32",
+   "d_nominal": 32,
+   "valores": {
+    "E": 45,
+    "FB": 7,
+    "MF": 10,
+    "R": 32,
+    "TF": 64,
+    "UF": 80,
+    "W": 16,
+    "ZF": 130
+   },
+   "confirmado_por": 1,
+   "nota": "Flange de aço do catálogo Festo (FNC); fonte única (nível B, sem segunda tabela de flange legível). Modelo simplificado: chapa quadrada UF x UF com quatro furos em quadrado de lado TF; E, R, W e ZF ficam como dados."
+  },
+  {
+   "designacao": "Ø40",
+   "d_nominal": 40,
+   "valores": {
+    "E": 54,
+    "FB": 9,
+    "MF": 10,
+    "R": 36,
+    "TF": 72,
+    "UF": 90,
+    "W": 20,
+    "ZF": 145
+   },
+   "confirmado_por": 1,
+   "nota": "Flange de aço do catálogo Festo (FNC); fonte única (nível B, sem segunda tabela de flange legível). Modelo simplificado: chapa quadrada UF x UF com quatro furos em quadrado de lado TF; E, R, W e ZF ficam como dados."
+  },
+  {
+   "designacao": "Ø50",
+   "d_nominal": 50,
+   "valores": {
+    "E": 65,
+    "FB": 9,
+    "MF": 12,
+    "R": 45,
+    "TF": 90,
+    "UF": 110,
+    "W": 25,
+    "ZF": 155
+   },
+   "confirmado_por": 1,
+   "nota": "Flange de aço do catálogo Festo (FNC); fonte única (nível B, sem segunda tabela de flange legível). Modelo simplificado: chapa quadrada UF x UF com quatro furos em quadrado de lado TF; E, R, W e ZF ficam como dados."
+  },
+  {
+   "designacao": "Ø63",
+   "d_nominal": 63,
+   "valores": {
+    "E": 75,
+    "FB": 9,
+    "MF": 12,
+    "R": 50,
+    "TF": 100,
+    "UF": 120,
+    "W": 25,
+    "ZF": 170
+   },
+   "confirmado_por": 1,
+   "nota": "Flange de aço do catálogo Festo (FNC); fonte única (nível B, sem segunda tabela de flange legível). Modelo simplificado: chapa quadrada UF x UF com quatro furos em quadrado de lado TF; E, R, W e ZF ficam como dados."
+  },
+  {
+   "designacao": "Ø80",
+   "d_nominal": 80,
+   "valores": {
+    "E": 93,
+    "FB": 12,
+    "MF": 16,
+    "R": 63,
+    "TF": 126,
+    "UF": 150,
+    "W": 30,
+    "ZF": 190
+   },
+   "confirmado_por": 1,
+   "nota": "Flange de aço do catálogo Festo (FNC); fonte única (nível B, sem segunda tabela de flange legível). Modelo simplificado: chapa quadrada UF x UF com quatro furos em quadrado de lado TF; E, R, W e ZF ficam como dados."
+  },
+  {
+   "designacao": "Ø100",
+   "d_nominal": 100,
+   "valores": {
+    "E": 110,
+    "FB": 14,
+    "MF": 16,
+    "R": 75,
+    "TF": 150,
+    "UF": 175,
+    "W": 35,
+    "ZF": 205
+   },
+   "confirmado_por": 1,
+   "nota": "Flange de aço do catálogo Festo (FNC); fonte única (nível B, sem segunda tabela de flange legível). Modelo simplificado: chapa quadrada UF x UF com quatro furos em quadrado de lado TF; E, R, W e ZF ficam como dados."
+  },
+  {
+   "designacao": "Ø125",
+   "d_nominal": 125,
+   "valores": {
+    "E": 132,
+    "FB": 16,
+    "MF": 20,
+    "R": 90,
+    "TF": 180,
+    "UF": 210,
+    "W": 45,
+    "ZF": 245
+   },
+   "confirmado_por": 1,
+   "nota": "Flange de aço do catálogo Festo (FNC); fonte única (nível B, sem segunda tabela de flange legível). Modelo simplificado: chapa quadrada UF x UF com quatro furos em quadrado de lado TF; E, R, W e ZF ficam como dados."
+  }
+ ]
+}
