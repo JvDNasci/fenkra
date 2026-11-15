@@ -756,7 +756,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.horizontal(|ui| {
                 ui.add_sized([96., 18.], egui::Label::new(tr("Centro da boca menor")));
                 for v in &mut c.center {
-                    ui.add(egui::DragValue::new(v).speed(0.5).suffix(" mm"));
+                    ui.add(crate::ui_ext::dv(v).speed(0.5).suffix(" mm"));
                 }
             });
             let mut own = c.k.is_some();

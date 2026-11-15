@@ -41,6 +41,7 @@ Consulte solidos, desenho quando a mudança atravessar a fronteira da área.
 Registre aqui erros que se repetiram.
 
 - Dobra por linha nasce sem linha (`a == b`): o recálculo trata isso como "esperando a face fixa" e o clique na face põe a linha no meio dela (`chapa_linha::linha_no_meio`). Valor padrão com `a != b` faz a dobra sair na ponta da peça (B469).
+- Comando de chapa na lista `previa_leve::so_no_fim` mostra só a caixa da zona durante a edição. Só entra nela o que é caro de construir; a dobra cônica saiu (B470).
 
 ## Ao terminar
 

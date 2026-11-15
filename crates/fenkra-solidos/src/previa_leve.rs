@@ -54,13 +54,14 @@ pub fn cobre(k: &FeatureKind) -> bool {
 }
 
 /// Chapa e estrutural: leves só quando são o último comando ativo (`cobre_no`). O desdobrar parcial
-/// fica de fora: ele não cria material, só muda o estado em que as abas aparecem.
+/// fica de fora: ele não cria material, só muda o estado em que as abas aparecem. A dobra cônica
+/// também fica de fora (B470): o tronco é só um perfil de quatro retas girado, barato o bastante
+/// para sair inteiro na prévia; leve, ela mostrava só a caixa envolvente em vez do cone.
 pub fn so_no_fim(k: &FeatureKind) -> bool {
     use FeatureKind as K;
     matches!(
         k,
         K::SmWall(_)
-            | K::SmCone(_)
             | K::SmFlange(_)
             | K::SmHem(_)
             | K::SmJoggle(_)
@@ -394,10 +395,6 @@ impl Ctx<'_> {
             K::SmFlangeLoop(x) => (self.arestas_inteiras(f.target, &x.edges), aba(self.num(&x.length), &x.radius)),
             K::SmCornerRelief(x) => (vec![x.at], self.num(&x.size).max(t)),
             K::SmCornerClose(x) => (vec![x.at], self.num(&x.gap).max(3. * t)),
-            K::SmCone(x) => {
-                let (r2, h, c) = (self.num(&x.r2), self.num(&x.height), x.center);
-                (vec![[c[0] - r2, c[1] - r2, c[2]], [c[0] + r2, c[1] + r2, c[2] + h]], t)
-            }
             K::SmLoftFlange(x) => ([esboco(self, x.a), esboco(self, x.b)].concat(), t),
             K::SmArcSlot(x) => (vec![x.center], self.num(&x.radius) + self.num(&x.width) / 2.),
             K::SmSurfFlange(x) => (vec![x.face], aba(self.num(&x.length), &x.radius)),

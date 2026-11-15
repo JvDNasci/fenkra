@@ -152,3 +152,36 @@ fn salva_e_abre_sem_perder_o_comando() {
         assert!((volume(&lido) - volume(&d)).abs() < 1e-9);
     }
 }
+
+/// B470: com o comando aberto (cálculo leve, como o app faz durante a edição) a prévia é o próprio
+/// tronco de cone: corpo com malha, volume e caixa do tronco, e nenhuma caixa de zona no lugar dele.
+#[test]
+fn previa_com_o_comando_aberto_mostra_a_malha_do_cone() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let (d, id) = doc_cone("40", "0.5", [0.; 3]);
+    assert!(!crate::previa_leve::cobre_no(&d, d.feature(id).unwrap()), "a dobra cônica não troca o cone pela caixa");
+    let mut cache = crate::Cache::default();
+    cache.leve = Some(id);
+    let r = crate::recompute_cached(&d, &mut cache);
+    assert!(matches!(r.status[&id], Status::Ok | Status::Warning(_)), "{:?}", r.status[&id]);
+    assert!(r.previas.iter().all(|p| p.feature != id), "sem caixa de prévia leve: {:?}", r.previas);
+    assert_eq!(r.bodies.len(), 1);
+    let m = &r.bodies[0].mesh;
+    assert!(m.indices.len() >= 3 * 100, "malha do cone na prévia: {} triângulos", m.indices.len() / 3);
+    let esperado = volume_analitico(20., 40., 50.);
+    assert!((r.bodies[0].mass.volume - esperado).abs() < 0.002 * esperado, "volume {} contra {esperado}", r.bodies[0].mass.volume);
+    // a malha é um tronco: o raio dos vértices cresce com a altura, de ~20 na boca menor a ~40 na maior
+    let (mut r_baixo, mut r_alto) = (f64::INFINITY, 0f64);
+    for p in m.positions.chunks_exact(3) {
+        let (rr, z) = ((p[0] as f64).hypot(p[1] as f64), p[2] as f64);
+        if z < 1. {
+            r_baixo = r_baixo.min(rr);
+        }
+        if z > 49. {
+            r_alto = r_alto.max(rr);
+        }
+    }
+    assert!((r_baixo - 20.).abs() < 0.5 && (r_alto - 40.).abs() < 2.5, "boca menor {r_baixo}, maior {r_alto}");
+}
