@@ -706,6 +706,8 @@ def desenhos():
     ic("sm_bainha", B="M6 28h26", R="M32 28a6 6 0 0 0 0-12H16")
     ic("sm_desdobrar", B="M6 32h16a6 6 0 0 0 6-6V8", r="M28 32h16", R=SA(28, 32, 16, -80, -10, 5))
     ic("sm_dobra_linha", B=Z((4, 34), (14, 20), (26, 20), (16, 34)), R=L((26, 20), (16, 34)) + L((26, 20), (40, 6), (44, 20), (16, 34)))
+    # B40: dobra cônica: o tronco dobrado (base) e o setor de coroa que ele desenvolve (resultado)
+    ic("sm_dobra_conica", B=Z((16, 10), (32, 10), (42, 28), (6, 28)), R=arc(14, 44, 22, -75, -15) + arc(14, 44, 10, -75, -15) + L((19.7, 22.7), (16.6, 34.3)) + L((35.3, 38.3), (23.7, 41.4)))
     ic("sm_estampo", B="M6 34h10M32 34h10", R="M16 34l4-14h8l4 14")
     ic("sm_joggle", B="M6 34h12", R="M18 34c6 0 6-16 12-16h12")
     ic("sm_parametros", B="M6 28h36M6 36h36", R=S(24, 16, 24, 28, 4) + S(24, 46, 24, 36, 4))
@@ -772,6 +774,7 @@ SO_INTERFACE |= {"des_esboco"}
 SO_INTERFACE |= {"des_automatico"}
 SO_INTERFACE |= {"pmi_empilhamento"}
 SO_INTERFACE |= {"des_inspecao", "des_inspecao_baloes", "des_inspecao_csv", "des_inspecao_xlsx"}
+SO_INTERFACE |= {"sm_dobra_conica"}
 
 # topo fino (B434): menu em ícone e uma aba por bancada
 ic("menu", B=L((10, 14), (38, 14)) + L((10, 34), (38, 34)), R=L((10, 24), (38, 24)))

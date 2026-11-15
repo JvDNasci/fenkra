@@ -748,6 +748,27 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
             ui.label(RichText::new(tr("O comprimento desenvolvido vem do fator K do raio da dobra. Na planificada a dobra é desfeita e a linha de dobra aparece no mapa.")).weak().small());
         }
+        FeatureKind::SmCone(c) => {
+            section(ui, "Dobra cônica");
+            expr(ui, "Raio da boca menor", &mut c.r1, vars, "mm");
+            expr(ui, "Raio da boca maior", &mut c.r2, vars, "mm");
+            expr(ui, "Altura do tronco", &mut c.height, vars, "mm");
+            ui.horizontal(|ui| {
+                ui.add_sized([96., 18.], egui::Label::new(tr("Centro da boca menor")));
+                for v in &mut c.center {
+                    ui.add(egui::DragValue::new(v).speed(0.5).suffix(" mm"));
+                }
+            });
+            let mut own = c.k.is_some();
+            if crate::editor::check(ui, &mut own, "fator K próprio (senão o da chapa)").changed() {
+                c.k = own.then(|| "0.5".to_string());
+            }
+            if let Some(k) = &mut c.k {
+                expr(ui, "Fator K", k, vars, "");
+            }
+            ui.label(RichText::new(tr("Os raios são internos; a espessura vem da chapa. O eixo do cone é o Z. Planificada, o tronco vira um setor de coroa: a geratriz mantém o comprimento e o arco abre 2π·sen α.")).weak().small());
+            ui.label(RichText::new(tr("Com fator K diferente de 0,5 o volume plano difere um pouco do dobrado; o comando avisa o quanto.")).weak().small());
+        }
         FeatureKind::SmLouver(l) => {
             section(ui, "Veneziana");
             ui.label(RichText::new(format!("abertura de {} a {}", crate::app::p3(l.a, 1), crate::app::p3(l.b, 1))).small());

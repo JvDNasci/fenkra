@@ -304,6 +304,7 @@ impl<'a> Tabela<'a> {
                 sketch: esboco.as_deref().map(|e| self.achar(e)).transpose()?,
                 position: *posicao as u8, cega: None,
             }),
+            Comando::DobraConica { r1, r2, altura, centro, k } => FeatureKind::SmCone(fenkra_core::SmCone { r1: r1.clone(), r2: r2.clone(), height: altura.clone(), center: *centro, k: k.clone() }),
             Comando::Membro(m) => FeatureKind::StructMember(StructMember {
                 paths: m.caminhos.iter().map(|c| self.curva(c)).collect::<Result<_, _>>()?,
                 family: m.familia.clone(),

@@ -84,7 +84,7 @@ pub fn falta(a: Act, c: &Contexto) -> Option<Falta> {
         Dwg(_) if !c.desenho_aberto => f("Nenhum desenho aberto: as vistas, as cotas e as tabelas moram numa folha.", Dwg(0), "Novo desenho"),
         Dwg(12..=14) | Dwg(20..=29) | Dwg(31..=37) | Dwg(40..=45) if c.vistas == 0 => f("A folha ainda não tem vistas: este comando parte de uma vista da peça.", Dwg(10), "3 vistas"),
         // chapa: parâmetros, depois a parede base, depois o resto
-        SmFlange | SmHem | SmBend | SmJoggle | SmStamp | SmFlangedHole | SmLouver | SmCut | SmCornerRelief | SmCornerClose | SmArcSlot | SmUnfold | SmUnfoldPartial(_) | SmCurveFlange | SmFlangeLoop | SmSurfFlange if !c.chapa_params => {
+        SmFlange | SmHem | SmBend | SmJoggle | SmStamp | SmFlangedHole | SmLouver | SmCut | SmCornerRelief | SmCornerClose | SmArcSlot | SmUnfold | SmUnfoldPartial(_) | SmCurveFlange | SmFlangeLoop | SmSurfFlange | SmCone if !c.chapa_params => {
             f("A peça ainda não tem parâmetros de chapa (espessura, raio de dobra e fator K).", SmParams, "Parâmetros da chapa")
         }
         SmFlange | SmHem | SmBend | SmJoggle | SmStamp | SmFlangedHole | SmLouver | SmCut | SmCornerRelief | SmCornerClose | SmArcSlot | SmUnfold | SmUnfoldPartial(_) | SmCurveFlange | SmFlangeLoop | SmSurfFlange if !c.chapa_parede => {

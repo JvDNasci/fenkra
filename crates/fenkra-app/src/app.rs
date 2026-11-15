@@ -2642,6 +2642,18 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     }),
                 }))
             }
+            Cmd::SmCone => {
+                if d.sheet.is_none() {
+                    d.sheet = Some(SheetParams::default());
+                }
+                // o centro da boca menor é o vértice clicado, se houver; senão a origem
+                let center = self.picks.iter().find_map(|p| match p {
+                    crate::picking::Pick::Vertex { pos, .. } => Some(pos.map(|v| v as f64)),
+                    _ => None,
+                });
+                let d = &mut self.open.doc;
+                Sel::Feature(d.add_feature(FeatureKind::SmCone(SmCone { r1: s("20"), r2: s("40"), height: s("50"), center: center.unwrap_or([0.; 3]), k: None })))
+            }
             Cmd::SmSurfFlange => {
                 if d.sheet.is_none() {
                     d.sheet = Some(SheetParams::default());
@@ -7948,6 +7960,7 @@ pub enum Cmd {
     SmHem,
     SmJoggle,
     SmBend,
+    SmCone,
     SmLouver,
     SmStamp,
     SmFlangedHole,

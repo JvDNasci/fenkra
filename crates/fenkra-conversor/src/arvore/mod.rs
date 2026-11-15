@@ -37,6 +37,10 @@ fn falso(v: &bool) -> bool {
     !*v
 }
 
+fn centro_zero(c: &[f64; 3]) -> bool {
+    *c == [0.; 3]
+}
+
 fn zero() -> String {
     "0".into()
 }
@@ -655,6 +659,16 @@ pub enum Comando {
         esboco: Option<String>,
         #[serde(default, skip_serializing_if = "e_padrao")]
         posicao: PosicaoDobra,
+    },
+    /// chapa: dobra cônica, tronco de cone de eixo Z com a espessura da chapa (planificada em setor)
+    DobraConica {
+        r1: String,
+        r2: String,
+        altura: String,
+        #[serde(default, skip_serializing_if = "centro_zero")]
+        centro: [f64; 3],
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        k: Option<String>,
     },
     /// estrutural: perfis ao longo das linhas guia
     Membro(Box<Membro>),

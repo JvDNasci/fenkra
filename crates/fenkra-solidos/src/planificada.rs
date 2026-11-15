@@ -131,6 +131,7 @@ fn eh_comando_de_chapa(k: &FeatureKind) -> bool {
     matches!(
         k,
         FeatureKind::SmWall(_)
+            | FeatureKind::SmCone(_)
             | FeatureKind::SmFlange(_)
             | FeatureKind::SmHem(_)
             | FeatureKind::SmJoggle(_)

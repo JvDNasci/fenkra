@@ -475,6 +475,7 @@ pub fn icone_comando(k: &FeatureKind) -> &'static str {
         SmHem(_) => "sm_bainha",
         SmJoggle(_) => "sm_joggle",
         SmBend(_) => "sm_dobra_linha",
+        SmCone(_) => "sm_dobra_conica",
         SmLouver(_) => "sm_veneziana",
         SmStamp(_) => "sm_estampo",
         SmFlangedHole(_) => "sm_furo_flangeado",

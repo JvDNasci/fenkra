@@ -359,6 +359,19 @@
         },
         {
           "type": "object",
+          "required": ["tipo", "r1", "r2", "altura"],
+          "additionalProperties": false,
+          "properties": {
+            "tipo": { "const": "dobra_conica" },
+            "r1": { "$ref": "#/$defs/expressao" },
+            "r2": { "$ref": "#/$defs/expressao" },
+            "altura": { "$ref": "#/$defs/expressao" },
+            "centro": { "$ref": "#/$defs/xyz" },
+            "k": { "$ref": "#/$defs/expressao" }
+          }
+        },
+        {
+          "type": "object",
           "required": ["tipo", "caminhos", "secao", "cotas"],
           "additionalProperties": false,
           "properties": {

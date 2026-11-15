@@ -573,6 +573,27 @@ fn chapa_volta_com_volume_caixa_e_planificada() {
     }
 }
 
+/// B40: dobra cônica pelo arquivo: o comando volta igual, dobrado e planificado.
+#[test]
+fn dobra_conica_volta_com_volume_e_caixa() {
+    precisa_kernel!();
+    let mut d = Document::new("cone");
+    d.sheet = Some(SheetParams { thickness: "1.5".into(), radius: "2".into(), k: "0.5".into(), ..Default::default() });
+    d.add_feature(FeatureKind::SmCone(SmCone { r1: "20".into(), r2: "40".into(), height: "50".into(), center: [10., 0., 0.], k: None }));
+    let lida = ida_e_volta(&d);
+    assert_eq!(lida.features.iter().map(|f| f.kind.clone()).collect::<Vec<_>>(), d.features.iter().map(|f| f.kind.clone()).collect::<Vec<_>>());
+    igual(&medir(&d), &medir(&lida), "cone");
+    mesma_caixa(&d, &lida, "cone");
+    let (_, hi) = caixa_das_malhas(&lida);
+    assert!(hi[2] > 49., "o tronco sobe a altura: {hi:?}");
+    let mut plana = d.clone();
+    plana.sheet.as_mut().unwrap().flat = true;
+    let lida = ida_e_volta(&plana);
+    igual(&medir(&plana), &medir(&lida), "cone plano");
+    let (_, hi) = caixa_das_malhas(&lida);
+    assert!(hi[2] < 1.5 + 1e-3, "planificada fica no plano: {hi:?}");
+}
+
 #[test]
 fn estilo_de_chapa_vai_resolvido_e_ordem_manual_fica_escrita() {
     let mut d = chapa_dobrada();

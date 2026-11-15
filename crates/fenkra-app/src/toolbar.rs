@@ -318,6 +318,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
         Group::ChDobras => vec![
             Family("sm_linha", vec![
                 it("sm_dobra_linha", "Dobra por linha", "Dobra por linha", "Escolha dois vértices na face: a chapa dobra nessa linha (linha de centro), com raio e fator K da chapa.", Cmd(C::SmBend)),
+                it("sm_dobra_conica", "Dobra cônica", "Dobra cônica (tronco de cone)", "Enrola a chapa num tronco de cone de eixo Z: raios internos das duas bocas e altura. Planificada, vira o setor de coroa do desenvolvimento exato.", Cmd(C::SmCone)),
                 it("sm_joggle", "Joggle", "Joggle (desvio em Z)", "Desloca a chapa além de uma linha por uma rampa, para sobrepor sem saliência.", Cmd(C::SmJoggle)),
             ]),
         ],

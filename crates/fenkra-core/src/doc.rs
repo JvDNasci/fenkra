@@ -1846,6 +1846,8 @@ pub enum FeatureKind {
     SmJoggle(SmJoggle),
     /// dobra por linha (chapa já plana dobrada numa linha da face)
     SmBend(SmBend),
+    /// B40: dobra cônica (chapa enrolada em tronco de cone, desenvolvida em setor de coroa)
+    SmCone(SmCone),
     /// veneziana (lanceta levantada)
     SmLouver(SmLouver),
     /// Chapa: estampo (rebaixo/reforço) com o perfil de um sketch na face.
@@ -2431,6 +2433,24 @@ pub struct SmBend {
     /// resto da chapa fica plano e cada ponta da linha leva um furo de alívio.
     #[serde(default)]
     pub cega: Option<DobraCega>,
+}
+
+/// B40: dobra cônica. A chapa é enrolada num tronco de cone de eixo Z; na planificada vira o setor de
+/// coroa circular do desenvolvimento exato, no plano XY. Espessura, raio e fator K vêm da chapa.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct SmCone {
+    /// raio interno da boca menor (mm)
+    pub r1: String,
+    /// raio interno da boca maior (mm); precisa passar o da menor
+    pub r2: String,
+    /// altura do tronco ao longo do eixo (mm)
+    pub height: String,
+    /// centro da boca menor (o eixo sobe em Z a partir dele)
+    #[serde(default)]
+    pub center: [f64; 3],
+    /// fator K próprio (senão o da chapa para o raio interno da boca menor)
+    #[serde(default)]
+    pub k: Option<String>,
 }
 
 /// Dobra cega: a dobra termina dentro da chapa, com furo de alívio nas duas pontas.
@@ -3044,6 +3064,7 @@ impl FeatureKind {
             SmHem(_) => "Bainha",
             SmJoggle(_) => "Joggle",
             SmBend(_) => "Dobra por linha",
+            SmCone(_) => "DobraConica",
             SmLouver(_) => "Veneziana",
             SmStamp(_) => "Estampo",
             SmFlangedHole(_) => "FuroFlangeado",
@@ -3114,6 +3135,7 @@ impl FeatureKind {
             SmHem(_) => "⊃",
             SmJoggle(_) => "⌇",
             SmBend(_) => "⌐",
+            SmCone(_) => "◭",
             SmLouver(_) => "≋",
             SmStamp(_) => "◡",
             SmFlangedHole(_) => "◉",
@@ -3358,6 +3380,14 @@ impl FeatureKind {
                 }
                 if let Some(c) = &mut b.cega {
                     exprs(&mut c.relief)
+                }
+            }
+            SmCone(c) => {
+                for e in [&mut c.r1, &mut c.r2, &mut c.height] {
+                    exprs(e)
+                }
+                if let Some(k) = &mut c.k {
+                    exprs(k)
                 }
             }
             SmLouver(l) => {
