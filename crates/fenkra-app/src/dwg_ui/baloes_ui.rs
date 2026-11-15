@@ -44,6 +44,16 @@ pub struct Candidato {
     pub ponto3: V3,
 }
 
+/// B472: aviso quando a origem do desenho não é uma montagem (nem peça estrutural com lista de corte).
+pub const SEM_MONTAGEM: &str = "Balões automáticos precisam de uma montagem como origem do desenho";
+
+/// B472: a janela de dois cliques e os balões tirados com Shift valem só para este uso do comando.
+pub fn rearmar(st: &mut DwgState) {
+    st.baloes.janela.clear();
+    st.baloes.fora.clear();
+    st.baloes.cache = None;
+}
+
 /// A vista de onde saem os balões e as peças dela: a primeira vista de montagem da folha ou, sem
 /// ela, a primeira peça estrutural (um balão por item da lista de corte).
 pub fn candidatos(st: &mut DwgState) -> Result<CandidatosVista, &'static str> {
@@ -103,7 +113,7 @@ fn ler_candidatos(st: &mut DwgState) -> Result<CandidatosVista, &'static str> {
         let out = centros.into_iter().map(|(item, c3)| Candidato { item: item.to_string(), peca: format!("item {item}"), ponta: layout::to_sheet(&v, &p, ax.project(c3)), ponto3: c3 }).collect();
         return Ok((v, lo, hi, out));
     }
-    Err("Coloque antes uma vista da montagem ou da peça estrutural na folha")
+    Err(SEM_MONTAGEM)
 }
 
 /// Os balões que o Confirmar vai criar: (candidato, posição).
@@ -210,6 +220,7 @@ pub fn barra(ctx: &egui::Context, st: &mut DwgState, rect: Rect) -> Option<(Stri
     let mut aviso = None;
     let painel = crate::paineis::Painel { nome: "dwg_baloes".into(), titulo: tr("Balões automáticos").to_string(), padrao: crate::paineis::abaixo_do_cubo(rect, 280.), largura: 280., redimensiona: false };
     let pos = st.baloes.painel.clone();
+    let erro_de_origem = candidatos(st).err();
     let saida = crate::paineis::mostrar(ctx, rect, &painel, pos, |ui| {
         let a = &mut st.baloes;
         egui::ComboBox::from_label(tr("Lado")).selected_text(tr(a.lado.label())).show_ui(ui, |ui| {
@@ -225,6 +236,9 @@ pub fn barra(ctx: &egui::Context, st: &mut DwgState, rect: Rect) -> Option<(Stri
             ui.label(tr("Passo (mm)"));
             ui.add(crate::ui_ext::dv(&mut a.passo).range(4.0..=40.).speed(0.5)).on_hover_text(tr("Espaço mínimo entre dois balões vizinhos na mesma fila."));
         });
+        if let Some(e) = erro_de_origem {
+            ui.colored_label(ui.visuals().warn_fg_color, format!("⚠ {}", tr(e)));
+        }
         ui.label(if a.janela.len() < 2 { tr("Janela: a vista toda (dois cliques na folha limitam)") } else { tr("Janela: só as peças com a ponta dentro") }).on_hover_text(tr("Clique dois cantos na folha para escolher as peças. Shift+clique num balão da prévia tira ou devolve."));
         if !a.fora.is_empty() {
             ui.label(format!("{}: {}", tr("Tirados com Shift"), a.fora.len()));
@@ -256,6 +270,7 @@ pub fn barra(ctx: &egui::Context, st: &mut DwgState, rect: Rect) -> Option<(Stri
             }
             if ui.button(tr("Cancelar")).clicked() {
                 st.tool = None;
+                rearmar(st);
             }
         });
     });
