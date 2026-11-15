@@ -56,8 +56,8 @@ main.com-painel #painel{display:flex}
 #corte input[type=range]{flex:1 1 140px;min-width:100px;height:32px}
 #medida{max-width:100%;display:none;padding:6px 10px;background:var(--janela);border:1px solid var(--destaque);border-radius:var(--raio);box-shadow:0 2px 10px var(--sombra);font-variant-numeric:tabular-nums}
 #anot2d{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-#etapas{display:none;gap:6px;align-items:center;padding:4px 6px;background:var(--janela);border:1px solid var(--linha);border-radius:10px;box-shadow:0 4px 16px var(--sombra);max-width:100%}
-#etapas strong{font-size:13px;white-space:nowrap;padding:0 4px}
+#etapas,#passosbar{display:none;gap:6px;align-items:center;padding:4px 6px;background:var(--janela);border:1px solid var(--linha);border-radius:10px;box-shadow:0 4px 16px var(--sombra);max-width:100%}
+#etapas strong,#passosbar strong{font-size:13px;white-space:nowrap;padding:0 4px}
 #aviso{position:absolute;inset:0;display:none;align-items:center;justify-content:center;text-align:center;padding:24px;background:var(--fundo)}
 #aviso.on{display:flex}
 #aviso .caixa{max-width:420px}
@@ -128,7 +128,7 @@ h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--suav
       <div id="cena3d"></div>
       <div id="folha"></div>
       <div id="barra" role="toolbar"></div>
-      <div id="flutuantes"><div id="corte"></div><div id="medida" role="status" aria-live="polite"></div><div id="etapas" role="group" aria-label="Capturas"></div></div>
+      <div id="flutuantes"><div id="corte"></div><div id="medida" role="status" aria-live="polite"></div><div id="etapas" role="group" aria-label="Capturas"></div><div id="passosbar" role="group" aria-label="Passos"></div></div>
       <div id="aviso" class="on"><div class="caixa"><h2 data-t="vazio_t">Abra um pacote .fkv</h2><p data-t="vazio_p">Escolha o arquivo ou arraste-o para cá. Nada sai do seu aparelho.</p><button id="babrir2" data-t="abrir">Abrir</button><p class="dica" data-t="vazio_p2">Não tem um .fkv? No Fenkra, use Arquivo, Exportar visualização.</p><p class="dica" data-t="vazio_p3">No celular: se o arquivo não aparecer ao tocar em Abrir, mande o .fkv para o aparelho e procure em Arquivos ou Downloads.</p></div></div>
     </section>
   </main>
@@ -167,12 +167,12 @@ const TX = {
   abrir_outro:"Abrir outro pacote para comparar", cmp_dica:"Abra outro .fkv do mesmo documento (outra versão) para ver o que mudou.", nova:"nova", antiga:"antiga", aberto:"Aberto",
   trocar_lado:"Trocar lados", cmp_igual:"Nenhuma diferença encontrada.", totais:"Totais", adicionados:"Adicionados", removidos:"Removidos", movidos:"Movidos", alterados:"Alterados",
   so_no_outro:"só no outro pacote", girou:"girou", visivel:"Visível", estado:"Estado", versao:"Versão",
-  capturas:"Capturas", etapa_de:"Captura {i} de {n}", anterior:"Anterior", proxima:"Próxima", sem_capturas:"Este pacote não tem capturas.", todas_etapas:"Mostrar todas as anotações", cordoes:"Mostrar o cordão das soldas",
+  capturas:"Capturas", etapa_de:"Captura {i} de {n}", passos:"Passos", montada:"Montada", passo_de:"Passo {i} de {n}", sem_passos:"Esta montagem não tem passos de explosão.", pecas_passo:"Peças deste passo", baloes:"Mostrar os balões", explosao:"Explosão", anterior:"Anterior", proxima:"Próxima", sem_capturas:"Este pacote não tem capturas.", todas_etapas:"Mostrar todas as anotações", cordoes:"Mostrar o cordão das soldas",
   faltas:"{n} ficaram de fora", faltas_t:"Ficaram de fora do pacote", faltas_dica:"Peças que não puderam ser mostradas. Veja o motivo de cada uma em Dados." },
  en:{ "3D":"3D", folhas:"Sheets", painel:"Panel", abrir:"Open", tema:"Theme",
   vazio_t:"Open a .fkv package", vazio_p:"Drop the .fkv file on this screen, or tap Open and choose it. Nothing leaves your device.", vazio_p2:"No .fkv yet? In Fenkra, use File, Export viewer package.", vazio_p3:"On a phone: if the file does not show up when you tap Open, send the .fkv to the device and look in Files or Downloads.",
   arvore:"Tree", dados:"Data", pmi:"PMI", vistas:"Views", estados:"States", lista:"List",
-  capturas:"Captures", etapa_de:"Capture {i} of {n}", anterior:"Previous", proxima:"Next", sem_capturas:"This package has no captures.", todas_etapas:"Show all annotations", cordoes:"Show the weld beads",
+  capturas:"Captures", etapa_de:"Capture {i} of {n}", passos:"Steps", montada:"Assembled", passo_de:"Step {i} of {n}", sem_passos:"This assembly has no explode steps.", pecas_passo:"Parts in this step", baloes:"Show the balloons", explosao:"Explode", anterior:"Previous", proxima:"Next", sem_capturas:"This package has no captures.", todas_etapas:"Show all annotations", cordoes:"Show the weld beads",
   buscar:"Search part, code or material", ajustar:"Fit", isolar:"Isolate", tudo:"All", cortar:"Section", medir:"Measure", orto:"Ortho", persp:"Persp.",
   sem_sel:"Tap a part to see its data.", nome:"Name", pn:"Part no.", descricao:"Description", material:"Material", tipo_de_peca:"Type",
   massa_kg:"Mass (kg)", volume_mm3:"Volume (mm³)", area_mm2:"Area (mm²)", dimensoes_mm:"Size (mm)", centro_de_massa_mm:"Center of mass (mm)",
@@ -240,12 +240,68 @@ async function lerZip(buf){
     return m.metodo===0 ? bruto : inflar(bruto);
   }};
 }
+/* EXT_meshopt_compression (B181): decodificador próprio, escrito pela especificação aberta.
+   ATTRIBUTES: diferença por byte para o elemento anterior, em grupos de 16, com 0, 2, 4 ou 8 bits.
+   INDICES: diferenças em número de 7 bits por byte. As vistas voltam a um binário comum. */
+const MESHOPT = "EXT_meshopt_compression";
+function moDecAtrib(f, n, passo){
+  if (f[0]!==0xa0 || passo%4 || passo>256) throw new Error("meshopt: atributos");
+  const cauda = Math.max(passo,32), fim = f.length-cauda, ult = f.slice(f.length-passo), out = new Uint8Array(n*passo);
+  const bloco = Math.min((Math.floor(8192/passo)) & ~15, 256), dif = new Uint8Array(256);
+  let c = 1;
+  for (let ini=0; ini<n; ){
+    const k = Math.min(bloco, n-ini), g = Math.ceil(k/16), nc = Math.ceil(g/4);
+    for (let b=0;b<passo;b++){
+      const cab = c; c += nc; dif.fill(0);
+      for (let q=0;q<g;q++){
+        const modo = (f[cab+(q>>2)] >> ((q&3)*2)) & 3;
+        if (modo===0) continue;
+        if (modo===3){ dif.set(f.subarray(c,c+16), q*16); c+=16; continue; }
+        const bits = modo===1?2:4, cheio = (1<<bits)-1, pb = 8/bits; let esc = c + 2*bits;
+        for (let i=0;i<16;i++){ const v = (f[c+Math.floor(i/pb)] >> (8-bits*(i%pb+1))) & cheio; dif[q*16+i] = v===cheio ? f[esc++] : v; }
+        c = esc;
+      }
+      let p = ult[b];
+      for (let i=0;i<k;i++){ const z=dif[i]; p = (p + ((z>>1) ^ (-(z&1)))) & 255; out[(ini+i)*passo+b] = p; }
+      ult[b] = p;
+    }
+    ini += k;
+  }
+  if (c>fim) throw new Error("meshopt: fluxo curto");
+  return out;
+}
+function moDecIndices(f, n, passo){
+  if (f[0]!==0xd1) throw new Error("meshopt: índices");
+  const out = passo===2 ? new Uint16Array(n) : new Uint32Array(n), base=[0,0]; let c=1;
+  for (let i=0;i<n;i++){
+    let v=0, s=0, b; do { b=f[c++]; v += (b&127)*Math.pow(2,s); s+=7; } while (b&128);
+    const qual = v%2, z = Math.floor(v/2), d = (z%2) ? -Math.floor(z/2)-1 : Math.floor(z/2);
+    base[qual] = (base[qual]+d)>>>0; out[i]=base[qual];
+  }
+  return new Uint8Array(out.buffer);
+}
+function moDescompactar(json, u8, bin){
+  if (!(json.extensionsUsed||[]).includes(MESHOPT)) return null;
+  const partes=[]; let tam=0;
+  json.bufferViews = json.bufferViews.map(v=>{
+    const e = v.extensions && v.extensions[MESHOPT]; let b;
+    if (!e) b = u8.subarray(bin+(v.byteOffset||0), bin+(v.byteOffset||0)+v.byteLength);
+    else { const f = u8.subarray(bin+(e.byteOffset||0), bin+(e.byteOffset||0)+e.byteLength);
+      b = e.mode==="ATTRIBUTES" ? moDecAtrib(f,e.count,e.byteStride) : e.mode==="INDICES" ? moDecIndices(f,e.count,e.byteStride) : (()=>{throw new Error("meshopt: modo "+e.mode);})(); }
+    tam = (tam+3)&~3; partes.push([tam,b]); const w={buffer:0,byteOffset:tam,byteLength:b.length}; if(v.byteStride) w.byteStride=v.byteStride; if(v.target) w.target=v.target; tam+=b.length; return w;
+  });
+  const novo = new Uint8Array(tam); for (const [o,b] of partes) novo.set(b,o);
+  json.buffers=[{byteLength:tam}];
+  return novo;
+}
 function lerGLB(u8){
   const dv = new DataView(u8.buffer,u8.byteOffset,u8.byteLength);
   if (dv.getUint32(0,true)!==0x46546c67) throw new Error("glb");
   const lj = dv.getUint32(12,true);
   const json = JSON.parse(new TextDecoder().decode(u8.subarray(20,20+lj)));
   const bin = 20+lj+8;
+  const cru = moDescompactar(json, u8, bin);
+  if (cru) return { json, bin:0, buf: cru.buffer, compactado:true };
   return { json, bin, buf: u8.buffer.slice(u8.byteOffset, u8.byteOffset+u8.byteLength) };
 }
 
@@ -335,7 +391,8 @@ const V3 = {
     const objs = [];
     const nos = J.nodes.map((n,i)=>{
       const o = new THREE.Object3D(); o.name = n.name||"";
-      if (n.matrix){ o.matrix.fromArray(n.matrix); o.matrixAutoUpdate=false; o.userData.base = o.matrix.clone(); }
+      if (n.matrix) o.matrix.fromArray(n.matrix);
+      o.matrixAutoUpdate=false; o.userData.base = o.matrix.clone();
       objs.push(o); return o;
     });
     J.nodes.forEach((n,i)=>{
@@ -567,6 +624,20 @@ const V3 = {
     const cv = this.ov; if (!cv) return;
     const d = cv.width/Math.max(1,this.w), cx = cv.getContext("2d");
     cx.setTransform(d,0,0,d,0,0); cx.clearRect(0,0,this.w,this.h);
+    const bal = baloesAtivos();
+    if (bal.length){
+      cx.font = `700 13px system-ui,sans-serif`; cx.textAlign="center"; cx.textBaseline="middle";
+      const cor = corCSS("--destaque"), fundoB = corCSS("--janela"), tx = corCSS("--texto");
+      for (const b of bal){
+        const q = this.ponto(new THREE.Vector3(...b.ponto)); if (!q) continue;
+        const bx = q.x+34, by = q.y-34;
+        cx.strokeStyle = cor; cx.lineWidth = 1.5; cx.beginPath(); cx.moveTo(q.x,q.y); cx.lineTo(bx-11*0.7,by+11*0.7); cx.stroke();
+        cx.fillStyle = cor; cx.beginPath(); cx.arc(q.x,q.y,2.5,0,6.2832); cx.fill();
+        cx.fillStyle = fundoB; cx.beginPath(); cx.arc(bx,by,11,0,6.2832); cx.fill(); cx.stroke();
+        cx.fillStyle = tx; cx.fillText(String(b.item),bx,by+0.5);
+      }
+      cx.textAlign="start";
+    }
     if (!this.itens2d || !this.itens2d.length) return;
     const fundo = corCSS("--janela"), f = 13, pad = 5;
     cx.font = `600 ${f}px system-ui,sans-serif`; cx.textBaseline = "middle"; cx.lineJoin = "round";
@@ -704,19 +775,21 @@ function isolarSelecionado(){
 function mostrarTudo(){ P.isolado=null; for (const [k,v] of P.base) P.entradas.get(k).vis=true; aplicarVisibilidade(); V3.ajustar(); }
 
 /* ---------------- painéis ---------------- */
-const ABAS = ["arvore","dados","pmi","capturas","vistas","estados","lista","zonas","montagem","comparar"];
+const ABAS = ["arvore","dados","pmi","capturas","vistas","estados","passos","lista","zonas","montagem","comparar"];
 function montarAbas(){
   const m = P.m, ab = $("#abas"); ab.replaceChildren();
-  const tem = { arvore:m.arvore.length>0, dados:true, pmi:true, capturas:m.capturas.length>0, vistas:true, estados:m.estados.length>0, lista:(m.lista&&m.lista.length>0)||(m.tabelas&&m.tabelas.length>0), zonas:!!m.cena&&m.arvore.length>0, montagem:m.tipo==="montagem", comparar:!!m.cena&&m.arvore.length>0 };
+  const tem = { arvore:m.arvore.length>0, dados:true, pmi:true, capturas:m.capturas.length>0, vistas:true, estados:m.estados.length>0, passos:(m.passos||[]).some(e=>e.passos.length>0), lista:(m.lista&&m.lista.length>0)||(m.tabelas&&m.tabelas.length>0), zonas:!!m.cena&&m.arvore.length>0, montagem:m.tipo==="montagem", comparar:!!m.cena&&m.arvore.length>0 };
   ABAS.filter(a=>tem[a] && !(a==="arvore"&&!m.arvore.length)).forEach(a=>ab.append(el("button",{role:"tab","data-aba":a,"aria-pressed":"false",onclick:()=>mostrarAba(a)},T(a))));
 }
 function mostrarAba(a, abrir){
+  if (a==="passos" && !P.passo && (P.m.passos||[]).length) P.passo={e:0,i:-1};
   if (abrir) $("#main").classList.add("com-painel"), $("#bpainel").setAttribute("aria-pressed","true");
   if (P.aba==="comparar" && a!=="comparar" && P.cores.size){ P.cores.clear(); V3.pronto && V3.tema(); }
   P.aba = a;
   document.querySelectorAll("#abas button").forEach(b=>b.setAttribute("aria-pressed",String(b.dataset.aba===a)));
   const c = $("#conteudo"); c.replaceChildren();
-  ({arvore:abaArvore,dados:abaDados,pmi:abaPmi,capturas:abaCapturas,vistas:abaVistas,estados:abaEstados,lista:abaLista,zonas:abaZonas,montagem:abaMontagem,comparar:abaComparar}[a])(c);
+  ({arvore:abaArvore,dados:abaDados,pmi:abaPmi,capturas:abaCapturas,vistas:abaVistas,estados:abaEstados,passos:abaPassos,lista:abaLista,zonas:abaZonas,montagem:abaMontagem,comparar:abaComparar}[a])(c);
+  barraPassos();
   V3.pronto && V3.tamanho();
 }
 function abaArvore(c){
@@ -797,9 +870,55 @@ function idsDe(num){
 }
 function restaurar(){
   for (const [k,v] of P.base) P.entradas.get(k).vis=v;
-  P.isolado=null; P.capAtiva=null; P.estadoAtivo=null; P.pmiFiltro=null; P.pmiSel=null; P.offsets.clear(); P.cores.clear();
+  P.isolado=null; P.capAtiva=null; P.estadoAtivo=null; P.pmiFiltro=null; P.pmiSel=null; P.offsets.clear(); P.cores.clear(); P.passo=null;
   for (const e of P.entradas.values()) if (e.obj && e.obj.userData.base) e.obj.matrix.copy(e.obj.userData.base);
-  V3.grupo.updateMatrixWorld(true); aplicarVisibilidade(); V3.anotar(); V3.tema(); barraEtapas(); mostrarAba(P.aba);
+  V3.grupo.updateMatrixWorld(true); aplicarVisibilidade(); V3.anotar(); V3.tema(); barraEtapas(); barraPassos(); mostrarAba(P.aba);
+}
+/* Passos da explosão (B181/B146): o pacote já traz o deslocamento acumulado de cada componente, a
+   lista de peças do passo e os balões com o número do item; a página só aplica e desenha. */
+function explosaoAtual(){ const ex=P.m.passos||[]; return ex[Math.min((P.passo&&P.passo.e)||0, ex.length-1)]; }
+function aplicarPasso(e, i){
+  const ex = (P.m.passos||[])[e]; if (!ex) return;
+  for (const x of P.entradas.values()) if (x.obj && x.obj.userData.base) x.obj.matrix.copy(x.obj.userData.base);
+  const p = i>=0 ? ex.passos[i] : null;
+  P.passo = {e, i};
+  if (p) p.deslocamentos.forEach(({id,d})=>{ const x=P.entradas.get(id); if(x&&x.obj) x.obj.matrix.premultiply(new THREE.Matrix4().makeTranslation(d[0],d[1],d[2])); });
+  V3.grupo.updateMatrixWorld(true); V3.precisa=true; barraPassos();
+  if (P.aba==="passos") mostrarAba("passos");
+}
+function barraPassos(){
+  const b = $("#passosbar"); if (!b) return;
+  const ex = P.m && (P.m.passos||[]).length ? explosaoAtual() : null;
+  const n = ex ? ex.passos.length : 0;
+  b.style.display = n && P.passo ? "flex" : "none"; b.replaceChildren();
+  if (!n || !P.passo) return;
+  const e = P.passo.e, i = P.passo.i;
+  b.append(el("button",{"aria-label":T("anterior"),title:T("anterior"),onclick:()=>aplicarPasso(e,Math.max(-1,i-1))},"◀"),
+    el("strong",{}, i<0 ? T("montada") : T("passo_de").replace("{i}",i+1).replace("{n}",n)+" · "+ex.passos[i].nome),
+    el("button",{"aria-label":T("proxima"),title:T("proxima"),onclick:()=>aplicarPasso(e,Math.min(n-1,i+1))},"▶"));
+}
+function abaPassos(c){
+  const ex = P.m.passos||[];
+  if (!ex.some(x=>x.passos.length)){ c.append(el("div",{class:"nada"},T("sem_passos"))); return; }
+  const e = (P.passo&&P.passo.e)||0, i = P.passo ? P.passo.i : -1;
+  if (ex.length>1){ const s=el("select",{"aria-label":T("explosao"),onchange:ev=>aplicarPasso(+ev.target.value,-1)}); ex.forEach((x,k)=>{ const o=el("option",{value:k},x.nome); if(k===e) o.selected=true; s.append(o); }); c.append(s); }
+  c.append(el("button",{class:"item","aria-pressed":String(!!P.passo&&i<0),onclick:()=>aplicarPasso(e,-1)},T("montada")));
+  ex[e].passos.forEach((p,k)=>c.append(el("button",{class:"item","aria-pressed":String(!!P.passo&&k===i),onclick:()=>aplicarPasso(e,k)},(k+1)+". "+p.nome,el("small",{},p.movidas.length+" · "+num(p.distancia_mm,1)+" mm"))));
+  const ck = el("input",{type:"checkbox"}); ck.checked = P.baloes!==false; ck.onchange=()=>{P.baloes=ck.checked; V3.precisa=true;};
+  c.append(el("label",{class:"item"},ck," "+T("baloes")));
+  const p = i>=0 ? ex[e].passos[i] : null, lista = p ? p.lista : (P.m.lista||[]);
+  if (lista.length){
+    c.append(el("h3",{},p?T("pecas_passo"):T("lista")));
+    const t = el("table",{class:"dados"}, el("tr",{},el("th",{},T("item")),el("th",{},T("qtd")),el("th",{},T("nome"))));
+    lista.forEach(r=>t.append(el("tr",{},el("td",{},String(r.item??"-")),el("td",{},String(r.quantidade)),el("td",{},r.nome))));
+    c.append(t);
+  }
+}
+/* Balões do passo (ou da montagem montada, na aba Passos): círculo com o número do item da lista. */
+function baloesAtivos(){
+  if (!P.m || P.baloes===false || P.aba!=="passos") return [];
+  const ex = P.passo && (P.m.passos||[])[P.passo.e];
+  return ex && P.passo.i>=0 ? ex.passos[P.passo.i].baloes : (P.m.baloes||[]);
 }
 /* Capturas em sequência: cada uma é uma etapa do detalhamento (câmera + só as anotações dela). */
 function indiceCaptura(){ return P.m.capturas.findIndex(k=>k.id===P.capAtiva); }
@@ -1259,7 +1378,7 @@ async function carregar(fonte, opcoes){
     const m = JSON.parse(new TextDecoder().decode(await zip.ler("pacote.json")));
     if (m.formato!=="fenkra-visualizacao") throw new Error("formato");
     if (m.versao>1) throw new Error("versão "+m.versao+" > 1");
-    Object.assign(P,{zip,m,sel:null,isolado:null,pmiFiltro:null,pmiSel:null,capAtiva:null,estadoAtivo:null,aba:null,bytes:buf,outro:null,papel:(opcoes&&opcoes.papel)||"B",meta:(opcoes&&opcoes.meta)||P.meta||null,usoBusca:""});
+    Object.assign(P,{zip,m,sel:null,isolado:null,pmiFiltro:null,pmiSel:null,capAtiva:null,estadoAtivo:null,passo:null,aba:null,bytes:buf,outro:null,papel:(opcoes&&opcoes.papel)||"B",meta:(opcoes&&opcoes.meta)||P.meta||null,usoBusca:""});
     if (Z.helper&&V3.pronto){ V3.s.remove(Z.helper); } Object.assign(Z,{un:null,reg:null,helper:null,res:[]});
     P.cores.clear(); Folha.dados=[]; Folha.svg=null; Folha.i=0; Folha.medindo=false;
     indexar(m); $("#titulo").textContent = m.nome;

@@ -12,7 +12,7 @@ fn gera_pacote_e_pagina_conferidos() {
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("placa.fkp"), fenkra_solidos::example_document().to_json()).unwrap();
     let pasta = Pasta::nova(&dir).unwrap();
-    let pedido = Pedido { arquivo: "placa.fkp", saida: "placa.fkv", html: Some("placa.html"), decimar: None, sobrescrever: false };
+    let pedido = Pedido { arquivo: "placa.fkp", saida: "placa.fkv", html: Some("placa.html"), decimar: None, compactar: false, sobrescrever: false };
     let r = visualizar(&pasta, &pedido).unwrap();
     assert_eq!(r["tipo"], "peca");
     let b = std::fs::read(dir.join("placa.fkv")).unwrap();
@@ -25,12 +25,18 @@ fn gera_pacote_e_pagina_conferidos() {
     // fora da pasta e extensão errada são recusados
     let fora = Pedido { arquivo: "../placa.fkp", ..pedido };
     assert!(visualizar(&pasta, &fora).is_err());
-    let ruim = Pedido { arquivo: "placa.fkp", saida: "placa.step", html: None, decimar: None, sobrescrever: true };
+    let ruim = Pedido { arquivo: "placa.fkp", saida: "placa.step", html: None, decimar: None, compactar: false, sobrescrever: true };
     assert!(visualizar(&pasta, &ruim).is_err());
     // decimar fora da faixa
-    let d = Pedido { arquivo: "placa.fkp", saida: "leve.fkv", html: None, decimar: Some(5.), sobrescrever: true };
+    let d = Pedido { arquivo: "placa.fkp", saida: "leve.fkv", html: None, decimar: Some(5.), compactar: false, sobrescrever: true };
     assert_eq!(visualizar(&pasta, &d).unwrap_err().codigo, "argumento");
     let d = Pedido { decimar: Some(0.3), ..d };
     let r = visualizar(&pasta, &d).unwrap();
     assert!(r["bytes"].as_u64().unwrap() < b.len() as u64);
+    // compactado (meshopt): menor que o inteiro e ainda válido para o leitor de referência
+    let c = Pedido { saida: "compacto.fkv", decimar: None, compactar: true, ..d };
+    let r = visualizar(&pasta, &c).unwrap();
+    assert!(r["bytes"].as_u64().unwrap() < b.len() as u64);
+    let lido = fenkra_pacote::Pacote::ler(&std::fs::read(dir.join("compacto.fkv")).unwrap()).unwrap();
+    lido.validar().unwrap();
 }

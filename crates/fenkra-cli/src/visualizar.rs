@@ -13,6 +13,8 @@ pub struct Pedido<'a> {
     pub html: Option<&'a str>,
     /// fração dos triângulos que fica; liga também a retirada dos pontos de captura exatos
     pub decimar: Option<f64>,
+    /// malhas pela extensão `EXT_meshopt_compression`: menor, mas pede leitor com a extensão
+    pub compactar: bool,
     pub sobrescrever: bool,
 }
 
@@ -23,7 +25,7 @@ pub fn visualizar(pasta: &Pasta, p: &Pedido) -> Result<Value, ErroApi> {
         }
     }
     let caminho = pasta.para_ler(p.arquivo, &["fkp", "fka", "fkd"])?;
-    let opc = Opcoes { decimar: p.decimar, capturas: p.decimar.is_none(), ..Default::default() };
+    let opc = Opcoes { decimar: p.decimar, capturas: p.decimar.is_none(), compactar: p.compactar, ..Default::default() };
     let pacote = de_arquivo(&caminho, &opc).map_err(|e| ErroApi::novo("leitura", e))?;
     pacote.validar().map_err(|e| ErroApi::novo("formato", e))?;
     let bytes = pacote.bytes().map_err(|e| ErroApi::novo("gravacao", e))?;

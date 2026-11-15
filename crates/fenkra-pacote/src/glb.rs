@@ -29,6 +29,8 @@ pub struct Construtor {
     materiais: Vec<Value>,
     cores: HashMap<[u8; 3], usize>,
     nos: Vec<Value>,
+    /// tamanho de um elemento de cada vista (o passo da compressão meshopt)
+    elementos: Vec<usize>,
 }
 
 fn relevo(v: f32) -> f32 {
@@ -40,7 +42,8 @@ fn relevo(v: f32) -> f32 {
 }
 
 impl Construtor {
-    fn dados(&mut self, dados: &[u8], alvo: u32, passo: Option<usize>) -> usize {
+    fn dados(&mut self, dados: &[u8], alvo: u32, passo: Option<usize>, elemento: usize) -> usize {
+        self.elementos.push(elemento);
         while self.bin.len() % 4 != 0 {
             self.bin.push(0);
         }
@@ -92,7 +95,7 @@ impl Construtor {
                 bytes.extend_from_slice(&v.to_le_bytes());
             }
         }
-        let vp = self.dados(&bytes, 34962, Some(12));
+        let vp = self.dados(&bytes, 34962, Some(12), 12);
         let ap = self.acessor(vp, FLOAT, n, "VEC3", json!({"min": lo, "max": hi}));
         let mut atributos = Map::new();
         atributos.insert("POSITION".into(), json!(ap));
@@ -102,16 +105,16 @@ impl Construtor {
                 let q = |x: f32| (relevo(x).clamp(-1., 1.) * 127.).round() as i8 as u8;
                 b.extend_from_slice(&[q(v[0]), q(v[1]), q(v[2]), 0]);
             }
-            let vn = self.dados(&b, 34962, Some(4));
+            let vn = self.dados(&b, 34962, Some(4), 4);
             let an = self.acessor(vn, BYTE, n, "VEC3", json!({"normalized": true}));
             atributos.insert("NORMAL".into(), json!(an));
         }
-        let (bytes, tipo): (Vec<u8>, u32) = if n <= 65535 {
-            (indices.iter().flat_map(|i| (*i as u16).to_le_bytes()).collect(), U16)
+        let (bytes, tipo, tam): (Vec<u8>, u32, usize) = if n <= 65535 {
+            (indices.iter().flat_map(|i| (*i as u16).to_le_bytes()).collect(), U16, 2)
         } else {
-            (indices.iter().flat_map(|i| i.to_le_bytes()).collect(), U32)
+            (indices.iter().flat_map(|i| i.to_le_bytes()).collect(), U32, 4)
         };
-        let vi = self.dados(&bytes, 34963, None);
+        let vi = self.dados(&bytes, 34963, None, tam);
         let ai = self.acessor(vi, tipo, indices.len(), "SCALAR", json!({}));
         let m = self.material(cor);
         self.malhas.push(json!({"name": nome, "primitives": [{"attributes": atributos, "indices": ai, "material": m, "mode": 4}], "extras": extras}));
@@ -139,50 +142,89 @@ impl Construtor {
         o.entry("children").or_insert_with(|| json!([])).as_array_mut().expect("lista").push(json!(filho));
     }
 
-    /// Fecha o arquivo: põe a raiz de conversão de unidade e eixo e devolve o GLB.
-    pub fn finalizar(mut self, raizes: &[usize], nome: &str) -> Vec<u8> {
+    /// Fecha o arquivo: põe a raiz de conversão de unidade e eixo e devolve o GLB. Com `compactar`, as
+    /// vistas vão pela extensão `EXT_meshopt_compression` (ver [`crate::meshopt`]): o binário do GLB
+    /// guarda só os fluxos compactados e um buffer reserva, sem dados, dá o tamanho descompactado.
+    pub fn finalizar(mut self, raizes: &[usize], nome: &str, compactar: bool) -> Vec<u8> {
         let k = 0.001;
         let raiz = json!({"name": "fkv:raiz", "children": raizes, "extras": {"fkv_raiz": true},
             "matrix": [k, 0., 0., 0., 0., 0., -k, 0., 0., k, 0., 0., 0., 0., 0., 1.]});
         self.nos.push(raiz);
         let topo = self.nos.len() - 1;
+        let mut extensoes = vec!["KHR_mesh_quantization"];
+        let mut buffers = vec![json!({"byteLength": (self.bin.len() + 3) / 4 * 4})];
+        let mut bin = std::mem::take(&mut self.bin);
+        if compactar && !self.vistas.is_empty() {
+            let mut novo = vec![];
+            for (v, &el) in self.vistas.iter_mut().zip(&self.elementos) {
+                let ini = v["byteOffset"].as_u64().unwrap_or(0) as usize;
+                let tam = v["byteLength"].as_u64().unwrap_or(0) as usize;
+                let cru = &bin[ini..ini + tam];
+                let (fluxo, modo) = if v["target"] == 34963 {
+                    let idx: Vec<u32> = if el == 2 {
+                        cru.chunks_exact(2).map(|b| u32::from(u16::from_le_bytes([b[0], b[1]]))).collect()
+                    } else {
+                        cru.chunks_exact(4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect()
+                    };
+                    (crate::meshopt::codificar_indices(&idx), "INDICES")
+                } else {
+                    (crate::meshopt::codificar_atributos(cru, el), "ATTRIBUTES")
+                };
+                while novo.len() % 4 != 0 {
+                    novo.push(0);
+                }
+                v["buffer"] = json!(1);
+                v["extensions"] = json!({crate::meshopt::EXTENSAO: {"buffer": 0, "byteOffset": novo.len(), "byteLength": fluxo.len(), "byteStride": el, "count": tam / el, "mode": modo}});
+                novo.extend_from_slice(&fluxo);
+            }
+            buffers = vec![
+                json!({"byteLength": novo.len().div_ceil(4) * 4}),
+                json!({"byteLength": (bin.len() + 3) / 4 * 4, "extensions": {crate::meshopt::EXTENSAO: {"fallback": true}}}),
+            ];
+            bin = novo;
+            extensoes.push(crate::meshopt::EXTENSAO);
+        }
         let mut j = json!({
             "asset": {"version": "2.0", "generator": "Fenkra", "extras": {"unidadeDoModelo": "mm", "eixoParaCima": "Z"}},
-            "extensionsUsed": ["KHR_mesh_quantization"],
-            "extensionsRequired": ["KHR_mesh_quantization"],
+            "extensionsUsed": extensoes,
+            "extensionsRequired": extensoes,
             "scene": 0,
             "scenes": [{"name": nome, "nodes": [topo]}],
             "nodes": self.nos,
-            "buffers": [{"byteLength": (self.bin.len() + 3) / 4 * 4}],
+            "buffers": buffers,
         });
         for (k, v) in [("meshes", self.malhas), ("materials", self.materiais), ("accessors", self.acessores), ("bufferViews", self.vistas)] {
             if !v.is_empty() {
                 j[k] = Value::Array(v);
             }
         }
-        let mut texto = serde_json::to_vec(&j).expect("json");
-        while texto.len() % 4 != 0 {
-            texto.push(b' ');
-        }
-        let mut bin = self.bin;
-        while bin.len() % 4 != 0 {
-            bin.push(0);
-        }
-        let total = 12 + 8 + texto.len() + if bin.is_empty() { 0 } else { 8 + bin.len() };
-        let mut s = Vec::with_capacity(total);
-        s.extend_from_slice(b"glTF");
-        s.extend_from_slice(&2u32.to_le_bytes());
-        s.extend_from_slice(&(total as u32).to_le_bytes());
-        s.extend_from_slice(&(texto.len() as u32).to_le_bytes());
-        s.extend_from_slice(&0x4e4f_534au32.to_le_bytes());
-        s.extend_from_slice(&texto);
-        if !bin.is_empty() {
-            s.extend_from_slice(&(bin.len() as u32).to_le_bytes());
-            s.extend_from_slice(&0x004e_4942u32.to_le_bytes());
-            s.extend_from_slice(&bin);
-        }
-        s
+        montar(&j, bin)
     }
+}
+
+/// Junta o JSON e o binário num GLB, com os alinhamentos de 4 bytes.
+pub fn montar(j: &Value, mut bin: Vec<u8>) -> Vec<u8> {
+    let mut texto = serde_json::to_vec(j).expect("json");
+    while texto.len() % 4 != 0 {
+        texto.push(b' ');
+    }
+    while bin.len() % 4 != 0 {
+        bin.push(0);
+    }
+    let total = 12 + 8 + texto.len() + if bin.is_empty() { 0 } else { 8 + bin.len() };
+    let mut s = Vec::with_capacity(total);
+    s.extend_from_slice(b"glTF");
+    s.extend_from_slice(&2u32.to_le_bytes());
+    s.extend_from_slice(&(total as u32).to_le_bytes());
+    s.extend_from_slice(&(texto.len() as u32).to_le_bytes());
+    s.extend_from_slice(&0x4e4f_534au32.to_le_bytes());
+    s.extend_from_slice(&texto);
+    if !bin.is_empty() {
+        s.extend_from_slice(&(bin.len() as u32).to_le_bytes());
+        s.extend_from_slice(&0x004e_4942u32.to_le_bytes());
+        s.extend_from_slice(&bin);
+    }
+    s
 }
 
 /// Lê o trecho JSON de um GLB e confere o cabeçalho e os tamanhos: base do teste de conformidade.
