@@ -4,8 +4,8 @@
 //!
 //! A leitura percorre os produtos pela posição dos atributos, que todo `IfcProduct` compartilha: a
 //! posição em 6 e a representação em 7. Traz faces trianguladas, poligonais e B-rep facetado, com
-//! instâncias por `IfcMappedItem`. Sólido por extrusão e outras formas paramétricas não têm malha
-//! pronta: ficam de fora e o relatório conta.
+//! instâncias por `IfcMappedItem`, e o sólido por extrusão vira malha (`ifc_extrusao.rs`). Varredura,
+//! booleana e outras formas paramétricas não têm malha pronta: ficam de fora e o relatório conta.
 //!
 //! A gravação põe cada peça num `IfcBuildingElementProxy`, com a malha uma vez só num
 //! `IfcRepresentationMap`, e todas num único pavimento. Não há árvore: montagem sai achatada.
@@ -26,15 +26,15 @@ enum V {
     Enum(String),
     Ref(u64),
     Lista(Vec<V>),
-    /// valor com tipo, como `IFCLABEL('x')`
-    Tipado(Vec<V>),
+    /// valor com tipo, como `IFCLABEL('x')`: o nome em maiúsculas e os argumentos
+    Tipado(String, Vec<V>),
 }
 
 impl V {
     fn numero(&self) -> Option<f64> {
         match self {
             V::Numero(n) => Some(*n),
-            V::Tipado(l) => l.first()?.numero(),
+            V::Tipado(_, l) => l.first()?.numero(),
             _ => None,
         }
     }
@@ -138,15 +138,17 @@ impl Analise<'_> {
                 std::str::from_utf8(&self.b[inicio..self.i]).ok()?.parse().ok().map(V::Numero)
             }
             c if c.is_ascii_alphabetic() => {
+                let inicio = self.i;
                 while self.b.get(self.i).is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_') {
                     self.i += 1;
                 }
+                let nome = String::from_utf8_lossy(&self.b[inicio..self.i]).to_ascii_uppercase();
                 self.pular_espaco();
                 if self.b.get(self.i) != Some(&b'(') {
                     return None;
                 }
                 self.i += 1;
-                Some(V::Tipado(self.lista(nivel)?))
+                Some(V::Tipado(nome, self.lista(nivel)?))
             }
             _ => None,
         }
@@ -425,8 +427,9 @@ impl Leitura<'_> {
         ([o[0], o[1]], [x[0], x[1]])
     }
 
-    /// Pontos de uma curva fechada de perfil: `IfcPolyline` ou `IfcIndexedPolyCurve` (arcos viram retas
-    /// entre os pontos, e o relatório conta).
+    /// Pontos de uma curva fechada de perfil: `IfcPolyline` ou `IfcIndexedPolyCurve`. Na curva indexada,
+    /// cada `IfcArcIndex` (arco pelos três pontos) vira um polígono com o passo do círculo de perfil, como
+    /// o `IfcCircleProfileDef`.
     fn curva_2d(&mut self, v: &V) -> Option<Vec<[f64; 2]>> {
         let (tipo, a) = self.entidade(v)?.clone();
         match tipo.as_str() {
@@ -434,38 +437,105 @@ impl Leitura<'_> {
             "IFCINDEXEDPOLYCURVE" => {
                 let (_, lista) = self.entidade(a.first()?)?;
                 let pts: Vec<[f64; 2]> = lista.first()?.lista().iter().map(V::numeros).filter(|c| c.len() >= 2).map(|c| [c[0], c[1]]).collect();
-                let arcos = a.get(1).map(|s| s.lista().iter().filter(|x| matches!(x, V::Tipado(_))).count()).unwrap_or(0);
-                let tem_arco = format!("{:?}", a.get(1)).contains("ARC");
-                if tem_arco {
-                    self.c.ignorar("aresta curva", arcos.max(1));
+                let segmentos = a.get(1).map(V::lista).unwrap_or_default();
+                if segmentos.is_empty() {
+                    return Some(pts);
                 }
-                Some(pts)
+                let ponto = |i: f64| pts.get((i as usize).wrapping_sub(1)).copied();
+                let juntar = |p: [f64; 2], saida: &mut Vec<[f64; 2]>| {
+                    if saida.last().is_none_or(|q| (q[0] - p[0]).abs() > 1e-12 || (q[1] - p[1]).abs() > 1e-12) {
+                        saida.push(p);
+                    }
+                };
+                let mut saida: Vec<[f64; 2]> = Vec::new();
+                for seg in segmentos {
+                    let V::Tipado(nome, args) = seg else { continue };
+                    let indices = args.first().map(V::numeros).unwrap_or_default();
+                    if nome == "IFCARCINDEX" && indices.len() == 3 {
+                        let (Some(p1), Some(p2), Some(p3)) = (ponto(indices[0]), ponto(indices[1]), ponto(indices[2])) else { continue };
+                        for p in super::ifc_extrusao::arco_por_tres(p1, p2, p3) {
+                            juntar(p, &mut saida);
+                        }
+                    } else {
+                        for p in indices.iter().filter_map(|i| ponto(*i)) {
+                            juntar(p, &mut saida);
+                        }
+                    }
+                }
+                Some(saida)
             }
             _ => None,
         }
     }
 
-    /// Contorno de fora de um perfil, já no plano XY do sólido.
-    fn perfil(&mut self, v: &V) -> Option<Vec<[f64; 2]>> {
+    /// Conta o canto arredondado que o perfil paramétrico declara e a malha deixa vivo.
+    fn canto(&mut self, a: &[V], indices: &[usize]) {
+        let tem = indices.iter().any(|i| a.get(*i).and_then(V::numero).is_some_and(|r| r > 0.));
+        self.c.ignorar("canto arredondado de perfil", usize::from(tem));
+    }
+
+    /// Contornos de um perfil, já no plano XY do sólido: o de fora primeiro e os furos depois. Os perfis
+    /// paramétricos de aço (I, L, U, T, tubo retangular e redondo) ficam centrados na caixa, como manda o
+    /// IFC4, e são as seções que a estrutura de aço grava (B134).
+    fn perfil(&mut self, v: &V) -> Option<Vec<Vec<[f64; 2]>>> {
         let (tipo, a) = self.entidade(v)?.clone();
-        let no_lugar = |l: ([f64; 2], [f64; 2]), p: [f64; 2]| [l.0[0] + l.1[0] * p[0] - l.1[1] * p[1], l.0[1] + l.1[1] * p[0] + l.1[0] * p[1]];
+        let l = a.get(2).map(|p| self.lugar_2d(p)).unwrap_or(([0.; 2], [1., 0.]));
+        let no_lugar = |p: [f64; 2]| [l.0[0] + l.1[0] * p[0] - l.1[1] * p[1], l.0[1] + l.1[1] * p[0] + l.1[0] * p[1]];
+        let posto = |c: &[[f64; 2]]| c.iter().map(|p| no_lugar(*p)).collect::<Vec<_>>();
+        let num = |i: usize| a.get(i).and_then(V::numero);
+        let circulo = |r: f64| {
+            let n = super::ifc_extrusao::LADOS_CIRCULO;
+            (0..n).map(|i| (i as f64) * std::f64::consts::TAU / n as f64).map(|t| [r * t.cos(), r * t.sin()]).collect::<Vec<_>>()
+        };
+        let retangulo = |x: f64, y: f64| vec![[-x, -y], [x, -y], [x, y], [-x, y]];
+        let deslocado = |c: Vec<[f64; 2]>, dx: f64, dy: f64| c.into_iter().map(|p| [p[0] - dx, p[1] - dy]).collect::<Vec<_>>();
         match tipo.as_str() {
-            "IFCRECTANGLEPROFILEDEF" => {
-                let l = a.get(2).map(|p| self.lugar_2d(p)).unwrap_or(([0.; 2], [1., 0.]));
-                let (x, y) = (a.get(3)?.numero()? / 2., a.get(4)?.numero()? / 2.);
-                Some([[-x, -y], [x, -y], [x, y], [-x, y]].map(|p| no_lugar(l, p)).to_vec())
+            "IFCRECTANGLEPROFILEDEF" => Some(vec![posto(&retangulo(num(3)? / 2., num(4)? / 2.))]),
+            "IFCCIRCLEPROFILEDEF" => Some(vec![posto(&circulo(num(3)?))]),
+            "IFCRECTANGLEHOLLOWPROFILEDEF" => {
+                let (x, y, t) = (num(3)? / 2., num(4)? / 2., num(5)?);
+                self.canto(&a, &[6, 7]);
+                Some(vec![posto(&retangulo(x, y)), posto(&retangulo(x - t, y - t))])
             }
-            "IFCCIRCLEPROFILEDEF" => {
-                let l = a.get(2).map(|p| self.lugar_2d(p)).unwrap_or(([0.; 2], [1., 0.]));
-                let r = a.get(3)?.numero()?;
-                let n = super::ifc_extrusao::LADOS_CIRCULO;
-                Some((0..n).map(|i| (i as f64) * std::f64::consts::TAU / n as f64).map(|t| no_lugar(l, [r * t.cos(), r * t.sin()])).collect())
+            "IFCCIRCLEHOLLOWPROFILEDEF" => {
+                let (r, t) = (num(3)?, num(4)?);
+                Some(vec![posto(&circulo(r)), posto(&circulo(r - t))])
             }
-            "IFCARBITRARYCLOSEDPROFILEDEF" => self.curva_2d(a.get(2)?),
+            "IFCISHAPEPROFILEDEF" => {
+                let (b, h, tw, tf) = (num(3)? / 2., num(4)? / 2., num(5)? / 2., num(6)?);
+                self.canto(&a, &[7, 8]);
+                let c = [[-b, -h], [b, -h], [b, -h + tf], [tw, -h + tf], [tw, h - tf], [b, h - tf], [b, h], [-b, h], [-b, h - tf], [-tw, h - tf], [-tw, -h + tf], [-b, -h + tf]];
+                Some(vec![posto(&c)])
+            }
+            "IFCLSHAPEPROFILEDEF" => {
+                let (d, t) = (num(3)?, num(5)?);
+                let w = num(4).unwrap_or(d);
+                self.canto(&a, &[6, 7]);
+                let c = deslocado(vec![[0., 0.], [w, 0.], [w, t], [t, t], [t, d], [0., d]], w / 2., d / 2.);
+                Some(vec![posto(&c)])
+            }
+            "IFCUSHAPEPROFILEDEF" => {
+                let (h, b, tw, tf) = (num(3)?, num(4)?, num(5)?, num(6)?);
+                self.canto(&a, &[7, 8]);
+                let c = deslocado(vec![[0., 0.], [b, 0.], [b, tf], [tw, tf], [tw, h - tf], [b, h - tf], [b, h], [0., h]], b / 2., h / 2.);
+                Some(vec![posto(&c)])
+            }
+            "IFCTSHAPEPROFILEDEF" => {
+                let (h, b, tw, tf) = (num(3)? / 2., num(4)? / 2., num(5)? / 2., num(6)?);
+                self.canto(&a, &[7, 8, 9]);
+                let c = [[-tw, -h], [tw, -h], [tw, h - tf], [b, h - tf], [b, h], [-b, h], [-b, h - tf], [-tw, h - tf]];
+                Some(vec![posto(&c)])
+            }
+            "IFCARBITRARYCLOSEDPROFILEDEF" => Some(vec![self.curva_2d(a.get(2)?)?]),
             "IFCARBITRARYPROFILEDEFWITHVOIDS" => {
-                let furos = a.get(3).map(|l| l.lista().len()).unwrap_or(0);
-                self.c.ignorar("furo em face", furos);
-                self.curva_2d(a.get(2)?)
+                let mut contornos = vec![self.curva_2d(a.get(2)?)?];
+                for furo in a.get(3).map(V::lista).unwrap_or_default() {
+                    match self.curva_2d(furo) {
+                        Some(c) => contornos.push(c),
+                        None => self.c.ignorar("furo em face", 1),
+                    }
+                }
+                Some(contornos)
             }
             _ => None,
         }
@@ -473,11 +543,13 @@ impl Leitura<'_> {
 
     /// `IfcExtrudedAreaSolid`: perfil, lugar do sólido, direção da extrusão e profundidade.
     fn extrusao(&mut self, a: &[V]) -> Option<Malha> {
-        let contorno = self.perfil(a.first()?)?;
+        let contornos = self.perfil(a.first()?)?;
         let lugar = a.get(1).filter(|p| **p != V::Nulo).map(|p| self.eixos(p)).unwrap_or(IDENTIDADE);
         let dir = a.get(2).and_then(|p| self.direcao(p)).unwrap_or([0., 0., 1.]);
         let prof = a.get(3)?.numero()?;
-        super::ifc_extrusao::extrudar(&contorno, dir, prof, &lugar)
+        let (m, furos_fora) = super::ifc_extrusao::extrudar(&contornos, dir, prof, &lugar)?;
+        self.c.ignorar("furo em face", furos_fora);
+        Some(m)
     }
 
     /// `IfcCartesianTransformationOperator3D`: eixo 1, eixo 2, origem, escala, eixo 3.
@@ -807,6 +879,85 @@ mod testes {
         assert!((pilar.volume() - area * 3000.).abs() < 1., "{}", pilar.volume());
         let x_min = pilar.pos.iter().map(|p| p[0]).fold(f64::MAX, f64::min);
         assert!((x_min - 5850.).abs() < 1e-6, "o pilar fica no lugar dele: {x_min}");
+    }
+
+    /// Arquivo em milímetros com um produto por perfil, cada um extrudado 1000 mm em Z e posto em X.
+    fn perfis(perfis: &[(&str, &str)]) -> String {
+        let mut t = String::from("DATA;\n#1=IFCSIUNIT(*,.LENGTHUNIT.,.MILLI.,.METRE.);\n#2=IFCDIRECTION((0.,0.,1.));\n");
+        for (i, (nome, def)) in perfis.iter().enumerate() {
+            let b = 100 + i * 10;
+            let _ = writeln!(
+                t,
+                "#{b}={def};\n#{}=IFCEXTRUDEDAREASOLID(#{b},$,#2,1000.);\n#{}=IFCSHAPEREPRESENTATION($,'Body','SweptSolid',(#{}));\n#{}=IFCPRODUCTDEFINITIONSHAPE($,$,(#{}));\n#{}=IFCCARTESIANPOINT(({}.,0.,0.));\n#{}=IFCAXIS2PLACEMENT3D(#{},$,$);\n#{}=IFCLOCALPLACEMENT($,#{});\n#{}=IFCMEMBER('g{i}',$,'{nome}',$,$,#{},#{},$,$);",
+                b + 1, b + 2, b + 1, b + 3, b + 2, b + 4, i * 1000, b + 5, b + 4, b + 6, b + 5, b + 7, b + 6, b + 3
+            );
+        }
+        t.push_str("ENDSEC;");
+        t
+    }
+
+    fn volume_e_x(c: &Cena, nome: &str) -> (f64, f64, f64) {
+        let m = c.no_lugar().into_iter().find(|m| m.nome == nome).unwrap().soldada();
+        assert!(m.fechada(), "{nome} fecha");
+        let x = |f: fn(f64, f64) -> f64, ini: f64| m.pos.iter().map(|p| p[0]).fold(ini, f);
+        (m.volume(), x(f64::min, f64::MAX), x(f64::max, f64::MIN))
+    }
+
+    /// B211 estende o B134: as seções de aço que a estrutura grava voltam como sólido com a área da seção.
+    #[test]
+    fn perfis_de_aco_parametricos_viram_solido_com_a_area_da_secao() {
+        let poligono = |r: f64| 32. * r * r * (std::f64::consts::TAU / 64.).sin();
+        let t = perfis(&[
+            ("I", "IFCISHAPEPROFILEDEF(.AREA.,'HEA 200',$,200.,190.,6.5,10.,18.,$,$)"),
+            ("Tubo retangular", "IFCRECTANGLEHOLLOWPROFILEDEF(.AREA.,$,$,100.,50.,5.,$,$)"),
+            ("Tubo redondo", "IFCCIRCLEHOLLOWPROFILEDEF(.AREA.,$,$,50.,5.)"),
+            ("L", "IFCLSHAPEPROFILEDEF(.AREA.,$,$,100.,$,10.,$,$,$)"),
+            ("U", "IFCUSHAPEPROFILEDEF(.AREA.,$,$,200.,75.,8.5,11.5,$,$,$)"),
+            ("T", "IFCTSHAPEPROFILEDEF(.AREA.,$,$,100.,100.,10.,10.,$,$,$,$,$)"),
+        ]);
+        let c = ler(t.as_bytes()).unwrap();
+        // só o I declara raio de concordância, que a malha deixa em canto vivo
+        assert_eq!(c.ignorados.get("canto arredondado de perfil"), Some(&1), "{:?}", c.ignorados);
+        assert_eq!(c.ignorados.len(), 1, "{:?}", c.ignorados);
+        let casos = [
+            ("I", 2. * 200. * 10. + 170. * 6.5, 100.),
+            ("Tubo retangular", 100. * 50. - 90. * 40., 50.),
+            ("Tubo redondo", poligono(50.) - poligono(45.), 50.),
+            ("L", 100. * 10. + 90. * 10., 50.),
+            ("U", 2. * 75. * 11.5 + 177. * 8.5, 37.5),
+            ("T", 100. * 10. + 90. * 10., 50.),
+        ];
+        for (i, (nome, area, meia_largura)) in casos.into_iter().enumerate() {
+            let (v, lo, hi) = volume_e_x(&c, nome);
+            assert!((v - area * 1000.).abs() < 1e-3, "{nome}: {v} contra {}", area * 1000.);
+            // centrado na caixa da seção, no lugar do produto
+            let x = (i * 1000) as f64;
+            assert!((lo - (x - meia_largura)).abs() < 1e-9 && (hi - (x + meia_largura)).abs() < 1e-9, "{nome}: {lo} a {hi}");
+        }
+    }
+
+    /// Rasgo de 100 × 40 com as pontas em meia-volta por `IfcArcIndex` e um furo redondo feito de dois arcos.
+    #[test]
+    fn perfil_com_furo_e_arcos_de_curva_indexada_desconta_o_furo() {
+        let t = perfis(&[(
+            "Rasgo",
+            "IFCARBITRARYPROFILEDEFWITHVOIDS(.AREA.,$,#90,(#93))",
+        )])
+        .replace(
+            "DATA;\n",
+            "DATA;\n#88=IFCCARTESIANPOINTLIST2D(((-30.,-20.),(30.,-20.),(50.,0.),(30.,20.),(-30.,20.),(-50.,0.)));\n\
+#90=IFCINDEXEDPOLYCURVE(#88,(IFCLINEINDEX((1,2)),IFCARCINDEX((2,3,4)),IFCLINEINDEX((4,5)),IFCARCINDEX((5,6,1))),.F.);\n\
+#91=IFCCARTESIANPOINTLIST2D(((10.,0.),(0.,10.),(-10.,0.),(0.,-10.)));\n\
+#93=IFCINDEXEDPOLYCURVE(#91,(IFCARCINDEX((1,2,3)),IFCARCINDEX((3,4,1))),.F.);\n",
+        );
+        let c = ler(t.as_bytes()).unwrap();
+        assert!(c.ignorados.is_empty(), "{:?}", c.ignorados);
+        let (v, lo, hi) = volume_e_x(&c, "Rasgo");
+        // meia-volta = 32 lados do polígono de 64; o furo é o polígono inteiro
+        let poligono = |r: f64| 32. * r * r * (std::f64::consts::TAU / 64.).sin();
+        let area = 60. * 40. + poligono(20.) - poligono(10.);
+        assert!((v - area * 1000.).abs() < 1e-3, "{v} contra {}", area * 1000.);
+        assert!((lo + 50.).abs() < 1e-9 && (hi - 50.).abs() < 1e-9, "{lo} a {hi}");
     }
 
     #[test]

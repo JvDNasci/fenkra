@@ -8,7 +8,7 @@
 
 mod svg;
 
-pub(crate) use svg::{gravar as gravar_svg, ler as ler_svg, parece as parece_svg};
+pub(crate) use svg::{gravar as gravar_svg, ler as ler_svg, ler_folha as ler_svg_folha, parece as parece_svg};
 
 use crate::{Capacidades, ErroConv, Formato, OpcoesExportar, OpcoesImportar, Registro};
 use fenkra_core::sketch::{Curve, SketchData};

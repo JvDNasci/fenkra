@@ -102,6 +102,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("A entrada é um desenho 2D: ela só vai para formatos 2D.", "The input is a 2D drawing: it only goes to 2D formats."),
     ("sólido paramétrico sem malha pronta", "parametric solid with no ready mesh"),
     ("furo em face", "hole in a face"),
+    ("canto arredondado de perfil", "rounded profile corner"),
     ("Grava os esboços da peça em milímetros, uma camada por esboço.", "Writes the part sketches in millimeters, one layer per sketch."),
     ("Linha de construção fica de fora. Cada esboço sai nas coordenadas dele.", "Construction lines are left out. Each sketch comes out in its own coordinates."),
 ];
