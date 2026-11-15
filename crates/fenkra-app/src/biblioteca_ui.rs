@@ -345,7 +345,11 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
         fechar = crate::app::done_bar(ui);
         conteudo(ui, &mut est);
     });
-    if let Some(p) = saida.movido {
+    // B458: o × do cabeçalho fecha a biblioteca, como o Concluir. Antes ele só escondia o painel e o
+    // estado ficava vivo: o painel some de vez ao ir para a peça e, na volta, `paineis` o tomava por
+    // painel de comando que reaparece e o reabria. O botão da barra também precisava de dois cliques.
+    if let Some(mut p) = saida.movido {
+        fechar |= std::mem::take(&mut p.fechado);
         app.settings.guardar_painel(PAINEL, p);
     }
     pedir_pasta(app, &mut est, crate::asm_ui::save);

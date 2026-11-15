@@ -130,8 +130,12 @@ mod tests {
         }
 
         fn quadro(&mut self) {
+            self.quadro_com(vec![]);
+        }
+
+        fn quadro_com(&mut self, events: Vec<egui::Event>) {
             self.t += 0.1;
-            let raw = egui::RawInput { time: Some(self.t), screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280., 800.))), ..Default::default() };
+            let raw = egui::RawInput { time: Some(self.t), screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280., 800.))), events, ..Default::default() };
             let (app, frame) = (&mut self.app, &mut self.frame);
             let mut saida = self.ctx.run_ui(raw, |ui| eframe::App::ui(app, ui, frame));
             // sem placa de vídeo ninguém consome as texturas, e o egui reclama delas ao soltar
@@ -246,6 +250,44 @@ mod tests {
         b.assentar();
         assert_eq!(b.st().asm.nodes.len(), pecas, "nenhuma cópia a mais");
         perto(b.volume(), 9000.);
+    }
+
+    /// Retângulo do painel no último quadro, como `paineis` o guarda.
+    fn rect_do_painel(ctx: &egui::Context, nome: &str) -> Option<egui::Rect> {
+        ctx.data(|d| d.get_temp::<egui::Rect>(egui::Id::unique(("painel", nome, 0u8)).with("rect")))
+    }
+
+    #[test]
+    fn biblioteca_fechada_no_x_nao_reabre_ao_voltar_da_peca() {
+        // B458: o × só escondia o painel; na volta da peça ele reaparecia, porque o estado seguia vivo
+        let mut b = Bancada::nova("biblioteca_x");
+        let a = b.a;
+        assert!(crate::asm_ui::command(&mut b.app, crate::app::Cmd::AsmCatalogo));
+        b.assentar();
+        let painel = crate::biblioteca_ui::PAINEL;
+        let r = rect_do_painel(&b.ctx, painel).expect("a biblioteca abriu");
+        // o × é o último botão da direita do cabeçalho (margem de 8, botão de 16)
+        let x = egui::pos2(r.right() - 16., r.top() + 16.);
+        let botao = |pressed| egui::Event::PointerButton { pos: x, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+        b.quadro_com(vec![egui::Event::PointerMoved(x)]);
+        b.quadro_com(vec![botao(true)]);
+        b.quadro_com(vec![botao(false)]);
+        b.quadro_com(vec![egui::Event::PointerGone]);
+        assert!(b.st().catalogo.is_none(), "o × fecha a biblioteca, não só o painel");
+        assert!(!b.app.settings.painel(painel, crate::paineis::Encaixe::Esquerda).fechado, "a posição guardada não fica marcada como fechada");
+        b.abrir(a);
+        assert!(b.st().editing_part.is_some(), "a peça abriu");
+        b.aba_montagem();
+        b.de_volta_na_montagem();
+        b.assentar();
+        assert!(b.st().catalogo.is_none(), "a biblioteca não volta sozinha");
+        let vivo = crate::paineis::abertos_ou_fechados(&b.ctx).into_iter().any(|(n, _, p)| n == painel && !p.fechado);
+        assert!(!vivo, "o painel não está na tela");
+        perto(b.volume(), 9000.);
+        // um clique no botão reabre: antes o primeiro só desligava o estado escondido
+        assert!(crate::asm_ui::command(&mut b.app, crate::app::Cmd::AsmCatalogo));
+        b.assentar();
+        assert!(b.st().catalogo.is_some() && rect_do_painel(&b.ctx, painel).is_some(), "um clique abre de novo");
     }
 
     #[test]
