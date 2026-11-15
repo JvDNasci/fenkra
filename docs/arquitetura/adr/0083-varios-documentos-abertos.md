@@ -77,3 +77,22 @@ um, e a opção de abrir um documento em janela nova.
 5. "Abrir em janela nova" no menu da aba e no menu de contexto da árvore do projeto: novo processo
    com `FENKRA_ABRIR`; trava só leitura no segundo processo.
 6. Material do comando em `Comandos/Documentos abertos.md` e item da checklist de interface.
+
+## Situação da implementação (B363)
+
+Feito em `crates/fenkra-app/src/app/docs_abertos.rs`, com estes ajustes ao plano:
+
+- `DocAberto` guarda documento, desfazer, resultado e gerações, seleção (inclusive a múltipla e os
+  picks), comando e sketch abertos, montagem, desenho, estado da forma livre, bancada e câmera. O que
+  aponta para itens do documento e é passageiro (renomear, diálogo de apagar, propriedades, realces)
+  é limpo na troca, não guardado.
+- Ctrl+Tab e Ctrl+Shift+Tab seguem a ordem da barra, como abas de navegador; a ordem de uso decide
+  só qual aba volta para a frente quando a ativa fecha. Com a ordem de uso, apertar Ctrl+Tab de novo
+  só alternaria entre os dois últimos.
+- A troca pedida por clique é feita no começo do quadro seguinte, antes da cópia do documento que
+  detecta edições, para que a troca nunca vire uma entrada de desfazer.
+- Sair com abas de fundo modificadas traz cada uma para a frente e pergunta, uma de cada vez.
+- O limite de memória é só por contagem (oito de fundo com resultado). A cota do modo leve e a
+  migração do `DocGuardado` da peça ativa da montagem para o `DocAberto` ficaram para depois.
+- "Abrir em nova janela" usa o processo novo do menu Janela (B440); a trava de só leitura entre dois
+  processos com o mesmo arquivo ainda não existe.

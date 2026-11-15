@@ -10,8 +10,13 @@
 //!   massa e área de pintura por metro, cortes inclinados da alma e da aba), bloco BO com os furos
 //!   passantes achados no sólido e EN.
 //!
-//! Fora desta versão, e dito no relatório de cada arquivo: contorno externo (AK) dos entalhes e dos
-//! encaixes, furos no tubo redondo (que pedem a planificação da superfície) e furos oblíquos.
+//! - **AK**: contorno externo das pontas recortadas, no tubo retangular com encaixe e nos perfis
+//!   abertos I, U e L com entalhe (`contornos_abertos`).
+//! - **Tubo redondo**: os furos radiais vão na face v desenrolada (x ao longo da barra, y = arco na
+//!   superfície externa a partir da geratriz de baixo, girando para +X).
+//!
+//! Fora desta versão, e dito no relatório de cada arquivo: contorno AK do tubo redondo com sela,
+//! entalhe interno (IK) e furos oblíquos.
 
 use super::*;
 
@@ -97,6 +102,7 @@ fn normais_das_pontas(sh: &Shape) -> [Option<V3>; 2] {
     let meio = (zmin + zmax) / 2.;
     let mut soma: [V3; 2] = [[0.; 3]; 2];
     let mut normais: [Vec<V3>; 2] = [vec![], vec![]];
+    let mut pontos: [Vec<V3>; 2] = [vec![], vec![]];
     for t in mesh.indices.chunks(3) {
         let (a, b, c) = (p(t[0]), p(t[1]), p(t[2]));
         let n = fenkra_kernel::cross(geo3d::sub(b, a), geo3d::sub(c, a));
@@ -111,10 +117,14 @@ fn normais_das_pontas(sh: &Shape) -> [Option<V3>; 2] {
         let k = usize::from((a[2] + b[2] + c[2]) / 3. > meio);
         soma[k] = geo3d::add(soma[k], n);
         normais[k].push(u);
+        pontos[k].extend([a, b, c]);
     }
+    // plana: todas as normais na mesma direção e todos os pontos no mesmo plano (um entalhe tem
+    // degraus paralelos, com a mesma normal em planos diferentes)
     [0, 1].map(|k| {
         let m = geo3d::unit(soma[k])?;
-        normais[k].iter().all(|u| geo3d::dot(*u, m) > 0.99996).then_some(m)
+        let (d0, d1) = pontos[k].iter().map(|q| geo3d::dot(*q, m)).fold((f64::MAX, f64::MIN), |(a, b), d| (a.min(d), b.max(d)));
+        (normais[k].iter().all(|u| geo3d::dot(*u, m) > 0.99996) && d1 - d0 < 0.05).then_some(m)
     })
 }
 
@@ -125,8 +135,45 @@ fn angulo_no_plano(n: V3, c: usize) -> f64 {
     (a * 1000.).round() / 1000.
 }
 
+/// Furo radial em tubo ou barra redonda, na superfície desenrolada (face v do DSTV).
+///
+/// Como funciona: o furo tem de ser radial, isto é, o eixo dele é perpendicular ao eixo da barra e
+/// passa por ele (a menos de 0,05 mm). A superfície externa é desenrolada a partir da geratriz de
+/// baixo (−Y local), girando no sentido de +X: o furo fica em x = posição ao longo da barra e
+/// y = R·φ, com R o raio externo e φ o ângulo do lado do furo. Um furo diametral (que atravessa as
+/// duas paredes) vem em duas faces cilíndricas, uma em cada parede, e vira dois furos a meia volta.
+/// Fora disso (furo inclinado ou fora do centro) não há furo radial: volta `None`. O raio vem da cota
+/// da seção (a caixa do OpenCASCADE é folgada pela tolerância).
+fn furo_radial(c: &fenkra_kernel::Cylinder, ponto: V3, lo: V3, hi: V3, raio: f64) -> Option<FuroDstv> {
+    if c.dir[2].abs() > 1e-3 {
+        return None;
+    }
+    let centro = [(lo[0] + hi[0]) / 2., (lo[1] + hi[1]) / 2.];
+    // distância entre o eixo do furo (no plano XY) e o eixo da barra
+    let d2 = [c.dir[0], c.dir[1]];
+    let n = (d2[0] * d2[0] + d2[1] * d2[1]).sqrt();
+    let (ux, uy) = (d2[0] / n, d2[1] / n);
+    let (ox, oy) = (c.origin[0] - centro[0], c.origin[1] - centro[1]);
+    if (ox * uy - oy * ux).abs() > 0.05 {
+        return None;
+    }
+    // o lado do furo: o da parede onde está a face
+    let lado = (ponto[0] - centro[0]) * ux + (ponto[1] - centro[1]) * uy;
+    let (sx, sy) = if lado >= 0. { (ux, uy) } else { (-ux, -uy) };
+    // φ a partir de −Y, crescendo para +X
+    let mut phi = sx.atan2(-sy);
+    if phi < 0. {
+        phi += 2. * std::f64::consts::PI;
+    }
+    // posição ao longo da barra: o ponto do eixo do furo mais perto do ponto da face
+    let t = geo3d::dot(geo3d::sub(ponto, c.origin), c.dir);
+    let o = geo3d::add(c.origin, geo3d::mul(c.dir, t));
+    let r2 = |v: f64| (v * 100.).round() / 100.;
+    Some(FuroDstv { face: 'v', x: r2(o[2] - lo[2]), y: r2(raio * phi), diametro: r2(2. * c.radius) })
+}
+
 /// Furos passantes do sólido: faces cilíndricas internas com eixo na direção X ou Y da seção.
-fn furos(sh: &Shape, kind: SectionKind, faltas: &mut Vec<String>) -> Vec<FuroDstv> {
+fn furos(sh: &Shape, kind: SectionKind, raio: f64, faltas: &mut Vec<String>) -> Vec<FuroDstv> {
     let (Ok(top), Some((lo, hi))) = (sh.topology(), sh.bbox()) else { return vec![] };
     let meio = [(lo[0] + hi[0]) / 2., (lo[1] + hi[1]) / 2.];
     let mut out: Vec<FuroDstv> = vec![];
@@ -137,8 +184,13 @@ fn furos(sh: &Shape, kind: SectionKind, faltas: &mut Vec<String>) -> Vec<FuroDst
             continue;
         }
         if kind == SectionKind::TuboRedondo || kind == SectionKind::BarraRedonda {
-            if !faltas.iter().any(|x| x.contains("redondo")) {
-                faltas.push("furo em perfil redondo (pede a planificação da superfície)".into());
+            match furo_radial(&c, f.point, lo, hi, raio) {
+                Some(furo) => {
+                    if !out.iter().any(|q| q.face == furo.face && (q.x - furo.x).abs() < 0.05 && (q.y - furo.y).abs() < 0.05 && (q.diametro - furo.diametro).abs() < 0.05) {
+                        out.push(furo);
+                    }
+                }
+                None => obliquo = true,
             }
             continue;
         }
@@ -179,6 +231,151 @@ fn caixa_justa(sh: &Shape) -> Option<(V3, V3)> {
         }
     }
     (lo[0] <= hi[0]).then_some((lo, hi))
+}
+
+/// Onde a reta paralela a Z por (px, py) entra e sai do sólido: o menor e o maior Z em que ela fura
+/// a malha. Triângulos de pé (paralelos a Z) não contam: as bordas deles já estão nos vizinhos.
+fn raio_z(mesh: &fenkra_kernel::Mesh, px: f64, py: f64) -> Option<(f64, f64)> {
+    let p = |i: u32| {
+        let k = i as usize * 3;
+        [mesh.positions[k] as f64, mesh.positions[k + 1] as f64, mesh.positions[k + 2] as f64]
+    };
+    let (mut a0, mut a1) = (f64::MAX, f64::MIN);
+    for t in mesh.indices.chunks(3) {
+        let (a, b, c) = (p(t[0]), p(t[1]), p(t[2]));
+        let det = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+        if det.abs() < 1e-9 {
+            continue;
+        }
+        let l1 = ((px - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (py - a[1])) / det;
+        let l2 = ((b[0] - a[0]) * (py - a[1]) - (px - a[0]) * (b[1] - a[1])) / det;
+        let tol = 1e-7;
+        if l1 < -tol || l2 < -tol || l1 + l2 > 1. + tol {
+            continue;
+        }
+        let z = a[2] + l1 * (b[2] - a[2]) + l2 * (c[2] - a[2]);
+        a0 = a0.min(z);
+        a1 = a1.max(z);
+    }
+    (a0 <= a1).then_some((a0, a1))
+}
+
+/// Tira um ponto que está na reta entre o anterior e o seguinte (o laço é fechado).
+fn sem_colineares(pts: Vec<[f64; 2]>) -> Vec<[f64; 2]> {
+    let mut v = pts;
+    loop {
+        let n = v.len();
+        if n <= 3 {
+            return v;
+        }
+        let k = (0..n).find(|&i| {
+            let (a, b, c) = (v[(i + n - 1) % n], v[i], v[(i + 1) % n]);
+            let cruz = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+            let l = ((c[0] - a[0]).powi(2) + (c[1] - a[1]).powi(2)).sqrt().max(1e-9);
+            cruz.abs() / l < 0.005
+        });
+        match k {
+            Some(i) => {
+                v.remove(i);
+            }
+            None => return v,
+        }
+    }
+}
+
+/// Contorno externo (bloco AK) dos perfis abertos I, U e L com entalhe ou recorte nas pontas.
+///
+/// Como funciona: cada face do DSTV é uma chapa do perfil (v = alma ou aba de pé, o e u = mesas ou
+/// aba deitada). Para uma face, uma reta paralela ao eixo da barra corre pelo plano médio da chapa;
+/// na posição `s` através da chapa (altura na alma, largura na mesa) ela entra no sólido em
+/// `z0(s)` e sai em `z1(s)`. Com pontas planas, `z0` e `z1` são retas entre os vértices da malha,
+/// então basta medir em cada vértice, um pouco antes e um pouco depois (o degrau de um entalhe fica
+/// assim exato). O contorno é a borda do fim subindo e a do início descendo, no sentido
+/// anti-horário que o DSTV pede, com x a partir do início da peça e y a partir da borda de baixo
+/// (v: Y; o, u: X), como nos furos. A face de alma vê o perfil todo de lado (o entalhe das mesas
+/// aparece nela); as mesas veem só a própria chapa.
+///
+/// A seção tem de estar na posição do modelo (sem giro): a caixa precisa bater com as cotas.
+fn contornos_abertos(sh: &Shape, kind: SectionKind, dims: &[f64]) -> Vec<(char, Vec<[f64; 2]>)> {
+    let g = |i: usize| dims.get(i).copied().unwrap_or(0.);
+    let Ok(mesh) = sh.mesh_angle(0.2, 0.2) else { return vec![] };
+    let Some((lo, hi)) = caixa_justa(sh) else { return vec![] };
+    let (largura, altura) = (hi[0] - lo[0], hi[1] - lo[1]);
+    let (b, h) = match kind {
+        SectionKind::PerfilI | SectionKind::PerfilU => (g(1), g(0)),
+        SectionKind::Cantoneira => (g(1), g(0)),
+        _ => return vec![],
+    };
+    if (largura - b).abs() > 0.5 || (altura - h).abs() > 0.5 {
+        return vec![];
+    }
+    let tem = |x: f64, y: f64| raio_z(&mesh, x, y).is_some();
+    let mx = (lo[0] + hi[0]) / 2.;
+    // (face, coordenada fixa, a reta corre em Y?)
+    let faces: Vec<(char, f64, bool)> = match kind {
+        SectionKind::PerfilI => {
+            let tf = g(3);
+            vec![('v', mx, true), ('o', hi[1] - tf / 2., false), ('u', lo[1] + tf / 2., false)]
+        }
+        SectionKind::PerfilU => {
+            let (tw, tf) = (g(2), g(3));
+            // alma à esquerda no modelo; espelhado, à direita
+            let xa = if tem(lo[0] + tw / 2., (lo[1] + hi[1]) / 2.) { lo[0] + tw / 2. } else { hi[0] - tw / 2. };
+            vec![('v', xa, true), ('o', hi[1] - tf / 2., false), ('u', lo[1] + tf / 2., false)]
+        }
+        _ => {
+            let t = g(2);
+            // a aba de pé atravessa a altura toda; a deitada, a largura toda
+            let (x0, x1, y0, y1) = (lo[0] + t / 2., hi[0] - t / 2., lo[1] + t / 2., hi[1] - t / 2.);
+            let xa = if tem(x0, y0) && tem(x0, y1) { x0 } else { x1 };
+            if tem(x0, y0) && tem(x1, y0) {
+                vec![('v', xa, true), ('u', lo[1] + t / 2., false)]
+            } else {
+                vec![('v', xa, true), ('o', hi[1] - t / 2., false)]
+            }
+        }
+    };
+    let eps = 0.01;
+    let mut out = vec![];
+    for (face, fixo, em_y) in faces {
+        let (a, bb) = if em_y { (lo[1], hi[1]) } else { (lo[0], hi[0]) };
+        // posições de quebra: os vértices da malha dentro da faixa
+        let mut quebras: Vec<f64> = mesh.positions.chunks(3).map(|v| if em_y { v[1] as f64 } else { v[0] as f64 }).filter(|s| *s >= a - 1e-6 && *s <= bb + 1e-6).collect();
+        quebras.push(a);
+        quebras.push(bb);
+        quebras.sort_by(f64::total_cmp);
+        quebras.dedup_by(|x, y| (*x - *y).abs() < 1e-3);
+        let medir = |s: f64| if em_y { raio_z(&mesh, fixo, s) } else { raio_z(&mesh, s, fixo) };
+        // (s, z0, z1) dos dois lados de cada quebra
+        let mut lados: Vec<(f64, f64, f64)> = vec![];
+        for &s in &quebras {
+            for d in [-eps, eps] {
+                let q = (s + d).clamp(a + eps, bb - eps);
+                if let Some((z0, z1)) = medir(q) {
+                    lados.push((s.clamp(a, bb), z0, z1));
+                }
+            }
+        }
+        if lados.len() < 2 {
+            continue;
+        }
+        let ponto = |z: f64, s: f64| [((z - lo[2]) * 100.).round() / 100., ((s - a) * 100.).round() / 100.];
+        let mut pts: Vec<[f64; 2]> = lados.iter().map(|(s, _, z1)| ponto(*z1, *s)).collect();
+        pts.extend(lados.iter().rev().map(|(s, z0, _)| ponto(*z0, *s)));
+        pts.dedup();
+        while pts.len() > 1 && pts.first() == pts.last() {
+            pts.pop();
+        }
+        let mut pts = sem_colineares(pts);
+        if pts.len() < 3 {
+            continue;
+        }
+        let k0 = pts.iter().enumerate().min_by(|(_, p), (_, q)| (p[1], p[0]).partial_cmp(&(q[1], q[0])).unwrap_or(std::cmp::Ordering::Equal)).map(|(i, _)| i).unwrap_or(0);
+        pts.rotate_left(k0);
+        pts.push(pts[0]);
+        out.push((face, pts));
+    }
+    out
 }
 
 /// Contorno externo (bloco AK) do tubo quadrado ou retangular com encaixe numa ou nas duas pontas.
@@ -335,7 +532,11 @@ pub fn pecas_nc(doc: &Document) -> Vec<PecaNc> {
         };
         let pontas = normais_das_pontas(&g.shape);
         let mut faltas = vec![];
-        let contornos = if pontas.iter().any(Option::is_none) { contornos_ak(doc, g, m.kind, &pontas) } else { vec![] };
+        let contornos = match m.kind {
+            _ if pontas.iter().all(Option::is_some) => vec![],
+            SectionKind::PerfilI | SectionKind::PerfilU | SectionKind::Cantoneira => contornos_abertos(&g.shape, m.kind, &dims),
+            _ => contornos_ak(doc, g, m.kind, &pontas),
+        };
         if pontas.iter().any(Option::is_none) && contornos.is_empty() {
             faltas.push("ponta que não é plana (encaixe ou entalhe): o contorno AK não é gravado".into());
         }
@@ -345,7 +546,7 @@ pub fn pecas_nc(doc: &Document) -> Vec<PecaNc> {
             pontas[0].map(|n| angulo_no_plano(n, 0)).unwrap_or(0.),
             pontas[1].map(|n| angulo_no_plano(n, 0)).unwrap_or(0.),
         ];
-        let furos = furos(&g.shape, m.kind, &mut faltas);
+        let furos = furos(&g.shape, m.kind, dims.first().copied().unwrap_or(0.) / 2., &mut faltas);
         out.push(PecaNc {
             item: g.item,
             designacao: if m.designation.trim().is_empty() { m.family.clone() } else { m.designation.clone() },
@@ -497,9 +698,36 @@ mod testes {
         let pino = Shape::face(&fr, &[vec![fenkra_kernel::Seg2::Circle([0., 0.], 9.)]]).unwrap().extrude([1., 0., 0.], 100., 0.).unwrap();
         let furada = alma.boolean(&pino, fenkra_kernel::Bool::Cut).unwrap();
         let mut faltas = vec![];
-        let f = furos(&furada, SectionKind::PerfilI, &mut faltas);
+        let f = furos(&furada, SectionKind::PerfilI, 0., &mut faltas);
         assert_eq!(f, vec![FuroDstv { face: 'v', x: 300., y: 120., diametro: 18. }], "{faltas:?}");
         assert!(faltas.is_empty());
+    }
+
+    /// Tubo Ø60,3 × 3,6 de 1000 com um furo diametral Ø12 na direção X a 300 da ponta e um radial
+    /// Ø10 na direção Y (só a parede de cima) a 700: na superfície desenrolada a partir da geratriz
+    /// de baixo, o lado +X fica a R·π/2, o −X a R·3π/2 e o +Y a R·π, com R = 30,15.
+    #[test]
+    fn furo_de_tubo_redondo_vai_na_superficie_desenrolada() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let fr = Frame { origin: [0., 0., 0.], x: [1., 0., 0.], normal: [0., 0., 1.] };
+        let tubo = Shape::face(&fr, &[vec![fenkra_kernel::Seg2::Circle([0., 0.], 30.15)], vec![fenkra_kernel::Seg2::Circle([0., 0.], 26.55)]]).unwrap().extrude([0., 0., 1.], 1000., 0.).unwrap();
+        let fx = Frame { origin: [-50., 0., 300.], x: [0., 1., 0.], normal: [1., 0., 0.] };
+        let pino = Shape::face(&fx, &[vec![fenkra_kernel::Seg2::Circle([0., 0.], 6.)]]).unwrap().extrude([1., 0., 0.], 100., 0.).unwrap();
+        let fy = Frame { origin: [0., 10., 700.], x: [1., 0., 0.], normal: [0., 1., 0.] };
+        let pino_y = Shape::face(&fy, &[vec![fenkra_kernel::Seg2::Circle([0., 0.], 5.)]]).unwrap().extrude([0., 1., 0.], 40., 0.).unwrap();
+        let furado = tubo.boolean(&pino, fenkra_kernel::Bool::Cut).unwrap().boolean(&pino_y, fenkra_kernel::Bool::Cut).unwrap();
+        let mut faltas = vec![];
+        let f = furos(&furado, SectionKind::TuboRedondo, 30.15, &mut faltas);
+        assert!(faltas.is_empty(), "{faltas:?}");
+        let r = 30.15;
+        let pi = std::f64::consts::PI;
+        let esperado = [(300., r * pi / 2., 12.), (300., r * 3. * pi / 2., 12.), (700., r * pi, 10.)];
+        assert_eq!(f.len(), 3, "{f:?}");
+        for (x, y, d) in esperado {
+            assert!(f.iter().any(|q| q.face == 'v' && (q.x - x).abs() < 0.2 && (q.y - y).abs() < 0.05 && (q.diametro - d).abs() < 0.01), "{x} {y} {d}: {f:?}");
+        }
     }
 
     #[test]

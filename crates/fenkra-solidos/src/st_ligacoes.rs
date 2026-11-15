@@ -13,6 +13,10 @@
 //! * Chapa de base com força de compressão centrada: pressão no concreto `σ = N/(B·L)` contra
 //!   `fcd = fck/(γc·γn)` (γc = 1,4; γn = 1,4 sem confinamento), e espessura pela flexão do balanço `c`
 //!   além da seção: `t ≥ c·√(2·σ·γa1/fy)`.
+//! * Parafuso ou chumbador a tração: `Ft,Rd = 0,75·Ab·fub/γa2` (barra rosqueada: até `Ab·fy/γa1`);
+//!   com cisalhamento junto, `(Ft,Sd/Ft,Rd)² + (Fv,Sd/Fv,Rd)² ≤ 1`.
+//! * Chapa de base com compressão e momento: bloco de tensão uniforme no concreto, excentricidade
+//!   crítica e tração nos chumbadores pelo equilíbrio (`chapa_de_base_com_momento`).
 //!
 //! O cálculo é de pré-dimensionamento: o relatório diz isso e as hipóteses. Unidades: N, mm, MPa.
 
@@ -112,9 +116,134 @@ pub fn chapa_de_base(n: f64, b: f64, l: f64, bs: f64, ls: f64, fck: f64, fy: f64
     (t, sigma / fcd, format!("chapa {:.0} × {:.0}: σ = {:.2} MPa contra fcd {:.2} MPa; balanço {:.1} mm; espessura mínima {:.1} mm", b, l, sigma, fcd, c, t))
 }
 
+/// Parafuso ou chumbador (barra redonda rosqueada) a tração: `Ft,Rd = 0,75·Ab·fub/γa2`, com a área
+/// efetiva tomada como 75 % da bruta; na barra rosqueada, nunca acima de `Ab·fy/γa1` (`fy` dado).
+pub fn tracao(d: f64, fub: f64, fy: Option<f64>) -> f64 {
+    let ab = std::f64::consts::PI * d * d / 4.;
+    let r = 0.75 * ab * fub / GAMA_A2;
+    match fy {
+        Some(fy) => r.min(ab * fy / GAMA_A1),
+        None => r,
+    }
+}
+
+/// Tração com cisalhamento no mesmo parafuso: `(Ft,Sd/Ft,Rd)² + (Fv,Sd/Fv,Rd)²`, que deve ficar até 1.
+pub fn interacao_tracao_cisalhamento(ft: f64, ft_rd: f64, fv: f64, fv_rd: f64) -> f64 {
+    (ft / ft_rd).powi(2) + (fv / fv_rd).powi(2)
+}
+
+/// Chapa de base com compressão e momento, pelo bloco de tensão uniforme no concreto.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BaseComMomento {
+    /// excentricidade M/N e a crítica, até a qual o concreto sozinho equilibra (mm)
+    pub e: f64,
+    pub e_critica: f64,
+    /// comprimento comprimido do concreto (mm)
+    pub y: f64,
+    /// tensão no concreto (MPa) e utilização dela contra fcd
+    pub sigma: f64,
+    pub utilizacao_concreto: f64,
+    /// tração no conjunto de chumbadores do lado tracionado (N)
+    pub tracao: f64,
+    /// espessura mínima da chapa: pela pressão do concreto e pela tração dos chumbadores (mm)
+    pub espessura: f64,
+    pub conta: String,
+}
+
+/// Chapa de base `b` (largura) × `l` (na direção do momento) sob um pilar `bs` × `ls`, com
+/// compressão `n` (N, positiva) e momento `m` (N·mm); `f` é a distância do centro da chapa à linha
+/// de chumbadores do lado tracionado; concreto `fck` e aço da chapa `fy` (MPa).
+///
+/// Como funciona: o concreto reage com tensão uniforme `σ` num trecho `Y` a partir da borda
+/// comprimida, até `fcd = fck/(1,4·1,4)`, isto é, até `qmax = fcd·b` por mm. Com `e = M/N` até
+/// `e_crit = L/2 − N/(2·qmax)`, só o concreto equilibra: `Y = L − 2e` e `σ = N/(b·Y)`. Acima, o
+/// concreto trabalha no limite e os chumbadores tracionam: das somas de forças e de momentos em
+/// torno da linha de chumbadores, `Y = (f + L/2) − √((f + L/2)² − 2·N·(e + f)/qmax)` e
+/// `T = qmax·Y − N`. Sem raiz real, a chapa é pequena demais: volta `None`. A espessura vem da
+/// flexão plástica de uma faixa de 1 mm em balanço além do pilar, `t = √(4·Mpl·γa1/fy)`: do lado do
+/// concreto com o momento da tensão no balanço `c` (todo comprimido, `σ·c²/2`; parte, `σ·Y·(c − Y/2)`)
+/// e do lado tracionado com `T·(f − ls/2)/b`.
+#[allow(clippy::too_many_arguments)]
+pub fn chapa_de_base_com_momento(n: f64, m: f64, b: f64, l: f64, bs: f64, ls: f64, f: f64, fck: f64, fy: f64) -> Option<BaseComMomento> {
+    if n <= 0. || b <= 0. || l <= 0. {
+        return None;
+    }
+    let fcd = fck / (1.4 * 1.4);
+    let qmax = fcd * b;
+    let e = m.abs() / n;
+    let e_critica = l / 2. - n / (2. * qmax);
+    let (y, sigma, tracao) = if e <= e_critica {
+        let y = l - 2. * e;
+        (y, n / (b * y), 0.)
+    } else {
+        let a = f + l / 2.;
+        let disc = a * a - 2. * n * (e + f) / qmax;
+        if disc < 0. {
+            return None;
+        }
+        let y = a - disc.sqrt();
+        (y, fcd, qmax * y - n)
+    };
+    let c = ((b - bs) / 2.).max((l - ls) / 2.).max(0.);
+    let m_conc = if y >= c { sigma * c * c / 2. } else { sigma * y * (c - y / 2.) };
+    let braco = (f - ls / 2.).max(0.);
+    let m_trac = tracao * braco / b;
+    let t = |mm: f64| (4. * mm * GAMA_A1 / fy).sqrt();
+    let espessura = t(m_conc).max(t(m_trac));
+    let conta = format!(
+        "chapa {:.0} × {:.0}: e = {:.1} mm (crítica {:.1}); concreto comprimido em {:.1} mm com σ = {:.2} MPa contra fcd {:.2} MPa; tração nos chumbadores {:.0} N; espessura mínima {:.1} mm",
+        b, l, e, e_critica, y, sigma, fcd, tracao, espessura
+    );
+    Some(BaseComMomento { e, e_critica, y, sigma, utilizacao_concreto: sigma / fcd, tracao, espessura, conta })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Chumbador Ø20 ASTM A36 (fub 400, fy 250): 0,75·314,16·400/1,35 = 69 813 N, abaixo de
+    /// Ab·fy/γa1 = 71 400 N; parafuso Ø16 classe 8.8 a tração e cisalhamento juntos.
+    #[test]
+    fn tracao_de_chumbador_e_interacao() {
+        let ab = std::f64::consts::PI * 100.;
+        assert!(perto(tracao(20., 400., Some(250.)), 0.75 * ab * 400. / 1.35, 1e-12));
+        assert!((tracao(20., 400., Some(250.)) - 69_813.).abs() < 1.);
+        // barra de aço fraco e ruptura alta: manda o escoamento
+        assert!(perto(tracao(20., 600., Some(250.)), ab * 250. / 1.1, 1e-12));
+        let p = Parafuso { d: 16., fub: 800., rosca_no_plano: true, planos: 1 };
+        let (ft_rd, fv_rd) = (tracao(16., 800., None), p.cisalhamento());
+        let u = interacao_tracao_cisalhamento(0.6 * ft_rd, ft_rd, 0.6 * fv_rd, fv_rd);
+        assert!(perto(u, 0.72, 1e-12));
+    }
+
+    /// Chapa 400 × 500 com chumbadores a 200 do centro, pilar 200 × 300, C25 e aço 250:
+    /// - 200 kN e 60 kN·m: e = 300 > e_crit = 250 − 200 000/(2·5 102) = 230,4, há tração;
+    ///   as duas equações de equilíbrio fecham com o Y e o T calculados;
+    /// - 200 kN e 20 kN·m: e = 100, Y = 300 e σ = 200 000/(400·300) = 1,667 MPa, sem tração.
+    #[test]
+    fn chapa_de_base_com_momento_fecha_o_equilibrio() {
+        let fcd = 25. / 1.96;
+        let r = chapa_de_base_com_momento(200_000., 60e6, 400., 500., 200., 300., 200., 25., 250.).unwrap();
+        assert!(perto(r.e, 300., 1e-12));
+        assert!(perto(r.e_critica, 250. - 200_000. / (2. * fcd * 400.), 1e-12));
+        assert!(r.tracao > 0. && perto(r.sigma, fcd, 1e-12));
+        // forças: compressão no concreto = N + T; momentos em torno do centro da chapa
+        let c = fcd * 400. * r.y;
+        assert!(perto(c, 200_000. + r.tracao, 1e-9));
+        assert!(perto(c * (250. - r.y / 2.) + r.tracao * 200., 200_000. * 300., 1e-9), "{r:?}");
+        // conta à mão: Y = 450 − √(450² − 2·200 000·500/5 102,04)
+        let y = 450. - (450f64.powi(2) - 2. * 200_000. * 500. / (fcd * 400.)).sqrt();
+        assert!(perto(r.y, y, 1e-12) && (r.y - 45.9).abs() < 0.1, "{}", r.y);
+        // espessura: balanço c = max(100, 100) = 100 > Y → σ·Y·(c − Y/2); tração: T·(200 − 150)/400
+        let m_conc = fcd * y * (100. - y / 2.);
+        let m_trac = r.tracao * 50. / 400.;
+        assert!(perto(r.espessura, (4. * m_conc.max(m_trac) * 1.1 / 250.).sqrt(), 1e-12));
+        let s = chapa_de_base_com_momento(200_000., 20e6, 400., 500., 200., 300., 200., 25., 250.).unwrap();
+        assert_eq!(s.tracao, 0.);
+        assert!(perto(s.y, 300., 1e-12) && perto(s.sigma, 200_000. / 120_000., 1e-12));
+        // chapa pequena para o momento: sem solução
+        assert!(chapa_de_base_com_momento(200_000., 1000e6, 400., 500., 200., 300., 200., 25., 250.).is_none());
+    }
 
     fn perto(a: f64, b: f64, rel: f64) -> bool {
         (a - b).abs() <= rel * b.abs()

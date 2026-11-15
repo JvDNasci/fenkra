@@ -195,7 +195,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Gera escada de degraus, descansos e guarda-corpo de plataforma por parâmetros e confere os itens do Anexo III da NR-12.", "Generates step stairs, landings and platform guardrails from parameters and checks the NR-12 Annex III items."),
     // B176: NC1 e STEP para as máquinas
     ("Exportar NC1 e STEP…", "Export NC1 and STEP…"),
-    ("Para as máquinas de perfil e de tubo: um arquivo DSTV NC1 (cabeçalho, cortes inclinados e furos) e um STEP do sólido já cortado por item da lista, numa pasta.", "For profile and tube machines: one DSTV NC1 file (header, skew cuts and holes) and one STEP of the cut solid per list item, in a folder."),
+    ("Para as máquinas de perfil e de tubo: um arquivo DSTV NC1 (cabeçalho, cortes inclinados, contornos recortados e furos, também no tubo redondo) e um STEP do sólido já cortado por item da lista, numa pasta.", "For profile and tube machines: one DSTV NC1 file (header, skew cuts, cut contours and holes, round tubes included) and one STEP of the cut solid per list item, in a folder."),
     ("NC1 e STEP gravados", "NC1 and STEP written"),
     // B174: acessibilidade da tocha
     ("Acessibilidade da tocha", "Torch accessibility"),
