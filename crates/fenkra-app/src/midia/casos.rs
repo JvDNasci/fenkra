@@ -139,7 +139,8 @@ pub fn montar(caso: &str) -> Option<(Document, FeatureKind)> {
                 skip: vec![],
             })
         }
-        _ => return None,
+        // B60: os comandos de sólidos que ainda não tinham mídia
+        _ => return super::casos_b60::montar(caso),
     };
     Some((d, kind))
 }

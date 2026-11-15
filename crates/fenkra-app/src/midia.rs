@@ -15,6 +15,7 @@
 //! Tudo aqui é testável sem janela: roteiro, interpolação, remendo de campo, hash e manifesto.
 
 pub mod casos;
+pub mod casos_b60;
 pub mod exibir;
 pub mod gif;
 pub mod pacote;
@@ -40,6 +41,21 @@ pub struct Animacao {
     #[serde(default)]
     pub t0: f64,
     pub t1: f64,
+    /// B60: o campo é de um comando que já está na peça do caso (índice em `features`), não do
+    /// comando aberto: a booleana muda a ferramenta, o espelho cresce a fonte
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub feature: Option<usize>,
+    /// B60: o campo é de uma referência da peça (índice em `references`), como o deslocamento do
+    /// plano onde a extrusão termina
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub referencia: Option<usize>,
+}
+
+impl Animacao {
+    /// A animação mexe no comando aberto (e não na peça).
+    pub fn no_comando(&self) -> bool {
+        self.feature.is_none() && self.referencia.is_none()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -112,7 +128,7 @@ impl Roteiro {
             return Err("recorte fora da proporção 360:220".into());
         }
         for a in &self.animacoes {
-            if !a.campo.starts_with('/') || a.t1 <= a.t0 || a.t0 < 0. || a.t1 > self.duracao {
+            if !a.campo.starts_with('/') || a.t1 <= a.t0 || a.t0 < 0. || a.t1 > self.duracao || (a.feature.is_some() && a.referencia.is_some()) {
                 return Err(format!("animação inválida em {}", a.campo));
             }
         }
@@ -138,10 +154,40 @@ impl Roteiro {
 
     /// Aplica as animações do tempo `t` num comando serializado (ver `remendar`).
     pub fn aplicar(&self, kind: &mut Value, t: f64) -> Result<(), String> {
-        for a in &self.animacoes {
+        for a in self.animacoes.iter().filter(|a| a.no_comando()) {
             remendar(kind, &a.campo, Self::valor(a, t))?;
         }
         Ok(())
+    }
+
+    /// B60: aplica no documento as animações que miram um comando ou uma referência da peça.
+    /// Devolve se algo mudou. Os índices são os da peça do caso, antes do comando novo, que entra
+    /// no fim da lista e não os desloca.
+    pub fn aplicar_doc(&self, doc: &mut fenkra_core::Document, t: f64) -> Result<bool, String> {
+        let mut mudou = false;
+        for a in self.animacoes.iter().filter(|a| !a.no_comando()) {
+            let v = Self::valor(a, t);
+            if let Some(i) = a.feature {
+                let f = doc.features.get_mut(i).ok_or_else(|| format!("{}: a peça não tem o comando {i}", a.campo))?;
+                let mut j = serde_json::to_value(&f.kind).map_err(|e| e.to_string())?;
+                remendar(&mut j, &a.campo, v)?;
+                let novo: fenkra_core::FeatureKind = serde_json::from_value(j).map_err(|e| format!("{}: {e}", a.campo))?;
+                if f.kind != novo {
+                    f.kind = novo;
+                    mudou = true;
+                }
+            } else if let Some(i) = a.referencia {
+                let r = doc.references.get_mut(i).ok_or_else(|| format!("{}: a peça não tem a referência {i}", a.campo))?;
+                let mut j = serde_json::to_value(&r.kind).map_err(|e| e.to_string())?;
+                remendar(&mut j, &a.campo, v)?;
+                let novo: fenkra_core::RefKind = serde_json::from_value(j).map_err(|e| format!("{}: {e}", a.campo))?;
+                if r.kind != novo {
+                    r.kind = novo;
+                    mudou = true;
+                }
+            }
+        }
+        Ok(mudou)
     }
 }
 
