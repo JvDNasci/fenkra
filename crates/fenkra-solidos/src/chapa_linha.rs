@@ -115,6 +115,90 @@ pub fn setas_de_sentido(a: V3, b: V3, normal: V3, flip: bool, comp: f64) -> Vec<
     [0.2, 0.5, 0.8].iter().map(|t| geo3d::lerp(a, b, *t)).map(|p| (p, geo3d::add(p, geo3d::mul(s, comp)))).collect()
 }
 
+/// B469: linha de dobra padrão no meio da face clicada, para o comando não nascer com uma linha
+/// solta na ponta da peça. `tris` são os triângulos da malha do corpo, `bordas` os segmentos das
+/// arestas dele, `ponto` e `normal` o clique na face.
+///
+/// Como acha a linha: junta os triângulos no plano do clique (a face), acha o menor retângulo que a
+/// envolve (um lado dele fica paralelo a uma borda da face, então basta testar as direções das
+/// bordas e dos eixos), passa a linha pelo centro desse retângulo, paralela ao lado menor (cruza a
+/// dimensão maior no meio, como a dobra mais comum) e corta a linha onde ela sai da face. Se o centro
+/// cai num furo, vale o retângulo. `fracao` < 1 encurta a linha em volta do meio (dobra cega: a aba
+/// que gira fica mais estreita que a chapa). `None` sem triângulo no plano.
+pub fn linha_no_meio(tris: &[[V3; 3]], bordas: &[[V3; 2]], ponto: V3, normal: V3, fracao: f64) -> Option<(V3, V3)> {
+    use geo3d::{add, dot, mul, sub, unit};
+    let cross = fenkra_kernel::cross;
+    let n = unit(normal)?;
+    let no_plano = |p: V3| dot(sub(p, ponto), n).abs() < 1e-3;
+    let face: Vec<[V3; 3]> = tris
+        .iter()
+        .filter(|t| t.iter().all(|p| no_plano(*p)) && unit(cross(sub(t[1], t[0]), sub(t[2], t[0]))).is_some_and(|u| dot(u, n).abs() > 0.999))
+        .copied()
+        .collect();
+    if face.is_empty() {
+        return None;
+    }
+    let no_plano_dir = |d: V3| unit(sub(d, mul(n, dot(d, n))));
+    let mut dirs: Vec<V3> = bordas.iter().filter(|[a, b]| no_plano(*a) && no_plano(*b)).filter_map(|[a, b]| no_plano_dir(sub(*b, *a))).collect();
+    dirs.extend([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]].into_iter().filter_map(no_plano_dir));
+    let pts: Vec<V3> = face.iter().flatten().copied().collect();
+    let caixa = |u: V3| {
+        let v = cross(n, u);
+        let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+        for p in &pts {
+            let q = sub(*p, ponto);
+            for (i, c) in [dot(q, u), dot(q, v)].into_iter().enumerate() {
+                lo[i] = lo[i].min(c);
+                hi[i] = hi[i].max(c);
+            }
+        }
+        (u, v, lo, hi)
+    };
+    let area = |c: &(V3, V3, [f64; 2], [f64; 2])| (c.3[0] - c.2[0]) * (c.3[1] - c.2[1]);
+    // empate (quadrado, ou duas direções do mesmo retângulo): fica a primeira, que é uma borda
+    let (u, v, lo, hi) = dirs.into_iter().map(caixa).fold(None, |m: Option<(V3, V3, [f64; 2], [f64; 2])>, c| match m {
+        Some(x) if area(&x) <= area(&c) + 1e-9 => Some(x),
+        _ => Some(c),
+    })?;
+    let centro = add(ponto, add(mul(u, (lo[0] + hi[0]) / 2.), mul(v, (lo[1] + hi[1]) / 2.)));
+    // paralela ao lado menor
+    let (dir, meia) = if hi[0] - lo[0] >= hi[1] - lo[1] { (v, (hi[1] - lo[1]) / 2.) } else { (u, (hi[0] - lo[0]) / 2.) };
+    let perp = cross(n, dir);
+    // trecho da reta centro + t·dir dentro de cada triângulo
+    let trechos: Vec<(f64, f64)> = face
+        .iter()
+        .filter_map(|t| {
+            let s: Vec<(f64, f64)> = t.iter().map(|p| (dot(sub(*p, centro), dir), dot(sub(*p, centro), perp))).collect();
+            let mut ts = vec![];
+            for i in 0..3 {
+                let ((s0, w0), (s1, w1)) = (s[i], s[(i + 1) % 3]);
+                if w0.abs() < 1e-9 {
+                    ts.push(s0);
+                }
+                if (w0 < -1e-9 && w1 > 1e-9) || (w0 > 1e-9 && w1 < -1e-9) {
+                    ts.push(s0 + (s1 - s0) * w0 / (w0 - w1));
+                }
+            }
+            let (a, b) = ts.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), t| (a.min(*t), b.max(*t)));
+            (b > a + 1e-9).then_some((a, b))
+        })
+        .collect();
+    // junta os trechos encostados a partir do que contém o centro
+    let (mut t0, mut t1) = match trechos.iter().find(|(a, b)| *a <= 1e-6 && *b >= -1e-6) {
+        Some(&(a, b)) => (a, b),
+        None => (-meia, meia),
+    };
+    loop {
+        let (a, b) = trechos.iter().fold((t0, t1), |(a, b), &(x, y)| if x <= b + 1e-6 && y >= a - 1e-6 { (a.min(x), b.max(y)) } else { (a, b) });
+        if (a, b) == (t0, t1) {
+            break;
+        }
+        (t0, t1) = (a, b);
+    }
+    let (m, r) = ((t0 + t1) / 2., (t1 - t0) / 2. * fracao.clamp(0.05, 1.));
+    Some((add(centro, mul(dir, m - r)), add(centro, mul(dir, m + r))))
+}
+
 /// Reescreve uma expressão para que passe a valer `novo`, sem perder as variáveis: número puro
 /// vira o número novo; `L + 5` vira `L + 8` (só o termo numérico muda); qualquer outra vira
 /// `(expr) + delta`. `atual` é o valor que a expressão tem agora.
@@ -176,6 +260,36 @@ mod testes {
         assert_eq!(flip_para_fixo(a, b, n, [60., 10., 2.]), None);
         assert!(no_lado_movel([90., 10., 2.], a, b, n, true));
         assert!(!no_lado_movel([20., 10., 2.], a, b, n, true));
+    }
+
+    /// Chapa 100 × 50 × 2 em triângulos (topo, fundo e uma lateral), com as quatro bordas do topo.
+    fn chapa() -> (Vec<[V3; 3]>, Vec<[V3; 2]>) {
+        let q = |z: f64| [[0., 0., z], [100., 0., z], [100., 50., z], [0., 50., z]];
+        let (t, f) = (q(2.), q(0.));
+        let tris = vec![[t[0], t[1], t[2]], [t[0], t[2], t[3]], [f[0], f[2], f[1]], [f[0], f[3], f[2]], [f[0], f[1], t[1]], [f[0], t[1], t[0]]];
+        let bordas = (0..4).map(|i| [t[i], t[(i + 1) % 4]]).collect();
+        (tris, bordas)
+    }
+
+    #[test]
+    fn linha_padrao_cruza_a_face_no_meio() {
+        let (tris, bordas) = chapa();
+        // clique perto da ponta: a linha vai ao meio da face, de borda a borda, paralela ao lado menor
+        let (a, b) = linha_no_meio(&tris, &bordas, [5., 5., 2.], [0., 0., 1.], 1.).unwrap();
+        let (lo, hi) = (if a[1] < b[1] { a } else { b }, if a[1] < b[1] { b } else { a });
+        for (p, q) in [(lo, [50., 0., 2.]), (hi, [50., 50., 2.])] {
+            assert!(geo3d::dist(p, q) < 1e-6, "{p:?} contra {q:?}");
+        }
+        // o clique fica do lado fixo
+        let flip = flip_para_fixo(a, b, [0., 0., 1.], [5., 5., 2.]).unwrap();
+        assert!(!no_lado_movel([5., 5., 2.], a, b, [0., 0., 1.], flip));
+        // dobra cega: a linha encolhe em volta do meio
+        let (a, b) = linha_no_meio(&tris, &bordas, [5., 5., 2.], [0., 0., 1.], 0.6).unwrap();
+        assert!((geo3d::dist(a, b) - 30.).abs() < 1e-6 && (geo3d::lerp(a, b, 0.5)[1] - 25.).abs() < 1e-6, "{a:?} {b:?}");
+        // a face de baixo também serve (a linha fica nela) e um ponto fora de qualquer face não dá linha
+        let (a, _) = linha_no_meio(&tris, &bordas, [5., 5., 0.], [0., 0., -1.], 1.).unwrap();
+        assert!(a[2].abs() < 1e-9);
+        assert!(linha_no_meio(&tris, &bordas, [5., 5., 9.], [0., 0., 1.], 1.).is_none());
     }
 
     #[test]

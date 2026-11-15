@@ -40,6 +40,8 @@ Consulte solidos, desenho quando a mudança atravessar a fronteira da área.
 
 Registre aqui erros que se repetiram.
 
+- Dobra por linha nasce sem linha (`a == b`): o recálculo trata isso como "esperando a face fixa" e o clique na face põe a linha no meio dela (`chapa_linha::linha_no_meio`). Valor padrão com `a != b` faz a dobra sair na ponta da peça (B469).
+
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.

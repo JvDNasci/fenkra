@@ -298,13 +298,29 @@ fn linha_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
         let dica;
         match est.fixo {
             None => {
-                dica = tr("Clique na face fixa: o lado dela fica parado e o outro se move.");
+                dica = tr("Clique na face fixa: a linha nasce no meio dela e o lado do clique fica parado.");
                 if let (Some(m), Some(r)) = (mouse, app.result.as_ref()) {
                     let f = Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None, fantasma: Some(id) };
-                    if let Some(p @ Pick::Face { point, normal, .. }) = crate::picking::pick(r, &app.open.doc, cam, rect, m, &f) {
+                    if let Some(p @ Pick::Face { body, point, normal, .. }) = crate::picking::pick(r, &app.open.doc, cam, rect, m, &f) {
                         crate::picking::draw(&painter, r, cam, rect, &p, false);
                         if ui.input(|i| i.pointer.primary_clicked()) {
-                            est.fixo = Some((point.map(|x| x as f64), normal.map(|x| x as f64)));
+                            let (fixo, n) = (point.map(|x| x as f64), normal.map(|x| x as f64));
+                            // B469: a linha nasce no meio da face clicada, com o lado do clique parado;
+                            // as pontas se ajustam arrastando, e ✎ desenha outra à mão
+                            let fracao = match kind {
+                                FeatureKind::SmBend(x) if x.cega.is_some() => FRACAO_CEGA,
+                                // a veneziana corta na linha: de borda a borda partiria a chapa
+                                FeatureKind::SmLouver(_) => 0.5,
+                                _ => 1.,
+                            };
+                            match linha_padrao(r, body, fixo, n, fracao) {
+                                Some((a, b)) => {
+                                    let flip = chapa_linha::flip_para_fixo(a, b, n, fixo).unwrap_or(false);
+                                    escreve_linha(&mut app.open.doc, id, a, b, Some(flip));
+                                    est = Desenho::default();
+                                }
+                                None => est.fixo = Some((fixo, n)),
+                            }
                         }
                     }
                 }
@@ -420,32 +436,87 @@ fn linha_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
     // inverter o lado móvel e, na dobra, a posição da linha
     // o menu fica além da ponta final, fora do caminho dos rótulos das alças, que nascem no meio
     let dir = (sb - sa).normalized();
+    let dir = if dir.is_finite() { dir } else { egui::vec2(1., 0.) };
     let pos = sb + dir * 30. + egui::vec2(0., -14.);
-    egui::Area::new(egui::Id::new(("chapa_linha_menu", id.0))).fixed_pos(pos).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
+    let posicao = match kind {
+        FeatureKind::SmBend(bd) => Some(bd.position),
+        _ => None,
+    };
+    let acao = minibarra(ui.ctx(), id, pos, posicao);
+    if acao.trocar_lado {
+        escreve_linha(&mut app.open.doc, id, a, b, Some(!flip));
+    }
+    if acao.redesenhar {
+        // volta ao estado sem linha (as duas pontas iguais), já com a face fixa de agora: o lado
+        // parado continua o mesmo e faltam só as duas pontas
+        escreve_linha(&mut app.open.doc, id, a, a, None);
+        let parado = chapa_linha::lado_movel(a, b, n, flip).map_or(mid, |s| geo3d::sub(mid, geo3d::mul(s, geo3d::dist(a, b).max(1.) * 0.25)));
+        ui.ctx().data_mut(|d| d.insert_temp(chave, Desenho { fixo: Some((parado, n)), primeiro: None }));
+    }
+    if let Some(i) = acao.posicao {
+        if let Some(FeatureKind::SmBend(x)) = app.open.doc.feature_mut(id).map(|f| &mut f.kind) {
+            x.position = i;
+        }
+    }
+    true
+}
+
+/// Fração da largura da face que a linha padrão da dobra cega ocupa (a aba que gira fica no meio).
+const FRACAO_CEGA: f64 = 0.6;
+
+/// B469: linha padrão no meio da face clicada do corpo `body` (ver `chapa_linha::linha_no_meio`).
+pub(crate) fn linha_padrao(r: &fenkra_solidos::RecomputeResult, body: usize, ponto: V3, n: V3, fracao: f64) -> Option<(V3, V3)> {
+    let m = &r.bodies.get(body)?.mesh;
+    let p = |i: u32| [m.positions[i as usize * 3] as f64, m.positions[i as usize * 3 + 1] as f64, m.positions[i as usize * 3 + 2] as f64];
+    let tris: Vec<[V3; 3]> = m.indices.chunks_exact(3).map(|t| [p(t[0]), p(t[1]), p(t[2])]).collect();
+    let bordas: Vec<[V3; 2]> = (0..m.edge_ranges.len()).flat_map(|e| crate::picking::edge_polyline(r, body, e).windows(2).map(|w| [w[0], w[1]]).collect::<Vec<_>>()).collect();
+    chapa_linha::linha_no_meio(&tris, &bordas, ponto, n, fracao)
+}
+
+/// O que a minibarra da linha pediu neste quadro.
+#[derive(Default, Debug, PartialEq)]
+pub(crate) struct AcaoMinibarra {
+    pub trocar_lado: bool,
+    pub redesenhar: bool,
+    pub posicao: Option<u8>,
+    /// onde ficou o botão das posições (para os testes clicarem nele)
+    pub botao_posicao: Option<Rect>,
+}
+
+/// Minibarra da linha de dobra, além da ponta final: trocar o lado, desenhar de novo e, na dobra por
+/// linha, a posição da linha na zona da dobra.
+///
+/// B469: as quatro posições ficavam abertas numa lista fixa sobre a vista, que segurava os cliques
+/// no 3D por baixo dela. Agora ficam num menu ▾ que abre só quando pedido e fecha ao escolher ou ao
+/// clicar fora; fechado, a minibarra é uma linha de três botões.
+pub(crate) fn minibarra(ctx: &egui::Context, id: Id, pos: Pos2, posicao: Option<u8>) -> AcaoMinibarra {
+    let mut acao = AcaoMinibarra::default();
+    egui::Area::new(egui::Id::new(("chapa_linha_menu", id.0))).fixed_pos(pos).order(egui::Order::Foreground).show(ctx, |ui| {
         egui::Frame::popup(ui.style()).show(ui, |ui| {
             ui.horizontal(|ui| {
                 if ui.small_button("⇄").on_hover_text(tr("Trocar o lado que se move (a face fixa passa a ser a outra).")).clicked() {
-                    escreve_linha(&mut app.open.doc, id, a, b, Some(!flip));
+                    acao.trocar_lado = true;
                 }
-                if ui.small_button("✎").on_hover_text(tr("Desenhar a linha de novo (escolhe a face fixa outra vez).")).clicked() {
-                    // volta ao estado sem linha: as duas pontas iguais
-                    escreve_linha(&mut app.open.doc, id, a, a, None);
+                if ui.small_button("✎").on_hover_text(tr("Desenhar a linha de novo: clique nas duas pontas (o lado parado continua o mesmo).")).clicked() {
+                    acao.redesenhar = true;
                 }
-            });
-            if let FeatureKind::SmBend(bd) = kind {
-                for (i, nome) in fenkra_core::SM_BEND_POSITIONS.iter().enumerate() {
-                    if ui.selectable_label(bd.position as usize == i, tr(nome)).clicked() {
-                        if let Some(f) = app.open.doc.feature_mut(id) {
-                            if let FeatureKind::SmBend(x) = &mut f.kind {
-                                x.position = i as u8;
+                if let Some(p) = posicao {
+                    let atual = fenkra_core::SM_BEND_POSITIONS[p.min(3) as usize];
+                    let r = ui.menu_button(format!("{} ▾", tr(atual)), |ui| {
+                        for (i, nome) in fenkra_core::SM_BEND_POSITIONS.iter().enumerate() {
+                            if ui.selectable_label(p as usize == i, tr(nome)).clicked() {
+                                acao.posicao = Some(i as u8);
+                                ui.close();
                             }
                         }
-                    }
+                    });
+                    acao.botao_posicao = Some(r.response.rect);
+                    r.response.on_hover_text(tr("Posição da linha na zona da dobra"));
                 }
-            }
+            });
         });
     });
-    true
+    acao
 }
 
 /// Normal (externa, pela ordem dos vértices) da maior área plana da malha cujo plano contém a linha
@@ -496,6 +567,10 @@ fn escreve_linha(doc: &mut Document, id: Id, a: V3, b: V3, flip: Option<bool>) {
         _ => {}
     }
 }
+
+#[cfg(test)]
+#[path = "chapa_minibarra_tests.rs"]
+mod testes_minibarra;
 
 #[cfg(test)]
 mod testes_rotulos {

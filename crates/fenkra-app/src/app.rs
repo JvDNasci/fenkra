@@ -2751,9 +2751,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         relief_kind: 0,
                     }),
                     Cmd::SmHem => FeatureKind::SmHem(SmHem { edge: edge.unwrap_or([0.; 3]), length: s("8"), gap: s("0"), flip: false, kind: 0, edge_key: None }),
+                    // B469: sem dois vértices clicados a dobra nasce sem linha (pontas iguais): o
+                    // clique na face fixa põe a linha no meio dela, em vez de uma linha solta na ponta
                     Cmd::SmBend => FeatureKind::SmBend(SmBend {
-                        a: verts.first().copied().unwrap_or([0.; 3]),
-                        b: verts.get(1).copied().unwrap_or([0., 10., 0.]),
+                        a: if verts.len() >= 2 { verts[0] } else { [0.; 3] },
+                        b: if verts.len() >= 2 { verts[1] } else { [0.; 3] },
                         angle: s("90"),
                         radius: None,
                         flip: false,
