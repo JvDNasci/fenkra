@@ -273,8 +273,8 @@ pub fn montar(caso: &str) -> Option<(Document, FeatureKind)> {
             peca_com_relevos(&mut d);
             edicao(OpDireta::Mover, &[[5., 0., 25.], [0., 0., 30.]], "0")
         }
-        // a face lateral da caixa simples: na peça com boss e filete feitos por histórico o kernel
-        // recusa o deslocamento ("não deixou um sólido fechado"), só a mesma peça vinda de STEP passa
+        // a face lateral da caixa simples (a peça com boss e filete por histórico também desloca
+        // desde o B464, coberta em fenkra-solidos/tests/edicao_direta_b464.rs)
         "edit_deslocar_face" => {
             caixa(&mut d);
             edicao(OpDireta::Deslocar, &[[-30., 0., 15.]], "0.5")
