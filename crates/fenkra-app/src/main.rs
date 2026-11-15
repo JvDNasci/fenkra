@@ -254,6 +254,7 @@ mod textos_edicao_direta;
 mod textos_dfm;
 mod textos_paineis;
 mod textos_layout;
+mod textos_rodada2;
 mod textos_comandos;
 mod textos_proximo;
 mod textos_opcoes;

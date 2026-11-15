@@ -1032,7 +1032,9 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
                 Some(Status::Warning(m)) => {
                     ui.label(RichText::new(format!("⚠ {}", tr(m))).color(crate::theme::st_warn()).small());
                 }
-                Some(Status::Inactive) => {
+                // B459: comando que ainda espera uma entrada fica inativo sem ser "suprimido": a faixa
+                // de entradas logo abaixo pede o que falta
+                Some(Status::Inactive) if !crate::slots::feature_incomplete(&doc.features[idx].kind) => {
                     ui.label(RichText::new(tr("inativo (suprimido ou depois do marcador)")).weak().small());
                 }
                 _ => {}
@@ -1103,6 +1105,8 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
 /// "suprimir quando". Saiu do painel de cada comando e mora em Propriedades. `nomes`: os nomes já
 /// usados por parâmetros e referências, que o recurso não pode repetir.
 pub fn bloco_comum(ui: &mut egui::Ui, f: &mut Feature, nomes: &[String], status: Option<&Status>, doc_ro: &Document) {
+    // B459: sem a entrada escolhida o comando fica inativo, mas não "suprimido"
+    let pendente = crate::slots::feature_incomplete(&f.kind);
     egui::Frame::NONE.fill(ui.visuals().faint_bg_color).corner_radius(12.).inner_margin(10.).show(ui, |ui| {
         ui.horizontal(|ui| {
             let (r, _) = ui.allocate_exact_size(egui::vec2(38., 38.), egui::Sense::hover());
@@ -1121,6 +1125,7 @@ pub fn bloco_comum(ui: &mut egui::Ui, f: &mut Feature, nomes: &[String], status:
                 let (t, c) = match status {
                     Some(Status::Error(_)) => ("ERRO", crate::theme::st_err()),
                     Some(Status::Warning(_)) => ("AVISO", crate::theme::st_warn()),
+                    Some(Status::Inactive) if pendente => ("A ESCOLHER", crate::theme::st_warn()),
                     Some(Status::Inactive) => ("INATIVO", ui.visuals().weak_text_color()),
                     _ => ("OK", crate::theme::st_ok()),
                 };
@@ -1133,6 +1138,9 @@ pub fn bloco_comum(ui: &mut egui::Ui, f: &mut Feature, nomes: &[String], status:
             }
             Some(Status::Warning(m)) => {
                 ui.label(RichText::new(tr(m)).color(crate::theme::st_warn()).small());
+            }
+            Some(Status::Inactive) if pendente => {
+                ui.label(RichText::new(tr("aguardando a escolha das entradas")).weak().small());
             }
             Some(Status::Inactive) => {
                 ui.label(RichText::new(tr("inativo (suprimido ou depois do marcador)")).weak().small());
