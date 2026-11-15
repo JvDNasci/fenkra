@@ -193,13 +193,23 @@ mod testes {
     fn relogios_do_sistema_andam() {
         let c0 = relogio::cpu_da_thread().unwrap();
         let (o0, t0) = relogio::tempos_do_sistema().unwrap();
+        // gira pelo menos 60 ms e até os dois relógios andarem (B453): o relógio de CPU da thread
+        // anda em passos de ~15,6 ms e, com a suíte em paralelo, a thread pode passar os 60 ms quase
+        // toda na fila sem ganhar um passo; o prazo de 10 s só evita travar se o relógio parar
         let t = Instant::now();
         let mut x = 0u64;
-        while t.elapsed().as_millis() < 60 {
-            x = x.wrapping_add(std::hint::black_box(1));
+        let (mut c1, mut o1, mut t1);
+        loop {
+            for _ in 0..10_000 {
+                x = x.wrapping_add(std::hint::black_box(1));
+            }
+            c1 = relogio::cpu_da_thread().unwrap();
+            (o1, t1) = relogio::tempos_do_sistema().unwrap();
+            let andaram = c1 > c0 && t1 > t0;
+            if (t.elapsed().as_millis() >= 60 && andaram) || t.elapsed().as_secs() >= 10 {
+                break;
+            }
         }
-        let c1 = relogio::cpu_da_thread().unwrap();
-        let (o1, t1) = relogio::tempos_do_sistema().unwrap();
         assert!(x > 0 && c1 > c0, "a thread girou e o relógio dela andou");
         assert!(t1 > t0 && o1 >= o0 && (t1 - t0) >= (o1 - o0));
     }

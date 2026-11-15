@@ -8,6 +8,8 @@
 // limite padrão de profundidade ao calcular o tipo do iterador (a compilação release falhava)
 #![recursion_limit = "256"]
 
+#[macro_use]
+mod por_teste;
 mod app;
 mod examples;
 mod theme;

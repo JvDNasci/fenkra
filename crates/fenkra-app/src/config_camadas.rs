@@ -226,7 +226,8 @@ impl Estado {
     }
 }
 
-static ESTADO: std::sync::OnceLock<Mutex<Estado>> = std::sync::OnceLock::new();
+// nos testes, um por thread (B453): o quadro de outro teste trocava o documento ativo no meio deste
+global_por_teste! { static ESTADO: std::sync::OnceLock<Mutex<Estado>> = std::sync::OnceLock::new(); }
 
 fn estado() -> MutexGuard<'static, Estado> {
     ESTADO.get_or_init(|| Mutex::new(Estado::novo())).lock().unwrap_or_else(|p| p.into_inner())

@@ -2614,7 +2614,8 @@ mod tests {
 
     /// Estado com a placa de exemplo gravada numa pasta própria do teste.
     fn estado_com_placa(nome: &str) -> (DwgState, std::path::PathBuf, Id) {
-        let dir = std::env::temp_dir().join(nome);
+        // uma pasta por processo: outra cópia da suíte rodando ao mesmo tempo não pisa nesta (B453)
+        let dir = std::env::temp_dir().join(format!("{nome}_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let arq = dir.join("placa.fkp");
         std::fs::write(&arq, fenkra_solidos::example_document().to_json()).unwrap();
