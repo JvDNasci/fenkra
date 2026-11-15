@@ -213,6 +213,17 @@ mod testes {
     }
 
     #[test]
+    fn barras_sem_nome_de_software_nem_de_comando_proprietario() {
+        // nomes montados em pedaços, para o próprio teste não citar marcas nem comandos de terceiros
+        let proibidos = [["Solid", "Works"].concat(), ["Cat", "ia"].concat(), ["Inven", "tor"].concat(), ["Onsh", "ape"].concat(), ["Auto", "CAD"].concat(), ["filleted", " pad"].concat(), ["drafted", " fill"].concat()];
+        for (nome, fonte) in [("toolbar.rs", include_str!("toolbar.rs")), ("organizacao.rs", include_str!("organizacao.rs"))] {
+            for x in &proibidos {
+                assert!(!fonte.to_lowercase().contains(&x.to_lowercase()), "{nome}: nome de terceiro «{x}» na barra");
+            }
+        }
+    }
+
+    #[test]
     fn cada_perfil_aplica_atalhos_e_navegacao_e_abre_a_trilha_certa() {
         let mut vistos = std::collections::HashSet::new();
         assert!(PERFIS.iter().all(|p| vistos.insert(p.id)));

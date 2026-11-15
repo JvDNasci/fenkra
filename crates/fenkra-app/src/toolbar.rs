@@ -140,7 +140,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("extrusao", "Extrusão", "Extrusão cega", "Empurra o perfil fechado do sketch ao longo da normal do plano por uma distância.", Cmd(C::Extrude)),
                 it("ext_simetrico", "Plano médio", "Extrusão simétrica (plano médio)", "Metade da distância para cada lado do plano do sketch.", Cmd(C::ExtrudeMid)),
                 it("ext_ate_plano", "Até plano", "Extrusão até um plano", "Termina exatamente num plano — da Origem ou de referência, inclusive inclinado.", Cmd(C::ExtrudeUpTo)),
-                it("ext_saida_filete", "Saída + filetes", "Extrusão com saída e filetes (drafted filleted pad)", "Extruda com ângulo de saída e já arredonda as arestas criadas — ajuste os dois comandos depois.", Cmd(C::ExtrudeDraftFillet)),
+                it("ext_saida_filete", "Saída + filetes", "Extrusão com saída e filetes", "Extruda com ângulo de saída e já arredonda as arestas criadas — ajuste os dois comandos depois.", Cmd(C::ExtrudeDraftFillet)),
             ]),
             Family("recorte", vec![
                 it("recorte", "Recorte", "Recorte passante", "Remove material atravessando todo o corpo, a partir do perfil do sketch.", Cmd(C::Cut)),

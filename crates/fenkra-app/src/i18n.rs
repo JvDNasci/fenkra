@@ -1713,7 +1713,7 @@ static TABLE: &[(&str, &str)] = &[
     ("Extrair", "Extract"),
     ("Extrair a seleção (faces, arestas, vértices)", "Extract the selection (faces, edges, vertices)"),
     ("Extruda com ângulo de saída e já arredonda as arestas criadas — ajuste os dois comandos depois.", "Extrudes with draft and rounds the created edges — tune both commands afterwards."),
-    ("Extrusão com saída e filetes (drafted filleted pad)", "Drafted filleted pad"),
+    ("Extrusão com saída e filetes", "Extrude with draft and fillets"),
     ("Fator X", "X factor"),
     ("Fator Y", "Y factor"),
     ("Fator Z (normal)", "Z factor (normal)"),
