@@ -311,9 +311,38 @@ struct Linha {
     id: u64,
     ativa: bool,
     tipo: Tipo,
+    /// nome guardado no documento (o mesmo para duas cópias do mesmo exemplo)
     nome: String,
     modificado: bool,
     arquivo: Option<PathBuf>,
+    /// o que a aba mostra: único entre as abas (B463), preenchido por [`rotulos_distintos`]
+    exibido: String,
+}
+
+/// B463: o nome que a aba mostra. Documento com arquivo aparece pelo arquivo (`placa`), que é o que
+/// a pessoa escolheu ao salvar; sem arquivo, pelo nome do documento. Nomes que ainda se repetem
+/// ganham a pasta do arquivo, quando ela desempata, ou um número na ordem da barra (a primeira
+/// fica sem número), para nenhuma aba ficar igual a outra.
+fn rotulos_distintos(linhas: &[Linha]) -> Vec<String> {
+    let base: Vec<String> = linhas.iter().map(|l| l.arquivo.as_ref().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| l.nome.clone())).collect();
+    let pasta = |i: usize| linhas[i].arquivo.as_ref().and_then(|p| p.parent()).and_then(|p| p.file_name()).map(|s| s.to_string_lossy().into_owned());
+    (0..linhas.len())
+        .map(|i| {
+            let iguais: Vec<usize> = (0..linhas.len()).filter(|&j| base[j] == base[i]).collect();
+            if iguais.len() < 2 {
+                return base[i].clone();
+            }
+            if let Some(p) = pasta(i) {
+                if iguais.iter().filter(|&&j| pasta(j).as_ref() == Some(&p)).count() == 1 {
+                    return format!("{} — {p}", base[i]);
+                }
+            }
+            match iguais.iter().position(|&j| j == i) {
+                Some(0) | None => base[i].clone(),
+                Some(k) => format!("{} ({})", base[i], k + 1),
+            }
+        })
+        .collect()
 }
 
 // ------------------------------------------------------------ troca no App
@@ -532,18 +561,24 @@ impl App {
 
     fn linhas(&self) -> Vec<Linha> {
         let abas = &self.documentos.abas;
-        abas.ids()
+        let mut linhas = abas
+            .ids()
             .into_iter()
             .filter_map(|id| {
                 if id == abas.ativa() {
                     let tipo = tipo_de(self.settings.bench, self.asm.is_some(), self.dwg.is_some());
-                    Some(Linha { id, ativa: true, tipo, nome: nome_de(tipo, &self.open, self.asm.as_ref(), self.dwg.as_ref()), modificado: self.algo_modificado(), arquivo: principal_de(tipo, &self.open, self.asm.as_ref(), self.dwg.as_ref()) })
+                    Some(Linha { id, ativa: true, tipo, nome: nome_de(tipo, &self.open, self.asm.as_ref(), self.dwg.as_ref()), modificado: self.algo_modificado(), arquivo: principal_de(tipo, &self.open, self.asm.as_ref(), self.dwg.as_ref()), exibido: String::new() })
                 } else {
                     let d = abas.guardado(id)?;
-                    Some(Linha { id, ativa: false, tipo: d.tipo(), nome: d.nome(), modificado: d.modificado(), arquivo: d.arquivo_principal() })
+                    Some(Linha { id, ativa: false, tipo: d.tipo(), nome: d.nome(), modificado: d.modificado(), arquivo: d.arquivo_principal(), exibido: String::new() })
                 }
             })
-            .collect()
+            .collect::<Vec<_>>();
+        let rotulos = rotulos_distintos(&linhas);
+        for (l, r) in linhas.iter_mut().zip(rotulos) {
+            l.exibido = r;
+        }
+        linhas
     }
 
     /// Arquivos das abas (para "Abrir em nova janela" do menu Janela).
@@ -579,7 +614,12 @@ impl App {
         }
         self.documentos.demo_feita = true;
         let Some(n) = std::env::var("FENKRA_DEMO_DOCS").ok().and_then(|v| v.parse::<usize>().ok()) else { return };
-        for (i, e) in crate::examples::all().into_iter().take(n.max(1)).enumerate() {
+        // B463: `FENKRA_DEMO_DOCS_IGUAIS=1` abre o mesmo exemplo em todas as abas (nomes repetidos)
+        let mut exemplos = crate::examples::all();
+        if std::env::var("FENKRA_DEMO_DOCS_IGUAIS").is_ok() {
+            exemplos = (0..n.max(1)).map(|_| crate::examples::all().remove(0)).collect();
+        }
+        for (i, e) in exemplos.into_iter().take(n.max(1)).enumerate() {
             if i > 0 {
                 let saindo = self.tirar_ativo();
                 self.documentos.abas.abrir(saindo);
@@ -681,7 +721,7 @@ enum PedidoLista {
 }
 
 fn rotulo(l: &Linha) -> String {
-    format!("{}{}", l.nome, if l.modificado { " •" } else { "" })
+    format!("{}{}", l.exibido, if l.modificado { " •" } else { "" })
 }
 
 fn dica(l: &Linha) -> String {
@@ -760,6 +800,37 @@ fn lista_ui(ui: &mut egui::Ui, linhas: &[Linha]) -> Option<PedidoLista> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn linha(nome: &str, arquivo: Option<&str>) -> Linha {
+        Linha { id: 0, ativa: false, tipo: Tipo::Peca, nome: nome.into(), modificado: false, arquivo: arquivo.map(PathBuf::from), exibido: String::new() }
+    }
+
+    fn sem_repeticao(r: &[String]) {
+        let mut v = r.to_vec();
+        v.sort();
+        v.dedup();
+        assert_eq!(v.len(), r.len(), "{r:?}");
+    }
+
+    /// B463: duas abas nunca mostram o mesmo nome. O arquivo salvo dá o nome; cópias sem arquivo
+    /// ganham número na ordem da barra; arquivos de mesmo nome em pastas diferentes, a pasta.
+    #[test]
+    fn abas_com_o_mesmo_nome_ficam_distintas() {
+        // o caso da rodada 2: o exemplo salvo como placa.fkp e outro exemplo ainda sem arquivo
+        let r = rotulos_distintos(&[linha("Placa de exemplo", Some("C:/teste/placa.fkp")), linha("Placa de exemplo", None)]);
+        assert_eq!(r, vec!["placa", "Placa de exemplo"]);
+        // dois exemplos sem arquivo: a primeira fica, a segunda ganha número
+        let r = rotulos_distintos(&[linha("Placa de exemplo", None), linha("Placa de exemplo", None), linha("Flange", None)]);
+        assert_eq!(r, vec!["Placa de exemplo", "Placa de exemplo (2)", "Flange"]);
+        sem_repeticao(&r);
+        // mesmo arquivo em pastas diferentes: a pasta desempata
+        let r = rotulos_distintos(&[linha("A", Some("C:/obra1/placa.fkp")), linha("B", Some("C:/obra2/placa.fkp"))]);
+        assert_eq!(r, vec!["placa — obra1", "placa — obra2"]);
+        // arquivo e documento sem arquivo com o mesmo nome: a pasta marca um, o número o outro
+        let r = rotulos_distintos(&[linha("x", Some("C:/a/placa.fkp")), linha("placa", None)]);
+        assert_eq!(r, vec!["placa — a", "placa (2)"]);
+        sem_repeticao(&r);
+    }
 
     #[test]
     fn abas_abrem_trocam_e_fecham_pela_ordem_de_uso() {
