@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 107900,
+ "tokens_total_k": 108380,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 7180,
-   "pct": 6.7
+   "pct": 6.6
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 10.8
+   "pct": 10.7
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 30.0
+   "pct": 29.8
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 23820,
-   "pct": 22.1
+   "tokens_k": 24300,
+   "pct": 22.4
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
    "tokens_k": 32940,
-   "pct": 30.5
+   "pct": 30.4
   }
  },
  "itens": [
@@ -7723,6 +7723,198 @@
    "area": "Kernel",
    "status": "feito",
    "pct": 0.1
+  },
+  {
+   "id": "B465",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Comando novo sem entrada mostra referência perdida com id sentinela",
+   "oque": "Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): os comandos novos (varredura avançada incluída) abrem com \"referência perdida (#18446744073709551603)\"; sem entrada, o campo fica vazio, sem aviso de perda.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B466",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Varredura por guias: clique preenche o campo ativo na ordem",
+   "oque": "Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): o primeiro clique numa aresta cai em \"Guia do ápice\" e os seguintes não preenchem; o clique deve preencher o campo ativo na ordem dos campos (Guia 1 primeiro), a lista do campo oferece arestas e curvas e os campos cabem na coluna.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B467",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Planos e objetos escondidos fora da seleção por clique",
+   "oque": "Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): um plano escondido continua sendo selecionado pelo clique no 3D.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B468",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Esc limpa a seleção antes de fechar o comando",
+   "oque": "Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): Esc dentro de lista ou com seleção feita fecha o comando inteiro; deve limpar só a seleção, e fechar no Esc seguinte.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B469",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Dobra por linha: menu da minibarra bloqueia os cliques no 3D",
+   "oque": "Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): o menu \"Linha de centro…\" da minibarra fica aberto e segura os cliques no 3D, e a dobra sai com a linha padrão na ponta da peça.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B470",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Dobra cônica: prévia com o cone",
+   "oque": "Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): a prévia da dobra cônica mostra só a caixa envolvente; deve mostrar o tronco de cone.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B471",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Abas: mesmo arquivo reaproveita a aba e exemplo não substitui edição",
+   "oque": "Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): \"Editar a peça\" pela montagem abre segunda aba do mesmo arquivo e a antiga mostra dado velho; aba de fundo deve recarregar ou avisar quando o arquivo muda no disco; abrir exemplo pela tela inicial nunca substitui aba com alterações.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B472",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Balões automáticos avisam quando a origem não é montagem",
+   "oque": "Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): com uma peça como origem, Balões automáticos não faz nada e não avisa; a janela de dois cliques fica guardada para o uso seguinte.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B473",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Vistas automáticas cabem na folha",
+   "oque": "Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): as vistas automáticas passam da margem da folha A3; a escala automática deve considerar as quatro vistas.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B474",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Reancorar mantém o painel da restrição aberto",
+   "oque": "Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): ao clicar a face nova no Reancorar, o painel da restrição fecha; deve continuar aberto para conferir.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B475",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Variantes de mover sem termos em inglês",
+   "oque": "Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): \"Mover o corpo (Translation)\", \"(Rotation)\", \"(Symmetry)\" e \"(Affinity)\": trocar pelos termos em português do glossário.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B476",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Diálogo Salvar como da biblioteca vem para a frente",
+   "oque": "Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): o diálogo Salvar como aberto pela biblioteca fica atrás da janela principal.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
   }
  ]
 }

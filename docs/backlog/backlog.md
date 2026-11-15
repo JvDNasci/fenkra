@@ -4,15 +4,15 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 107.9 M tokens (≈ 360 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 108.4 M tokens (≈ 361 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
-| Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 6.7% |
-| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 10.8% |
-| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 156 | ≈ 32350 k | 30.0% |
-| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 103 | ≈ 23820 k | 22.1% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 109 | ≈ 32940 k | 30.5% |
+| Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 6.6% |
+| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 10.7% |
+| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 156 | ≈ 32350 k | 29.8% |
+| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 115 | ≈ 24300 k | 22.4% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 109 | ≈ 32940 k | 30.4% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
@@ -359,6 +359,18 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 | B462 | P1 | **Clique que insere fixador também seleciona a face e abre o gizmo** — Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): o clique que põe o fixador também seleciona a face embaixo e abre o gizmo; deve só inserir. | USR-MOUSE |  | 40 k | 0.0% | Auto + Manual | feito |
 | B463 | P1 | **Abas de documentos com o mesmo nome** — Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): duas abas mostram o mesmo nome 'Placa de exemplo'; diferenciar pelo arquivo ou numerar. | USR-MOUSE |  | 40 k | 0.0% | Auto + Manual | feito |
 | B464 | P1 | **Kernel: Deslocar face falha em peça com boss e filete por histórico** — Achado do B60 (14/11): Deslocar face falha com 'não deixou um sólido fechado' numa peça com boss e filete feitos por histórico; a mesma peça vinda de STEP passa. Reproduzir em teste, achar a causa no kernel (provável tolerância ou costura de faces do histórico) e corrigir. | USR-CHECK |  | 60 k | 0.1% | Auto | feito |
+| B465 | P1 | **Comando novo sem entrada mostra referência perdida com id sentinela** — Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): os comandos novos (varredura avançada incluída) abrem com "referência perdida (#18446744073709551603)"; sem entrada, o campo fica vazio, sem aviso de perda. | USR-CHECK |  | 40 k | 0.0% | Auto + Visual | a fazer |
+| B466 | P1 | **Varredura por guias: clique preenche o campo ativo na ordem** — Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): o primeiro clique numa aresta cai em "Guia do ápice" e os seguintes não preenchem; o clique deve preencher o campo ativo na ordem dos campos (Guia 1 primeiro), a lista do campo oferece arestas e curvas e os campos cabem na coluna. | USR-CHECK |  | 40 k | 0.0% | Auto + Visual | a fazer |
+| B467 | P1 | **Planos e objetos escondidos fora da seleção por clique** — Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): um plano escondido continua sendo selecionado pelo clique no 3D. | USR-CHECK |  | 40 k | 0.0% | Auto + Visual | a fazer |
+| B468 | P1 | **Esc limpa a seleção antes de fechar o comando** — Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): Esc dentro de lista ou com seleção feita fecha o comando inteiro; deve limpar só a seleção, e fechar no Esc seguinte. | USR-CHECK |  | 40 k | 0.0% | Auto + Visual | a fazer |
+| B469 | P1 | **Dobra por linha: menu da minibarra bloqueia os cliques no 3D** — Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): o menu "Linha de centro…" da minibarra fica aberto e segura os cliques no 3D, e a dobra sai com a linha padrão na ponta da peça. | USR-CHECK |  | 40 k | 0.0% | Auto + Visual | a fazer |
+| B470 | P1 | **Dobra cônica: prévia com o cone** — Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): a prévia da dobra cônica mostra só a caixa envolvente; deve mostrar o tronco de cone. | USR-CHECK |  | 40 k | 0.0% | Auto + Visual | a fazer |
+| B471 | P1 | **Abas: mesmo arquivo reaproveita a aba e exemplo não substitui edição** — Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): "Editar a peça" pela montagem abre segunda aba do mesmo arquivo e a antiga mostra dado velho; aba de fundo deve recarregar ou avisar quando o arquivo muda no disco; abrir exemplo pela tela inicial nunca substitui aba com alterações. | USR-CHECK |  | 40 k | 0.0% | Auto + Visual | a fazer |
+| B472 | P1 | **Balões automáticos avisam quando a origem não é montagem** — Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): com uma peça como origem, Balões automáticos não faz nada e não avisa; a janela de dois cliques fica guardada para o uso seguinte. | USR-CHECK |  | 40 k | 0.0% | Auto + Visual | a fazer |
+| B473 | P1 | **Vistas automáticas cabem na folha** — Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): as vistas automáticas passam da margem da folha A3; a escala automática deve considerar as quatro vistas. | USR-CHECK |  | 40 k | 0.0% | Auto + Visual | a fazer |
+| B474 | P1 | **Reancorar mantém o painel da restrição aberto** — Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): ao clicar a face nova no Reancorar, o painel da restrição fecha; deve continuar aberto para conferir. | USR-CHECK |  | 40 k | 0.0% | Auto + Visual | a fazer |
+| B475 | P1 | **Variantes de mover sem termos em inglês** — Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): "Mover o corpo (Translation)", "(Rotation)", "(Symmetry)" e "(Affinity)": trocar pelos termos em português do glossário. | USR-CHECK |  | 40 k | 0.0% | Auto + Visual | a fazer |
+| B476 | P1 | **Diálogo Salvar como da biblioteca vem para a frente** — Teste com mouse real, rodada 3 (docs/validacao/teste-mouse-rodada3.md): o diálogo Salvar como aberto pela biblioteca fica atrás da janela principal. | USR-CHECK |  | 40 k | 0.0% | Auto + Visual | a fazer |
 | B50 | P1 | **Estrutura → montagem viva e desenho por item** — Acrescentar que Gerar montagem abre antes um resumo (peças, instâncias, pasta de destino, nomes) com Confirmar e Cancelar, em vez de mensagens curtas de erro por arquivo não salvo. | DR-44, DR-45 | EST-08, DES-11 | 250 k | 0.2% | Auto + Visual | feito |
 | B63 | P1 | **Biblioteca de prendedores aeronáuticos e industriais ampla** — Todas as famílias pesquisadas (NAS, MS, AN, Hi-Lok, Hi-Lite, lockbolts, cegos estruturais, porcas âncora, insertos, pinos, anéis) sobre o modelo genérico (B42), com tipos PinoComColar e Rebite (L pelo grip), dash number, equivalência mm↔pol explícita e dados gratuitos em duas fontes (nada [C] como confirmado); ver docs/pesquisa/prendedores-*.md. | PESQ-FIX, CTX-HW | BIB-06 | 400 k | 0.4% | Auto | em andamento |
 | B189 | P2 | **PMI: alvos de referência (datum targets), alvos móveis e áreas restritas** — Datum target ponto, linha, círculo, círculo-curva, retângulo, área e curva, com número (A1), dimensões do alvo, símbolo vetorial e relação com o Datum; alvo móvel com direção e curso; áreas restritas e cotas enquadradas ligadas; aviso da regra 3-2-1. Mapeia para placed_datum_target_feature e alvos explícitos com advanced_face. | PESQ-PMI |  | 250 k | 0.2% | Auto + Visual | feito |
