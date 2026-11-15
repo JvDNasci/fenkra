@@ -1157,7 +1157,7 @@ mod tests {
         let rect = egui::Rect::from_min_size(egui::pos2(0., 0.), egui::vec2(800., 600.));
         let cam = crate::render::Camera { target: alvo, yaw: 0.3, pitch: 0.2, dist: 200., ortho: true };
         let pos = cam.project(rect, alvo).expect("na tela");
-        let filtro = |fantasma| crate::picking::Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None, fantasma };
+        let filtro = |fantasma| crate::picking::Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None, fantasma, planos_origem: true, planos_ref: true };
         let dono = |p: Option<crate::picking::Pick>| match p {
             Some(crate::picking::Pick::Face { owner, .. }) => Some(owner),
             _ => None,

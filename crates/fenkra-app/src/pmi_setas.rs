@@ -319,7 +319,7 @@ mod tests {
         let pts = NA_TELA.lock().unwrap().1.iter().find(|s| s.id == id).expect("a seta foi registrada").pts.clone();
         let (a, ponta) = (pts[pts.len() - 2], *pts.last().unwrap());
         let q = ponta + (a - ponta).normalized() * 4.;
-        let filt = Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None };
+        let filt = Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None, planos_origem: true, planos_ref: true };
         let r = app.result.as_ref().unwrap();
         assert!(matches!(crate::picking::pick(r, &app.open.doc, &cam, rect, q, &filt), Some(Pick::Face { .. })), "sob a seta há uma face");
         assert_eq!(seta_em(ctx.cumulative_frame_nr(), q), Some((id, 0)), "o teste de clique vê a seta antes da face");

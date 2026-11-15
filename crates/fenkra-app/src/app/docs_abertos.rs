@@ -195,6 +195,9 @@ pub struct DocAberto {
     errors_prev: usize,
     /// saiu com cálculo pendente ou soltou a malha: pede de novo ao voltar
     pub(crate) a_recalcular: bool,
+    /// B471: como estavam os arquivos no disco quando a aba foi para o fundo; ao voltar, o que mudou
+    /// nesse meio tempo (outra aba salvou o mesmo arquivo) recarrega ou avisa
+    vistos: Vec<(PathBuf, Option<fenkra_project::seguro::Assinatura>)>,
 }
 
 impl DocAberto {
@@ -218,6 +221,7 @@ impl DocAberto {
             camera: None,
             errors_prev: 0,
             a_recalcular: true,
+            vistos: vec![],
         }
     }
 
@@ -277,6 +281,11 @@ fn principal_de(t: Tipo, open: &OpenDoc, asm: Option<&crate::asm_ui::AsmState>, 
         Tipo::Desenho => dwg.and_then(|s| s.path.clone()),
         Tipo::Peca => open.file.clone(),
     }
+}
+
+/// Como cada arquivo está no disco agora (`None` quando não dá para ler).
+fn assinaturas_do_disco(arquivos: &[PathBuf]) -> Vec<(PathBuf, Option<fenkra_project::seguro::Assinatura>)> {
+    arquivos.iter().map(|p| (p.clone(), fenkra_project::seguro::assinar(p).ok())).collect()
 }
 
 /// Mesmo arquivo? Compara o caminho canônico quando dá (letras de unidade, `..`).
@@ -358,6 +367,7 @@ impl App {
         }
         let vazio = OpenDoc { doc: Document::new("Peça"), entry: None, frozen: None, file: None, modified: false, ramo: None };
         let result = self.result.take();
+        let vistos = assinaturas_do_disco(&arquivos_de(&self.open, self.asm.as_ref(), self.dwg.as_ref()));
         DocAberto {
             open: std::mem::replace(&mut self.open, vazio),
             hist: std::mem::replace(&mut self.hist, crate::historico::Historico::new(self.settings.historico_mb)),
@@ -376,6 +386,7 @@ impl App {
             bench: self.settings.bench,
             camera: self.viewport.as_ref().map(|v| v.camera),
             errors_prev: std::mem::take(&mut self.errors_prev),
+            vistos,
         }
     }
 
@@ -408,7 +419,7 @@ impl App {
         self.last_order.borrow_mut().clear();
         self.multi_anchor.set(None);
         self.polir = Default::default();
-        let DocAberto { open, hist, result, result_doc, sent_doc, sel, multi, picks, session, sketch, asm, dwg, forma, bench, camera, errors_prev, a_recalcular } = d;
+        let DocAberto { open, hist, result, result_doc, sent_doc, sel, multi, picks, session, sketch, asm, dwg, forma, bench, camera, errors_prev, a_recalcular, vistos: _ } = d;
         self.open = open;
         self.hist = hist;
         self.result = result;
@@ -459,8 +470,10 @@ impl App {
         let saindo = self.tirar_ativo();
         match self.documentos.abas.trocar(id, saindo) {
             Ok(entrando) => {
+                let vistos = entrando.vistos.clone();
                 self.por_ativo(entrando);
                 self.aliviar_memoria();
+                self.conferir_disco(&vistos);
                 true
             }
             Err(saindo) => {
@@ -535,9 +548,17 @@ impl App {
                 return true;
             }
         }
+        self.com_aba_nova(|app| app.rodar_acao(acao.clone()));
+        true
+    }
+
+    /// Carrega um documento sem tirar o lugar de ninguém: a aba da frente só é ocupada se não tiver
+    /// nada que valha guardar; senão ela vai para o fundo e `carregar` roda numa aba nova. Se
+    /// `carregar` não trouxer documento (erro já avisado), a aba nova sai e a anterior volta.
+    pub(super) fn com_aba_nova(&mut self, carregar: impl FnOnce(&mut App)) {
         if self.ativo_descartavel() {
-            self.rodar_acao(acao.clone());
-            return true;
+            carregar(self);
+            return;
         }
         let bench = self.settings.bench;
         let saindo = self.tirar_ativo();
@@ -547,7 +568,7 @@ impl App {
         nova.a_recalcular = false;
         self.por_ativo(nova);
         self.doc_trocado = false;
-        self.rodar_acao(acao.clone());
+        carregar(self);
         let carregou = self.doc_trocado || self.asm.is_some() || self.dwg.is_some();
         self.doc_trocado = true;
         if !carregou {
@@ -556,7 +577,40 @@ impl App {
             self.started = true;
         }
         self.aliviar_memoria();
-        true
+    }
+
+    /// B471: abrir um exemplo pela tela inicial nunca substitui a aba da frente: se ela tiver
+    /// alterações (ou qualquer coisa que valha guardar), o exemplo abre numa aba nova.
+    pub(super) fn abrir_exemplo_da_tela(&mut self, indice: usize) {
+        let Some(e) = crate::examples::all().into_iter().nth(indice) else { return };
+        self.com_aba_nova(|app| {
+            app.load_doc(e.doc, None, None);
+            app.settings.bench = e.bench;
+            app.started = true;
+        });
+    }
+
+    /// Aba de fundo (não a da frente) que já tem `p` aberto.
+    pub(crate) fn aba_de_fundo_com(&self, p: &Path) -> Option<u64> {
+        let abas = &self.documentos.abas;
+        abas.ids().into_iter().filter(|&id| id != abas.ativa()).find(|&id| abas.guardado(id).is_some_and(|d| d.arquivos().iter().any(|a| mesmo_arquivo(a, p))))
+    }
+
+    /// B471: a aba que acaba de voltar para a frente confere se os arquivos dela mudaram no disco
+    /// enquanto estava no fundo (outra aba salvou o mesmo arquivo). Sem alterações por salvar, uma peça
+    /// recarrega do disco; com alterações, ou montagem e desenho, só avisa, para não perder trabalho.
+    pub(super) fn conferir_disco(&mut self, vistos: &[(PathBuf, Option<fenkra_project::seguro::Assinatura>)]) {
+        use fenkra_project::seguro::{verificar, MudancaExterna};
+        let mudados: Vec<&PathBuf> = vistos.iter().filter_map(|(p, a)| a.as_ref().filter(|a| verificar(p, a) == MudancaExterna::Mudou).map(|_| p)).collect();
+        let Some(&primeiro) = mudados.first() else { return };
+        let nome = primeiro.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let so_peca = self.asm.is_none() && self.dwg.is_none() && self.open.entry.is_none() && self.open.file.as_deref() == Some(primeiro.as_path());
+        if so_peca && !self.algo_modificado() {
+            self.open_path(&primeiro.clone());
+            self.toast(format!("{} {nome}", tr("Recarregada do disco, porque outra aba a salvou:")), false);
+        } else {
+            self.toast(format!("{} {nome}", tr("Este arquivo mudou no disco enquanto a aba estava em segundo plano; salvar aqui vai sobrescrever a mudança:")), true);
+        }
     }
 
     fn linhas(&self) -> Vec<Linha> {

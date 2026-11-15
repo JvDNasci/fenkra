@@ -148,16 +148,16 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("ext_ate_plano", "Recorte até plano", "Recorte até um plano", "Remove material até um plano (inclusive inclinado).", Cmd(C::CutUpTo)),
             ]),
             Family("revolucao", vec![
-                it("revolucao", "Revolução", "Girar o perfil em torno de um eixo (Shaft)", "Gira o perfil fechado em torno de um eixo da Origem, de uma linha do sketch ou de uma linha de referência.", Cmd(C::Revolve)),
-                it("ranhura", "Ranhura", "Remover girando o perfil (Groove)", "Remove material girando o perfil em torno do eixo.", Cmd(C::Groove)),
+                it("revolucao", "Revolução", "Girar o perfil em torno de um eixo", "Gira o perfil fechado em torno de um eixo da Origem, de uma linha do sketch ou de uma linha de referência.", Cmd(C::Revolve)),
+                it("ranhura", "Ranhura", "Remover girando o perfil", "Remove material girando o perfil em torno do eixo.", Cmd(C::Groove)),
             ]),
             Family("varredura", vec![
-                it("nervura", "Nervura", "Varrer o perfil ao longo de uma curva (Rib)", "O perfil do sketch percorre uma curva guia (linha, spline, hélice, aresta) acrescentando material.", Cmd(C::Rib)),
+                it("nervura", "Nervura", "Varrer o perfil ao longo de uma curva", "O perfil do sketch percorre uma curva guia (linha, spline, hélice, aresta) acrescentando material.", Cmd(C::Rib)),
                 it("rasgo_varrido", "Rasgo varrido", "Remover varrendo o perfil ao longo de uma curva (não é o rasgo de chapa)", "O perfil percorre a curva guia removendo material. Para um rasgo em chapa metálica use o recorte da bancada Chapa.", Cmd(C::Slot)),
-                it("reforco", "Reforço", "Reforço / nervura de parede (Stiffener)", "Cada linha do sketch vira uma parede fina com espessura e profundidade.", Cmd(C::Stiffener)),
+                it("reforco", "Reforço", "Reforço / nervura de parede", "Cada linha do sketch vira uma parede fina com espessura e profundidade.", Cmd(C::Stiffener)),
             ]),
             Family("multisecoes", vec![
-                it("multisecoes", "Multi-seções", "Sólido por vários perfis (loft)", "Transição suave entre dois ou mais perfis em planos diferentes.", Cmd(C::Loft)),
+                it("multisecoes", "Multi-seções", "Sólido por vários perfis", "Transição suave entre dois ou mais perfis em planos diferentes.", Cmd(C::Loft)),
                 it("multisecoes_remover", "Multi-seções -", "Remover por vários perfis", "Remove material com a transição entre os perfis.", Cmd(C::LoftCut)),
             ]),
             Family("furo", vec![
@@ -181,10 +181,10 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("chanfro_dist_angulo", "Dist. + ângulo", "Chanfro por distância e ângulo", "Distância numa face e ângulo em relação a ela.", Cmd(C::ChamferDistAngle)),
                 it("chanfro_dist", "Chanfro total", "Chanfro em todas as arestas", "Chanfra todas as arestas do corpo.", Cmd(C::ChamferAll)),
             ]),
-            One(it("saida", "Saída", "Ângulo de saída (Draft)", "Inclina as faces escolhidas a partir de um plano neutro, para desmoldar.", Cmd(C::Draft))),
+            One(it("saida", "Saída", "Ângulo de saída", "Inclina as faces escolhidas a partir de um plano neutro, para desmoldar.", Cmd(C::Draft))),
             Family("casca", vec![
-                it("casca", "Casca", "Esvaziar o sólido (Shell)", "Abre as faces escolhidas e deixa paredes com espessura uniforme.", Cmd(C::Shell)),
-                it("espessura", "Espessura", "Engrossar ou afinar faces (Thickness)", "Acrescenta ou remove material nas faces planas escolhidas.", Cmd(C::Thickness)),
+                it("casca", "Casca", "Esvaziar o sólido", "Abre as faces escolhidas e deixa paredes com espessura uniforme.", Cmd(C::Shell)),
+                it("espessura", "Espessura", "Engrossar ou afinar faces", "Acrescenta ou remove material nas faces planas escolhidas.", Cmd(C::Thickness)),
             ]),
             One(it("rosca", "Rosca", "Rosca em eixo ou furo (Thread/Tap)", "Rosca cosmética ou modelada numa face cilíndrica, por norma.", Cmd(C::Thread))),
             Family("pl_boss", crate::plastico_rec_ui::itens()),
@@ -193,15 +193,15 @@ pub fn entries(g: Group) -> Vec<Entry> {
             Family("padrao", vec![
                 it("padrao_linear", "Padrão linear", "Padrão retangular", "Repete os comandos escolhidos (ou o corpo) em uma ou duas direções.", Cmd(C::PatternLinear)),
                 it("padrao_circular", "Padrão circular", "Padrão circular", "Repete em volta de um eixo.", Cmd(C::PatternCircular)),
-                it("padrao_pontos", "Por pontos", "Padrão por pontos (user pattern)", "Repete nos pontos escolhidos.", Cmd(C::PatternPoints)),
+                it("padrao_pontos", "Por pontos", "Padrão por pontos", "Repete nos pontos escolhidos.", Cmd(C::PatternPoints)),
             ]),
-            One(it("espelho", "Espelho", "Espelhar (Mirror)", "Espelha os comandos escolhidos (ou o corpo) por um plano.", Cmd(C::Mirror))),
-            One(it("escala", "Escala", "Escalar a peça (Scale)", "Multiplica as medidas do corpo a partir de um centro.", Cmd(C::Scale))),
+            One(it("espelho", "Espelho", "Espelhar", "Espelha os comandos escolhidos (ou o corpo) por um plano.", Cmd(C::Mirror))),
+            One(it("escala", "Escala", "Escalar a peça", "Multiplica as medidas do corpo a partir de um centro.", Cmd(C::Scale))),
             Family("mover_corpo", vec![
-                it("xf_mover", "Translação", "Mover o corpo (Translation)", "Move o corpo inteiro ao longo de uma direção.", Cmd(C::MoveBody(0))),
-                it("xf_girar", "Rotação", "Girar o corpo (Rotation)", "Gira o corpo inteiro em torno de um eixo.", Cmd(C::MoveBody(1))),
-                it("xf_simetria", "Simetria", "Simetria do corpo (Symmetry)", "Leva o corpo para o lado espelhado (sem cópia; para copiar use Espelho).", Cmd(C::MoveBody(2))),
-                it("xf_afinidade", "Afinidade", "Afinidade (Affinity)", "Escala independente em X, Y e Z.", Cmd(C::MoveBody(3))),
+                it("xf_mover", "Translação", "Mover o corpo (translação)", "Move o corpo inteiro ao longo de uma direção.", Cmd(C::MoveBody(0))),
+                it("xf_girar", "Rotação", "Girar o corpo (rotação)", "Gira o corpo inteiro em torno de um eixo.", Cmd(C::MoveBody(1))),
+                it("xf_simetria", "Simetria", "Simetria do corpo (reflexão)", "Leva o corpo para o lado espelhado (sem cópia; para copiar use Espelho).", Cmd(C::MoveBody(2))),
+                it("xf_afinidade", "Afinidade", "Afinidade (escala por eixo)", "Escala independente em X, Y e Z.", Cmd(C::MoveBody(3))),
             ]),
         ],
         Group::Booleanas => vec![
@@ -312,7 +312,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("sm_aba", "Aba", "Aba (comando unificado)", "Um comando só para toda aba: escolha o modo (aresta, laço, aresta curva, perfil ou superfície) no painel. Painel em Suporte, Modo, Parâmetros e Avançado; um botão único inverte a direção e o raio próprio nasce da regra da chapa.", Cmd(C::SmFlange)),
                 it("sm_bainha", "Bainha", "Bainha", "Dobra de 180° na borda: esmagada (folga 0) ou aberta/circular.", Cmd(C::SmHem)),
             ]),
-            One(it("sm_aba_perfis", "Aba entre perfis", "Aba entre perfis (lofted)", "Escolha dois contornos fechados em planos diferentes: a chapa passa de um ao outro, como um funil ou adaptador, com a espessura da chapa. Facetada (dobradeira) ou lisa (estampada).", Cmd(C::SmLoftFlange))),
+            One(it("sm_aba_perfis", "Aba entre perfis", "Aba entre perfis (transição entre contornos)", "Escolha dois contornos fechados em planos diferentes: a chapa passa de um ao outro, como um funil ou adaptador, com a espessura da chapa. Facetada (dobradeira) ou lisa (estampada).", Cmd(C::SmLoftFlange))),
             One(it("sm_converter_chapa", "Converter em chapa", "Converter sólido em chapa", "Reconhece a espessura constante e as dobras de um corpo e o trata como chapa, para usar abas, alívios e planificação sobre ele. Clique na face fixa.", Cmd(C::SmConvert))),
         ],
         Group::ChDobras => vec![
@@ -460,7 +460,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
         Group::StLigacoes => vec![
             Family("st_ligacao", vec![
                 it("st_placa", "Placa", "Placa de extremidade", "Fecha a ponta do membro mais perto do vértice selecionado (base de fixação).", Cmd(C::StPlate)),
-                it("st_reforco", "Reforço", "Reforço (gusset)", "Chapa triangular ou com chanfro de alívio no encontro de dois membros.", Cmd(C::StGusset)),
+                it("st_reforco", "Reforço", "Chapa de reforço", "Chapa triangular ou com chanfro de alívio no encontro de dois membros.", Cmd(C::StGusset)),
             ]),
             One(it("st_canto_meia", "Cantos", "Cantos da estrutura", "Lista os cantos onde os membros se encontram, realça cada um no 3D, troca o tratamento e quem continua, e agrupa cantos iguais.", Cmd(C::StCorners))),
         ],
@@ -553,13 +553,13 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("forma_plano", "Plano de forma", "Folha aberta", "Arraste o retângulo no plano. A folha tem borda: vira superfície, não sólido.", Cmd(C::Forma(PrimitivaForma::Plano)))),
         ],
         Group::Hibrido => vec![
-            One(it("hib_dividir", "Dividir corpo", "Dividir o sólido por superfície (Split)", "Corta o corpo com uma superfície, face ou plano e mantém um lado.", Cmd(C::SplitBody))),
+            One(it("hib_dividir", "Dividir corpo", "Dividir o sólido por superfície", "Corta o corpo com uma superfície, face ou plano e mantém um lado.", Cmd(C::SplitBody))),
             Family("hib_engrossar", vec![
                 it("hib_engrossar", "Engrossar", "Engrossar superfície (Thick Surface / Thicken)", "Transforma a superfície em sólido com espessura para um ou dois lados.", Cmd(C::ThickSurface)),
                 it("hib_fechar", "Fechar", "Fechar superfície (Close Surface / Stitch)", "Costura as superfícies e tampa as bordas para formar um sólido.", Cmd(C::CloseSurface)),
             ]),
-            One(it("hib_costurar", "Costurar", "Costurar superfície no corpo (Sew Surface)", "Acrescenta o volume entre a superfície e o corpo, ou remove o lado escolhido.", Cmd(C::SewSurface))),
-            One(it("hib_preencher", "Preencher", "Preencher fronteiras (Boundary Fill)", "Sólido dos volumes fechados por superfícies, faces e planos; escolha as células que ficam de fora.", Cmd(C::BoundaryFill))),
+            One(it("hib_costurar", "Costurar", "Costurar superfície no corpo", "Acrescenta o volume entre a superfície e o corpo, ou remove o lado escolhido.", Cmd(C::SewSurface))),
+            One(it("hib_preencher", "Preencher", "Preencher fronteiras", "Sólido dos volumes fechados por superfícies, faces e planos; escolha as células que ficam de fora.", Cmd(C::BoundaryFill))),
         ],
         Group::Malha => vec![
             Family("hib_malha", vec![
