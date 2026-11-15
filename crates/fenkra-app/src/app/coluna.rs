@@ -122,6 +122,8 @@ impl App {
             tr(p.c.tipo.label()).to_string()
         } else if self.in_asm() && self.asm.as_ref().is_some_and(|s| s.sim_open) {
             tr("Estudo de movimento").to_string()
+        } else if let Some(t) = crate::asm_inserir::titulo(self).filter(|_| self.in_asm()) {
+            tr(t).to_string()
         } else if let Some(i) = self.pmi_pending.filter(|_| !self.in_asm()) {
             // B448: anotação pendente: o painel é do comando, não da seleção anterior
             tr(crate::pmi_ui::kind_of(i).label()).to_string()
@@ -157,6 +159,8 @@ impl App {
                 crate::compasso::painel(self, ui)
             } else if self.settings.bench == crate::settings::Bench::Desenho {
                 crate::dwg_ui::panel(self, ui)
+            } else if crate::asm_inserir::na_coluna(self) {
+                crate::asm_inserir::painel(self, ui)
             } else if self.settings.bench == crate::settings::Bench::Montagem {
                 crate::medir_quadros::fase("painel", || crate::asm_ui::panel(self, ui))
             } else if self.sketch.is_some() {

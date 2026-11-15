@@ -126,6 +126,22 @@ struct PacoteUi {
     resultado: Option<Result<ResultadoPacote, String>>,
 }
 
+/// O que Arquivo › Salvar como… faz com o documento ativo (B460).
+#[derive(Debug, PartialEq)]
+enum SalvarComo {
+    /// nunca gravado: pede o arquivo, como o Ctrl+S
+    PrimeiraGravacao,
+    /// já tem arquivo: grava uma cópia e decide o que fazer com as peças que ela usa (B93)
+    CopiaComReferencias(PathBuf, String),
+}
+
+fn salvar_como_de(arquivo: Option<(PathBuf, String)>) -> SalvarComo {
+    match arquivo {
+        Some((origem, texto)) => SalvarComo::CopiaComReferencias(origem, texto),
+        None => SalvarComo::PrimeiraGravacao,
+    }
+}
+
 fn id_salvar_como() -> egui::Id {
     egui::Id::new("fenkra_salvar_como_ref")
 }
@@ -144,11 +160,16 @@ impl App {
         }
     }
 
-    /// Abre o diálogo Salvar como com referências (B93).
+    /// Abre o diálogo Salvar como com referências (B93). Documento que nunca foi gravado não tem
+    /// arquivo para copiar nem referências para reapontar: Salvar como é a primeira gravação, com
+    /// o mesmo diálogo de arquivo do Ctrl+S (B460).
     pub(super) fn abrir_salvar_como(&mut self, ctx: &egui::Context) {
-        let Some((origem, texto)) = self.arquivo_do_documento_ativo() else {
-            self.toast(tr("Salve o documento uma vez antes de usar Salvar como com referências"), true);
-            return;
+        let (origem, texto) = match salvar_como_de(self.arquivo_do_documento_ativo()) {
+            SalvarComo::PrimeiraGravacao => {
+                self.salvar_ativo();
+                return;
+            }
+            SalvarComo::CopiaComReferencias(origem, texto) => (origem, texto),
         };
         let stem = origem.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
         let ext = origem.extension().map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "fkp".into());
@@ -819,5 +840,19 @@ impl App {
                 };
             });
         }
+    }
+}
+
+#[cfg(test)]
+mod testes_salvar_como {
+    use super::*;
+
+    /// B460: peça nunca salva vai para a primeira gravação (diálogo do Ctrl+S), não para a recusa;
+    /// peça com arquivo segue para a cópia com referências.
+    #[test]
+    fn salvar_como_sem_arquivo_e_a_primeira_gravacao() {
+        assert_eq!(salvar_como_de(None), SalvarComo::PrimeiraGravacao);
+        let f = PathBuf::from("placa.fkp");
+        assert_eq!(salvar_como_de(Some((f.clone(), "{}".into()))), SalvarComo::CopiaComReferencias(f, "{}".into()));
     }
 }

@@ -23,6 +23,18 @@ pub const FORMAT_VERSION: u32 = 3;
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Serialize, Deserialize, PartialOrd, Ord)]
 pub struct Id(pub u64);
 
+impl Id {
+    /// Faixa dos marcadores "a escolher": um comando recém-aberto nasce com estes ids nos campos que
+    /// ainda esperam a seleção (perfil, aresta, plano...). Não são objetos do documento; o recálculo
+    /// os trata como entrada pendente, nunca como referência apagada (B459).
+    pub const A_ESCOLHER: std::ops::RangeInclusive<u64> = (u64::MAX - 16)..=(u64::MAX - 11);
+
+    /// O id é um marcador de campo ainda não escolhido?
+    pub fn a_escolher(self) -> bool {
+        Self::A_ESCOLHER.contains(&self.0)
+    }
+}
+
 // ---------------------------------------------------------------- Origem e referências
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]

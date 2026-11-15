@@ -6599,6 +6599,9 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                     let ruim = touched.iter().any(|b| validade::invalido(cx.body(*b)));
                     validade::com_aviso(st, ruim)
                 };
+                // B459: campo ainda "a escolher" (comando recém-aberto, sem perfil) não é referência
+                // perdida: o comando espera a seleção, inativo e sem erro
+                let st = if matches!(st, Status::Error(_)) && Document::refs_of(&f.kind).iter().any(|x| x.a_escolher()) { Status::Inactive } else { st };
                 // cancelado no meio do kernel: o que veio é lixo (erro "cancelado" ou resultado parcial).
                 // Não vai para o cache, para o próximo cálculo refazer este comando do zero.
                 if matches!(st, Status::Error(_)) && cancelar.as_ref().is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed)) {

@@ -3113,6 +3113,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             st.cmd = None;
         } else if let Some(st) = self.asm.as_mut().filter(|s| s.sim_open) {
             crate::asm_estudo::fechar(st);
+        } else if let Some(st) = self.asm.as_mut().filter(|s| s.inserir.is_some()) {
+            crate::asm_inserir::fechar_pela_coluna(st);
         } else {
             self.sel = Sel::None;
         }
@@ -8770,7 +8772,8 @@ impl eframe::App for App {
         let active = if self.settings.bench == crate::settings::Bench::Desenho {
             self.dwg.as_ref().is_some_and(|s| s.active())
         } else if self.in_asm() {
-            self.asm.as_ref().is_some_and(|s| s.editing())
+            // B456: o Inserir peça é comando da coluna, como os outros
+            self.asm.as_ref().is_some_and(|s| s.editing() || s.inserir.is_some())
         } else {
             self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some() || self.sel.abre_painel(crate::pmi_minibar::open())
         };
@@ -8779,7 +8782,7 @@ impl eframe::App for App {
         let comando = if self.settings.bench == crate::settings::Bench::Desenho {
             self.dwg.as_ref().is_some_and(|s| s.em_comando())
         } else if self.in_asm() {
-            self.asm.as_ref().is_some_and(|s| s.cmd.is_some() || s.sim_open)
+            self.asm.as_ref().is_some_and(|s| s.cmd.is_some() || s.sim_open || s.inserir.is_some())
         } else {
             self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some()
         };
@@ -8829,7 +8832,6 @@ impl eframe::App for App {
         crate::asm_ui::bom_window(self, ctx);
         crate::asm_ui::fasteners_window(self, ctx);
         crate::biblioteca_ui::painel(self, ctx, area);
-        crate::asm_inserir::painel(self, ctx, area);
         crate::asm_interf::painel(self, ctx, area);
         crate::asm_repeticao::painel(self, ctx, area);
         crate::asm_exibicao::painel(self, ctx, area);

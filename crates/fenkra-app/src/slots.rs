@@ -33,7 +33,7 @@ pub fn axis() -> AxisRef {
 }
 
 pub fn is_unset(id: Id) -> bool {
-    (UNSET_SKETCH.0..=UNSET_POINT.0).contains(&id.0)
+    id.a_escolher()
 }
 
 /// Texto do campo vazio (pede a referência certa).

@@ -186,6 +186,11 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
         doc.add_feature(extrude(sk, BoolOp::Add, "8"));
         return Some(DemoPrevia::Ref(RefKind::PointCoords { x: "10".into(), y: "6".into(), z: "20".into(), frame: None }));
     }
+    // B459: extrusão nova sem perfil escolhido: o painel pede o perfil, sem "referência perdida"
+    if nome == "extrusao_sem_perfil" {
+        caixa_simples(doc);
+        return Some(DemoPrevia::Comando(extrude(crate::slots::UNSET_SKETCH, BoolOp::Add, "10")));
+    }
     Some(match nome {
         // B91: padrão linear com a terceira cópia pulada (ponto com X) e as setas de espaçamento
         "padrao_pontos" => {
