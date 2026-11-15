@@ -1,0 +1,36 @@
+{
+  "versao": 1,
+  "comando": "ext_ate_plano",
+  "caso": "ext_ate_plano",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    273,
+    0,
+    0,
+    14
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    422,
+    180,
+    540,
+    330
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/OffsetPlane/offset",
+      "de": 6,
+      "ate": 30,
+      "t0": 0.4,
+      "t1": 2.6,
+      "referencia": 0
+    }
+  ]
+}

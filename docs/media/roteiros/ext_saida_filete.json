@@ -1,0 +1,43 @@
+{
+  "versao": 1,
+  "comando": "ext_saida_filete",
+  "caso": "ext_saida_filete",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    210,
+    0,
+    0,
+    10
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    422,
+    180,
+    540,
+    330
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/Extrude/taper",
+      "de": 0,
+      "ate": 8,
+      "t0": 0.3,
+      "t1": 1.5,
+      "feature": 1
+    },
+    {
+      "campo": "/Fillet/value",
+      "de": 0.5,
+      "ate": 3,
+      "t0": 1.5,
+      "t1": 2.7
+    }
+  ]
+}

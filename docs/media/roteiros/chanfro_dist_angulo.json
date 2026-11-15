@@ -1,0 +1,35 @@
+{
+  "versao": 1,
+  "comando": "chanfro_dist_angulo",
+  "caso": "chanfro_dist_angulo",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    252,
+    0,
+    0,
+    15
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    422,
+    180,
+    540,
+    330
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/Chamfer/mode/DistAngle",
+      "de": 20,
+      "ate": 70,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}
