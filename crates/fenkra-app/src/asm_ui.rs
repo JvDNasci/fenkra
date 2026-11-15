@@ -1145,6 +1145,10 @@ fn selecao_do_clique(app: &mut App, alt: bool) {
     };
     let (Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. }) = p else { return };
     let Some(c) = st.comp_of_body(body) else { return };
+    // B474: restrição de referência perdida aberta: o clique só escolhe o elemento novo
+    if crate::asm_reancorar::manter_restricao(&st.asm, st.sel) {
+        return;
+    }
     if alt {
         st.sel = Some(crate::asm_selecao::subir_nivel(&st.asm, st.sel, c));
         st.multi.clear();
