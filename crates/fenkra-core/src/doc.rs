@@ -4247,6 +4247,10 @@ pub struct Document {
     /// recompute avisa nos comandos afetados. Só vale na sessão; não é gravado.
     #[serde(default, skip_serializing)]
     pub migracoes: Vec<String>,
+    /// pasta do arquivo na sessão (B454): malha e textura relativas são lidas a partir dela; fora do
+    /// arquivo e da igualdade
+    #[serde(skip)]
+    pub pasta: crate::pasta_doc::PastaDoc,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -4308,6 +4312,7 @@ impl Document {
             migracoes: vec![],
             origem: None,
             malhas: Default::default(),
+            pasta: Default::default(),
         };
         let c = d.add_collector("Corpo principal");
         d.active_collector = c;

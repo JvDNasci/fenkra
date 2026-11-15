@@ -138,7 +138,7 @@ impl PartCache {
         }
         if self.documentos.get(full).is_none_or(|(s, _)| *s != stamp) {
             let txt = std::fs::read_to_string(full).map_err(|e| format!("{}: {e}", full.display()))?;
-            let doc = Document::from_json(&txt).map_err(|e| e.to_string())?;
+            let doc = Document::from_json(&txt).map_err(|e| e.to_string())?.na_pasta(full);
             self.documentos.insert(full.to_path_buf(), (stamp, doc));
         }
         Ok(&self.documentos[full].1)
@@ -213,7 +213,7 @@ impl PartCache {
                 Some(d) => d.clone(),
                 None => {
                     let txt = std::fs::read_to_string(full).map_err(|e| format!("{}: {e}", full.display()))?;
-                    Document::from_json(&txt).map_err(|e| e.to_string())?
+                    Document::from_json(&txt).map_err(|e| e.to_string())?.na_pasta(full)
                 }
             };
             let (result, prototipo, shape) = self.calcular(&doc, with_shape)?;
@@ -314,7 +314,7 @@ impl PartCache {
             Some(d) => (d.clone(), None),
             None => {
                 let txt = std::fs::read_to_string(full).map_err(|e| format!("{}: {e}", full.display()))?;
-                let doc = Document::from_json(&txt).map_err(|e| e.to_string())?;
+                let doc = Document::from_json(&txt).map_err(|e| e.to_string())?.na_pasta(full);
                 // B393: a mesma peça, com o mesmo programa, já calculada antes
                 let chave = crate::formas_disco::guardavel(&doc).then(|| crate::formas_disco::chave(&txt));
                 if let Some(sh) = chave.as_deref().and_then(crate::formas_disco::ler) {
@@ -353,7 +353,7 @@ impl PartCache {
                 continue;
             }
             let Ok(texto) = std::fs::read_to_string(full) else { continue };
-            let Ok(doc) = Document::from_json(&texto) else { continue };
+            let Ok(doc) = Document::from_json(&texto).map(|d| d.na_pasta(full)) else { continue };
             if crate::formas_disco::guardavel(&doc) {
                 if let Some(sh) = crate::formas_disco::ler(&crate::formas_disco::chave(&texto)) {
                     self.formas.insert(full.clone(), (stamp, sh));

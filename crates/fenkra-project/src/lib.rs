@@ -23,6 +23,8 @@ pub mod importacao;
 pub mod mudancas;
 #[cfg(test)]
 mod links_externos_testes;
+#[cfg(test)]
+mod malha_pacote_testes;
 pub mod pacote;
 pub mod plano;
 pub mod pn;
@@ -594,8 +596,10 @@ impl Project {
 
     pub fn load(&self, id: u64) -> PResult<Document> {
         let e = self.entry(id)?;
-        let s = std::fs::read_to_string(self.root.join(&e.file))?;
-        let mut d = Document::from_json(&s)?;
+        let arquivo = self.root.join(&e.file);
+        let s = std::fs::read_to_string(&arquivo)?;
+        // B454: malha e textura relativas são lidas da pasta do arquivo de trabalho
+        let mut d = Document::from_json(&s)?.na_pasta(&arquivo);
         if d.uid.esta_vazio() {
             d.uid.0 = e.uid.clone();
         }

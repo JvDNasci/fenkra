@@ -6106,7 +6106,8 @@ impl Ctx<'_> {
             FeatureKind::MeshImport(m) if m.corpo => self.importar_corpo_malha(f, m),
             FeatureKind::MeshOp(m) => self.operar_malha(f, m),
             FeatureKind::MeshImport(m) => {
-                let tris = mesh_io::read(&m.path)?;
+                // B454: caminho relativo é lido da pasta do documento, não da pasta de trabalho
+                let tris = mesh_io::read(&self.doc.arquivo_externo(&m.path).to_string_lossy())?;
                 let sh = Shape::from_mesh(&tris, m.solid).map_err(k)?;
                 let n = tris.len() / 9;
                 if sh.is_solid() {

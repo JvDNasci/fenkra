@@ -21,7 +21,8 @@
 //!
 //! Referências seguidas (B452): componentes e subconjuntos da montagem, vistas do desenho, links de
 //! peça em `external[]` (peça linkada ou derivada), malha importada e texturas. Malha e textura são
-//! copiadas byte a byte e o caminho fica absoluto, porque o comando as lê pela pasta de trabalho. O
+//! copiadas byte a byte e o caminho fica relativo à cópia, como o dos documentos: o comando as lê a
+//! partir da pasta do documento (B454), e caminho absoluto antigo continua valendo. O
 //! furo que a montagem manda para a peça não entra na tabela: a montagem não é dependência da peça;
 //! o caminho só é recalculado (ou leva à cópia da montagem, se ela também for copiada).
 //!
@@ -441,7 +442,8 @@ impl PlanoSalvarComo {
                 }
                 let completo = absoluto(&r.arquivo(&dir_orig));
                 let alvo = mapa.get(&chave(&completo)).cloned().unwrap_or(completo);
-                let novo = if r.tipo.caminho_absoluto() { alvo.to_string_lossy().replace('\\', "/") } else { caminho_relativo(&absoluto(&dir_novo), &absoluto(&alvo)) };
+                // malha e textura também: o comando as lê da pasta do documento (B454)
+                let novo = caminho_relativo(&absoluto(&dir_novo), &absoluto(&alvo));
                 if novo != r.caminho {
                     trocas.push((r.caminho, novo));
                 }

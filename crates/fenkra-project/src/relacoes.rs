@@ -69,12 +69,6 @@ impl TipoRef {
     pub fn e_dependencia(self) -> bool {
         self != TipoRef::FuroMontagem
     }
-
-    /// Caminho gravado como texto absoluto: o comando lê malha e textura pelo caminho como está, a
-    /// partir da pasta de trabalho do programa, então um caminho relativo à peça quebraria.
-    pub fn caminho_absoluto(self) -> bool {
-        !self.eh_documento()
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -101,8 +95,8 @@ impl RefEncontrada {
 /// - caminho absoluto vale como está;
 /// - documento e link: relativo à pasta do documento que grava (mesma regra de
 ///   `fenkra_montagem::links::resolver`);
-/// - malha e textura: ao lado do documento ou, se lá não existir, relativo à pasta de trabalho, que é
-///   como o comando as lê.
+/// - malha e textura: ao lado do documento ou, se lá não existir, relativo à pasta de trabalho (arquivo
+///   antigo). É a ordem de `fenkra_core::pasta_doc::resolver`, que o comando segue ao ler (B454).
 pub fn arquivo_da_ref(dir: &Path, tipo: TipoRef, caminho: &str) -> PathBuf {
     let p = Path::new(caminho);
     if p.is_absolute() {

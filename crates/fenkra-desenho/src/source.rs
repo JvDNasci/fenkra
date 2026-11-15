@@ -281,6 +281,7 @@ impl Models {
         if !is_asm {
             return match Document::from_json(&txt) {
                 Ok(doc) => {
+                    let doc = doc.na_pasta(full);
                     let shape = fenkra_solidos::final_shape(&doc);
                     let error = shape.is_none().then(|| "a peça não tem corpo visível".to_string());
                     Loaded { model: Model::Part(Box::new(doc)), shape, pieces: vec![], piece_names: vec![], linhas: vec![], files, error }

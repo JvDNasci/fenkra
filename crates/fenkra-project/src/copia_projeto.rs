@@ -268,9 +268,9 @@ impl Project {
                         d
                     }
                 };
-                // o comando lê a malha pelo caminho como está gravado: absoluto, para não depender da
-                // pasta de trabalho do programa
-                *c = texto_do_caminho(&destino);
+                // relativo à cópia: o comando lê da pasta do documento (B454), e o projeto pode mudar
+                // de pasta ou de máquina sem quebrar a malha
+                *c = caminho_relativo(&dir_novo, &absoluto(&destino));
             }
         }
 
@@ -455,8 +455,9 @@ mod tests {
         let r = p.copiar_para_projeto(&fora.join("casca.fkp")).unwrap();
         let copia = p.load(r.id).unwrap();
         let m = copia.features.iter().find_map(|f| if let FeatureKind::MeshImport(m) = &f.kind { Some(m) } else { None }).expect("comando de malha");
-        assert_eq!(chave(Path::new(&m.path)), chave(&root.join("pecas").join("casca.stl")));
-        assert_eq!(std::fs::read(&m.path).unwrap(), b"solid x\nendsolid x\n");
+        assert_eq!(m.path, "casca.stl", "relativo à cópia, que mora na mesma pasta");
+        assert_eq!(chave(&copia.arquivo_externo(&m.path)), chave(&root.join("pecas").join("casca.stl")));
+        assert_eq!(std::fs::read(copia.arquivo_externo(&m.path)).unwrap(), b"solid x\nendsolid x\n");
         assert_eq!(r.copiados.len(), 2);
     }
 }

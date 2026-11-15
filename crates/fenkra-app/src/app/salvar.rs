@@ -293,7 +293,10 @@ impl App {
             };
             let caminho = pasta.join(format!("{nome}.{ext}"));
             match item.id {
-                PECA => self.open.file = Some(caminho),
+                PECA => {
+                    self.open.doc.definir_pasta(&caminho);
+                    self.open.file = Some(caminho);
+                }
                 MONTAGEM => {
                     if let Some(s) = self.asm.as_mut() {
                         s.file = Some(caminho);
