@@ -14,7 +14,6 @@
 use crate::app::App;
 use crate::biblioteca_ui::{self, Malha};
 use crate::i18n::tr;
-use crate::paineis::{self, Encaixe, Painel};
 use crate::render::Camera;
 use eframe::egui::{self, Pos2, Rect, RichText, Sense, Stroke};
 use fenkra_core::Id;
@@ -25,7 +24,6 @@ use glam::Vec3;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub const PAINEL: &str = "inserir_peca";
 /// Limite de triângulos do fantasma: acima disso o desenho por quadro deixa o cursor lento.
 const MAX_TRIS: usize = 40_000;
 /// Lado da miniatura, em pontos.
@@ -400,16 +398,33 @@ fn grade(ui: &mut egui::Ui, previas: &crate::examples::PreviewCache, lista: &[Pa
     });
 }
 
-/// Painel do comando, aberto só enquanto ele dura.
-pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
+/// O comando está aberto e é ele que a coluna da esquerda mostra (B456). Outro comando da montagem
+/// aberto por cima (restrição, estudo) tem a coluna antes dele.
+pub fn na_coluna(app: &App) -> bool {
+    app.in_asm() && app.asm.as_ref().is_some_and(|s| s.inserir.is_some() && s.cmd.is_none() && !s.sim_open)
+}
+
+/// Título do painel na coluna.
+pub fn titulo(app: &App) -> Option<&'static str> {
+    let est = app.asm.as_ref()?.inserir.as_ref()?;
+    Some(if est.sub { "Inserir subconjunto" } else { "Inserir peça" })
+}
+
+/// X do painel na coluna: encerra o comando como o Concluir.
+pub fn fechar_pela_coluna(st: &mut crate::asm_ui::AsmState) {
+    encerrar_ao_sair(st);
+}
+
+/// Campos do comando, dentro da coluna da esquerda (B456, ADR 0094). Antes era um painel encaixado à
+/// parte, que abria à direita e deixava a coluna com a árvore; agora é um comando como os outros: toma a
+/// coluna, a árvore recolhe na seta, e o título com o X vem da coluna.
+pub fn painel(app: &mut App, ui: &mut egui::Ui) {
     if app.settings.bench != crate::settings::Bench::Montagem {
         return;
     }
+    let ctx = ui.ctx().clone();
     let Some(st) = app.asm.as_mut() else { return };
     let Some(mut est) = st.inserir.take() else { return };
-    let titulo = if est.sub { tr("Inserir subconjunto") } else { tr("Inserir peça") };
-    let cfg = Painel { nome: PAINEL.into(), titulo: titulo.to_string(), padrao: paineis::ao_lado_da_arvore(area), largura: 320., redimensiona: true };
-    let posicao = app.settings.painel(PAINEL, Encaixe::Esquerda);
     let (mut recentes, mut pasta) = listar(&app.settings.recent_files, st.dir().as_deref(), st.file.as_deref(), est.sub, &est.filtro);
     let primeira = insercao::fixa_na_origem(&st.asm);
     let perfil = est.perfil.get_or_insert_with(|| app.project.as_ref().map_or_else(perfil_sem_projeto, |p| p.perfil_qualidade())).clone();
@@ -433,7 +448,7 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
     if tem_aberta {
         est.chave_aberta = chave_aberta.clone();
     }
-    let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
+    let mut corpo = |ui: &mut egui::Ui| {
         if crate::app::done_bar(ui) {
             acao = Some(Acao::Fechar);
         }
@@ -506,10 +521,8 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
                 grade(ui, previas, &pasta, nome_mao.as_deref(), &mut acao);
             }
         });
-    });
-    if let Some(p) = saida.movido {
-        app.settings.guardar_painel(PAINEL, p);
-    }
+    };
+    corpo(ui);
     let mut aviso = None;
     if matches!(acao, Some(Acao::PegarAberta)) {
         est.fila.clear();
@@ -545,7 +558,7 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
     if let Some(a) = aviso {
         app.toast(a, true);
     }
-    crate::asm_inserir_projeto::aviso(app, ctx);
+    crate::asm_inserir_projeto::aviso(app, &ctx);
 }
 
 fn v3(p: V3) -> Vec3 {
