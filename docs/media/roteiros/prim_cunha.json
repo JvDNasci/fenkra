@@ -1,0 +1,36 @@
+{
+  "versao": 1,
+  "comando": "prim_cunha",
+  "caso": "prim_cunha",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    215,
+    20,
+    15,
+    10
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    422,
+    180,
+    540,
+    330
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "concluido": true,
+  "animacoes": [
+    {
+      "campo": "/Primitive/d",
+      "de": 40,
+      "ate": 6,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}

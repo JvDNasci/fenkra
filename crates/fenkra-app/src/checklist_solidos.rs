@@ -238,10 +238,6 @@ mod tests {
     /// Comandos de sólidos ainda com algum parcial. Só pode encolher: quem gravar a mídia ou fizer a
     /// alça tira o nome daqui.
     const PARCIAIS: &[&str] = &[
-        // sem GIF (camada 3 do tooltip); os casos de B60 em `midia/casos_b60.rs` ainda não mostram o
-        // resultado no recorte (prévia só em arame, transparência de "todas as arestas")
-        "nervura", "rasgo_varrido", "multisecoes", "multisecoes_remover", "prim_toro", "prim_cunha", "filete_completo", "arestas_todas", "chanfro_dist", "edit_apagar_face",
-        "padrao_pontos",
         // sem alça 3D da grandeza principal (ângulo da saída, comprimento da rosca)
         "saida", "rosca",
     ];
