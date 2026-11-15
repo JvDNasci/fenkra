@@ -249,6 +249,11 @@ pub fn analisar(s: &Shape) -> Result<Resumo, ErroApi> {
     })
 }
 
+fn xyz_de(v: &Value) -> Option<[f64; 3]> {
+    let l = v.as_array()?;
+    Some([l.first()?.as_f64()?, l.get(1)?.as_f64()?, l.get(2)?.as_f64()?])
+}
+
 fn aresta_json(m: &Mesh, e: usize) -> Value {
     let vizinhas: Vec<u32> = m
         .edge_faces
@@ -275,6 +280,22 @@ fn aresta_json(m: &Mesh, e: usize) -> Value {
     };
     v["indice"] = json!(e);
     v["faces"] = json!(vizinhas);
+    // comprimento (B420), para "a aresta mais longa": exato em reta e arco, pela poligonal no resto
+    let exato = match (v["tipo"].as_str(), xyz_de(&v["a"]), xyz_de(&v["b"])) {
+        (Some("reta"), Some(a), Some(b)) => Some(dot(sub(b, a), sub(b, a)).sqrt()),
+        (Some("circulo" | "arco"), _, _) => v["raio"].as_f64().zip(v["angulo"].as_f64()).map(|(r, g)| r * g.abs().to_radians()),
+        _ => None,
+    };
+    let comprimento = exato.unwrap_or_else(|| {
+        let nseg = m.edges.len() / 6;
+        let s0 = m.edge_ranges.get(e).map_or(nseg, |x| *x as usize).min(nseg);
+        let s1 = m.edge_ranges.get(e + 1).map_or(nseg, |x| *x as usize).clamp(s0, nseg);
+        m.edges[s0 * 6..s1 * 6]
+            .chunks_exact(6)
+            .map(|s| (0..3).map(|i| f64::from(s[i + 3] - s[i]).powi(2)).sum::<f64>().sqrt())
+            .sum()
+    });
+    v["comprimento"] = json!(r6(comprimento));
     if let Some(p) = m.edge_mids.get(e * 3..e * 3 + 3) {
         v["meio"] = json!(r6v([p[0] as f64, p[1] as f64, p[2] as f64]));
     }

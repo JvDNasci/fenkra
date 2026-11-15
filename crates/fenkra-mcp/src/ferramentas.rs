@@ -329,13 +329,15 @@ const fn edicao(
 fn e_selecionar() -> Value {
     objeto(
         json!({
+            "descricao": { "type": "string", "description": "o pedido em palavras: \"face superior\", \"aresta mais longa\", \"maior face\", \"arestas da face de cima\", \"furos de 8 mm\", \"círculos de raio 4\", \"as 2 arestas mais curtas da frente\". Vira os campos abaixo; um campo informado junto manda sobre ela" },
             "alvo": { "enum": ["arestas", "faces"], "description": "padrão arestas" },
             "lado": { "description": "topo, base, frente, tras, esquerda, direita ou uma normal [x, y, z]: fica com as faces planas que olham para lá (e as arestas delas)" },
             "extrema": { "type": "boolean", "description": "padrão verdadeiro: só a camada mais afastada daquele lado (a face de cima, não os degraus)" },
             "tipo": { "type": "string", "description": "arestas: reta, circulo, arco, elipse; faces: plano, cilindro, cone, esfera, toro, livre" },
             "raio": { "type": "number", "description": "mm; filtra círculos, arcos e cilindros pelo raio" },
             "perto": { "description": "ponto [x, y, z]: fica com o que estiver mais perto dele (o meio da aresta, um ponto da face)" },
-            "quantas": { "type": "integer", "description": "com `perto`, quantas devolver; padrão 1" },
+            "ordem": { "enum": ["maior", "menor"], "description": "ordena por comprimento (arestas) ou área (faces) e fica com as `quantas` primeiras; empates vêm todos" },
+            "quantas": { "type": "integer", "description": "com `perto` ou `ordem`, quantas devolver; padrão 1" },
         }),
         &[],
     )
@@ -454,11 +456,29 @@ fn e_salvar_montagem() -> Value {
     arquivo_e_sobrescrever("caminho .fka (montagem que o aplicativo abre) ou .fkx (formato aberto: componentes e posições, sem restrições) relativo à pasta do projeto")
 }
 
+fn e_inserir_biblioteca() -> Value {
+    objeto(
+        juntar(
+            identificacao(),
+            json!({
+                "familia": { "type": "string", "description": "id da família (consultar_biblioteca), como iso4762" },
+                "tamanho": { "type": "string", "description": "designação, como M6" },
+                "comprimento": { "type": "number", "description": "mm, para parafuso, rebite, trilho e cilindro; ausente, o da série que a norma sugere" },
+                "arquivo": { "type": "string", "description": ".fkp onde a peça fica na pasta; ausente, o nome sai da peça (iso-4762-m6x20.fkp)" },
+                "origem": { "type": "array", "items": { "type": "number" }, "description": "posição [x, y, z] do componente; a face de apoio da cabeça fica em z = 0 da peça e a haste vai para -Z" },
+                "rotacao": matriz(),
+                "fixo": { "type": "boolean" },
+            }),
+        ),
+        &["familia", "tamanho"],
+    )
+}
+
 fn t_chapa(a: &Value) -> Result<Value, ErroApi> {
     cotas_em_texto(a, &["espessura", "raio", "fator_k", "compensacao", "alivio", "canto"])
 }
 
-pub const FERRAMENTAS: [Ferramenta; 31] = [
+pub const FERRAMENTAS: [Ferramenta; 33] = [
     Ferramenta { nome: "consultar_step", titulo: "Consultar STEP", descricao: "Lista caixa envolvente, massa, faces, arestas, planos, cilindros e furos de um STEP do projeto. Os planos trazem a normal para fora, as arestas trazem a fórmula, e os furos já vêm agrupados. Exige o aceite --liberar-step.", comando: "topologia", le_step: true, somente_leitura: true, esquema: e_consultar, traduzir: t_consultar },
     edicao("nova_peca", "Nova peça", "Começa uma peça vazia.", "nova_peca", e_nova, igual),
     edicao("abrir_peca", "Abrir peça", "Abre uma peça .fkx ou .fkp do projeto.", "abrir", e_abrir, igual),
@@ -477,7 +497,7 @@ pub const FERRAMENTAS: [Ferramenta; 31] = [
     leitura("topologia_modelo", "Topologia da peça", "Faces, arestas, planos, cilindros e furos da peça em edição. Use os meios das arestas para filetar.", "topologia", e_topologia, t_topologia),
     Ferramenta { nome: "comparar_alvo", titulo: "Comparar com o alvo", descricao: "Checador de similaridade: compara a peça com o STEP alvo por volume, área, centroide, caixa, inércia, furos por diâmetro e distância entre superfícies, e diz onde diverge. Exige o aceite --liberar-step.", comando: "comparar", le_step: true, somente_leitura: true, esquema: e_comparar, traduzir: t_comparar },
     edicao("salvar_peca", "Salvar peça", "Grava a peça em .fkx ou .fkp. Nunca troca um arquivo que existe sem `sobrescrever`.", "salvar", e_salvar, igual),
-    leitura("selecionar", "Selecionar faces ou arestas", "Seleção por sentido: as arestas da face de cima, os círculos de raio 4, as faces que olham para a frente. Devolve `pontos` prontos para `arestas` de filetar e chanfrar ou `faces` de criar_casca.", "selecionar", e_selecionar, igual),
+    leitura("selecionar", "Selecionar faces ou arestas", "Seleção semântica: em palavras (`descricao`: \"face superior\", \"aresta mais longa\", \"furos de 8 mm\") ou por campos (lado, tipo, raio, ordem, perto). Devolve `pontos` prontos para `arestas` de filetar e chanfrar ou `faces` de criar_casca.", "selecionar", e_selecionar, igual),
     leitura("reconhecer_features", "Reconhecer features", "O que a geometria da peça em edição mostra: furos passantes e cegos (com rebaixo, escareado e ponta), filetes e chanfros, com medidas e centro. É inferência da forma, não histórico.", "features", e_topologia_sem_secoes, t_topologia),
     leitura("verificar", "Verificar requisitos", "Confere os requisitos da peça, um resultado por requisito com o que foi medido: massa, furos, folga e interferência entre corpos, caixa máxima e se um parâmetro trocado chega na forma. Serve de critério quando não há STEP alvo. Não muda a peça.", "verificar", e_verificar, igual),
     leitura("consultar_biblioteca", "Consultar biblioteca de normas", "Famílias de fixadores normalizados, tamanhos, medidas e a faixa do furo de passagem. Use antes de furar para um parafuso.", "biblioteca", e_biblioteca, igual),
@@ -489,5 +509,7 @@ pub const FERRAMENTAS: [Ferramenta; 31] = [
     edicao("mover_componente", "Mover componente", "Muda a posição de um componente (absoluta, deslocamento ou giro) e resolve as restrições de novo: o que está preso volta ao lugar.", "mover_componente", e_mover, igual),
     leitura("ver_montagem", "Estado da montagem", "Componentes com posição, graus de liberdade, volume e caixa de cada um; restrições com o que falhou; volume e caixa do conjunto.", "montagem", sem_args, igual),
     leitura("lista_de_pecas", "Lista de peças", "Lista de peças (BOM) da montagem: item, nome, quantidade, arquivo, PN e volume unitário, no nível topo, pecas (todos os níveis somados) ou estruturada.", "bom", e_bom, igual),
+    leitura("lista_de_corte", "Lista de corte", "Estrutural: lista de corte dos membros da peça, um item por perfil, comprimento e corte de ponta iguais, com quantidade, barras de matéria-prima, material, ângulo de cada ponta (0 reto, 45 meia-esquadria) e o comprimento total.", "lista_de_corte", sem_args, igual),
+    edicao("inserir_da_biblioteca", "Inserir peça da biblioteca", "Gera uma peça normalizada da biblioteca (parafuso, porca, arruela, rolamento, rebite, guia) pela família e tamanho, grava o .fkp na pasta e, com montagem em edição, insere como componente na posição dada. Sem montagem, só grava. Arquivo igual que já existe é reusado.", "inserir_da_biblioteca", e_inserir_biblioteca, igual),
     edicao("salvar_montagem", "Salvar montagem", "Grava a montagem em .fka, que o aplicativo abre com as restrições, ou em .fkx. Nunca troca um arquivo que existe sem `sobrescrever`.", "salvar_montagem", e_salvar_montagem, igual),
 ];

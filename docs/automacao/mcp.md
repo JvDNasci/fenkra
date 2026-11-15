@@ -54,13 +54,15 @@ do cliente.
 | `comparar_alvo` | Checador de similaridade contra o STEP alvo. Pede aceite |
 | `salvar_peca`, `exportar_step` | Gravar na pasta. Nunca sobrescreve sem `sobrescrever` |
 | `revolucionar`, `criar_padrao`, `espelhar`, `criar_casca`, `criar_primitiva` | Geradas do esquema publicado da árvore (B420): cada `tipo` de comando do formato sem ferramenta escrita à mão vira uma, com o esquema de entrada tirado do arquivo. Tipo novo no formato chega como `adicionar_<tipo>` |
-| `selecionar` | Seleção por sentido: arestas ou faces por lado (topo, base, frente, tras, esquerda, direita ou normal), tipo, raio e o mais perto de um ponto. Devolve `pontos` para filetar, chanfrar e criar_casca |
+| `selecionar` | Seleção semântica: em palavras (`descricao`: "face superior", "aresta mais longa", "maior face", "furos de 8 mm") ou por campos: lado (topo, base, frente, tras, esquerda, direita ou normal), tipo, raio, ordem por comprimento ou área e o mais perto de um ponto. Empates vêm todos. Devolve `pontos` para filetar, chanfrar, criar_aba e criar_casca |
 | `reconhecer_features` | Furos, filetes e chanfros inferidos da geometria da peça em edição |
 | `verificar` | Requisitos da peça (B418), declarados nela ou passados na chamada: massa, furos, folga, interferência, caixa e propagação de parâmetro, com resultado por requisito |
 | `consultar_biblioteca` | Famílias de fixadores, tamanhos, medidas e faixa do furo de passagem |
+| `inserir_da_biblioteca` | Gera a peça normalizada (família, tamanho, comprimento), grava o `.fkp` na pasta e, com montagem em edição, insere como componente. Arquivo igual que já existe é reusado; outro no mesmo nome é recusado |
 | `definir_chapa` | Liga a chapa metálica na peça ou muda espessura, raio, fator K, compensação e alívios; `planificada` mede e mostra a peça desdobrada |
 | `criar_parede_chapa`, `criar_aba`, `criar_bainha`, `dobrar_chapa` | Chapa metálica, geradas do esquema: parede a partir de esboço fechado, aba e bainha numa aresta (ponto sobre ela, de `selecionar`), dobra por linha |
 | `criar_membro`, `criar_placa_extremidade`, `criar_reforco` | Estrutural, geradas do esquema: perfis sobre as retas de um esboço ou de referência, com tratamento de canto; placa na ponta; reforço no encontro de dois membros |
+| `lista_de_corte` | Estrutural: um item por perfil, comprimento e corte de ponta iguais, com quantidade, barras, material, ângulo de cada ponta e comprimento total |
 | `nova_montagem`, `inserir_componente` | Montagem ao lado da peça; componentes são peças `.fkp` da pasta (grave com `salvar_peca`), e o primeiro entra fixo |
 | `restringir`, `mover_componente` | Coincidente, contato, distância, ângulo, paralela e perpendicular entre faces (ponto sobre elas no mundo), planos ou eixos da origem da peça; mover reaplica as restrições |
 | `ver_montagem`, `lista_de_pecas` | Posição, graus de liberdade, volume e caixa de cada componente e do conjunto; lista de peças por nível |

@@ -161,6 +161,13 @@ class Fenkra:
     def salvar_montagem(self, arquivo, sobrescrever=False):
         return self.chamar("salvar_montagem", arquivo=arquivo, sobrescrever=sobrescrever)
 
+    def inserir_da_biblioteca(self, familia, tamanho, **campos):
+        """Peça normalizada da biblioteca: grava o .fkp e, com montagem, insere como componente."""
+        return self.chamar("inserir_da_biblioteca", familia=familia, tamanho=tamanho, **campos)
+
+    def lista_de_corte(self):
+        return self.chamar("lista_de_corte")
+
     # consulta
     def recalcular(self):
         return self.chamar("recalcular")

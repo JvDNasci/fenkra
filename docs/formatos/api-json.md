@@ -67,8 +67,10 @@ Um comando que entra na árvore mas falha no cálculo não é erro da chamada: a
 | `reproduzir` | `arquivo` (`.jsonl`) | `comandos` |
 | `registro` | | `arquivo`, `comandos` |
 | `adicionar` | `tipo` (qualquer `comando.tipo` do [`.fkx`](arvore.md): `revolucao`, `casca`, `primitiva`, `padrao`, `espelho`, `parede_chapa`, `aba`, `bainha`, `dobra`, `membro`, `placa_extremidade`, `reforco`...), os campos dele, `id`, `nome` | `id`, `status`, `mensagem`, `volume` |
-| `selecionar` | `alvo` (`arestas`, `faces`), `lado`, `extrema`, `tipo`, `raio`, `perto`, `quantas` | `quantidade`, `pontos` |
+| `selecionar` | `descricao` (em palavras: "face superior", "aresta mais longa"), `alvo` (`arestas`, `faces`), `lado`, `extrema`, `tipo`, `raio`, `ordem` (`maior`, `menor`), `perto`, `quantas` | `quantidade`, `pontos`, `itens` (com `comprimento` nas arestas e `area` nas faces) |
 | `biblioteca` | `busca`, `familia`, `tamanho`, `furo` | famílias ou tamanhos com medidas |
+| `inserir_da_biblioteca` | `familia`, `tamanho`, `comprimento`, `arquivo` (`.fkp`), e os de `inserir_componente` | `arquivo`, `peca`, `gerado`, `componente` |
+| `lista_de_corte` | | `linhas` (`item`, `designacao`, `comprimento`, `quantidade`, `barras_por_peca`, `material`, `angulo_ponta1`, `angulo_ponta2`, `ponta_longa`), `pecas`, `comprimento_total` |
 | `verificar` | `requisitos` | `ok`, `falhas`, `resultados` |
 | `definir_chapa` | campos de `chapa` no `.fkx` (`espessura`, `raio`, `fator_k`, `planificada`, `material`, `metodo`, `compensacao`, `alivio`, `alivio_forma`, `canto`); só os informados mudam | `chapa`, `status`, `volume`, `caixa` |
 | `nova_montagem` | `nome` | `nome` |

@@ -1266,3 +1266,176 @@ fn montagem_pelo_servidor_restricao_movimento_e_lista_de_pecas() {
 fn estado_final(c: &mut Cliente) -> Value {
     c.chamar("ver_montagem", json!({}))
 }
+
+// ------------------------------------------------------------------ fumaça: mini-chassi só por ferramentas (B420)
+
+/// O quadro 600 x 400 de tubo 40 x 3 em meia-esquadria, em código, sobre as mesmas quatro retas.
+fn quadro_em_codigo() -> Document {
+    let mut d = Document::new("quadro");
+    let cantos = [[0., 0., 0.], [600., 0., 0.], [600., 400., 0.], [0., 400., 0.]];
+    let caminhos: Vec<CurveRef> = (0..4)
+        .map(|i| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(cantos[i]), b: PointRef::Fixed(cantos[(i + 1) % 4]), start: "0".into(), end: "0".into() })))
+        .collect();
+    d.add_feature(FeatureKind::StructMember(StructMember {
+        paths: caminhos,
+        family: String::new(),
+        designation: "40x3".into(),
+        kind: SectionKind::TuboQuadrado,
+        dims: vec!["40".into(), "3".into()],
+        anchor: 0,
+        angle: "0".into(),
+        off_x: "0".into(),
+        off_y: "0".into(),
+        ext1: "0".into(),
+        ext2: "0".into(),
+        corner: CornerMode::MeiaEsquadria,
+        gap: "0".into(),
+        joints: vec![],
+        material: String::new(),
+        mirror: false,
+    }));
+    d
+}
+
+fn mais(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
+    [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+/// B420, teste de fumaça: um mini-chassi montado só pelas ferramentas do servidor real. Quadro de
+/// perfis com lista de corte, tampa de chapa com aba escolhida por seleção semântica, montagem com
+/// contato e alinhamento e um parafuso da biblioteca. Cada peça confere com a mesma montada em código;
+/// a montagem confere volume e caixa com as peças nas posições resolvidas, e o registro refaz tudo
+/// sem servidor.
+#[test]
+fn fumaca_mini_chassi_perfis_chapa_e_montagem_so_por_ferramentas() {
+    precisa_kernel!();
+    let pasta = pasta_limpa("mini-chassi");
+    let mut c = Cliente::iniciar(&pasta, false);
+    let nomes: Vec<String> = c.chamar("listar_comandos", json!({}))["ferramentas"].as_array().unwrap().iter().map(|t| t["nome"].as_str().unwrap().to_string()).collect();
+    for n in ["criar_membro", "lista_de_corte", "definir_chapa", "criar_parede_chapa", "criar_aba", "selecionar", "nova_montagem", "restringir", "inserir_da_biblioteca", "consultar_biblioteca", "lista_de_pecas"] {
+        assert!(nomes.iter().any(|x| x == n), "{n}: {nomes:?}");
+    }
+
+    // 1. quadro de perfis sobre um esqueleto retangular
+    c.chamar("nova_peca", json!({ "nome": "quadro" }));
+    let (pontos, curvas) = retangulo(0., 0., 600., 400.);
+    c.chamar("criar_esboco", json!({ "id": "esqueleto", "plano": "XY", "pontos": pontos, "curvas": curvas }));
+    let caminhos: Vec<Value> = (0..4).map(|i| json!({ "esboco": "esqueleto", "curva": format!("c{i}") })).collect();
+    let r = c.chamar("criar_membro", json!({ "caminhos": caminhos, "secao": "tubo_quadrado", "cotas": [40, 3], "canto": "meia_esquadria", "designacao": "40x3" }));
+    assert_eq!(r["status"], "ok", "{r}");
+    let quadro = c.chamar("recalcular", json!({}));
+    assert_eq!(quadro["status"], "ok", "{quadro}");
+    let ref_quadro = quadro_em_codigo();
+    confere_com_referencia(&quadro, &ref_quadro, 1., "quadro");
+    let corte = c.chamar("lista_de_corte", json!({}));
+    let linhas = corte["linhas"].as_array().unwrap();
+    assert_eq!(corte["pecas"], 4, "{corte}");
+    let mut por_comprimento: Vec<(f64, u64)> = linhas.iter().map(|l| (l["comprimento"].as_f64().unwrap(), l["quantidade"].as_u64().unwrap())).collect();
+    por_comprimento.sort_by(|a, b| a.0.total_cmp(&b.0));
+    assert_eq!(por_comprimento.len(), 2, "duas medidas, duas barras de cada: {corte}");
+    for ((l, n), linha) in por_comprimento.iter().zip([400., 600.]) {
+        assert_eq!(*n, 2, "{corte}");
+        assert!((l - linha).abs() <= 40. + 1e-6, "{l} contra a linha de {linha}: {corte}");
+    }
+    for l in linhas {
+        assert_eq!(l["designacao"], "40x3", "{corte}");
+        for p in ["angulo_ponta1", "angulo_ponta2"] {
+            assert!((l[p].as_f64().unwrap() - 45.).abs() < 0.5, "meia-esquadria nas duas pontas: {corte}");
+        }
+    }
+    // a lista de corte confere com a do documento em código
+    let ref_corte = fenkra_solidos::cut_list(&ref_quadro);
+    let total: f64 = ref_corte.iter().map(|l| l.length * l.count as f64).sum();
+    assert!((corte["comprimento_total"].as_f64().unwrap() - total).abs() < 1e-3, "{corte}");
+    c.chamar("salvar_peca", json!({ "arquivo": "quadro.fkp" }));
+
+    // 2. tampa de chapa; a aba vai na aresta escolhida por descrição
+    c.chamar("nova_peca", json!({ "nome": "tampa" }));
+    let (pontos, curvas) = retangulo(0., 0., 600., 400.);
+    c.chamar("criar_esboco", json!({ "id": "base", "plano": "XY", "pontos": pontos, "curvas": curvas }));
+    c.chamar("definir_chapa", json!({ "espessura": 2, "raio": 2, "fator_k": 0.44 }));
+    assert_eq!(c.chamar("criar_parede_chapa", json!({ "esboco": "base" }))["status"], "ok");
+    let s = c.chamar("selecionar", json!({ "descricao": "arestas mais longas da direita" }));
+    assert_eq!(s["quantidade"], 2, "as de cima e de baixo da borda direita, 400 mm cada: {s}");
+    assert!(s["itens"].as_array().unwrap().iter().all(|i| (i["comprimento"].as_f64().unwrap() - 400.).abs() < 1e-6), "{s}");
+    let topo = c.chamar("selecionar", json!({ "descricao": "arestas mais longas da direita", "perto": [600, 200, 2] }));
+    assert_eq!(topo["quantidade"], 1, "{topo}");
+    let meio = topo["pontos"][0].clone();
+    assert_eq!(meio, json!([600., 200., 2.]), "{topo}");
+    let (e, erro) = c.tentar("selecionar", json!({ "descricao": "uma coisa bonita" }));
+    assert!(erro && e["mensagem"].as_str().unwrap().contains("superior"), "{e}");
+    let r = c.chamar("criar_aba", json!({ "aresta": meio, "comprimento": 20, "angulo": 90 }));
+    assert_eq!(r["status"], "ok", "{r}");
+    let tampa = c.chamar("recalcular", json!({}));
+    let mut ref_tampa = Document::new("tampa");
+    ref_tampa.sheet = Some(SheetParams { thickness: "2".into(), radius: "2".into(), k: "0.44".into(), ..Default::default() });
+    let sk = sk_rect(&mut ref_tampa, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [600., 400.]);
+    ref_tampa.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+    ref_tampa.add_feature(FeatureKind::SmFlange(SmFlange { edge: [600., 200., 2.], length: "20".into(), angle: "90".into(), radius: None, off1: "0".into(), off2: "0".into(), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
+    confere_com_referencia(&tampa, &ref_tampa, 1e-3, "tampa");
+    c.chamar("salvar_peca", json!({ "arquivo": "tampa.fkp" }));
+
+    // 3. a montagem: quadro fixo, tampa apoiada e alinhada, parafusos da biblioteca
+    c.chamar("nova_montagem", json!({ "nome": "mini-chassi" }));
+    c.chamar("inserir_componente", json!({ "id": "quadro", "arquivo": "quadro.fkp" }));
+    c.chamar("inserir_componente", json!({ "id": "tampa", "arquivo": "tampa.fkp", "origem": [0, 0, 100] }));
+    let (lo_q, hi_q) = caixa_de(&quadro);
+    let r = c.chamar("restringir", json!({ "tipo": "contato", "a": { "componente": "quadro", "face": [300, lo_q[1] + 20., hi_q[2]] }, "b": { "componente": "tampa", "face": [300, 200, 100] } }));
+    assert_eq!(r["status"], "ok", "{r}");
+    for plano in ["YZ", "XZ"] {
+        let r = c.chamar("restringir", json!({ "tipo": "coincidente", "a": { "componente": "quadro", "plano": plano }, "b": { "componente": "tampa", "plano": plano } }));
+        assert_eq!(r["status"], "ok", "{plano}: {r}");
+    }
+    let estado = c.chamar("ver_montagem", json!({}));
+    let t = componente(&estado, "tampa");
+    let o = xyz(&t["origem"]);
+    assert!(o[0].abs() < 1e-6 && o[1].abs() < 1e-6 && (o[2] - hi_q[2]).abs() < 1e-6, "a tampa assenta no topo do quadro: {t}");
+    assert_eq!(t["graus_de_liberdade"], 0, "{t}");
+
+    let b = c.chamar("consultar_biblioteca", json!({ "familia": "iso4762", "tamanho": "M6" }));
+    assert!(b.to_string().contains("M6"), "{b}");
+    let origem_parafuso = [700., 200., 0.];
+    let p = c.chamar("inserir_da_biblioteca", json!({ "id": "parafuso", "familia": "iso4762", "tamanho": "M6", "comprimento": 20, "origem": origem_parafuso }));
+    assert_eq!((p["gerado"].as_bool(), p["componente"]["id"].as_str()), (Some(true), Some("parafuso")), "{p}");
+    let arquivo_parafuso = p["arquivo"].as_str().unwrap().to_string();
+    assert!(pasta.join(&arquivo_parafuso).is_file(), "{p}");
+    // o mesmo de novo reusa o arquivo; outro tamanho no mesmo nome é recusado; fora da pasta também
+    let p2 = c.chamar("inserir_da_biblioteca", json!({ "id": "parafuso2", "familia": "iso4762", "tamanho": "M6", "comprimento": 20, "origem": [800, 200, 0] }));
+    assert_eq!((p2["gerado"].as_bool(), p2["arquivo"].as_str()), (Some(false), Some(arquivo_parafuso.as_str())), "{p2}");
+    let (e, erro) = c.tentar("inserir_da_biblioteca", json!({ "familia": "iso4762", "tamanho": "M8", "arquivo": arquivo_parafuso }));
+    assert!(erro && e["codigo"] == "ja_existe", "{e}");
+    let (e, erro) = c.tentar("inserir_da_biblioteca", json!({ "familia": "iso4762", "tamanho": "M6", "arquivo": "../fuga.fkp" }));
+    assert!(erro && e["codigo"] == "caminho_fora", "{e}");
+    let (e, erro) = c.tentar("inserir_da_biblioteca", json!({ "familia": "nao_existe", "tamanho": "M6" }));
+    assert!(erro && e["codigo"] == "biblioteca", "{e}");
+
+    // volume e caixa do conjunto: as peças em código, nas posições resolvidas
+    let ref_parafuso = fenkra_solidos::fixadores::fixador_documento("iso4762", "M6", Some(20.)).unwrap();
+    let estado = c.chamar("ver_montagem", json!({}));
+    let v_esperado = volume_do_documento(&ref_quadro) + volume_do_documento(&ref_tampa) + 2. * volume_do_documento(&ref_parafuso);
+    assert!((estado["volume"].as_f64().unwrap() - v_esperado).abs() < 1., "{} contra {v_esperado}: {estado}", estado["volume"]);
+    let mut caixas = vec![caixa_do_documento(&ref_quadro)];
+    let (a, b) = caixa_do_documento(&ref_tampa);
+    caixas.push((mais(a, [0., 0., hi_q[2]]), mais(b, [0., 0., hi_q[2]])));
+    let (a, b) = caixa_do_documento(&ref_parafuso);
+    for o in [origem_parafuso, [800., 200., 0.]] {
+        caixas.push((mais(a, o), mais(b, o)));
+    }
+    let lo: Vec<f64> = (0..3).map(|i| caixas.iter().map(|c| c.0[i]).fold(f64::INFINITY, f64::min)).collect();
+    let hi: Vec<f64> = (0..3).map(|i| caixas.iter().map(|c| c.1[i]).fold(f64::NEG_INFINITY, f64::max)).collect();
+    let (clo, chi) = caixa_de(&estado);
+    for i in 0..3 {
+        assert!((clo[i] - lo[i]).abs() < 1e-3 && (chi[i] - hi[i]).abs() < 1e-3, "caixa {clo:?} {chi:?} contra {lo:?} {hi:?}");
+    }
+    let bom = c.chamar("lista_de_pecas", json!({}));
+    let linhas = bom["linhas"].as_array().unwrap();
+    let qtd = |arq: &str| linhas.iter().find(|l| l["arquivo"] == arq).map(|l| l["quantidade"].as_u64().unwrap());
+    assert_eq!((qtd("quadro.fkp"), qtd("tampa.fkp"), qtd(&arquivo_parafuso), bom["pecas"].as_u64()), (Some(1), Some(1), Some(2), Some(4)), "{bom}");
+    c.chamar("salvar_montagem", json!({ "arquivo": "mini-chassi.fka" }));
+    assert!(pasta.join("mini-chassi.fka").is_file());
+
+    // o registro refaz o conjunto sem servidor: os arquivos da biblioteca são reusados
+    let refeita = refeito(&pasta, &mut c, "montagem");
+    assert_eq!(refeita["volume"], estado["volume"]);
+    assert_eq!(refeita["caixa"], estado["caixa"]);
+}

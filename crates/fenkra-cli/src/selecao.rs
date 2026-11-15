@@ -79,8 +79,151 @@ fn faces_do_lado(faces: &[Value], d: [f64; 3], extrema: bool) -> Vec<usize> {
         .collect()
 }
 
+/// Minúsculas e sem acento, para "superior" e "SUPERIOR", "aresta" e "arestas" se acharem.
+fn normalizar(t: &str) -> String {
+    t.to_lowercase()
+        .chars()
+        .map(|c| match c {
+            'á' | 'à' | 'â' | 'ã' => 'a',
+            'é' | 'ê' => 'e',
+            'í' => 'i',
+            'ó' | 'ô' | 'õ' => 'o',
+            'ú' => 'u',
+            'ç' => 'c',
+            c if c.is_alphanumeric() || c == '.' || c == ',' => c,
+            _ => ' ',
+        })
+        .collect()
+}
+
+/// Palavras de lado, na convenção de [`LADOS`].
+const PALAVRAS_LADO: [(&str, &str); 16] = [
+    ("superior", "topo"),
+    ("cima", "topo"),
+    ("topo", "topo"),
+    ("inferior", "base"),
+    ("baixo", "base"),
+    ("base", "base"),
+    ("fundo", "base"),
+    ("frontal", "frente"),
+    ("frente", "frente"),
+    ("traseira", "tras"),
+    ("tras", "tras"),
+    ("posterior", "tras"),
+    ("direita", "direita"),
+    ("direito", "direita"),
+    ("esquerda", "esquerda"),
+    ("esquerdo", "esquerda"),
+];
+
+/// Tipos por palavra: (raiz, alvo, tipo).
+const PALAVRAS_TIPO: [(&str, &str, &str); 9] = [
+    ("plana", "faces", "plano"),
+    ("cilindric", "faces", "cilindro"),
+    ("conica", "faces", "cone"),
+    ("esferic", "faces", "esfera"),
+    ("toroidal", "faces", "toro"),
+    ("reta", "arestas", "reta"),
+    ("circul", "arestas", "circulo"),
+    ("arco", "arestas", "arco"),
+    ("elipse", "arestas", "elipse"),
+];
+
+fn numero(p: &str) -> Option<f64> {
+    p.trim_end_matches("mm").replace(',', ".").trim_end_matches('.').parse().ok().filter(|v: &f64| v.is_finite() && *v > 0.)
+}
+
+/// Seleção semântica por descrição (B420): "face superior", "aresta mais longa", "maior face",
+/// "arestas da face de cima", "furos de 8 mm", "círculos de raio 4", "as 2 arestas mais curtas da
+/// frente". Vira os mesmos campos de [`selecionar`]; o que não se entende é recusado com o vocabulário,
+/// em vez de devolver tudo.
+pub fn interpretar(descricao: &str) -> Result<Value, ErroApi> {
+    let texto = normalizar(descricao);
+    let palavras: Vec<&str> = texto.split_whitespace().collect();
+    let tem = |raiz: &str| palavras.iter().any(|p| p.starts_with(raiz));
+    let pos = |raiz: &str| palavras.iter().position(|p| p.starts_with(raiz));
+    let mut v = json!({});
+    let furo = tem("furo");
+    // alvo: o que vem primeiro manda. "arestas da face de cima" são arestas; furo é face cilíndrica
+    let alvo = match (pos("aresta"), pos("face")) {
+        (Some(a), Some(f)) if a < f => "arestas",
+        (Some(_), Some(_)) => "faces",
+        (Some(_), None) => "arestas",
+        (None, Some(_)) => "faces",
+        (None, None) if furo => "faces",
+        _ => "",
+    };
+    if !alvo.is_empty() {
+        v["alvo"] = json!(alvo);
+    }
+    let mut filtro = false;
+    if let Some((_, lado)) = PALAVRAS_LADO.iter().find(|(p, _)| palavras.contains(p)) {
+        v["lado"] = json!(lado);
+        filtro = true;
+    }
+    if furo {
+        v["tipo"] = json!("cilindro");
+        filtro = true;
+    } else if let Some((_, a, t)) = PALAVRAS_TIPO.iter().find(|(r, _, _)| tem(r)) {
+        if v["alvo"].is_null() {
+            v["alvo"] = json!(a);
+        }
+        // "face circular" não existe: o tipo só vale no alvo dele
+        if v["alvo"] == *a {
+            v["tipo"] = json!(t);
+            filtro = true;
+        }
+    }
+    // medida: "raio 4", "diâmetro 8", "de 8 mm" (em furo é diâmetro, no resto é raio)
+    for (i, p) in palavras.iter().enumerate() {
+        let Some(n) = palavras.get(i + 1).and_then(|q| numero(q)) else { continue };
+        if p.starts_with("raio") {
+            v["raio"] = json!(n);
+        } else if p.starts_with("diametro") {
+            v["raio"] = json!(n / 2.);
+        } else if *p == "de" && v["raio"].is_null() && (palavras.get(i + 2) == Some(&"mm") || palavras[i + 1].ends_with("mm")) {
+            v["raio"] = json!(if furo { n / 2. } else { n });
+        } else {
+            continue;
+        }
+        filtro = true;
+    }
+    // ordem: mais longa, maior, mais curta, menor; "as 3 maiores" diz quantas
+    let maior = ["maior", "longa", "longo", "comprid", "extens"].iter().any(|r| tem(r));
+    let menor = ["menor", "curta", "curto", "pequen"].iter().any(|r| tem(r));
+    if maior || menor {
+        v["ordem"] = json!(if maior { "maior" } else { "menor" });
+        let quantas = palavras.iter().find_map(|p| p.parse::<u64>().ok().filter(|n| *n > 0 && *n < 1000)).unwrap_or(1);
+        v["quantas"] = json!(quantas);
+        filtro = true;
+    }
+    if tem("tod") {
+        filtro = true;
+    }
+    // só "a face", sem lado, tipo, medida nem ordem, não escolhe nada: recusa em vez de devolver tudo
+    if v["alvo"].is_null() || !filtro {
+        return Err(ErroApi::argumento(format!(
+            "não entendi '{descricao}'. Diga o alvo (face, aresta, furo) e um filtro: lado (superior, inferior, frente, trás, direita, esquerda), tipo (plana, cilíndrica, reta, circular), medida (raio 4, diâmetro 8, de 8 mm) ou ordem (mais longa, maior, mais curta, menor); \"todas as arestas\" pega todas"
+        )));
+    }
+    Ok(v)
+}
+
 /// Escolhe faces ou arestas da topologia (`faces` e `arestas` completas) pelo pedido.
 pub fn selecionar(topologia: &Value, args: &Value) -> Result<Value, ErroApi> {
+    // a descrição em texto preenche os campos que o pedido não trouxe: o explícito manda
+    let juntos;
+    let args = match args["descricao"].as_str() {
+        Some(d) => {
+            let mut v = interpretar(d)?;
+            for (k, x) in args.as_object().into_iter().flatten().filter(|(k, _)| *k != "descricao") {
+                v[k] = x.clone();
+            }
+            juntos = v;
+            &juntos
+        }
+        None => args,
+    };
     let alvo = args["alvo"].as_str().unwrap_or("arestas");
     if !["arestas", "faces"].contains(&alvo) {
         return Err(ErroApi::argumento("`alvo` é \"arestas\" ou \"faces\""));
@@ -117,10 +260,27 @@ pub fn selecionar(topologia: &Value, args: &Value) -> Result<Value, ErroApi> {
             .filter(|a| tipo.is_none_or(|t| a["tipo"] == t))
             .filter(|a| confere_raio(a, raio))
             .filter(|a| !a["meio"].is_null())
-            .map(|a| json!({ "indice": a["indice"], "tipo": a["tipo"], "ponto": a["meio"], "raio": a["raio"] }))
+            .map(|a| json!({ "indice": a["indice"], "tipo": a["tipo"], "ponto": a["meio"], "raio": a["raio"], "comprimento": a["comprimento"] }))
             .collect()
     };
     let mut escolhidos = escolhidos;
+    // "a aresta mais longa", "a maior face": ordena por comprimento (arestas) ou área (faces). Empates
+    // (as quatro arestas iguais de um quadrado) vêm todos, para o agente não receber um ao acaso
+    if let Some(ordem) = args["ordem"].as_str() {
+        let maior = match ordem {
+            "maior" => true,
+            "menor" => false,
+            o => return Err(ErroApi::argumento(format!("ordem '{o}' não existe; use maior ou menor"))),
+        };
+        let campo = if alvo == "faces" { "area" } else { "comprimento" };
+        let medida = |e: &Value| e[campo].as_f64().unwrap_or(0.);
+        escolhidos.sort_by(|a, b| if maior { medida(b).total_cmp(&medida(a)) } else { medida(a).total_cmp(&medida(b)) });
+        let quantas = args["quantas"].as_u64().unwrap_or(1).max(1) as usize;
+        if let Some(corte) = escolhidos.get(quantas - 1).map(medida) {
+            let tol = 1e-6_f64.max(corte.abs() * 1e-6);
+            escolhidos.retain(|e| if maior { medida(e) >= corte - tol } else { medida(e) <= corte + tol });
+        }
+    }
     // "a aresta mais perto deste ponto": ordena pela distância e fica com as `quantas` primeiras
     if !args["perto"].is_null() {
         let p = xyz(&args["perto"]).ok_or_else(|| ErroApi::argumento("`perto` é um ponto [x, y, z] em mm"))?;
@@ -195,6 +355,64 @@ mod testes {
         assert_eq!(r["pontos"][0], json!([10., 10., 5.]), "{r}");
         let r = selecionar(&caixa(), &json!({ "lado": "topo", "perto": [0, 0, 20], "quantas": 2 })).unwrap();
         assert_eq!(r["quantidade"], 2, "{r}");
+    }
+
+    /// Bloco 30 x 20 x 10: as arestas de 30 são as mais longas, a face de cima (600) é das maiores.
+    fn bloco() -> Value {
+        let (lx, ly, lz) = (30., 20., 10.);
+        let faces = json!([
+            { "tipo": "plano", "direcao": [0, 0, 1], "ponto": [15, 10, lz], "area": lx * ly },
+            { "tipo": "plano", "direcao": [0, 0, -1], "ponto": [15, 10, 0], "area": lx * ly },
+            { "tipo": "plano", "direcao": [0, -1, 0], "ponto": [15, 0, 5], "area": lx * lz },
+            { "tipo": "plano", "direcao": [0, 1, 0], "ponto": [15, ly, 5], "area": lx * lz },
+            { "tipo": "plano", "direcao": [1, 0, 0], "ponto": [lx, 10, 5], "area": ly * lz },
+            { "tipo": "plano", "direcao": [-1, 0, 0], "ponto": [0, 10, 5], "area": ly * lz },
+            { "tipo": "cilindro", "direcao": [0, 0, 1], "ponto": [19, 10, 5], "area": 251.3, "raio": 4 },
+        ]);
+        let a = |i: usize, f: [usize; 2], meio: [f64; 3], c: f64| json!({ "indice": i, "tipo": "reta", "faces": f, "meio": meio, "comprimento": c });
+        let arestas = json!([
+            a(0, [0, 2], [15., 0., lz], lx), a(1, [0, 3], [15., ly, lz], lx), a(2, [0, 4], [lx, 10., lz], ly), a(3, [0, 5], [0., 10., lz], ly),
+            a(4, [1, 2], [15., 0., 0.], lx), a(5, [1, 3], [15., ly, 0.], lx), a(6, [2, 4], [lx, 0., 5.], lz),
+            { "indice": 7, "tipo": "circulo", "faces": [0, 6], "meio": [19, 10, lz], "raio": 4, "comprimento": 25.13 },
+        ]);
+        json!({ "faces": faces, "arestas": arestas })
+    }
+
+    #[test]
+    fn descricao_em_texto_vira_os_campos() {
+        assert_eq!(interpretar("face superior").unwrap(), json!({ "alvo": "faces", "lado": "topo" }));
+        assert_eq!(interpretar("a aresta mais longa").unwrap(), json!({ "alvo": "arestas", "ordem": "maior", "quantas": 1 }));
+        assert_eq!(interpretar("Arestas da face de cima").unwrap(), json!({ "alvo": "arestas", "lado": "topo" }));
+        assert_eq!(interpretar("furos de 8 mm").unwrap(), json!({ "alvo": "faces", "tipo": "cilindro", "raio": 4.0 }));
+        assert_eq!(interpretar("círculos de raio 4").unwrap(), json!({ "alvo": "arestas", "tipo": "circulo", "raio": 4.0 }));
+        assert_eq!(interpretar("as 2 maiores faces").unwrap(), json!({ "alvo": "faces", "ordem": "maior", "quantas": 2 }));
+        assert_eq!(interpretar("todas as arestas").unwrap(), json!({ "alvo": "arestas" }));
+        for ruim in ["a face", "coisa bonita", ""] {
+            let e = interpretar(ruim).unwrap_err();
+            assert!(e.mensagem.contains("superior"), "{ruim}: {}", e.mensagem);
+        }
+    }
+
+    #[test]
+    fn face_superior_aresta_mais_longa_e_maior_face_no_bloco() {
+        let t = bloco();
+        let r = selecionar(&t, &json!({ "descricao": "face superior" })).unwrap();
+        assert_eq!((r["quantidade"].as_u64(), &r["pontos"][0]), (Some(1), &json!([15., 10., 10.])), "{r}");
+        // as quatro arestas de 30 mm empatam: vêm todas, nenhuma ao acaso
+        let r = selecionar(&t, &json!({ "descricao": "aresta mais longa" })).unwrap();
+        assert_eq!(r["quantidade"], 4, "{r}");
+        assert!(r["itens"].as_array().unwrap().iter().all(|i| i["comprimento"] == 30.), "{r}");
+        // com lado: na face direita, a de cima tem 20 mm e a vertical 10
+        let r = selecionar(&t, &json!({ "descricao": "aresta mais curta da direita" })).unwrap();
+        assert_eq!((r["quantidade"].as_u64(), &r["pontos"][0]), (Some(1), &json!([30., 0., 5.])), "{r}");
+        let r = selecionar(&t, &json!({ "descricao": "maior face" })).unwrap();
+        assert_eq!(r["quantidade"], 2, "topo e base empatam em 600: {r}");
+        let r = selecionar(&t, &json!({ "descricao": "furo de 8 mm" })).unwrap();
+        assert_eq!((r["quantidade"].as_u64(), &r["pontos"][0]), (Some(1), &json!([19., 10., 5.])), "{r}");
+        // o campo explícito manda sobre a descrição
+        let r = selecionar(&t, &json!({ "descricao": "face superior", "lado": "base" })).unwrap();
+        assert_eq!(r["pontos"][0], json!([15., 10., 0.]), "{r}");
+        assert!(selecionar(&t, &json!({ "descricao": "uma face" })).is_err());
     }
 
     #[test]

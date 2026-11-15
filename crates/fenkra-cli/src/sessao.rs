@@ -16,7 +16,7 @@ use serde_json::{json, Value};
 use std::path::PathBuf;
 
 /// Todos os comandos que existem. Nada fora desta lista roda, e nenhum deles interpreta código.
-pub const COMANDOS: [&str; 37] = [
+pub const COMANDOS: [&str; 39] = [
     "versao",
     "comandos",
     "nova_peca",
@@ -54,10 +54,12 @@ pub const COMANDOS: [&str; 37] = [
     "montagem",
     "bom",
     "salvar_montagem",
+    "lista_de_corte",
+    "inserir_da_biblioteca",
 ];
 
 /// Os que mudam o modelo: são estes que entram no registro e que `reproduzir` aceita.
-pub const COMANDOS_DE_MODELO: [&str; 16] = [
+pub const COMANDOS_DE_MODELO: [&str; 17] = [
     "nova_peca",
     "definir_parametro",
     "criar_plano",
@@ -74,6 +76,7 @@ pub const COMANDOS_DE_MODELO: [&str; 16] = [
     "inserir_componente",
     "restringir",
     "mover_componente",
+    "inserir_da_biblioteca",
 ];
 
 const LEITURA_PECA: [&str; 2] = ["fkx", "fkp"];
@@ -254,6 +257,8 @@ impl Sessao {
                 }
             }
             "salvar_montagem" => self.salvar_montagem(args),
+            "lista_de_corte" => self.lista_de_corte(),
+            "inserir_da_biblioteca" => self.inserir_da_biblioteca(args),
             "criar_esboco" => self.adicionar("esboco", "esboco", "Esboço", args),
             "extrudar" => self.adicionar("extrusao", "extrusao", "Extrusão", args),
             "furar" => self.adicionar(
@@ -719,6 +724,55 @@ impl Sessao {
         Ok(r)
     }
 
+    /// Peça normalizada da biblioteca (B420): gera o fixador pela norma, grava o `.fkp` na pasta e, com
+    /// montagem em edição, insere como componente. O arquivo que já existe com a mesma peça é reusado
+    /// (é o que acontece ao refazer o registro); com outra peça no nome, é recusado.
+    fn inserir_da_biblioteca(&mut self, args: &Value) -> Result<Value, ErroApi> {
+        let familia = texto(args, "familia")?;
+        let tamanho = texto(args, "tamanho")?;
+        let comprimento = match &args["comprimento"] {
+            Value::Null => None,
+            v => Some(v.as_f64().ok_or_else(|| ErroApi::argumento("`comprimento` é um número em mm"))?),
+        };
+        let doc = fenkra_solidos::fixadores::fixador_documento(&familia, &tamanho, comprimento)
+            .map_err(|e| ErroApi::novo("biblioteca", format!("{e}; consulte consultar_biblioteca")))?;
+        let arquivo = match args["arquivo"].as_str() {
+            Some(a) => a.to_string(),
+            None => format!("{}.fkp", nome_de_arquivo(&doc.name)),
+        };
+        if !arquivo.to_ascii_lowercase().ends_with(".fkp") {
+            return Err(ErroApi::novo("formato", "a peça da biblioteca grava em .fkp, que a montagem abre"));
+        }
+        let existe = self.pasta.para_ler(&arquivo, &LEITURA_PECA).is_ok_and(|p| p.is_file());
+        let gerado = if existe {
+            let lida = Document::from_json(&self.pasta.ler_texto(&arquivo, &LEITURA_PECA)?)
+                .map_err(|e| ErroApi::novo("leitura", format!("'{arquivo}': {e}")))?;
+            if lida.name != doc.name {
+                return Err(ErroApi::novo("ja_existe", format!("'{arquivo}' já existe com outra peça ({}); informe outro `arquivo`", lida.name)));
+            }
+            false
+        } else {
+            let conteudo = doc.to_json();
+            self.pasta.gravar(&arquivo, &LEITURA_PECA, false, |p| std::fs::write(p, &conteudo).map_err(|e| ErroApi::novo("gravacao", e.to_string())))?;
+            true
+        };
+        let mut saida = json!({ "arquivo": arquivo, "peca": doc.name, "gerado": gerado });
+        if self.montagem.is_some() {
+            let mut ins = args.clone();
+            if let Some(o) = ins.as_object_mut() {
+                for k in ["familia", "tamanho", "comprimento"] {
+                    o.remove(k);
+                }
+                o.insert("arquivo".into(), json!(arquivo));
+                o.entry("nome").or_insert_with(|| json!(doc.name));
+            }
+            saida["componente"] = self.inserir_componente(&ins)?;
+        } else {
+            saida["uso"] = json!("sem montagem em edição: a peça só foi gravada; use nova_montagem e chame de novo, ou inserir_componente com este arquivo");
+        }
+        Ok(saida)
+    }
+
     /// Roda uma mudança na montagem; se falhar, nada muda e o histórico não cresce.
     fn mudar_montagem(&mut self, f: impl FnOnce(&mut Montagem, &Formas) -> Result<Value, ErroApi>) -> Result<Value, ErroApi> {
         let mut m = self.guardar_montagem()?;
@@ -751,6 +805,30 @@ impl Sessao {
         };
         self.pasta.gravar(&arquivo, &["fka", "fkx"], sobrescrever, |p| std::fs::write(p, &conteudo).map_err(|e| ErroApi::novo("gravacao", e.to_string())))?;
         Ok(json!({ "arquivo": arquivo, "fora": fora }))
+    }
+
+    // ------------------------------------------------------------------ estrutural
+
+    /// Lista de corte dos membros estruturais (B420): um item por perfil, comprimento e cortes de
+    /// ponta iguais, com quantidade, barras de matéria-prima e o ângulo de cada ponta.
+    fn lista_de_corte(&mut self) -> Result<Value, ErroApi> {
+        let doc = self.calcular()?.doc.clone();
+        let linhas = fenkra_solidos::cut_list(&doc);
+        if linhas.is_empty() {
+            return Err(ErroApi::novo("sem_membros", "a peça não tem membro estrutural; crie com criar_membro"));
+        }
+        let total: f64 = linhas.iter().map(|l| l.length * l.count as f64).sum();
+        let lista: Vec<Value> = linhas
+            .iter()
+            .map(|l| {
+                json!({
+                    "item": l.item, "designacao": l.designation.trim(), "comprimento": r6(l.length), "quantidade": l.count,
+                    "barras_por_peca": l.bars, "material": l.material,
+                    "angulo_ponta1": l.angle1.map(r6), "angulo_ponta2": l.angle2.map(r6), "ponta_longa": r6(l.long),
+                })
+            })
+            .collect();
+        Ok(json!({ "linhas": lista, "pecas": linhas.iter().map(|l| l.count).sum::<usize>(), "comprimento_total": r6(total) }))
     }
 
     // ------------------------------------------------------------------ cálculo e medidas
@@ -993,6 +1071,20 @@ impl Sessao {
         }
         Ok(json!({ "comandos": linhas.len() }))
     }
+}
+
+/// Nome de arquivo a partir do nome da peça: minúsculas, letras, números e hífen.
+fn nome_de_arquivo(nome: &str) -> String {
+    let mut s = String::new();
+    for c in nome.to_lowercase().chars() {
+        if c.is_ascii_alphanumeric() || c == '.' {
+            s.push(c);
+        } else if !s.ends_with('-') && !s.is_empty() {
+            s.push('-');
+        }
+    }
+    let s = s.trim_end_matches('-').replace('.', "_");
+    if s.is_empty() { "peca-da-biblioteca".into() } else { s }
 }
 
 fn com_padrao(args: &Value, chave: &str, padrao: Value) -> Value {

@@ -15,7 +15,7 @@ pub const NOME: &str = "listar_comandos";
 const FORA: [(&str, &str); 3] = [
     ("juntas e mecanismos", "juntas com movimento, engrenagens, subconjuntos e repetição de componentes: a montagem daqui tem peças, restrições de posição, movimento e lista de peças"),
     ("chapa: comandos avançados", "aba por perfil ou por superfície, recorte, estampo, veneziana, furo flangeado, fechamento e alívio de canto, desdobrar parcial: daqui saem parede, aba, bainha, dobra por linha e planificação"),
-    ("estrutural: solda e regras de canto", "cordão de solda, dobra de tubo no nó e regra própria por canto: daqui saem membro, placa de extremidade e reforço"),
+    ("estrutural: solda e regras de canto", "cordão de solda, dobra de tubo no nó e regra própria por canto: daqui saem membro (com os cortes de canto: meia-esquadria, aparar, encaixe), placa de extremidade, reforço e lista de corte"),
 ];
 
 fn propria() -> Value {
