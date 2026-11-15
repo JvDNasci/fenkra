@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 107400,
+ "tokens_total_k": 107840,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -18,19 +18,19 @@
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 30.1
+   "pct": 30.0
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 23320,
-   "pct": 21.7
+   "tokens_k": 23760,
+   "pct": 22.0
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
    "tokens_k": 32940,
-   "pct": 30.7
+   "pct": 30.5
   }
  },
  "itens": [
@@ -7513,7 +7513,7 @@
    "tokens_k": 80,
    "teste": "Manual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.1
   },
   {
@@ -7545,7 +7545,7 @@
    "tokens_k": 50,
    "teste": "Auto",
    "area": "Geral",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7561,6 +7561,150 @@
    "tokens_k": 40,
    "teste": "Auto",
    "area": "PLM",
+   "status": "feito",
+   "pct": 0.0
+  },
+  {
+   "id": "B455",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Tela inicial limpa com animação leve e opção para desligar",
+   "oque": "Pedido do usuário em 14/11/2026: a tela inicial está com cara de IA. Refazer com visual limpo e autoral, só com cores do tema, com animação simples e leve que roda até em PC fraco: ao passar o mouse e ao clicar nos cartões e ações, e um movimento discreto de fundo. Opção em Configurações para ligar e desligar as animações, desligada sozinha no modo leve e no adaptador de software. Imagens de referência podem vir da Tripo (procedência registrada).",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B456",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Montagem: painel do Inserir peça abre na coluna esquerda",
+   "oque": "Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): o painel do Inserir peça abre à direita, não na coluna esquerda do layout novo (B433).",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Manual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B457",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Biblioteca em furo: linha Comprimento cobre o cabeçalho da tabela",
+   "oque": "Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): ao inserir em furo, a linha Comprimento cobre o cabeçalho da tabela.",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Manual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B458",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Voltar da peça não reabre o painel da Biblioteca fechado",
+   "oque": "Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): voltar da peça para a montagem reabre o painel da Biblioteca que estava fechado.",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Manual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B459",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Extrusão nova sem perfil mostra referência perdida com número inválido",
+   "oque": "Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): uma extrusão nova sem perfil já mostra 'referência perdida: sketch #18446744073709551599'; deve pedir o perfil, sem erro.",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Manual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B460",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Salvar como em peça nunca salva",
+   "oque": "Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): Salvar como numa peça nunca salva recusa; o Ctrl+S funciona.",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Manual",
+   "area": "PDM / PLM",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B461",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Furo apagado deixa restrições do parafuso como OK",
+   "oque": "Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): depois de apagar o furo, as restrições do parafuso inserido continuam OK, sem aviso de perda nem botão Reancorar.",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Manual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B462",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Clique que insere fixador também seleciona a face e abre o gizmo",
+   "oque": "Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): o clique que põe o fixador também seleciona a face embaixo e abre o gizmo; deve só inserir.",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Manual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B463",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Abas de documentos com o mesmo nome",
+   "oque": "Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): duas abas mostram o mesmo nome 'Placa de exemplo'; diferenciar pelo arquivo ou numerar.",
+   "origem": [
+    "USR-MOUSE"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Manual",
+   "area": "Interface",
    "status": "a fazer",
    "pct": 0.0
   }
