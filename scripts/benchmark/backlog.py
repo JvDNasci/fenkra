@@ -943,6 +943,8 @@ c('B462', 3, 'P1', 'Clique que insere fixador também seleciona a face e abre o 
   ['USR-MOUSE'], [], 40, 'Auto + Manual', 'Montagem'),
 c('B463', 3, 'P1', 'Abas de documentos com o mesmo nome', "Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): duas abas mostram o mesmo nome 'Placa de exemplo'; diferenciar pelo arquivo ou numerar.",
   ['USR-MOUSE'], [], 40, 'Auto + Manual', 'Interface'),
+c('B464', 3, 'P1', 'Kernel: Deslocar face falha em peça com boss e filete por histórico', "Achado do B60 (14/11): Deslocar face falha com 'não deixou um sólido fechado' numa peça com boss e filete feitos por histórico; a mesma peça vinda de STEP passa. Reproduzir em teste, achar a causa no kernel (provável tolerância ou costura de faces do histórico) e corrigir.",
+  ['USR-CHECK'], [], 60, 'Auto', 'Kernel'),
 ]
 def main():
     for x in B:

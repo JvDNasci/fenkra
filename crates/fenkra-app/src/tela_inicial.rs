@@ -542,6 +542,18 @@ mod tests {
         let mut giro = Default::default();
         let mut mostra = true;
         let mut pedidos = (false, None);
+        // quadros de aquecimento: o carregador de imagens termina em outra thread e pede um quadro ao
+        // terminar; sob carga isso caía dentro da medição. Mede-se só depois de as imagens assentarem.
+        for _ in 0..40 {
+            let s = ctx.run_ui(egui::RawInput { time: Some(0.), screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1280., 800.))), ..Default::default() }, |ui| {
+                let e = Entrada { pal: Paleta::atual(), ligada: false, t: 0., dt: 0.016, voltar: false, arquivos: &[], projetos: &[], mostrar_ao_iniciar: &mut mostra, previews: &cache, giro: &mut giro, exemplos: &[] };
+                mostrar(ui, e);
+            });
+            if !s.viewport_output[&egui::ViewportId::ROOT].repaint_delay.is_zero() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
         for quadro in 0..3 {
             let mut saida = ctx.run_ui(egui::RawInput { time: Some(quadro as f64 * 0.5), screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1280., 800.))), ..Default::default() }, |ui| {
                 let e = Entrada { pal: Paleta::atual(), ligada, t: quadro as f32 * 0.5 + 1., dt: 0.016, voltar: false, arquivos: &[], projetos: &[], mostrar_ao_iniciar: &mut mostra, previews: &cache, giro: &mut giro, exemplos: &[] };
