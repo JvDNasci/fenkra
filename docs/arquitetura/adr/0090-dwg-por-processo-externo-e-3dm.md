@@ -81,3 +81,14 @@ openNURBS; e o DXF 2D com ida e volta também no desenho técnico, não só no s
   DXF gerado, mensagem sem o programa) é conferido com um programa falso.
 - O `dxf2dwg` do LibreDWG grava DWG R2000 e a importação de DXF dele ainda é marcada como experimental pelo próprio
   projeto. Um DWG gravado pelo Fenkra deve ser aberto e conferido no programa de destino antes de virar entrega.
+
+## Adendo de 15/11/2026 (B211)
+- **IFC:** a extrusão passa a ler as seções de aço paramétricas (I, L, U, T, tubo retangular e redondo, centradas
+  na caixa como no IFC4), o perfil com furos (ponte de cada furo ao contorno de fora e triangulação por orelhas) e
+  o `IfcArcIndex` da curva indexada. Canto arredondado de seção fica vivo e o relatório conta. A gravação segue
+  facetada (`IfcBuildingElementProxy` e, na estrutura de aço, os elementos do B134).
+- **SVG na folha:** o texto da exportação do desenho volta como nota, e o retângulo branco do fundo da página não
+  vira geometria. No esboço o texto continua indo para o relatório.
+- **Relatório de ida e volta:** `docs/modulos/ida-e-volta.md`, gerado por `tests/ida_e_volta.rs`.
+- **3DM continua só com a detecção.** O fonte do openNURBS segue fora da máquina e trazê-lo pede o aval do usuário;
+  a ponte desenhada acima é a próxima frente. **PDF 3D** e **STEP em XML** continuam fora pelos motivos do ADR 0055.

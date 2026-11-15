@@ -8,7 +8,7 @@
 
 use crate::malha::xml as xml_seguro;
 use crate::ErroConv;
-use fenkra_dxf::{Camada, Desenho, Entidade, Item, Unidade, Vertice, P2};
+use fenkra_dxf::{Anexo, Camada, Desenho, Entidade, Item, Unidade, Vertice, P2};
 use std::f64::consts::{PI, TAU};
 use std::fmt::Write as _;
 
@@ -140,6 +140,15 @@ fn comprimento_mm(t: &str) -> Option<f64> {
 struct Leitor {
     d: Desenho,
     ignorados: Vec<String>,
+    /// na folha do desenho o texto vira nota; no esboço ele não tem lugar e vai para o relatório
+    com_texto: bool,
+}
+
+/// Retângulo branco sem traço do tamanho da página: é o fundo que quem grava a folha põe, não geometria.
+fn e_fundo(e: roxmltree::Node, x: f64, y: f64) -> bool {
+    let sem_traco = e.attribute("stroke").is_none_or(|t| t.trim() == "none");
+    let branco = e.attribute("fill").is_some_and(|f| matches!(f.trim().to_ascii_lowercase().as_str(), "white" | "#fff" | "#ffffff"));
+    sem_traco && branco && x.abs() < 1e-12 && y.abs() < 1e-12
 }
 
 impl Leitor {
@@ -311,6 +320,25 @@ impl Leitor {
         }
     }
 
+    /// `<text>`: ponto de inserção, altura pela escala, giro pela matriz e anexo pelo `text-anchor`.
+    fn texto(&mut self, e: roxmltree::Node, m: &Matriz, camada: &str) {
+        let texto: String = e.descendants().filter(|n| n.is_text()).filter_map(|n| n.text()).collect::<String>().trim().to_string();
+        if texto.is_empty() {
+            return;
+        }
+        let n = |nome: &str| e.attribute(nome).map(numeros).and_then(|v| v.first().copied()).unwrap_or(0.);
+        let tamanho = e.attribute("font-size").and_then(|t| numeros(t).first().copied()).unwrap_or(16.);
+        let x = m.vetor([1., 0.]);
+        let anexo = match e.attribute("text-anchor").map(str::trim) {
+            Some("middle") => Anexo::Centro,
+            Some("end") => Anexo::Direita,
+            _ => Anexo::Esquerda,
+        };
+        // a escala do eixo Y (que o SVG desce) dá a altura da letra
+        let altura = tamanho * m.vetor([0., 1.]).iter().map(|v| v * v).sum::<f64>().sqrt();
+        self.item(camada, Entidade::Texto { pos: m.ponto([n("x"), n("y")]), altura, angulo: x[1].atan2(x[0]).to_degrees(), anexo, texto });
+    }
+
     fn elemento(&mut self, e: roxmltree::Node, pai: &Matriz, camada: &str, nivel: usize) {
         if nivel > PROFUNDIDADE {
             return;
@@ -329,6 +357,10 @@ impl Leitor {
             "line" => self.item(camada, Entidade::Linha(m.ponto([n("x1"), n("y1")]), m.ponto([n("x2"), n("y2")]))),
             "rect" => {
                 let (x, y, w, h) = (n("x"), n("y"), n("width"), n("height"));
+                if e_fundo(e, x, y) {
+                    self.ignorados.push("fundo".into());
+                    return;
+                }
                 if e.attribute("rx").is_some() || e.attribute("ry").is_some() {
                     self.ignorados.push("cantos arredondados".into());
                 }
@@ -339,14 +371,24 @@ impl Leitor {
             "polyline" => self.poligono(camada, &m, &pontos(), false),
             "polygon" => self.poligono(camada, &m, &pontos(), true),
             "path" => self.caminho(camada, &m, e.attribute("d").unwrap_or("")),
+            "text" if self.com_texto => self.texto(e, &m, camada),
             "text" | "image" | "use" | "foreignObject" => self.ignorados.push(e.tag_name().name().to_string()),
             _ => {}
         }
     }
 }
 
-/// Lê um SVG como desenho em milímetros.
+/// Lê um SVG como desenho em milímetros, para o esboço: texto vai para o relatório.
 pub(crate) fn ler(b: &[u8]) -> Result<Desenho, ErroConv> {
+    ler_com(b, false)
+}
+
+/// Lê um SVG para a folha do desenho, com os textos.
+pub(crate) fn ler_folha(b: &[u8]) -> Result<Desenho, ErroConv> {
+    ler_com(b, true)
+}
+
+fn ler_com(b: &[u8], com_texto: bool) -> Result<Desenho, ErroConv> {
     let texto = String::from_utf8_lossy(b);
     let opcoes = roxmltree::ParsingOptions { allow_dtd: true, ..Default::default() };
     let doc = roxmltree::Document::parse_with_options(&texto, opcoes).map_err(|e| ErroConv::Leitura(format!("SVG: {e}")))?;
@@ -363,7 +405,7 @@ pub(crate) fn ler(b: &[u8]) -> Result<Desenho, ErroConv> {
     let y0 = raiz.attribute("data-fenkra-y0").and_then(|v| v.parse().ok()).unwrap_or(altura);
     let k = mm.unwrap_or(1.);
     let base = Matriz { a: k, b: 0., c: 0., d: -k, e: 0., f: y0 * k };
-    let mut l = Leitor { d: Desenho { unidade: if mm.is_some() { Unidade::Milimetro } else { Unidade::SemUnidade }, ..Default::default() }, ignorados: vec![] };
+    let mut l = Leitor { d: Desenho { unidade: if mm.is_some() { Unidade::Milimetro } else { Unidade::SemUnidade }, ..Default::default() }, ignorados: vec![], com_texto };
     l.elemento(raiz, &base, "", 0);
     for oque in l.ignorados {
         *l.d.ignorados.entry(oque).or_insert(0) += 1;
@@ -560,6 +602,23 @@ mod testes {
     fn texto_e_imagem_vao_para_o_relatorio() {
         let d = um(r#"<svg width="20mm" viewBox="0 0 20 20"><text>oi</text><text>tchau</text><line x2="1"/></svg>"#);
         assert_eq!(d.ignorados.get("text"), Some(&2));
+    }
+
+    /// B211: na folha, o texto da exportação do desenho volta com ponto, altura, giro e anexo, e o fundo
+    /// branco da página não vira quatro linhas.
+    #[test]
+    fn na_folha_texto_vira_entidade_e_fundo_branco_fica_de_fora() {
+        let t = r##"<svg width="100mm" height="50mm" viewBox="0 0 100 50"><rect width="100" height="50" fill="white"/><rect x="10" y="10" width="5" height="5" fill="#ffffff" stroke="black"/><text x="20.000" y="40.000" font-size="5" text-anchor="middle" transform="rotate(-90.000 20.000 40.000)">CHAPA 3 mm</text></svg>"##;
+        let d = ler_folha(t.as_bytes()).unwrap();
+        assert_eq!(d.ignorados.get("fundo"), Some(&1));
+        let polilinhas = d.itens.iter().filter(|i| matches!(i.entidade, Entidade::Polilinha { .. })).count();
+        assert_eq!(polilinhas, 1, "o retângulo com traço é geometria");
+        let Some(Entidade::Texto { pos, altura, angulo, anexo, texto }) = d.itens.iter().map(|i| &i.entidade).find(|e| matches!(e, Entidade::Texto { .. })) else { panic!("{:?}", d.itens) };
+        assert_eq!((texto.as_str(), *anexo), ("CHAPA 3 mm", Anexo::Centro));
+        assert!((pos[0] - 20.).abs() < 1e-9 && (pos[1] - 10.).abs() < 1e-9 && (altura - 5.).abs() < 1e-9, "{pos:?} {altura}");
+        assert!((angulo - 90.).abs() < 1e-9, "{angulo}");
+        // no esboço o mesmo arquivo manda o texto para o relatório
+        assert_eq!(ler(t.as_bytes()).unwrap().ignorados.get("text"), Some(&1));
     }
 
     #[test]

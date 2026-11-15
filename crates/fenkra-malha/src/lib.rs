@@ -62,6 +62,7 @@ pub const ITENS_FORA: &[&str] = &[
     "protótipo",
     "sólido paramétrico sem malha pronta",
     "furo em face",
+    "canto arredondado de perfil",
     "cavidade interna que ficou como sólido à parte",
     "peça com vários materiais, que ficou com a cor do maior",
 ];
