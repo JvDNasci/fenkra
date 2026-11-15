@@ -1270,7 +1270,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -3702,7 +3702,7 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "Geral",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -5352,7 +5352,7 @@
    "tokens_k": 200,
    "teste": "Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -6137,7 +6137,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.3
   },
   {
@@ -6617,7 +6617,7 @@
    "tokens_k": 100,
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -7497,7 +7497,7 @@
    "tokens_k": 60,
    "teste": "Auto + Manual",
    "area": "Montagem",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -7513,7 +7513,7 @@
    "tokens_k": 80,
    "teste": "Manual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -7737,7 +7737,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7753,7 +7753,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -7769,7 +7769,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7785,7 +7785,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7801,7 +7801,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -7817,7 +7817,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -7833,7 +7833,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7849,7 +7849,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7865,7 +7865,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7881,7 +7881,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Montagem",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7897,7 +7897,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7913,7 +7913,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   }
  ]
