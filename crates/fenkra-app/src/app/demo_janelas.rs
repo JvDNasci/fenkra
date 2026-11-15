@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
 //! Desenvolvimento: `FENKRA_DEMO_JANELA=<nome>` abre, no segundo quadro, uma janela ou painel que só o
-//! mouse abriria, para a captura (`FENKRA_DEMO_FOTO`). Nomes: `salvar_como`, `empacotar`, `reparar`,
+//! mouse abriria, para a captura (`FENKRA_DEMO_FOTO`). Nomes: `salvar_como`, `salvar_como_novo` (peça nunca salva, B460), `empacotar`, `reparar`,
 //! `liberar` (combine com `FENKRA_DEMO_PROJETO=1`), `resumo` (com `FENKRA_DEMO_EST=1`), `roda`, `roda_editor`,
 //! `ramos` (com `FENKRA_DEMO_PROJETO=1`: ramo em conflito e janela de mesclagem), `tabela` (parâmetros com a tabela de projeto preenchida), `reparo_candidatas` (assistente de
 //! reparo com as candidatas da face perdida numeradas no 3D).
@@ -37,7 +37,8 @@ impl App {
             self.demo_conjunto_que_usa();
         }
         match nome.as_str() {
-            "salvar_como" => self.abrir_salvar_como(ctx),
+            // B460: `salvar_como_novo` usa a peça nunca salva (com FENKRA_DEMO_PASTA grava sem diálogo)
+            "salvar_como" | "salvar_como_novo" => self.abrir_salvar_como(ctx),
             "empacotar" => self.abrir_empacotar(ctx),
             "reparar" => self.abrir_reparar_links(ctx),
             "liberar" => {
