@@ -33,10 +33,10 @@ medidos no código; "Intuitivo" fica a conferir até o teste com pessoas que nun
 | 2 distâncias | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Dist. + ângulo | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Chanfro total | a conferir | ok | ok | ok | parcial | ok | ok | sem GIF (camada 3) |
-| Saída | a conferir | ok | parcial | ok | ok | ok | ok | sem alça 3D (Draft) |
+| Saída | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Casca | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Espessura | a conferir | ok | ok | ok | ok | ok | ok |  |
-| Rosca | a conferir | ok | parcial | ok | ok | ok | ok | sem alça 3D (Thread) |
+| Rosca | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Boss | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Snap-fit | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Grelha | a conferir | ok | ok | ok | ok | ok | ok |  |
@@ -66,4 +66,4 @@ medidos no código; "Intuitivo" fica a conferir até o teste com pessoas que nun
 | Deslocar face | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Raio do filete | a conferir | ok | ok | ok | ok | ok | ok |  |
 
-46 de 59 comandos com ok em todos os itens medidos (fora "Intuitivo").
+48 de 59 comandos com ok em todos os itens medidos (fora "Intuitivo").

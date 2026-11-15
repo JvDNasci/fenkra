@@ -218,6 +218,8 @@ mod biblioteca_ui;
 mod reparo_ui;
 #[cfg(test)]
 mod checklist_solidos;
+#[cfg(test)]
+mod checklist_comandos;
 mod textos_montagem;
 mod textos_montagem3;
 mod textos_montagem4;
