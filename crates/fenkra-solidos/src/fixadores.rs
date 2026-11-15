@@ -101,6 +101,8 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
         "terminal_rotular" => crate::terminal_rotular::corpo(&mut m, fam, t)?,
         "fixacao_pe" | "fixacao_flange" | "fixacao_munhao" | "fixacao_garfo" => crate::pneumatica_fixacoes::corpo(&mut m, fam, t)?,
         "rebite_universal" | "rebite_escareado" => crate::rebites::corpo(&mut m, fam, t, l)?,
+        "parafuso_12pontos" => crate::parafusos_aero::doze_pontos(&mut m, fam, t, l)?,
+        "pino_cabeca" => crate::parafusos_aero::pino_cabeca(&mut m, fam, t, l)?,
         g => return Err(format!("{}: gerador '{g}' sem geometria", fam.id)),
     }
     propriedades(&mut m.doc, fam, t);

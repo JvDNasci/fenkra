@@ -66,6 +66,10 @@ pub fn cabeca_de(f: &Familia) -> Cabeca {
     if f.gerador == "parafuso_escareado" || f.gerador == "rebite_escareado" {
         return Cabeca::Escareada;
     }
+    // o pino de cabeça entra no furo como parafuso, mas não é parafuso de cabeça Allen
+    if f.gerador == "pino_cabeca" {
+        return Cabeca::Nenhuma;
+    }
     match f.tipo {
         TipoFixador::ParafusoAllen => Cabeca::Allen,
         TipoFixador::ParafusoSextavado => Cabeca::Sextavada,
@@ -298,6 +302,12 @@ pub fn nome_da_cota(tipo: TipoFixador, simbolo: &str) -> &'static str {
         (_, "P") => "passo da rosca",
         (_, "dk") => "diâmetro da cabeça",
         (TipoFixador::ParafusoAllen | TipoFixador::ParafusoSextavado | TipoFixador::ParafusoCruz | TipoFixador::Rebite, "k") => "altura da cabeça",
+        (TipoFixador::ParafusoAllen, "A") => "diâmetro da haste do pino",
+        (TipoFixador::ParafusoAllen, "E") => "diâmetro do furo de cupilha",
+        (TipoFixador::ParafusoAllen, "OL") => "comprimento total menos o efetivo (G)",
+        (TipoFixador::ParafusoSextavado, "A") => "diâmetro do flange",
+        (TipoFixador::ParafusoSextavado, "Q") => "espessura do flange",
+        (TipoFixador::ParafusoSextavado, "D") => "diâmetro do elemento de 12 pontos",
         (_, "dr") => "diâmetro da rosca depois do ombro",
         (_, "bm") => "rosca da ponta fixa, que entra na peça",
         (TipoFixador::Prisioneiro, "b") => "rosca do lado da porca",
@@ -560,12 +570,12 @@ mod testes {
     #[test]
     fn chips_filtram_por_sistema_cabeca_e_material() {
         let f = |c: Filtro| buscar(familias(), &c).len();
-        // em polegada: ASME B18.3, o parafuso AN, as porcas AN310, AN315 e MS21042 e os rebites AN470 e AN426
-        assert_eq!(f(Filtro { sistema: Some(Sistema::Metrico), ..Default::default() }), familias().len() - 7);
-        assert_eq!(f(Filtro { sistema: Some(Sistema::Polegada), ..Default::default() }), 7);
-        // ISO 4762, ISO 7380-1, ISO 7379 e ASME B18.3
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Allen), ..Default::default() }), 4);
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Sextavada), ..Default::default() }), 4);
+        // em polegada: ASME B18.3, o parafuso AN, as porcas AN310, AN315 e MS21042, os rebites AN470 e AN426 e, do B43, MS20004, MS20073, MS20002, MS20392 e MS21250
+        assert_eq!(f(Filtro { sistema: Some(Sistema::Metrico), ..Default::default() }), familias().len() - 12);
+        assert_eq!(f(Filtro { sistema: Some(Sistema::Polegada), ..Default::default() }), 12);
+        // ISO 4762, ISO 7380-1, ISO 7379, ASME B18.3 e o MS20004 (B43)
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Allen), ..Default::default() }), 5);
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Sextavada), ..Default::default() }), 6);
         // ISO 10642 e o rebite AN426; a cabeça universal do AN470 é abaulada
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Escareada), ..Default::default() }), 2);
         assert_eq!(f(Filtro { cabeca: Some(Cabeca::Abaulada), ..Default::default() }), 1);
@@ -574,10 +584,10 @@ mod testes {
         // 5 porcas, 4 arruelas, 2 prisioneiros e os rolamentos (60, 62, 63, 68, 69, 160, 72, NU2 e 302) o cilindro ISO 15552 e o trilho HGR
         // e as três porcas aeronáuticas, o minicilindro ISO 6432 e a porca do nariz dele
         // e o patim, a porca e o fuso de esferas (B46), o terminal rotular (B397) e as quatro fixações de cilindro (B45)
-        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 35);
+        assert_eq!(f(Filtro { cabeca: Some(Cabeca::Nenhuma), ..Default::default() }), 37);
         assert_eq!(f(Filtro { material: Some("Aço".into()), ..Default::default() }), familias().len());
         assert_eq!(f(Filtro { material: Some("Aço inoxidável".into()), ..Default::default() }), 0);
-        assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 4);
+        assert_eq!(f(Filtro { tipo: Some(TipoFixador::Arruela), ..Default::default() }), 5);
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Prisioneiro), ..Default::default() }), 2);
         assert_eq!(f(Filtro { tipo: Some(TipoFixador::Rolamento), ..Default::default() }), 9);
     }

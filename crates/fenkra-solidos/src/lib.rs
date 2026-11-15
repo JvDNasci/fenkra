@@ -30,6 +30,7 @@ pub mod mesh_io;
 pub mod structural;
 pub mod perfis_catalogo;
 pub mod pneumatica_fixacoes;
+pub mod parafusos_aero;
 pub mod perfis_catalogo_gerdau;
 pub mod perfis_catalogo_tubos;
 pub mod st_cantos;
