@@ -38,8 +38,10 @@ pub fn kind_of(i: u8) -> PmiKind {
     }
 }
 
+// nos testes, uma por thread (B453): o quadro de outro teste zerava a variante no meio deste
+global_por_teste! {
 /// Variante de medida escolhida com Tab no comando aberto (B185): vale até criar ou cancelar.
-static VARIANTE: std::sync::Mutex<Option<(u8, PmiKind)>> = std::sync::Mutex::new(None);
+static VARIANTE: std::sync::Mutex<Option<(u8, PmiKind)>> = std::sync::Mutex::new(None); }
 
 fn set_variant(v: Option<(u8, PmiKind)>) {
     crate::pmi_smart::tab_reset();

@@ -8,7 +8,8 @@ use fenkra_desenho::cotas::{Alvo, Motivo};
 
 /// Estado com a placa de exemplo (vista da frente em [150, 150]).
 fn estado_com_placa(nome: &str) -> (DwgState, Id) {
-    let dir = std::env::temp_dir().join(nome);
+    // uma pasta por processo: outra cópia da suíte rodando ao mesmo tempo não pisa nesta (B453)
+    let dir = std::env::temp_dir().join(format!("{nome}_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     std::fs::write(dir.join("placa.fkp"), fenkra_solidos::example_document().to_json()).unwrap();
     let mut d = Drawing::new("T", Format::A3);

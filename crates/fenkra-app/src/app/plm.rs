@@ -428,8 +428,16 @@ mod tests {
         assert!(m.tamanho_arquivo_kb > 0.);
         assert_eq!((m.faces_minusculas, m.arestas_minusculas, m.geometria_invalida, m.referencias_em_erro), (0, 0, 0, 0));
         // o perfil padrão deixa a caixa passar
+        // o tempo de recálculo é de relógio de parede: com a suíte em paralelo a máquina pode passar
+        // do teto do perfil sem culpa da caixa (B453). A regra de tempo só é aceita quando o tempo
+        // medido passou mesmo do teto; qualquer outra violação reprova
+        let teto = Perfil::padrao().regras.iter().find(|l| l.regra == Regra::TempoRecalculo).unwrap().limite;
         let rel = fenkra_project::qualidade_modelo::avaliar(&Perfil::padrao(), &m, Momento::Revisar, &[]);
-        assert!(rel.violacoes.is_empty(), "{:?}", rel.violacoes);
+        let outras: Vec<_> = rel.violacoes.iter().filter(|v| !(v.regra == Regra::TempoRecalculo && m.tempo_recalculo_ms > teto)).collect();
+        assert!(outras.is_empty(), "{:?}", rel.violacoes);
+        // com o tempo dentro do teto, o perfil padrão deixa a caixa passar sem nenhuma violação
+        let rapida = Medidas { tempo_recalculo_ms: m.tempo_recalculo_ms.min(teto), ..m };
+        assert!(fenkra_project::qualidade_modelo::avaliar(&Perfil::padrao(), &rapida, Momento::Revisar, &[]).violacoes.is_empty());
         // um perfil com teto de 4 faces barra a mesma peça
         let mut estreito = Perfil::padrao();
         estreito.regras.iter_mut().find(|l| l.regra == Regra::Faces).unwrap().limite = 4.;

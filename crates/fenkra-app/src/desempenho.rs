@@ -292,7 +292,8 @@ impl Contador {
     }
 }
 
-static CONTADOR: std::sync::Mutex<Option<Contador>> = std::sync::Mutex::new(None);
+// nos testes, um por thread (B453): outro teste desligando o contador zerava a rajada deste
+global_por_teste! { static CONTADOR: std::sync::Mutex<Option<Contador>> = std::sync::Mutex::new(None); }
 
 /// Conta o quadro que está começando. Ligado, pede o quadro de conferência de repouso; desligado,
 /// não guarda nada e não pede nada.

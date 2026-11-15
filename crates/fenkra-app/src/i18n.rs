@@ -6,7 +6,8 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 
-static EN: AtomicBool = AtomicBool::new(false);
+// idioma da sessão; nos testes, um por thread (B453)
+global_por_teste! { static EN: AtomicBool = AtomicBool::new(false); }
 
 pub fn set_english(on: bool) {
     EN.store(on, Ordering::Relaxed);
