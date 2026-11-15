@@ -292,13 +292,18 @@ class Fenkra:
         self.foco()
         p = W.POINT()
         user32.GetCursorPos(ctypes.byref(p))
-        ox, oy, _, _ = cliente(self.h)
+        ox, oy, w, hh = cliente(self.h)
         x0, y0 = p.x - ox, p.y - oy
-        dentro = 0 <= x0 and 0 <= y0
+        # cursor fora da área cliente (outro monitor, barra de título): o caminho começa no destino,
+        # senão os pontos intermediários caem fora da janela e o clique é recusado
+        dentro = 0 <= x0 < w and 0 <= y0 < hh
         for k in range(1, passos + 1):
             t = k / passos
             if dentro:
-                self._ir(round(x0 + (x - x0) * t), round(y0 + (y - y0) * t))
+                try:  # ponto intermediário sob outra janela (aviso de outro programa): pula
+                    self._ir(round(x0 + (x - x0) * t), round(y0 + (y - y0) * t))
+                except ValueError:
+                    pass
             time.sleep(0.012)
         self._ir(x, y)
         time.sleep(0.05)
