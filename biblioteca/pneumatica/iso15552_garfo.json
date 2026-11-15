@@ -1,0 +1,129 @@
+{
+ "id": "iso15552_garfo",
+ "nome": "Garfo traseiro de cilindro ISO 15552 (MP2)",
+ "norma": "ISO 15552",
+ "revisao": "2018",
+ "versao": 1,
+ "gerador": "fixacao_garfo",
+ "tipo": "fixacao_cilindro",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Hydraulic Megastore, acessórios de fixação em alumínio para cilindros ISO 15552 (pé alto, garfo e olhal traseiros)",
+   "url": "https://www.hydraulicmegastore.com/wp-content/uploads/2019/10/ISO-15552-Mounting-Accessories-Aluminium.pdf"
+  },
+  {
+   "rotulo": "Festo, cilindros padrão DNC ISO 15552, catálogo 2014/01 (acessórios: dimensões das fixações)",
+   "url": "https://ftp.festo.com/Public/PNEUMATIC/SOFTWARE_SERVICE/Documentation/2014/EN/DNC_EN.PDF"
+  }
+ ],
+ "campos": [
+  "CD",
+  "CB",
+  "FL",
+  "L",
+  "MR",
+  "UB"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "Ø32",
+   "d_nominal": 32,
+   "valores": {
+    "CD": 10,
+    "CB": 26,
+    "FL": 22,
+    "L": 13,
+    "MR": 10,
+    "UB": 45
+   },
+   "confirmado_por": 2,
+   "nota": "Garfo do catálogo de alumínio (colunas do pino, da folga interna, de FL, de MR e da largura UB); o olhal traseiro do catálogo Festo (SNCL) traz CD, EW (= CB), FL e MR iguais nas sete bitolas, que é a segunda conferência. L (espessura do olhal) vem só do catálogo Festo e UB só do de alumínio. Modelo simplificado: corpo quadrado UB, rasgo CB e furo do pino, ponta em canto vivo."
+  },
+  {
+   "designacao": "Ø40",
+   "d_nominal": 40,
+   "valores": {
+    "CD": 12,
+    "CB": 28,
+    "FL": 25,
+    "L": 16,
+    "MR": 12,
+    "UB": 52
+   },
+   "confirmado_por": 2,
+   "nota": "Garfo do catálogo de alumínio (colunas do pino, da folga interna, de FL, de MR e da largura UB); o olhal traseiro do catálogo Festo (SNCL) traz CD, EW (= CB), FL e MR iguais nas sete bitolas, que é a segunda conferência. L (espessura do olhal) vem só do catálogo Festo e UB só do de alumínio. Modelo simplificado: corpo quadrado UB, rasgo CB e furo do pino, ponta em canto vivo."
+  },
+  {
+   "designacao": "Ø50",
+   "d_nominal": 50,
+   "valores": {
+    "CD": 12,
+    "CB": 32,
+    "FL": 27,
+    "L": 16,
+    "MR": 12,
+    "UB": 60
+   },
+   "confirmado_por": 2,
+   "nota": "Garfo do catálogo de alumínio (colunas do pino, da folga interna, de FL, de MR e da largura UB); o olhal traseiro do catálogo Festo (SNCL) traz CD, EW (= CB), FL e MR iguais nas sete bitolas, que é a segunda conferência. L (espessura do olhal) vem só do catálogo Festo e UB só do de alumínio. Modelo simplificado: corpo quadrado UB, rasgo CB e furo do pino, ponta em canto vivo."
+  },
+  {
+   "designacao": "Ø63",
+   "d_nominal": 63,
+   "valores": {
+    "CD": 16,
+    "CB": 40,
+    "FL": 32,
+    "L": 21,
+    "MR": 16,
+    "UB": 70
+   },
+   "confirmado_por": 2,
+   "nota": "Garfo do catálogo de alumínio (colunas do pino, da folga interna, de FL, de MR e da largura UB); o olhal traseiro do catálogo Festo (SNCL) traz CD, EW (= CB), FL e MR iguais nas sete bitolas, que é a segunda conferência. L (espessura do olhal) vem só do catálogo Festo e UB só do de alumínio. Modelo simplificado: corpo quadrado UB, rasgo CB e furo do pino, ponta em canto vivo."
+  },
+  {
+   "designacao": "Ø80",
+   "d_nominal": 80,
+   "valores": {
+    "CD": 16,
+    "CB": 50,
+    "FL": 36,
+    "L": 22,
+    "MR": 16,
+    "UB": 90
+   },
+   "confirmado_por": 2,
+   "nota": "Garfo do catálogo de alumínio (colunas do pino, da folga interna, de FL, de MR e da largura UB); o olhal traseiro do catálogo Festo (SNCL) traz CD, EW (= CB), FL e MR iguais nas sete bitolas, que é a segunda conferência. L (espessura do olhal) vem só do catálogo Festo e UB só do de alumínio. Modelo simplificado: corpo quadrado UB, rasgo CB e furo do pino, ponta em canto vivo."
+  },
+  {
+   "designacao": "Ø100",
+   "d_nominal": 100,
+   "valores": {
+    "CD": 20,
+    "CB": 60,
+    "FL": 41,
+    "L": 27,
+    "MR": 20,
+    "UB": 110
+   },
+   "confirmado_por": 2,
+   "nota": "Garfo do catálogo de alumínio (colunas do pino, da folga interna, de FL, de MR e da largura UB); o olhal traseiro do catálogo Festo (SNCL) traz CD, EW (= CB), FL e MR iguais nas sete bitolas, que é a segunda conferência. L (espessura do olhal) vem só do catálogo Festo e UB só do de alumínio. Modelo simplificado: corpo quadrado UB, rasgo CB e furo do pino, ponta em canto vivo."
+  },
+  {
+   "designacao": "Ø125",
+   "d_nominal": 125,
+   "valores": {
+    "CD": 25,
+    "CB": 70,
+    "FL": 50,
+    "L": 30,
+    "MR": 25,
+    "UB": 130
+   },
+   "confirmado_por": 2,
+   "nota": "Garfo do catálogo de alumínio (colunas do pino, da folga interna, de FL, de MR e da largura UB); o olhal traseiro do catálogo Festo (SNCL) traz CD, EW (= CB), FL e MR iguais nas sete bitolas, que é a segunda conferência. L (espessura do olhal) vem só do catálogo Festo e UB só do de alumínio. Modelo simplificado: corpo quadrado UB, rasgo CB e furo do pino, ponta em canto vivo."
+  }
+ ]
+}

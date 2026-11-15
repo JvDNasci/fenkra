@@ -61,6 +61,8 @@ pub enum TipoFixador {
     FusoEsferas,
     /// terminal rotular macho (cabeça com esfera furada e haste roscada), dos braços da direção
     TerminalRotular,
+    /// fixação de cilindro pneumático (pé, flange, munhão, garfo traseiro), pelas medidas do catálogo
+    FixacaoCilindro,
 }
 
 /// Geradores de geometria nomeados. Uma família escolhe o gerador pelo nome (`"gerador"` no JSON);
@@ -82,6 +84,10 @@ pub const GERADORES: &[(&str, TipoFixador)] = &[
     ("porca_esferas", TipoFixador::PorcaEsferas),
     ("fuso_esferas", TipoFixador::FusoEsferas),
     ("terminal_rotular", TipoFixador::TerminalRotular),
+    ("fixacao_pe", TipoFixador::FixacaoCilindro),
+    ("fixacao_flange", TipoFixador::FixacaoCilindro),
+    ("fixacao_munhao", TipoFixador::FixacaoCilindro),
+    ("fixacao_garfo", TipoFixador::FixacaoCilindro),
     // geradores de forma própria sobre um tipo já existente: o tipo diz como a montagem usa a peça
     ("parafuso_escareado", TipoFixador::ParafusoAllen),
     ("parafuso_ombro", TipoFixador::ParafusoAllen),
@@ -98,6 +104,10 @@ pub fn campos_do_gerador(gerador: &str) -> &'static [&'static str] {
         // perfil quadrado com tirantes (ISO 15552) ou tubo redondo com olhal (ISO 6432)
         "cilindro_pneumatico" => &["TG", "WH", "B", "L8", "RT", "E"],
         "cilindro_redondo" => &["BE", "WF", "XC", "EW", "CD", "D"],
+        "fixacao_pe" => &["AB", "AH", "AT", "AU", "TR", "US"],
+        "fixacao_flange" => &["FB", "MF", "TF", "UF"],
+        "fixacao_munhao" => &["TD", "TK", "TL", "TM", "US"],
+        "fixacao_garfo" => &["CD", "CB", "FL", "L", "MR", "UB"],
         _ => &[],
     }
 }
@@ -119,6 +129,7 @@ impl TipoFixador {
             TipoFixador::PorcaEsferas => "Porca de esferas",
             TipoFixador::FusoEsferas => "Fuso de esferas",
             TipoFixador::TerminalRotular => "Terminal rotular",
+            TipoFixador::FixacaoCilindro => "Fixação de cilindro",
         }
     }
 
@@ -163,6 +174,8 @@ impl TipoFixador {
             TipoFixador::FusoEsferas => &["P"],
             // o furo da esfera e a rosca da haste são o diâmetro nominal do tamanho
             TipoFixador::TerminalRotular => &["dk", "C1", "dE", "B", "h", "dh", "l1"],
+            // as cotas vêm do gerador (pé, flange, munhão ou garfo)
+            TipoFixador::FixacaoCilindro => &[],
         }
     }
 }
@@ -596,6 +609,10 @@ const PUBLICA: &[(&str, &str)] = &[
     ("iso15552.json", include_str!("../../../biblioteca/pneumatica/iso15552.json")),
     ("iso6432.json", include_str!("../../../biblioteca/pneumatica/iso6432.json")),
     ("iso6432_mr3.json", include_str!("../../../biblioteca/pneumatica/iso6432_mr3.json")),
+    ("iso15552_pe.json", include_str!("../../../biblioteca/pneumatica/iso15552_pe.json")),
+    ("iso15552_flange.json", include_str!("../../../biblioteca/pneumatica/iso15552_flange.json")),
+    ("iso15552_munhao.json", include_str!("../../../biblioteca/pneumatica/iso15552_munhao.json")),
+    ("iso15552_garfo.json", include_str!("../../../biblioteca/pneumatica/iso15552_garfo.json")),
     ("hiwin_hgr.json", include_str!("../../../biblioteca/guias/hiwin_hgr.json")),
     ("hiwin_hgh.json", include_str!("../../../biblioteca/guias/hiwin_hgh.json")),
     ("din69051_porca.json", include_str!("../../../biblioteca/guias/din69051_porca.json")),
@@ -758,8 +775,8 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        // 42 e o terminal rotular ilustrativo (B397)
-        assert_eq!(b.familias.len(), 43);
+        // 42 + o terminal rotular ilustrativo (B397) + as quatro fixações de cilindro (B45)
+        assert_eq!(b.familias.len(), 47);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -1164,7 +1181,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 44);
+        assert_eq!(m.familias.len(), 48);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

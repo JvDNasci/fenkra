@@ -1,0 +1,161 @@
+{
+ "id": "iso15552_pe",
+ "nome": "Pé de fixação de cilindro ISO 15552 (MS1)",
+ "norma": "ISO 15552",
+ "revisao": "2018",
+ "versao": 1,
+ "gerador": "fixacao_pe",
+ "tipo": "fixacao_cilindro",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Festo, cilindros padrão DNC ISO 15552, catálogo 2014/01 (acessórios: dimensões das fixações)",
+   "url": "https://ftp.festo.com/Public/PNEUMATIC/SOFTWARE_SERVICE/Documentation/2014/EN/DNC_EN.PDF"
+  },
+  {
+   "rotulo": "Hydraulic Megastore, acessórios de fixação em alumínio para cilindros ISO 15552 (pé alto, garfo e olhal traseiros)",
+   "url": "https://www.hydraulicmegastore.com/wp-content/uploads/2019/10/ISO-15552-Mounting-Accessories-Aluminium.pdf"
+  }
+ ],
+ "campos": [
+  "AB",
+  "AH",
+  "AO",
+  "AT",
+  "AU",
+  "SA",
+  "TR",
+  "US",
+  "XA",
+  "XS"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "Ø32",
+   "d_nominal": 32,
+   "valores": {
+    "AB": 7,
+    "AH": 32,
+    "AO": 6.5,
+    "AT": 4,
+    "AU": 24,
+    "SA": 142,
+    "TR": 32,
+    "US": 45,
+    "XA": 144,
+    "XS": 45
+   },
+   "confirmado_por": 2,
+   "nota": "Pé de aço do catálogo Festo (HNC). Conferidos nos dois fabricantes: a altura do apoio ao eixo AH e a distância entre os furos TR (o par {AH, TR} aparece nas duas tabelas, a 1 mm). AB, AT, AU, US, AO, SA, XA e XS vêm só do catálogo Festo; o pé de alumínio da outra tabela tem furo e espessura próprios. Modelo simplificado: chapa de apoio, perna e dois furos."
+  },
+  {
+   "designacao": "Ø40",
+   "d_nominal": 40,
+   "valores": {
+    "AB": 10,
+    "AH": 36,
+    "AO": 9,
+    "AT": 4,
+    "AU": 28,
+    "SA": 161,
+    "TR": 36,
+    "US": 54,
+    "XA": 163,
+    "XS": 53
+   },
+   "confirmado_por": 2,
+   "nota": "Pé de aço do catálogo Festo (HNC). Conferidos nos dois fabricantes: a altura do apoio ao eixo AH e a distância entre os furos TR (o par {AH, TR} aparece nas duas tabelas, a 1 mm). AB, AT, AU, US, AO, SA, XA e XS vêm só do catálogo Festo; o pé de alumínio da outra tabela tem furo e espessura próprios. Modelo simplificado: chapa de apoio, perna e dois furos."
+  },
+  {
+   "designacao": "Ø50",
+   "d_nominal": 50,
+   "valores": {
+    "AB": 10,
+    "AH": 45,
+    "AO": 9.5,
+    "AT": 5,
+    "AU": 32,
+    "SA": 170,
+    "TR": 45,
+    "US": 64,
+    "XA": 175,
+    "XS": 62
+   },
+   "confirmado_por": 2,
+   "nota": "Pé de aço do catálogo Festo (HNC). Conferidos nos dois fabricantes: a altura do apoio ao eixo AH e a distância entre os furos TR (o par {AH, TR} aparece nas duas tabelas, a 1 mm). AB, AT, AU, US, AO, SA, XA e XS vêm só do catálogo Festo; o pé de alumínio da outra tabela tem furo e espessura próprios. Modelo simplificado: chapa de apoio, perna e dois furos."
+  },
+  {
+   "designacao": "Ø63",
+   "d_nominal": 63,
+   "valores": {
+    "AB": 10,
+    "AH": 50,
+    "AO": 12.5,
+    "AT": 5,
+    "AU": 32,
+    "SA": 185,
+    "TR": 50,
+    "US": 75,
+    "XA": 190,
+    "XS": 63
+   },
+   "confirmado_por": 2,
+   "nota": "Pé de aço do catálogo Festo (HNC). Conferidos nos dois fabricantes: a altura do apoio ao eixo AH e a distância entre os furos TR (o par {AH, TR} aparece nas duas tabelas, a 1 mm). AB, AT, AU, US, AO, SA, XA e XS vêm só do catálogo Festo; o pé de alumínio da outra tabela tem furo e espessura próprios. Modelo simplificado: chapa de apoio, perna e dois furos."
+  },
+  {
+   "designacao": "Ø80",
+   "d_nominal": 80,
+   "valores": {
+    "AB": 12,
+    "AH": 63,
+    "AO": 15,
+    "AT": 6,
+    "AU": 41,
+    "SA": 210,
+    "TR": 63,
+    "US": 93,
+    "XA": 215,
+    "XS": 81
+   },
+   "confirmado_por": 2,
+   "nota": "Pé de aço do catálogo Festo (HNC). Conferidos nos dois fabricantes: a altura do apoio ao eixo AH e a distância entre os furos TR (o par {AH, TR} aparece nas duas tabelas, a 1 mm). AB, AT, AU, US, AO, SA, XA e XS vêm só do catálogo Festo; o pé de alumínio da outra tabela tem furo e espessura próprios. Modelo simplificado: chapa de apoio, perna e dois furos."
+  },
+  {
+   "designacao": "Ø100",
+   "d_nominal": 100,
+   "valores": {
+    "AB": 14.5,
+    "AH": 71,
+    "AO": 17.5,
+    "AT": 6,
+    "AU": 41,
+    "SA": 220,
+    "TR": 75,
+    "US": 110,
+    "XA": 230,
+    "XS": 86
+   },
+   "confirmado_por": 2,
+   "nota": "Pé de aço do catálogo Festo (HNC). Conferidos nos dois fabricantes: a altura do apoio ao eixo AH e a distância entre os furos TR (o par {AH, TR} aparece nas duas tabelas, a 1 mm). AB, AT, AU, US, AO, SA, XA e XS vêm só do catálogo Festo; o pé de alumínio da outra tabela tem furo e espessura próprios. Modelo simplificado: chapa de apoio, perna e dois furos."
+  },
+  {
+   "designacao": "Ø125",
+   "d_nominal": 125,
+   "valores": {
+    "AB": 16.5,
+    "AH": 90,
+    "AO": 22,
+    "AT": 8,
+    "AU": 45,
+    "SA": 250,
+    "TR": 90,
+    "US": 131,
+    "XA": 270,
+    "XS": 102
+   },
+   "confirmado_por": 2,
+   "nota": "Pé de aço do catálogo Festo (HNC). Conferidos nos dois fabricantes: a altura do apoio ao eixo AH e a distância entre os furos TR (o par {AH, TR} aparece nas duas tabelas, a 1 mm). AB, AT, AU, US, AO, SA, XA e XS vêm só do catálogo Festo; o pé de alumínio da outra tabela tem furo e espessura próprios. Modelo simplificado: chapa de apoio, perna e dois furos."
+  }
+ ]
+}

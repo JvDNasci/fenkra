@@ -1,0 +1,149 @@
+{
+ "id": "iso15552_munhao",
+ "nome": "Flange com munhões de cilindro ISO 15552 (MT)",
+ "norma": "ISO 15552",
+ "revisao": "2018",
+ "versao": 1,
+ "gerador": "fixacao_munhao",
+ "tipo": "fixacao_cilindro",
+ "nivel": "B",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "Festo, cilindros padrão DNC ISO 15552, catálogo 2014/01 (acessórios: dimensões das fixações)",
+   "url": "https://ftp.festo.com/Public/PNEUMATIC/SOFTWARE_SERVICE/Documentation/2014/EN/DNC_EN.PDF"
+  }
+ ],
+ "campos": [
+  "C2",
+  "C3",
+  "TD",
+  "TK",
+  "TL",
+  "TM",
+  "US",
+  "XH",
+  "XL"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "Ø32",
+   "d_nominal": 32,
+   "valores": {
+    "C2": 71,
+    "C3": 86,
+    "TD": 12,
+    "TK": 16,
+    "TL": 12,
+    "TM": 50,
+    "US": 45,
+    "XH": 18,
+    "XL": 128
+   },
+   "confirmado_por": 1,
+   "nota": "Flange com munhões do catálogo Festo (ZNCF); fonte única (nível B). XL é o valor da versão básica (curso zero). Modelo simplificado: corpo TM x US x TK e dois munhões de diâmetro TD e comprimento TL; C2, C3, XH e XL ficam como dados."
+  },
+  {
+   "designacao": "Ø40",
+   "d_nominal": 40,
+   "valores": {
+    "C2": 87,
+    "C3": 105,
+    "TD": 16,
+    "TK": 20,
+    "TL": 16,
+    "TM": 63,
+    "US": 54,
+    "XH": 20,
+    "XL": 145
+   },
+   "confirmado_por": 1,
+   "nota": "Flange com munhões do catálogo Festo (ZNCF); fonte única (nível B). XL é o valor da versão básica (curso zero). Modelo simplificado: corpo TM x US x TK e dois munhões de diâmetro TD e comprimento TL; C2, C3, XH e XL ficam como dados."
+  },
+  {
+   "designacao": "Ø50",
+   "d_nominal": 50,
+   "valores": {
+    "C2": 99,
+    "C3": 117,
+    "TD": 16,
+    "TK": 24,
+    "TL": 16,
+    "TM": 75,
+    "US": 64,
+    "XH": 25,
+    "XL": 155
+   },
+   "confirmado_por": 1,
+   "nota": "Flange com munhões do catálogo Festo (ZNCF); fonte única (nível B). XL é o valor da versão básica (curso zero). Modelo simplificado: corpo TM x US x TK e dois munhões de diâmetro TD e comprimento TL; C2, C3, XH e XL ficam como dados."
+  },
+  {
+   "designacao": "Ø63",
+   "d_nominal": 63,
+   "valores": {
+    "C2": 116,
+    "C3": 136,
+    "TD": 20,
+    "TK": 24,
+    "TL": 20,
+    "TM": 90,
+    "US": 75,
+    "XH": 25,
+    "XL": 170
+   },
+   "confirmado_por": 1,
+   "nota": "Flange com munhões do catálogo Festo (ZNCF); fonte única (nível B). XL é o valor da versão básica (curso zero). Modelo simplificado: corpo TM x US x TK e dois munhões de diâmetro TD e comprimento TL; C2, C3, XH e XL ficam como dados."
+  },
+  {
+   "designacao": "Ø80",
+   "d_nominal": 80,
+   "valores": {
+    "C2": 136,
+    "C3": 156,
+    "TD": 20,
+    "TK": 28,
+    "TL": 20,
+    "TM": 110,
+    "US": 93,
+    "XH": 32,
+    "XL": 188
+   },
+   "confirmado_por": 1,
+   "nota": "Flange com munhões do catálogo Festo (ZNCF); fonte única (nível B). XL é o valor da versão básica (curso zero). Modelo simplificado: corpo TM x US x TK e dois munhões de diâmetro TD e comprimento TL; C2, C3, XH e XL ficam como dados."
+  },
+  {
+   "designacao": "Ø100",
+   "d_nominal": 100,
+   "valores": {
+    "C2": 164,
+    "C3": 189,
+    "TD": 25,
+    "TK": 38,
+    "TL": 25,
+    "TM": 132,
+    "US": 110,
+    "XH": 32,
+    "XL": 208
+   },
+   "confirmado_por": 1,
+   "nota": "Flange com munhões do catálogo Festo (ZNCF); fonte única (nível B). XL é o valor da versão básica (curso zero). Modelo simplificado: corpo TM x US x TK e dois munhões de diâmetro TD e comprimento TL; C2, C3, XH e XL ficam como dados."
+  },
+  {
+   "designacao": "Ø125",
+   "d_nominal": 125,
+   "valores": {
+    "C2": 192,
+    "C3": 217,
+    "TD": 25,
+    "TK": 50,
+    "TL": 25,
+    "TM": 160,
+    "US": 131,
+    "XH": 40,
+    "XL": 250
+   },
+   "confirmado_por": 1,
+   "nota": "Flange com munhões do catálogo Festo (ZNCF); fonte única (nível B). XL é o valor da versão básica (curso zero). Modelo simplificado: corpo TM x US x TK e dois munhões de diâmetro TD e comprimento TL; C2, C3, XH e XL ficam como dados."
+  }
+ ]
+}
