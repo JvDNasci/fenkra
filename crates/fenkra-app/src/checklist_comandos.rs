@@ -57,8 +57,19 @@ pub struct Linha {
     pub obs: String,
 }
 
+/// O código sem o módulo de testes do fim do arquivo. Um `#[cfg(test)] mod x;` solto no topo (declaração de
+/// arquivo de teste) não corta o resto: só conta o `#[cfg(test)]` seguido de `mod ... {`.
 fn codigo(f: &str) -> &str {
-    f.split("#[cfg(test)]").next().unwrap_or(f)
+    let mut pos = 0;
+    while let Some(i) = f[pos..].find("#[cfg(test)]") {
+        let ini = pos + i;
+        let resto = f[ini + "#[cfg(test)]".len()..].trim_start();
+        if resto.starts_with("mod ") && resto.lines().next().is_some_and(|l| l.contains('{')) {
+            return &f[..ini];
+        }
+        pos = ini + 1;
+    }
+    f
 }
 
 /// Funções de alça (as que chamam `ui.interact`) que não desenham pelo `EstadoAlca`: (arquivo, função).
