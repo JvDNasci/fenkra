@@ -11,7 +11,6 @@ use eframe::egui::{self, Color32, RichText};
 use fenkra_core::*;
 use fenkra_kernel::Mesh;
 use fenkra_solidos::RecomputeResult;
-use serde_json::Value;
 
 /// O tipo de coisa que o campo ativo espera.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -95,15 +94,6 @@ fn espera_do_sentinela(u: u64) -> Option<Espera> {
     })
 }
 
-fn sentinelas(v: &Value, out: &mut Vec<Espera>) {
-    match v {
-        Value::Number(n) => out.extend(n.as_u64().and_then(espera_do_sentinela)),
-        Value::Object(m) => m.values().for_each(|x| sentinelas(x, out)),
-        Value::Array(a) => a.iter().for_each(|x| sentinelas(x, out)),
-        _ => {}
-    }
-}
-
 /// O campo que o próximo clique no 3D preenche, ou `None` quando o comando tem tudo o que precisa.
 /// Quando falta mais de um, vale a ordem do comando (perfil, faces, arestas, eixo, plano…).
 pub fn campo_ativo(k: &FeatureKind) -> Option<Espera> {
@@ -132,11 +122,9 @@ pub fn campo_ativo(k: &FeatureKind) -> Option<Espera> {
     if proprio.is_some() {
         return proprio;
     }
-    let mut falta = vec![];
-    if let Ok(v) = serde_json::to_value(k) {
-        sentinelas(&v, &mut falta);
-    }
-    falta.into_iter().min_by_key(|e| e.prioridade())
+    // B466: na ordem da declaração (a do painel), para empatar igual ao preenchimento de `slots::fill`
+    let falta = crate::slots::vazios_em_ordem(k).into_iter().filter_map(espera_do_sentinela);
+    falta.min_by_key(|e| e.prioridade())
 }
 
 /// Quantos itens do campo de lista o comando já tem (faces da casca, arestas do filete…).

@@ -103,7 +103,117 @@ impl Cands {
     }
 }
 
-fn walk_fill(v: &mut Value, c: &mut Cands, changed: &mut bool) {
+/// B466: a forma do comando na ordem em que os campos foram declarados. O `serde_json::Value` guarda
+/// os objetos num mapa ordenado por nome (sem o recurso `preserve_order`), então percorrer o `Value`
+/// visita os campos em ordem alfabética: na varredura cônica `apex` vinha antes de `guide1`, e o
+/// primeiro clique caía na "Guia do ápice". A forma é lida do texto JSON, que o serde escreve na
+/// ordem da declaração, e diz em que ordem visitar as chaves do `Value`.
+#[derive(Debug, Default)]
+pub(crate) enum Forma {
+    #[default]
+    Folha,
+    Lista(Vec<Forma>),
+    Objeto(Vec<(String, Forma)>),
+}
+
+impl<'de> serde::Deserialize<'de> for Forma {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = Forma;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("JSON")
+            }
+            fn visit_bool<E>(self, _: bool) -> Result<Forma, E> {
+                Ok(Forma::Folha)
+            }
+            fn visit_i64<E>(self, _: i64) -> Result<Forma, E> {
+                Ok(Forma::Folha)
+            }
+            fn visit_u64<E>(self, _: u64) -> Result<Forma, E> {
+                Ok(Forma::Folha)
+            }
+            fn visit_f64<E>(self, _: f64) -> Result<Forma, E> {
+                Ok(Forma::Folha)
+            }
+            fn visit_str<E>(self, _: &str) -> Result<Forma, E> {
+                Ok(Forma::Folha)
+            }
+            fn visit_unit<E>(self) -> Result<Forma, E> {
+                Ok(Forma::Folha)
+            }
+            fn visit_none<E>(self) -> Result<Forma, E> {
+                Ok(Forma::Folha)
+            }
+            fn visit_some<D: serde::Deserializer<'de>>(self, d: D) -> Result<Forma, D::Error> {
+                serde::Deserialize::deserialize(d)
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(self, mut a: A) -> Result<Forma, A::Error> {
+                let mut v = vec![];
+                while let Some(x) = a.next_element()? {
+                    v.push(x);
+                }
+                Ok(Forma::Lista(v))
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(self, mut a: A) -> Result<Forma, A::Error> {
+                let mut v = vec![];
+                while let Some((k, x)) = a.next_entry::<String, Forma>()? {
+                    v.push((k, x));
+                }
+                Ok(Forma::Objeto(v))
+            }
+        }
+        d.deserialize_any(V)
+    }
+}
+
+impl Forma {
+    pub(crate) fn de<T: Serialize>(k: &T) -> Forma {
+        serde_json::to_string(k).ok().and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default()
+    }
+}
+
+/// Chaves do objeto `m` na ordem da forma (as que a forma não conhece vão no fim, em ordem de nome).
+fn chaves_em_ordem<'a>(m: &serde_json::Map<String, Value>, f: &'a Forma) -> Vec<(String, Option<&'a Forma>)> {
+    let mut out: Vec<(String, Option<&Forma>)> = match f {
+        Forma::Objeto(v) => v.iter().filter(|(k, _)| m.contains_key(k)).map(|(k, x)| (k.clone(), Some(x))).collect(),
+        _ => vec![],
+    };
+    for k in m.keys() {
+        if !out.iter().any(|(j, _)| j == k) {
+            out.push((k.clone(), None));
+        }
+    }
+    out
+}
+
+/// Sentinelas dos campos vazios na ordem da declaração (a do painel).
+pub fn vazios_em_ordem<T: Serialize>(k: &T) -> Vec<u64> {
+    fn walk(v: &Value, f: &Forma, out: &mut Vec<u64>) {
+        match v {
+            Value::Number(x) => out.extend(x.as_u64().filter(|u| is_unset(Id(*u)))),
+            Value::Object(m) => {
+                for (k, sub) in chaves_em_ordem(m, f) {
+                    walk(&m[&k], sub.unwrap_or(&Forma::Folha), out);
+                }
+            }
+            Value::Array(a) => {
+                let fs = if let Forma::Lista(l) = f { l.as_slice() } else { &[] };
+                for (i, x) in a.iter().enumerate() {
+                    walk(x, fs.get(i).unwrap_or(&Forma::Folha), out);
+                }
+            }
+            _ => {}
+        }
+    }
+    let mut out = vec![];
+    if let Ok(v) = serde_json::to_value(k) {
+        walk(&v, &Forma::de(k), &mut out);
+    }
+    out
+}
+
+fn walk_fill(v: &mut Value, f: &Forma, c: &mut Cands, changed: &mut bool) {
     let rep: Option<Value> = match v {
         // perfil: sketch; ou a curva do wireframe; ou o sketch da curva clicada
         Value::Number(x) if x.as_u64() == Some(UNSET_SKETCH.0) => c
@@ -147,8 +257,19 @@ fn walk_fill(v: &mut Value, c: &mut Cands, changed: &mut bool) {
         return;
     }
     match v {
-        Value::Object(m) => m.values_mut().for_each(|x| walk_fill(x, c, changed)),
-        Value::Array(a) => a.iter_mut().for_each(|x| walk_fill(x, c, changed)),
+        Value::Object(m) => {
+            for (k, sub) in chaves_em_ordem(m, f) {
+                if let Some(x) = m.get_mut(&k) {
+                    walk_fill(x, sub.unwrap_or(&Forma::Folha), c, changed);
+                }
+            }
+        }
+        Value::Array(a) => {
+            let fs = if let Forma::Lista(l) = f { l.as_slice() } else { &[] };
+            for (i, x) in a.iter_mut().enumerate() {
+                walk_fill(x, fs.get(i).unwrap_or(&Forma::Folha), c, changed);
+            }
+        }
         _ => {}
     }
 }
@@ -167,7 +288,7 @@ fn circle_axis(c: &CurveRef) -> Option<AxisRef> {
 pub fn fill<T: Serialize + DeserializeOwned>(k: &mut T, c: &mut Cands) -> bool {
     let Ok(mut v) = serde_json::to_value(&*k) else { return false };
     let mut changed = false;
-    walk_fill(&mut v, c, &mut changed);
+    walk_fill(&mut v, &Forma::de(&*k), c, &mut changed);
     if changed {
         if let Ok(n) = serde_json::from_value(v) {
             *k = n;

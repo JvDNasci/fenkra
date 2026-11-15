@@ -700,7 +700,11 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     let picked = app.picked_edges();
     let picked_faces = app.picked_faces();
     let session = app.session.as_ref().map(|s| (s.id, s.is_new));
-    let seed = app.seed(false);
+    let mut seed = app.seed(false);
+    // B466: a lista dos campos de curva oferece as curvas e arestas do modelo
+    if matches!(sel, Sel::Ref(_)) {
+        seed.modelo = std::sync::Arc::new(crate::curvas_modelo::lista(app));
+    }
     let ref_err = match sel {
         Sel::Ref(id) => match app.status_of(id) {
             Some(Status::Error(e)) => Some(e.clone()),

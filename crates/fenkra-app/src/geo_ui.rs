@@ -18,6 +18,49 @@ pub struct Seed {
     pub surface: Option<SurfRef>,
     /// B290: superfície dona de cada aresta clicada, para a concordância deduzir o apoio
     pub apoios: Vec<(CurveRef, SurfRef)>,
+    /// B466: curvas dos sketches e arestas dos corpos, para a lista ▾ dos campos de curva
+    pub modelo: std::sync::Arc<Vec<(String, CurveRef)>>,
+}
+
+/// B466: o campo vazio que o próximo clique no 3D preenche é o primeiro vazio na ordem do painel, que
+/// é a ordem da declaração (a mesma de `slots::fill`). O primeiro campo vazio desenhado no quadro
+/// fica marcado; os seguintes não. Devolve se este campo é o ativo.
+pub(crate) fn campo_ativo(ui: &egui::Ui, vazio: bool) -> bool {
+    if !vazio {
+        return false;
+    }
+    let chave = egui::Id::new("geo_campo_ativo");
+    let passo = ui.ctx().cumulative_pass_nr();
+    let ja = ui.ctx().data(|d| d.get_temp::<u64>(chave)) == Some(passo);
+    if !ja {
+        ui.ctx().data_mut(|d| d.insert_temp(chave, passo));
+    }
+    !ja
+}
+
+/// Rótulo do campo: o ativo vem marcado na cor do papel, com a dica do que clicar.
+fn rotulo_do_campo(ui: &mut egui::Ui, label: &str, ativo: bool, espera: crate::entradas::Espera) {
+    let txt = tr(label);
+    if ativo {
+        let cor = espera.cor();
+        ui.add_sized([96., 18.], egui::Label::new(RichText::new(format!("▶ {txt}")).strong().color(cor)).truncate())
+            .on_hover_text(format!("{}: {}", tr("Campo ativo"), tr(espera.dica())));
+    } else {
+        ui.add_sized([96., 18.], egui::Label::new(txt).truncate());
+    }
+}
+
+/// Largura da lista ▾ que deixa os botões ao lado dentro da coluna (`botoes` = quantos botões
+/// pequenos vêm depois dela).
+fn largura_da_lista(ui: &egui::Ui, botoes: usize) -> f32 {
+    (ui.available_width() - botoes as f32 * 30. - 4.).clamp(70., 150.)
+}
+
+/// A lista ▾ dentro de uma faixa da largura dada: a `ComboBox` trata `width` como mínimo e o texto
+/// cortado (`truncate`) só encolhe até a largura disponível, então sem a faixa a lista ocupava a linha
+/// toda e empurrava os botões para fora da coluna.
+fn na_faixa<R>(ui: &mut egui::Ui, largura: f32, f: impl FnOnce(&mut egui::Ui) -> R) -> R {
+    ui.allocate_ui(egui::vec2(largura, ui.spacing().interact_size.y), f).inner
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -699,15 +742,20 @@ fn pick_button(ui: &mut egui::Ui, enabled: bool, what: &str) -> bool {
 }
 
 pub(crate) fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, p: &mut PointRef, seed: &Seed) {
-    ui.scope(|ui| row(ui, label, |ui| {
-        egui::ComboBox::from_id_salt(salt).selected_text(point_name(doc, p)).width(150.).show_ui(ui, |ui| {
-            ui.selectable_value(p, PointRef::Origin, tr("Origem"));
-            for (id, n) in candidates(doc, RefClass::Point, me) {
-                ui.selectable_value(p, PointRef::Ref(id), n);
-            }
-            if !matches!(p, PointRef::Fixed(_)) && ui.selectable_label(false, tr("Coordenadas fixas…")).clicked() {
-                *p = PointRef::Fixed([0.; 3]);
-            }
+    let ativo = campo_ativo(ui, matches!(p, PointRef::Ref(id) if crate::slots::is_unset(*id)));
+    ui.scope(|ui| ui.horizontal(|ui| {
+        rotulo_do_campo(ui, label, ativo, crate::entradas::Espera::Ponto);
+        let w = largura_da_lista(ui, 1);
+        na_faixa(ui, w, |ui| {
+            egui::ComboBox::from_id_salt(salt).selected_text(point_name(doc, p)).width(w).truncate().show_ui(ui, |ui| {
+                ui.selectable_value(p, PointRef::Origin, tr("Origem"));
+                for (id, n) in candidates(doc, RefClass::Point, me) {
+                    ui.selectable_value(p, PointRef::Ref(id), n);
+                }
+                if !matches!(p, PointRef::Fixed(_)) && ui.selectable_label(false, tr("Coordenadas fixas…")).clicked() {
+                    *p = PointRef::Fixed([0.; 3]);
+                }
+            });
         });
         if pick_button(ui, !seed.points.is_empty(), "um vértice ou ponto") {
             *p = *seed.points.last().unwrap();
@@ -736,17 +784,36 @@ pub(crate) fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docum
 }
 
 pub(crate) fn curve_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, c: &mut CurveRef, seed: &Seed) {
-    ui.scope(|ui| row(ui, label, |ui| {
-        egui::ComboBox::from_id_salt(salt).selected_text(curve_name(doc, c)).width(150.).show_ui(ui, |ui| {
-            for a in [OriginAxis::X, OriginAxis::Y, OriginAxis::Z] {
-                ui.selectable_value(c, CurveRef::Axis(a), format!("Origem · eixo {a:?}"));
-            }
-            for (id, n) in candidates(doc, RefClass::Curve, me) {
-                ui.selectable_value(c, CurveRef::Ref(id), n);
-            }
+    let vazio = matches!(c, CurveRef::Ref(id) if crate::slots::is_unset(*id));
+    let ativo = campo_ativo(ui, vazio);
+    ui.scope(|ui| ui.horizontal(|ui| {
+        rotulo_do_campo(ui, label, ativo, crate::entradas::Espera::Curva);
+        // B466: aresta ou curva escolhida aparece com o rótulo da lista, não como "Aresta do modelo"
+        let nome = seed.modelo.iter().find(|(_, x)| x == c).map(|(n, _)| n.clone()).unwrap_or_else(|| curve_name(doc, c));
+        let w = largura_da_lista(ui, if vazio { 1 } else { 2 });
+        let deps = doc.dependents(me);
+        na_faixa(ui, w, |ui| {
+            egui::ComboBox::from_id_salt(salt).selected_text(nome).width(w).truncate().show_ui(ui, |ui| {
+                for a in [OriginAxis::X, OriginAxis::Y, OriginAxis::Z] {
+                    ui.selectable_value(c, CurveRef::Axis(a), format!("Origem · eixo {a:?}"));
+                }
+                for (id, n) in candidates(doc, RefClass::Curve, me) {
+                    ui.selectable_value(c, CurveRef::Ref(id), n);
+                }
+                for (n, x) in seed.modelo.iter() {
+                    if matches!(x, CurveRef::SketchCurve { sketch, .. } if *sketch == me || deps.contains(sketch)) {
+                        continue;
+                    }
+                    ui.selectable_value(c, x.clone(), n);
+                }
+            });
         });
         if pick_button(ui, !seed.curves.is_empty(), "uma aresta ou curva") {
             *c = seed.curves.last().unwrap().clone();
+        }
+        // esvaziar o campo devolve a ele o próximo clique no 3D
+        if !vazio && ui.small_button("✖").on_hover_text(tr("Esvaziar o campo: o próximo clique no 3D vem para cá.")).clicked() {
+            *c = crate::slots::curve();
         }
     }))
     .response
@@ -778,21 +845,26 @@ pub(crate) fn axis_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
         AxisRef::Edge { .. } => tr("Aresta do modelo").into(),
         AxisRef::Planes { .. } => tr("Interseção de planos").into(),
     };
-    ui.scope(|ui| row(ui, label, |ui| {
-        egui::ComboBox::from_id_salt(salt).selected_text(name).width(150.).show_ui(ui, |ui| {
-            for x in [OriginAxis::X, OriginAxis::Y, OriginAxis::Z] {
-                ui.selectable_value(a, AxisRef::Origin(x), format!("Origem · eixo {x:?}"));
-            }
-            for (id, n) in candidates(doc, RefClass::Curve, me) {
-                ui.selectable_value(a, AxisRef::Ref(id), n);
-            }
-            for f in &doc.features {
-                if let FeatureKind::Sketch(s) = &f.kind {
-                    for e in s.data.curves.iter().filter(|e| matches!(e.geom, fenkra_core::sketch::Curve::Line { .. })) {
-                        ui.selectable_value(a, AxisRef::SketchLine { sketch: f.id, entity: e.id }, format!("{} · linha #{}", f.name, e.id.0));
+    let ativo = campo_ativo(ui, matches!(a, AxisRef::Ref(id) if crate::slots::is_unset(*id)));
+    ui.scope(|ui| ui.horizontal(|ui| {
+        rotulo_do_campo(ui, label, ativo, crate::entradas::Espera::Eixo);
+        let w = largura_da_lista(ui, 1);
+        na_faixa(ui, w, |ui| {
+            egui::ComboBox::from_id_salt(salt).selected_text(name).width(w).truncate().show_ui(ui, |ui| {
+                for x in [OriginAxis::X, OriginAxis::Y, OriginAxis::Z] {
+                    ui.selectable_value(a, AxisRef::Origin(x), format!("Origem · eixo {x:?}"));
+                }
+                for (id, n) in candidates(doc, RefClass::Curve, me) {
+                    ui.selectable_value(a, AxisRef::Ref(id), n);
+                }
+                for f in &doc.features {
+                    if let FeatureKind::Sketch(s) = &f.kind {
+                        for e in s.data.curves.iter().filter(|e| matches!(e.geom, fenkra_core::sketch::Curve::Line { .. })) {
+                            ui.selectable_value(a, AxisRef::SketchLine { sketch: f.id, entity: e.id }, format!("{} · linha #{}", f.name, e.id.0));
+                        }
                     }
                 }
-            }
+            });
         });
         if pick_button(ui, !seed.curves.is_empty(), "uma aresta ou linha") {
             *a = axis_of(seed.curves.last().unwrap());
@@ -822,25 +894,30 @@ fn plane_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id
 }
 
 pub(crate) fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, s: &mut SurfRef, seed: &Seed) {
-    ui.scope(|ui| row(ui, label, |ui| {
+    let ativo = campo_ativo(ui, matches!(s, SurfRef::Ref(id) if crate::slots::is_unset(*id)));
+    ui.scope(|ui| ui.horizontal(|ui| {
+        rotulo_do_campo(ui, label, ativo, crate::entradas::Espera::Superficie);
         let none = PlaneRef::Datum(Id(u64::MAX));
         let mut pl = match s {
             SurfRef::Plane(p) => *p,
             _ => none,
         };
         let mut sref: Option<Id> = None;
-        egui::ComboBox::from_id_salt(salt).selected_text(surf_name(doc, s)).width(150.).show_ui(ui, |ui| {
-            for o in [OriginPlane::XY, OriginPlane::XZ, OriginPlane::YZ] {
-                ui.selectable_value(&mut pl, PlaneRef::Origin(o), plane_ref_name(doc, &PlaneRef::Origin(o)));
-            }
-            for (id, n) in candidates(doc, RefClass::Plane, me) {
-                ui.selectable_value(&mut pl, PlaneRef::Datum(id), n);
-            }
-            for (id, n) in candidates(doc, RefClass::Surface, me) {
-                if ui.selectable_label(*s == SurfRef::Ref(id), format!("◫ {n}")).clicked() {
-                    sref = Some(id);
+        let w = largura_da_lista(ui, 1);
+        na_faixa(ui, w, |ui| {
+            egui::ComboBox::from_id_salt(salt).selected_text(surf_name(doc, s)).width(w).truncate().show_ui(ui, |ui| {
+                for o in [OriginPlane::XY, OriginPlane::XZ, OriginPlane::YZ] {
+                    ui.selectable_value(&mut pl, PlaneRef::Origin(o), plane_ref_name(doc, &PlaneRef::Origin(o)));
                 }
-            }
+                for (id, n) in candidates(doc, RefClass::Plane, me) {
+                    ui.selectable_value(&mut pl, PlaneRef::Datum(id), n);
+                }
+                for (id, n) in candidates(doc, RefClass::Surface, me) {
+                    if ui.selectable_label(*s == SurfRef::Ref(id), format!("◫ {n}")).clicked() {
+                        sref = Some(id);
+                    }
+                }
+            });
         });
         if let Some(id) = sref {
             *s = SurfRef::Ref(id);

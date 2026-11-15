@@ -208,6 +208,8 @@ mod chapa_fab_ui;
 mod chapa_anim_ui;
 mod textos_chapa_fab;
 mod textos_b40;
+mod textos_r3b;
+mod curvas_modelo;
 mod st_alcas;
 mod st_esqueleto;
 mod st_secao;

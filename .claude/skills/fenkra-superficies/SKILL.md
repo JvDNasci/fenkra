@@ -40,6 +40,9 @@ Consulte solidos, kernel quando a mudança atravessar a fronteira da área.
 
 Registre aqui erros que se repetiram.
 
+- Ordem dos campos vazios: `serde_json::Value` guarda objetos em ordem alfabética (sem `preserve_order`). Percorrer o `Value` para achar o próximo campo inverte campos do mesmo tipo (`apex` antes de `guide1`, B466). Use `slots::fill` / `slots::vazios_em_ordem`, que seguem a ordem da declaração.
+- `ComboBox::width` é largura mínima e `truncate` só corta até a largura disponível: para caber na coluna com botões ao lado, ponha a lista numa faixa (`allocate_ui`), como `geo_ui::na_faixa`.
+
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.
