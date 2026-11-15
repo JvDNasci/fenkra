@@ -225,6 +225,7 @@ pub mod bridge {
 
         /// kind: 0 translação (dx,dy,dz), 1 rotação (o, d, graus), 2 espelho (o, normal), 3 escala (o, fator)
         fn transform_shape(s: &Shape, kind: u8, p: &[f64]) -> Result<UniquePtr<Shape>>;
+        fn move_shape(s: &Shape, kind: u8, p: &[f64]) -> Result<UniquePtr<Shape>>;
         fn transform_t(s: &Shape, kind: u8, p: &[f64], tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         /// Varre o perfil (face) ao longo da polilinha `spine` (xyz…); modo 0 Frenet corrigido, 1 fixo, 2 Frenet.
         fn sweep_tool(face: &Shape, spine: &[f64], mode: u8) -> Result<UniquePtr<Shape>>;

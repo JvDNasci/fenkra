@@ -454,9 +454,11 @@ pub fn posicionado(sh: Shape, p: &Placement) -> Option<Shape> {
         } else {
             unit([r[1][2] - r[2][1], r[2][0] - r[0][2], r[0][1] - r[1][0]])
         };
-        out = out.transformed(Xform::Rotate([0.; 3], axis, ang.to_degrees())).ok()?;
+        out = out.moved(Xform::Rotate([0.; 3], axis, ang.to_degrees())).ok()?;
     }
-    out.transformed(Xform::Translate(p.origin)).ok()
+    // B393: só soma a posição, sem copiar a geometria: as instâncias de uma peça repetida dividem a
+    // malha e a projeção de cada vista não refaz o que a outra cópia já fez
+    out.moved(Xform::Translate(p.origin)).ok()
 }
 
 /// Interferências: pares de componentes cujo volume comum passa de `tol` (mm³).

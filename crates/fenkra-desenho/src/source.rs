@@ -459,7 +459,9 @@ impl Models {
         for (r, ped, _, _) in f.receber() {
             let fonte = r.fonte.clone();
             f.arquivos.insert(r.fonte, r.arquivos);
-            f.extras.insert(fonte.clone(), (r.volume, r.nomes));
+            // a prévia chega sem volume: não apaga o que já se mediu
+            let volume = if r.volume == 0. { f.extras.get(&fonte).map_or(0., |e| e.0) } else { r.volume };
+            f.extras.insert(fonte.clone(), (volume, r.nomes));
             // a leitura leve guardada não tinha os nomes das peças nem os arquivos
             self.loaded.remove(&fonte);
             // a chave final conta os arquivos que a thread acabou de ler
@@ -785,11 +787,20 @@ impl Models {
             proj.previa = l.previa && proj.error.is_none() && !veio_do_disco;
             let fonte = self.fonte_de(&p.vista.source);
             let guardado = self.volumes.get(&fonte).copied();
+            let t_vol = std::time::Instant::now();
+            // B393: a prévia não espera pelo volume (segundos no conjunto de peças com superfície livre);
+            // ele vem junto da exata, e só os campos da legenda dependem dele
+            let sem_volume = l.previa && guardado.is_none();
             let (arquivos, volume, nomes) = {
                 let ld = self.load(&p.vista.source);
-                (ld.files.clone(), guardado.unwrap_or_else(|| ld.shape.as_ref().map_or(0., |s| s.mass().volume)), ld.piece_names.clone())
+                (ld.files.clone(), if sem_volume { 0. } else { guardado.unwrap_or_else(|| ld.shape.as_ref().map_or(0., |s| s.mass().volume)) }, ld.piece_names.clone())
             };
-            self.volumes.insert(fonte.clone(), volume);
+            if medir && guardado.is_none() && !sem_volume {
+                eprintln!("[desenho] volume da forma: {:?}", t_vol.elapsed());
+            }
+            if !sem_volume {
+                self.volumes.insert(fonte.clone(), volume);
+            }
             out.push(crate::fundo::Resposta { id: p.id, proj, fonte, arquivos, volume, nomes });
         }
         Some(out)

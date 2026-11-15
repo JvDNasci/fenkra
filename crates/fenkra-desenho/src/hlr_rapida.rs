@@ -158,7 +158,7 @@ fn silhuetas(m: &Mesh, toward: [f64; 3]) -> Vec<[usize; 2]> {
     let ntri = m.indices.len() / 3;
     let mut out = vec![];
     let nf = m.face_ranges.len();
-    let mut canon: HashMap<[i64; 3], usize> = HashMap::new();
+    let mut canon: HashMap<[i64; 4], usize> = HashMap::new();
     let mut lados: HashMap<(usize, usize), bool> = HashMap::new();
     for f in 0..nf {
         // face plana não tem silhueta
@@ -185,12 +185,13 @@ fn silhuetas(m: &Mesh, toward: [f64; 3]) -> Vec<[usize; 2]> {
             // superfície livre: posição em milésimos de mm, o mesmo ponto em dois retalhos cai na mesma
             // chave; face analítica (furo, filete) fica com os próprios vértices, a silhueta é dela
             let livre = m.face_info.get(f).is_some_and(|x| x.kind == 5);
+            // Face analítica: a mesma chave, mas só dentro da própria face. A costura de um cilindro
+            // (a linha onde o parâmetro fecha a volta) tem os nós duplicados na malha, e sem casá-los
+            // a silhueta que cai sobre ela some: o eixo visto de frente perdia um dos contornos.
             let mut id = |k: usize| {
-                if !livre {
-                    return i[k] as usize;
-                }
                 let q = p(k).map(|x| (x * 1000.).round() as i64);
-                *canon.entry(q).or_insert(i[k] as usize)
+                let chave = [q[0], q[1], q[2], if livre { -1 } else { f as i64 }];
+                *canon.entry(chave).or_insert(i[k] as usize)
             };
             let v = [id(0), id(1), id(2)];
             for (x, y) in [(v[0], v[1]), (v[1], v[2]), (v[2], v[0])] {
