@@ -962,7 +962,7 @@
    "tokens_k": 200,
    "teste": "Auto",
    "area": "Superfícies e wireframe",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.2
   },
   {
@@ -7721,7 +7721,7 @@
    "tokens_k": 60,
    "teste": "Auto",
    "area": "Kernel",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   }
  ]

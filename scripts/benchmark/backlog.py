@@ -93,7 +93,7 @@ c('B37', 3, 'P1', 'Estrutural: entalhe, cordões, barras', "Acrescentar a intera
 c('B38', 3, 'P2', 'PMI: consultor de tolerância', "As mensagens do consultor aparecem também como etiqueta junto à anotação afetada, com realce do alvo ao passar o cursor e botão de correção de um clique quando houver (por exemplo, trocar o modificador inválido). Aceite: cada regra tem texto de ação ('o que fazer'), não só de diagnóstico, e o clique na etiqueta enquadra a anotação.", ['BM-PMI-01'], ['PMI-05'], 120, 'Auto', 'PMI 3D', status='feito'),
 c('B39', 3, 'P1', 'API Python', 'Incluir, como consumidor desta CLI, o servidor MCP do Fenkra (item novo): a CLI precisa de comandos de consulta de topologia (listar faces, cilindros, planos, caixa envolvente) e de saída JSON estável para o agente. Sem execução de código arbitrário.', ['BM-GER-01'], ['GER-07'], 250, 'Auto', 'Geral', status='feito'),
 c('B40', 3, 'P3', 'Herdados: varredura cônica, subdivisão, dobra cega', 'Varredura cônica/adaptativa com várias guias e G2 exato; formas por subdivisão; dobra cega e cônica, cortes flangeados, alívios aeronáuticos.',
-  ['histórico'], [], 200, 'Auto', 'Superfícies e wireframe'),
+  ['histórico'], [], 200, 'Auto', 'Superfícies e wireframe', status='em andamento'),
 c('B41', 1, 'P1', 'Teste com o mouse (usuário)', 'Pendências antigas que dependem do usuário: desenho por mouse, cotagem smart, menu rápido, arrastar na árvore, manipulador, bancadas.',
   ['histórico'], [], 0, 'Manual', 'Geral', status='em andamento'),
 # ---------------------------------------------------------------- lacunas restantes do catálogo
@@ -944,7 +944,7 @@ c('B462', 3, 'P1', 'Clique que insere fixador também seleciona a face e abre o 
 c('B463', 3, 'P1', 'Abas de documentos com o mesmo nome', "Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): duas abas mostram o mesmo nome 'Placa de exemplo'; diferenciar pelo arquivo ou numerar.",
   ['USR-MOUSE'], [], 40, 'Auto + Manual', 'Interface', status='feito'),
 c('B464', 3, 'P1', 'Kernel: Deslocar face falha em peça com boss e filete por histórico', "Achado do B60 (14/11): Deslocar face falha com 'não deixou um sólido fechado' numa peça com boss e filete feitos por histórico; a mesma peça vinda de STEP passa. Reproduzir em teste, achar a causa no kernel (provável tolerância ou costura de faces do histórico) e corrigir.",
-  ['USR-CHECK'], [], 60, 'Auto', 'Kernel'),
+  ['USR-CHECK'], [], 60, 'Auto', 'Kernel', status='feito'),
 ]
 def main():
     for x in B:
