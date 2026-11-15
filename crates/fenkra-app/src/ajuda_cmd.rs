@@ -274,7 +274,8 @@ impl Busca {
                     self.sel = 0;
                 }
                 if achados.is_empty() && !self.texto.trim().is_empty() {
-                    ui.label(RichText::new(tr("Nenhum comando encontrado.")).weak());
+                    // B314: no tema Fênix a pluma acompanha o estado vazio
+                    crate::arabesco::vazio_com_texto(ui, RichText::new(tr("Nenhum comando encontrado.")).weak());
                 }
                 for (n, i) in achados.iter().enumerate() {
                     let linha = ui.horizontal(|ui| {

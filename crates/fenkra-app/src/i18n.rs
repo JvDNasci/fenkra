@@ -663,6 +663,7 @@ static TABLE: &[(&str, &str)] = &[
     ("Cianotipia Petróleo", "Teal Cyanotype"),
     ("Cianotipia Noturna", "Night Cyanotype"),
     ("Cianotipia Sépia", "Sepia Cyanotype"),
+    ("Fênix", "Phoenix"),
     ("Esfera", "Sphere"),
     ("Espaçamento", "Spacing"),
     ("Espaçamento 2", "Spacing 2"),
