@@ -5,7 +5,7 @@
 //! `docs/modulos/ida-e-volta.md` sai daqui; `FENKRA_ATUALIZAR_IDA_E_VOLTA=1` regrava.
 
 use fenkra_conversor::folha::{abrir_como_desenho, caixa};
-use fenkra_conversor::{detectar, Destino, Formato, InstanciaNeutra, ModeloNeutro, OpcoesExportar, OpcoesImportar, ProdutoNeutro, Registro};
+use fenkra_conversor::{detectar, Destino, Formato, InstanciaNeutra, ModeloNeutro, OpcoesExportar, OpcoesImportar, ProdutoNeutro, Provedor, Registro};
 use fenkra_core::sketch::{Curve, SketchData};
 use fenkra_core::{Document, FeatureKind, Id, OriginPlane, PlaneRef, Sketch};
 use fenkra_desenho::esboco::DonoEsboco;
@@ -206,16 +206,75 @@ fn ifc_perfis(dir: &Path) -> Linha {
     Linha { formato: "IFC", caminho: "extrusão de perfil de aço (ler)", ida: solidos(2, 0, v, caixa), volta: solidos(r.solidos, r.nao_fecharam.len(), r.volume, m), estado: "igual" }
 }
 
+/// Medida de um modelo 3D com camadas e cores: sólidos, abertos, volume preciso dos sólidos, caixa de tudo,
+/// caminhos das camadas e número de cores.
+type Medida3d = (u32, usize, f64, [f64; 3], Vec<String>, usize);
+
+fn medir_3d(m: &ModeloNeutro) -> Medida3d {
+    let (mut sol, mut fora, mut v) = (0, 0, 0.);
+    let (mut lo, mut hi) = ([f64::MAX; 3], [f64::MIN; 3]);
+    let (mut camadas, mut cores) = (vec![], vec![]);
+    for p in &m.xde.produtos {
+        let Some(f) = p.forma.as_ref() else { continue };
+        if f.is_solid() {
+            sol += 1;
+            v += f.volume_preciso();
+        } else {
+            fora += 1;
+        }
+        let (a, b) = f.bbox().unwrap();
+        for k in 0..3 {
+            lo[k] = lo[k].min(a[k]);
+            hi[k] = hi[k].max(b[k]);
+        }
+        camadas.extend(p.camadas.iter().cloned());
+        if let Some(c) = p.cor {
+            let c = [0, 1, 2].map(|k| (c[k] * 255.).round() as u8);
+            if !cores.contains(&c) {
+                cores.push(c);
+            }
+        }
+    }
+    camadas.sort();
+    (sol, fora, v, [0, 1, 2].map(|k| hi[k] - lo[k]), camadas, cores.len())
+}
+
+/// Placa 80 × 40 × 10 com furo de 12 mm na camada "Chapas > Corte" e superfície ondulada na camada
+/// "Superfícies", com cores diferentes: grava em 3DM pelo openNURBS e lê de volta.
+fn tresdm_peca(dir: &Path) -> Option<Linha> {
+    use fenkra_kernel::{Bool, HoleShape};
+    if !fenkra_3dm::disponivel() {
+        return None;
+    }
+    let placa = Shape::box_tool([0., 0., 0.], [1., 0., 0.], [0., 0., 1.], [80., 40., 10.]).unwrap();
+    let furo = Shape::hole_tool([20., 20., 10.], [0., 0., -1.], 12., 10., HoleShape::Simple).unwrap();
+    let linhas: Vec<Vec<[f64; 3]>> = (0..5).map(|i| (0..4).map(|j| [100. + 10. * i as f64, 10. * j as f64, if (i + j) % 2 == 0 { 0. } else { 4. }]).collect()).collect();
+    let chapa = ProdutoNeutro { nome: "Chapa".into(), forma: Some(placa.boolean(&furo, Bool::Cut).unwrap()), cor: Some([0.8, 0.2, 0.2, 1.]), camadas: vec!["Chapas > Corte".into()], ..Default::default() };
+    let onda = ProdutoNeutro { nome: "Onda".into(), forma: Some(Shape::grid_surface(&linhas).unwrap()), cor: Some([0.2, 0.4, 1., 1.]), camadas: vec!["Superfícies".into()], ..Default::default() };
+    let filhos = vec![InstanciaNeutra { produto: 0, nome: "Chapa".into(), local: IDENTIDADE, cor: None }, InstanciaNeutra { produto: 1, nome: "Onda".into(), local: IDENTIDADE, cor: None }];
+    let topo = ProdutoNeutro { nome: "Prova".into(), filhos, ..Default::default() };
+    let modelo = ModeloNeutro { formato: Formato::Step, xde: ModeloXde { produtos: vec![chapa, onda, topo], raizes: vec![2], ..Default::default() } };
+    let a = dir.join("prova ç.3dm");
+    Registro::default().gravar(&modelo, &a, &OpcoesExportar::default()).unwrap();
+    let lido = fenkra_conversor::Provedor3dm.ler(Formato::Tresdm, &a, &OpcoesImportar::default()).unwrap();
+    let (ida, volta) = (medir_3d(&modelo), medir_3d(&lido));
+    assert_eq!((volta.0, volta.1), (ida.0, ida.1), "3DM: sólidos e abertos");
+    assert!((volta.2 - ida.2).abs() < 1e-6 * ida.2, "3DM: volume {} contra {}", volta.2, ida.2);
+    assert!((0..3).all(|k| (volta.3[k] - ida.3[k]).abs() < 1e-4), "3DM: caixa {:?} contra {:?}", volta.3, ida.3);
+    assert_eq!((&volta.4, volta.5), (&ida.4, ida.5), "3DM: camadas e cores");
+    let fmt = |m: &Medida3d| format!("{}; camadas {}; {} cores", solidos(m.0, m.1, m.2, m.3), m.4.join(" e "), m.5);
+    Some(Linha { formato: "3DM", caminho: "peça com camadas (gravar e ler)", ida: fmt(&ida), volta: fmt(&volta), estado: "igual" })
+}
+
 fn relatorio() -> String {
     let dir = pasta("relatorio");
     let mut linhas = vec![esboco(&dir, Formato::Dxf), esboco(&dir, Formato::Svg), na_folha(&dir, Formato::Dxf), na_folha(&dir, Formato::Svg), ifc_obra(&dir), ifc_perfis(&dir)];
 
-    // 3DM: o arquivo é reconhecido e a resposta diz o que fazer, em vez de "formato desconhecido"
-    let e = detectar(Path::new("casco.3dm"), b"3D Geometry File Format        8\0\0").unwrap_err().to_string();
-    assert!(e.contains("openNURBS") && e.contains("STEP"), "{e}");
+    // 3DM: reconhecido pelo cabeçalho, mesmo com outra extensão
+    assert_eq!(detectar(Path::new("casco.bin"), b"3D Geometry File Format        8\0\0").unwrap().0, Formato::Tresdm);
     let fora = |formato, caminho, motivo: &str| Linha { formato, caminho, ida: "–".into(), volta: motivo.into(), estado: "fora" };
     linhas.push(Linha { formato: "DWG", caminho: "esboço e folha", ida: "DXF R2000 pelo dxf2dwg".into(), volta: "DXF pelo dwg2dxf".into(), estado: "com o LibreDWG instalado" });
-    linhas.push(fora("3DM", "peça", "reconhecido pelo cabeçalho; a leitura das NURBS depende da ponte com o openNURBS (ADR 0090)"));
+    linhas.push(tresdm_peca(&dir).unwrap_or_else(|| fora("3DM", "peça com camadas (gravar e ler)", "compilado sem o openNURBS (scripts/baixar_opennurbs.py)")));
     linhas.push(fora("PDF 3D", "peça", "sem biblioteca aberta de PRC com licença compatível (ADR 0055)"));
     linhas.push(fora("STEP em XML", "peça", "o OpenCASCADE 8.0.1 não traz a parte 28 (ADR 0055)"));
 
@@ -224,7 +283,8 @@ fn relatorio() -> String {
 > montado em código, lê de volta e compara. No 2D: curvas, textos e extensão em milímetros. No 3D: sólidos,\n\
 > volume e caixa. Para regravar: `FENKRA_ATUALIZAR_IDA_E_VOLTA=1 cargo test -p fenkra-conversor --test ida_e_volta`.\n\
 > O DWG não entra na conta porque depende do LibreDWG instalado à parte; o encanamento é conferido em\n\
-> `tests/dwg.rs` com um programa falso, e com o de verdade quando ele existe.\n\n\
+> `tests/dwg.rs` com um programa falso, e com o de verdade quando ele existe. O 3DM pede o openNURBS baixado por\n\
+> `scripts/baixar_opennurbs.py`; o volume dele é o da integração adaptativa (`Shape::volume_preciso`).\n\n\
 | Formato | Caminho | Ida | Volta | Resultado |\n|---|---|---|---|---|\n",
     );
     for l in &linhas {
@@ -237,6 +297,11 @@ fn relatorio() -> String {
 #[test]
 fn cada_formato_vai_e_volta_e_o_relatorio_publicado_sai_daqui() {
     let gerado = relatorio();
+    // sem o openNURBS a linha do 3DM sai diferente: as outras foram conferidas, a página publicada não
+    if !fenkra_3dm::disponivel() {
+        eprintln!("3DM IGNORADO: compilado sem o openNURBS; a página publicada não foi comparada");
+        return;
+    }
     let caminho = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../docs/modulos/ida-e-volta.md");
     if std::env::var("FENKRA_ATUALIZAR_IDA_E_VOLTA").is_ok() {
         std::fs::write(&caminho, &gerado).unwrap();

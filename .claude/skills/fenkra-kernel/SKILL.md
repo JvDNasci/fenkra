@@ -48,6 +48,10 @@ Registre aqui erros que se repetiram.
   SOLID (`MakeSolid` testa `myShape.ShapeType()`); com o COMPOUND que a booleana devolve, sai casca solta.
   Corpo vindo de STEP chega como SOLID e escondia o problema. Desloque sólido por sólido (`face_offset_t`, B464).
   Antes de culpar tolerância quando "histórico falha e STEP passa", compare o tipo do contêiner.
+- `BRepGProp::VolumeProperties` sem `eps` usa pontos de Gauss fixos e erra na quarta casa em face aparada por curva
+  NURBS racional (furo vindo de 3DM: 1130,84 em vez de 1130,97), com a geometria certa. Antes de culpar a
+  tradução, compare a malha fina ou use `Shape::volume_preciso` (B211). E não converta cilindro, cone, esfera e toro
+  para NURBS sem precisar: a forma racional tem outro parâmetro e o volume medido nela erra 1 %.
 - `posicionado` (montagem) copia a forma sem a malha: quem tessela a peça posicionada refaz a malha inteira a cada
   vez. Use a malha da vista quando ela basta, ou tessele em threads (B394).
 

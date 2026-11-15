@@ -1741,3 +1741,4 @@ rust::String occt_version() { return rust::String(OCC_VERSION_COMPLETE); }
 #include "drawing.inc"
 #include "xde.inc"
 #include "xde_pmi.inc"
+#include "nurbs.inc"

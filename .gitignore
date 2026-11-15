@@ -49,3 +49,6 @@ tools/*/target/
 .claude/settings.local.json
 ErrorReports/
 plot.log
+
+# openNURBS baixado por scripts/baixar_opennurbs.py (ADR 0090)
+/third_party/opennurbs/

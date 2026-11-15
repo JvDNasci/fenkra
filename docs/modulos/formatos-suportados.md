@@ -8,6 +8,7 @@
 | STEP | step, stp | sim | sim | sim | – | sim | sim | sim | sim | – | sim | OpenCASCADE |
 | IGES | igs, iges | sim | sim | sim | – | sim | – | – | – | – | sim | OpenCASCADE |
 | BREP | brep | sim | sim | sim | – | – | – | – | – | – | – | OpenCASCADE |
+| 3DM | 3dm | sim | sim | sim | – | sim | sim | – | – | – | sim | openNURBS |
 | DXF | dxf | sim | sim | sim | – | – | sim | – | – | – | sim | Fenkra |
 | SVG | svg | sim | sim | sim | – | – | sim | – | – | – | sim | Fenkra |
 | DWG | dwg | sim | sim | sim | – | – | sim | – | – | – | sim | LibreDWG (externo) |
