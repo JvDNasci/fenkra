@@ -11,9 +11,9 @@ use fenkra_core::sketch::Curve;
 use fenkra_core::*;
 
 /// Nomes dos casos deste módulo (um por roteiro).
-pub const CASOS: [&str; 41] = [
+pub const CASOS: [&str; 42] = [
     "ext_simetrico", "ext_ate_plano", "ext_saida_filete", "ext_cego", "ranhura", "nervura", "rasgo_varrido", "multisecoes", "multisecoes_remover", "prim_toro", "prim_cunha",
-    "prim_prisma", "bool_unir", "bool_subtrair", "bool_intersecao", "furo_rebaixado", "furo_escareado", "furo_roscado", "filete_variavel", "filete_face_face", "arestas_todas",
+    "prim_prisma", "bool_unir", "bool_subtrair", "bool_intersecao", "furo_rebaixado", "furo_escareado", "furo_roscado", "filete_variavel", "filete_face_face", "filete_completo", "arestas_todas",
     "chanfro_dist_dist", "chanfro_dist_angulo", "chanfro_dist", "edit_mover_face", "edit_deslocar_face", "edit_raio_filete", "padrao_circular", "padrao_pontos", "espelho", "escala",
     "xf_mover", "xf_girar", "xf_simetria", "xf_afinidade", "pl_boss", "pl_snap", "pl_grelha", "pl_lip", "pl_ranhura", "edit_apagar_face",
 ];
@@ -252,6 +252,13 @@ pub fn montar(caso: &str) -> Option<(Document, FeatureKind)> {
         "filete_face_face" => {
             caixa(&mut d);
             FeatureKind::Fillet(aresta("1", EdgeSel::AllOfBody, EdgeMode::FaceFace([0., -20., 15.], [0., 0., 30.])))
+        }
+        // parede fina 60 x 6 x 8 (features 0 e 1, altura animada): o filete completo consome o
+        // topo entre as duas faces laterais e deixa meia-cana
+        "filete_completo" => {
+            let sk = retangulo(&mut d, xy(), [-30., -3.], [30., 3.]);
+            d.add_feature(extrusao(sk, BoolOp::Add, Extent::Blind(s("8"))));
+            FeatureKind::Fillet(aresta("0.5", EdgeSel::AllOfBody, EdgeMode::FullRound { mid: [0., 0., 8.], a: [0., -3., 4.], b: [0., 3., 4.] }))
         }
         "arestas_todas" => {
             caixa(&mut d);

@@ -79,6 +79,10 @@ pub struct Roteiro {
     #[serde(default = "fps_padrao")]
     pub fps: u32,
     pub duracao: f64,
+    /// B60: o comando entra na peça já concluído, sem painel nem prévia fantasma: a mídia mostra o
+    /// sólido que ele deixa (a prévia dos comandos de superfície lisa quase não aparece)
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub concluido: bool,
     #[serde(default)]
     pub animacoes: Vec<Animacao>,
 }

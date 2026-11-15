@@ -1,0 +1,61 @@
+{
+  "versao": 1,
+  "comando": "filete_completo",
+  "caso": "filete_completo",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    165,
+    0,
+    0,
+    4
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    422,
+    180,
+    540,
+    330
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "concluido": true,
+  "animacoes": [
+    {
+      "campo": "/Sketch/points/1/x",
+      "de": 6,
+      "ate": 30,
+      "t0": 0.4,
+      "t1": 2.6,
+      "feature": 0
+    },
+    {
+      "campo": "/Sketch/points/2/x",
+      "de": 6,
+      "ate": 30,
+      "t0": 0.4,
+      "t1": 2.6,
+      "feature": 0
+    },
+    {
+      "campo": "/Sketch/points/0/x",
+      "de": -6,
+      "ate": -30,
+      "t0": 0.4,
+      "t1": 2.6,
+      "feature": 0
+    },
+    {
+      "campo": "/Sketch/points/3/x",
+      "de": -6,
+      "ate": -30,
+      "t0": 0.4,
+      "t1": 2.6,
+      "feature": 0
+    }
+  ]
+}
