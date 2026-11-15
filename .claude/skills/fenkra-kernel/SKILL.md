@@ -44,6 +44,10 @@ Registre aqui erros que se repetiram.
   booleana não tem estado global, mas a mesma forma entra em vários pares e o comum pode devolver as faces da
   entrada: tesselar grava a malha nelas, e duas threads gravariam na mesma face. `Shape::clone` divide a topologia
   e não serve de cópia (B394).
+- `BRepOffset_MakeOffset::MakeOffsetShape` só fecha o resultado em SOLID quando a entrada é do tipo
+  SOLID (`MakeSolid` testa `myShape.ShapeType()`); com o COMPOUND que a booleana devolve, sai casca solta.
+  Corpo vindo de STEP chega como SOLID e escondia o problema. Desloque sólido por sólido (`face_offset_t`, B464).
+  Antes de culpar tolerância quando "histórico falha e STEP passa", compare o tipo do contêiner.
 - `posicionado` (montagem) copia a forma sem a malha: quem tessela a peça posicionada refaz a malha inteira a cada
   vez. Use a malha da vista quando ela basta, ou tessele em threads (B394).
 

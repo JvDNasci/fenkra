@@ -720,15 +720,69 @@ std::unique_ptr<Shape> defeature_t(const Shape& s, rust::Slice<const double> pts
 
 // Edição direta (B33): desloca as faces pela distância dada ao longo da normal, com as vizinhas
 // acompanhando (também em faces cilíndricas, esféricas e cônicas: muda o raio).
+//
+// B464: o offset só fecha o resultado em sólido quando a entrada é do tipo SOLID; com qualquer outro
+// contêiner (o COMPOUND que a união devolve, como na peça com boss feito por histórico) ele devolve a
+// casca solta e a verificação recusa ("não deixou um sólido fechado"). Por isso cada sólido do corpo
+// é deslocado por si: os que têm face escolhida passam pelo offset, os outros e o que não for sólido
+// (casca, face solta) seguem como estão. Corpo sem sólido nenhum (superfície) vai inteiro, como antes.
 std::unique_ptr<Shape> face_offset_t(const Shape& s, rust::Slice<const double> pts, double value, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
     return guard("deslocar face", [&] {
-        BRepOffset_MakeOffset mk;
-        mk.Initialize(s.s, 0.0, 1e-5, BRepOffset_Skin, Standard_True, Standard_False, GeomAbs_Intersection, Standard_False, Standard_False);
-        for (auto& f : faces_near(s.s, pts)) mk.SetOffsetOnFace(f, value);
-        mk.MakeOffsetShape();
-        if (!mk.IsDone() || mk.Shape().IsNull()) throw std::runtime_error("o deslocamento desfaz o corpo: reduza a distância");
-        fill(out, carry(s.s, to_vec(tags), mk.Shape(), [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& { return mk.Modified(f); }, -1));
-        return wrap(mk.Shape());
+        const std::vector<TopoDS_Face> faces = faces_near(s.s, pts);
+        std::vector<std::unique_ptr<BRepOffset_MakeOffset>> feitos;
+        auto desloca = [&](const TopoDS_Shape& alvo) -> TopoDS_Shape {
+            auto mk = std::make_unique<BRepOffset_MakeOffset>();
+            mk->Initialize(alvo, 0.0, 1e-5, BRepOffset_Skin, Standard_True, Standard_False, GeomAbs_Intersection, Standard_False, Standard_False);
+            TopTools_IndexedMapOfShape dele;
+            TopExp::MapShapes(alvo, TopAbs_FACE, dele);
+            for (auto& f : faces)
+                if (dele.Contains(f)) mk->SetOffsetOnFace(f, value);
+            mk->MakeOffsetShape();
+            if (!mk->IsDone() || mk->Shape().IsNull()) throw std::runtime_error("o deslocamento desfaz o corpo: reduza a distância");
+            TopoDS_Shape r = mk->Shape();
+            feitos.push_back(std::move(mk));
+            return r;
+        };
+        auto tem_escolhida = [&](const TopoDS_Shape& x) {
+            TopTools_IndexedMapOfShape m;
+            TopExp::MapShapes(x, TopAbs_FACE, m);
+            for (auto& f : faces)
+                if (m.Contains(f)) return true;
+            return false;
+        };
+        TopoDS_Shape res;
+        if (s.s.ShapeType() == TopAbs_SOLID || !TopExp_Explorer(s.s, TopAbs_SOLID).More()) {
+            res = desloca(s.s);
+        } else {
+            BRep_Builder bb;
+            TopoDS_Compound c;
+            bb.MakeCompound(c);
+            int pecas = 0;
+            TopoDS_Shape unica;
+            std::function<void(const TopoDS_Shape&)> anda = [&](const TopoDS_Shape& x) {
+                if (x.ShapeType() == TopAbs_COMPOUND || x.ShapeType() == TopAbs_COMPSOLID) {
+                    for (TopoDS_Iterator it(x); it.More(); it.Next()) anda(it.Value());
+                    return;
+                }
+                TopoDS_Shape y = x.ShapeType() == TopAbs_SOLID && tem_escolhida(x) ? desloca(x) : x;
+                bb.Add(c, y);
+                unica = y;
+                pecas++;
+            };
+            anda(s.s);
+            // um sólido só sai como SOLID, como o corpo vindo de STEP
+            res = pecas == 1 ? unica : TopoDS_Shape(c);
+        }
+        static const TopTools_ListOfShape vazio;
+        auto modificada = [&](const TopoDS_Shape& f) -> const TopTools_ListOfShape& {
+            for (auto& mk : feitos) {
+                const TopTools_ListOfShape& l = mk->Modified(f);
+                if (!l.IsEmpty()) return l;
+            }
+            return vazio;
+        };
+        fill(out, carry(s.s, to_vec(tags), res, modificada, -1));
+        return wrap(res);
     });
 }
 
