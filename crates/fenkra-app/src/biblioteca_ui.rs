@@ -577,41 +577,70 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
             });
         }
     }
-    // tabela: uma linha por tamanho
-    egui::ScrollArea::vertical().id_salt("biblioteca_tabela").max_height(150.).auto_shrink([false, true]).show(ui, |ui| {
-        egui::Grid::new("biblioteca_grade").striped(true).num_columns(ficha.cotas.len() + 2).show(ui, |ui| {
-            ui.label(RichText::new(tr("Tamanho")).strong());
-            for c in &ficha.cotas {
-                ui.label(RichText::new(format!("{} ({})", c.simbolo, c.unidade)).strong().small()).on_hover_text(tr(&c.nome));
-            }
-            ui.label(RichText::new(tr("Fontes")).strong().small());
-            ui.end_row();
-            let mut novo: Option<String> = None;
-            for l in &ficha.linhas {
-                let sel = l.designacao == tamanho_atual;
-                let r = ui.selectable_label(sel, &l.designacao);
-                let arrasto = ui.interact(r.rect, r.id.with("arrasto"), Sense::drag());
-                if r.clicked() {
-                    novo = Some(l.designacao.clone());
+    // tabela: uma linha por tamanho. O cabeçalho fica fora da rolagem (B457): dentro dela, a roda do
+    // mouse sobre a tabela rolava só a tabela e o cabeçalho sumia sob a linha "Comprimento", e assim
+    // ficava ao reabrir o painel. Agora só as linhas rolam e os títulos das colunas ficam à vista.
+    let altura = ui.spacing().interact_size.y;
+    let mut novo: Option<String> = None;
+    ui.push_id("biblioteca_tabela", |ui| {
+        egui_extras::TableBuilder::new(ui)
+            .id_salt("biblioteca_grade")
+            .striped(true)
+            .resizable(false)
+            .vscroll(true)
+            // o padrão da tabela (200 de altura mínima) passaria do teto de 150 das linhas
+            .min_scrolled_height(60.)
+            .max_scroll_height(150.)
+            .auto_shrink([false, true])
+            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+            .column(egui_extras::Column::auto().at_least(40.))
+            .columns(egui_extras::Column::auto(), ficha.cotas.len() + 1)
+            .header(altura, |mut h| {
+                h.col(|ui| {
+                    ui.label(RichText::new(tr("Tamanho")).strong());
+                });
+                for c in &ficha.cotas {
+                    h.col(|ui| {
+                        ui.label(RichText::new(format!("{} ({})", c.simbolo, c.unidade)).strong().small()).on_hover_text(tr(&c.nome));
+                    });
                 }
-                if arrasto.drag_started() {
-                    novo = Some(l.designacao.clone());
-                    est.inserindo = Some(Insercao { arrastando: true });
-                    est.furos = None;
+                h.col(|ui| {
+                    ui.label(RichText::new(tr("Fontes")).strong().small());
+                });
+            })
+            .body(|mut corpo| {
+                for l in &ficha.linhas {
+                    corpo.row(altura, |mut linha| {
+                        linha.col(|ui| {
+                            let sel = l.designacao == tamanho_atual;
+                            let r = ui.selectable_label(sel, &l.designacao);
+                            let arrasto = ui.interact(r.rect, r.id.with("arrasto"), Sense::drag());
+                            if r.clicked() {
+                                novo = Some(l.designacao.clone());
+                            }
+                            if arrasto.drag_started() {
+                                novo = Some(l.designacao.clone());
+                                est.inserindo = Some(Insercao { arrastando: true });
+                                est.furos = None;
+                            }
+                            arrasto.on_hover_text(tr("Arraste para a viewport e solte: o item entra onde o modo escolhido abaixo manda (furo, ponto ou solto)."));
+                        });
+                        for v in &l.valores {
+                            linha.col(|ui| {
+                                ui.label(RichText::new(fmt(*v)).small());
+                            });
+                        }
+                        linha.col(|ui| {
+                            ui.label(RichText::new(format!("{}×", l.confirmado_por)).small().weak());
+                        });
+                    });
                 }
-                arrasto.on_hover_text(tr("Arraste para a viewport e solte: o item entra onde o modo escolhido abaixo manda (furo, ponto ou solto)."));
-                for v in &l.valores {
-                    ui.label(RichText::new(fmt(*v)).small());
-                }
-                ui.label(RichText::new(format!("{}×", l.confirmado_por)).small().weak());
-                ui.end_row();
-            }
-            if let Some(t) = novo {
-                let f = fam.id.clone();
-                est.escolher(&f, Some(&t));
-            }
-        });
+            });
     });
+    if let Some(t) = novo {
+        let f = fam.id.clone();
+        est.escolher(&f, Some(&t));
+    }
     // fontes
     egui::CollapsingHeader::new(tr("Fontes e licença")).open(est.fontes_abertas_demo.then_some(true)).show(ui, |ui| {
         ui.label(RichText::new(format!("{}: {} · {}", tr("Nível"), ficha.nivel, ficha.licenca)).small());
@@ -1834,6 +1863,61 @@ mod tests {
         let (livre, baixo) = (altura(5000.), altura(150.));
         assert!(livre > 450., "a ficha inteira tem bem mais que o teto simulado: {livre}");
         assert!((livre - baixo).abs() < 1., "o teto de altura não pode apertar o conteúdo: livre {livre}, com teto {baixo}");
+    }
+
+    /// Textos desenhados no quadro: (texto, retângulo, recorte).
+    fn textos(saida: &egui::FullOutput) -> Vec<(String, Rect, Rect)> {
+        fn juntar(s: &egui::Shape, clip: Rect, v: &mut Vec<(String, Rect, Rect)>) {
+            match s {
+                egui::Shape::Text(t) => v.push((t.galley.text().to_string(), t.galley.rect.translate(t.pos.to_vec2()), clip)),
+                egui::Shape::Vec(l) => l.iter().for_each(|x| juntar(x, clip, v)),
+                _ => {}
+            }
+        }
+        let mut v = vec![];
+        for c in &saida.shapes {
+            juntar(&c.shape, c.clip_rect, &mut v);
+        }
+        v
+    }
+
+    #[test]
+    fn rolar_a_tabela_nao_esconde_o_cabecalho_sob_a_linha_comprimento() {
+        // B457: a roda do mouse sobre a tabela rolava o cabeçalho junto, e "Tamanho" sumia sob a linha
+        // "Comprimento" (e continuava assim ao reabrir o painel)
+        let mut est = Estado::default();
+        est.escolher("iso4762", Some("M6"));
+        let ctx = egui::Context::default();
+        let mut t = 0.;
+        let mut quadro = |est: &mut Estado, evs: Vec<egui::Event>| {
+            t += 1. / 60.;
+            let raw = egui::RawInput { time: Some(t), screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(500., 1200.))), events: evs, ..Default::default() };
+            let mut saida = ctx.run_ui(raw, |ui| {
+                egui::ScrollArea::vertical().show(ui, |ui| conteudo(ui, est));
+            });
+            saida.textures_delta.clear();
+            textos(&saida)
+        };
+        let achar = |v: &[(String, Rect, Rect)], s: &str| v.iter().find(|x| x.0 == s).cloned();
+        let mut v = vec![];
+        for _ in 0..3 {
+            v = quadro(&mut est, vec![]);
+        }
+        let m3 = achar(&v, "M3").expect("a tabela tem o M3");
+        let sobre = achar(&v, "M8").expect("a tabela tem o M8").1.center();
+        let roda = egui::Event::MouseWheel { unit: egui::MouseWheelUnit::Point, delta: egui::vec2(0., -400.), phase: egui::TouchPhase::Move, source: egui::MouseWheelSource::Wheel, modifiers: Default::default() };
+        quadro(&mut est, vec![egui::Event::PointerMoved(sobre)]);
+        quadro(&mut est, vec![egui::Event::PointerMoved(sobre), roda]);
+        for _ in 0..40 {
+            v = quadro(&mut est, vec![]);
+        }
+        // a tabela rolou de fato: o M3 subiu para fora da vista dela
+        let m3_depois = achar(&v, "M3");
+        assert!(m3_depois.as_ref().is_none_or(|x| x.1.top() < m3.1.top() - 5.), "a roda rola a tabela: {m3:?} → {m3_depois:?}");
+        let tamanho = achar(&v, "Tamanho").expect("o cabeçalho segue desenhado");
+        let comprimento = achar(&v, "Comprimento").expect("a linha Comprimento");
+        assert!(tamanho.2.contains_rect(tamanho.1.shrink(0.5)), "o cabeçalho fica inteiro à vista: {:?} recorte {:?}", tamanho.1, tamanho.2);
+        assert!(tamanho.1.top() >= comprimento.1.bottom(), "o cabeçalho fica abaixo da linha Comprimento: {:?} {:?}", tamanho.1, comprimento.1);
     }
 
     #[test]
