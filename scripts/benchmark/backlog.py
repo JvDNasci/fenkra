@@ -926,7 +926,7 @@ c('B453', 3, 'P1', 'Testes instáveis sob carga: isolar estado compartilhado', '
 c('B454', 3, 'P1', 'Malha e textura: caminho relativo à pasta do documento', 'Achado do B452: o comando de importar malha lê o caminho a partir da pasta de trabalho do programa; no pacote e em outra máquina, malha e textura com caminho relativo podem não abrir. Resolver o caminho a partir da pasta do documento, com teste de abrir o pacote em outra pasta.',
   ['USR-CHECK'], [], 40, 'Auto', 'PLM', status='feito'),
 c('B455', 3, 'P1', 'Tela inicial limpa com animação leve e opção para desligar', 'Pedido do usuário em 14/11/2026: a tela inicial está com cara de IA. Refazer com visual limpo e autoral, só com cores do tema, com animação simples e leve que roda até em PC fraco: ao passar o mouse e ao clicar nos cartões e ações, e um movimento discreto de fundo. Opção em Configurações para ligar e desligar as animações, desligada sozinha no modo leve e no adaptador de software. Imagens de referência podem vir da Tripo (procedência registrada).',
-  ['USR-CHECK'], [], 120, 'Auto + Visual', 'Interface'),
+  ['USR-CHECK'], [], 120, 'Auto + Visual', 'Interface', status='feito'),
 c('B456', 3, 'P1', 'Montagem: painel do Inserir peça abre na coluna esquerda', 'Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): o painel do Inserir peça abre à direita, não na coluna esquerda do layout novo (B433).',
   ['USR-MOUSE'], [], 40, 'Auto + Manual', 'Interface'),
 c('B457', 3, 'P1', 'Biblioteca em furo: linha Comprimento cobre o cabeçalho da tabela', 'Teste com mouse real, rodada 2 (docs/validacao/teste-mouse-rodada2.md): ao inserir em furo, a linha Comprimento cobre o cabeçalho da tabela.',
