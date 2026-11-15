@@ -1647,8 +1647,9 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 SweepKind::CircleRadius { .. } => 4,
                 SweepKind::CircleCenter { .. } => 5,
                 SweepKind::Conic { .. } => 6,
+                SweepKind::ConicGuides { .. } => 7,
             };
-            let names = ["Perfil explícito", "Reta entre guias", "Reta com ângulo", "Arco por 3 guias", "Arco de raio", "Tubo (centro e raio)", "Cônica"];
+            let names = ["Perfil explícito", "Reta entre guias", "Reta com ângulo", "Arco por 3 guias", "Arco de raio", "Tubo (centro e raio)", "Cônica", "Cônica por 3 guias"];
             let mut sel = cur;
             row(ui, "Tipo", |ui| {
                 egui::ComboBox::from_id_salt("g_swk").selected_text(tr(names[cur])).width(170.).show_ui(ui, |ui| {
@@ -1667,7 +1668,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                     3 => SweepKind::Circle3 { guide1: gi(0), guide2: gi(1), guide3: gi(2) },
                     4 => SweepKind::CircleRadius { guide1: gi(0), guide2: gi(1), radius: "20".into() },
                     5 => SweepKind::CircleCenter { center: gi(0), radius: "5".into() },
-                    _ => SweepKind::Conic { guide1: gi(0), guide2: gi(1), height: "10".into(), rho: "0.5".into() },
+                    6 => SweepKind::Conic { guide1: gi(0), guide2: gi(1), height: "10".into(), rho: "0.5".into() },
+                    _ => SweepKind::ConicGuides { guide1: gi(0), guide2: gi(1), apex: gi(2), rho: "0.5".into(), radius: String::new() },
                 };
                 *solution = 0;
             }
@@ -1711,6 +1713,20 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                     curve_slot(ui, "g_x2", "Guia 2", doc, me, guide2, seed);
                     expr(ui, "Altura do ápice", height, vars, "mm");
                     expr(ui, "ρ", rho, vars, "");
+                }
+                SweepKind::ConicGuides { guide1, guide2, apex, rho, radius } => {
+                    curve_slot(ui, "g_x1", "Guia 1", doc, me, guide1, seed);
+                    curve_slot(ui, "g_x2", "Guia 2", doc, me, guide2, seed);
+                    curve_slot(ui, "g_x3", "Guia do ápice", doc, me, apex, seed);
+                    let mut por_raio = !radius.trim().is_empty();
+                    if crate::editor::check(ui, &mut por_raio, "ρ pelo raio de curvatura na guia 1 (G2 exato)").changed() {
+                        *radius = if por_raio { "10".into() } else { String::new() };
+                    }
+                    if por_raio {
+                        expr(ui, "Raio na guia 1", radius, vars, "mm");
+                    } else {
+                        expr(ui, "ρ", rho, vars, "");
+                    }
                 }
             }
             *solution = (*solution).min(fenkra_solidos::geo3d::solucoes_da_varredura(kind) - 1);

@@ -219,7 +219,7 @@ fn dobra_por_linha_leve_nao_gira_a_chapa_e_guarda_a_linha() {
     let mut d = chapa_base();
     let sem = volume_total(&fenkra_solidos::recompute(&d));
     let caixa0 = caixa_da_malha(&fenkra_solidos::recompute(&d));
-    let id = d.add_feature(FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("45"), radius: None, flip: true, down: false, sketch: None, position: 0 }));
+    let id = d.add_feature(FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("45"), radius: None, flip: true, down: false, sketch: None, position: 0, cega: None }));
     let (leve, final_) = leve_e_final(&d, id);
     assert!(ok(&leve, id), "{:?}", leve.status.get(&id));
     assert!((volume_total(&leve) - sem).abs() < 1e-6);

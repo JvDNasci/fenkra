@@ -738,6 +738,14 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             }
             crate::chapa_unif_ui::inverter(ui, &mut b.flip);
             crate::editor::check(ui, &mut b.down, "dobrar para o outro lado");
+            let mut cega = b.cega.is_some();
+            if crate::editor::check(ui, &mut cega, "dobra cega (só a faixa entre as pontas da linha gira)").changed() {
+                b.cega = cega.then(|| fenkra_core::DobraCega { relief: String::new() });
+            }
+            if let Some(c) = &mut b.cega {
+                expr(ui, "Furo de alívio", &mut c.relief, vars, "mm");
+                ui.label(RichText::new(tr("Vazio usa o mínimo aeronáutico: o maior entre 3 mm e 2 × espessura + raio. Um furo menor sobe a esse mínimo.")).weak().small());
+            }
             ui.label(RichText::new(tr("O comprimento desenvolvido vem do fator K do raio da dobra. Na planificada a dobra é desfeita e a linha de dobra aparece no mapa.")).weak().small());
         }
         FeatureKind::SmLouver(l) => {
@@ -954,7 +962,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             section(ui, "Alívio de canto");
             ui.label(RichText::new(format!("{} {} — {}", tr("canto em"), crate::app::p3(cr.at, 1), tr("clique outro vértice/face para trocar"))).small());
             ui.horizontal_wrapped(|ui| {
-                for (k, n) in [(0u8, "redondo"), (1, "quadrado"), (2, "gota")] {
+                for (k, n) in [(0u8, "redondo"), (1, "quadrado"), (2, "gota"), (3, "aeronáutico")] {
                     ui.selectable_value(&mut cr.kind, k, tr(n));
                 }
             });

@@ -66,7 +66,7 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
         let pts = [[50., 0.], [62., 25.], [50., 50.]].map(|p| data.add_point(&mut al, p[0], p[1])).to_vec();
         data.add_curve(&mut al, sketch::Curve::Spline { pts }, false);
         let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
-        return Some(DemoPrevia::Comando(FeatureKind::SmBend(SmBend { sketch: Some(sk), a: [0.; 3], b: [0.; 3], angle: t("90"), radius: None, flip: false, down: false, position: 0 })));
+        return Some(DemoPrevia::Comando(FeatureKind::SmBend(SmBend { sketch: Some(sk), a: [0.; 3], b: [0.; 3], angle: t("90"), radius: None, flip: false, down: false, position: 0, cega: None })));
     }
     if nome == "sup_chapa_recorte" {
         chapa(d);

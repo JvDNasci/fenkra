@@ -373,6 +373,11 @@ pub enum SweepKind {
     CircleCenter { center: CurveRef, radius: String },
     /// cônica entre duas guias: altura do ápice e ρ (0 < ρ < 1; 0,5 = parábola)
     Conic { guide1: CurveRef, guide2: CurveRef, height: String, rho: String },
+    /// B40: cônica por três guias. As duas primeiras dão as pontas de cada seção; a terceira (guia
+    /// do ápice) dá o vértice do triângulo de controle. `rho` é o ρ (0 < ρ < 1; 0,5 = parábola) e,
+    /// se `radius` não for vazio, o ρ de cada seção sai do raio de curvatura pedido na guia 1
+    /// (continuidade G2 exata com a superfície vizinha), ignorando `rho`.
+    ConicGuides { guide1: CurveRef, guide2: CurveRef, apex: CurveRef, rho: String, radius: String },
 }
 
 impl SweepKind {
@@ -382,6 +387,7 @@ impl SweepKind {
             SweepKind::Linear { guide1, guide2 } | SweepKind::CircleRadius { guide1, guide2, .. } | SweepKind::Conic { guide1, guide2, .. } => vec![guide1, guide2],
             SweepKind::LinearDir { guide1, .. } => vec![guide1],
             SweepKind::Circle3 { guide1, guide2, guide3 } => vec![guide1, guide2, guide3],
+            SweepKind::ConicGuides { guide1, guide2, apex, .. } => vec![guide1, guide2, apex],
             SweepKind::CircleCenter { center, .. } => vec![center],
         }
     }
@@ -422,6 +428,13 @@ impl SweepKind {
                 guide2.walk(ids);
                 exprs(height);
                 exprs(rho);
+            }
+            SweepKind::ConicGuides { guide1, guide2, apex, rho, radius } => {
+                guide1.walk(ids);
+                guide2.walk(ids);
+                apex.walk(ids);
+                exprs(rho);
+                exprs(radius);
             }
         }
     }
@@ -2414,6 +2427,18 @@ pub struct SmBend {
     /// gira), 3 vértice externo (encontro das faces de fora, como na cotagem por fora)
     #[serde(default)]
     pub position: u8,
+    /// B40: dobra cega. A linha a–b (ou cada reta do sketch) limita a largura da aba que gira; o
+    /// resto da chapa fica plano e cada ponta da linha leva um furo de alívio.
+    #[serde(default)]
+    pub cega: Option<DobraCega>,
+}
+
+/// Dobra cega: a dobra termina dentro da chapa, com furo de alívio nas duas pontas.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct DobraCega {
+    /// diâmetro do furo de alívio (mm); vazio usa o mínimo aeronáutico da chapa
+    #[serde(default)]
+    pub relief: String,
 }
 
 /// Posições da linha de dobra em relação à zona dobrada.
@@ -2682,7 +2707,7 @@ pub struct SmConvert {
 pub struct SmCornerRelief {
     pub at: [f64; 3],
     pub size: String,
-    /// 0 redondo, 1 quadrado, 2 gota
+    /// 0 redondo, 1 quadrado, 2 gota, 3 aeronáutico (redondo, com diâmetro mínimo da chapa)
     pub kind: u8,
 }
 
@@ -3330,6 +3355,9 @@ impl FeatureKind {
                 exprs(&mut b.angle);
                 if let Some(r) = &mut b.radius {
                     exprs(r)
+                }
+                if let Some(c) = &mut b.cega {
+                    exprs(&mut c.relief)
                 }
             }
             SmLouver(l) => {

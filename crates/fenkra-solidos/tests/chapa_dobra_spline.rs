@@ -32,7 +32,7 @@ fn chapa_com_spline() -> (Document, Id) {
     let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [100., 50.]);
     d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
     let sp = sk_spline(&mut d, &[[50., 0.], [65., 25.], [50., 50.]]);
-    let id = d.add_feature(FeatureKind::SmBend(SmBend { a: [0.; 3], b: [0.; 3], angle: s("90"), radius: None, flip: false, down: false, sketch: Some(sp), position: 0 }));
+    let id = d.add_feature(FeatureKind::SmBend(SmBend { a: [0.; 3], b: [0.; 3], angle: s("90"), radius: None, flip: false, down: false, sketch: Some(sp), position: 0, cega: None }));
     (d, id)
 }
 

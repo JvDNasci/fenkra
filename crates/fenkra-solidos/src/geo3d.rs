@@ -776,7 +776,7 @@ pub fn tangent_points(c: &Curve3, dir: V3) -> Result<[V3; 2], String> {
 pub fn solucoes_da_varredura(k: &fenkra_core::SweepKind) -> usize {
     use fenkra_core::SweepKind as K;
     match k {
-        K::Circle3 { .. } | K::Conic { .. } => 2,
+        K::Circle3 { .. } | K::Conic { .. } | K::ConicGuides { .. } => 2,
         K::CircleRadius { .. } => 4,
         _ => 1,
     }

@@ -302,7 +302,7 @@ impl<'a> Tabela<'a> {
                 flip: *inverter,
                 down: *para_baixo,
                 sketch: esboco.as_deref().map(|e| self.achar(e)).transpose()?,
-                position: *posicao as u8,
+                position: *posicao as u8, cega: None,
             }),
             Comando::Membro(m) => FeatureKind::StructMember(StructMember {
                 paths: m.caminhos.iter().map(|c| self.curva(c)).collect::<Result<_, _>>()?,

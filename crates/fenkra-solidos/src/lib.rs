@@ -15,6 +15,9 @@ pub mod forma_brep_cache;
 pub mod forma_vinculo;
 pub mod polimento;
 pub mod geo3d;
+pub mod varredura_guias;
+#[cfg(test)]
+mod varredura_guias_tests;
 pub mod regioes;
 pub mod analise;
 pub mod loft;
@@ -94,6 +97,10 @@ pub mod previa_leve;
 pub mod chapa_animacao;
 pub mod chapa_linha;
 mod chapa_dobra_curva;
+pub mod chapa_cega;
+pub mod chapa_cone;
+#[cfg(test)]
+mod chapa_cega_tests;
 mod chapa_flat;
 mod arestas;
 mod chapa_laco;
@@ -3391,6 +3398,19 @@ impl Ctx<'_> {
                     v.push(v[0]);
                     v
                 }
+                SweepKind::ConicGuides { rho, radius, .. } => {
+                    let (p0, p1, p2) = (g(0, i), g(2, i), g(1, i));
+                    let rho = if radius.trim().is_empty() {
+                        e(rho, "ρ")?
+                    } else {
+                        let r = e(radius, "raio na guia 1")?;
+                        varredura_guias::rho_para_raio(p0, p1, p2, r).ok_or("o ápice, a guia 1 e a guia 2 estão alinhados numa seção, ou o raio é inválido")?
+                    };
+                    if !(0.01..=0.99).contains(&rho) {
+                        return Err("ρ precisa estar entre 0 e 1 (0,5 = parábola)".into());
+                    }
+                    varredura_guias::secao_conica(p0, p1, p2, rho, arc_n)
+                }
                 SweepKind::Conic { height, rho, .. } => {
                     let (hh, rho) = (e(height, "altura do ápice")?, e(rho, "ρ")?);
                     if !(0.01..=0.99).contains(&rho) {
@@ -5006,7 +5026,22 @@ impl Ctx<'_> {
                             }
                         }
                     }
-                    let (shape, mut map) = self.bend_line(&cur, p, q, ang, r, kloc, sp.t, bd.flip, bd.down, delta, !sp.flat && !leve)?;
+                    let (shape, mut map) = match &bd.cega {
+                        // B40: dobra cega, só a faixa entre as pontas gira, com furo de alívio em cada ponta
+                        Some(cg) => {
+                            let pedido = if cg.relief.trim().is_empty() { None } else { Some(ev(&cg.relief, &self.vars, "furo de alívio")?) };
+                            let (dia, subiu) = chapa_cega::diametro_alivio(sp.t, r, pedido);
+                            if subiu {
+                                notes.push(format!("furo de alívio subido ao mínimo de {dia:.2} mm"));
+                            }
+                            let (sh, com_furos, m) = self.bend_line_cega(&cur, p, q, ang, r, kloc, sp.t, bd.flip, bd.down, delta, !sp.flat && !leve, dia)?;
+                            if sh.is_none() {
+                                cur = com_furos;
+                            }
+                            (sh, m)
+                        }
+                        None => self.bend_line(&cur, p, q, ang, r, kloc, sp.t, bd.flip, bd.down, delta, !sp.flat && !leve)?,
+                    };
                     centers.push(c_orig);
                     if let Some(sh) = shape {
                         cur = sh;
@@ -5033,6 +5068,10 @@ impl Ctx<'_> {
                     self.previa_da_dobra(f, &pts, r + sp.t);
                 } else if sp.flat {
                     notes.insert(0, "planificada: dobra desfeita".into());
+                    if bd.cega.is_some() {
+                        // a chapa plana guarda os furos de alívio da dobra cega
+                        self.bodies.insert(f.target, fresh_body(cur, f.id));
+                    }
                 } else {
                     self.bodies.insert(f.target, fresh_body(cur, f.id));
                 }
@@ -5533,6 +5572,8 @@ impl Ctx<'_> {
                         let slot = if geo3d::dot(fenkra_kernel::cross(z, w), v) < 0. { slot.transformed(Xform::Mirror(top, v)).map_err(k)? } else { slot };
                         round.compound(&slot)
                     }
+                    // B40: furo de alívio aeronáutico na interseção de dobras: nunca abaixo do mínimo
+                    3 => Shape::hole_tool(top, z, chapa_cega::diametro_alivio(sp.t, sp.r, Some(size)).0, sp.t * 2. + 2., HoleShape::Simple).map_err(k)?,
                     _ => Shape::hole_tool(top, z, size, sp.t * 2. + 2., HoleShape::Simple).map_err(k)?,
                 };
                 self.apply(f.target, tool, BoolOp::Cut, f.id)?;
@@ -9229,7 +9270,7 @@ mod tests {
         assert!((zmin + 3.).abs() < 0.01, "desvio {zmin}");
         // dobra por linha a 90°: volume conservado (comprimento desenvolvido) e a ponta sobe
         let mut d = base();
-        d.add_feature(FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("90"), radius: None, flip: false, down: false, sketch: None, position: 0 }));
+        d.add_feature(FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("90"), radius: None, flip: false, down: false, sketch: None, position: 0, cega: None }));
         let r = check(&d);
         assert!(near(r.bodies[0].mass.volume, 10000., 2e-3), "dobra por linha {}", r.bodies[0].mass.volume);
         let zmax = r.bodies[0].mesh.positions.chunks_exact(3).map(|p| p[2]).fold(f32::MIN, f32::max);
@@ -10790,7 +10831,7 @@ mod tests_dobra_sketch {
             d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
             d
         };
-        let bend = |sketch: Option<Id>, x: f64, position: u8| SmBend { a: [x, 0., 2.], b: [x, 50., 2.], angle: s("90"), radius: None, flip: false, down: false, sketch, position };
+        let bend = |sketch: Option<Id>, x: f64, position: u8| SmBend { a: [x, 0., 2.], b: [x, 50., 2.], angle: s("90"), radius: None, flip: false, down: false, sketch, position, cega: None };
         let cx = |l: &BendLine| (l.center[0][0] + l.center[1][0]) / 2.;
         // duas linhas paralelas num sketch: duas dobras, volume conservado
         let mut d = base();
