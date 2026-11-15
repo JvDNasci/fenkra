@@ -726,7 +726,7 @@ impl AsmState {
         self.comp_of_body(body)
     }
 
-    fn comp_of_body(&self, body: usize) -> Option<Id> {
+    pub(crate) fn comp_of_body(&self, body: usize) -> Option<Id> {
         self.view.as_ref()?.bodies.get(body).map(|b| b.collector)
     }
 
@@ -1115,7 +1115,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
 /// clique numa peça a seleciona na árvore.
 pub fn after_viewport(app: &mut App, ctx: &egui::Context) {
     after_view_quick(app);
-    if !crate::asm_inserir::apos_viewport(app) && !crate::asm_fixadores::apos_viewport(app) && !crate::asm_conjunto::apos_viewport(app) && !crate::asm_chaveta::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::transmissao_ui::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
+    if !crate::asm_inserir::apos_viewport(app) && !crate::biblioteca_ui::apos_viewport(app) && !crate::asm_fixadores::apos_viewport(app) && !crate::asm_conjunto::apos_viewport(app) && !crate::asm_chaveta::apos_viewport(app) && !crate::asm_repeticao::apos_viewport(app) && !crate::transmissao_ui::apos_viewport(app) && !crate::asm_cmd::apos_viewport(app) && !crate::asm_manip::apos_viewport(app) {
         selecao_do_clique(app, ctx.input(|i| i.modifiers.alt));
     }
     // duplo clique numa peça: abre para editar
@@ -4193,8 +4193,8 @@ fn after_view_quick(app: &mut App) {
 
 pub fn gizmo(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: &crate::render::Camera) {
     let Some(st) = app.asm.as_mut() else { return };
-    // com a peça na mão o clique é da colocação
-    if st.inserir.is_some() || st.repeticao.is_some() {
+    // com a peça na mão o clique é da colocação; com o item da biblioteca armado também (B462)
+    if st.inserir.is_some() || st.repeticao.is_some() || st.catalogo.as_ref().is_some_and(|c| c.inserindo.is_some()) {
         return;
     }
     eixos_da_serie(st, ui, rect, cam);
