@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 107840,
+ "tokens_total_k": 107900,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -23,8 +23,8 @@
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 23760,
-   "pct": 22.0
+   "tokens_k": 23820,
+   "pct": 22.1
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
@@ -7593,7 +7593,7 @@
    "tokens_k": 40,
    "teste": "Auto + Manual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7609,7 +7609,7 @@
    "tokens_k": 40,
    "teste": "Auto + Manual",
    "area": "Montagem",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7625,7 +7625,7 @@
    "tokens_k": 40,
    "teste": "Auto + Manual",
    "area": "Montagem",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7641,7 +7641,7 @@
    "tokens_k": 40,
    "teste": "Auto + Manual",
    "area": "Sólidos",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7657,7 +7657,7 @@
    "tokens_k": 40,
    "teste": "Auto + Manual",
    "area": "PDM / PLM",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7673,7 +7673,7 @@
    "tokens_k": 40,
    "teste": "Auto + Manual",
    "area": "Montagem",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7689,7 +7689,7 @@
    "tokens_k": 40,
    "teste": "Auto + Manual",
    "area": "Montagem",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7705,8 +7705,24 @@
    "tokens_k": 40,
    "teste": "Auto + Manual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.0
+  },
+  {
+   "id": "B464",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Kernel: Deslocar face falha em peça com boss e filete por histórico",
+   "oque": "Achado do B60 (14/11): Deslocar face falha com 'não deixou um sólido fechado' numa peça com boss e filete feitos por histórico; a mesma peça vinda de STEP passa. Reproduzir em teste, achar a causa no kernel (provável tolerância ou costura de faces do histórico) e corrigir.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 60,
+   "teste": "Auto",
+   "area": "Kernel",
+   "status": "a fazer",
+   "pct": 0.1
   }
  ]
 }
