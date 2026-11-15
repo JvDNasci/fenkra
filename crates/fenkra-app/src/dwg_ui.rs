@@ -33,6 +33,8 @@ mod tabelas_ui;
 mod testes_centros_tabelas;
 #[cfg(test)]
 mod testes_corte_cota;
+#[cfg(test)]
+mod testes_r3c;
 
 /// Comandos (índice do `Cmd::Dwg`).
 pub mod c {
@@ -574,7 +576,7 @@ pub fn command(app: &mut App, i: u8) {
             let st = app.dwg.as_mut().unwrap();
             st.tool = Some(c::AUTO_BALLOONS);
             st.clicks.clear();
-            st.baloes.cache = None;
+            baloes_ui::rearmar(st);
         }
         c::FAI_BALOES => inspecao_ui::alternar_baloes(app.dwg.as_mut().unwrap()),
         c::AUTO => {

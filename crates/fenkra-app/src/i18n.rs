@@ -74,6 +74,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_montagem6::TEXTOS.iter())
             .chain(crate::textos_montagem7::TEXTOS.iter())
             .chain(crate::textos_montagem_sem_arquivo::TEXTOS.iter())
+            .chain(crate::textos_r3::TEXTOS.iter())
             .chain(crate::textos_estrutura::TEXTOS.iter())
             .chain(crate::textos_interface3::TEXTOS.iter())
             .chain([crate::textos_interface4::TEXTOS, crate::handles::vocab::TEXTOS].into_iter().flatten())
@@ -106,6 +107,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_paineis::TEXTOS.iter())
             .chain(crate::textos_layout::TEXTOS.iter())
             .chain(crate::textos_rodada2::TEXTOS.iter())
+            .chain(crate::textos_r3c::TEXTOS.iter())
             .chain(crate::textos_comandos::TEXTOS.iter())
             .chain(crate::textos_proximo::TEXTOS.iter())
             .chain(crate::textos_opcoes::TEXTOS.iter())
@@ -664,6 +666,7 @@ static TABLE: &[(&str, &str)] = &[
     ("Cianotipia Petróleo", "Teal Cyanotype"),
     ("Cianotipia Noturna", "Night Cyanotype"),
     ("Cianotipia Sépia", "Sepia Cyanotype"),
+    ("Fênix", "Phoenix"),
     ("Esfera", "Sphere"),
     ("Espaçamento", "Spacing"),
     ("Espaçamento 2", "Spacing 2"),

@@ -300,7 +300,7 @@ fn linha_overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id:
             None => {
                 dica = tr("Clique na face fixa: a linha nasce no meio dela e o lado do clique fica parado.");
                 if let (Some(m), Some(r)) = (mouse, app.result.as_ref()) {
-                    let f = Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None, fantasma: Some(id) };
+                    let f = Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None, fantasma: Some(id), planos_origem: true, planos_ref: true };
                     if let Some(p @ Pick::Face { body, point, normal, .. }) = crate::picking::pick(r, &app.open.doc, cam, rect, m, &f) {
                         crate::picking::draw(&painter, r, cam, rect, &p, false);
                         if ui.input(|i| i.pointer.primary_clicked()) {

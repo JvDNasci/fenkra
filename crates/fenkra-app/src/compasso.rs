@@ -391,7 +391,7 @@ fn aviso(p: &egui::Painter, ui: &egui::Ui, em: Pos2, txt: &str) {
 /// Alvo sob o mouse enquanto o cubo é levado (com memória do último, a conta da face é cara).
 fn alvo(app: &mut App, cam: &Camera, rect: Rect, em: Pos2) -> Option<Ancora> {
     let r = app.result.as_ref()?;
-    let filt = crate::picking::Filter { faces: true, edges: true, vertices: false, planes: true, hidden_env: app.hidden_env, exclude_sketch: None, fantasma: None };
+    let filt = crate::picking::Filter { faces: true, edges: true, vertices: false, planes: true, hidden_env: app.hidden_env, exclude_sketch: None, fantasma: None, planos_origem: app.settings.filter.planos_origem, planos_ref: app.settings.filter.planos_ref };
     let caixas = app.asm.as_ref().filter(|_| app.in_asm()).map(|s| s.caixas.as_slice());
     let pick = crate::picking::pick_com_caixas(r, &app.open.doc, cam, rect, em, &filt, caixas)?;
     if let Some((p, a)) = app.compasso.ultimo {

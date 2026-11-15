@@ -131,11 +131,11 @@ do comando ainda não foi mapeado (só os comandos de sólidos têm).
 | Solidos | Recorte até plano | ok | ok | ok | ok | n/a | ok | ok |  |
 | Solidos | Revolução | ok | ok | ok | ok | n/a | ok | ok |  |
 | Solidos | Ranhura | ok | ok | ok | ok | n/a | ok | ok |  |
-| Solidos | Nervura | ok | ok | parcial | ok | n/a | ok | n/a | sem GIF |
-| Solidos | Rasgo varrido | ok | ok | parcial | ok | n/a | ok | n/a | sem GIF |
+| Solidos | Nervura | ok | ok | ok | ok | n/a | ok | n/a |  |
+| Solidos | Rasgo varrido | ok | ok | ok | ok | n/a | ok | n/a |  |
 | Solidos | Reforço | ok | ok | ok | ok | n/a | ok | ok |  |
-| Solidos | Multi-seções | ok | ok | parcial | ok | n/a | ok | ok | sem GIF |
-| Solidos | Multi-seções - | ok | ok | parcial | ok | n/a | ok | ok | sem GIF |
+| Solidos | Multi-seções | ok | ok | ok | ok | n/a | ok | ok |  |
+| Solidos | Multi-seções - | ok | ok | ok | ok | n/a | ok | ok |  |
 | Solidos | Furo | ok | ok | ok | ok | ok | ok | ok |  |
 | Solidos | Rebaixado | ok | ok | ok | ok | ok | ok | ok |  |
 | Solidos | Escareado | ok | ok | ok | ok | ok | ok | ok |  |
@@ -143,12 +143,12 @@ do comando ainda não foi mapeado (só os comandos de sólidos têm).
 | Acabamento | Filete | ok | ok | ok | ok | ok | ok | ok |  |
 | Acabamento | Filete variável | ok | ok | ok | ok | ok | ok | ok |  |
 | Acabamento | Face-face | ok | ok | ok | ok | ok | ok | ok |  |
-| Acabamento | Completo | ok | ok | parcial | ok | ok | ok | ok | sem GIF |
-| Acabamento | Filete total | ok | ok | parcial | ok | ok | ok | ok | sem GIF |
+| Acabamento | Completo | ok | ok | ok | ok | ok | ok | ok |  |
+| Acabamento | Filete total | ok | ok | ok | ok | ok | ok | ok |  |
 | Acabamento | Chanfro | ok | ok | ok | ok | ok | ok | ok |  |
 | Acabamento | 2 distâncias | ok | ok | ok | ok | ok | ok | ok |  |
 | Acabamento | Dist. + ângulo | ok | ok | ok | ok | ok | ok | ok |  |
-| Acabamento | Chanfro total | ok | ok | parcial | ok | ok | ok | ok | sem GIF |
+| Acabamento | Chanfro total | ok | ok | ok | ok | ok | ok | ok |  |
 | Acabamento | Saída | ok | ok | ok | ok | ok | ok | ok |  |
 | Acabamento | Casca | ok | ok | ok | ok | ok | ok | ok |  |
 | Acabamento | Espessura | ok | ok | ok | ok | ok | ok | ok |  |
@@ -160,7 +160,7 @@ do comando ainda não foi mapeado (só os comandos de sólidos têm).
 | Acabamento | Ranhura de encaixe | ok | ok | ok | ok | n/a | ok | ok |  |
 | Padroes | Padrão linear | ok | ok | ok | ok | n/a | ok | ok |  |
 | Padroes | Padrão circular | ok | ok | ok | ok | n/a | ok | ok |  |
-| Padroes | Por pontos | ok | ok | parcial | ok | n/a | ok | ok | sem GIF |
+| Padroes | Por pontos | ok | ok | ok | ok | n/a | ok | ok |  |
 | Padroes | Espelho | ok | ok | ok | ok | n/a | ok | n/a |  |
 | Padroes | Escala | ok | ok | ok | ok | n/a | ok | ok |  |
 | Padroes | Translação | ok | ok | ok | ok | n/a | ok | ok |  |
@@ -332,11 +332,11 @@ do comando ainda não foi mapeado (só os comandos de sólidos têm).
 | Primitivas | Cilindro | ok | ok | ok | ok | n/a | ok | ok |  |
 | Primitivas | Esfera | ok | ok | ok | ok | n/a | ok | ok |  |
 | Primitivas | Cone | ok | ok | ok | ok | n/a | ok | ok |  |
-| Primitivas | Toro | ok | ok | parcial | ok | n/a | ok | ok | sem GIF |
-| Primitivas | Cunha | ok | ok | parcial | ok | n/a | ok | ok | sem GIF |
+| Primitivas | Toro | ok | ok | ok | ok | n/a | ok | ok |  |
+| Primitivas | Cunha | ok | ok | ok | ok | n/a | ok | ok |  |
 | Primitivas | Prisma | ok | ok | ok | ok | n/a | ok | ok |  |
 | EdicaoDireta | Mover face | ok | ok | ok | ok | ok | ok | ok |  |
-| EdicaoDireta | Apagar face | ok | ok | parcial | ok | ok | ok | ok | sem GIF |
+| EdicaoDireta | Apagar face | ok | ok | ok | ok | ok | ok | ok |  |
 | EdicaoDireta | Deslocar face | ok | ok | ok | ok | ok | ok | ok |  |
 | EdicaoDireta | Raio do filete | ok | ok | ok | ok | ok | ok | ok |  |
 | Malha | Malha | ok | ok | parcial | a conferir | a conferir | a conferir | a conferir | sem GIF |
@@ -348,6 +348,7 @@ do comando ainda não foi mapeado (só os comandos de sólidos têm).
 | Malha | Impressão | ok | ok | parcial | a conferir | a conferir | a conferir | a conferir | sem GIF |
 | Malha | Importar | ok | ok | parcial | a conferir | a conferir | a conferir | a conferir | sem GIF |
 | ChDobras | Dobra por linha | ok | ok | parcial | a conferir | a conferir | a conferir | a conferir | sem GIF |
+| ChDobras | Dobra cônica | ok | ok | parcial | a conferir | a conferir | a conferir | a conferir | sem GIF |
 | ChDobras | Joggle | ok | ok | parcial | a conferir | a conferir | a conferir | a conferir | sem GIF |
 | ChCorte | Recorte | ok | ok | parcial | a conferir | a conferir | a conferir | a conferir | sem GIF |
 | ChCorte | Alívio de canto | ok | ok | parcial | a conferir | a conferir | a conferir | a conferir | sem GIF |
@@ -378,13 +379,13 @@ do comando ainda não foi mapeado (só os comandos de sólidos têm).
 | DesGerar | Automático | ok | ok | parcial | a conferir | a conferir | a conferir | a conferir | sem GIF |
 | DesGerar | Balões auto | ok | ok | parcial | a conferir | a conferir | a conferir | a conferir | sem GIF |
 
-- Comandos de sólidos com ok em tudo o que se mede: 51 de 62.
-- Ícone: 369 ok, 0 parcial, 0 falta, 0 n/a, 0 a conferir.
-- Tooltip: 359 ok, 0 parcial, 10 falta, 0 n/a, 0 a conferir.
-- GIF: 61 ok, 308 parcial, 0 falta, 0 n/a, 0 a conferir.
-- Manipulação 3D: 62 ok, 0 parcial, 0 falta, 0 n/a, 307 a conferir.
-- Aplicar e continuar: 21 ok, 0 parcial, 0 falta, 41 n/a, 307 a conferir.
-- Enter/Esc: 62 ok, 0 parcial, 0 falta, 0 n/a, 307 a conferir.
-- Estados da alça: 56 ok, 0 parcial, 0 falta, 6 n/a, 307 a conferir.
+- Comandos de sólidos com ok em tudo o que se mede: 62 de 62.
+- Ícone: 370 ok, 0 parcial, 0 falta, 0 n/a, 0 a conferir.
+- Tooltip: 360 ok, 0 parcial, 10 falta, 0 n/a, 0 a conferir.
+- GIF: 72 ok, 298 parcial, 0 falta, 0 n/a, 0 a conferir.
+- Manipulação 3D: 62 ok, 0 parcial, 0 falta, 0 n/a, 308 a conferir.
+- Aplicar e continuar: 21 ok, 0 parcial, 0 falta, 41 n/a, 308 a conferir.
+- Enter/Esc: 62 ok, 0 parcial, 0 falta, 0 n/a, 308 a conferir.
+- Estados da alça: 56 ok, 0 parcial, 0 falta, 6 n/a, 308 a conferir.
 
 Alças de sólidos que ainda não usam `EstadoAlca` (só podem encolher): `handles.rs::tag`, `handles.rs::contour_overlay`, `handles.rs::inverter_plano`, `handles/aresta.rs::inverter`, `handles/padrao.rs::pontos`.

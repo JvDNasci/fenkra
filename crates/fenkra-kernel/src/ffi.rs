@@ -316,6 +316,10 @@ pub mod bridge {
         fn close_surface(s: &Shape, tol: f64) -> Result<UniquePtr<Shape>>;
         fn volume_cells(s: &Shape, exclude: &[f64]) -> Result<UniquePtr<Shape>>;
         fn mesh_shape(tris: &[f64], solid: bool) -> Result<UniquePtr<Shape>>;
+        // B211: B-rep ⇄ fluxo NURBS do 3DM (cpp/nurbs.inc; formato em fenkra-3dm/src/lib.rs)
+        fn brep_de_fluxo(fluxo: &[f64], tolerancia: f64) -> Result<UniquePtr<Shape>>;
+        fn fluxo_de_brep(s: &Shape) -> Result<Vec<f64>>;
+        fn volume_preciso(s: &Shape, eps: f64) -> f64;
         fn mesh_hybrid(vertices: &[f64], facetas: &[u32], regioes: &[f64], lacos: &[i64], tol: f64, solid: bool) -> Result<UniquePtr<Shape>>;
         fn face_types(s: &Shape) -> Vec<u32>;
         fn is_solid(s: &Shape) -> bool;

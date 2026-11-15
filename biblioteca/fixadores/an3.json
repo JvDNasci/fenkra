@@ -1,9 +1,9 @@
 {
  "id": "an3",
- "nome": "Parafuso aeronáutico de cabeça sextavada (AN3 a AN8)",
+ "nome": "Parafuso aeronáutico de cabeça sextavada (AN3 a AN10)",
  "norma": "AN (AN3 a AN20, domínio público, distribuição A)",
  "revisao": "sem revisão conferida (tabela usual de pega)",
- "versao": 4,
+ "versao": 5,
  "gerador": "parafuso_sextavado",
  "tipo": "parafuso_sextavado",
  "nivel": "C",
@@ -48,6 +48,18 @@
   {
    "rotulo": "Boeing Distribution — parafusos AN7-22A e AN8-27A (altura da cabeça)",
    "url": "https://shop.boeing.com/aviation-supply/p/AN8-27A=28"
+  },
+  {
+   "rotulo": "Military Fasteners — fichas AN9-24A e AN9-34 (altura da cabeça, entre faces, comprimento roscado, pega)",
+   "url": "https://military-fasteners.com/bolts/machine%20bolts/an9-24a"
+  },
+  {
+   "rotulo": "Military Fasteners — ficha AN10-40A (altura da cabeça, entre faces, comprimento roscado, pega e comprimento)",
+   "url": "https://military-fasteners.com/catalog/pdf/AN10-40A"
+  },
+  {
+   "rotulo": "EverySpec — folha MS20073B (entre faces de 9/16 e 5/8 pol, as mesmas dos AN9 e AN10)",
+   "url": "https://everyspec.com/MS-Specs/MS2/MS20000-MS20999/MS20073B_7802/"
   }
  ],
  "campos": [
@@ -233,6 +245,70 @@
    ],
    "furo_min": 12.7,
    "furo_max": 14.605
+  },
+  {
+   "designacao": "AN9",
+   "original": "9/16-18 UNF",
+   "d_nominal": 14.287,
+   "valores": {
+    "P": 1.411,
+    "s": 22.123,
+    "k": 7.925,
+    "b": 23.012
+   },
+   "confirmado_por": 1,
+   "nota": "Rosca 9/16-18 UNF classe 3A. Entre faces 0.865 a 0.877 pol: duas fontes (Military Fasteners e a folha MS20073, que usa a mesma cabeça sextavada). PENDENTE: altura da cabeça 0.296 a 0.328 pol e comprimento roscado b = 0.906 pol só na ficha da Military Fasteners (a ficha da Boeing Distribution recusa acesso automático). L = traço em oitavos de polegada + 0.156 pol (AN9-24A: 2 21/32 pol, pega 1 3/4; AN10-40A: 4 9/64, pega 3 3/16). Séries de AN9 e AN10 só do traço -10 ao -24 (1 1/4 a 3 pol); os maiores seguem a mesma regra.",
+   "comprimentos": [
+    35.712,
+    38.887,
+    42.062,
+    45.237,
+    48.412,
+    51.587,
+    54.762,
+    57.937,
+    61.112,
+    64.287,
+    67.462,
+    70.637,
+    73.812,
+    76.987,
+    80.162
+   ],
+   "furo_min": 14.287,
+   "furo_max": 14.694
+  },
+  {
+   "designacao": "AN10",
+   "original": "5/8-18 UNF",
+   "d_nominal": 15.875,
+   "valores": {
+    "P": 1.411,
+    "s": 23.724,
+    "k": 8.738,
+    "b": 24.206
+   },
+   "confirmado_por": 1,
+   "nota": "Rosca 5/8-18 UNF classe 3A. Entre faces 0.928 a 0.940 pol: duas fontes (Military Fasteners e a folha MS20073, que usa a mesma cabeça sextavada). PENDENTE: altura da cabeça 0.328 a 0.360 pol e comprimento roscado b = 0.953 pol só na ficha da Military Fasteners (a ficha da Boeing Distribution recusa acesso automático). L = traço em oitavos de polegada + 0.141 pol (AN9-24A: 2 21/32 pol, pega 1 3/4; AN10-40A: 4 9/64, pega 3 3/16). Séries de AN9 e AN10 só do traço -10 ao -24 (1 1/4 a 3 pol); os maiores seguem a mesma regra.",
+   "comprimentos": [
+    35.331,
+    38.506,
+    41.681,
+    44.856,
+    48.031,
+    51.206,
+    54.381,
+    57.556,
+    60.731,
+    63.906,
+    67.081,
+    70.256,
+    73.431,
+    76.606,
+    79.781
+   ],
+   "furo_min": 15.875,
+   "furo_max": 16.281
   }
  ]
 }

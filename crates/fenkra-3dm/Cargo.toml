@@ -1,0 +1,16 @@
+[package]
+name = "fenkra-3dm"
+description = "Leitura e gravação de 3DM pelo openNURBS (B211, ADR 0090)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+build = "build.rs"
+
+[dependencies]
+cxx = "1"
+thiserror.workspace = true
+
+[build-dependencies]
+cc = "1"
+cxx-build = "1"

@@ -130,7 +130,10 @@ impl App {
                     } else if let Some(kind) = self.gravar_caso.take() {
                         let snapshot = self.open.doc.clone();
                         let id = self.open.doc.add_feature(kind);
-                        self.start_session(id, true, Some(snapshot));
+                        // B60: roteiro `concluido` mostra o sólido pronto, sem painel nem fantasma
+                        if !g.roteiro.concluido {
+                            self.start_session(id, true, Some(snapshot));
+                        }
                         g.id = Some(id);
                         self.request_recompute();
                         g.fase = Fase::Aplicar;

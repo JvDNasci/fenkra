@@ -25,6 +25,20 @@ C:/dev/vcpkg/vcpkg.exe install opencascade:x64-windows-release
 
 Outro local: defina a variável `OCCT_ROOT` apontando para a pasta `installed/<triplet>`.
 
+4. openNURBS, para ler e gravar 3DM (B211, ADR 0090). O fonte não fica no repositório; baixe a versão
+   fixada uma vez, na raiz do repositório:
+
+```bash
+python -I scripts/baixar_opennurbs.py
+```
+
+O script clona o repositório oficial no commit fixado e guarda só os fontes da biblioteca em
+`third_party/opennurbs` (fora do git). O `build.rs` do `fenkra-3dm` procura em `FENKRA_OPENNURBS` e depois
+em `third_party/opennurbs` desta pasta ou de qualquer pasta acima, então os worktrees de
+`.claude/worktrees` usam a cópia da raiz. A primeira compilação leva uns 4 minutos com 2 tarefas; depois,
+mudar só a ponte não recompila o openNURBS. Sem o fonte, o Fenkra compila sem 3DM e a importação de um
+3DM responde como obter o openNURBS.
+
 Rodar:
 
 ```bash

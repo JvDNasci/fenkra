@@ -45,6 +45,17 @@ Como reconstruir:
      DLLs compiladas da mesma série de versão e com a mesma interface binária.
 
 --------------------------------------------------------------------------------
+Aviso sobre o openNURBS
+--------------------------------------------------------------------------------
+
+A leitura e a gravação de 3DM usam o openNURBS, versão 8.35.26251.13001 (ramo 8.x, commit
+eb92af3ba180), de https://github.com/mcneel/opennurbs, ligado de forma estática.
+Copyright (c) 1993-2018 Robert McNeel & Associates. Distribuído "como está", sem garantia; o titular
+declara o toolkit gratuito e sem restrições de copyright nem de copyleft. O zlib embutido nele segue a
+licença do zlib. Avisos completos em THIRD-PARTY-LICENSES, seção 6. O fonte não acompanha o repositório:
+scripts/baixar_opennurbs.py baixa a versão fixada.
+
+--------------------------------------------------------------------------------
 Outros créditos
 --------------------------------------------------------------------------------
 

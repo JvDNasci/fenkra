@@ -2,7 +2,7 @@
 //! Interface de provedor: quem sabe ler e gravar um formato. O OpenCASCADE é o provedor padrão; outro
 //! provedor entra no registro sem mudar diálogos nem relatórios.
 
-use crate::{Capacidades, ErroConv, Formato, ModeloNeutro, OpcoesExportar, OpcoesImportar, ProvedorMalha, ProvedorOcct};
+use crate::{Capacidades, ErroConv, Formato, ModeloNeutro, OpcoesExportar, OpcoesImportar, Provedor3dm, ProvedorMalha, ProvedorOcct};
 use std::path::Path;
 
 pub trait Provedor: Send + Sync {
@@ -24,7 +24,7 @@ pub struct Registro {
 
 impl Default for Registro {
     fn default() -> Self {
-        Registro { provedores: vec![Box::new(ProvedorOcct), Box::new(ProvedorMalha)] }
+        Registro { provedores: vec![Box::new(ProvedorOcct), Box::new(ProvedorMalha), Box::new(Provedor3dm)] }
     }
 }
 

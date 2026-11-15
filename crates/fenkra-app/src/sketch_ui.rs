@@ -3037,7 +3037,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         Tool::Convert | Tool::Intersect => {
             let intersect = tool == Tool::Intersect;
             if let (Some(r), Some(h)) = (app.result.as_ref(), resp.hover_pos()) {
-                let filt = crate::picking::Filter { faces: intersect, edges: true, vertices: !intersect, planes: true, hidden_env: false, exclude_sketch: Some(edit.feature), fantasma: None };
+                let filt = crate::picking::Filter { faces: intersect, edges: true, vertices: !intersect, planes: true, hidden_env: false, exclude_sketch: Some(edit.feature), fantasma: None, planos_origem: app.settings.filter.planos_origem, planos_ref: app.settings.filter.planos_ref };
                 if let Some(p) = crate::picking::pick(r, &app.open.doc, &v.cam, rect, h, &filt) {
                     crate::picking::draw(&painter, r, &v.cam, rect, &p, false);
                     let made = crate::sketch_ext::world(&app.open.doc, r, &p, intersect, &v.f);

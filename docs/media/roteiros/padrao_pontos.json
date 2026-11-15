@@ -1,0 +1,43 @@
+{
+  "versao": 1,
+  "comando": "padrao_pontos",
+  "caso": "padrao_pontos",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    231,
+    0,
+    0,
+    5
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    422,
+    180,
+    540,
+    330
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "concluido": true,
+  "animacoes": [
+    {
+      "campo": "/Pattern/kind/Points/points/1/Fixed/0",
+      "de": 20,
+      "ate": 44,
+      "t0": 0.4,
+      "t1": 2.6
+    },
+    {
+      "campo": "/Pattern/kind/Points/points/0/Fixed/0",
+      "de": 10,
+      "ate": 22,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}

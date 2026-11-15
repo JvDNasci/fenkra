@@ -184,7 +184,7 @@ impl App {
         let outros: Vec<PathBuf> = self.settings.recent_files.iter().map(PathBuf::from).filter(|p| p.exists() && Some(p) != atual.as_ref()).take(12).collect();
         ui.menu_button(tr("Abrir recente"), |ui| {
             if outros.is_empty() {
-                ui.label(RichText::new(tr("Nenhum outro documento recente.")).weak());
+                crate::arabesco::vazio_com_texto(ui, RichText::new(tr("Nenhum outro documento recente.")).weak());
             }
             for p in &outros {
                 if ui.button(nome_curto(p)).on_hover_text(p.display().to_string()).clicked() {

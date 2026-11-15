@@ -92,3 +92,52 @@ openNURBS; e o DXF 2D com ida e volta também no desenho técnico, não só no s
 - **Relatório de ida e volta:** `docs/modulos/ida-e-volta.md`, gerado por `tests/ida_e_volta.rs`.
 - **3DM continua só com a detecção.** O fonte do openNURBS segue fora da máquina e trazê-lo pede o aval do usuário;
   a ponte desenhada acima é a próxima frente. **PDF 3D** e **STEP em XML** continuam fora pelos motivos do ADR 0055.
+
+## Adendo de 15/11/2026 (B211, ponte do 3DM)
+- **Licença conferida.** Com o aval do usuário, o repositório oficial (github.com/mcneel/opennurbs) foi clonado
+  com `--depth 1`: ramo 8.x, commit `eb92af3ba1806b0a34a99aba0d3bda83e3d46083`, versão 8.35.26251.13001
+  (15/09/2026). O `LICENSE` traz só o aviso de direitos, a isenção de garantia e a licença do zlib; o texto de
+  concessão está na página oficial do toolkit ("What is openNURBS?"): uso comercial incentivado, gratuito, sem
+  restrições de copyright nem de copyleft. Compatível com a LGPL do Fenkra; o `deny.toml` não muda (não é crate).
+  Registrado em `procedencia.md`, `NOTICE` e `THIRD-PARTY-LICENSES` (seção 6).
+- **O fonte não entra no repositório: script com a versão fixada.** São 414 arquivos e cerca de 18 MB de C++.
+  Vendorizar aumentaria o repositório e cada worktree; um submódulo pediria `git submodule update` (e rede) em
+  cada worktree dos agentes. `scripts/baixar_opennurbs.py` clona o commit fixado e guarda só os fontes da
+  biblioteca, o zlib, o `android_uuid` (fora do Windows), o `LICENSE` e o `CMakeLists.txt` em
+  `third_party/opennurbs` (no `.gitignore`), mais um `FENKRA_VERSAO` com URL e commit. O `build.rs` procura em
+  `FENKRA_OPENNURBS` e depois nas pastas acima do crate, então um worktree acha a cópia da raiz. Sem o fonte, o
+  crate compila sem a ponte, a matriz mostra o 3DM sem leitura nem gravação, e importar um 3DM responde como
+  obter o openNURBS.
+- **Compilação.** O `cc` compila os fontes da lista do `CMakeLists.txt` (mais a gerência de memória) com
+  `ON_COMPILING_OPENNURBS`, `Z_PREFIX`, `MY_ZCALLOC`, `UNICODE` e `ON_CMAKE_BUILD`, e `/bigobj` no MSVC; liga
+  `shlwapi`, `shell32`, `usp10`, `rpcrt4` e as do sistema. Primeira vez: cerca de 4 minutos com 2 tarefas. Um
+  carimbo (versão, pasta, alvo e otimização) evita recompilar quando só a ponte muda.
+- **Ponte (`crates/fenkra-3dm`).** Só dado atravessa: camadas (nome, cor, mãe, visível), objetos (nome, camada,
+  cor própria ou da camada) e a geometria, como malha ou como um fluxo de números da B-rep (formato no topo de
+  `fenkra-3dm/src/lib.rs`). O crate do 3DM não inclui nada do OpenCASCADE; o kernel monta e desmonta o fluxo
+  (`cpp/nurbs.inc`, `Shape::de_fluxo_nurbs` e `Shape::fluxo_nurbs`).
+- **Leitura.** B-rep com a topologia do arquivo: um vértice e uma aresta por vértice e aresta do 3DM, a curva de
+  aparo de cada face levada ao intervalo da aresta, costura (a mesma aresta duas vezes na face) com as duas curvas
+  de aparo, aparo singular como aresta degenerada, `SameParameter`, `ShapeFix_Shape` com a tolerância do modelo
+  como teto, e sólido quando a casca fecha. Superfície NURBS de mesmo parâmetro vai como está; a revolução e a
+  soma de curva com reta (o que o 3DM grava em cilindros, esferas e extrusões) vão como revolução e extrusão, com
+  os aparos levados por mapa afim (ângulo, arco e reta têm parâmetro diferente da forma NURBS); revolução de reta
+  ou círculo que é cilindro, cone, esfera ou toro vira a superfície própria do OpenCASCADE com o mesmo parâmetro.
+  Sem caminho exato, a face vai pela forma NURBS com os aparos levados ponto a ponto, e o objeto sai marcado como
+  aproximado. Extrusões e SubD entram pela forma B-rep do próprio openNURBS; malhas viram forma facetada; blocos
+  são expandidos no lugar (até 16 níveis); curvas, pontos e anotações ficam de fora e são contados no relatório.
+  Unidade do arquivo convertida para milímetros.
+- **Árvore e aparência.** Cada camada usada vira uma submontagem com a hierarquia das camadas, e os objetos ficam
+  dentro dela: na importação como peça, o corpo se chama "Camada / Subcamada / Objeto" e leva a cor; como
+  montagem, cada camada é um grupo. O caminho da camada fica em `ProdutoXde::camadas` para a gravação de volta.
+- **Gravação.** Cada peça no seu lugar vira um `ON_Brep`, com camada (a hierarquia refeita pelo caminho) e cor.
+  As faces vão no tipo de mesmo parâmetro: plano como retalho NURBS de grau 1, cilindro, cone, esfera, toro e
+  revolução como `ON_RevSurface`, extrusão linear como `ON_SumSurface`, NURBS como estão. Só quando alguma face
+  não tem esse caminho a forma inteira passa por `BRepBuilderAPI_NurbsConvert`. O openNURBS confere cada B-rep
+  (`IsValid`) e o que ele recusa volta como aviso. Grava sempre em milímetros, declarados no arquivo.
+- **Volume.** A integração padrão do `BRepGProp::VolumeProperties` erra na quarta casa em face aparada por curva
+  NURBS racional (o círculo de um furo vindo de 3DM): 1130,84 em vez de 1130,97 num cilindro de raio 6, com a
+  geometria igual (conferida por distância e por malha fina). `Shape::volume_preciso` usa a integração adaptativa;
+  a ida e volta confere com ele.
+- **Fora desta entrega:** gravar blocos como blocos (vão expandidos), materiais e texturas, curvas e pontos
+  soltos, e a unidade de saída escolhida no diálogo (o 3DM sai em milímetros).

@@ -1,0 +1,137 @@
+{
+ "id": "ms20002",
+ "nome": "Arruela lisa de alta resistência (MS20002)",
+ "norma": "MS 20002 (domínio público, distribuição A)",
+ "revisao": "E, 29 dez 1972 (aviso 2 de 2000)",
+ "versao": 1,
+ "gerador": "arruela",
+ "tipo": "arruela",
+ "nivel": "C",
+ "licenca": "CC BY 4.0 (dados)",
+ "fontes": [
+  {
+   "rotulo": "EverySpec — folha MS20002E (29 dez 1972), tabela de cotas",
+   "url": "https://everyspec.com/MS-Specs/MS2/MS20000-MS20999/MS20002E_7768/",
+   "pagina": "folha 1"
+  },
+  {
+   "rotulo": "Military Fasteners — fichas MS20002-4 e MS20002-5 (externo, furo, espessura)",
+   "url": "https://military-fasteners.com/products/ms20002-4-flat-washer"
+  }
+ ],
+ "campos": [
+  "d1",
+  "d2",
+  "h"
+ ],
+ "tamanhos": [
+  {
+   "designacao": "MS20002-4",
+   "original": "1/4 pol",
+   "d_nominal": 6.35,
+   "valores": {
+    "d1": 6.502,
+    "d2": 13.487,
+    "h": 1.575
+   },
+   "confirmado_por": 2,
+   "nota": "Arruela lisa para uso sob a porca, espessura 0,062 pol (desenho da folha). Folha MS20002E: Ø externo 0.531 pol, furo 0.252 a 0.260 pol. A versão escareada (sufixo C, espessura 0,078 pol, para sob a cabeça) não é modelada. Conferido na ficha pública do distribuidor (externo, furo e espessura 0,052 a 0,072 pol)."
+  },
+  {
+   "designacao": "MS20002-5",
+   "original": "5/16 pol",
+   "d_nominal": 7.938,
+   "valores": {
+    "d1": 8.115,
+    "d2": 15.062,
+    "h": 1.575
+   },
+   "confirmado_por": 2,
+   "nota": "Arruela lisa para uso sob a porca, espessura 0,062 pol (desenho da folha). Folha MS20002E: Ø externo 0.593 pol, furo 0.315 a 0.324 pol. A versão escareada (sufixo C, espessura 0,078 pol, para sob a cabeça) não é modelada. Conferido na ficha pública do distribuidor (externo, furo e espessura 0,052 a 0,072 pol)."
+  },
+  {
+   "designacao": "MS20002-6",
+   "original": "3/8 pol",
+   "d_nominal": 9.525,
+   "valores": {
+    "d1": 9.728,
+    "d2": 17.45,
+    "h": 1.575
+   },
+   "confirmado_por": 1,
+   "nota": "Arruela lisa para uso sob a porca, espessura 0,062 pol (desenho da folha). Folha MS20002E: Ø externo 0.687 pol, furo 0.378 a 0.388 pol. A versão escareada (sufixo C, espessura 0,078 pol, para sob a cabeça) não é modelada. PENDENTE: só a folha MS conferida."
+  },
+  {
+   "designacao": "MS20002-7",
+   "original": "7/16 pol",
+   "d_nominal": 11.112,
+   "valores": {
+    "d1": 11.328,
+    "d2": 19.837,
+    "h": 1.575
+   },
+   "confirmado_por": 1,
+   "nota": "Arruela lisa para uso sob a porca, espessura 0,062 pol (desenho da folha). Folha MS20002E: Ø externo 0.781 pol, furo 0.441 a 0.451 pol. A versão escareada (sufixo C, espessura 0,078 pol, para sob a cabeça) não é modelada. PENDENTE: só a folha MS conferida."
+  },
+  {
+   "designacao": "MS20002-8",
+   "original": "1/2 pol",
+   "d_nominal": 12.7,
+   "valores": {
+    "d1": 12.941,
+    "d2": 22.225,
+    "h": 1.575
+   },
+   "confirmado_por": 1,
+   "nota": "Arruela lisa para uso sob a porca, espessura 0,062 pol (desenho da folha). Folha MS20002E: Ø externo 0.875 pol, furo 0.504 a 0.515 pol. A versão escareada (sufixo C, espessura 0,078 pol, para sob a cabeça) não é modelada. PENDENTE: só a folha MS conferida."
+  },
+  {
+   "designacao": "MS20002-9",
+   "original": "9/16 pol",
+   "d_nominal": 14.287,
+   "valores": {
+    "d1": 14.567,
+    "d2": 24.587,
+    "h": 1.575
+   },
+   "confirmado_por": 1,
+   "nota": "Arruela lisa para uso sob a porca, espessura 0,062 pol (desenho da folha). Folha MS20002E: Ø externo 0.968 pol, furo 0.568 a 0.579 pol. A versão escareada (sufixo C, espessura 0,078 pol, para sob a cabeça) não é modelada. PENDENTE: só a folha MS conferida."
+  },
+  {
+   "designacao": "MS20002-10",
+   "original": "5/8 pol",
+   "d_nominal": 15.875,
+   "valores": {
+    "d1": 16.18,
+    "d2": 26.975,
+    "h": 1.575
+   },
+   "confirmado_por": 1,
+   "nota": "Arruela lisa para uso sob a porca, espessura 0,062 pol (desenho da folha). Folha MS20002E: Ø externo 1.062 pol, furo 0.631 a 0.643 pol. A versão escareada (sufixo C, espessura 0,078 pol, para sob a cabeça) não é modelada. PENDENTE: só a folha MS conferida."
+  },
+  {
+   "designacao": "MS20002-12",
+   "original": "3/4 pol",
+   "d_nominal": 19.05,
+   "valores": {
+    "d1": 19.393,
+    "d2": 31.75,
+    "h": 1.575
+   },
+   "confirmado_por": 1,
+   "nota": "Arruela lisa para uso sob a porca, espessura 0,062 pol (desenho da folha). Folha MS20002E: Ø externo 1.250 pol, furo 0.757 a 0.770 pol. A versão escareada (sufixo C, espessura 0,078 pol, para sob a cabeça) não é modelada. PENDENTE: só a folha MS conferida."
+  },
+  {
+   "designacao": "MS20002-14",
+   "original": "7/8 pol",
+   "d_nominal": 22.225,
+   "valores": {
+    "d1": 22.619,
+    "d2": 36.5,
+    "h": 1.575
+   },
+   "confirmado_por": 1,
+   "nota": "Arruela lisa para uso sob a porca, espessura 0,062 pol (desenho da folha). Folha MS20002E: Ø externo 1.437 pol, furo 0.884 a 0.897 pol. A versão escareada (sufixo C, espessura 0,078 pol, para sob a cabeça) não é modelada. PENDENTE: só a folha MS conferida."
+  }
+ ]
+}

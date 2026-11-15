@@ -1354,7 +1354,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     let mut edit_req: Option<Id> = None;
     let mut anchor_req: Option<(Id, usize, [f64; 3], Option<PmiTarget>)> = None;
     let mut refresh: Vec<(Id, Vec<[f64; 3]>, Vec<Option<PmiTarget>>)> = vec![];
-    let pick_filter = crate::picking::Filter { faces: true, edges: true, vertices: true, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None };
+    let pick_filter = crate::picking::Filter { faces: true, edges: true, vertices: true, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None, planos_origem: true, planos_ref: true };
     let mut clicked = None;
     let fields = title_fields(app);
     // B117: número de inspeção de cada característica, quando os balões estão ligados

@@ -28,6 +28,7 @@ mod pmi_step;
 mod provedor;
 mod relatorio;
 mod sonda;
+pub mod tresdm;
 
 pub use documento::montar_documento;
 pub use formato::{detectar, Formato};
@@ -39,6 +40,7 @@ pub use malha::{Cena, OpcoesMalha, ProvedorMalha};
 pub use matriz::{Capacidades, LinhaMatriz};
 pub use pmi_step::{anotacoes_com_modo, anotacoes_do_documento, face_do_alvo, ModoPmi, SaidaPmi, NOTAS_PMI};
 pub use provedor::{Provedor, Registro};
+pub use tresdm::Provedor3dm;
 pub use relatorio::{Contagem, Defeito, LinhaReparo, Nota, Relatorio, TipoDefeito, NOTAS};
 
 /// Por que uma conversão não terminou.

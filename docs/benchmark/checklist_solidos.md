@@ -15,11 +15,11 @@ medidos no código; "Intuitivo" fica a conferir até o teste com pessoas que nun
 | Recorte até plano | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Revolução | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Ranhura | a conferir | ok | ok | ok | ok | ok | ok |  |
-| Nervura | a conferir | ok | ok | ok | parcial | ok | ok | sem GIF (camada 3) |
-| Rasgo varrido | a conferir | ok | ok | ok | parcial | ok | ok | sem GIF (camada 3) |
+| Nervura | a conferir | ok | ok | ok | ok | ok | ok |  |
+| Rasgo varrido | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Reforço | a conferir | ok | ok | ok | ok | ok | ok |  |
-| Multi-seções | a conferir | ok | ok | ok | parcial | ok | ok | sem GIF (camada 3) |
-| Multi-seções - | a conferir | ok | ok | ok | parcial | ok | ok | sem GIF (camada 3) |
+| Multi-seções | a conferir | ok | ok | ok | ok | ok | ok |  |
+| Multi-seções - | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Furo | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Rebaixado | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Escareado | a conferir | ok | ok | ok | ok | ok | ok |  |
@@ -27,12 +27,12 @@ medidos no código; "Intuitivo" fica a conferir até o teste com pessoas que nun
 | Filete | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Filete variável | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Face-face | a conferir | ok | ok | ok | ok | ok | ok |  |
-| Completo | a conferir | ok | ok | ok | parcial | ok | ok | sem GIF (camada 3) |
-| Filete total | a conferir | ok | ok | ok | parcial | ok | ok | sem GIF (camada 3) |
+| Completo | a conferir | ok | ok | ok | ok | ok | ok |  |
+| Filete total | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Chanfro | a conferir | ok | ok | ok | ok | ok | ok |  |
 | 2 distâncias | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Dist. + ângulo | a conferir | ok | ok | ok | ok | ok | ok |  |
-| Chanfro total | a conferir | ok | ok | ok | parcial | ok | ok | sem GIF (camada 3) |
+| Chanfro total | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Saída | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Casca | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Espessura | a conferir | ok | ok | ok | ok | ok | ok |  |
@@ -44,7 +44,7 @@ medidos no código; "Intuitivo" fica a conferir até o teste com pessoas que nun
 | Ranhura de encaixe | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Padrão linear | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Padrão circular | a conferir | ok | ok | ok | ok | ok | ok |  |
-| Por pontos | a conferir | ok | ok | ok | parcial | ok | ok | sem GIF (camada 3) |
+| Por pontos | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Espelho | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Escala | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Translação | a conferir | ok | ok | ok | ok | ok | ok |  |
@@ -58,12 +58,12 @@ medidos no código; "Intuitivo" fica a conferir até o teste com pessoas que nun
 | Cilindro | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Esfera | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Cone | a conferir | ok | ok | ok | ok | ok | ok |  |
-| Toro | a conferir | ok | ok | ok | parcial | ok | ok | sem GIF (camada 3) |
-| Cunha | a conferir | ok | ok | ok | parcial | ok | ok | sem GIF (camada 3) |
+| Toro | a conferir | ok | ok | ok | ok | ok | ok |  |
+| Cunha | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Prisma | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Mover face | a conferir | ok | ok | ok | ok | ok | ok |  |
-| Apagar face | a conferir | ok | ok | ok | parcial | ok | ok | sem GIF (camada 3) |
+| Apagar face | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Deslocar face | a conferir | ok | ok | ok | ok | ok | ok |  |
 | Raio do filete | a conferir | ok | ok | ok | ok | ok | ok |  |
 
-48 de 59 comandos com ok em todos os itens medidos (fora "Intuitivo").
+59 de 59 comandos com ok em todos os itens medidos (fora "Intuitivo").

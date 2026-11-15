@@ -7,6 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+fenkra-3dm = { path = "../fenkra-3dm" }
 fenkra-core = { path = "../fenkra-core" }
 fenkra-desenho = { path = "../fenkra-desenho" }
 fenkra-dxf = { path = "../fenkra-dxf" }

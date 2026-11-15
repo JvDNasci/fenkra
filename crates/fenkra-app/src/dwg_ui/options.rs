@@ -64,6 +64,10 @@ fn fit_scale(st: &mut DwgState, tool: u8) -> f64 {
         return v.scale;
     }
     let Some(src) = st.source.clone() else { return 1. };
+    if tool == c::SET {
+        // B473: as quatro vistas e os vãos entre elas dentro da moldura e fora do carimbo
+        return conjunto_auto(st, &src).0;
+    }
     // B415: a área que sobra dentro da moldura, descontada a legenda (largura e altura)
     let size = st.d.sheet(st.sheet).map(|s| s.size()).unwrap_or([420., 297.]);
     let (m0, m1) = st.d.sheet(st.sheet).map(fenkra_desenho::ocupacao::area_moldura).unwrap_or(([20., 10.], [size[0] - 10., size[1] - 10.]));
@@ -91,6 +95,16 @@ fn fit_scale(st: &mut DwgState, tool: u8) -> f64 {
         return 1.;
     }
     PRESETS.iter().copied().find(|s| w * s + margin <= livre[0] && h * s + margin <= livre[1]).unwrap_or(PRESETS[PRESETS.len() - 1])
+}
+
+/// B473: escala automática das quatro vistas padrão e a caixa delas (relativa ao centro da frente).
+pub(super) fn conjunto_auto(st: &mut DwgState, src: &Source) -> (f64, (V2, V2)) {
+    let sheet = st.sheet;
+    let mut t = ghost::scratch(st, 3);
+    let med = fenkra_desenho::conjunto::medir_conjunto(&mut t, &mut st.models, sheet, src);
+    let area = fenkra_desenho::conjunto::area_util(&st.d, sheet);
+    let (s, caixa, _) = fenkra_desenho::conjunto::escala_do_conjunto(&med, st.d.projection, area, 25.);
+    (s, caixa)
 }
 
 /// Miniatura de uma direção: um cubo em perspectiva cavaleira com a(s) face(s) vista(s) pintadas.

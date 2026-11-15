@@ -92,6 +92,9 @@ pub const GERADORES: &[(&str, TipoFixador)] = &[
     ("parafuso_escareado", TipoFixador::ParafusoAllen),
     ("parafuso_ombro", TipoFixador::ParafusoAllen),
     ("porca_flangeada", TipoFixador::Porca),
+    // prendedores aeronáuticos de forma própria (B43): 12 pontos flangeado e pino de cabeça com furo de cupilha
+    ("parafuso_12pontos", TipoFixador::ParafusoSextavado),
+    ("pino_cabeca", TipoFixador::ParafusoAllen),
 ];
 
 /// Campos que o gerador precisa, além dos do tipo.
@@ -99,6 +102,8 @@ pub fn campos_do_gerador(gerador: &str) -> &'static [&'static str] {
     match gerador {
         "parafuso_ombro" => &["dr", "b"],
         "porca_flangeada" => &["dc", "c"],
+        "parafuso_12pontos" => &["A", "Q", "D"],
+        "pino_cabeca" => &["A", "dk", "k", "E", "OL"],
         "prisioneiro" => &["b", "bm"],
         "rebite_universal" => &["k"],
         // perfil quadrado com tirantes (ISO 15552) ou tubo redondo com olhal (ISO 6432)
@@ -440,7 +445,9 @@ impl Familia {
         if self.campos.is_empty() {
             return er("sem campos");
         }
-        for c in self.tipo.campos_obrigatorios().iter().chain(campos_do_gerador(&self.gerador)) {
+        // o pino de cabeça usa o tipo do parafuso só para a montagem (entra no furo com L); ele não tem passo nem sextavado
+        let do_tipo: &[&str] = if self.gerador == "pino_cabeca" { &[] } else { self.tipo.campos_obrigatorios() };
+        for c in do_tipo.iter().chain(campos_do_gerador(&self.gerador)) {
             if !self.campos.iter().any(|x| x == c) {
                 return er(&format!("falta o campo '{c}' exigido pelo tipo {} (gerador {})", self.tipo.rotulo(), self.gerador));
             }
@@ -597,6 +604,11 @@ const PUBLICA: &[(&str, &str)] = &[
     ("ms21042.json", include_str!("../../../biblioteca/fixadores/ms21042.json")),
     ("an470.json", include_str!("../../../biblioteca/fixadores/an470.json")),
     ("an426.json", include_str!("../../../biblioteca/fixadores/an426.json")),
+    ("ms20004.json", include_str!("../../../biblioteca/fixadores/ms20004.json")),
+    ("ms20073.json", include_str!("../../../biblioteca/fixadores/ms20073.json")),
+    ("ms20002.json", include_str!("../../../biblioteca/fixadores/ms20002.json")),
+    ("ms20392.json", include_str!("../../../biblioteca/fixadores/ms20392.json")),
+    ("ms21250.json", include_str!("../../../biblioteca/fixadores/ms21250.json")),
     ("iso15_60.json", include_str!("../../../biblioteca/rolamentos/iso15_60.json")),
     ("iso15_62.json", include_str!("../../../biblioteca/rolamentos/iso15_62.json")),
     ("iso15_63.json", include_str!("../../../biblioteca/rolamentos/iso15_63.json")),
@@ -776,7 +788,7 @@ mod tests {
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
         // 42 + o terminal rotular ilustrativo (B397) + as quatro fixações de cilindro (B45)
-        assert_eq!(b.familias.len(), 47);
+        assert_eq!(b.familias.len(), 52);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -784,8 +796,8 @@ mod tests {
             assert_eq!(f.nivel, "C");
             assert!(f.licenca.starts_with("CC BY 4.0"));
         }
-        // 4762, 4017, 933, 4014, 7380-1, 10642, 7045, 938, 939, 7379, B18.3 e AN
-        assert_eq!(familias().iter().filter(|f| f.tipo.e_parafuso()).count(), 12);
+        // 4762, 4017, 933, 4014, 7380-1, 10642, 7045, 938, 939, 7379, B18.3 e AN, mais MS20004, MS20073, MS21250 e o pino MS20392 (B43)
+        assert_eq!(familias().iter().filter(|f| f.tipo.e_parafuso()).count(), 16);
     }
 
     #[test]
@@ -892,7 +904,7 @@ mod tests {
     fn parafusos_aeronauticos_an3_a_an6_pela_pega() {
         // B43: AN3 a AN6, pega e comprimento conferidos em duas tabelas; b = L − pega é constante por tamanho
         let f = familia("an3").unwrap();
-        assert_eq!(f.tamanhos.iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["AN3", "AN4", "AN5", "AN6", "AN7", "AN8"]);
+        assert_eq!(f.tamanhos.iter().map(|t| t.designacao.as_str()).collect::<Vec<_>>(), ["AN3", "AN4", "AN5", "AN6", "AN7", "AN8", "AN9", "AN10"]);
         let pol = 25.4;
         // AN7 e AN8 (B43): AN7-12A com L 1 11/32" dentro de 1,328 a 1,375 e b = 21/32" (Military
         // Fasteners); chave 5/8" e 3/4" (Hi-Line) dentro da faixa entre faces
@@ -1181,7 +1193,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 48);
+        assert_eq!(m.familias.len(), 53);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

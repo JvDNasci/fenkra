@@ -14,6 +14,7 @@ mas que não estavam no cache local (alvos Linux, macOS, Android e web) e ainda 
   3. Crates Rust (licença declarada em cada Cargo.toml)
   4. Textos de licença dos crates Rust
   5. Visualizador web: three.js (MIT), embutido na página gerada pelo `fenkra-pacote`
+  6. openNURBS (3DM), ligado de forma estática, e o zlib que vem com ele
 
 ==============================================================================
 1. BIBLIOTECAS NATIVAS (vcpkg x64-windows-release)
@@ -12051,3 +12052,26 @@ THE SOFTWARE.
 manifold-rust 0.19.2 (Apache-2.0), usado por fenkra-malha nas booleanas de malha.
 Texto da licença Apache-2.0: seção correspondente deste arquivo.
 =============================================================================
+
+==============================================================================
+6. OPENNURBS (B211, ADR 0090)
+==============================================================================
+openNURBS, ramo 8.x, versão 8.35.26251.13001, commit eb92af3ba1806b0a34a99aba0d3bda83e3d46083, do repositório oficial
+https://github.com/mcneel/opennurbs. Compilado do fonte por crates/fenkra-3dm/build.rs e ligado de forma
+estática; o fonte é baixado por scripts/baixar_opennurbs.py e não fica no repositório do Fenkra.
+
+Aviso de direitos e isenção de garantia do arquivo LICENSE do repositório:
+
+    Copyright (c) 1993-2018 Robert McNeel & Associates. All Rights Reserved.
+
+    THIS SOFTWARE IS PROVIDED "AS IS" WITHOUT EXPRESS OR IMPLIED
+    WARRANTY.  ALL IMPLIED WARRANTIES OF FITNESS FOR ANY PARTICULAR
+    PURPOSE AND OF MERCHANTABILITY ARE HEREBY DISCLAIMED.
+
+Termos de uso: a página oficial do toolkit (developer.rhino3d.com/guides/opennurbs/what-is-opennurbs)
+declara que o uso comercial é incentivado, que as ferramentas são gratuitas e que não se aplicam
+restrições de copyright nem de copyleft. Os cabeçalhos dos fontes mandam ao site do openNURBS para os
+termos completos. O aviso original cita marcas de produto do titular, que o Fenkra não usa.
+
+zlib 1.1.3 (subconjunto embutido no openNURBS, sem modificação), de Jean-loup Gailly e Mark Adler, sob a
+licença do zlib, cujo texto completo está na seção 1 deste arquivo.

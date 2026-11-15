@@ -1,0 +1,45 @@
+{
+  "versao": 1,
+  "comando": "nervura",
+  "caso": "nervura",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    28,
+    215,
+    17,
+    0,
+    0
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    422,
+    180,
+    540,
+    330
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "concluido": true,
+  "animacoes": [
+    {
+      "campo": "/Polyline/points/2/Fixed/1",
+      "de": 0,
+      "ate": 6,
+      "t0": 0.4,
+      "t1": 2.6,
+      "referencia": 0
+    },
+    {
+      "campo": "/Polyline/points/3/Fixed/1",
+      "de": 0,
+      "ate": 16,
+      "t0": 0.4,
+      "t1": 2.6,
+      "referencia": 0
+    }
+  ]
+}
