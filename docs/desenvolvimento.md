@@ -75,6 +75,7 @@ preferências do usuário.
 | `FENKRA_DEMO_LEVE=1` | mostra a caixa de sugestão do modo leve (motivos de exemplo) |
 | `FENKRA_DEMO_RELATORIO=1` | mostra um relatório de falha de exemplo, sem gravar nada |
 | `FENKRA_DEMO_INICIO=1` | mostra a tela inicial |
+| `FENKRA_DEMO_ANIMAR=1` | anima a tela inicial mesmo com os efeitos de animação do Windows desligados (B455) |
 | `FENKRA_DEMO_TEMA=<nome>` | usa o tema (Escuro, Claro, NeoTech Minimalista…) |
 | `FENKRA_DEMO_IMPORTAR=<arquivo>` | abre o painel de importação com o arquivo; `FENKRA_DEMO_IMPORTAR_OK=1` confirma sozinho |
 | `FENKRA_DEMO_INVALIDO=1` | todo corpo conta como inválido na conferência de validade (B413): a árvore mostra o aviso "sólido inválido" em cada comando que mexe em corpo |

@@ -595,6 +595,9 @@ pub struct Settings {
     pub leve_anterior: Option<crate::perfil::Anterior>,
     /// transições da interface e da câmera (desligadas no modo leve)
     pub animacoes: bool,
+    /// B455: realce e fundo animados da tela inicial (desligam sozinhos no modo leve, no adaptador
+    /// por software e com "reduzir movimento")
+    pub animar_inicio: bool,
     /// B347: no máximo quantos quadros por segundo enquanto algo se move
     pub limite_quadros: crate::desempenho::Limite,
     /// B347: sincronismo vertical (cada quadro espera a tela atualizar)
@@ -721,6 +724,7 @@ impl Default for Settings {
             modo_leve: false,
             leve_anterior: None,
             animacoes: true,
+            animar_inicio: true,
             limite_quadros: Default::default(),
             vsync: true,
             contador_fps: false,

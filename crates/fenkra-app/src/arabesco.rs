@@ -86,16 +86,6 @@ pub fn separador(ui: &mut egui::Ui) {
     ui.painter().add(egui::Shape::line(pts, Stroke::new(1., cor_do_fio(ui))));
 }
 
-/// Fio da tela inicial, centrado; só com o tema que liga o arabesco.
-pub fn fio_da_marca(ui: &mut egui::Ui) {
-    if !crate::theme::arabesco_ativo() {
-        return;
-    }
-    let (r, _) = ui.allocate_exact_size(egui::vec2(280., 18.), egui::Sense::hover());
-    let pts: Vec<Pos2> = fio(280., 14.).into_iter().map(|p| r.center() + p.to_vec2()).collect();
-    ui.painter().add(egui::Shape::line(pts, Stroke::new(1., cor_do_fio(ui))));
-}
-
 /// Ornamento de estado vazio, centrado em `rect`; só com o tema que liga o arabesco.
 pub fn estado_vazio(ui: &mut egui::Ui, rect: Rect) {
     if !crate::theme::arabesco_ativo() {

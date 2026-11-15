@@ -119,6 +119,7 @@ pub const CLASSIFICACAO: &[(&str, Classe)] = &[
     ("modo_leve", Maquina),
     ("leve_anterior", Maquina),
     ("animacoes", Maquina),
+    ("animar_inicio", Interface),
     ("limite_quadros", Maquina),
     ("vsync", Maquina),
     ("contador_fps", Interface),

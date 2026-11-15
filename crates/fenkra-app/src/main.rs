@@ -302,6 +302,8 @@ mod acessibilidade;
 mod camera_nav;
 mod arabesco;
 mod inicio_tema;
+mod tela_inicial;
+mod textos_inicio;
 mod props_geometria;
 mod asm_fundo;
 mod instancias;
