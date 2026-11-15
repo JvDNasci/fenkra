@@ -241,6 +241,8 @@ pub struct Estado {
     /// a montagem ainda não tem arquivo (copiado do estado a cada quadro): o painel avisa que inserir
     /// pede para salvar antes (B450)
     pub sem_pasta: bool,
+    /// um clique na vista foi da inserção neste quadro: a seleção não pode ficar com ele (B462)
+    clique_tomado: bool,
 }
 
 impl Default for Estado {
@@ -266,6 +268,7 @@ impl Default for Estado {
             furos: None,
             foco_ficha: false,
             sem_pasta: false,
+            clique_tomado: false,
         }
     }
 }
@@ -1052,6 +1055,18 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
     }
 }
 
+/// Depois da viewport (B462). Com a inserção armada, o clique na vista é dela: a face embaixo não
+/// fica selecionada e o manipulador da peça não abre. A viewport escolhe a face no clique antes de a
+/// biblioteca ver o mesmo clique; aqui a escolha é desfeita e a seleção por clique não roda.
+pub fn apos_viewport(app: &mut App) -> bool {
+    let Some(est) = app.asm.as_mut().and_then(|s| s.catalogo.as_mut()) else { return false };
+    let tomou = std::mem::take(&mut est.clique_tomado);
+    if tomou {
+        app.picks.clear();
+    }
+    tomou || est.inserindo.is_some_and(|i| !i.arrastando)
+}
+
 fn quadro_da_insercao(st: &mut crate::asm_ui::AsmState, est: &mut Estado, ui: &mut egui::Ui, rect: Rect, cam: &Camera) -> Aviso {
     let ctx = ui.ctx().clone();
     let Some(ins) = est.inserindo else { return None };
@@ -1074,6 +1089,7 @@ fn quadro_da_insercao(st: &mut crate::asm_ui::AsmState, est: &mut Estado, ui: &m
     let sobre_viewport = pos.is_some_and(|p| rect.contains(p) && ctx.layer_id_at(p).is_some_and(|l| l.order == egui::Order::Background));
     let solto = ctx.input(|i| i.pointer.primary_released());
     let clicou = ctx.input(|i| i.pointer.primary_clicked());
+    est.clique_tomado |= clicou && sobre_viewport && !ins.arrastando;
     let alt = ctx.input(|i| i.modifiers.alt);
     if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Tab)) {
         est.inverter = !est.inverter;
@@ -1278,6 +1294,7 @@ fn quadro_livre(st: &mut crate::asm_ui::AsmState, est: &mut Estado, ui: &mut egu
     let sobre_viewport = pos.is_some_and(|p| rect.contains(p) && ctx.layer_id_at(p).is_some_and(|l| l.order == egui::Order::Background));
     let solto = ctx.input(|i| i.pointer.primary_released());
     let clicou = ctx.input(|i| i.pointer.primary_clicked());
+    est.clique_tomado |= clicou && sobre_viewport && !ins.arrastando;
     let alt = ctx.input(|i| i.modifiers.alt);
     let demo = est.cursor_demo.map(|f| rect.min + egui::vec2(rect.width() * f[0], rect.height() * f[1]));
     let Some(pos) = demo.or(pos.filter(|_| sobre_viewport)) else {
@@ -1666,6 +1683,52 @@ mod tests {
         assert_eq!(st.undo.len(), 1);
         st.asm = st.undo.pop().unwrap();
         assert_eq!(pecas(&st), 1);
+    }
+
+    #[test]
+    fn o_clique_que_insere_nao_seleciona_a_face_embaixo_nem_abre_o_manipulador() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // B462: o mesmo clique punha o parafuso e selecionava a face da placa, abrindo o gizmo dela
+        let mut st = montagem("b462");
+        let placa = st.asm.nodes.iter().find(|n| n.name == "Placa").unwrap().id;
+        let mut est = armar(Alvo::Ponto, "iso4762", "M6", Some(20.));
+        let ctx = egui::Context::default();
+        quadro(&ctx, &mut st, &mut est, vec![]);
+        let p = tela().center();
+        let (o, d) = Camera::default().ray(tela(), p);
+        let (ponto, normal) = avulso::ponto_na_cena(malhas_da_cena(&st), d3(o), d3(d)).expect("a placa está no centro da vista");
+        let aviso = clicar(&ctx, &mut st, &mut est, p);
+        assert!(aviso.as_ref().is_some_and(|a| !a.1), "{aviso:?}");
+        assert_eq!(pecas(&st), 2, "o parafuso entrou");
+        // o mesmo clique, visto pela viewport: a face da placa embaixo do cursor
+        let face = crate::picking::Pick::Face { body: 0, face: 0, owner: fenkra_core::Id(1), point: ponto.map(|v| v as f32), normal: normal.map(|v| v as f32) };
+        let mut app = App::new(&eframe::CreationContext::_new_kittest(egui::Context::default()));
+        app.settings.bench = crate::settings::Bench::Montagem;
+        st.sel = None;
+        st.catalogo = Some(est);
+        st.refresh();
+        assert_eq!(st.comp_of_body(0), Some(placa), "o corpo 0 da vista é a placa");
+        // vista: placa de exemplo e o parafuso M6x20 em pé no ponto, sem erro
+        let v = st.view.as_ref().expect("vista");
+        assert_eq!(v.bodies.len(), 2);
+        assert!(v.status.values().all(|s| !matches!(s, fenkra_solidos::Status::Error(_))), "{:?}", v.status);
+        assert!(v.bodies[1].mass.volume > 400. && v.bodies[1].mass.volume < 1000., "M6x20: {}", v.bodies[1].mass.volume);
+        let (lo, hi) = st.caixas[1];
+        assert!((0..2).all(|i| ponto[i] as f32 > lo[i] && (ponto[i] as f32) < hi[i]), "o parafuso fica no ponto clicado: {lo:?} {hi:?} {ponto:?}");
+        app.asm = Some(st);
+        app.picks = vec![face];
+        crate::asm_ui::after_viewport(&mut app, &ctx);
+        let st = app.asm.as_mut().unwrap();
+        assert!(app.picks.is_empty(), "a face não fica selecionada");
+        assert_eq!(st.sel, None, "a placa não é escolhida: sem ela o manipulador não abre");
+        assert!(st.catalogo.as_ref().is_some_and(|c| c.inserindo.is_some()), "segue armado para o próximo");
+        // desarmado (Esc), o clique volta a ser da seleção
+        st.catalogo.as_mut().unwrap().inserindo = None;
+        app.picks = vec![face];
+        crate::asm_ui::after_viewport(&mut app, &ctx);
+        assert_eq!(app.asm.as_ref().unwrap().sel, Some(placa), "sem inserção, o clique escolhe a peça");
     }
 
     #[test]
