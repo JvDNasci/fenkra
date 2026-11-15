@@ -318,6 +318,7 @@ impl Tradutor {
                     _ => PosicaoDobra::Centro,
                 },
             },
+            FeatureKind::SmCone(c) => Comando::DobraConica { r1: c.r1.clone(), r2: c.r2.clone(), altura: c.height.clone(), centro: c.center, k: preenchido(&c.k) },
             FeatureKind::StructMember(m) => {
                 if !m.joints.is_empty() || m.corner == CornerMode::Dobra {
                     return Err("membro com regra própria de canto ou dobra de tubo no nó não existe na versão 1".into());

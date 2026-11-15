@@ -12,6 +12,7 @@
 //! (igual ao perímetro neutro do cone) e o volume (Pappus). Fica de fora: a aba cônica numa borda
 //! circular de chapa plana (ela não se desenvolve sem esticar o material; veja `dobra por linha em curva`).
 
+use super::*;
 use fenkra_kernel::{Frame, Loop2, Seg2, Shape};
 
 /// Desenvolvimento do tronco de cone.
@@ -88,6 +89,30 @@ pub fn corpo_plano(c: &Cone, t: f64) -> Result<Shape, String> {
     ];
     let plano = Frame { origin: [0.; 3], x: [1., 0., 0.], normal: [0., 0., 1.] };
     Shape::face(&plano, &[perfil]).and_then(|f| f.extrude([0., 0., 1.], t, 0.)).map_err(k)
+}
+
+impl Ctx<'_> {
+    /// Comando da dobra cônica: cria o corpo base, dobrado (tronco) ou planificado (setor), conforme o
+    /// estado da chapa. A espessura vem da chapa; o fator K, do comando ou da regra para o raio da boca menor.
+    pub(crate) fn run_cone(&mut self, f: &Feature, c: &SmCone) -> Result<Option<String>, String> {
+        let sp = self.sheet()?;
+        let r1 = ev(&c.r1, &self.vars, "raio da boca menor")?;
+        let r2 = ev(&c.r2, &self.vars, "raio da boca maior")?;
+        let h = ev(&c.height, &self.vars, "altura do tronco")?;
+        let k = match &c.k {
+            Some(e) if !e.trim().is_empty() => ev(e, &self.vars, "fator K")?,
+            _ => sp.k_for(r1),
+        };
+        let cone = desenvolve(r1, r2, h, sp.t, k)?;
+        let corpo = if sp.flat { corpo_plano(&cone, sp.t)? } else { corpo_dobrado(r1, r2, h, sp.t)? };
+        let corpo = if c.center == [0.; 3] { corpo } else { corpo.transformed(Xform::Translate(c.center)).map_err(|e| e.0)? };
+        self.apply(f.target, corpo, BoolOp::Add, f.id)?;
+        // o volume do dobrado é o girado (linha neutra no meio da parede) e o do plano é o do setor na linha
+        // neutra do fator K: a razão entre os dois é (r̄ + K·t·cos α) / (r̄ + t/2·cos α), com r̄ o raio médio
+        let rm = (r1 + r2) / 2.;
+        let dif = ((rm + k * sp.t * cone.alfa.cos()) / (rm + sp.t / 2. * cone.alfa.cos()) - 1.).abs() * 100.;
+        Ok((dif > 0.1).then(|| format!("fator K {k:.2}: o volume da planificada difere do dobrado em {dif:.1}% (a linha neutra não fica no meio da parede; em K = 0,5 os dois batem)")))
+    }
 }
 
 #[cfg(test)]

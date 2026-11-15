@@ -101,6 +101,8 @@ pub mod chapa_cega;
 pub mod chapa_cone;
 #[cfg(test)]
 mod chapa_cega_tests;
+#[cfg(test)]
+mod chapa_cone_tests;
 mod chapa_flat;
 mod arestas;
 mod chapa_laco;
@@ -3971,6 +3973,7 @@ impl Ctx<'_> {
         let own = matches!(
             f.kind,
             FeatureKind::SmWall(_)
+                | FeatureKind::SmCone(_)
                 | FeatureKind::SmFlange(_)
                 | FeatureKind::SmFlangeLoop(_)
                 | FeatureKind::SmHem(_)
@@ -4844,6 +4847,7 @@ impl Ctx<'_> {
                 self.apply_roles(f.target, tool, BoolOp::Add, f.id, Some(roles))?;
                 Ok(None)
             }
+            FeatureKind::SmCone(c) => self.run_cone(f, c),
             FeatureKind::SmFlange(fl) => self.run_flange(f, fl, &ExtensaoAba::Inteira, false),
             FeatureKind::SmFlangeLoop(lp) => self.run_flange_loop(f, lp),
             FeatureKind::SmCornerClose(cc) => self.run_corner_close(f, cc),
