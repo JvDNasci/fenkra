@@ -168,10 +168,11 @@ fn salvar_como_copia_a_peca_linkada_e_os_recursos() {
     }
     let furo = placa.external.iter().find(|e| e.publication.starts_with("montagem:furo:")).unwrap();
     assert_eq!(chave(&v2.join(&furo.path)), chave(&dest), "o furo segue a cópia da montagem");
-    assert_eq!(chave(Path::new(&placa.textures[0].path)), chave(&v2.join("textura.png")), "textura com caminho absoluto da cópia");
-    let casca = Document::from_json(&std::fs::read_to_string(v2.join("casca.fkp")).unwrap()).unwrap();
+    assert_eq!(placa.textures[0].path, "textura.png", "textura relativa à cópia (B454)");
+    let casca = Document::from_json(&std::fs::read_to_string(v2.join("casca.fkp")).unwrap()).unwrap().na_pasta(&v2.join("casca.fkp"));
     let FeatureKind::MeshImport(m) = &casca.features[0].kind else { panic!() };
-    assert_eq!(chave(Path::new(&m.path)), chave(&v2.join("casca.stl")));
+    assert_eq!(m.path, "casca.stl");
+    assert_eq!(chave(&casca.arquivo_externo(&m.path)), chave(&v2.join("casca.stl")));
     let diag = diagnosticar(&v2.join("placa.fkp"), &[c.d.clone()]);
     assert!(diag.iter().all(|x| x.veredito == Veredito::Ok), "{diag:?}");
     // os originais ficaram como estavam
@@ -192,7 +193,8 @@ fn salvar_como_mantendo_aponta_para_a_peca_linkada_original() {
         assert_eq!(l.path, "../../pecas/mestre.fkp");
         assert_eq!(l.uid, c.uid_mestre, "mantido: continua o mesmo documento");
     }
-    assert_eq!(chave(Path::new(&placa.textures[0].path)), chave(&c.d.join("pecas/textura.png")));
+    assert_eq!(placa.textures[0].path, "../../pecas/textura.png");
+    assert_eq!(chave(&placa.clone().na_pasta(&dest).arquivo_externo(&placa.textures[0].path)), chave(&c.d.join("pecas/textura.png")));
     let diag = diagnosticar(&dest, &[c.d.clone()]);
     assert!(diag.iter().all(|x| x.veredito == Veredito::Ok), "{diag:?}");
     // mover o mestre atualiza o link da placa (achada pelo onde-usado)

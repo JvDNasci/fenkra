@@ -277,7 +277,7 @@ impl<'a> Gerador<'a> {
             let (no, m) = match &n.kind {
                 NodeKind::Part { path } => {
                     let cheio = pasta.join(path);
-                    let lida = std::fs::read_to_string(&cheio).map_err(|e| e.to_string()).and_then(|t| Document::from_json(&t).map_err(|e| e.to_string()));
+                    let lida = std::fs::read_to_string(&cheio).map_err(|e| e.to_string()).and_then(|t| Document::from_json(&t).map(|d| d.na_pasta(&cheio)).map_err(|e| e.to_string()));
                     let peca = match lida.map_err(|e| Falta::Erro(format!("{}: {e}", cheio.display()))).and_then(|doc| self.peca(&cheio, doc)) {
                         Ok(p) => p,
                         Err(Falta::Esqueleto(_)) => continue,
@@ -551,7 +551,7 @@ pub fn de_arquivo(caminho: &Path, opc: &Opcoes) -> Result<Pacote, String> {
     let txt = std::fs::read_to_string(caminho).map_err(|e| format!("{}: {e}", caminho.display()))?;
     let pasta = caminho.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
     match caminho.extension().and_then(|e| e.to_str()).map(str::to_lowercase).as_deref() {
-        Some("fkp") => de_peca(&Document::from_json(&txt).map_err(|e| e.to_string())?, opc),
+        Some("fkp") => de_peca(&Document::from_json(&txt).map_err(|e| e.to_string())?.na_pasta(caminho), opc),
         Some("fka") => de_montagem(&Assembly::from_json(&txt)?, pasta, opc),
         Some("fkd") => de_desenho(&Drawing::from_json(&txt)?, pasta, opc),
         _ => Err("use um arquivo .fkp (peça), .fka (montagem) ou .fkd (desenho)".into()),

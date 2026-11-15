@@ -22,6 +22,7 @@ pub mod macros;
 pub mod malha;
 pub mod materiais;
 pub mod parametros;
+pub mod pasta_doc;
 pub mod gdt;
 pub mod pmi;
 pub mod pmi_acabamento;

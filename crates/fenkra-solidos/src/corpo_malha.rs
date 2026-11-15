@@ -233,16 +233,18 @@ pub(crate) fn ao_reaproveitar(malhas: &mut HashMap<Id, CorpoMalha>, f: &Feature)
 
 impl Ctx<'_> {
     pub(crate) fn importar_corpo_malha(&mut self, f: &Feature, m: &MeshImport) -> Result<Option<String>, String> {
+        // B454: caminho relativo é lido da pasta do documento, não da pasta de trabalho
+        let arquivo = self.doc.arquivo_externo(&m.path);
         let origem: Vec<u8> = if m.dados.is_empty() {
-            let meta = std::fs::metadata(&m.path).map_err(|e| format!("não foi possível ler '{}': {e}", m.path))?;
-            format!("{}|{}|{:?}", m.path, meta.len(), meta.modified().ok()).into_bytes()
+            let meta = std::fs::metadata(&arquivo).map_err(|e| format!("não foi possível ler '{}': {e}", arquivo.display()))?;
+            format!("{}|{}|{:?}", arquivo.display(), meta.len(), meta.modified().ok()).into_bytes()
         } else {
             m.dados.clone().into_bytes()
         };
         let chave = chave_de(&[b"importar", &origem]);
         let e = obter(chave, || {
             let malha = if m.dados.is_empty() {
-                let cena = fenkra_malha::ler_arquivo(std::path::Path::new(&m.path)).map_err(|e| e.to_string())?;
+                let cena = fenkra_malha::ler_arquivo(&arquivo).map_err(|e| e.to_string())?;
                 let partes = cena.no_lugar();
                 juntar(&partes).soldada()
             } else {

@@ -1257,6 +1257,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     pub fn load_doc_pub(&mut self, d: Document, file: Option<PathBuf>) {
+        let d = match &file {
+            Some(f) => d.na_pasta(f),
+            None => d,
+        };
         self.load_doc(d, None, None);
         self.open.file = file;
     }
@@ -1686,6 +1690,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             match fenkra_project::seguro::gravar_atomico(&path, self.open.doc.to_json().as_bytes()) {
                 Ok(()) => {
                     self.settings.add_recent_file(&path);
+                    self.open.doc.definir_pasta(&path);
                     self.open.file = Some(path);
                     self.open.modified = false;
                     self.toast("Peça salva", false);
@@ -1735,7 +1740,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if let Some(f) = &futuro {
                     self.toast(tr("Arquivo de formato mais novo: abre somente para leitura. Atualize o Fenkra para editar.").to_string() + &format!(" ({f})"), true);
                 }
-                self.load_doc(d, None, futuro);
+                self.load_doc(d.na_pasta(&path), None, futuro);
                 self.settings.add_recent_file(&path);
                 self.open.file = Some(path);
                 if let Some(b) = bench {
@@ -9234,10 +9239,12 @@ impl eframe::App for App {
                     .textures
                     .iter()
                     .map(|t| {
+                        // B454: relativo vale da pasta da peça; a raiz do projeto fica de reserva
                         let p = std::path::Path::new(&t.path);
-                        let full = match (&root, p.is_relative()) {
-                            (Some(r), true) => r.join(p),
-                            _ => p.to_path_buf(),
+                        let perto = self.open.doc.arquivo_externo(&t.path);
+                        let full = match (&root, p.is_relative() && !perto.is_file()) {
+                            (Some(r), true) if r.join(p).is_file() => r.join(p),
+                            _ => perto,
                         };
                         (crate::render::load_texture(&full).unwrap_or_default(), t.scale as f32)
                     })
