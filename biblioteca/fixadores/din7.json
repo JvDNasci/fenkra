@@ -1,0 +1,242 @@
+{
+  "id": "din7",
+  "nome": "Pino cilíndrico (DIN 7, ajuste m6; ISO 2338 equivalente)",
+  "norma": "DIN 7",
+  "revisao": "1981 (cancelada, vale a ISO 2338)",
+  "versao": 1,
+  "gerador": "pino_cilindrico",
+  "tipo": "pino",
+  "nivel": "C",
+  "licenca": "CC BY 4.0 (dados)",
+  "fontes": [
+    {
+      "rotulo": "fasten.it — DIN 7, tabelas de c e de comprimentos nominais",
+      "url": "https://fasten.it/en/Norms/Norm/DIN%207"
+    },
+    {
+      "rotulo": "Westfield Fasteners — ficha técnica DIN 7, tabela 1",
+      "url": "https://westfieldfasteners.co.uk/Standards/Pin-Dowel.pdf"
+    },
+    {
+      "rotulo": "Aspen Fasteners — ficha DIN 7 / ISO 2338",
+      "url": "https://www.aspenfasteners.com/v/vspfiles/files/docs/Metric_DIN_7_spec.pdf"
+    }
+  ],
+  "campos": [
+    "c"
+  ],
+  "comprimentos": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    10,
+    12,
+    14,
+    16,
+    18,
+    20,
+    24,
+    28,
+    32,
+    36,
+    40,
+    45,
+    50,
+    55,
+    60,
+    70,
+    80,
+    90,
+    100,
+    120,
+    140,
+    160,
+    180,
+    200
+  ],
+  "tamanhos": [
+    {
+      "designacao": "Ø0.8",
+      "d_nominal": 0.8,
+      "valores": {
+        "c": 0.12
+      },
+      "confirmado_por": 2,
+      "nota": "c máx: duas fontes concordam (fasten.it, Westfield). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø1",
+      "d_nominal": 1,
+      "valores": {
+        "c": 0.15
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø1.2",
+      "d_nominal": 1.2,
+      "valores": {
+        "c": 0.18
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø1.5",
+      "d_nominal": 1.5,
+      "valores": {
+        "c": 0.23
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø2",
+      "d_nominal": 2,
+      "valores": {
+        "c": 0.3
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø2.5",
+      "d_nominal": 2.5,
+      "valores": {
+        "c": 0.4
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø3",
+      "d_nominal": 3,
+      "valores": {
+        "c": 0.45
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø4",
+      "d_nominal": 4,
+      "valores": {
+        "c": 0.6
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø5",
+      "d_nominal": 5,
+      "valores": {
+        "c": 0.75
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø6",
+      "d_nominal": 6,
+      "valores": {
+        "c": 0.9
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø8",
+      "d_nominal": 8,
+      "valores": {
+        "c": 1.2
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø10",
+      "d_nominal": 10,
+      "valores": {
+        "c": 1.5
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø12",
+      "d_nominal": 12,
+      "valores": {
+        "c": 1.8
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø14",
+      "d_nominal": 14,
+      "valores": {
+        "c": 2.0
+      },
+      "confirmado_por": 2,
+      "nota": "c máx: duas fontes concordam (fasten.it, Westfield). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø16",
+      "d_nominal": 16,
+      "valores": {
+        "c": 2.5
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø20",
+      "d_nominal": 20,
+      "valores": {
+        "c": 3.0
+      },
+      "confirmado_por": 3,
+      "nota": "c máx: três fontes concordam (fasten.it, Westfield, Aspen). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø25",
+      "d_nominal": 25,
+      "valores": {
+        "c": 4.0
+      },
+      "confirmado_por": 2,
+      "nota": "c máx: duas fontes concordam (fasten.it, Westfield). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø30",
+      "d_nominal": 30,
+      "valores": {
+        "c": 4.5
+      },
+      "confirmado_por": 2,
+      "nota": "c máx: duas fontes concordam (fasten.it, Westfield). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø40",
+      "d_nominal": 40,
+      "valores": {
+        "c": 6.0
+      },
+      "confirmado_por": 2,
+      "nota": "c máx: duas fontes concordam (fasten.it, Westfield). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    },
+    {
+      "designacao": "Ø50",
+      "d_nominal": 50,
+      "valores": {
+        "c": 7.5
+      },
+      "confirmado_por": 2,
+      "nota": "c máx: duas fontes concordam (fasten.it, Westfield). PENDENTE: a faixa de comprimentos por diâmetro não saiu legível em nenhuma fonte; vale a série nominal da norma (2 a 200 mm). Chanfro c não modelado; ajuste m6 no furo."
+    }
+  ]
+}

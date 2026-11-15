@@ -54,7 +54,7 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
             return Err(format!("{} {}: {nome} {c} fora de {} a {} mm", curta, t.designacao, minimo, maximo));
         }
         (format!("{curta} {}x{c}", t.designacao), Some(c))
-    } else if fam.tipo.e_parafuso() || fam.tipo == TipoFixador::Rebite {
+    } else if fam.tipo.e_parafuso() || matches!(fam.tipo, TipoFixador::Rebite | TipoFixador::Pino | TipoFixador::PinoComColar) {
         let (minimo, maximo) = fam.limites_de_comprimento(t).ok_or("sem comprimentos para o tamanho")?;
         let l = match comprimento {
             Some(l) => l,
@@ -103,6 +103,9 @@ pub fn gerar(fam: &Familia, tamanho: &str, comprimento: Option<f64>) -> Result<D
         "rebite_universal" | "rebite_escareado" => crate::rebites::corpo(&mut m, fam, t, l)?,
         "parafuso_12pontos" => crate::parafusos_aero::doze_pontos(&mut m, fam, t, l)?,
         "pino_cabeca" => crate::parafusos_aero::pino_cabeca(&mut m, fam, t, l)?,
+        "pino_cilindrico" | "pino_elastico" | "cupilha" => crate::pinos_aneis::pino(&mut m, fam, t, l)?,
+        "anel_externo" | "anel_interno" => crate::pinos_aneis::anel(&mut m, fam, t)?,
+        "pino_colar" => crate::pinos_aneis::pino_colar(&mut m, fam, t, l)?,
         g => return Err(format!("{}: gerador '{g}' sem geometria", fam.id)),
     }
     propriedades(&mut m.doc, fam, t);
@@ -160,6 +163,10 @@ fn publicacoes(m: &mut Montador, fam: &Familia) -> Result<(), String> {
         (_, TipoFixador::TerminalRotular) => ("-h", "0"),
         // fixação de cilindro: a face de apoio fica em z = 0 e o eixo segue o Z
         (_, TipoFixador::FixacaoCilindro) => ("10", "0"),
+        // pino: do fim da haste à face de apoio; anel: a espessura sob a face; pino com colar: até o topo da cabeça
+        (_, TipoFixador::Pino) => ("-L", "0"),
+        (_, TipoFixador::Anel) => ("-s", "0"),
+        (_, TipoFixador::PinoComColar) => ("-L", "k"),
     };
     let ponto0 = PointRef::Origin;
     m.publicar("Eixo", RefKind::LineDir { point: ponto0, dir: AxisRef::Origin(OriginAxis::Z), start: inicio.into(), end: fim.into() });

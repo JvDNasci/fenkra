@@ -1,0 +1,88 @@
+{
+  "id": "hl18",
+  "nome": "Pino de cabeça protuberante de cisalhamento com ranhura de torque (HL18, aço liga)",
+  "norma": "Hi-Shear HL18",
+  "revisao": "listagens de distribuidores, 2026",
+  "versao": 1,
+  "gerador": "pino_colar",
+  "tipo": "pino_com_colar",
+  "nivel": "C",
+  "licenca": "CC BY 4.0 (dados)",
+  "fontes": [
+    {
+      "rotulo": "Military-Fasteners — HL18PB5-3 (cabeça, haste, rosca, comprimento, pega)",
+      "url": "https://military-fasteners.com/catalog/pdf/HL18PB5-3"
+    },
+    {
+      "rotulo": "Boeing Distribution — HL18PB5-14 e HL18PB6-2/-3 (comprimento total, cabeça, rosca)",
+      "url": "https://shop.boeing.com/cpd/bdi_hl18pb5-14%3D28"
+    }
+  ],
+  "campos": [
+    "dk",
+    "k",
+    "sobra"
+  ],
+  "tamanhos": [
+    {
+      "designacao": "HL18PB5",
+      "original": "dash 5 = 5/32 pol",
+      "d_nominal": 4.1402,
+      "valores": {
+        "dk": 6.4008,
+        "k": 1.0668,
+        "sobra": 7.9375
+      },
+      "confirmado_por": 2,
+      "comprimentos": [
+        9.525,
+        11.112,
+        12.7,
+        14.287,
+        15.875,
+        17.462,
+        19.05,
+        20.637,
+        22.225,
+        23.812,
+        25.4,
+        26.987,
+        28.575,
+        30.162,
+        31.75,
+        33.337
+      ],
+      "nota": "Cabeça Ø 0,242–0,262 pol × 0,037–0,047 pol e haste Ø 0,1625–0,1635 pol (rosca 0,164-32): duas fontes concordam; usados os pontos médios. L = pega máxima n/16 + 0,3125 pol, com n = dash do grip: conferido em -3 (0,500 pol) e -14 (1,187 pol); os demais dashes (-1 a -16) seguem a regra, PENDENTE de conferência. O colar HL70 não é modelado: nenhuma fonte pública traz sua altura nem a chave. Rosca e recesso sextavado da ponta não modelados."
+    },
+    {
+      "designacao": "HL18PB6",
+      "original": "dash 6 = 3/16 pol",
+      "d_nominal": 4.826,
+      "valores": {
+        "dk": 7.747,
+        "k": 1.27,
+        "sobra": 8.255
+      },
+      "confirmado_por": 1,
+      "comprimentos": [
+        9.842,
+        11.43,
+        13.017,
+        14.605,
+        16.192,
+        17.78,
+        19.367,
+        20.955,
+        22.542,
+        24.13,
+        25.717,
+        27.305,
+        28.892,
+        30.48,
+        32.067,
+        33.655
+      ],
+      "nota": "PENDENTE: uma fonte só (Boeing Distribution: cabeça Ø 0,295–0,315 pol × 0,045–0,055 pol, rosca 0,19-32, L 0,45 pol em -2 e 0,512 pol em -3, o que dá L = n/16 + 0,325 pol); o Ø da haste foi tomado como o da rosca, 0,19 pol, sem fonte para a haste. O colar HL70 não é modelado."
+    }
+  ]
+}

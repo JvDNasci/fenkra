@@ -63,6 +63,12 @@ pub enum TipoFixador {
     TerminalRotular,
     /// fixação de cilindro pneumático (pé, flange, munhão, garfo traseiro), pelas medidas do catálogo
     FixacaoCilindro,
+    /// pino de fixação sem cabeça roscada (cilíndrico, elástico, cupilha); o comprimento L é livre na série
+    Pino,
+    /// anel de retenção (eixo ou furo); sem comprimento, só a espessura
+    Anel,
+    /// pino de cabeça com colar de fechamento (Hi-Lok e parentes); o L sai da pega: L = pega + sobra do colar
+    PinoComColar,
 }
 
 /// Geradores de geometria nomeados. Uma família escolhe o gerador pelo nome (`"gerador"` no JSON);
@@ -95,6 +101,13 @@ pub const GERADORES: &[(&str, TipoFixador)] = &[
     // prendedores aeronáuticos de forma própria (B43): 12 pontos flangeado e pino de cabeça com furo de cupilha
     ("parafuso_12pontos", TipoFixador::ParafusoSextavado),
     ("pino_cabeca", TipoFixador::ParafusoAllen),
+    // pinos, anéis e pino com colar (B63)
+    ("pino_cilindrico", TipoFixador::Pino),
+    ("pino_elastico", TipoFixador::Pino),
+    ("cupilha", TipoFixador::Pino),
+    ("anel_externo", TipoFixador::Anel),
+    ("anel_interno", TipoFixador::Anel),
+    ("pino_colar", TipoFixador::PinoComColar),
 ];
 
 /// Campos que o gerador precisa, além dos do tipo.
@@ -104,6 +117,9 @@ pub fn campos_do_gerador(gerador: &str) -> &'static [&'static str] {
         "porca_flangeada" => &["dc", "c"],
         "parafuso_12pontos" => &["A", "Q", "D"],
         "pino_cabeca" => &["A", "dk", "k", "E", "OL"],
+        "pino_cilindrico" => &["c"],
+        "pino_elastico" => &["s"],
+        "cupilha" => &["dmax", "cmax"],
         "prisioneiro" => &["b", "bm"],
         "rebite_universal" => &["k"],
         // perfil quadrado com tirantes (ISO 15552) ou tubo redondo com olhal (ISO 6432)
@@ -135,6 +151,9 @@ impl TipoFixador {
             TipoFixador::FusoEsferas => "Fuso de esferas",
             TipoFixador::TerminalRotular => "Terminal rotular",
             TipoFixador::FixacaoCilindro => "Fixação de cilindro",
+            TipoFixador::Pino => "Pino",
+            TipoFixador::Anel => "Anel de retenção",
+            TipoFixador::PinoComColar => "Pino com colar",
         }
     }
 
@@ -146,13 +165,13 @@ impl TipoFixador {
     /// Tipos cuja peça muda de comprimento pela escolha da pessoa: o L do parafuso ou o curso do
     /// cilindro, sempre dentro da série da família.
     pub fn usa_comprimento(self) -> bool {
-        self.e_parafuso() || matches!(self, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::Rebite | TipoFixador::FusoEsferas)
+        self.e_parafuso() || matches!(self, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::Rebite | TipoFixador::FusoEsferas | TipoFixador::Pino | TipoFixador::PinoComColar)
     }
 
     /// Entra no furo como parafuso: corpo para dentro, cabeça para fora e L pela espessura (o rebite
     /// também, com o L pela pega).
     pub fn atravessa_furo(self) -> bool {
-        self.e_parafuso() || self == TipoFixador::Rebite
+        self.e_parafuso() || matches!(self, TipoFixador::Rebite | TipoFixador::Pino | TipoFixador::PinoComColar)
     }
 
     pub fn e_parafuso(self) -> bool {
@@ -181,6 +200,11 @@ impl TipoFixador {
             TipoFixador::TerminalRotular => &["dk", "C1", "dE", "B", "h", "dh", "l1"],
             // as cotas vêm do gerador (pé, flange, munhão ou garfo)
             TipoFixador::FixacaoCilindro => &[],
+            // as cotas do pino vêm do gerador (cilíndrico, elástico, cupilha)
+            TipoFixador::Pino => &[],
+            TipoFixador::Anel => &["s", "d3", "b"],
+            // a sobra é o trecho do L além da pega (colar e ponta)
+            TipoFixador::PinoComColar => &["dk", "k", "sobra"],
         }
     }
 }
@@ -609,6 +633,12 @@ const PUBLICA: &[(&str, &str)] = &[
     ("ms20002.json", include_str!("../../../biblioteca/fixadores/ms20002.json")),
     ("ms20392.json", include_str!("../../../biblioteca/fixadores/ms20392.json")),
     ("ms21250.json", include_str!("../../../biblioteca/fixadores/ms21250.json")),
+    ("din471.json", include_str!("../../../biblioteca/fixadores/din471.json")),
+    ("din472.json", include_str!("../../../biblioteca/fixadores/din472.json")),
+    ("din7.json", include_str!("../../../biblioteca/fixadores/din7.json")),
+    ("din94.json", include_str!("../../../biblioteca/fixadores/din94.json")),
+    ("iso8752.json", include_str!("../../../biblioteca/fixadores/iso8752.json")),
+    ("hl18.json", include_str!("../../../biblioteca/fixadores/hl18.json")),
     ("iso15_60.json", include_str!("../../../biblioteca/rolamentos/iso15_60.json")),
     ("iso15_62.json", include_str!("../../../biblioteca/rolamentos/iso15_62.json")),
     ("iso15_63.json", include_str!("../../../biblioteca/rolamentos/iso15_63.json")),
@@ -656,6 +686,14 @@ pub const SOBRA_REBITE: f64 = 1.5;
 pub fn rebite_pela_pega(fam: &Familia, t: &Tamanho, pega: f64) -> Option<f64> {
     let d = t.diametro_nominal()?;
     let alvo = pega + SOBRA_REBITE * d;
+    fam.comprimentos_de(t).into_iter().find(|l| *l >= alvo - 1e-6)
+}
+
+/// Comprimento L de um pino com colar para a pega `pega` (espessura da pilha, mm): o menor da série
+/// do tamanho com `L >= pega + sobra`, onde `sobra` é o campo do tamanho (o que o colar e a ponta
+/// pedem além da pilha). `None` quando a pega pede mais que o maior da série.
+pub fn pino_colar_pela_pega(fam: &Familia, t: &Tamanho, pega: f64) -> Option<f64> {
+    let alvo = pega + t.valor("sobra")?;
     fam.comprimentos_de(t).into_iter().find(|l| *l >= alvo - 1e-6)
 }
 
@@ -787,8 +825,8 @@ mod tests {
     #[test]
     fn todas_as_familias_carregam_e_validam() {
         let b = publica();
-        // 42 + o terminal rotular ilustrativo (B397) + as quatro fixações de cilindro (B45)
-        assert_eq!(b.familias.len(), 52);
+        // 42 + o terminal rotular ilustrativo (B397) + as quatro fixações de cilindro (B45) + DIN 471, 472, 7, 94, ISO 8752 e HL18 (B63)
+        assert_eq!(b.familias.len(), 58);
         b.validar().unwrap();
         for id in ["iso4762", "iso4017", "din933", "iso4032", "din934", "iso7089"] {
             let f = familia(id).unwrap_or_else(|| panic!("{id} ausente"));
@@ -1193,7 +1231,7 @@ mod tests {
         let usuario = Biblioteca::de_jsons(Camada::Usuario, &[("t.json", SINTETICA), ("iso.json", &include_str!("../../../biblioteca/fixadores/iso7089.json").replacen("\"versao\": 1", "\"versao\": 9", 1))]).unwrap();
         let m = Biblioteca::mesclar(&[usuario, publica]); // a ordem de entrada não importa
         assert_eq!(m.camada, Camada::Usuario);
-        assert_eq!(m.familias.len(), 53);
+        assert_eq!(m.familias.len(), 59);
         let a = m.familia("iso7089").unwrap();
         assert_eq!((a.camada, a.versao), (Camada::Usuario, 9));
         assert_eq!(m.familia("iso4762").unwrap().camada, Camada::Publica);

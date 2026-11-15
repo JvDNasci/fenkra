@@ -1,0 +1,376 @@
+{
+  "id": "iso8752",
+  "nome": "Pino elástico ranhurado, tipo pesado (ISO 8752; DIN 1481 equivalente)",
+  "norma": "ISO 8752",
+  "revisao": "2009",
+  "versao": 1,
+  "gerador": "pino_elastico",
+  "tipo": "pino",
+  "nivel": "C",
+  "licenca": "CC BY 4.0 (dados)",
+  "fontes": [
+    {
+      "rotulo": "Westfield Fasteners — ficha técnica ISO 8752 / DIN 1481, tabela 1",
+      "url": "https://westfieldfasteners.co.uk/Standards/Pin-RollSlot.pdf"
+    },
+    {
+      "rotulo": "fasten.it — DIN 1481 (substituída pela ISO 8752)",
+      "url": "https://fasten.it/en/Norms/Norm/DIN%201481"
+    },
+    {
+      "rotulo": "SPIROL — Slotted Spring Pins, especificações métricas ISO 8752 e tabela de comprimentos",
+      "url": "https://cdn.shopify.com/s/files/1/0492/3631/2223/files/SPIROL-Slotted-Spring-Pins-us.pdf"
+    }
+  ],
+  "campos": [
+    "s",
+    "D1max",
+    "D1min",
+    "d2",
+    "a"
+  ],
+  "tamanhos": [
+    {
+      "designacao": "Ø1.5",
+      "d_nominal": 1.5,
+      "valores": {
+        "s": 0.3,
+        "D1max": 1.8,
+        "D1min": 1.7,
+        "d2": 1.1,
+        "a": 0.45
+      },
+      "confirmado_por": 3,
+      "nota": "d1 máx e mín, d2, a e s: três fontes concordam (Westfield, fasten.it/DIN 1481 e SPIROL; a SPIROL não traz d2). Comprimentos: só a tabela da SPIROL (uma fonte, PENDENTE de segunda). A ranhura longitudinal e o chanfro não são modelados; o pino é o tubo de Ø nominal.",
+      "comprimentos": [
+        5,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26
+      ]
+    },
+    {
+      "designacao": "Ø2",
+      "d_nominal": 2,
+      "valores": {
+        "s": 0.4,
+        "D1max": 2.4,
+        "D1min": 2.3,
+        "d2": 1.5,
+        "a": 0.55
+      },
+      "confirmado_por": 3,
+      "nota": "d1 máx e mín, d2, a e s: três fontes concordam (Westfield, fasten.it/DIN 1481 e SPIROL; a SPIROL não traz d2). Comprimentos: só a tabela da SPIROL (uma fonte, PENDENTE de segunda). A ranhura longitudinal e o chanfro não são modelados; o pino é o tubo de Ø nominal.",
+      "comprimentos": [
+        5,
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30
+      ]
+    },
+    {
+      "designacao": "Ø2.5",
+      "d_nominal": 2.5,
+      "valores": {
+        "s": 0.5,
+        "D1max": 2.9,
+        "D1min": 2.8,
+        "d2": 1.8,
+        "a": 0.6
+      },
+      "confirmado_por": 3,
+      "nota": "d1 máx e mín, d2, a e s: três fontes concordam (Westfield, fasten.it/DIN 1481 e SPIROL; a SPIROL não traz d2). Comprimentos: só a tabela da SPIROL (uma fonte, PENDENTE de segunda). A ranhura longitudinal e o chanfro não são modelados; o pino é o tubo de Ø nominal.",
+      "comprimentos": [
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        35,
+        40
+      ]
+    },
+    {
+      "designacao": "Ø3",
+      "d_nominal": 3,
+      "valores": {
+        "s": 0.6,
+        "D1max": 3.5,
+        "D1min": 3.3,
+        "d2": 2.1,
+        "a": 0.7
+      },
+      "confirmado_por": 3,
+      "nota": "d1 máx e mín, d2, a e s: três fontes concordam (Westfield, fasten.it/DIN 1481 e SPIROL; a SPIROL não traz d2). Comprimentos: só a tabela da SPIROL (uma fonte, PENDENTE de segunda). A ranhura longitudinal e o chanfro não são modelados; o pino é o tubo de Ø nominal.",
+      "comprimentos": [
+        6,
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        35,
+        40,
+        45,
+        50
+      ]
+    },
+    {
+      "designacao": "Ø3.5",
+      "d_nominal": 3.5,
+      "valores": {
+        "s": 0.75,
+        "D1max": 4.0,
+        "D1min": 3.8,
+        "d2": 2.3,
+        "a": 0.8
+      },
+      "confirmado_por": 3,
+      "nota": "d1 máx e mín, d2, a e s: três fontes concordam (Westfield, fasten.it/DIN 1481 e SPIROL; a SPIROL não traz d2). Comprimentos: só a tabela da SPIROL (uma fonte, PENDENTE de segunda). A ranhura longitudinal e o chanfro não são modelados; o pino é o tubo de Ø nominal.",
+      "comprimentos": [
+        8,
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        35,
+        40,
+        45,
+        50
+      ]
+    },
+    {
+      "designacao": "Ø4",
+      "d_nominal": 4,
+      "valores": {
+        "s": 0.8,
+        "D1max": 4.6,
+        "D1min": 4.4,
+        "d2": 2.8,
+        "a": 0.85
+      },
+      "confirmado_por": 3,
+      "nota": "d1 máx e mín, d2, a e s: três fontes concordam (Westfield, fasten.it/DIN 1481 e SPIROL; a SPIROL não traz d2). Comprimentos: só a tabela da SPIROL (uma fonte, PENDENTE de segunda). A ranhura longitudinal e o chanfro não são modelados; o pino é o tubo de Ø nominal.",
+      "comprimentos": [
+        10,
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        35,
+        40,
+        45,
+        50,
+        55,
+        60
+      ]
+    },
+    {
+      "designacao": "Ø5",
+      "d_nominal": 5,
+      "valores": {
+        "s": 1.0,
+        "D1max": 5.6,
+        "D1min": 5.4,
+        "d2": 3.4,
+        "a": 1.1
+      },
+      "confirmado_por": 3,
+      "nota": "d1 máx e mín, d2, a e s: três fontes concordam (Westfield, fasten.it/DIN 1481 e SPIROL; a SPIROL não traz d2). Comprimentos: só a tabela da SPIROL (uma fonte, PENDENTE de segunda). A ranhura longitudinal e o chanfro não são modelados; o pino é o tubo de Ø nominal.",
+      "comprimentos": [
+        12,
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        35,
+        40,
+        45,
+        50,
+        55,
+        60
+      ]
+    },
+    {
+      "designacao": "Ø6",
+      "d_nominal": 6,
+      "valores": {
+        "s": 1.2,
+        "D1max": 6.7,
+        "D1min": 6.4,
+        "d2": 4.0,
+        "a": 1.4
+      },
+      "confirmado_por": 3,
+      "nota": "d1 máx e mín, d2, a e s: três fontes concordam (Westfield, fasten.it/DIN 1481 e SPIROL; a SPIROL não traz d2). Comprimentos: só a tabela da SPIROL (uma fonte, PENDENTE de segunda). A ranhura longitudinal e o chanfro não são modelados; o pino é o tubo de Ø nominal.",
+      "comprimentos": [
+        14,
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        35,
+        40,
+        45,
+        50,
+        55,
+        60,
+        65,
+        70
+      ]
+    },
+    {
+      "designacao": "Ø8",
+      "d_nominal": 8,
+      "valores": {
+        "s": 1.5,
+        "D1max": 8.8,
+        "D1min": 8.5,
+        "d2": 5.5,
+        "a": 2.0
+      },
+      "confirmado_por": 3,
+      "nota": "d1 máx e mín, d2, a e s: três fontes concordam (Westfield, fasten.it/DIN 1481 e SPIROL; a SPIROL não traz d2). Comprimentos: só a tabela da SPIROL (uma fonte, PENDENTE de segunda). A ranhura longitudinal e o chanfro não são modelados; o pino é o tubo de Ø nominal.",
+      "comprimentos": [
+        16,
+        18,
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        35,
+        40,
+        45,
+        50,
+        55,
+        60,
+        65,
+        70,
+        75
+      ]
+    },
+    {
+      "designacao": "Ø10",
+      "d_nominal": 10,
+      "valores": {
+        "s": 2.0,
+        "D1max": 10.8,
+        "D1min": 10.5,
+        "d2": 6.5,
+        "a": 2.4
+      },
+      "confirmado_por": 3,
+      "nota": "d1 máx e mín, d2, a e s: três fontes concordam (Westfield, fasten.it/DIN 1481 e SPIROL; a SPIROL não traz d2). Comprimentos: só a tabela da SPIROL (uma fonte, PENDENTE de segunda). A ranhura longitudinal e o chanfro não são modelados; o pino é o tubo de Ø nominal.",
+      "comprimentos": [
+        20,
+        22,
+        24,
+        26,
+        28,
+        30,
+        32,
+        35,
+        40,
+        45,
+        50,
+        55,
+        60,
+        65,
+        70,
+        75,
+        80
+      ]
+    },
+    {
+      "designacao": "Ø12",
+      "d_nominal": 12,
+      "valores": {
+        "s": 2.5,
+        "D1max": 12.8,
+        "D1min": 12.5,
+        "d2": 7.5,
+        "a": 2.4
+      },
+      "confirmado_por": 3,
+      "nota": "d1 máx e mín, d2, a e s: três fontes concordam (Westfield, fasten.it/DIN 1481 e SPIROL; a SPIROL não traz d2). Comprimentos: só a tabela da SPIROL (uma fonte, PENDENTE de segunda). A ranhura longitudinal e o chanfro não são modelados; o pino é o tubo de Ø nominal.",
+      "comprimentos": [
+        30,
+        32,
+        35,
+        40,
+        45,
+        50,
+        55,
+        60,
+        65,
+        70,
+        75,
+        80
+      ]
+    }
+  ]
+}

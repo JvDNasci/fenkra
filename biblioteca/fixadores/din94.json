@@ -1,0 +1,290 @@
+{
+  "id": "din94",
+  "nome": "Cupilha (DIN 94; ISO 1234 equivalente)",
+  "norma": "DIN 94",
+  "revisao": "1983 (cancelada, vale a ISO 1234)",
+  "versao": 1,
+  "gerador": "cupilha",
+  "tipo": "pino",
+  "nivel": "C",
+  "licenca": "CC BY 4.0 (dados)",
+  "fontes": [
+    {
+      "rotulo": "fasten.it — DIN 94, tabela de diâmetros e comprimentos",
+      "url": "https://fasten.it/en/Norms/Norm/DIN%2094"
+    },
+    {
+      "rotulo": "Westfield Fasteners — ficha técnica DIN 94, tabela 1",
+      "url": "https://westfieldfasteners.co.uk/Standards/Pin-Cotter.pdf"
+    }
+  ],
+  "campos": [
+    "dmin",
+    "dmax",
+    "a",
+    "b",
+    "cmin",
+    "cmax"
+  ],
+  "comprimentos": [
+    4,
+    5,
+    6,
+    8,
+    10,
+    12,
+    14,
+    16,
+    18,
+    20,
+    22,
+    25,
+    28,
+    32,
+    36,
+    40,
+    45,
+    50,
+    56,
+    63,
+    71,
+    80,
+    90,
+    100,
+    112,
+    125,
+    140,
+    160,
+    180,
+    200,
+    224,
+    250,
+    280
+  ],
+  "tamanhos": [
+    {
+      "designacao": "Ø0.6",
+      "d_nominal": 0.6,
+      "valores": {
+        "dmin": 0.4,
+        "dmax": 0.5,
+        "a": 1.6,
+        "b": 2,
+        "cmin": 0.9,
+        "cmax": 1
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø0.8",
+      "d_nominal": 0.8,
+      "valores": {
+        "dmin": 0.6,
+        "dmax": 0.7,
+        "a": 1.6,
+        "b": 2.4,
+        "cmin": 1.2,
+        "cmax": 1.4
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø1",
+      "d_nominal": 1,
+      "valores": {
+        "dmin": 0.8,
+        "dmax": 0.9,
+        "a": 1.6,
+        "b": 3,
+        "cmin": 1.6,
+        "cmax": 1.8
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø1.2",
+      "d_nominal": 1.2,
+      "valores": {
+        "dmin": 0.9,
+        "dmax": 1,
+        "a": 2.5,
+        "b": 3,
+        "cmin": 1.7,
+        "cmax": 2
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø1.6",
+      "d_nominal": 1.6,
+      "valores": {
+        "dmin": 1.3,
+        "dmax": 1.4,
+        "a": 2.5,
+        "b": 3.2,
+        "cmin": 2.4,
+        "cmax": 2.8
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø2",
+      "d_nominal": 2,
+      "valores": {
+        "dmin": 1.7,
+        "dmax": 1.8,
+        "a": 2.5,
+        "b": 4,
+        "cmin": 3.2,
+        "cmax": 3.6
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø2.5",
+      "d_nominal": 2.5,
+      "valores": {
+        "dmin": 2.1,
+        "dmax": 2.3,
+        "a": 2.5,
+        "b": 5,
+        "cmin": 4,
+        "cmax": 4.6
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø3.2",
+      "d_nominal": 3.2,
+      "valores": {
+        "dmin": 2.7,
+        "dmax": 2.9,
+        "a": 3.2,
+        "b": 6.4,
+        "cmin": 5.1,
+        "cmax": 5.8
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø4",
+      "d_nominal": 4,
+      "valores": {
+        "dmin": 3.5,
+        "dmax": 3.7,
+        "a": 4,
+        "b": 8,
+        "cmin": 6.5,
+        "cmax": 7.4
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø5",
+      "d_nominal": 5,
+      "valores": {
+        "dmin": 4.4,
+        "dmax": 4.6,
+        "a": 4,
+        "b": 10,
+        "cmin": 8,
+        "cmax": 9.2
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø6.3",
+      "d_nominal": 6.3,
+      "valores": {
+        "dmin": 5.7,
+        "dmax": 5.9,
+        "a": 4,
+        "b": 12.6,
+        "cmin": 10.3,
+        "cmax": 11.8
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø8",
+      "d_nominal": 8,
+      "valores": {
+        "dmin": 7.3,
+        "dmax": 7.5,
+        "a": 4,
+        "b": 16,
+        "cmin": 13.1,
+        "cmax": 15
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø10",
+      "d_nominal": 10,
+      "valores": {
+        "dmin": 9.3,
+        "dmax": 9.5,
+        "a": 6.3,
+        "b": 20,
+        "cmin": 16.6,
+        "cmax": 19
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø13",
+      "d_nominal": 13,
+      "valores": {
+        "dmin": 12.1,
+        "dmax": 12.4,
+        "a": 6.3,
+        "b": 26,
+        "cmin": 21.7,
+        "cmax": 24.8
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    },
+    {
+      "designacao": "Ø16",
+      "d_nominal": 16,
+      "valores": {
+        "dmin": 15.1,
+        "dmax": 15.4,
+        "a": 6.3,
+        "b": 32,
+        "cmin": 27,
+        "cmax": 30.8
+      },
+      "confirmado_por": 1,
+      "nota": "PENDENTE: b do d 16 diverge entre as fontes (fasten.it 32; o PDF do Westfield repete a linha do d 13, com 26); vale 32, que segue b = 2d. Demais cotas concordam. O d nominal é o furo, não o fio. Forma simplificada (hastes em cilindro e olho em disco). Comprimentos: série nominal da norma, sem faixa por diâmetro (PENDENTE)."
+    },
+    {
+      "designacao": "Ø20",
+      "d_nominal": 20,
+      "valores": {
+        "dmin": 19,
+        "dmax": 19.3,
+        "a": 6.3,
+        "b": 40,
+        "cmin": 33.8,
+        "cmax": 38.6
+      },
+      "confirmado_por": 2,
+      "nota": "dmin, dmax, a, b, cmin e cmax: duas fontes concordam (fasten.it e Westfield). O d nominal é o furo, não o fio. PENDENTE: faixa de comprimentos por diâmetro; vale a série nominal da norma (4 a 280 mm). Forma simplificada (hastes em cilindro e olho em disco)."
+    }
+  ]
+}

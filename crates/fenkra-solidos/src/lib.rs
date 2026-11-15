@@ -31,6 +31,9 @@ pub mod structural;
 pub mod perfis_catalogo;
 pub mod pneumatica_fixacoes;
 pub mod parafusos_aero;
+pub mod pinos_aneis;
+#[cfg(test)]
+mod pinos_aneis_tests;
 pub mod perfis_catalogo_gerdau;
 pub mod perfis_catalogo_tubos;
 pub mod st_cantos;
