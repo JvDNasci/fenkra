@@ -11,11 +11,12 @@ use fenkra_core::sketch::Curve;
 use fenkra_core::*;
 
 /// Nomes dos casos deste módulo (um por roteiro).
-pub const CASOS: [&str; 42] = [
+pub const CASOS: [&str; 43] = [
     "ext_simetrico", "ext_ate_plano", "ext_saida_filete", "ext_cego", "ranhura", "nervura", "rasgo_varrido", "multisecoes", "multisecoes_remover", "prim_toro", "prim_cunha",
     "prim_prisma", "bool_unir", "bool_subtrair", "bool_intersecao", "furo_rebaixado", "furo_escareado", "furo_roscado", "filete_variavel", "filete_face_face", "filete_completo", "arestas_todas",
     "chanfro_dist_dist", "chanfro_dist_angulo", "chanfro_dist", "edit_mover_face", "edit_deslocar_face", "edit_raio_filete", "padrao_circular", "padrao_pontos", "espelho", "escala",
     "xf_mover", "xf_girar", "xf_simetria", "xf_afinidade", "pl_boss", "pl_snap", "pl_grelha", "pl_lip", "pl_ranhura", "edit_apagar_face",
+    "sm_dobra_conica",
 ];
 
 fn s(x: &str) -> String {
@@ -314,6 +315,11 @@ pub fn montar(caso: &str) -> Option<(Document, FeatureKind)> {
         "espelho" => {
             let b = pino(&mut d, 8., [[-30., -8.], [30., 18.]]);
             FeatureKind::Mirror(Mirror { plane: PlaneRef::Origin(OriginPlane::YZ), sources: vec![b] })
+        }
+        // B470: chapa de 2 mm sem corpo; o comando aberto é o tronco, que a prévia mostra inteiro
+        "sm_dobra_conica" => {
+            d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
+            FeatureKind::SmCone(SmCone { r1: s("20"), r2: s("40"), height: s("50"), center: [0.; 3], k: None })
         }
         "escala" => {
             caixa(&mut d);
