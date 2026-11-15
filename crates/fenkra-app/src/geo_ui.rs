@@ -194,14 +194,14 @@ impl GeoKind {
             AnConexao => ("an_conexao", "Conexão", "Análise de conexão", "Mede folga, ângulo e diferença de curvatura ao longo da junção de duas superfícies."),
             AnDesvio => ("an_desvio", "Desvio", "Mapa de desvio", "Pinta a primeira superfície pela distância até a segunda, com mínimo, máximo e RMS."),
             AnPente => ("an_pente", "Pente", "Pente de curvatura", "Dentes perpendiculares à curva, do tamanho da curvatura em cada ponto; serve para curvas e arestas."),
-            SurfLoft => ("sup_multisecoes", "Multi-seções", "Superfície por seções (loft)", "Transição suave entre duas ou mais curvas; com guia, as seções seguem a guia."),
+            SurfLoft => ("sup_multisecoes", "Multi-seções", "Superfície por seções", "Transição suave entre duas ou mais curvas; com guia, as seções seguem a guia."),
             SurfBlend => ("sup_concordancia", "Concordância", "Concordância entre bordas (blend)", "Liga duas bordas com continuidade G0 (reta), G1 (tangente) ou G2 (curvatura) às superfícies de apoio."),
             OpJoin => ("op_juntar", "Juntar", "Juntar superfícies (join)", "Costura superfícies que se tocam numa só: bordas comuns viram uma."),
             OpHeal => ("op_curar", "Curar", "Curar superfície (heal)", "Fecha frestas até a tolerância e une faces do mesmo suporte."),
             OpSplit => ("op_dividir", "Dividir", "Dividir superfície (split)", "Corta a superfície por outra superfície ou plano e mantém um lado."),
             OpCut => ("op_aparar", "Aparar e dividir", "Aparar e dividir por região", "Corta a superfície por ferramentas, ou duas superfícies uma pela outra, e você clica nos pedaços que ficam ou saem. A escolha sobrevive quando o modelo muda."),
             OpTrim => ("op_aparar", "Aparar", "Aparar duas superfícies (trim)", "Corta uma pela outra e junta os lados escolhidos de cada uma."),
-            OpBoundary => ("op_contorno", "Contorno", "Contorno da superfície (boundary)", "Curva da borda livre da superfície (escolha qual quando houver várias)."),
+            OpBoundary => ("op_contorno", "Contorno", "Contorno da superfície", "Curva da borda livre da superfície (escolha qual quando houver várias)."),
             OpMulti => ("op_multi_extrair", "Multi-extração", "Extrair várias faces", "Copia várias faces do modelo como uma superfície só."),
             OpPart => ("op_desmontar", "Desmontar", "Desmontar (uma face)", "Separa uma face de uma superfície composta, pelo número."),
             OpUntrim => ("op_desaparar", "Desaparar", "Desaparar (untrim)", "Devolve a face aos limites naturais do suporte, sem os recortes."),
@@ -212,7 +212,7 @@ impl GeoKind {
             XfScale => ("xf_escala", "Escala", "Escala", "Aumenta ou reduz o elemento a partir de um ponto."),
             CurveIntersect => ("curva_intersecao", "Interseção", "Curva de interseção", "Onde duas superfícies (ou uma superfície e um plano) se cruzam."),
             CurveProjSurf => ("curva_proj_sup", "Projeção", "Curva projetada na superfície", "Normal (cada ponto vai para o ponto mais próximo) ou ao longo de uma direção."),
-            CurveParallel => ("curva_paralela", "Paralela", "Curva paralela (offset)", "Desloca a curva sobre um plano ou superfície de apoio, com distância constante ou variando do início ao fim."),
+            CurveParallel => ("curva_paralela", "Paralela", "Curva paralela", "Desloca a curva sobre um plano ou superfície de apoio, com distância constante ou variando do início ao fim."),
         }
     }
 

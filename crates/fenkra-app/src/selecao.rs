@@ -386,7 +386,7 @@ mod testes {
         let rect = eframe::egui::Rect::from_min_size(Pos2::new(0., 0.), eframe::egui::vec2(800., 600.));
         let cam = crate::render::Camera { target: glam::Vec3::new(10., 10., 10.), yaw: 0., pitch: 1.5, dist: 200., ortho: true };
         let pos = cam.project(rect, glam::Vec3::new(10., 10., 10.)).expect("na tela");
-        let f = Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None };
+        let f = Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None, planos_origem: true, planos_ref: true };
         let pilha = pilha_de_faces(&r, &d, &cam, rect, pos, &f);
         assert_eq!(pilha.len(), 2, "{pilha:?}");
         let z = |p: &Pick| match p {

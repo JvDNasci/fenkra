@@ -56,7 +56,7 @@ impl Pedido {
             Pedido::CentroFace => (true, false, false, false),
             Pedido::HPlano => (false, false, false, true),
         };
-        Filter { faces, edges, vertices, planes, hidden_env: false, exclude_sketch: Some(sketch), fantasma: None }
+        Filter { faces, edges, vertices, planes, hidden_env: false, exclude_sketch: Some(sketch), fantasma: None, planos_origem: true, planos_ref: true }
     }
     fn e_de_origem(self) -> bool {
         matches!(self, Pedido::Ponto | Pedido::Intersecao | Pedido::PontoMedio | Pedido::CentroFace)

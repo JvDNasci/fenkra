@@ -40,6 +40,9 @@ mod docs_abertos;
 pub(crate) use visualizacao::abrir_no_navegador;
 mod importar;
 mod features;
+mod esc_sessao;
+#[cfg(test)]
+mod abas_r3_testes;
 mod lote;
 mod plm;
 pub(crate) use plm::medidas_do_resultado;
@@ -1683,7 +1686,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             Some(f) => Some(f.clone()),
             // desenvolvimento: FENKRA_DEMO_PASTA=<pasta> grava sem perguntar
             None => std::env::var_os("FENKRA_DEMO_PASTA").map(|d| PathBuf::from(d).join(format!("{}.fkp", self.open.doc.name))).or_else(|| {
-                rfd::FileDialog::new().add_filter("Peça Fenkra", &["fkp"]).set_file_name(format!("{}.fkp", self.open.doc.name)).save_file()
+                crate::dialogo_dono::novo().add_filter("Peça Fenkra", &["fkp"]).set_file_name(format!("{}.fkp", self.open.doc.name)).save_file()
             }),
         };
         if let Some(path) = path {
@@ -1753,7 +1756,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     fn export(&mut self, ext: &str, preset: fenkra_core::PresetStl) {
-        let Some(path) = rfd::FileDialog::new()
+        let Some(path) = crate::dialogo_dono::novo()
             .add_filter(ext.to_uppercase(), &[ext])
             .set_file_name(format!("{}.{ext}", self.open.doc.name))
             .save_file()
@@ -1897,11 +1900,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             self.com_confirmacao(Acao::AbrirCaminho(PathBuf::from(&f)));
         }
         if let Some(i) = example {
-            if let Some(e) = crate::examples::all().into_iter().nth(i) {
-                self.load_doc(e.doc, None, None);
-                self.settings.bench = e.bench;
-                self.started = true;
-            }
+            // B471: o exemplo nunca substitui a aba da frente se ela tiver o que guardar
+            self.abrir_exemplo_da_tela(i);
         }
         match action {
             Some(0) => self.new_project(),
@@ -7471,6 +7471,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     hidden_env: self.hidden_env,
                     exclude_sketch: None,
                     fantasma: aberto.filter(|_| !escolhe_faces),
+                    planos_origem: self.settings.filter.planos_origem,
+                    planos_ref: self.settings.filter.planos_ref,
                 };
                 // sem mouse na medição: a seleção no meio da vista dá o custo de passar o mouse
                 if crate::medir_quadros::ativo() && crate::partida::quadros() % 25 == 0 {
@@ -8638,7 +8640,12 @@ impl eframe::App for App {
             } else if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
                 self.conclude_session();
             } else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-                self.cancel_session();
+                // B468: o Esc desfaz um nível por vez (lista aberta, seleção, comando)
+                match esc_sessao::decidir(egui::Popup::is_any_open(ctx), !self.picks.is_empty()) {
+                    esc_sessao::Esc::FechaLista => {}
+                    esc_sessao::Esc::LimpaSelecao => self.picks.clear(),
+                    esc_sessao::Esc::Cancela => self.cancel_session(),
+                }
             }
         } else if self.sketch.is_none() && !self.picks.is_empty() && !ctx.egui_wants_keyboard_input() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.picks.clear();

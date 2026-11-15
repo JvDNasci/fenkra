@@ -1007,7 +1007,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                         app.toast(tr("Selecione os componentes (Ctrl+clique nas peças na viewport ou escolha na árvore)"), true);
                         return true;
                     }
-                    let mut dlg = rfd::FileDialog::new().add_filter("Montagem", &["fka"]).set_file_name("Subconjunto.fka");
+                    let mut dlg = crate::dialogo_dono::novo().add_filter("Montagem", &["fka"]).set_file_name("Subconjunto.fka");
                     if let Some(d) = st.dir() {
                         dlg = dlg.set_directory(d);
                     }
@@ -1222,6 +1222,15 @@ pub(crate) fn ativar_peca(app: &mut App, id: Id) {
     }
     let Some(NodeKind::Part { path }) = st.asm.node(id).map(|n| n.kind.clone()) else { return };
     let full = full_path(st.dir().as_deref(), &path);
+    // B471: a peça que já está aberta noutra aba é editada ali; uma segunda cópia na montagem deixaria
+    // a aba velha mostrando o dado de antes
+    if let Some(aba) = app.aba_de_fundo_com(&full) {
+        if app.trocar_documento(aba) {
+            app.toast(tr("A peça já estava aberta em outra aba: a edição segue nela"), false);
+        }
+        return;
+    }
+    let Some(st) = app.asm.as_mut() else { return };
     // a árvore semeia o documento na memória: sem o arquivo, ele abriria como se nada tivesse sumido
     let achou = full.exists() || st.cache.e_pendente(&full);
     let doc = if achou { st.cache.documento(&full).cloned() } else { Err(full.display().to_string()) };
@@ -1493,7 +1502,7 @@ pub fn save(app: &mut App) {
     let Some(st) = app.asm.as_mut() else { return };
     let path = match &st.file {
         Some(f) => Some(f.clone()),
-        None => rfd::FileDialog::new().add_filter("Montagem Fenkra", &["fka"]).set_file_name(format!("{}.fka", st.asm.name)).save_file(),
+        None => crate::dialogo_dono::novo().add_filter("Montagem Fenkra", &["fka"]).set_file_name(format!("{}.fka", st.asm.name)).save_file(),
     };
     let Some(path) = path else { return };
     // caminhos absolutos dentro da pasta nova viram relativos
@@ -3670,7 +3679,7 @@ pub fn context_overlay(app: &mut App, ui: &mut egui::Ui, rect: egui::Rect, cam: 
     }
     // clique no que está em volta: escolhe a referência. A peça ativa tem a vez, pois está na frente
     let hover_ativo = app.hover_pick.is_some();
-    let filtro = crate::picking::Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None };
+    let filtro = crate::picking::Filter { faces: true, edges: false, vertices: false, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None, planos_origem: true, planos_ref: true };
     let Some(st) = app.asm.as_mut() else { return };
     if st.editing_part.is_none() {
         return;
@@ -4565,7 +4574,7 @@ fn save_gear(app: &mut App, p: &fenkra_solidos::ParamEngrenagem, dir: Option<Pat
 
 /// Pergunta onde gravar a peça (`.fkp`) e grava o documento.
 fn save_doc(app: &mut App, doc: &Document, nome: &str, dir: Option<PathBuf>) {
-    let mut dlg = rfd::FileDialog::new().add_filter("Peça", &["fkp"]).set_file_name(format!("{nome}.fkp"));
+    let mut dlg = crate::dialogo_dono::novo().add_filter("Peça", &["fkp"]).set_file_name(format!("{nome}.fkp"));
     if let Some(d) = dir {
         dlg = dlg.set_directory(d);
     }

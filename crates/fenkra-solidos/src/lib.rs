@@ -6790,7 +6790,12 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 }
             }
             Err(e) => {
-                cx.status.insert(r.id, Status::Error(e));
+                // B465: referência com campo ainda "a escolher" (comando novo, sem entrada) espera a
+                // seleção: inativa e sem erro, como os comandos (B459); campo apagado de verdade segue erro
+                let mut ids = vec![];
+                r.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
+                let espera = ids.iter().any(|x| x.a_escolher());
+                cx.status.insert(r.id, if espera { Status::Inactive } else { Status::Error(e) });
             }
         }
     }

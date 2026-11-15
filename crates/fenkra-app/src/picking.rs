@@ -51,6 +51,10 @@ pub struct Filter {
     pub exclude_sketch: Option<Id>,
     /// comando aberto: o que só existe na prévia dele não entra na seleção
     pub fantasma: Option<Id>,
+    /// B467: os planos da Origem desligados em Exibir não entram na seleção por clique
+    pub planos_origem: bool,
+    /// B467: idem para os planos de referência
+    pub planos_ref: bool,
 }
 
 /// O que sai da seleção em um corpo com prévia: faces do comando aberto, arestas que só tocam
@@ -255,7 +259,7 @@ mod testes_caixas {
         let cx: Vec<_> = r.bodies.iter().filter_map(|b| fenkra_montagem::lod::caixa_de(&b.mesh)).collect();
         let cam = Camera { dist: 400., ..Default::default() };
         let rect = Rect::from_min_size(Pos2::ZERO, egui::vec2(800., 600.));
-        let f = Filter { faces: true, edges: true, vertices: true, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None };
+        let f = Filter { faces: true, edges: true, vertices: true, planes: false, hidden_env: false, exclude_sketch: None, fantasma: None, planos_origem: true, planos_ref: true };
         let mut achou = 0;
         for x in (0..800).step_by(53) {
             for y in (0..600).step_by(47) {
@@ -279,8 +283,8 @@ pub fn plano_primeiro(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: R
     let mut best: Option<(f32, PlaneRef)> = None;
     for pl in &r.planes {
         let vis = match pl.id {
-            Some(id) => ref_ok(id),
-            None => doc.origin_visible && !f.hidden_env,
+            Some(id) => ref_ok(id) && f.planos_ref,
+            None => doc.origin_visible && !f.hidden_env && f.planos_origem,
         };
         if !vis {
             continue;
@@ -330,12 +334,30 @@ mod testes_plano_primeiro {
         let mut cam = Camera { dist: 200., ..Default::default() };
         cam.set_view(0., std::f32::consts::FRAC_PI_2 - 0.01);
         let rect = Rect::from_min_size(Pos2::ZERO, egui::vec2(800., 600.));
-        let f = Filter { faces: true, edges: false, vertices: false, planes: true, hidden_env: false, exclude_sketch: None, fantasma: None };
+        let f = Filter { faces: true, edges: false, vertices: false, planes: true, hidden_env: false, exclude_sketch: None, fantasma: None, planos_origem: true, planos_ref: true };
         let c = cam.project(rect, Vec3::new(2., 2., 10.)).expect("o topo aparece na tela");
         assert!(matches!(pick(&r, &d, &cam, rect, c, &f), Some(Pick::Face { .. })), "a seleção normal pega a face");
         assert!(matches!(plano_primeiro(&r, &d, &cam, rect, c, &f), Some(Pick::Plane(PlaneRef::Origin(OriginPlane::XY)))), "ao criar sketch o plano vem antes");
         // fora do quadrado dos planos não há plano a oferecer
         assert!(plano_primeiro(&r, &d, &cam, rect, Pos2::new(1., 1.), &f).is_none());
+    }
+
+    /// B467: plano desligado em Exibir não é selecionável: nem na seleção normal nem ao criar sketch.
+    #[test]
+    fn plano_desligado_no_filtro_nao_entra_na_selecao() {
+        let d = Document::new("t");
+        let r = fenkra_solidos::recompute(&d);
+        let mut cam = Camera { dist: 200., ..Default::default() };
+        cam.set_view(0., std::f32::consts::FRAC_PI_2 - 0.01);
+        let rect = Rect::from_min_size(Pos2::ZERO, egui::vec2(800., 600.));
+        let filtro = |origem, refs| Filter { faces: true, edges: false, vertices: false, planes: true, hidden_env: false, exclude_sketch: None, fantasma: None, planos_origem: origem, planos_ref: refs };
+        let c = cam.project(rect, Vec3::new(2., 2., 0.)).expect("o plano XY aparece");
+        assert!(matches!(pick(&r, &d, &cam, rect, c, &filtro(true, true)), Some(Pick::Plane(PlaneRef::Origin(OriginPlane::XY)))), "ligado: seleciona");
+        assert!(plano_primeiro(&r, &d, &cam, rect, c, &filtro(true, true)).is_some());
+        assert!(pick(&r, &d, &cam, rect, c, &filtro(false, true)).is_none(), "planos da Origem desligados: o clique atravessa");
+        assert!(plano_primeiro(&r, &d, &cam, rect, c, &filtro(false, true)).is_none());
+        // desligar os planos de referência não mexe nos da Origem
+        assert!(pick(&r, &d, &cam, rect, c, &filtro(true, false)).is_some());
     }
 }
 
@@ -526,8 +548,8 @@ pub fn pick_com_caixas(r: &RecomputeResult, doc: &Document, cam: &Camera, rect: 
         let mut best: Option<(f32, Pick)> = None;
         for pl in &r.planes {
             let vis = match pl.id {
-                Some(id) => ref_ok(id),
-                None => doc.origin_visible && !f.hidden_env,
+                Some(id) => ref_ok(id) && f.planos_ref,
+                None => doc.origin_visible && !f.hidden_env && f.planos_origem,
             };
             if !vis {
                 continue;
