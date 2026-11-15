@@ -259,6 +259,8 @@ pub(super) fn aplicar(doc: &mut Document, id: Id, slot: u8, valor: String) -> bo
             _ => return false,
         },
         (FeatureKind::Extrude(e), SAIDA) => e.taper = valor,
+        // B20: o mesmo arco serve ao comando Saída (ângulo de saída das faces escolhidas)
+        (FeatureKind::Draft(d), SAIDA) => d.angle = valor,
         (FeatureKind::DirectEdit(e), s @ EDICAO_X..=22) => e.delta[(s - EDICAO_X) as usize] = valor,
         (FeatureKind::DirectEdit(e), EDICAO_VALOR) => e.value = valor,
         (FeatureKind::Fillet(o), s @ CONTROLE_RAIO..=39) => match o.extra.controls.get((s - CONTROLE_RAIO) as usize) {
@@ -366,11 +368,14 @@ pub(super) fn seta_ate_face(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &
     };
     let ponta = base + dir * alvo;
     let (Some(sb), Some(st)) = (cam.project(rect, base), cam.project(rect, ponta)) else { return };
-    let cor = crate::theme::accent(ui.visuals());
     let hr = ui.interact(Rect::from_center_size(st, egui::vec2(PEGA, PEGA)), egui::Id::new(("ate_face", id.0)), egui::Sense::drag());
+    // B20: os mesmos cinco estados das outras alças (repouso, pairando, ativa, travada, erro)
+    let erro = matches!(r.status.get(&id), Some(fenkra_solidos::Status::Error(_)));
+    let estado = crate::alca_estado::EstadoAlca::de(hr.hovered(), hr.dragged(), false, erro);
+    let cor = estado.cor(ui.visuals());
     let painter = ui.painter_at(rect);
-    painter.line_segment([sb, st], Stroke::new(2.5, cor));
-    painter.circle_stroke(st, PEGA / 2., Stroke::new(2., cor));
+    painter.line_segment([sb, st], Stroke::new(estado.espessura() + 1., cor));
+    painter.circle_stroke(st, PEGA / 2., Stroke::new(estado.espessura(), cor));
     painter.circle_filled(sb, 3.5, cor);
     let g = painter.layout_no_wrap(rotulo, egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), Color32::WHITE);
     let caixa = Rect::from_min_size(st + egui::vec2(18., -10.), g.size() + egui::vec2(10., 6.));
@@ -409,8 +414,34 @@ pub(super) fn arcos(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, 
             let pe = o + d * (centro - o).dot(d);
             arc_handle(app, ui, rect, cam, id, pe + base * raio, (o, d), &angle, false, GIRAR, (-360., 360.));
         }
+        FeatureKind::Draft(d) => {
+            if let Some((pivo, eixo, partida)) = geometria_saida_faces(app, r, f.target, &d) {
+                arc_handle(app, ui, rect, cam, id, pivo + partida, (pivo, eixo), &d.angle, false, SAIDA, LIM_SAIDA);
+            }
+        }
         _ => {}
     }
+}
+
+/// Geometria do arco do comando Saída (B20): pivô na primeira face escolhida, à altura do plano
+/// neutro; o eixo é a reta onde a face encontra o plano neutro (normal da face x direção de
+/// desmoldagem); o vetor de partida segue a direção de desmoldagem, sobre a face. Só vale com a
+/// face escolhida e fora de paralelo com o plano neutro. A malha é a de antes do comando.
+fn geometria_saida_faces(app: &App, r: &fenkra_solidos::RecomputeResult, alvo: Id, d: &Draft) -> Option<(Vec3, Vec3, Vec3)> {
+    let p = *d.faces.first()?;
+    let malha = app.session.as_ref().and_then(|s| s.corpos_antes.iter().find(|c| c.collector == alvo).map(|c| &c.mesh)).or_else(|| r.bodies.iter().find(|b| b.collector == alvo).map(|b| &b.mesh))?;
+    let plano = plane_of(r, &d.neutral)?;
+    let (lo, hi) = caixa_do_corpo(r, alvo).unwrap_or((Vec3::ZERO, Vec3::splat(20.)));
+    arco_da_saida(malha, p, plano, d.reverse, (hi - lo).length())
+}
+
+/// A parte pura de `geometria_saida_faces`: só malha, ponto da face, plano neutro e tamanho da peça.
+pub(super) fn arco_da_saida(malha: &fenkra_kernel::Mesh, p: [f64; 3], (o, dn): (Vec3, Vec3), reverse: bool, diagonal: f32) -> Option<(Vec3, Vec3, Vec3)> {
+    let n = normal_da_face(malha, p)?;
+    let eixo = n.cross(dn).try_normalize()?;
+    let pivo = v3(p) - dn * (v3(p) - o).dot(dn);
+    let dir = if reverse { -dn } else { dn };
+    Some((pivo, eixo, dir * (diagonal * 0.25).max(5.)))
 }
 
 #[cfg(test)]
@@ -652,5 +683,28 @@ mod tests {
         let shift = crate::ui_ext::mult_teclas(egui::Modifiers { shift: true, ..Default::default() });
         assert_eq!(normal, 1.);
         assert_ne!(shift, normal);
+    }
+
+    /// B20: o comando Saída ganha o arco do ângulo, no pé da face escolhida; o valor arrastado
+    /// vai para o campo `angle` e o sólido muda (parede de 20 x 20 x 10 com 5 graus de saída).
+    #[test]
+    fn comando_saida_ganha_arco_e_grava_o_angulo() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let (mut d, _ex) = base_com_extrusao(Extent::Blind(t("10")), "0");
+        let sd = d.add_feature(FeatureKind::Draft(Draft { faces: vec![[10., 0., 5.]], neutral: XY, angle: t("0"), reverse: false, face_keys: vec![], regras: vec![] }));
+        let r = recompute(&d);
+        let corpo = r.bodies.iter().find(|b| b.collector == d.feature(sd).unwrap().target).expect("corpo");
+        let (pivo, eixo, partida) = arco_da_saida(&corpo.mesh, [10., 0., 5.], (Vec3::ZERO, Vec3::Z), false, 30.).expect("arco");
+        // pivô na face x = 10, ao nível do plano neutro; eixo ao longo da aresta (Y); partida na direção da peça
+        assert!((pivo.x - 10.).abs() < 1e-3 && pivo.z.abs() < 1e-3, "{pivo:?}");
+        assert!(eixo.y.abs() > 0.99, "{eixo:?}");
+        assert!(partida.z > 4.9 && partida.x.abs() < 1e-3, "{partida:?}");
+        // face paralela ao plano neutro: sem arco
+        assert!(arco_da_saida(&corpo.mesh, [10., 0., 5.], (Vec3::ZERO, Vec3::X), false, 30.).is_none());
+        assert!(aplicar(&mut d, sd, SAIDA, "5".into()));
+        let Some(FeatureKind::Draft(x)) = d.feature(sd).map(|f| f.kind.clone()) else { panic!() };
+        assert_eq!(x.angle, "5");
     }
 }

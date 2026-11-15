@@ -23,6 +23,9 @@ use crate::toolbar::{entries, Entry, Item};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Nota {
     Ok,
+    /// o critério não vale para este comando (B20): repetir comando sem escolha na viewport, estados
+    /// de uma alça que o comando não tem
+    NaoSeAplica,
     Parcial,
     Falta,
     /// depende de gente (teste de uso) ou de mouse real
@@ -33,6 +36,7 @@ impl Nota {
     pub fn texto(self) -> &'static str {
         match self {
             Nota::Ok => "ok",
+            Nota::NaoSeAplica => "n/a",
             Nota::Parcial => "parcial",
             Nota::Falta => "falta",
             Nota::AConferir => "a conferir",
@@ -52,7 +56,7 @@ pub struct Linha {
 pub const ITENS: [&str; 7] = ["Intuitivo", "Prévia 3D", "Manipulação 3D", "Ícone claro", "Tooltip com GIF", "Dica por campo", "Fluxo"];
 
 /// (ícone do comando, tipo no documento procurado nas alças, tem grandeza para arrastar?)
-const TIPO: &[(&str, &str, bool)] = &[
+pub(crate) const TIPO: &[(&str, &str, bool)] = &[
     ("extrusao", "Extrude", true),
     ("ext_simetrico", "Extrude", true),
     ("ext_ate_plano", "Extrude", true),
@@ -143,18 +147,18 @@ const FONTES_ALCAS: &[&str] = &[
     include_str!("handles/vocab.rs"),
 ];
 
-fn tem_alca(tipo: &str) -> bool {
+pub(crate) fn tem_alca(tipo: &str) -> bool {
     let alvo = format!("FeatureKind::{tipo}(");
     let alvo2 = format!("FeatureKind::{tipo} ");
-    FONTES_ALCAS.iter().any(|f| f.contains(&alvo) || f.contains(&alvo2))
+    FONTES_ALCAS.iter().map(|f| f.split("#[cfg(test)]").next().unwrap_or(f)).any(|f| f.contains(&alvo) || f.contains(&alvo2))
 }
 
-fn midias() -> Vec<String> {
+pub(crate) fn midias() -> Vec<String> {
     crate::midia::Manifesto::ler(&crate::midia::pasta_docs()).map(|m| m.midias.into_iter().map(|e| e.id).collect()).unwrap_or_default()
 }
 
 /// Ícone repetido: o mesmo desenho usado por outro comando de nome de ícone diferente.
-fn icone_repetido(icone: &str, todos: &[Item]) -> bool {
+pub(crate) fn icone_repetido(icone: &str, todos: &[Item]) -> bool {
     let Some(a) = crate::icons::modelo_texto(icone) else { return false };
     todos.iter().any(|o| o.icon != icone && crate::icons::modelo_texto(o.icon).is_some_and(|b| b == a))
 }
@@ -242,8 +246,7 @@ mod tests {
         // resultado no recorte (prévia só em arame, transparência de "todas as arestas")
         "nervura", "rasgo_varrido", "multisecoes", "multisecoes_remover", "prim_toro", "prim_cunha", "filete_completo", "arestas_todas", "chanfro_dist", "edit_apagar_face",
         "padrao_pontos",
-        // sem alça 3D da grandeza principal (ângulo da saída, comprimento da rosca)
-        "saida", "rosca",
+        // (B20: saída e rosca ganharam a alça 3D da grandeza principal e saíram da lista)
     ];
 
     #[test]

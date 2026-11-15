@@ -117,6 +117,11 @@ fn handle_for(app: &App, id: Id) -> Option<Linear> {
                 let n = v3(info.dir);
                 (info.kind == 0).then_some(Linear { base: v3(p), dir: if t.remove { -n } else { n }, k: 1., expr: t.value.clone(), label: "Espessura" })
             }
+            // B20: comprimento da rosca: a seta sai do início dela, sobre o eixo, ao longo do furo ou eixo
+            FeatureKind::Thread(t) if t.end.is_none() => {
+                let x = r.roscas.iter().find(|x| x.feature == id)?;
+                Some(Linear { base: v3(x.origin), dir: v3(x.dir).try_normalize()?, k: 1., expr: t.length.clone(), label: "Comprimento" })
+            }
             FeatureKind::Plastico(p) => crate::plastico_rec_ui::seta(r, p).map(|(base, dir, expr, label)| Linear { base, dir, k: 1., expr, label }),
             FeatureKind::Stiffener(s) => {
                 let (c, n) = sketch_center(r, s.sketch)?;
@@ -338,6 +343,7 @@ fn write_value(app: &mut App, id: Id, value: String) {
             FeatureKind::Thickness(t) => t.value = value,
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => o.value = value,
             FeatureKind::Shell(sh) => sh.thickness = value,
+            FeatureKind::Thread(t) => t.length = value,
             FeatureKind::ThickSurface(t) => t.t1 = value,
             FeatureKind::Revolve(r) => r.angle = value,
             FeatureKind::SmFlange(x) => x.length = value,
