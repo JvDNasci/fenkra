@@ -47,7 +47,7 @@ fn sk_spline(d: &mut Document, pts: &[[f64; 2]]) -> Id {
 }
 
 fn dobra(sketch: Option<Id>) -> SmBend {
-    SmBend { sketch, a: [0.; 3], b: [0.; 3], angle: s("90"), radius: None, flip: false, down: false, position: 0 }
+    SmBend { sketch, a: [0.; 3], b: [0.; 3], angle: s("90"), radius: None, flip: false, down: false, position: 0, cega: None }
 }
 
 #[test]

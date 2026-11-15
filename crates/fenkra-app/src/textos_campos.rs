@@ -7,6 +7,8 @@
 
 /// (rótulo, dica em português, dica em inglês)
 pub static CAMPOS: &[(&str, &str, &str)] = &[
+    ("Raio na guia 1", "Raio de curvatura da seção na guia 1. O ρ de cada seção é calculado para dar exatamente esse raio (G2 com a superfície vizinha). Maior que zero.", "Curvature radius of the section at guide 1. Each section's ρ is computed to give exactly this radius (G2 with the neighboring surface). Above zero."),
+    ("Furo de alívio", "Diâmetro do furo aberto em cada ponta da dobra cega. Vazio usa o mínimo, o maior entre 3 mm e 2 × espessura + raio; menor que isso sobe ao mínimo.", "Diameter of the hole opened at each end of the blind bend. Empty uses the minimum, the larger of 3 mm and 2 × thickness + radius; smaller values are raised to it."),
     ("Face", "Espessura da parede nesta face, no lugar da geral. Maior que zero.", "Wall thickness on this face, instead of the general one. Greater than zero."),
     ("Intensidade", "Quanto o loft segue a normal do perfil antes de virar. 0 a 3; 1 é um terço do vão.", "How far the loft follows the profile normal before turning. 0 to 3; 1 is a third of the span."),
     // análises de superfície

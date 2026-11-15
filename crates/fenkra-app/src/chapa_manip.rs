@@ -296,7 +296,7 @@ mod tests {
         let mut d = base();
         let a = aba(&mut d, "90");
         let h = d.add_feature(FeatureKind::SmHem(SmHem { edge: [0., 25., 2.], length: s("8"), gap: s("2"), flip: false, kind: 1, edge_key: None }));
-        let b = d.add_feature(FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("45"), radius: None, flip: true, down: false, sketch: None, position: 0 }));
+        let b = d.add_feature(FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("45"), radius: None, flip: true, down: false, sketch: None, position: 0, cega: None }));
         let r = recompute_ok(&d);
         let v = r.params.clone();
 

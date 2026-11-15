@@ -53,7 +53,7 @@ pub fn spline(d: &mut Document, plana: bool) {
     let p: Vec<Id> = [[55., 0.], [70., 30.], [55., 60.]].iter().map(|q| data.add_point(&mut al, q[0], q[1])).collect();
     data.add_curve(&mut al, Curve::Spline { pts: p }, false);
     let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
-    let id = d.add_feature(FeatureKind::SmBend(SmBend { a: [0.; 3], b: [0.; 3], angle: s("90"), radius: None, flip: false, down: false, sketch: Some(sk), position: 0 }));
+    let id = d.add_feature(FeatureKind::SmBend(SmBend { a: [0.; 3], b: [0.; 3], angle: s("90"), radius: None, flip: false, down: false, sketch: Some(sk), position: 0, cega: None }));
     d.feature_mut(id).map(|f| f.name = "DobraSpline".into());
     if let Some(sp) = d.sheet.as_mut() {
         sp.flat = plana;
@@ -72,7 +72,7 @@ pub fn linhas(d: &mut Document, nova: bool) {
     nomeia(d, FeatureKind::SmLouver(SmLouver { a: [75., 15., 2.], b: [75., 45., 2.], width: s("10"), height: s("4"), flip: false, down: false }), "Veneziana");
     nomeia(d, FeatureKind::SmJoggle(SmJoggle { a: [45., 0., 2.], b: [45., 60., 2.], depth: s("4"), run: s("6"), flip: false, angle: None, plane: None, keep_length: false }), "Joggle");
     let (a, b) = if nova { ([0.; 3], [0.; 3]) } else { ([20., 0., 2.], [20., 60., 2.]) };
-    nomeia(d, FeatureKind::SmBend(SmBend { a, b, angle: s("45"), radius: None, flip: false, down: false, sketch: None, position: 0 }), "DobraLinha");
+    nomeia(d, FeatureKind::SmBend(SmBend { a, b, angle: s("45"), radius: None, flip: false, down: false, sketch: None, position: 0, cega: None }), "DobraLinha");
 }
 
 /// B35: aba entre perfis, um funil de quadrado 40 embaixo para quadrado 20 a 30 mm de altura, com o

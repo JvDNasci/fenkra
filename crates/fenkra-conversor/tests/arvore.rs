@@ -546,7 +546,7 @@ fn chapa_dobrada() -> Document {
 /// Chapa plana dobrada a 30° numa linha da face.
 fn chapa_com_dobra() -> Document {
     let mut d = parede("dobra");
-    d.add_feature(FeatureKind::SmBend(SmBend { a: [50., 0., 1.5], b: [50., 60., 1.5], angle: "30".into(), radius: None, flip: false, down: false, sketch: None, position: 0 }));
+    d.add_feature(FeatureKind::SmBend(SmBend { a: [50., 0., 1.5], b: [50., 60., 1.5], angle: "30".into(), radius: None, flip: false, down: false, sketch: None, position: 0, cega: None }));
     d
 }
 

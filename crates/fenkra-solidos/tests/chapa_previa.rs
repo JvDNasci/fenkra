@@ -66,7 +66,7 @@ fn todo_comando_de_chapa_devolve_malha_de_previa() {
     let comandos: Vec<(&str, FeatureKind)> = vec![
         ("aba", FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None })),
         ("bainha", FeatureKind::SmHem(SmHem { edge: [100., 25., 2.], length: s("8"), gap: s("0"), flip: false, kind: 0, edge_key: None })),
-        ("dobra por linha", FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("90"), radius: None, flip: false, down: false, sketch: None, position: 0 })),
+        ("dobra por linha", FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("90"), radius: None, flip: false, down: false, sketch: None, position: 0, cega: None })),
         ("joggle", FeatureKind::SmJoggle(SmJoggle { a: [60., 0., 2.], b: [60., 50., 2.], depth: s("3"), run: s("6"), flip: true, angle: None, plane: None, keep_length: false })),
         ("veneziana", FeatureKind::SmLouver(SmLouver { a: [30., 10., 2.], b: [30., 40., 2.], width: s("12"), height: s("5"), flip: false, down: false })),
         ("estampo", FeatureKind::SmStamp(SmStamp { sketch: quadrado, depth: s("3"), flip: false, kind: 0, width: String::new(), punch: None })),
@@ -96,7 +96,7 @@ fn previa_invalida_traz_a_causa_em_texto() {
         return;
     }
     let d = chapa();
-    let p = previa_comando(&d, FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("200"), radius: None, flip: false, down: false, sketch: None, position: 0 }));
+    let p = previa_comando(&d, FeatureKind::SmBend(SmBend { a: [60., 0., 2.], b: [60., 50., 2.], angle: s("200"), radius: None, flip: false, down: false, sketch: None, position: 0, cega: None }));
     assert!(p.malha.is_none());
     assert!(matches!(&p.status, Status::Error(m) if m.contains("ângulo")), "{:?}", p.status);
 }

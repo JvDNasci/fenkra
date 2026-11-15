@@ -54,7 +54,7 @@ fn face_fixa_decide_o_lado_da_dobra_por_linha() {
     let flip = flip_de(a, b, [20., 25., 2.]);
     assert!(flip);
     assert_eq!(lado_movel(a, b, NORMAL, flip).unwrap(), [1., 0., 0.]);
-    d.add_feature(FeatureKind::SmBend(SmBend { a, b, angle: s("90"), radius: None, flip, down: false, sketch: None, position: 0 }));
+    d.add_feature(FeatureKind::SmBend(SmBend { a, b, angle: s("90"), radius: None, flip, down: false, sketch: None, position: 0, cega: None }));
     let r = ok(&d);
     assert!((volume_total(&r) - 10000.).abs() < 20., "volume {}", volume_total(&r));
     let v = xz(&r);
@@ -68,7 +68,7 @@ fn face_fixa_decide_o_lado_da_dobra_por_linha() {
     let mut d = base();
     let flip = flip_de(a, b, [90., 25., 2.]);
     assert!(!flip);
-    d.add_feature(FeatureKind::SmBend(SmBend { a, b, angle: s("90"), radius: None, flip, down: false, sketch: None, position: 0 }));
+    d.add_feature(FeatureKind::SmBend(SmBend { a, b, angle: s("90"), radius: None, flip, down: false, sketch: None, position: 0, cega: None }));
     let r = ok(&d);
     assert!((volume_total(&r) - 10000.).abs() < 20., "volume {}", volume_total(&r));
     let v = xz(&r);
@@ -136,7 +136,7 @@ fn sem_linha_ainda_espera_sem_erro() {
     }
     let z = [0.; 3];
     for k in [
-        FeatureKind::SmBend(SmBend { a: z, b: z, angle: s("90"), radius: None, flip: false, down: false, sketch: None, position: 0 }),
+        FeatureKind::SmBend(SmBend { a: z, b: z, angle: s("90"), radius: None, flip: false, down: false, sketch: None, position: 0, cega: None }),
         FeatureKind::SmJoggle(SmJoggle { a: z, b: z, depth: s("3"), run: s("6"), flip: false, angle: None, plane: None, keep_length: false }),
         FeatureKind::SmLouver(SmLouver { a: z, b: z, width: s("10"), height: s("4"), flip: false, down: false }),
     ] {

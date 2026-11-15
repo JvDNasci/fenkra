@@ -479,7 +479,7 @@ mod tests {
     /// B243: sem linha desenhada, a dobra por linha não diz "entradas completas": pede a face fixa.
     #[test]
     fn dobra_por_linha_sem_linha_pede_a_face_fixa() {
-        let mut b = SmBend { a: [0.; 3], b: [0.; 3], angle: s("90"), radius: None, flip: false, down: false, sketch: None, position: 0 };
+        let mut b = SmBend { a: [0.; 3], b: [0.; 3], angle: s("90"), radius: None, flip: false, down: false, sketch: None, position: 0, cega: None };
         assert_eq!(campo_ativo(&FeatureKind::SmBend(b.clone())), Some(Espera::Face));
         b.b = [0., 50., 2.];
         assert_eq!(campo_ativo(&FeatureKind::SmBend(b)), None);
