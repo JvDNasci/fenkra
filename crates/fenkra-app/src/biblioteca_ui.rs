@@ -243,6 +243,9 @@ pub struct Estado {
     pub sem_pasta: bool,
     /// um clique na vista foi da inserção neste quadro: a seleção não pode ficar com ele (B462)
     clique_tomado: bool,
+    /// "Em furo" foi armado e nenhum furo da montagem serve para este tamanho (B482): nada entrou, e o
+    /// painel avisa e oferece "Inserir solto", em vez de o item cair solto sem pedir
+    pub sem_furo: Option<String>,
 }
 
 impl Default for Estado {
@@ -269,6 +272,7 @@ impl Default for Estado {
             foco_ficha: false,
             sem_pasta: false,
             clique_tomado: false,
+            sem_furo: None,
         }
     }
 }
@@ -284,6 +288,7 @@ impl Estado {
         self.familia = Some(familia.to_string());
         self.tamanho = t.clone();
         self.furos = None;
+        self.sem_furo = None;
         if let Some(t) = t {
             self.prefs.registrar(familia, &t);
             salvar_prefs(&self.prefs);
@@ -668,9 +673,16 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
                 est.alvo = alvo;
                 est.inserindo = if ativo { None } else { Some(Insercao { arrastando: false }) };
                 est.furos = None;
+                est.sem_furo = None;
             }
         }
     });
+    if let (Some(t), Alvo::Furo) = (est.sem_furo.clone(), est.alvo) {
+        ui.label(RichText::new(format!("⚠ {} {t}. {}", tr("Nenhum furo desta montagem serve para o"), tr("O item não entrou."))).small().color(crate::theme::st_warn()));
+        if ui.button(format!("✥ {}", tr("Inserir solto"))).on_hover_text(tr("Arma a inserção solta: o próximo clique na viewport larga o item no espaço, como peça livre para posicionar depois.")).clicked() {
+            armar_solto(est);
+        }
+    }
     ui.horizontal_wrapped(|ui| {
         if ui.button(tr("Adicionar à montagem")).on_hover_text(tr("Põe o item agora na montagem, como peça livre no centro da vista, sem precisar clicar na viewport. Depois é só posicionar.")).clicked() {
             est.adicionar_agora = true;
@@ -1145,6 +1157,9 @@ fn quadro_da_insercao(st: &mut crate::asm_ui::AsmState, est: &mut Estado, ui: &m
         let dir = st.dir();
         est.furos = Some(avulso::furos_do_mundo(&st.asm, dir.as_deref(), &mut st.cache, &[]));
     }
+    if let Some(aviso) = conferir_furos(est, fam, t) {
+        return Some(aviso);
+    }
     let pos = ctx.input(|i| i.pointer.latest_pos());
     let sobre_viewport = pos.is_some_and(|p| rect.contains(p) && ctx.layer_id_at(p).is_some_and(|l| l.order == egui::Order::Background));
     let solto = ctx.input(|i| i.pointer.primary_released());
@@ -1271,6 +1286,29 @@ fn quadro_da_insercao(st: &mut crate::asm_ui::AsmState, est: &mut Estado, ui: &m
     }
 }
 
+/// Em furo sem nenhum furo da montagem que sirva para o tamanho (B482): antes o fantasma seguia o
+/// cursor com o aviso "nenhum furo casa" por cima do modelo e o clique não punha nada, até o botão de
+/// adicionar largar o item solto na origem. Agora a inserção desarma na hora, o aviso diz que nada
+/// entrou e o painel oferece "Inserir solto". Devolve o aviso, ou `None` quando há furo que case.
+fn conferir_furos(est: &mut Estado, fam: &Familia, t: &biblioteca::Tamanho) -> Aviso {
+    let furos = est.furos.as_deref().unwrap_or_default();
+    if furos.iter().any(|f| avulso::casa(fam, t, f)) {
+        est.sem_furo = None;
+        return None;
+    }
+    est.inserindo = None;
+    est.sem_furo = Some(t.designacao.clone());
+    Some((format!("{} {} {}. {}", tr("nenhum furo casa com"), t.designacao, tr("nesta montagem"), tr("O item não entrou: use «Inserir solto» ou «Em ponto», ou faça o furo antes.")), true))
+}
+
+/// O botão "Inserir solto" do aviso de furo (B482): passa para a inserção solta e arma o fantasma.
+pub fn armar_solto(est: &mut Estado) {
+    est.alvo = Alvo::Solto;
+    est.inserindo = Some(Insercao { arrastando: false });
+    est.sem_furo = None;
+    est.furos = None;
+}
+
 // ---------------------------------------------------------------- inserção em ponto e solto (B374)
 
 fn d3(v: Vec3) -> fenkra_montagem::V3 {
@@ -1338,8 +1376,12 @@ fn inserir_livre(st: &mut crate::asm_ui::AsmState, est: &mut Estado, fam: &Famil
     }
 }
 
-/// Botão "Adicionar à montagem": o item entra solto no centro da vista, sem clique na viewport.
+/// Botão "Adicionar à montagem": o item entra solto no centro da vista, sem clique na viewport. É
+/// pedido explícito de peça livre: o fantasma armado (em furo, ponto ou solto) sai junto, senão ele
+/// continuava seguindo o cursor depois que o item já tinha entrado (B482).
 fn adicionar_agora(st: &mut crate::asm_ui::AsmState, est: &mut Estado, cam: &Camera) -> Aviso {
+    est.inserindo = None;
+    est.sem_furo = None;
     let Some((fam, t)) = est.escolhida() else { return Some((tr("Escolha um item no catálogo antes de inserir").to_string(), true)) };
     let alvo = d3(cam.target);
     inserir_livre(st, est, fam, t, PosicaoLivre::Solto { origem: alvo })
@@ -2086,5 +2128,69 @@ mod tests {
             assert_eq!(pecas(st), 1);
         }
         let _ = std::fs::remove_dir_all(d);
+    }
+
+    // ---------------------------------------------------------------- rodada 4 (B482)
+
+    #[test]
+    fn em_furo_sem_furo_que_case_avisa_nao_insere_e_oferece_solto() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // B482: o fantasma seguia o cursor com "nenhum furo casa" e o botão largava o item na origem
+        let mut st = montagem("b482");
+        let dir = st.dir().unwrap();
+        let furos = avulso::furos_do_mundo(&st.asm, Some(&dir), &mut st.cache, &[]);
+        assert!(!furos.is_empty(), "a placa de exemplo tem furos");
+        let fam = biblioteca::familia("iso4762").unwrap();
+        let grande = fam.tamanhos.iter().rev().find(|t| !furos.iter().any(|f| avulso::casa(fam, t, f))).expect("algum tamanho não cabe nos furos M6").designacao.clone();
+        let mut est = armar(Alvo::Furo, "iso4762", &grande, None);
+        let ctx = egui::Context::default();
+        let aviso = quadro(&ctx, &mut st, &mut est, vec![]);
+        assert!(aviso.as_ref().is_some_and(|a| a.1 && a.0.contains(&grande)), "erro que diz o tamanho: {aviso:?}");
+        assert!(est.inserindo.is_none(), "o fantasma não fica armado");
+        assert_eq!(est.sem_furo.as_deref(), Some(grande.as_str()));
+        // clicar na vista depois não põe nada
+        assert!(clicar(&ctx, &mut st, &mut est, tela().center()).is_none());
+        assert_eq!(pecas(&st), 1, "nada entrou");
+        assert!(st.undo.is_empty() && st.asm.mates.is_empty());
+        // o painel mostra o aviso e o botão "Inserir solto"
+        let mut saida = ctx.run_ui(egui::RawInput { screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(500., 2400.))), ..Default::default() }, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| conteudo(ui, &mut est));
+        });
+        saida.textures_delta.clear();
+        let v = textos(&saida);
+        assert!(v.iter().any(|x| x.0.contains(tr("Nenhum furo desta montagem serve para o")) && x.0.contains(&grande)), "aviso no painel");
+        assert!(v.iter().any(|x| x.0.contains(tr("Inserir solto"))), "botão para inserir solto");
+        // o botão: inserção solta armada, e o clique larga o item no espaço, sem restrição
+        armar_solto(&mut est);
+        assert_eq!((est.alvo, est.inserindo.is_some(), est.sem_furo.is_none()), (Alvo::Solto, true, true));
+        let aviso = clicar(&ctx, &mut st, &mut est, egui::pos2(300., 250.));
+        assert!(aviso.as_ref().is_some_and(|a| !a.1), "{aviso:?}");
+        assert_eq!(pecas(&st), 2);
+        assert!(st.asm.mates.is_empty(), "solto: sem restrição");
+        // a vista: a placa e o parafuso, sem erro, o parafuso fora da placa
+        st.refresh();
+        let v = st.view.as_ref().unwrap();
+        assert_eq!(v.bodies.len(), 2);
+        assert!(v.status.values().all(|s| !matches!(s, fenkra_solidos::Status::Error(_))), "{:?}", v.status);
+        assert!(v.bodies[1].mass.volume > 1000., "{grande}: {}", v.bodies[1].mass.volume);
+    }
+
+    #[test]
+    fn adicionar_a_montagem_desarma_o_fantasma() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // B482: depois do "Adicionar à montagem", o fantasma armado continuava seguindo o cursor
+        let mut st = montagem("b482_adicionar");
+        let mut est = armar(Alvo::Furo, "iso4762", "M6", None);
+        let ctx = egui::Context::default();
+        quadro(&ctx, &mut st, &mut est, vec![]);
+        assert!(est.inserindo.is_some(), "M6 casa com a placa: armado");
+        let aviso = adicionar_agora(&mut st, &mut est, &Camera::default());
+        assert!(aviso.is_some_and(|a| !a.1));
+        assert_eq!(pecas(&st), 2);
+        assert!(est.inserindo.is_none(), "o item entrou solto e o fantasma saiu");
     }
 }

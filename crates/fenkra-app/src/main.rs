@@ -323,6 +323,7 @@ mod textos_desempenho;
 mod textos_montagem5;
 mod textos_posicoes;
 mod textos_montagem6;
+mod textos_r4b;
 mod textos_montagem7;
 mod textos_montagem_sem_arquivo;
 mod textos_r3;
