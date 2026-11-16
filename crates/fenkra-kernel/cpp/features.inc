@@ -634,6 +634,24 @@ std::unique_ptr<Shape> shell_faces_t(const Shape& s, rust::Slice<const double> p
     });
 }
 
+// B478: a face tem vizinha ligada por tangência (um filete, por exemplo)? O OpenCASCADE só inclina a
+// face se a vizinha tangente também puder ser inclinada; um filete cujo eixo cruza a direção de
+// desmoldagem não pode, e a Saída falha. Serve para o aviso dizer a causa certa.
+static bool face_com_vizinha_tangente(const TopoDS_Shape& corpo, const TopoDS_Face& f) {
+    TopTools_IndexedDataMapOfShapeListOfShape e2f;
+    TopExp::MapShapesAndAncestors(corpo, TopAbs_EDGE, TopAbs_FACE, e2f);
+    for (TopExp_Explorer ex(f, TopAbs_EDGE); ex.More(); ex.Next()) {
+        const TopoDS_Edge& e = TopoDS::Edge(ex.Current());
+        int i = e2f.FindIndex(e);
+        if (i == 0) continue;
+        for (const TopoDS_Shape& g : e2f.FindFromIndex(i)) {
+            if (g.IsSame(f)) continue;
+            if (BRep_Tool::Continuity(e, f, TopoDS::Face(g)) >= GeomAbs_G1) return true;
+        }
+    }
+    return false;
+}
+
 std::unique_ptr<Shape> draft_t(const Shape& s, rust::Slice<const double> pts, double dx, double dy, double dz, double angle_deg,
                                double ox, double oy, double oz, double nx, double ny, double nz,
                                rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out) {
@@ -643,7 +661,11 @@ std::unique_ptr<Shape> draft_t(const Shape& s, rust::Slice<const double> pts, do
         gp_Pln neutral(gp_Pnt(ox, oy, oz), gp_Dir(nx, ny, nz));
         for (auto& f : faces_near(s.s, pts)) {
             d.Add(f, pull, angle_deg * M_PI / 180.0, neutral);
-            if (!d.AddDone()) throw std::runtime_error("a face não aceita ângulo de saída (precisa ser plana, cilíndrica ou cônica e cruzar o plano neutro)");
+            if (!d.AddDone()) {
+                if (face_com_vizinha_tangente(s.s, f))
+                    throw std::runtime_error("a face é tangente a um filete ou arredondamento e não pode receber saída: aplique a Saída antes do filete");
+                throw std::runtime_error("a face não aceita ângulo de saída (precisa ser plana, cilíndrica ou cônica e cruzar o plano neutro)");
+            }
         }
         d.Build();
         if (!d.IsDone()) throw std::runtime_error("não foi possível aplicar o ângulo de saída");

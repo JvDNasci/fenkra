@@ -231,8 +231,13 @@ fn chave_plano(id: Id) -> egui::Id {
 }
 
 /// O clique no 3D deve escolher o plano neutro (e não mais uma face da lista)?
+/// B478: com o campo ativo em Plano o clique o preenche; só quem pediu mais faces (`mais_faces`) as acrescenta.
 pub fn clique_vai_para_plano(ctx: &egui::Context, id: Id, k: &FeatureKind) -> bool {
-    espera_plano_neutro(k) && ctx.data(|d| d.get_temp::<bool>(chave_plano(id))).unwrap_or(false)
+    destino_e_plano(k, ctx.data(|d| d.get_temp::<bool>(chave_plano(id))).unwrap_or(false))
+}
+
+fn destino_e_plano(k: &FeatureKind, mais_faces: bool) -> bool {
+    espera_plano_neutro(k) && !mais_faces
 }
 
 /// Legenda de cores do que o comando mostra no 3D: (cor, texto).
@@ -310,10 +315,12 @@ pub fn faixa(ui: &mut egui::Ui, id: Id, k: &FeatureKind) {
         }
         // a saída pede faces e depois o plano neutro: o botão muda o destino do clique
         if espera_plano_neutro(k) {
-            let ligado = ui.ctx().data(|d| d.get_temp::<bool>(chave_plano(id))).unwrap_or(false);
+            // B478: o padrão é o plano (é o campo ativo); o botão alterna para acrescentar mais faces
+            let mais_faces = ui.ctx().data(|d| d.get_temp::<bool>(chave_plano(id))).unwrap_or(false);
+            let ligado = !mais_faces;
             let txt = if ligado { "Clique numa face plana ou plano para ser o neutro" } else { "Escolher o plano neutro no 3D" };
             if ui.add(egui::Button::new(RichText::new(crate::i18n::tr(txt)).color(acc)).selected(ligado)).clicked() {
-                ui.ctx().data_mut(|d| d.insert_temp(chave_plano(id), !ligado));
+                ui.ctx().data_mut(|d| d.insert_temp(chave_plano(id), ligado));
             }
         } else {
             ui.ctx().data_mut(|d| d.remove_temp::<bool>(chave_plano(id)));
@@ -517,6 +524,9 @@ mod tests {
         crate::feat_ui::add_face(&mut k, [20., 0., 10.]);
         assert_eq!(campo_ativo(&k), Some(Espera::Plano));
         assert!(espera_plano_neutro(&k));
+        // B478: com o campo ativo em Plano o clique vai para o plano, sem apertar botão nenhum
+        assert!(destino_e_plano(&k, false));
+        assert!(!destino_e_plano(&k, true), "quem pediu mais faces as acrescenta");
         let seed = Seed { planes: vec![PlaneRef::Origin(OriginPlane::XY)], ..Default::default() };
         assert!(fill(&mut k, &mut Cands::from_seed(&seed, None)), "o clique preenche o plano");
         assert_eq!(campo_ativo(&k), None);

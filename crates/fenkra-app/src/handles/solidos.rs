@@ -416,6 +416,15 @@ pub(super) fn arcos(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, 
         }
         FeatureKind::Draft(d) => {
             if let Some((pivo, eixo, partida)) = geometria_saida_faces(app, r, f.target, &d) {
+                // B478: com 3 graus o arco quase some; as duas semirretas (a face e a face inclinada) mostram o ângulo
+                if let Ok(ang) = fenkra_core::expr::eval_str(&d.angle, &app.vars()) {
+                    let ponta = pivo + glam::Quat::from_axis_angle(eixo, (ang as f32).to_radians()) * partida;
+                    if let (Some(a), Some(b), Some(c)) = (cam.project(rect, pivo), cam.project(rect, pivo + partida), cam.project(rect, ponta)) {
+                        let tr = egui::Stroke::new(1., crate::theme::accent(ui.visuals()));
+                        ui.painter_at(rect).line_segment([a, b], tr);
+                        ui.painter_at(rect).line_segment([a, c], tr);
+                    }
+                }
                 arc_handle(app, ui, rect, cam, id, pivo + partida, (pivo, eixo), &d.angle, false, SAIDA, LIM_SAIDA);
             }
         }
