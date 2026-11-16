@@ -246,6 +246,8 @@ pub struct Estado {
     /// "Em furo" foi armado e nenhum furo da montagem serve para este tamanho (B482): nada entrou, e o
     /// painel avisa e oferece "Inserir solto", em vez de o item cair solto sem pedir
     pub sem_furo: Option<String>,
+    /// a família foi escolhida na lista: o painel rola até a tabela de tamanhos (B484)
+    rolar_tabela: bool,
 }
 
 impl Default for Estado {
@@ -273,6 +275,7 @@ impl Default for Estado {
             sem_pasta: false,
             clique_tomado: false,
             sem_furo: None,
+            rolar_tabela: false,
         }
     }
 }
@@ -452,6 +455,7 @@ fn conteudo(ui: &mut egui::Ui, est: &mut Estado) {
     });
     if let Some((f, t)) = escolha {
         est.escolher(&f, t.as_deref());
+        est.rolar_tabela = true;
     }
     ui.separator();
     ficha_ui(ui, est);
@@ -500,15 +504,6 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
     ui.label(RichText::new(format!("{} · {} · {}", tr(ficha.sistema.rotulo()), ficha.material, tr(ficha.cabeca.rotulo()))).small().weak());
     let tamanho_atual = est.tamanho.clone().unwrap_or_default();
     let linha_atual = ficha.linhas.iter().find(|l| l.designacao == tamanho_atual).or(ficha.linhas.first());
-    ui.horizontal(|ui| {
-        if let Some(l) = linha_atual {
-            let (rect, resp) = ui.allocate_exact_size(egui::vec2(150., 150.), Sense::drag());
-            previa_3d(ui, rect, &resp, est, fam, &l.designacao);
-            ui.vertical(|ui| {
-                esquema(ui, &ficha, l, est.comprimento);
-            });
-        }
-    });
     // curso do cilindro ou comprimento do trilho: livre entre o menor e o maior da série, com os
     // valores usuais no menu
     if matches!(fam.tipo, TipoFixador::CilindroPneumatico | TipoFixador::TrilhoLinear | TipoFixador::FusoEsferas) {
@@ -587,7 +582,7 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
     // ficava ao reabrir o painel. Agora só as linhas rolam e os títulos das colunas ficam à vista.
     let altura = ui.spacing().interact_size.y;
     let mut novo: Option<String> = None;
-    ui.push_id("biblioteca_tabela", |ui| {
+    let tabela = ui.push_id("biblioteca_tabela", |ui| {
         egui_extras::TableBuilder::new(ui)
             .id_salt("biblioteca_grade")
             .striped(true)
@@ -641,11 +636,28 @@ fn ficha_ui(ui: &mut egui::Ui, est: &mut Estado) {
                     });
                 }
             });
-    });
+    })
+    .response
+    .rect;
     if let Some(t) = novo {
         let f = fam.id.clone();
         est.escolher(&f, Some(&t));
     }
+    // B484: família escolhida na lista leva a tabela para a vista do painel
+    if std::mem::take(&mut est.rolar_tabela) {
+        ui.scroll_to_rect(tabela, None);
+    }
+    // prévia e esquema das cotas depois da tabela (B484): antes eles vinham primeiro e, com os 150 de
+    // altura da prévia, a tabela de tamanhos ficava abaixo da dobra numa janela de 720 de altura
+    ui.horizontal(|ui| {
+        if let Some(l) = linha_atual {
+            let (rect, resp) = ui.allocate_exact_size(egui::vec2(150., 150.), Sense::drag());
+            previa_3d(ui, rect, &resp, est, fam, &l.designacao);
+            ui.vertical(|ui| {
+                esquema(ui, &ficha, l, est.comprimento);
+            });
+        }
+    });
     // fontes
     egui::CollapsingHeader::new(tr("Fontes e licença")).open(est.fontes_abertas_demo.then_some(true)).show(ui, |ui| {
         ui.label(RichText::new(format!("{}: {} · {}", tr("Nível"), ficha.nivel, ficha.licenca)).small());
@@ -2130,7 +2142,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(d);
     }
 
-    // ---------------------------------------------------------------- rodada 4 (B482)
+    // ---------------------------------------------------------------- rodada 4 (B482, B484)
 
     #[test]
     fn em_furo_sem_furo_que_case_avisa_nao_insere_e_oferece_solto() {
@@ -2192,5 +2204,64 @@ mod tests {
         assert!(aviso.is_some_and(|a| !a.1));
         assert_eq!(pecas(&st), 2);
         assert!(est.inserindo.is_none(), "o item entrou solto e o fantasma saiu");
+    }
+
+    /// Textos do painel da biblioteca encaixado numa janela de `largura` × `altura`, depois de alguns
+    /// quadros; com `rolar`, a família é escolhida na lista no meio deles, com o painel já de pé.
+    fn painel_na_janela(est: &mut Estado, largura: f32, altura: f32, rolar: bool) -> Vec<(String, Rect, Rect)> {
+        let ctx = egui::Context::default();
+        let tela = Rect::from_min_size(Pos2::ZERO, egui::vec2(largura, altura));
+        // a coluna da esquerda vai até 320 e a barra de ícones fica nos últimos 60
+        let area = Rect::from_min_max(egui::pos2(320., 56.), egui::pos2(largura - 60., altura - 30.));
+        let cfg = Painel { nome: PAINEL.into(), titulo: "Biblioteca".into(), padrao: paineis::ao_lado_da_arvore(area), largura: 380., redimensiona: true };
+        let pos = paineis::Posicao { encaixe: Encaixe::Esquerda, ..Default::default() };
+        let mut v = vec![];
+        for k in 0..16 {
+            if rolar && k == 6 {
+                est.rolar_tabela = true;
+            }
+            // passos de um quarto de segundo: a rolagem do painel é animada
+            let raw = egui::RawInput { time: Some(k as f64 / 4.), screen_rect: Some(tela), ..Default::default() };
+            let mut saida = ctx.run_ui(raw, |ui| {
+                paineis::publicar(ui.ctx(), area, &crate::settings::Settings::default());
+                paineis::mostrar(ui.ctx(), area, &cfg, pos, |ui| conteudo(ui, est));
+            });
+            saida.textures_delta.clear();
+            v = textos(&saida);
+        }
+        v
+    }
+
+    #[test]
+    fn a_tabela_de_tamanhos_cabe_no_painel_de_uma_janela_pequena() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // B484: a tabela ficava escondida abaixo da prévia até aumentar a janela
+        for (largura, altura) in [(1280., 720.), (1366., 768.), (1920., 1009.)] {
+            let mut est = Estado::default();
+            est.escolher("iso4762", Some("M6"));
+            let v = painel_na_janela(&mut est, largura, altura, false);
+            let inteiro = |nome: &str| v.iter().find(|x| x.0 == nome).is_some_and(|x| x.2.contains_rect(x.1.shrink(0.5)));
+            assert!(inteiro("Tamanho"), "{largura}x{altura}: o cabeçalho da tabela à vista");
+            for t in ["M3", "M4", "M5"] {
+                assert!(inteiro(t), "{largura}x{altura}: a linha {t} à vista sem rolar o painel");
+            }
+        }
+    }
+
+    #[test]
+    fn escolher_a_familia_na_lista_rola_o_painel_ate_a_tabela() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // janela bem baixa: a tabela não cabe, e escolher a família leva o painel até ela
+        let mut est = Estado::default();
+        est.escolher("iso4762", Some("M6"));
+        let v = painel_na_janela(&mut est, 1280., 420., false);
+        let inteiro = |v: &[(String, Rect, Rect)], nome: &str| v.iter().find(|x| x.0 == nome).is_some_and(|x| x.2.contains_rect(x.1.shrink(0.5)));
+        assert!(!inteiro(&v, "M3"), "sem rolar, a tabela fica abaixo da dobra nesta altura");
+        let v = painel_na_janela(&mut est, 1280., 420., true);
+        assert!(inteiro(&v, "Tamanho") && inteiro(&v, "M3"), "o painel rolou até a tabela");
     }
 }
