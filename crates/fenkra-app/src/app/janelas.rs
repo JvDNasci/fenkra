@@ -174,8 +174,9 @@ fn nome_curto(p: &Path) -> String {
 impl App {
     /// Conteúdo do menu Janela.
     pub(super) fn menu_janela(&mut self, ui: &mut egui::Ui) {
-        let atual = self.open.file.clone();
-        let nome_atual = atual.as_deref().map(nome_curto).unwrap_or_else(|| self.open.doc.name.clone());
+        // B481: o documento da frente (montagem, desenho ou peça), não a peça que ficou por baixo
+        let (nome_doc, atual) = self.documento_da_frente();
+        let nome_atual = atual.as_deref().map(nome_curto).unwrap_or(nome_doc);
         ui.label(RichText::new(format!("{} {nome_atual}", tr("Nesta janela:"))).small().weak());
         // B363: os documentos abertos nesta janela, em abas
         self.menu_documentos(ui);

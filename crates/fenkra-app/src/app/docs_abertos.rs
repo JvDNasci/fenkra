@@ -544,6 +544,8 @@ impl App {
         if let Acao::AbrirCaminho(p) = acao {
             if let Some(id) = self.aba_com_arquivo(p) {
                 self.trocar_documento(id);
+                // B481: a aba guarda peça, montagem e desenho; traz para a frente o que tem o arquivo
+                self.mostrar_arquivo(p);
                 self.started = true;
                 return true;
             }
@@ -587,6 +589,44 @@ impl App {
             app.load_doc(e.doc, None, None);
             app.settings.bench = e.bench;
             app.started = true;
+        });
+    }
+
+    /// B481: o documento que a aba da frente está mostrando (nome e arquivo), conforme a bancada: com a
+    /// montagem na frente é a montagem, não a peça que ficou por baixo dela.
+    pub(super) fn documento_da_frente(&self) -> (String, Option<PathBuf>) {
+        let tipo = tipo_de(self.settings.bench, self.asm.is_some(), self.dwg.is_some());
+        (nome_de(tipo, &self.open, self.asm.as_ref(), self.dwg.as_ref()), principal_de(tipo, &self.open, self.asm.as_ref(), self.dwg.as_ref()))
+    }
+
+    /// B481: a aba já tem `p` aberto, mas pode ser a peça por baixo da montagem (ou o contrário). Leva a
+    /// bancada para a que mostra esse arquivo, para que "abrir" sempre resulte em algo visível.
+    pub(super) fn mostrar_arquivo(&mut self, p: &Path) {
+        let ativo = |f: Option<&PathBuf>| f.is_some_and(|f| mesmo_arquivo(f, p));
+        if ativo(self.asm.as_ref().and_then(|s| s.file.as_ref())) {
+            self.settings.bench = Bench::Montagem;
+        } else if ativo(self.dwg.as_ref().and_then(|s| s.path.as_ref())) {
+            self.settings.bench = Bench::Desenho;
+        } else if ativo(self.open.file.as_ref()) && matches!(self.settings.bench, Bench::Montagem | Bench::Desenho) {
+            self.settings.bench = crate::abertura::bancada_do_conteudo(&self.open.doc);
+        }
+    }
+
+    /// B480: "Nova montagem" da tela inicial abre numa aba nova se a da frente tem o que guardar.
+    pub(super) fn nova_montagem_da_tela(&mut self) {
+        self.com_aba_nova(|app| {
+            app.started = true;
+            app.command(Cmd::AsmNew);
+            app.settings.bench = crate::settings::Bench::Montagem;
+        });
+    }
+
+    /// B480: "Novo desenho" da tela inicial idem; o diálogo do desenho abre na aba nova.
+    pub(super) fn novo_desenho_da_tela(&mut self) {
+        self.com_aba_nova(|app| {
+            app.started = true;
+            app.settings.bench = crate::settings::Bench::Desenho;
+            app.command(Cmd::Dwg(0));
         });
     }
 
