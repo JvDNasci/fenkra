@@ -257,9 +257,10 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("asm_subconjunto", "Subconjunto", "Inserir subconjunto", "Insere outra montagem (.fka) como um componente: escolha na lista e clique na vista para colocar.", Cmd(C::AsmSubAsm)),
                 it("asm_peca_nova", "Peça nova", "Peça nova no contexto", "Cria o arquivo da peça ao lado da montagem e abre para modelar.", Cmd(C::AsmNewPart)),
                 it("asm_sub_selecao", "Subconjunto da seleção", "Subconjunto dos selecionados", "Os componentes escolhidos viram uma montagem nova (.fka), inserida no lugar deles; as restrições entre eles vão junto.", Cmd(C::AsmSubFromSel)),
+                // B485: o grupo organiza a árvore do produto, como o subconjunto; solto, ele ficava no fim da estrutura, colado na Biblioteca
+                it("asm_grupo", "Grupo", "Grupo de organização", "Elemento vazio só para organizar a árvore (não muda a geometria).", Cmd(C::AsmGroup)),
             ]),
             One(it("asm_link", "Copiar geometria", "Copiar geometria de outra peça (link)", "Escolha na árvore a peça que recebe e clique numa face plana de outra peça: a face é publicada automaticamente e entra por link (sem referência circular).", Cmd(C::AsmLink))),
-            One(it("asm_grupo", "Grupo", "Grupo de organização", "Elemento vazio só para organizar a árvore (não muda a geometria).", Cmd(C::AsmGroup))),
             One(it("asm_substituir", "Substituir", "Substituir componente", "Troca a peça mantendo a posição e as restrições (as faces são reencontradas pelo ponto clicado).", Cmd(C::AsmReplace))),
             One(it("asm_repeticao", "Repetição", "Repetição inteligente de componente", "Copia componentes numa direção dada por aresta, eixo ou face, em volta de um eixo ou pelos furos de uma peça. Mostra as cópias antes de aceitar.", Cmd(C::AsmPattern))),
             One(it("asm_numerar", "Numerar", "Numeração automática", "Renumera os componentes em sequência, na ordem da árvore.", Cmd(C::AsmNumber))),

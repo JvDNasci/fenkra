@@ -284,6 +284,8 @@ pub struct AsmState {
     /// componentes cuja peça mudou no contexto desde o último Salvar
     pub pecas_alteradas: std::collections::HashSet<Id>,
     pub renaming: Option<Id>,
+    /// B485: o campo do nome aberto pelo próprio comando Grupo; o nome dado nele entra no passo da criação
+    pub nome_na_criacao: Option<Id>,
     /// item em edição e o estado de antes (Cancelar volta para ele; item novo some)
     pub edit_snap: Option<(Id, Assembly)>,
     /// posição antes do arrasto do manipulador
@@ -426,6 +428,7 @@ impl AsmState {
             substituir: None,
             pecas_alteradas: Default::default(),
             renaming: None,
+            nome_na_criacao: None,
             edit_snap: None,
             drag_start: None,
             snapshot: None,
@@ -796,7 +799,7 @@ impl AsmState {
                 let lp = self.cache.get(&full, true).ok();
                 match (p, lp) {
                     (Pick::Edge { .. }, Some(lp)) => Some(releitura::viva_da_aresta(lp, local)),
-                    (Pick::Edge { .. }, None) => Some(Viva::Aresta { ponto: local }),
+                    (Pick::Edge { .. }, None) => Some(Viva::Aresta { ponto: local, perdida: false }),
                     (_, lp) => lp.and_then(|lp| {
                         // o clique cai na malha da vista: leva o ponto até a superfície exata
                         pick = lp.shape.as_ref().and_then(|s| s.surface_near(local).ok()).map(|(q, _)| q).or(pick);
@@ -888,6 +891,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                     let id = st.asm.add_group("Grupo", parent);
                     st.sel = Some(id);
                     st.renaming = Some(id);
+                    st.nome_na_criacao = Some(id);
                 }
                 Cmd::AsmReplace => {
                     let Some(id) = st.sel.filter(|s| st.asm.node(*s).is_some_and(|n| !matches!(n.kind, NodeKind::Group))) else {
@@ -1802,7 +1806,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
                         ui.label(RichText::new(t).color(c).small()).on_hover_text(tip);
                     }
                     if st.renaming == Some(n.id) {
-                        let key = egui::Id::unique(("asm_ren", n.id.0));
+                        let key = crate::asm_grupo::chave_do_nome(n.id);
                         let mut buf: String = ui.ctx().data(|m| m.get_temp(key)).unwrap_or_else(|| n.name.clone());
                         let r = ui.add(egui::TextEdit::singleline(&mut buf).desired_width(140.));
                         if !r.has_focus() && !r.lost_focus() {
@@ -2254,7 +2258,10 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
             .or_else(|| st_ro.asm.patterns.iter().find(|p| p.id == s).map(|p| p.source))
     });
     app.set_tree_hover(hover);
+    let atalho_desfazer = app.settings.keys.binding(crate::keymap::KeyAction::Undo);
     let st = app.asm.as_mut().unwrap();
+    // B485: Ctrl+Z com o campo do nome do grupo recém-criado aberto e nada digitado desfaz o grupo
+    crate::asm_grupo::desfazer_no_nome(ui.ctx(), st, atalho_desfazer.as_ref());
     if let Some((id, k)) = ui.ctx().data(|m| m.get_temp::<(Id, Id)>(egui::Id::unique("asm_mover"))) {
         ui.ctx().data_mut(|m| m.remove::<(Id, Id)>(egui::Id::unique("asm_mover")));
         st.push_undo();
@@ -2265,12 +2272,7 @@ pub fn tree(app: &mut App, ui: &mut egui::Ui) {
     }
     if let Some((id, name)) = ui.ctx().data(|m| m.get_temp::<(Id, String)>(egui::Id::unique("asm_ren_ok"))) {
         ui.ctx().data_mut(|m| m.remove::<(Id, String)>(egui::Id::unique("asm_ren_ok")));
-        st.renaming = None;
-        st.push_undo();
-        if let Some(n) = st.asm.node_mut(id) {
-            n.name = name.trim().to_string();
-        }
-        st.dirty = true;
+        crate::asm_grupo::confirmar_nome(st, id, &name);
     }
     if let Some((id, k)) = act {
         node_action(app, id, k);
@@ -3323,7 +3325,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     }
     if let (Some((id, lado_a)), Some(p)) = (reancorar, ultimo_pick) {
         // o passo de desfazer sai da comparação com `before`, no fim do painel
-        let feito = st.mate_ref(p).and_then(|nova| fenkra_montagem::releitura::reancorar(&mut st.asm, id, lado_a, nova));
+        let feito = crate::asm_reancorar::aplicar(st, id, lado_a, p);
         match feito {
             Ok(()) => {
                 aviso_links = Some((tr("Restrição reancorada").to_string(), false));

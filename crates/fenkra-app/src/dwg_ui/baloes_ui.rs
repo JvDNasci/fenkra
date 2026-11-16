@@ -215,13 +215,19 @@ pub fn fantasma(st: &mut DwgState) -> Vec<layout::Item> {
     out
 }
 
-/// A barra do comando, na folha.
-pub fn barra(ctx: &egui::Context, st: &mut DwgState, rect: Rect) -> Option<(String, bool)> {
+/// A barra do comando, num painel encaixado.
+///
+/// O painel encaixa na área dos painéis do quadro (`paineis::area_dos_paineis`), e não na folha
+/// (B486). A folha é o que sobra dessa área depois da faixa que os painéis da direita reservam: com o
+/// painel posto na borda da folha, cada quadro ele reservava mais, a folha encolhia e o painel ia
+/// junto, até a reserva bater no teto de 60% e a folha ficar cortada no meio da tela.
+pub fn barra(ctx: &egui::Context, st: &mut DwgState, _folha: Rect) -> Option<(String, bool)> {
     let mut aviso = None;
-    let painel = crate::paineis::Painel { nome: "dwg_baloes".into(), titulo: tr("Balões automáticos").to_string(), padrao: crate::paineis::abaixo_do_cubo(rect, 280.), largura: 280., redimensiona: false };
+    let area = crate::paineis::area_dos_paineis(ctx);
+    let painel = crate::paineis::Painel { nome: "dwg_baloes".into(), titulo: tr("Balões automáticos").to_string(), padrao: crate::paineis::abaixo_do_cubo(area, 280.), largura: 280., redimensiona: false };
     let pos = st.baloes.painel.clone();
     let erro_de_origem = candidatos(st).err();
-    let saida = crate::paineis::mostrar(ctx, rect, &painel, pos, |ui| {
+    let saida = crate::paineis::mostrar(ctx, area, &painel, pos, |ui| {
         let a = &mut st.baloes;
         egui::ComboBox::from_label(tr("Lado")).selected_text(tr(a.lado.label())).show_ui(ui, |ui| {
             for l in Lado::TODOS {
@@ -406,4 +412,47 @@ pub fn demo(st: &mut DwgState) {
     }
     st.sel = Some(dividido);
     st.items = None;
+}
+
+#[cfg(test)]
+mod testes_b486 {
+    use super::*;
+    use crate::dwg_ui::DwgState;
+    use fenkra_desenho::{Drawing, Format};
+
+    /// Reserva da direita e borda direita do painel depois de `quadros` quadros da bancada Desenho com
+    /// o comando aberto: a folha é a área dos painéis menos a reserva, como no `App::ui`.
+    fn rodar(quadros: usize) -> (f32, Rect) {
+        let mut st = DwgState::new(Drawing::new("T", Format::A3), None);
+        let ctx = egui::Context::default();
+        // 1920 × 1009 da rodada 4: a coluna da esquerda vai até 320 e a barra da direita começa em 1805
+        let tela = Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1920., 1009.));
+        let area = Rect::from_min_max(egui::pos2(320., 56.), egui::pos2(1805., 980.));
+        let ajustes = crate::settings::Settings::default();
+        let mut reserva = 0.;
+        for k in 0..quadros {
+            let raw = egui::RawInput { time: Some(k as f64 / 60.), screen_rect: Some(tela), ..Default::default() };
+            let mut saida = ctx.run_ui(raw, |ui| {
+                crate::paineis::publicar(ui.ctx(), area, &ajustes);
+                reserva = crate::paineis::reservas(ui.ctx(), area).0;
+                let folha = Rect::from_min_max(area.min, egui::pos2(area.right() - reserva, area.bottom()));
+                barra(ui.ctx(), &mut st, folha);
+            });
+            saida.textures_delta.clear();
+        }
+        (reserva, area)
+    }
+
+    #[test]
+    fn o_painel_dos_baloes_nao_corta_a_folha() {
+        // B486: com o painel aberto, a folha ficava cortada em x = 915 e o resto da área vazio
+        let (reserva, area) = rodar(40);
+        assert!(reserva > 0., "o painel encaixa na direita e reserva a faixa dele");
+        assert!(reserva < 280. + 40., "a reserva é só a largura do painel, e não cresce a cada quadro: {reserva}");
+        let folha_direita = area.right() - reserva;
+        assert!(folha_direita > area.right() - 330., "a folha vai até perto da borda direita: {folha_direita}");
+        // a reserva é a mesma depois de muitos quadros: não há realimentação
+        let (mais_tarde, _) = rodar(120);
+        assert!((mais_tarde - reserva).abs() < 1., "{reserva} -> {mais_tarde}");
+    }
 }

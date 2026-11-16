@@ -233,8 +233,12 @@ mod testes_aresta {
         d
     }
 
+    /// Antes do B479 este teste esperava o contrário: com a chapa estreita, a repetição passava a correr
+    /// em Y, pela aresta que ficou mais perto do ponto guardado. Era a mesma religação silenciosa que
+    /// levava a coincidência do parafuso para o canto da placa; agora a aresta que corre em outro
+    /// sentido não é tomada pela de antes, a referência fica perdida e a repetição segue em X.
     #[test]
-    fn repeticao_por_aresta_muda_de_direcao_com_a_peca() {
+    fn repeticao_por_aresta_acompanha_a_aresta_e_avisa_quando_ela_some() {
         if !fenkra_kernel::AVAILABLE {
             return;
         }
@@ -248,16 +252,26 @@ mod testes_aresta {
         let peca = a.add_component("P", NodeKind::Part { path: "p.fkp".into() }, Placement::default(), None);
         a.node_mut(guia).unwrap().fixed = true;
         let id = a.add_pattern(peca, PatternKind::linear([1., 0., 0.], "3", "20"));
-        a.patterns[0].ref1 = Some(MateRef { comp: guia, geom: Geom::Axis { p: [0., 0., 0.], d: [1., 0., 0.] }, pick: None, viva: Some(Viva::Aresta { ponto: [30., 1., 0.] }) });
+        a.patterns[0].ref1 = Some(MateRef { comp: guia, geom: Geom::Axis { p: [0., 0., 0.], d: [1., 0., 0.] }, pick: None, viva: Some(Viva::Aresta { ponto: [30., 0., 0.], perdida: false }) });
         let mut cache = PartCache::default();
         crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
         let copia = |a: &Assembly| a.patterns.iter().find(|p| p.id == id).unwrap().instances.iter().map(|i| a.node(*i).unwrap().placement.origin).fold([0f64; 3], |m, o| [m[0].max(o[0].abs()), m[1].max(o[1].abs()), 0.]);
         assert!(copia(&a)[0] > 30. && copia(&a)[1] < 1e-6, "{:?}", copia(&a));
-        // a chapa ficou estreita: a aresta mais perto do ponto guardado, o meio da de antes, corre em Y
+        let r1 = |a: &Assembly| a.patterns[0].ref1.unwrap();
+        assert!(!crate::releitura::perdida(&r1(&a)), "{:?}", r1(&a));
+        // a chapa cresceu em X: a aresta de baixo ainda passa pelo ponto guardado, e a repetição segue nela
+        std::fs::write(&f, chapa([0., 0.], [60., 40.]).to_json()).unwrap();
+        cache.forget(&f);
+        crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
+        assert!(copia(&a)[0] > 30. && copia(&a)[1] < 1e-6, "{:?}", copia(&a));
+        assert!(!crate::releitura::perdida(&r1(&a)), "{:?}", r1(&a));
+        // a chapa ficou estreita: a aresta mais perto do ponto guardado, o meio da de antes, corre em Y.
+        // Não é a mesma aresta: a referência avisa e a repetição fica em X, com a última geometria boa
         std::fs::write(&f, chapa([0., -10.], [15., 40.]).to_json()).unwrap();
         cache.forget(&f);
         crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
-        assert!(copia(&a)[1] > 30. && copia(&a)[0] < 1e-6, "{:?}", copia(&a));
+        assert!(crate::releitura::perdida(&r1(&a)), "{:?}", r1(&a));
+        assert!(copia(&a)[0] > 30. && copia(&a)[1] < 1e-6, "{:?}", copia(&a));
     }
 }
 
