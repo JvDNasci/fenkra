@@ -43,6 +43,8 @@ mod features;
 mod esc_sessao;
 #[cfg(test)]
 mod abas_r3_testes;
+#[cfg(test)]
+mod vazios_r4_testes;
 mod lote;
 mod plm;
 pub(crate) use plm::medidas_do_resultado;
@@ -1908,16 +1910,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             Some(1) => self.open_project(),
             Some(2) => self.com_confirmacao(Acao::NovaPeca),
             Some(3) => self.com_confirmacao(Acao::AbrirDialogo),
-            Some(5) => {
-                self.started = true;
-                self.command(Cmd::AsmNew);
-                self.settings.bench = crate::settings::Bench::Montagem;
-            }
-            Some(6) => {
-                self.started = true;
-                self.settings.bench = crate::settings::Bench::Desenho;
-                self.command(Cmd::Dwg(0));
-            }
+            // B480: "novo" da tela inicial nunca substitui a aba da frente que tem o que guardar
+            Some(5) => self.nova_montagem_da_tela(),
+            Some(6) => self.novo_desenho_da_tela(),
             _ => {}
         }
     }

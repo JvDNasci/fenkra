@@ -186,7 +186,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("casca", "Casca", "Esvaziar o sólido", "Abre as faces escolhidas e deixa paredes com espessura uniforme.", Cmd(C::Shell)),
                 it("espessura", "Espessura", "Engrossar ou afinar faces", "Acrescenta ou remove material nas faces planas escolhidas.", Cmd(C::Thickness)),
             ]),
-            One(it("rosca", "Rosca", "Rosca em eixo ou furo (Thread/Tap)", "Rosca cosmética ou modelada numa face cilíndrica, por norma.", Cmd(C::Thread))),
+            One(it("rosca", "Rosca", "Rosca em eixo ou furo", "Rosca cosmética ou modelada numa face cilíndrica, por norma.", Cmd(C::Thread))),
             Family("pl_boss", crate::plastico_rec_ui::itens()),
         ],
         Group::Padroes => vec![
@@ -320,7 +320,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             Family("sm_linha", vec![
                 it("sm_dobra_linha", "Dobra por linha", "Dobra por linha", "Escolha dois vértices na face: a chapa dobra nessa linha (linha de centro), com raio e fator K da chapa.", Cmd(C::SmBend)),
                 it("sm_dobra_conica", "Dobra cônica", "Dobra cônica (tronco de cone)", "Enrola a chapa num tronco de cone de eixo Z: raios internos das duas bocas e altura. Planificada, vira o setor de coroa do desenvolvimento exato.", Cmd(C::SmCone)),
-                it("sm_joggle", "Joggle", "Joggle (desvio em Z)", "Desloca a chapa além de uma linha por uma rampa, para sobrepor sem saliência.", Cmd(C::SmJoggle)),
+                it("sm_joggle", "Desvio em Z", "Desvio em Z (degrau na chapa)", "Desloca a chapa além de uma linha por uma rampa, para sobrepor sem saliência.", Cmd(C::SmJoggle)),
             ]),
         ],
         Group::ChCorte => vec![

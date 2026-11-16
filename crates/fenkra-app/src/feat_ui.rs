@@ -673,7 +673,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             crate::chapa_unif_ui::inverter(ui, &mut h.flip);
         }
         FeatureKind::SmJoggle(j) => {
-            section(ui, "Joggle");
+            section(ui, "Desvio em Z");
             let mut by_plane = j.plane.is_some();
             ui.horizontal_wrapped(|ui| {
                 if ui.selectable_label(!by_plane, tr("por dois pontos")).clicked() {

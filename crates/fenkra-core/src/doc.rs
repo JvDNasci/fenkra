@@ -3062,7 +3062,7 @@ impl FeatureKind {
             SmWall(_) => "ParedeBase",
             SmFlange(_) => "Aba",
             SmHem(_) => "Bainha",
-            SmJoggle(_) => "Joggle",
+            SmJoggle(_) => "Desvio em Z",
             SmBend(_) => "Dobra por linha",
             SmCone(_) => "DobraConica",
             SmLouver(_) => "Veneziana",
