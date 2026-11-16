@@ -7833,7 +7833,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "feito",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -7929,7 +7929,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -7945,7 +7945,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Sólidos",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -7961,7 +7961,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Montagem",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -7977,7 +7977,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -7993,7 +7993,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -8009,7 +8009,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -8025,7 +8025,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -8041,7 +8041,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -8057,7 +8057,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Montagem",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -8073,7 +8073,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
-   "status": "a fazer",
+   "status": "em andamento",
    "pct": 0.0
   }
  ]
