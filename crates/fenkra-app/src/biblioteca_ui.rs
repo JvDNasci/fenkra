@@ -978,6 +978,25 @@ fn esquema(ui: &mut egui::Ui, ficha: &catalogo::Ficha, l: &catalogo::LinhaTamanh
             p.rect_stroke(Rect::from_center_size(c, egui::vec2(lado as f32 * esc, lado as f32 * esc)), 0., traco, egui::StrokeKind::Middle);
             p.line_segment([Pos2::new(c.x - lado as f32 * esc / 2. - 6., c.y), Pos2::new(c.x + lado as f32 * esc / 2. + 6., c.y)], fino);
         }
+        TipoFixador::Pino | TipoFixador::PinoComColar => {
+            // vista lateral: haste d × L (com o colar na ponta, se houver); as cotas saem na lista ao lado
+            let ls = comprimento.or(l.comprimentos.iter().copied().find(|x| *x >= 4. * d)).or(l.comprimentos.last().copied()).unwrap_or(d * 4.);
+            let esc = ((rect.height() - 40.) / ls as f32).min((rect.width() * 0.5 - 20.) / d as f32);
+            let cx = rect.left() + 70.;
+            let topo = rect.top() + 14.;
+            p.rect_stroke(Rect::from_min_size(Pos2::new(cx - d as f32 * esc / 2., topo), egui::vec2(d as f32 * esc, ls as f32 * esc)), 0., traco, egui::StrokeKind::Middle);
+            p.line_segment([Pos2::new(cx, topo - 6.), Pos2::new(cx, topo + ls as f32 * esc + 6.)], fino);
+            notas.push((format!("d {}", fmt(d)), 0.));
+            notas.push((format!("L {}", fmt(ls)), 1.));
+        }
+        TipoFixador::Anel => {
+            // vista de frente: anel entre o diâmetro do eixo/furo e o diâmetro externo do anel
+            let esc = (rect.width() * 0.5 - 20.) / (d as f32 * 1.4);
+            let c = Pos2::new(rect.left() + 70., rect.top() + 60.);
+            p.circle_stroke(c, d as f32 * esc / 2., fino);
+            p.circle_stroke(c, d as f32 * esc * 0.7, traco);
+            notas.push((format!("d {}", fmt(d)), 0.));
+        }
         TipoFixador::Arruela => {
             let (d1, d2, h) = (valor("d1").unwrap_or(d), valor("d2").unwrap_or(d * 2.), valor("h").unwrap_or(d * 0.2));
             let esc = ((rect.width() * 0.5 - 20.) / d2 as f32).min(40. / h as f32);
