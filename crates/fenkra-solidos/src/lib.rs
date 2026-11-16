@@ -6653,6 +6653,15 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 // B459: campo ainda "a escolher" (comando recém-aberto, sem perfil) não é referência
                 // perdida: o comando espera a seleção, inativo e sem erro
                 let st = if matches!(st, Status::Error(_)) && Document::refs_of(&f.kind).iter().any(|x| x.a_escolher()) { Status::Inactive } else { st };
+                // B477: face ou aresta por posição em (0,0,0) é o "ainda não escolhi" de Rosca, Casca,
+                // Saída etc. (mesma convenção do painel): espera a seleção, sem "referência perdida"
+                let st = match st {
+                    Status::Error(m) if m.starts_with("referência perdida") && m.contains("passava perto de (0.00, 0.00, 0.00)") => Status::Inactive,
+                    // a origem pode tocar uma face de verdade (canto do corpo): a rosca sem face escolhida
+                    // então reclama de outra coisa, mas segue sem escolha
+                    Status::Error(_) if matches!(&f.kind, FeatureKind::Thread(t) if t.face == [0.; 3]) => Status::Inactive,
+                    st => st,
+                };
                 // cancelado no meio do kernel: o que veio é lixo (erro "cancelado" ou resultado parcial).
                 // Não vai para o cache, para o próximo cálculo refazer este comando do zero.
                 if matches!(st, Status::Error(_)) && cancelar.as_ref().is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed)) {
