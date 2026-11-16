@@ -989,6 +989,12 @@ c('B485', 3, 'P1', 'Grupo da montagem: ícone ao lado da Biblioteca e Ctrl+Z nã
   ['USR-CHECK'], [], 40, 'Auto + Visual', 'Montagem', status='em andamento'),
 c('B486', 3, 'P1', 'Folha cortada com o painel Edição aberto', 'Teste com mouse real, rodada 4 (docs/validacao/teste-mouse-rodada4.md): com o painel Edição aberto, a folha fica cortada em x ≈ 915 e o resto da área fica vazio.',
   ['USR-CHECK'], [], 40, 'Auto + Visual', 'Desenho técnico', status='em andamento'),
+c('B487', 4, 'P0', 'Prévia leve por arestas em todas as operações que mudam a peça', 'Pedido do usuário em 16/11: a prévia translúcida pesa e confunde. Toda operação que altera a peça (sólidos, chapa, estrutural, superfícies) mostra primeiro só as arestas do resultado, ou uma forma simplificada (furo como cilindro de arestas, dobra como contorno), sem recalcular o sólido. Botão Prévia no painel e opção "Prévia automática" para ligar e desligar. A prévia completa fica sob pedido. Aceite: furo, extrusão, filete, aba, dobra e membro mostram arestas em até 50 ms na peça de exemplo; desligar a opção deixa só o botão.',
+  ['USR-CHECK'], [], 450, 'Auto + Visual', 'Interface'),
+c('B488', 4, 'P0', 'Chapa: revisão geral, várias paredes na mesma peça', 'Pedido do usuário em 16/11: criar várias abas e paredes na mesma peça falha ou dá resultado errado. Revisar a bancada inteira: aba sobre aba, aba em aresta de aba, alívios, cantos entre abas vizinhas, planificação depois de várias abas. Aceite: um conjunto de peças de chapa com 3 a 8 paredes cada recalcula sem erro, planifica e confere volume e caixa envolvente; depois, teste com mouse.',
+  ['USR-CHECK'], [], 400, 'Auto + Visual', 'Chapa metálica'),
+c('B489', 4, 'P0', 'Conjunto de peças de teste por bancada, executado com mouse e teclado', 'Pedido do usuário em 16/11: para cada bancada, um conjunto de peças que usa todas as opções dos comandos, uma aba por peça, refeito com mouse e teclado no app e comparado ao montado em código. Relatório por bancada com capturas e os bugs viram itens.',
+  ['USR-CHECK'], [], 600, 'Auto + Visual', 'Interface'),
 ]
 def main():
     for x in B:

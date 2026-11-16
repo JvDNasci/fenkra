@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 108780,
+ "tokens_total_k": 110230,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 7180,
-   "pct": 6.6
+   "pct": 6.5
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 10.7
+   "pct": 10.5
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 29.7
+   "pct": 29.3
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 24700,
-   "pct": 22.7
+   "pct": 22.4
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 32940,
-   "pct": 30.3
+   "tokens_k": 34390,
+   "pct": 31.2
   }
  },
  "itens": [
@@ -5737,7 +5737,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B339",
@@ -5978,7 +5978,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "em andamento",
-   "pct": 0.6
+   "pct": 0.5
   },
   {
    "id": "B354",
@@ -8075,6 +8075,54 @@
    "area": "Desenho técnico",
    "status": "em andamento",
    "pct": 0.0
+  },
+  {
+   "id": "B487",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Prévia leve por arestas em todas as operações que mudam a peça",
+   "oque": "Pedido do usuário em 16/11: a prévia translúcida pesa e confunde. Toda operação que altera a peça (sólidos, chapa, estrutural, superfícies) mostra primeiro só as arestas do resultado, ou uma forma simplificada (furo como cilindro de arestas, dobra como contorno), sem recalcular o sólido. Botão Prévia no painel e opção \"Prévia automática\" para ligar e desligar. A prévia completa fica sob pedido. Aceite: furo, extrusão, filete, aba, dobra e membro mostram arestas em até 50 ms na peça de exemplo; desligar a opção deixa só o botão.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B488",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Chapa: revisão geral, várias paredes na mesma peça",
+   "oque": "Pedido do usuário em 16/11: criar várias abas e paredes na mesma peça falha ou dá resultado errado. Revisar a bancada inteira: aba sobre aba, aba em aresta de aba, alívios, cantos entre abas vizinhas, planificação depois de várias abas. Aceite: um conjunto de peças de chapa com 3 a 8 paredes cada recalcula sem erro, planifica e confere volume e caixa envolvente; depois, teste com mouse.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B489",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Conjunto de peças de teste por bancada, executado com mouse e teclado",
+   "oque": "Pedido do usuário em 16/11: para cada bancada, um conjunto de peças que usa todas as opções dos comandos, uma aba por peça, refeito com mouse e teclado no app e comparado ao montado em código. Relatório por bancada com capturas e os bugs viram itens.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 600,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.5
   }
  ]
 }
