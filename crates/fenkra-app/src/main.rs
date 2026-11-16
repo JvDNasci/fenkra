@@ -71,6 +71,7 @@ mod chapa_manip_ui;
 mod gizmo;
 mod asm_ui;
 mod asm_abrir;
+mod asm_grupo;
 mod asm_reancorar;
 mod asm_estrutura;
 mod textos_estrutura;
