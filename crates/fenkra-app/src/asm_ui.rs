@@ -796,7 +796,7 @@ impl AsmState {
                 let lp = self.cache.get(&full, true).ok();
                 match (p, lp) {
                     (Pick::Edge { .. }, Some(lp)) => Some(releitura::viva_da_aresta(lp, local)),
-                    (Pick::Edge { .. }, None) => Some(Viva::Aresta { ponto: local }),
+                    (Pick::Edge { .. }, None) => Some(Viva::Aresta { ponto: local, perdida: false }),
                     (_, lp) => lp.and_then(|lp| {
                         // o clique cai na malha da vista: leva o ponto até a superfície exata
                         pick = lp.shape.as_ref().and_then(|s| s.surface_near(local).ok()).map(|(q, _)| q).or(pick);
@@ -3323,7 +3323,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     }
     if let (Some((id, lado_a)), Some(p)) = (reancorar, ultimo_pick) {
         // o passo de desfazer sai da comparação com `before`, no fim do painel
-        let feito = st.mate_ref(p).and_then(|nova| fenkra_montagem::releitura::reancorar(&mut st.asm, id, lado_a, nova));
+        let feito = crate::asm_reancorar::aplicar(st, id, lado_a, p);
         match feito {
             Ok(()) => {
                 aviso_links = Some((tr("Restrição reancorada").to_string(), false));

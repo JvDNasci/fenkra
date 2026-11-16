@@ -9,7 +9,8 @@
 //!   só desempata. Face sem nome usa o ponto, mas só enquanto ele continuar sobre a peça;
 //! - **aresta nomeada**: a aresta entre duas faces nomeadas;
 //! - **aresta**: procura na malha a aresta mais perto do ponto guardado. Perguntar pela face ali
-//!   devolveria o eixo do cilindro vizinho, e não a aresta;
+//!   devolveria o eixo do cilindro vizinho, e não a aresta. Longe do ponto, a mais perto só vale se
+//!   for o mesmo tipo de curva (B479): o círculo de um furo apagado não vira a reta do canto da peça;
 //! - **vértice**: a ponta de aresta mais perto;
 //! - **ponto de encaixe**: o candidato do mesmo tipo mais perto, de preferência com a mesma normal,
 //!   porque um canto pertence a três faces;
@@ -33,8 +34,13 @@ use std::path::{Path, PathBuf};
 /// Como a referência se reencontra. Sem isto, vale o ponto clicado na face.
 #[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
 pub enum Viva {
-    /// aresta que passa perto de `ponto`, no sistema da peça
-    Aresta { ponto: V3 },
+    /// aresta que passa perto de `ponto`, no sistema da peça. `perdida`: não há mais aresta ali, e a
+    /// mais perto é outra curva (B479)
+    Aresta {
+        ponto: V3,
+        #[serde(default)]
+        perdida: bool,
+    },
     /// vértice mais perto da posição guardada na própria geometria
     Vertice,
     /// ponto de encaixe do tipo escolhido
@@ -71,9 +77,14 @@ pub enum Viva {
 /// erro da malha em faces curvas; uma face que andou mais que isso deixa o ponto no ar.
 const NA_FACE: f64 = 0.5;
 
+/// Distância do ponto guardado até a aresta para ela ainda ser "a aresta dali" (mm), com a mesma folga
+/// da face. Mais longe que isso, a aresta mais perto é outra que pode ter andado até lá, e só vale se
+/// for o mesmo tipo de curva ([`mesma_curva`]).
+const NA_ARESTA: f64 = 0.5;
+
 /// A referência perdeu a face ou a aresta em que nasceu?
 pub fn perdida(r: &MateRef) -> bool {
-    matches!(r.viva, Some(Viva::Face { perdida: true, .. } | Viva::ArestaNomeada { perdida: true, .. } | Viva::PlanoNoEixo { perdida: true, .. }))
+    matches!(r.viva, Some(Viva::Face { perdida: true, .. } | Viva::Aresta { perdida: true, .. } | Viva::ArestaNomeada { perdida: true, .. } | Viva::PlanoNoEixo { perdida: true, .. }))
 }
 
 /// Plano pelo eixo (`o`, `d`) com a normal mais perto de `n`: a normal perde a parte ao longo do eixo,
@@ -225,15 +236,21 @@ pub fn viva_da_face(lp: &LoadedPart, q: V3) -> Option<Viva> {
 
 /// Como reencontrar a aresta clicada perto de `ponto`: entre as duas faces nomeadas, quando dá; senão
 /// pela aresta mais perto do ponto, como antes.
+///
+/// O nome das duas faces vale mesmo quando ele sozinho não separa a aresta das outras, desde que o
+/// ponto desempate (B479): a boca de um dos quatro furos de um mesmo comando tem o mesmo par de faces
+/// nas quatro, e a leitura já usa o ponto para escolher entre elas. Sem isso a aresta ficava só com o
+/// ponto, e apagar os furos a religava à aresta mais perto que sobrou.
 pub fn viva_da_aresta(lp: &LoadedPart, ponto: V3) -> Viva {
     let chave = aresta_indice_perto(lp, ponto).and_then(|(bi, e)| {
         let b = &lp.result.bodies[bi];
         let t = topologia(&b.mesh);
-        refs::promote_edge(&vista(&t, b), e)
+        let v = vista(&t, b);
+        refs::promote_edge(&v, e).or_else(|| v.edge_key(e).filter(|k| refs::find_edge(&v, k, Some(ponto)) == Ok(e)))
     });
     match chave {
         Some(chave) => Viva::ArestaNomeada { chave, ponto, perdida: false },
-        None => Viva::Aresta { ponto },
+        None => Viva::Aresta { ponto, perdida: false },
     }
 }
 
@@ -374,6 +391,24 @@ pub fn eixo_da_aresta(pts: &[V3], antes: Option<V3>) -> Option<Geom> {
     Some(Geom::Axis { p, d: if vira { d.map(|x| -x) } else { d } })
 }
 
+/// Raio de uma aresta lida como eixo: a distância de um ponto dela até o eixo. Na reta o ponto fica no
+/// próprio eixo, e o raio é zero.
+fn raio(g: &Geom, q: V3) -> f64 {
+    let Geom::Axis { p, d } = *g else { return 0. };
+    let (d, v) = (unit(d), sub(q, p));
+    norm(sub(v, d.map(|x| x * dot(v, d))))
+}
+
+/// A aresta `pts`, lida como `nova`, pode ser a aresta guardada como `antes` (passando por `ponto`) que
+/// andou? Só se for o mesmo tipo de curva no mesmo sentido: reta com reta, círculo com círculo de mesmo
+/// raio (B479). A boca circular de um furo apagado não pode virar a reta do canto da peça, que é só a
+/// aresta que sobrou mais perto.
+fn mesma_curva(antes: &Geom, ponto: V3, nova: &Geom, pts: &[V3]) -> bool {
+    let (r0, r1) = (raio(antes, ponto), raio(nova, encaixe::meio(pts)));
+    // folga para o erro da malha e do clique, que pode cair um pouco fora da reta
+    mesma_direcao(antes, nova) && (r0 - r1).abs() <= 0.1 + 0.02 * r0
+}
+
 fn vertice_perto(ms: &[&Mesh], q: V3) -> Option<V3> {
     let pontas = ms.iter().flat_map(|m| (0..m.edge_ranges.len()).map(|e| encaixe::polilinha(m, e))).filter(|p| p.len() >= 2).flat_map(|p| [p[0], p[p.len() - 1]]);
     pontas.min_by(|a, b| norm(sub(*a, q)).total_cmp(&norm(sub(*b, q))))
@@ -404,10 +439,17 @@ fn ler_na_peca(r: &MateRef, lp: &LoadedPart) -> Option<Lida> {
     let ms = malhas(lp);
     let (p, d) = base(&r.geom);
     match r.viva {
-        Some(Viva::Aresta { ponto }) => {
-            let pts = aresta_perto(&ms, ponto)?;
-            let g = eixo_da_aresta(&pts, d)?;
-            Some((g, Some(Viva::Aresta { ponto: encaixe::meio(&pts) }), None))
+        Some(Viva::Aresta { ponto, .. }) => {
+            let perdeu = Some((r.geom, Some(Viva::Aresta { ponto, perdida: true }), None));
+            let Some(pts) = aresta_perto(&ms, ponto) else { return perdeu };
+            let Some(g) = eixo_da_aresta(&pts, d) else { return perdeu };
+            // a aresta mais perto passa pelo ponto guardado: é a mesma. Longe dele, só se for a mesma
+            // curva que andou; senão o que foi clicado sumiu, e a restrição avisa em vez de pular
+            let ali = pts.windows(2).map(|w| distancia_ao_segmento(ponto, w[0], w[1])).fold(f64::MAX, f64::min) <= NA_ARESTA;
+            if !ali && !mesma_curva(&r.geom, ponto, &g, &pts) {
+                return perdeu;
+            }
+            Some((g, Some(Viva::Aresta { ponto: encaixe::meio(&pts), perdida: false }), None))
         }
         Some(Viva::ArestaNomeada { chave, ponto, .. }) => ler_aresta_nomeada(r, lp, chave, ponto),
         Some(Viva::Vertice) => Some((Geom::Point(vertice_perto(&ms, p)?), r.viva, None)),
@@ -580,6 +622,12 @@ mod tests {
         cache.forget(&f);
     }
 
+    fn trocar_arq(dir: &Path, nome: &str, cache: &mut PartCache, doc: &Document) {
+        let f = dir.join(nome);
+        std::fs::write(&f, doc.to_json()).unwrap();
+        cache.forget(&f);
+    }
+
     /// O bloco com filete de raio `r` na aresta de cima em X = `l`.
     fn bloco_com_filete(l: f64, h: f64, x: f64, r: f64) -> Document {
         use fenkra_core::{EdgeOp, EdgeSel};
@@ -683,6 +731,130 @@ mod tests {
         assert!(!perdida(&a.mates.iter().find(|x| x.id == m).unwrap().a));
     }
 
+    /// Placa de exemplo (quatro furos rebaixados "Furos M6" e filete em tudo) e um pino com o vértice
+    /// na boca circular do furo de (48, 24), como na rodada 4 do teste com mouse (B479). Devolve a
+    /// montagem, a restrição, o elemento do lado da placa como a interface o cria e a pasta.
+    fn placa_com_pino_na_boca(nome: &str, caso: Caso) -> (Assembly, Id, MateRef, PathBuf, PartCache) {
+        let dir = pasta(nome);
+        std::fs::write(dir.join("placa.fkp"), placa_exemplo(caso, true).to_json()).unwrap();
+        std::fs::write(dir.join("pino.fkp"), bloco(10., 10., 5.).to_json()).unwrap();
+        let mut a = Assembly::new("B479");
+        let placa = a.add_component("Placa", NodeKind::Part { path: "placa.fkp".into() }, Placement::default(), None);
+        a.node_mut(placa).unwrap().fixed = true;
+        let pino = a.add_component("Pino", NodeKind::Part { path: "pino.fkp".into() }, Placement { origin: [40., 20., 10.], ..Default::default() }, None);
+        let mut cache = PartCache::default();
+        let lp = cache.get(&dir.join("placa.fkp"), true).unwrap();
+        // clique na aresta circular de cima do rebaixo, como a interface lê: eixo pelo centro do círculo
+        // com o filete de 1 em tudo, a boca do rebaixo (Ø11) fica no fim do filete, com raio 6,5
+        let clique = [48. + if caso == Caso::SemFilete { 5.5 } else { 6.5 }, 24., 10.];
+        let pts = aresta_perto(&malhas(lp), clique).unwrap();
+        let g = eixo_da_aresta(&pts, None).unwrap();
+        let Geom::Axis { p: centro, d } = g else { panic!("{g:?}") };
+        assert!(norm(sub([centro[0], centro[1], 0.], [48., 24., 0.])) < 0.05 && d[2].abs() > 0.999, "boca do furo: {g:?}");
+        assert!(raio(&g, encaixe::meio(&pts)) > 5., "aresta circular: {g:?}");
+        // a interface guarda o ponto do meio da aresta (o `mid` da escolha)
+        let meio = encaixe::meio(&pts);
+        let viva = if caso == Caso::Legado { Viva::Aresta { ponto: meio, perdida: false } } else { viva_da_aresta(lp, meio) };
+        let ra = MateRef { comp: placa, geom: g, pick: None, viva: Some(viva) };
+        let rb = MateRef { comp: pino, geom: Geom::Point([0.; 3]), pick: None, viva: Some(Viva::Vertice) };
+        let m = a.add_mate(MateKind::Coincident { flip: false }, ra, rb);
+        (a, m, ra, dir, cache)
+    }
+
+    /// Como a boca do furo foi guardada: a placa de exemplo (filete em tudo), a mesma placa num arquivo
+    /// de antes (só o ponto, sem tentar o nome) e a placa sem o filete.
+    #[derive(Clone, Copy, PartialEq, Debug)]
+    enum Caso {
+        Exemplo,
+        Legado,
+        SemFilete,
+    }
+
+    /// A placa de exemplo, com ou sem os "Furos M6"; sem o filete no caso `SemFilete`.
+    fn placa_exemplo(caso: Caso, furos: bool) -> Document {
+        let mut doc = fenkra_solidos::example_document();
+        doc.features.retain(|f| (furos || f.name != "Furos M6") && (caso != Caso::SemFilete || !matches!(f.kind, FeatureKind::Fillet(_))));
+        doc
+    }
+
+    /// Volumes e caixas da montagem, com o status de cada comando conferido.
+    fn compor_ok(a: &Assembly, dir: &Path, cache: &mut PartCache) -> (Vec<f64>, Vec<([f32; 3], [f32; 3])>) {
+        let comp = crate::view::compor(a, Some(dir), cache, &mut vec![], None).unwrap();
+        let erros: Vec<_> = comp.result.status.values().filter(|s| matches!(s, fenkra_solidos::Status::Error(_))).collect();
+        assert!(erros.is_empty(), "{erros:?}");
+        (comp.result.bodies.iter().map(|b| b.mass.volume).collect(), comp.caixas.iter().map(|c| (c.0, c.1)).collect())
+    }
+
+    #[test]
+    fn furo_apagado_deixa_a_coincidencia_na_boca_perdida_em_vez_de_religar_no_canto() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        // B479: com o furo apagado, a coincidência ia para a aresta do canto da placa, sem aviso. Vale
+        // para a referência criada hoje, com ou sem o nome das faces, e para a gravada antes, só com o ponto
+        for caso in [Caso::Exemplo, Caso::Legado, Caso::SemFilete] {
+            let rotulo = format!("{caso:?}");
+            let (mut a, m, ra, dir, mut cache) = placa_com_pino_na_boca(&format!("b479_{rotulo}"), caso);
+            match caso {
+                Caso::SemFilete => assert!(matches!(ra.viva, Some(Viva::ArestaNomeada { .. })), "sem filete, a boca de um dos quatro furos ganha o nome das faces, com o ponto para desempatar: {:?}", ra.viva),
+                // o filete em tudo não dá papel às faces dele: a aresta fica só com o ponto
+                _ => assert!(matches!(ra.viva, Some(Viva::Aresta { .. })), "{:?}", ra.viva),
+            }
+            let rep = crate::solve::solve(&mut a);
+            assert!(rep.converged, "{rep:?}");
+            let (v0, cx0) = compor_ok(&a, &dir, &mut cache);
+            assert_eq!(v0.len(), 2);
+            let pino0 = a.node(a.mates[0].b.comp).unwrap().placement.origin;
+            assert!(norm(sub([pino0[0], pino0[1], 0.], [48., 24., 0.])) < 0.05 && (pino0[2] - 10.).abs() < 0.05, "o vértice do pino no centro da boca: {pino0:?}");
+            // sem mudança na peça: nada perdido, a mesma geometria
+            crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
+            let mate = |a: &Assembly| a.mates.iter().find(|x| x.id == m).unwrap().clone();
+            assert!(!perdida(&mate(&a).a), "{rotulo}: {:?}", mate(&a).a);
+            let Geom::Axis { p, .. } = mate(&a).a.geom else { panic!() };
+            assert!(norm(sub(p, base(&ra.geom).0)) < 0.05, "{rotulo}: a mesma boca: {p:?}");
+            // apagar "Furos M6" e reler
+            trocar_arq(&dir, "placa.fkp", &mut cache, &placa_exemplo(caso, false));
+            crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
+            let mm = mate(&a);
+            assert!(perdida(&mm.a), "{rotulo}: a boca do furo sumiu, a restrição avisa: {:?}", mm.a);
+            assert!(norm(sub(base(&mm.a.geom).0, base(&ra.geom).0)) < 0.05, "{rotulo}: segue com a última geometria boa, não com o canto: {:?}", mm.a.geom);
+            assert!(crate::solve::solve(&mut a).converged);
+            let (v1, cx1) = compor_ok(&a, &dir, &mut cache);
+            assert!(v1[0] > v0[0] + 100., "{rotulo}: os furos fecharam: {} → {}", v0[0], v1[0]);
+            assert!((v1[1] - v0[1]).abs() < 1e-6, "o mesmo pino");
+            assert!((0..3).all(|i| (cx1[1].0[i] - cx0[1].0[i]).abs() < 1e-3 && (cx1[1].1[i] - cx0[1].1[i]).abs() < 1e-3), "{rotulo}: o pino fica onde estava: {:?} → {:?}", cx0[1], cx1[1]);
+            // Reancorar: a aresta reta da frente da placa, clicada como a interface clica
+            let pl = a.mates[0].a.comp;
+            let lp = cache.get(&dir.join("placa.fkp"), true).unwrap();
+            // a interface guarda o ponto do meio da aresta (o `mid` da escolha), que fica sobre ela
+            let pts = aresta_perto(&malhas(lp), [0., -36., 10.]).unwrap();
+            let meio = encaixe::meio(&pts);
+            let nova = MateRef { comp: pl, geom: eixo_da_aresta(&pts, None).unwrap(), pick: None, viva: Some(viva_da_aresta(lp, meio)) };
+            reancorar(&mut a, m, true, nova).unwrap();
+            assert!(!perdida(&mate(&a).a));
+            assert!(crate::solve::solve(&mut a).converged);
+            crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
+            assert!(!perdida(&mate(&a).a), "{rotulo}: reancorada, a releitura acha a aresta nova: {:?}", mate(&a).a);
+            assert!(crate::solve::solve(&mut a).converged);
+            let o = a.node(a.mates[0].b.comp).unwrap().placement.origin;
+            assert!((o[1] + 36.).abs() < 1.1 && (o[2] - 10.).abs() < 1.1, "{rotulo}: o vértice do pino na aresta da frente: {o:?}");
+        }
+    }
+
+    #[test]
+    fn aresta_sem_nome_so_acompanha_a_mesma_curva() {
+        // reta com reta no mesmo sentido; o círculo não vira reta nem círculo de outro raio (B479)
+        let reta = Geom::Axis { p: [0., 0., 0.], d: [1., 0., 0.] };
+        assert!(mesma_curva(&reta, [3., 0., 0.], &Geom::Axis { p: [0., 5., 0.], d: [1., 0., 0.] }, &[[0., 5., 0.], [10., 5., 0.]]));
+        assert!(!mesma_curva(&reta, [3., 0., 0.], &Geom::Axis { p: [0., 5., 0.], d: [0., 1., 0.] }, &[[0., 5., 0.], [0., 15., 0.]]), "virou de lado");
+        let circulo = Geom::Axis { p: [48., 24., 10.], d: [0., 0., 1.] };
+        let na_boca = [54.5, 24., 10.];
+        assert!(!mesma_curva(&circulo, na_boca, &Geom::Axis { p: [60., 0., 10.], d: [0., 0., 1.] }, &[[60., 0., 10.], [60., 36., 10.]]), "círculo não vira reta, mesmo paralela");
+        let arco = |r: f64| -> Vec<V3> { (0..=32).map(|k| (k as f64) * std::f64::consts::TAU / 32.).map(|t| [10. + r * t.cos(), 10. + r * t.sin(), 10.]).collect() };
+        assert!(mesma_curva(&circulo, na_boca, &Geom::Axis { p: [10., 10., 10.], d: [0., 0., 1.] }, &arco(6.5)), "o mesmo furo que andou");
+        assert!(!mesma_curva(&circulo, na_boca, &Geom::Axis { p: [10., 10., 10.], d: [0., 0., 1.] }, &arco(3.)), "outro raio");
+    }
+
     #[test]
     fn ponto_de_encaixe_acompanha_o_furo_que_andou() {
         if !fenkra_kernel::AVAILABLE {
@@ -722,19 +894,19 @@ mod tests {
         let dir = pasta("aresta");
         let (a, c, mut cache) = montagem(&dir, &bloco(40., 10., 12.));
         // aresta vertical do canto (40, 20): o eixo é Z, e a altura muda de 10 para 25
-        let mut r = MateRef { comp: c, geom: Geom::Axis { p: [40., 20., 0.], d: [0., 0., -1.] }, pick: None, viva: Some(Viva::Aresta { ponto: [40., 20., 5.] }) };
+        let mut r = MateRef { comp: c, geom: Geom::Axis { p: [40., 20., 0.], d: [0., 0., -1.] }, pick: None, viva: Some(Viva::Aresta { ponto: [40., 20., 5.], perdida: false }) };
         trocar(&dir, &mut cache, &bloco(55., 25., 12.));
         // o bloco cresceu em X: a aresta mais perto do ponto guardado é a do outro lado do rasgo novo
         let mut r2 = r;
-        r2.viva = Some(Viva::Aresta { ponto: [55., 20., 5.] });
+        r2.viva = Some(Viva::Aresta { ponto: [55., 20., 5.], perdida: false });
         Leitor::novo(&a, &mut cache, Some(&dir)).reler(&mut r2);
         let Geom::Axis { p, d } = r2.geom else { panic!("{:?}", r2.geom) };
         assert!(d[2] < -0.999, "sentido preservado: {d:?}");
         assert!((p[0] - 55.).abs() < 1e-3, "{p:?}");
-        let Some(Viva::Aresta { ponto }) = r2.viva else { panic!() };
+        let Some(Viva::Aresta { ponto, .. }) = r2.viva else { panic!() };
         assert!((ponto[2] - 12.5).abs() < 1e-3, "o ponto guardado acompanha: {ponto:?}");
         // uma aresta do furo vira o eixo do círculo
-        r.viva = Some(Viva::Aresta { ponto: [15., 10., 25.] });
+        r.viva = Some(Viva::Aresta { ponto: [15., 10., 25.], perdida: false });
         Leitor::novo(&a, &mut cache, Some(&dir)).reler(&mut r);
         let Geom::Axis { p, .. } = r.geom else { panic!() };
         assert!(norm(sub([p[0], p[1], 0.], [12., 10., 0.])) < 0.02, "{p:?}");
