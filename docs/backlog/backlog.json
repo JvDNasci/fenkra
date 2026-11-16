@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 108380,
+ "tokens_total_k": 108780,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -18,19 +18,19 @@
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 29.8
+   "pct": 29.7
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
-   "tokens_k": 24300,
-   "pct": 22.4
+   "tokens_k": 24700,
+   "pct": 22.7
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
    "tokens_k": 32940,
-   "pct": 30.4
+   "pct": 30.3
   }
  },
  "itens": [
@@ -3365,7 +3365,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B191",
@@ -3945,7 +3945,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B227",
@@ -4425,7 +4425,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B257",
@@ -7753,7 +7753,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7801,7 +7801,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7817,7 +7817,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
-   "status": "em andamento",
+   "status": "feito",
    "pct": 0.0
   },
   {
@@ -7881,7 +7881,7 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Montagem",
-   "status": "feito",
+   "status": "em andamento",
    "pct": 0.0
   },
   {
@@ -7913,7 +7913,167 @@
    "tokens_k": 40,
    "teste": "Auto + Visual",
    "area": "Interface",
-   "status": "em andamento",
+   "status": "feito",
+   "pct": 0.0
+  },
+  {
+   "id": "B477",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Rosca abre com referência perdida perto da origem",
+   "oque": "Teste com mouse real, rodada 4 (docs/validacao/teste-mouse-rodada4.md): a Rosca abre com \"referência perdida perto de (0,0,0)\" (Arquivo › Nova peça de exemplo › Rosca); o B465 não cobriu a Rosca.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B478",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Saída: prévia sempre inválida com plano neutro válido",
+   "oque": "Teste com mouse real, rodada 4 (docs/validacao/teste-mouse-rodada4.md): na Placa de exemplo, face lateral + plano neutro no topo, em XY ou YZ, a prévia diz que a face cruza o plano neutro; o anel do ângulo fica vermelho e o arco não aparece; com \"Campo ativo: Plano\", o clique no topo entra como face.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B479",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Coincidência religada a outra aresta sem aviso",
+   "oque": "Teste com mouse real, rodada 4 (docs/validacao/teste-mouse-rodada4.md): apagado o furo, a Coincidência do parafuso continua OK e vai para a aresta do canto da placa, sem aviso nem ⚠; deve ficar perdida e oferecer Reancorar.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B480",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Novo desenho pela tela inicial substitui aba editada",
+   "oque": "Teste com mouse real, rodada 4 (docs/validacao/teste-mouse-rodada4.md): Tela inicial › Novo desenho substitui a aba \"conj4 •\" com alteração não salva, sem perguntar.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B481",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Abrir peça com montagem na frente não abre o arquivo",
+   "oque": "Teste com mouse real, rodada 4 (docs/validacao/teste-mouse-rodada4.md): Arquivo › Abrir peça com a aba da montagem na frente não abre o .fkp escolhido e não avisa; \"Abrir recente\" não lista a peça salva por Ctrl+S; Janela mostra \"Nesta janela: placa4.fkp\" com a aba conj4 na frente.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B482",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Inserir \"em furo\" sem furo compatível entra solto",
+   "oque": "Teste com mouse real, rodada 4 (docs/validacao/teste-mouse-rodada4.md): sem furo compatível, a peça da biblioteca entra solta na origem e o fantasma continua, com o aviso \"nenhum furo casa\" sobre o modelo; deve avisar e não inserir.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B483",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Termos em inglês restantes: Thread/Tap e Joggle",
+   "oque": "Teste com mouse real, rodada 4 (docs/validacao/teste-mouse-rodada4.md): tooltip \"Rosca em eixo ou furo (Thread/Tap)\" e item \"Joggle (desvio em Z)\" no menu Dobra; o teste de rótulos deve cobrir tooltips e menus.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B484",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Tabela de tamanhos da biblioteca escondida em janela menor",
+   "oque": "Teste com mouse real, rodada 4 (docs/validacao/teste-mouse-rodada4.md): a tabela de tamanhos só aparece aumentando a janela; deve caber ou rolar.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Biblioteca de normas",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B485",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Grupo da montagem: ícone ao lado da Biblioteca e Ctrl+Z não desfaz",
+   "oque": "Teste com mouse real, rodada 4 (docs/validacao/teste-mouse-rodada4.md): o ícone de Grupo fica ao lado do de Biblioteca e Ctrl+Z não desfaz o Grupo criado.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B486",
+   "onda": 3,
+   "prio": "P1",
+   "titulo": "Folha cortada com o painel Edição aberto",
+   "oque": "Teste com mouse real, rodada 4 (docs/validacao/teste-mouse-rodada4.md): com o painel Edição aberto, a folha fica cortada em x ≈ 915 e o resto da área fica vazio.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto + Visual",
+   "area": "Desenho técnico",
+   "status": "a fazer",
    "pct": 0.0
   }
  ]
