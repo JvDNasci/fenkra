@@ -1,0 +1,35 @@
+{
+  "versao": 1,
+  "comando": "sm_dobra_conica",
+  "caso": "sm_dobra_conica",
+  "tema": "Escuro",
+  "camera": [
+    -40,
+    24,
+    250,
+    0,
+    0,
+    22
+  ],
+  "janela": [
+    1180,
+    700
+  ],
+  "recorte": [
+    340,
+    140,
+    720,
+    440
+  ],
+  "fps": 12,
+  "duracao": 3.0,
+  "animacoes": [
+    {
+      "campo": "/SmCone/r2",
+      "de": 28,
+      "ate": 48,
+      "t0": 0.4,
+      "t1": 2.6
+    }
+  ]
+}

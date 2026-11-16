@@ -637,6 +637,16 @@
       "altura": 220
     },
     {
+      "id": "sm_dobra_conica",
+      "hash_roteiro": "d99ebf944d53ec40",
+      "gif": "saida/sm_dobra_conica.gif",
+      "bytes_gif": 50147,
+      "hash_gif": "3513909a58167b68",
+      "quadros": 36,
+      "largura": 360,
+      "altura": 220
+    },
+    {
       "id": "xf_afinidade",
       "hash_roteiro": "1254c13856d8fe31",
       "gif": "saida/xf_afinidade.gif",
