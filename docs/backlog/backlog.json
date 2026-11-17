@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 110230,
+ "tokens_total_k": 113280,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 7180,
-   "pct": 6.5
+   "pct": 6.3
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 10.5
+   "pct": 10.2
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 29.3
+   "pct": 28.6
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 24700,
-   "pct": 22.4
+   "pct": 21.8
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 34390,
-   "pct": 31.2
+   "tokens_k": 37440,
+   "pct": 33.1
   }
  },
  "itens": [
@@ -573,7 +573,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B27",
@@ -4857,7 +4857,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "feito",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B284",
@@ -5177,7 +5177,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "feito",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B304",
@@ -5753,7 +5753,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B340",
@@ -6330,7 +6330,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B376",
@@ -7050,7 +7050,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B421",
@@ -8081,7 +8081,7 @@
    "onda": 4,
    "prio": "P0",
    "titulo": "Prévia leve por arestas em todas as operações que mudam a peça",
-   "oque": "Pedido do usuário em 16/11: a prévia translúcida pesa e confunde. Toda operação que altera a peça (sólidos, chapa, estrutural, superfícies) mostra primeiro só as arestas do resultado, ou uma forma simplificada (furo como cilindro de arestas, dobra como contorno), sem recalcular o sólido. Botão Prévia no painel e opção \"Prévia automática\" para ligar e desligar. A prévia completa fica sob pedido. Aceite: furo, extrusão, filete, aba, dobra e membro mostram arestas em até 50 ms na peça de exemplo; desligar a opção deixa só o botão.",
+   "oque": "Pedido do usuário em 16/11: a prévia translúcida pesa e confunde. Toda operação que altera a peça (sólidos, chapa, estrutural, superfícies) mostra primeiro só as arestas do resultado, ou uma forma simplificada (furo como cilindro de arestas, dobra como contorno), sem recalcular o sólido. Botão Prévia no painel e opção \"Prévia automática\" para ligar e desligar. A prévia completa fica sob pedido. Aceite: furo, extrusão, filete, aba, dobra e membro mostram arestas em até 50 ms na peça de exemplo; desligar a opção deixa só o botão. Estudo de cursos públicos (17/11, cofre Conhecimento/Estudo de cursos): os CADs estudados usam prévia translúcida cheia; manter a de arestas como padrão e somar as setas clicáveis para inverter lado e o campo numérico flutuante com Tab.",
    "origem": [
     "USR-CHECK"
    ],
@@ -8097,7 +8097,7 @@
    "onda": 4,
    "prio": "P0",
    "titulo": "Chapa: revisão geral, várias paredes na mesma peça",
-   "oque": "Pedido do usuário em 16/11: criar várias abas e paredes na mesma peça falha ou dá resultado errado. Revisar a bancada inteira: aba sobre aba, aba em aresta de aba, alívios, cantos entre abas vizinhas, planificação depois de várias abas. Aceite: um conjunto de peças de chapa com 3 a 8 paredes cada recalcula sem erro, planifica e confere volume e caixa envolvente; depois, teste com mouse.",
+   "oque": "Pedido do usuário em 16/11: criar várias abas e paredes na mesma peça falha ou dá resultado errado. Revisar a bancada inteira: aba sobre aba, aba em aresta de aba, alívios, cantos entre abas vizinhas, planificação depois de várias abas. Aceite: um conjunto de peças de chapa com 3 a 8 paredes cada recalcula sem erro, planifica e confere volume e caixa envolvente; depois, teste com mouse. Do estudo de cursos (17/11): várias arestas num único comando de aba com um OK; direção da aba pelo lado do mouse; \"coletar todos\" com filtro para alívios e cantos; canto fechado que falha oferece abrir a região da dobra; canto soldado não muda a planificação e canto fechado muda; seletor único do método de dobra (tolerância, fator K, tabela, dedução) com conferência do comprimento planificado.",
    "origem": [
     "USR-CHECK"
    ],
@@ -8123,6 +8123,182 @@
    "area": "Interface",
    "status": "a fazer",
    "pct": 0.5
+  },
+  {
+   "id": "B490",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Estrutural: membro como recurso coletor com subárvore",
+   "oque": "Pedido do usuário em 17/11: criar 4 membros num comando gera 4 recursos soltos. Deve nascer um recurso coletor (grupo de membros) com os membros numa subárvore: mudar perfil, orientação ou encaixe no coletor muda todos; arrastar um membro para fora o torna independente, com os parâmetros atuais; arrastar um membro para dentro de um coletor faz ele herdar a configuração do grupo. Aceite: teste monta 4 membros, muda o perfil no coletor e confere os 4; tira um, muda o grupo e confere que o tirado não mudou; desfazer volta cada passo.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B491",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Estrutural: meia-esquadria falhando",
+   "oque": "Teste do usuário em 17/11: o encaixe em meia-esquadria entre membros não fica certo. Aceite: quadro retangular e quadro com ângulo diferente de 90° em tubo quadrado, retangular e cantoneira; as duas faces de corte coincidem no plano bissetor, sem sobra nem vão (volume da interseção zero, folga zero), e a lista de corte mostra os ângulos.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B492",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Estrutural: corte a 90° (topo) entre membros falhando",
+   "oque": "Teste do usuário em 17/11: o encaixe de topo a 90° entre os membros não corta certo. Aceite: em canto de quadro e em T, o membro que encosta é aparado na face do outro (ou estendido até ela), sem interferência nem vão, com escolha de qual membro passa direto; lista de corte com comprimentos conferidos.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B493",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Extrusão por regiões escolhidas do esboço",
+   "oque": "Do estudo de cursos (17/11): com mais de um perfil no esboço, o comando mostra a lista de contornos e realça as regiões ao passar o mouse; o mesmo esboço serve a várias extrusões. Aceite: círculo e retângulo sobrepostos extrudam só a interseção, depois só o resto, com volumes conferidos.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B494",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Filete: arredondamento completo, filete de face e opção manter recursos",
+   "oque": "Do estudo de cursos (17/11), complementa o B49: seletor de tipo no topo (constante, variável, face, completo); arredondamento completo pede três faces e tira o raio da espessura; opção que decide se o filete preserva ou consome um ressalto no caminho. Aceite: parede de 10 mm vira meia-cana; ordem errada das faces dá erro claro; as duas opções do ressalto dão volumes diferentes e conferidos.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B495",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Furo normatizado em duas etapas: tipo e posições",
+   "oque": "Do estudo de cursos (17/11): primeira etapa escolhe norma, tipo, tamanho e ajuste em listas que se filtram em cascata e preenchem as medidas; segunda etapa posiciona pontos com inferência e cota dentro do comando; o painel abre com as opções da última vez. Aceite: M6 com rebaixo para cabeça sextavada em três posições, troca para M8 recalcula os três; ajuste justo, normal e folgado mudam o diâmetro.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B496",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Recurso de usuário reutilizável com entradas e parâmetros publicados",
+   "oque": "Do estudo de cursos (17/11): o usuário agrupa recursos, marca as entradas (face, aresta, plano) e os parâmetros publicados, salva na biblioteca e instancia em outra peça; o painel de instanciar pede só o publicado. Aceite: rebaixo de usuário instanciado duas vezes em arestas diferentes com valores diferentes, volumes conferidos, e mudar a definição atualiza as instâncias quando pedido.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B497",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Montagem: restrição rápida, reusar padrão e atualização sob pedido",
+   "oque": "Do estudo de cursos (17/11): restrição rápida escolhe coincidência ou contato pelo tipo das duas seleções; reusar padrão monta o parafuso nos outros furos do padrão herdando as restrições; modo em que a restrição nova só move a peça ao pedir Atualizar, com a árvore marcando pendente. Aceite: eixo com eixo vira coincidência e face com face vira contato sem escolher; um parafuso vira quatro em padrão de 4 furos; com o modo ligado nada se move antes de Atualizar.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B498",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Montagem: graus livres por componente e explosão própria do desenho",
+   "oque": "Do estudo de cursos (17/11): o menu do componente lista as rotações e translações ainda livres e qual restrição falta; a vista explodida do desenho é independente da montagem (o 3D fica montado), com balões e lista de materiais pela ordem da árvore. Aceite: componente com uma rotação livre mostra só ela; reordenar a árvore muda a numeração dos balões.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Montagem",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B499",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Superfícies: concordância com continuidade e tensão por lado",
+   "oque": "Do estudo de cursos (17/11): painel em abas (básico, tensão, pontos de fechamento, acoplamento), continuidade e tensão escolhidas em cada lado, prévia com setas de curva e de suporte rotuladas. Aceite: concordância G1 entre duas superfícies com tensão ajustável sem salto de tangente na emenda (desvio angular abaixo de 0,5°).",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B500",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Comando que falha oferece a correção na própria janela",
+   "oque": "Do estudo de cursos (17/11): quando a operação não fecha (canto de chapa, filete, casca), o painel explica a causa e oferece a correção provável em um clique (abrir a região da dobra, reduzir o raio, tirar a face), em vez de só dar erro. Aceite: três falhas conhecidas da peça de exemplo mostram causa e correção, e aplicar a correção recalcula com status ok.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.3
   }
  ]
 }
