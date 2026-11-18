@@ -94,12 +94,23 @@ pub struct NovoDesenho {
     pub escala: Option<f64>,
     /// peça ou montagem de origem das vistas; `None` = folha em branco
     pub origem: Option<Source>,
+    /// modelo de folha (B512): formato, margens e bloco de título do usuário; `None` = a legenda da norma
+    pub modelo: Option<crate::modelo_folha::ModeloFolha>,
 }
 
 impl NovoDesenho {
     /// Padrão: A3 paisagem, ISO 7200, 1º diedro, escala automática, a origem dada.
     pub fn padrao(nome: &str, origem: Option<Source>) -> Self {
-        NovoDesenho { nome: nome.into(), formato: Format::A3, retrato: false, norma: TitleStyle::Iso7200, projecao: Projecao::Primeiro, escala: None, origem }
+        NovoDesenho { nome: nome.into(), formato: Format::A3, retrato: false, norma: TitleStyle::Iso7200, projecao: Projecao::Primeiro, escala: None, origem, modelo: None }
+    }
+
+    /// Escolhe o modelo de folha: o formato e a orientação passam a ser os dele.
+    pub fn aplicar_modelo(&mut self, m: Option<crate::modelo_folha::ModeloFolha>) {
+        if let Some(m) = &m {
+            self.formato = m.formato;
+            self.retrato = m.retrato;
+        }
+        self.modelo = m;
     }
 
     /// A norma escolhida traz o que costuma acompanhá-la: ANSI usa folhas ANSI e 3º diedro; ISO e
@@ -133,6 +144,12 @@ impl NovoDesenho {
     /// Área útil para as vistas: dentro da moldura, acima da legenda e com folga das zonas.
     fn area_util(&self) -> (V2, V2) {
         let [w, h] = self.tamanho();
+        if let Some(m) = &self.modelo {
+            // dentro da moldura do modelo, acima do bloco, com a mesma folga das zonas
+            let (lo, hi) = m.moldura([w, h]);
+            let topo_bloco = m.caixa_do_bloco([w, h]).1[1];
+            return ([lo[0] + 10., topo_bloco + 10.], [hi[0] - 10., hi[1] - 15.]);
+        }
         ([30., 55.], [w - 20., h - 25.])
     }
 
@@ -143,6 +160,10 @@ impl NovoDesenho {
         d.sheets[0].portrait = self.retrato;
         d.title.style = self.norma;
         d.projection = self.projecao;
+        if let Some(m) = &self.modelo {
+            let s = d.sheets[0].id;
+            d.aplicar_modelo(s, m.clone());
+        }
         let Some(src) = self.origem.clone() else { return d };
         let sheet = d.sheets[0].id;
         let (dir_sup, dir_lat) = self.projecao.vistas_da_frente();

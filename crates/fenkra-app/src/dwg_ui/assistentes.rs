@@ -19,11 +19,14 @@ pub struct NovoUi {
     /// quadros desde a abertura: nos primeiros a janela é recentrada (a tela pode ainda não ter
     /// tamanho e o tamanho da janela só se conhece depois do primeiro desenho); depois fica livre
     quadros: u8,
+    /// modelos de folha da biblioteca do usuário (B512), lidos ao abrir o diálogo
+    biblioteca: Vec<fenkra_desenho::modelo_folha::ModeloFolha>,
 }
 
 impl NovoUi {
     pub fn new(origem: Option<Source>) -> Self {
-        NovoUi { cfg: NovoDesenho::padrao(&tr("Desenho"), origem), models: Models::new(None), miniatura: None, quadros: 0 }
+        let biblioteca = fenkra_desenho::modelo_folha::pasta_biblioteca().map(|p| fenkra_desenho::modelo_folha::listar(&p).into_iter().map(|x| x.1).collect()).unwrap_or_default();
+        NovoUi { cfg: NovoDesenho::padrao(&tr("Desenho"), origem), models: Models::new(None), miniatura: None, quadros: 0, biblioteca }
     }
 }
 
@@ -132,6 +135,24 @@ fn janela_novo(ctx: &egui::Context, novo: &mut Option<NovoUi>, aberta: Option<So
                             }
                         }
                     }).response.on_hover_text(tr("Modelo da legenda e do desenho: traz o formato e o método de projeção da família"));
+                    ui.end_row();
+                    // B512: modelo de folha do usuário (formato, margens e bloco de título)
+                    ui.label(tr("Modelo de folha"));
+                    let atual = n.cfg.modelo.as_ref().map_or_else(|| tr("Legenda da norma").to_string(), |m| m.nome.clone());
+                    let mut escolha = None;
+                    egui::ComboBox::from_id_salt("novo_modelo_folha").selected_text(atual).width(190.).show_ui(ui, |ui| {
+                        if ui.selectable_label(n.cfg.modelo.is_none(), tr("Legenda da norma")).clicked() {
+                            escolha = Some(None);
+                        }
+                        for m in &n.biblioteca {
+                            if ui.selectable_label(n.cfg.modelo.as_ref().is_some_and(|x| x.uid == m.uid), &m.nome).clicked() {
+                                escolha = Some(Some(m.clone()));
+                            }
+                        }
+                    }).response.on_hover_text(tr("Modelo de folha gravado na biblioteca: formato, margens e bloco de título montado no editor de bloco de título"));
+                    if let Some(e) = escolha {
+                        n.cfg.aplicar_modelo(e);
+                    }
                     ui.end_row();
                     ui.label(tr("Formato"));
                     ui.horizontal(|ui| {

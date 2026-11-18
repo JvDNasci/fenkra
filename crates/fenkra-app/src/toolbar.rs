@@ -379,6 +379,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
         ],
         Group::DesArquivo => vec![
             One(it("des_folha", "Folha", "Nova folha", "Acrescenta uma folha no mesmo formato da atual.", Cmd(C::Dwg(50)))),
+            One(it("des_bloco_titulo", "Bloco de título", "Editor de bloco de título e modelo de folha", "Monta o carimbo sem desenhar linhas: divide caixas, escreve textos fixos, liga campos às propriedades da peça e do desenho ({codigo}, {material}, {cliente}…), põe tabela de revisões e logotipo. Arraste as divisórias na folha. Guarda como modelo de folha (formato, margens e bloco) para outros desenhos; mudar o modelo atualiza todas as folhas que o usam, e o PDF e o DXF saem com ele.", Cmd(C::Dwg(51)))),
             One(it("des_novo", "Novo", "Novo desenho", "Folha A3 vazia; a origem das vistas é a peça ou montagem aberta (salva).", Cmd(C::Dwg(0)))),
             One(it("des_abrir", "Abrir", "Abrir desenho (.fkd, DXF, DWG, SVG)", "Abre um desenho salvo, com as vistas recalculadas pelos arquivos de origem, ou um DXF, DWG ou SVG como folha nova, com um esboço por camada.", Cmd(C::Dwg(1)))),
             One(it("des_salvar", "Salvar", "Salvar desenho   Ctrl+S", "Grava o .fkd (caminhos das peças relativos à pasta do desenho).", Cmd(C::Dwg(2)))),

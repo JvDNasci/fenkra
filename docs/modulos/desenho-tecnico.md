@@ -5,6 +5,7 @@ Estado do módulo no Fenkra (alpha.26). Comparação com outros CADs em [benchma
 ## ✅ Pronto
 
 - **Folhas, formatos e carimbo** (Folhas, carimbo) — Formatos ISO/ANSI, carimbos ISO 7200/ABNT, zonas ISO 5457.
+- **Editor de bloco de título e modelos de folha** (Bloco de título) — B512: bloco montado por caixas que se dividem (árvore de cortes, `modelo_folha.rs`), com texto fixo, campos `{chave}` ligados à peça, à folha e ao desenho (inclusive propriedades personalizadas), tabela de revisões, logotipo (imagem em retângulos, `logo.rs`) e diedro; divisórias e tamanho arrastados na folha; modelo de folha (formato, margens, bloco) guardado no desenho por `uid`, com biblioteca `.fkfolha`, escolha no Novo desenho e atualização de todas as folhas que o usam. Teste `tests/bloco_titulo.rs`.
 - **Cortes e seções** (Corte) — Teste vistas_corte_detalhe_cotas_tabelas_e_exportacao.
 - **Cotas associativas** (Cotas) — Cotas com estilo, setas e posição do texto.
 - **Balões e lista de peças** (Balões, BOM) — Balões automáticos ligados à BOM e à lista de corte por item, inclusive em vistas estruturais (B26). `DR-33`

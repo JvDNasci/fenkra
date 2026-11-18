@@ -15,3 +15,4 @@ fenkra-montagem = { path = "../fenkra-montagem" }
 fenkra-tolerancias = { path = "../fenkra-tolerancias" }
 serde.workspace = true
 serde_json.workspace = true
+image = { version = "0.25", default-features = false, features = ["png", "jpeg"] }

@@ -982,6 +982,15 @@ impl Models {
             Model::Asm(a) => Some((a.props.pn.clone(), if a.props.description.is_empty() { a.name.clone() } else { a.props.description.clone() }, String::new())),
         }
     }
+
+    /// Nome e propriedades personalizadas da peça/montagem (B512: campos `{cliente}` etc. do
+    /// bloco de título).
+    pub fn nome_e_personalizadas(&mut self, src: &Source) -> (String, Vec<(String, String)>) {
+        match &self.load(src).model {
+            Model::Part(d) => (d.name.clone(), d.props.custom.clone()),
+            Model::Asm(a) => (a.name.clone(), a.props.custom.clone()),
+        }
+    }
 }
 
 /// Peças de um subconjunto (e dos subconjuntos dentro dele), já levadas ao sistema de quem o contém.

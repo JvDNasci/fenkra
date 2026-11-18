@@ -105,7 +105,7 @@ pub fn centro_dentro(at: V2, caixa: (V2, V2), area: (V2, V2)) -> V2 {
 /// Área útil das vistas na folha: dentro da moldura e acima do carimbo (mm, y de baixo).
 pub fn area_util(d: &Drawing, folha: Id) -> (V2, V2) {
     let size = d.sheet(folha).map(|s| s.size()).unwrap_or([420., 297.]);
-    let (m0, m1) = d.sheet(folha).map(crate::ocupacao::area_moldura).unwrap_or(([20., 10.], [size[0] - 10., size[1] - 10.]));
-    let legenda = crate::ocupacao::legenda_caixa(d.title.style, size);
+    let (m0, m1) = d.sheet(folha).map(|sh| crate::ocupacao::moldura_da_folha(d, sh)).unwrap_or(([20., 10.], [size[0] - 10., size[1] - 10.]));
+    let legenda = d.sheet(folha).map(|sh| crate::ocupacao::legenda_da_folha(d, sh)).unwrap_or_else(|| crate::ocupacao::legenda_caixa(d.title.style, size));
     ([m0[0], legenda.1[1]], m1)
 }
