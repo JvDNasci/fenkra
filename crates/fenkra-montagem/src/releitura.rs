@@ -449,7 +449,14 @@ fn ler_na_peca(r: &MateRef, lp: &LoadedPart) -> Option<Lida> {
             if !ali && !mesma_curva(&r.geom, ponto, &g, &pts) {
                 return perdeu;
             }
-            Some((g, Some(Viva::Aresta { ponto: encaixe::meio(&pts), perdida: false }), None))
+            // B516: a aresta achada pelo ponto ganha o nome das duas faces quando dá (arquivo antigo, ou a
+            // peça ganhou papéis): dali em diante ela segue a aresta pelo nome, e não a mais perto do ponto
+            let meio = encaixe::meio(&pts);
+            let viva = match viva_da_aresta(lp, meio) {
+                v @ Viva::ArestaNomeada { .. } => v,
+                _ => Viva::Aresta { ponto: meio, perdida: false },
+            };
+            Some((g, Some(viva), None))
         }
         Some(Viva::ArestaNomeada { chave, ponto, .. }) => ler_aresta_nomeada(r, lp, chave, ponto),
         Some(Viva::Vertice) => Some((Geom::Point(vertice_perto(&ms, p)?), r.viva, None)),
@@ -903,7 +910,9 @@ mod tests {
         let Geom::Axis { p, d } = r2.geom else { panic!("{:?}", r2.geom) };
         assert!(d[2] < -0.999, "sentido preservado: {d:?}");
         assert!((p[0] - 55.).abs() < 1e-3, "{p:?}");
-        let Some(Viva::Aresta { ponto, .. }) = r2.viva else { panic!() };
+        // B516: a aresta achada pelo ponto ganha o nome das faces vizinhas, e o ponto guardado acompanha
+        let (Some(Viva::Aresta { ponto, .. }) | Some(Viva::ArestaNomeada { ponto, .. })) = r2.viva else { panic!("{:?}", r2.viva) };
+        assert!(matches!(r2.viva, Some(Viva::ArestaNomeada { .. })), "a aresta do bloco tem nome: {:?}", r2.viva);
         assert!((ponto[2] - 12.5).abs() < 1e-3, "o ponto guardado acompanha: {ponto:?}");
         // uma aresta do furo vira o eixo do círculo
         r.viva = Some(Viva::Aresta { ponto: [15., 10., 25.], perdida: false });

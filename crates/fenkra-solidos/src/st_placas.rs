@@ -126,7 +126,8 @@ impl Ctx<'_> {
     /// Placa de extremidade (B255).
     pub(super) fn struct_plate(&mut self, f: &Feature, pl: &StructPlate) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
-        let (g, end_at_start) = self.member_end(pl.at, f)?;
+        // B516: a ponta do membro pela âncora (comando, trecho e ponta), não pelo ponto
+        let (g, end_at_start, _) = self.membro_ancorado("placa", f, "at", pl.at)?;
         let t = ev(&pl.thickness, &self.vars, "espessura")?;
         if t <= 0. {
             return Err("a espessura da placa precisa ser maior que 0".into());
@@ -187,7 +188,13 @@ impl Ctx<'_> {
     /// Reforço entre dois membros (B255).
     pub(super) fn struct_gusset(&mut self, f: &Feature, gs: &StructGusset) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
-        let (a, b, p) = self.member_pair(gs.at, f)?;
+        // B516: o encontro pela âncora (a ponta do primeiro membro): quando os membros andam, o
+        // reforço vai junto, em vez de procurar o encontro perto do ponto antigo
+        let at = match self.membro_ancorado("reforço", f, "at", gs.at)? {
+            (g, inicio, true) => if inicio { g.start } else { g.end },
+            _ => gs.at,
+        };
+        let (a, b, p) = self.member_pair(at, f)?;
         let d1 = ev(&gs.leg, &self.vars, "aba D1")?;
         let d2 = if gs.leg2.trim().is_empty() { d1 } else { ev(&gs.leg2, &self.vars, "aba D2")? };
         let t = ev(&gs.thickness, &self.vars, "espessura")?;

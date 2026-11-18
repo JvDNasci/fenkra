@@ -509,7 +509,7 @@ fn montar(peca: &Peca) -> Result<Document, ErroConv> {
         }
         let appearance = i.cor.map(|color| Appearance { color, finish: Finish::default(), texture: None });
         let name = nome_livre(&d, &i.nome);
-        d.features.push(Feature { id, name, kind, suppressed: i.suprimido, suppress_if: i.suprimir_se.clone(), folder: None, target, hidden: i.oculto, appearance, flat_space: false });
+        d.features.push(Feature { id, name, kind, suppressed: i.suprimido, suppress_if: i.suprimir_se.clone(), folder: None, target, hidden: i.oculto, appearance, flat_space: false, ancoras: vec![] });
     }
     d.rollback = peca.ativos.unwrap_or(d.features.len()).min(d.features.len());
     Ok(d)

@@ -261,6 +261,8 @@ mod textos_pmi_captura;
 mod textos_pmi_nota;
 mod textos_superficies;
 mod textos_solidos;
+mod textos_referencias;
+mod ref_nome;
 mod textos_edicao_direta;
 mod textos_dfm;
 mod textos_paineis;

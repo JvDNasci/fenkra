@@ -112,6 +112,9 @@ mod chapa_cone_tests;
 mod chapa_flat;
 mod arestas;
 mod chapa_laco;
+mod ancoras;
+#[cfg(test)]
+mod referencias_b516_tests;
 pub mod chapa_canto;
 pub mod chapa_desdobra;
 pub mod chapa_converte;
@@ -770,6 +773,16 @@ pub enum Promoted {
     Faces(Vec<Option<FaceKey>>),
     /// B15: centros (`Hole.points`, todos, na mesma ordem) e direção do furo que deixaram de ser fixos
     Furo { pontos: Vec<PointRef>, dir: Option<AxisRef> },
+    /// B516: chaves dos campos que só guardavam o ponto (`Feature::ancoras`); o app junta às do comando
+    Ancoras(Vec<fenkra_core::Ancora>),
+    /// B516: chave da face de término (`Extent::UpToSurface(SurfRef::Face)`) da extrusão, do furo ou da rosca
+    Ate(FaceKey),
+    /// B516: linhas guia de membro estrutural que eram só pontos (`CurveRef::Edge`) e viraram aresta do
+    /// modelo com chave (`CurveRef::BodyEdge`), na mesma ordem de `StructMember::paths`
+    Caminhos(Vec<CurveRef>),
+    /// B516: chave de uma referência da pasta (plano de face, face extraída, eixo de face ou de aresta)
+    /// que só tinha o ponto; a chave é da face ou da aresta que o ponto escolhe no fim da linha do tempo
+    Referencia(fenkra_core::ChaveAncora),
 }
 
 pub struct RecomputeResult {
@@ -1470,22 +1483,51 @@ impl Ctx<'_> {
             }
             return Ok(origin);
         }
-        for (b, owners, roles) in self.bodies.values() {
+        // B516: com a chave, a face sai da consulta em camadas (dono, papel, assinatura e o ponto para
+        // desempatar), e nunca da primeira face do mesmo papel que aparecer: duas candidatas que nada
+        // separa é referência perdida, com o nome da face
+        if let Some(k) = key {
+            let nome = refs::nome_face(self.doc, k, &|s| s.to_string());
+            let (mut achadas, mut lost) = (vec![], refs::Lost::None);
+            for (b, owners, roles) in self.bodies.values() {
+                let topo = b.topology().map_err(|e| e.0)?;
+                match refs::find_face(&refs::View { topo: &topo, owners, roles }, k, Some(origin)) {
+                    Ok(j) => achadas.push(topo.faces[j]),
+                    Err(refs::Lost::None) => {}
+                    Err(l) => lost = l,
+                }
+            }
+            // a mesma face em dois corpos (cópias): fica a do plano mais perto, se for clara
+            achadas.sort_by(|a, c| dot(sub(a.point, origin), n).abs().total_cmp(&dot(sub(c.point, origin), n).abs()));
+            if let [a, c, ..] = achadas.as_slice() {
+                let (da, dc) = (dot(sub(a.point, origin), n).abs(), dot(sub(c.point, origin), n).abs());
+                if !(dc - da > 1e-6 && da <= 0.5 * dc) {
+                    lost = refs::Lost::Ambiguous(achadas.len());
+                    achadas.clear();
+                }
+            }
+            return match achadas.first() {
+                Some(f) if f.kind == 0 && dot(f.dir, n).abs() > 0.99 => Ok(add(origin, mul(n, dot(sub(f.point, origin), n)))),
+                Some(f) if f.kind == 0 => Err(format!("referência perdida: a face '{nome}' do plano não é mais paralela a ele; escolha outra face")),
+                Some(_) => Ok(origin),
+                None => Err(match lost {
+                    refs::Lost::Ambiguous(c) => format!("referência perdida: a face '{nome}' do plano tem {c} candidatas; escolha outra face"),
+                    refs::Lost::None => format!("referência perdida: a face '{nome}' do plano não existe mais; escolha outra face"),
+                }),
+            };
+        }
+        for (b, owners, _) in self.bodies.values() {
             let topo = b.topology().map_err(|e| e.0)?;
             for (j, f) in topo.faces.iter().enumerate() {
-                let same = match key {
-                    Some(k) => owners.get(j) == Some(&k.owner) && roles.get(j) == Some(&k.role),
-                    None => owners.get(j) == Some(&who),
-                };
-                if !same {
+                if owners.get(j) != Some(&who) {
                     continue;
                 }
                 if f.kind == 0 {
                     let h = dot(sub(f.point, origin), n);
-                    if dot(f.dir, n).abs() > 0.99 && (key.is_some() || h.abs() < 1e-3) {
+                    if dot(f.dir, n).abs() > 0.99 && h.abs() < 1e-3 {
                         return Ok(add(origin, mul(n, h)));
                     }
-                } else if key.is_some() || b.surface_near(origin).is_ok_and(|(q, _)| dist(q, origin) < 1e-3) {
+                } else if b.surface_near(origin).is_ok_and(|(q, _)| dist(q, origin) < 1e-3) {
                     return Ok(origin);
                 }
             }
@@ -3227,14 +3269,15 @@ impl Ctx<'_> {
                         all.push(Some(key.clone()));
                     }
                     Err(why) => {
-                        let who = format!("a face de '{}' ({})", self.doc.name_of(key.owner), refs::role_name(key.role));
+                        // B516: o nome da face e as candidatas pelo nome, para escolher de novo
+                        let who = format!("a face '{}'{}", refs::nome_face(self.doc, key, &|s| s.to_string()), refs::sugerir_faces(self.doc, &v, Some(key), *p));
                         return Err(self.lost(what, f, why, who));
                     }
                 },
                 None => {
                     // sem chave, o ponto só vale a até 1 mm da face; fora disso é referência perdida
                     let Some(j) = b.face_index(*p, 1.0).map_err(k)? else {
-                        let who = format!("a face que passava perto de ({:.2}, {:.2}, {:.2})", p[0], p[1], p[2]);
+                        let who = format!("a face que passava perto de ({:.2}, {:.2}, {:.2}){}", p[0], p[1], p[2], refs::sugerir_faces(self.doc, &v, None, *p));
                         return Err(self.lost(what, f, refs::Lost::None, who));
                     };
                     out.push(*p);
@@ -3277,8 +3320,7 @@ impl Ctx<'_> {
                         all.push(Some(key.clone()));
                     }
                     Err(why) => {
-                        let face = |fk: &FaceKey| format!("'{}' ({})", self.doc.name_of(fk.owner), refs::role_name(fk.role));
-                        let who = format!("a aresta entre as faces {} e {}", face(&key.a), face(&key.b));
+                        let who = format!("a aresta '{}'{}", refs::nome_aresta(self.doc, key, &|s| s.to_string()), refs::sugerir_arestas(self.doc, &v, Some(key), *p));
                         return Err(self.lost(what, f, why, who));
                     }
                 },
@@ -3570,11 +3612,13 @@ impl Ctx<'_> {
 
     /// Membro (de comandos estruturais anteriores) com a ponta mais perto de `at`. Um ponto sobre a
     /// face de uma ponta (face clicada, B255) escolhe essa ponta mesmo que outra esteja mais perto.
-    fn member_end(&self, at: V3, me: &Feature) -> Result<(MemberGeom, bool), String> {
-        let mut best: Option<(f64, MemberGeom, bool)> = None;
+    /// Devolve também de qual comando e trecho é a ponta (B516: a âncora da placa e do reforço guarda
+    /// essa identidade, e não o ponto).
+    fn member_end_ref(&self, at: V3, me: &Feature) -> Result<(MemberGeom, bool, Id, usize), String> {
+        let mut best: Option<(f64, MemberGeom, bool, Id, usize)> = None;
         for f in self.doc.features.iter().take_while(|g| g.id != me.id) {
             let FeatureKind::StructMember(m) = &f.kind else { continue };
-            for g in self.members(m)? {
+            for (i, g) in self.members(m)?.into_iter().enumerate() {
                 for (p, s) in [(g.start, true), (g.end, false)] {
                     let d = geo3d::sub(at, p);
                     let along = geo3d::dot(d, g.z);
@@ -3583,12 +3627,12 @@ impl Ctx<'_> {
                     let on_face = along.abs() < 1e-3 && lateral <= (g.w * g.w + g.h * g.h).sqrt() / 2. + 1e-3;
                     let dd = if on_face { lateral * 1e-3 } else { geo3d::dist(p, at) + 1e-3 };
                     if best.as_ref().is_none_or(|b| dd < b.0) {
-                        best = Some((dd, g.clone(), s));
+                        best = Some((dd, g.clone(), s, f.id, i));
                     }
                 }
             }
         }
-        best.map(|(_, g, s)| (g, s)).ok_or_else(|| "nenhum membro estrutural antes deste comando".into())
+        best.map(|(_, g, s, id, i)| (g, s, id, i)).ok_or_else(|| "nenhum membro estrutural antes deste comando".into())
     }
 
     /// Dois membros que se encontram perto de `at`: (geometria, direção para dentro de cada um) e o ponto.
@@ -3633,7 +3677,9 @@ impl Ctx<'_> {
         // acha a aresta que passa pelo ponto e recusa se não houver nenhuma
         match self.resolve_edges(what, f, b, owners, roles, &[p], &[key.cloned()]) {
             Ok(pts) => Ok((pts[0], flat_now)),
-            Err(_) if key.is_none() => Ok((p, flat_now)),
+            // B516: o kernel pega a aresta mais perto do ponto sem limite; só vale deixar com ele quando
+            // alguma aresta passa mesmo pelo ponto. Ponto no ar (a aresta andou) é referência perdida
+            Err(_) if key.is_none() && b.edges_through(p, 0.01).is_ok_and(|on| !on.is_empty()) => Ok((p, flat_now)),
             Err(e) => Err(e),
         }
     }
@@ -3763,7 +3809,21 @@ impl Ctx<'_> {
             self.previa_da_ferramenta(f, &tool);
             return Ok(None);
         }
-        self.apply(f.target, tool, BoolOp::Add, f.id)?;
+        // B516: papel em cada face da aba (dobra, faces da parte reta, ponta, lados), para as arestas
+        // dela terem nome: a bainha na ponta da aba e o filete na dobra seguem a aba quando ela muda.
+        // A aba por laço faz várias abas no mesmo comando: cada uma leva o número dela
+        let roles = if p.flat {
+            None
+        } else {
+            let aba = self.body_owned(f.target).map_or(0, |(_, owners, roles)| {
+                let mut abas: Vec<i32> = owners.iter().zip(roles).filter(|(o, r)| **o == f.id && papeis::nome_aba(**r).is_some()).map(|(_, r)| (r - papeis::PAPEL_ABA) / 16).collect();
+                abas.sort_unstable();
+                abas.dedup();
+                abas.len()
+            });
+            tool.topology().ok().and_then(|t| papeis::aba_topo(&t, info.ends, info.normal, info.out, p.r, p.t, p.angle, aba))
+        };
+        self.apply_roles(f.target, tool, BoolOp::Add, f.id, roles)?;
         Ok(None)
     }
 
@@ -4437,6 +4497,8 @@ impl Ctx<'_> {
                 Ok(warn)
             }
             FeatureKind::Extrude(e) => {
+                // B516: término "até a face" de arquivo antigo ganha a chave da face
+                self.promover_ate(&e.extent);
                 let (frame, sk) = &self.sketch(e.sketch)?;
                 let (face, warn_open) = self.profile_face(frame, sk, e.thin.as_ref(), e.thin_side)?;
                 let taper = ev(&e.taper, &self.vars, "ângulo de saída")?;
@@ -4502,6 +4564,7 @@ impl Ctx<'_> {
                 Ok(None)
             }
             FeatureKind::Hole(h) => {
+                self.promover_ate(&h.depth);
                 let d = ev(&h.diameter, &self.vars, "diâmetro")?;
                 // direção escolhida (linha, aresta, eixo) ou automática
                 let custom = match &h.dir {
@@ -4993,6 +5056,13 @@ impl Ctx<'_> {
             FeatureKind::SmConvert(c) => self.run_convert(f, c),
             FeatureKind::SmJoggle(j) => {
                 let sp = self.sheet()?;
+                // B516: a linha segue a face pela âncora (dono + papel), não pelo ponto
+                let j = &if j.plane.is_none() {
+                    let (a, b) = self.linha_na_face("joggle", f, "linha", j.a, j.b, sp.flat)?;
+                    SmJoggle { a, b, ..j.clone() }
+                } else {
+                    j.clone()
+                };
                 let depth = ev(&j.depth, &self.vars, "desvio")?;
                 let mut run = ev(&j.run, &self.vars, "rampa")?;
                 if let Some(a) = &j.angle {
@@ -5120,7 +5190,8 @@ impl Ctx<'_> {
                         notes.extend(nt);
                         ls.iter().map(|(p, q)| (frame.point(p[0], p[1]), frame.point(q[0], q[1]))).collect()
                     }
-                    None => vec![(bd.a, bd.b)],
+                    // B516: a linha segue a face pela âncora (dono + papel), não pelo ponto
+                    None => vec![self.linha_na_face("dobra", f, "linha", bd.a, bd.b, sp.flat)?],
                 };
                 // o que foi escolhido no estado em que o comando nasceu vai para o estado atual
                 let raw: Vec<(V3, V3)> = raw.iter().map(|(p, q)| (self.map_point(*p, f.flat_space, sp.flat), self.map_point(*q, f.flat_space, sp.flat))).collect();
@@ -5228,6 +5299,11 @@ impl Ctx<'_> {
                 if h <= sp.t {
                     return Err("a altura da veneziana precisa ser maior que a espessura".into());
                 }
+                // B516: a linha segue a face pela âncora (dono + papel), não pelo ponto
+                let lv = &{
+                    let (a, b) = self.linha_na_face("veneziana", f, "linha", lv.a, lv.b, sp.flat)?;
+                    SmLouver { a, b, ..lv.clone() }
+                };
                 let b = self.body(f.target).ok_or("a veneziana precisa de uma chapa")?.clone();
                 let mid = geo3d::lerp(lv.a, lv.b, 0.5);
                 let (_, n0) = b.surface_near(mid).map_err(k)?;
@@ -5424,8 +5500,10 @@ impl Ctx<'_> {
                     }
                 } else {
                     let b = self.body(f.target).ok_or("o furo flangeado precisa de uma chapa")?.clone();
-                    for q in &h.points {
-                        let q = self.map_point(*q, f.flat_space, sp.flat);
+                    for (i, q) in h.points.iter().enumerate() {
+                        // B516: cada centro segue a face pela âncora (dono + papel)
+                        let q = self.ponto_na_face("furo flangeado", f, &format!("points.{i}"), *q, sp.flat)?;
+                        let q = self.map_point(q, f.flat_space, sp.flat);
                         let (on, n) = b.surface_near(q).map_err(k)?;
                         // o colar sai pelo outro lado da face escolhida (ou pelo mesmo, invertido)
                         centers.push((on, if h.flip { n } else { geo3d::mul(n, -1.) }));
@@ -5560,7 +5638,8 @@ impl Ctx<'_> {
                     None => sp.r,
                 };
                 let b = self.body(f.target).ok_or("a aba precisa de uma web (parede base)")?.clone();
-                let fp = self.map_point(sf.face, f.flat_space, sp.flat);
+                let fp = self.ponto_na_face("aba por superfície", f, "face", sf.face, sp.flat)?;
+                let fp = self.map_point(fp, f.flat_space, sp.flat);
                 let (on, n) = b.surface_near(fp).map_err(k)?;
                 // suporte que some (apagado, suprimido ou fora do alcance): falha explícita no comando
                 let support = self.cut_shape(&sf.support, 0).map_err(|e| format!("o suporte da aba por superfície não está disponível ({e}): escolha o suporte de novo"))?;
@@ -5655,7 +5734,8 @@ impl Ctx<'_> {
                     return Err("raio maior que meia largura e varredura diferente de zero".into());
                 }
                 let b = self.body(f.target).ok_or("o rasgo precisa de uma chapa")?.clone();
-                let c = self.map_point(sl.center, f.flat_space, sp.flat);
+                let c = self.ponto_na_face("rasgo em arco", f, "center", sl.center, sp.flat)?;
+                let c = self.map_point(c, f.flat_space, sp.flat);
                 let (on, n) = b.surface_near(c).map_err(k)?;
                 let x = geo3d::any_perp(n);
                 let fr = Frame { origin: on, x, normal: n };
@@ -5745,6 +5825,10 @@ impl Ctx<'_> {
                 self.sheet_tool(f, h_edge, from, p, false)
             }
             FeatureKind::StructMember(m) => {
+                // B516: linha guia que era só o polígono de uma aresta passa a seguir a aresta pela chave
+                if let Some(c) = self.promover_caminhos(&m.paths) {
+                    *self.promoted.borrow_mut() = Some(Promoted::Caminhos(c));
+                }
                 let mut geo = self.members(m)?;
                 // B326: nós de dobra de tubo (pernas encadeadas num tubo só)
                 let plano_dobra = self.plano_dobras(f, m, &geo);
@@ -6920,6 +7004,18 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         match v {
             Ok(g) => {
                 cx.status.insert(r.id, cache.notes.get(&r.id).filter(|n| n.warn).map_or(Status::Ok, |n| Status::Warning(n.text.clone())));
+                // B516: referência de face ou aresta que só tinha o ponto (arquivo antigo) ganha a chave
+                // da face ou aresta em que o ponto cai agora, para o app gravar
+                let sem_chave = match &r.kind {
+                    RefKind::FacePlane { origin, key: None, .. } => Some((*origin, false)),
+                    RefKind::SurfExtract { face, key: None, .. } => Some((*face, false)),
+                    RefKind::AxisLine { axis: AxisRef::Face { point, key: None }, .. } => Some((*point, false)),
+                    RefKind::AxisLine { axis: AxisRef::Edge { mid, key: None }, .. } => Some((*mid, true)),
+                    _ => None,
+                };
+                if let Some(ch) = sem_chave.and_then(|(p, aresta)| cx.chave_no_ponto(p, aresta)) {
+                    promoted.insert(r.id, Promoted::Referencia(ch));
+                }
                 match g {
                     RefViz::Plane(fr) => planes.push(PlaneViz { id: Some(r.id), name: r.name.clone(), frame: fr }),
                     RefViz::Point(p) => points.push(PointViz { id: r.id, name: r.name.clone(), p }),

@@ -265,13 +265,16 @@ mod testes_aresta {
         crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
         assert!(copia(&a)[0] > 30. && copia(&a)[1] < 1e-6, "{:?}", copia(&a));
         assert!(!crate::releitura::perdida(&r1(&a)), "{:?}", r1(&a));
-        // a chapa ficou estreita: a aresta mais perto do ponto guardado, o meio da de antes, corre em Y.
-        // Não é a mesma aresta: a referência avisa e a repetição fica em X, com a última geometria boa
+        // B516: na primeira leitura a aresta ganhou o nome das faces vizinhas (a lateral de baixo e a
+        // tampa da chapa). A chapa ficou estreita e desceu: pelo ponto, a aresta mais perto correria em Y
+        // (antes a referência ficava perdida); pelo nome, é a mesma aresta de baixo, que agora está em
+        // y = -10 e continua em X. A repetição segue a direção dela, sem aviso
+        assert!(matches!(r1(&a).viva, Some(crate::releitura::Viva::ArestaNomeada { .. })), "{:?}", r1(&a));
         std::fs::write(&f, chapa([0., -10.], [15., 40.]).to_json()).unwrap();
         cache.forget(&f);
         crate::load::refresh_refs(&mut a, &mut cache, Some(&dir));
-        assert!(crate::releitura::perdida(&r1(&a)), "{:?}", r1(&a));
-        assert!(copia(&a)[0] > 30. && copia(&a)[1] < 1e-6, "{:?}", copia(&a));
+        assert!(!crate::releitura::perdida(&r1(&a)), "{:?}", r1(&a));
+        assert!(copia(&a)[0] > 30. && copia(&a)[1] < 1e-6, "a repetição segue em X, a direção da aresta de baixo: {:?}", copia(&a));
     }
 }
 

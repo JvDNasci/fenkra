@@ -1610,8 +1610,7 @@ fn feature_ui(
                 AxisRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
                 AxisRef::Ref(id) => doc.name_of(*id),
                 AxisRef::Fixed { .. } => "Aresta (direção fixa)".to_string(),
-                AxisRef::Face { .. } => tr("Eixo da face").to_string(),
-                AxisRef::Edge { .. } => tr("Aresta do modelo").to_string(),
+                AxisRef::Face { .. } | AxisRef::Edge { .. } => crate::ref_nome::eixo(doc, a),
                 AxisRef::Planes { .. } => tr("Interseção de planos").to_string(),
             };
             egui::ComboBox::from_id_salt("eixo").selected_text(axis_name(&r.axis)).width(200.).show_ui(ui, |ui| {
@@ -1680,6 +1679,8 @@ fn feature_ui(
                 }
             }
             if let EdgeSel::Edges(m) = &mut o.edges {
+                // B516: cada aresta pelo nome (as duas faces vizinhas), não pela coordenada
+                let chaves = o.keys.clone();
                 // sacola: a lista das arestas (cada clique na aresta soma/tira)
                 crate::geo_ui::bag(
                     ui,
@@ -1689,8 +1690,8 @@ fn feature_ui(
                     picked,
                     0,
                     |p| format!("{}", crate::app::p3(p, 0)),
-                    |ui, _, p| {
-                        ui.label(format!("{} {}", tr("aresta em"), crate::app::p3(p, 1)));
+                    |ui, i, p| {
+                        ui.label(crate::ref_nome::campo_aresta(doc, chaves.get(i).and_then(|k| k.as_ref()), *p)).on_hover_text(crate::ref_nome::dica_aresta());
                     },
                     || [0.; 3],
                     None,

@@ -37,12 +37,13 @@ pub fn inverter(ui: &mut egui::Ui, flip: &mut bool) -> egui::Response {
 
 /// Suporte do comando de aba: o que foi escolhido no 3D, com contador e botão de limpar. Só as
 /// abas de aresta e de laço têm suporte de aresta; os outros modos mostram o suporte no próprio painel.
-pub fn suporte(ui: &mut egui::Ui, kind: &mut FeatureKind) {
+pub fn suporte(ui: &mut egui::Ui, doc: &fenkra_core::Document, kind: &mut FeatureKind) {
     match kind {
         FeatureKind::SmFlange(fl) => {
             section(ui, "Suporte");
             let vazio = fl.edge == [0.; 3];
-            ui.label(RichText::new(if vazio { tr("⚠ clique numa aresta reta da chapa na viewport").to_string() } else { format!("{} {} — {}", tr("aresta em"), crate::app::p3(fl.edge, 1), tr("clique outra aresta para trocar")) }).small());
+            // B516: a aresta pelo nome (as duas faces vizinhas), não pela coordenada
+            ui.label(RichText::new(if vazio { tr("⚠ clique numa aresta reta da chapa na viewport").to_string() } else { format!("{} — {}", crate::ref_nome::campo_aresta(doc, fl.edge_key.as_ref(), fl.edge), tr("clique outra aresta para trocar")) }).small()).on_hover_text(crate::ref_nome::dica_aresta());
             if ui.add_enabled(!vazio, egui::Button::new(tr("Limpar"))).on_hover_text(tr("Tira a aresta escolhida para escolher outra.")).clicked() {
                 fl.edge = [0.; 3];
                 fl.edge_key = None;

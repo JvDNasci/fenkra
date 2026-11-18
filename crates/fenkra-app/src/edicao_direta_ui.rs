@@ -28,7 +28,7 @@ fn dica(op: OpDireta) -> &'static str {
 }
 
 /// Painel do comando aberto.
-pub fn painel(ui: &mut egui::Ui, e: &mut DirectEdit, vars: &Vars, picked: &[[f64; 3]]) {
+pub fn painel(ui: &mut egui::Ui, doc: &fenkra_core::Document, e: &mut DirectEdit, vars: &Vars, picked: &[[f64; 3]]) {
     section(ui, "Operação");
     let opts: Vec<(&str, &str, &str, bool)> = OpDireta::ALL.iter().map(|o| (icone(*o), o.rotulo(), dica(*o), *o == e.op)).collect();
     if let Some(i) = icon_choice(ui, &opts) {
@@ -48,7 +48,7 @@ pub fn painel(ui: &mut egui::Ui, e: &mut DirectEdit, vars: &Vars, picked: &[[f64
     ui.label(RichText::new(tr(dica(e.op))).weak().small());
     crate::selecao_regras::regra_faces_ui(ui, &mut e.regras, &e.faces);
     let before = e.faces.clone();
-    crate::feat_ui::faces_ui(ui, &mut e.faces, picked);
+    crate::feat_ui::faces_ui(ui, doc, &mut e.faces, &e.face_keys, picked);
     e.face_keys = carry_keys(&before, &e.face_keys, &e.faces);
     crate::selecao_regras::acompanhar_sementes(&mut e.regras, &before, &e.faces);
 }

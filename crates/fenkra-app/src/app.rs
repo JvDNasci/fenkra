@@ -2066,8 +2066,13 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
 
     fn apply_promoted(&mut self, promoted: &std::collections::HashMap<Id, fenkra_solidos::Promoted>) {
         use fenkra_solidos::Promoted;
-        fn put(kind: &mut FeatureKind, p: &Promoted) {
-            match (kind, p) {
+        fn put(f: &mut fenkra_core::Feature, p: &Promoted) {
+            // B516: âncoras dos campos de ponto ficam no comando, fora do tipo dele
+            if let Promoted::Ancoras(a) = p {
+                f.guardar_ancoras(a);
+                return;
+            }
+            match (&mut f.kind, p) {
                 (FeatureKind::Fillet(o) | FeatureKind::Chamfer(o), Promoted::Edges(k)) => {
                     if matches!(&o.edges, EdgeSel::Edges(m) if m.len() == k.len()) {
                         o.keys = k.clone();
@@ -2076,6 +2081,19 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 (FeatureKind::SmFlange(a), Promoted::Edges(k)) if k.len() == 1 => a.edge_key = k[0].clone(),
                 (FeatureKind::SmHem(a), Promoted::Edges(k)) if k.len() == 1 => a.edge_key = k[0].clone(),
                 (FeatureKind::SmCurveFlange(a), Promoted::Edges(k)) if k.len() == 1 => a.edge_key = k[0].clone(),
+                // B516: aba por laço (uma chave por aresta) e término "até a face"
+                (FeatureKind::SmFlangeLoop(a), Promoted::Edges(k)) if k.len() == a.edges.len() => a.edge_keys = k.clone(),
+                (FeatureKind::Extrude(e), Promoted::Ate(k)) => {
+                    if let fenkra_core::Extent::UpToSurface(SurfRef::Face { key, .. }) = &mut e.extent {
+                        *key = Some(*k);
+                    }
+                }
+                (FeatureKind::Hole(h), Promoted::Ate(k)) => {
+                    if let fenkra_core::Extent::UpToSurface(SurfRef::Face { key, .. }) = &mut h.depth {
+                        *key = Some(*k);
+                    }
+                }
+                (FeatureKind::StructMember(m), Promoted::Caminhos(c)) if c.len() == m.paths.len() => m.paths = c.clone(),
                 (FeatureKind::Shell(s), Promoted::Faces(k)) if s.faces.len() == k.len() => s.face_keys = k.clone(),
                 (FeatureKind::Draft(d), Promoted::Faces(k)) if d.faces.len() == k.len() => d.face_keys = k.clone(),
                 (FeatureKind::Thickness(t), Promoted::Faces(k)) if t.faces.len() == k.len() => t.face_keys = k.clone(),
@@ -2107,13 +2125,39 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 continue;
             }
             if let Some(f) = self.open.doc.feature_mut(*id) {
-                put(&mut f.kind, p);
+                put(f, p);
             }
             if let Some(f) = self.sent_doc.as_mut().and_then(|d| d.feature_mut(*id)) {
-                put(&mut f.kind, p);
+                put(f, p);
             }
             if let Some(f) = self.result_doc.as_mut().and_then(|d| d.feature_mut(*id)) {
-                put(&mut f.kind, p);
+                put(f, p);
+            }
+        }
+        // B516: referências da pasta (plano de face, face extraída, eixo de face ou aresta) que só
+        // tinham o ponto ganham a chave calculada no fim da linha do tempo
+        fn put_ref(kind: &mut RefKind, ch: &fenkra_core::ChaveAncora) {
+            use fenkra_core::ChaveAncora as C;
+            match (kind, ch) {
+                (RefKind::FacePlane { key: k @ None, .. } | RefKind::SurfExtract { key: k @ None, .. }, C::Face(f)) => *k = Some(*f),
+                (RefKind::AxisLine { axis: AxisRef::Face { key: k @ None, .. }, .. }, C::Face(f)) => *k = Some(*f),
+                (RefKind::AxisLine { axis: AxisRef::Edge { key: k @ None, .. }, .. }, C::Aresta(e)) => *k = Some(*e),
+                _ => {}
+            }
+        }
+        for (id, p) in promoted {
+            let Promoted::Referencia(ch) = p else { continue };
+            let same = match (self.sent_doc.as_ref().and_then(|d| d.reference(*id)), self.open.doc.reference(*id)) {
+                (Some(a), Some(b)) => a.kind == b.kind,
+                _ => false,
+            };
+            if !same {
+                continue;
+            }
+            for d in [Some(&mut self.open.doc), self.sent_doc.as_mut(), self.result_doc.as_mut()].into_iter().flatten() {
+                if let Some(r) = d.references.iter_mut().find(|r| r.id == *id) {
+                    put_ref(&mut r.kind, ch);
+                }
             }
         }
     }

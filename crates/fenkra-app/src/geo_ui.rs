@@ -688,9 +688,10 @@ pub fn point_name(doc: &Document, p: &PointRef) -> String {
         PointRef::Origin => "Origem".into(),
         PointRef::Ref(id) => doc.reference(*id).map(|r| r.name.clone()).or_else(|| crate::slots::label(*id)).unwrap_or_else(|| format!("⚠ perdido #{}", id.0)),
         PointRef::Fixed(q) => format!("({}, {}, {})", fmt(q[0]), fmt(q[1]), fmt(q[2])),
-        PointRef::Vertex { .. } => tr("Vértice do modelo").into(),
-        PointRef::Center { .. } => tr("Centro da aresta").into(),
-        PointRef::OnFace { .. } => tr("Ponto na face").into(),
+        // B516: o vértice, o centro e o ponto na face pelo nome da aresta ou da face que eles seguem
+        PointRef::Vertex { edge, .. } => format!("{} {}", tr("Vértice de"), crate::ref_nome::aresta(doc, edge)),
+        PointRef::Center { edge, .. } => format!("{} {}", tr("Centro de"), crate::ref_nome::aresta(doc, edge)),
+        PointRef::OnFace { key, .. } => format!("{} {}", tr("Ponto em"), crate::ref_nome::face(doc, key)),
         PointRef::SketchPoint { sketch, point } => format!("{} · ponto #{}", doc.name_of(*sketch), point.0),
         PointRef::CurveVertex { curve, index } => format!("{} · {}", doc.name_of(*curve), match index {
             0 => "início".to_string(),
@@ -706,7 +707,7 @@ pub fn curve_name(doc: &Document, c: &CurveRef) -> String {
         CurveRef::Ref(id) => doc.reference(*id).map(|r| r.name.clone()).or_else(|| crate::slots::label(*id)).unwrap_or_else(|| format!("⚠ perdida #{}", id.0)),
         CurveRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
         CurveRef::Edge(p) => format!("Aresta ({} pontos)", p.len()),
-        CurveRef::BodyEdge { .. } => tr("Aresta do modelo").into(),
+        CurveRef::BodyEdge { key, .. } => crate::ref_nome::aresta(doc, key),
         CurveRef::SketchCurve { sketch, curve } => format!("{} · curva #{}", doc.name_of(*sketch), curve.0),
         CurveRef::Segment { curve, index } => format!("{} · trecho {}", doc.name_of(*curve), index + 1),
     }
@@ -715,6 +716,7 @@ pub fn curve_name(doc: &Document, c: &CurveRef) -> String {
 fn surf_name(doc: &Document, s: &SurfRef) -> String {
     match s {
         SurfRef::Plane(p) => plane_ref_name(doc, p),
+        SurfRef::Face { key: Some(k), .. } => crate::ref_nome::face(doc, k),
         SurfRef::Face { owner, .. } => format!("Face de {}", owner.map(|o| doc.name_of(o)).unwrap_or_default()),
         SurfRef::Ref(id) => crate::slots::label(*id).unwrap_or_else(|| doc.name_of(*id)),
     }
@@ -846,8 +848,7 @@ pub(crate) fn axis_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
         AxisRef::SketchLine { sketch, entity } => format!("{} · linha #{}", doc.name_of(*sketch), entity.0),
         AxisRef::Ref(id) => crate::slots::label(*id).unwrap_or_else(|| doc.name_of(*id)),
         AxisRef::Fixed { .. } => "Aresta (direção fixa)".into(),
-        AxisRef::Face { .. } => tr("Eixo da face").into(),
-        AxisRef::Edge { .. } => tr("Aresta do modelo").into(),
+        AxisRef::Face { .. } | AxisRef::Edge { .. } => crate::ref_nome::eixo(doc, a),
         AxisRef::Planes { .. } => tr("Interseção de planos").into(),
     };
     let est = campo_ativo(ui, salt, matches!(a, AxisRef::Ref(id) if crate::slots::is_unset(*id)));
@@ -1706,7 +1707,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             expr(ui, "Comprimento", length, vars, "mm");
         }
         R::SurfExtract { face, prop, complement, expected, key, .. } => {
-            ui.label(RichText::new(format!("{} ({}, {}, {})", tr("Face em"), fmt(face[0]), fmt(face[1]), fmt(face[2]))).small());
+            // B516: a face pelo nome (dono e papel), não pela coordenada
+            ui.label(RichText::new(crate::ref_nome::campo_face(doc, key.as_ref(), *face)).small()).on_hover_text(crate::ref_nome::dica_face());
             if let Some(SurfRef::Face { point, key: k, .. }) = seed.surface {
                 if ui.button(tr("⊙ Usar a face selecionada")).clicked() {
                     *face = point;
@@ -1743,7 +1745,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             }
         }
         R::LineAxis { face } => {
-            ui.label(RichText::new(format!("Face em ({}, {}, {})", fmt(face[0]), fmt(face[1]), fmt(face[2]))).small());
+            ui.label(RichText::new(crate::ref_nome::campo_face(doc, None, *face)).small());
             if let Some(SurfRef::Face { point, .. }) = seed.surface {
                 if ui.button(tr("⊙ Usar a face selecionada")).clicked() {
                     *face = point;

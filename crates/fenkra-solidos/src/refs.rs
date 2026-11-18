@@ -44,13 +44,92 @@ fn dist(a: [f64; 3], b: [f64; 3]) -> f64 {
 
 /// Nome do papel para mensagens.
 pub fn role_name(role: i32) -> String {
+    nome_papel(role, &|s| s.to_string())
+}
+
+/// Tradução das palavras fixas de um nome de referência (a interface passa a dela; as mensagens do
+/// recálculo usam o texto como está).
+pub type Tradutor<'a> = &'a dyn Fn(&str) -> String;
+
+/// Nome do papel de uma face (B516): "tampa final", "lateral 3", "furo 2, boca", "aba 2, ponta",
+/// "face 4" (superfície). As palavras fixas passam por `tr`.
+pub fn nome_papel(role: i32, tr: Tradutor) -> String {
+    use crate::papeis::{nome_aba, PARTES_FURO, PAPEL_ABA, PAPEL_FURO};
     match role {
-        r if r >= PAPEL_SUPERFICIE => format!("face {}", r - PAPEL_SUPERFICIE + 1),
-        0 => "tampa inicial".into(),
-        1 => "tampa final".into(),
-        r if r >= crate::papeis::PAPEL_FURO => crate::papeis::nome_furo(r).unwrap_or_default(),
-        r if r >= 2 => format!("lateral {}", r - 1),
-        _ => "sem papel".into(),
+        r if r >= PAPEL_SUPERFICIE => format!("{} {}", tr("face"), r - PAPEL_SUPERFICIE + 1),
+        r if r >= PAPEL_ABA => match nome_aba(r) {
+            Some((0, parte)) => tr(parte),
+            Some((i, parte)) => format!("{} {}, {}", tr("aba"), i + 1, tr(parte)),
+            None => tr("sem papel"),
+        },
+        0 => tr("tampa inicial"),
+        1 => tr("tampa final"),
+        r if r >= PAPEL_FURO => {
+            let r = r - PAPEL_FURO;
+            let parte = PARTES_FURO.get((r % 16) as usize).copied().unwrap_or("parte");
+            format!("{} {}, {}", tr("furo"), r / 16 + 1, tr(parte))
+        }
+        r if r >= 2 => format!("{} {}", tr("lateral"), r - 1),
+        _ => tr("sem papel"),
+    }
+}
+
+/// Nome de uma face pela chave (B516): o dono e o papel, como "Extrusão 2 · tampa final". É o que o
+/// painel mostra no lugar da coordenada e o que as mensagens de referência perdida citam.
+pub fn nome_face(doc: &fenkra_core::Document, k: &FaceKey, tr: Tradutor) -> String {
+    format!("{} · {}", doc.name_of(k.owner), nome_papel(k.role, tr))
+}
+
+/// Nome de uma aresta pela chave (B516). Aresta de superfície: "Superfície 1 · aresta 3". Entre a tampa
+/// e uma lateral do mesmo comando, a aresta do perfil que gerou a lateral: "Parede 1 · aresta 3 · tampa
+/// final". Entre outras faces do mesmo comando: "Furo 1 · furo 1, boca × furo 1, parede". Entre comandos
+/// diferentes, as duas faces: "Extrusão 1 · tampa final × Filete 1 · sem papel".
+pub fn nome_aresta(doc: &fenkra_core::Document, k: &EdgeKey, tr: Tradutor) -> String {
+    use crate::papeis::PAPEL_FURO;
+    if let Some(i) = k.edge {
+        return format!("{} · {} {}", doc.name_of(k.a.owner), tr("aresta"), i + 1);
+    }
+    if k.a.owner != k.b.owner {
+        return format!("{} × {}", nome_face(doc, &k.a, tr), nome_face(doc, &k.b, tr));
+    }
+    let lateral = |r: i32| (2..PAPEL_FURO).contains(&r);
+    let tampa = |r: i32| r == 0 || r == 1;
+    let dono = doc.name_of(k.a.owner);
+    match (k.a.role, k.b.role) {
+        (t, l) | (l, t) if tampa(t) && lateral(l) => format!("{dono} · {} {} · {}", tr("aresta"), l - 1, nome_papel(t, tr)),
+        (a, b) => format!("{dono} · {} × {}", nome_papel(a, tr), nome_papel(b, tr)),
+    }
+}
+
+/// Nome de uma âncora de campo (B516), como a face, a aresta ou a ponta de membro que ela guarda.
+pub fn nome_ancora(doc: &fenkra_core::Document, a: &fenkra_core::ChaveAncora, tr: Tradutor) -> String {
+    match a {
+        fenkra_core::ChaveAncora::Face(k) => nome_face(doc, k, tr),
+        fenkra_core::ChaveAncora::Aresta(k) => nome_aresta(doc, k, tr),
+        fenkra_core::ChaveAncora::PontaMembro { membro, trecho, fim } => {
+            format!("{} · {} {} · {}", doc.name_of(*membro), tr("trecho"), trecho + 1, tr(if *fim { "fim" } else { "início" }))
+        }
+    }
+}
+
+/// Candidatas de uma face perdida pelo nome, para a mensagem de erro sugerir (B516): as do mesmo
+/// dono e papel ou, sem nenhuma, as do mesmo tipo mais perto do último ponto. Só as que têm nome.
+pub fn sugerir_faces(doc: &fenkra_core::Document, v: &View, key: Option<&FaceKey>, hint: [f64; 3]) -> String {
+    let nomes: Vec<String> = candidatas_face(v, key, hint, 8).into_iter().filter_map(|j| v.face_key(j)).map(|k| nome_face(doc, &k, &|s| s.to_string())).take(3).collect();
+    if nomes.is_empty() {
+        String::new()
+    } else {
+        format!(" (candidatas: {})", nomes.join("; "))
+    }
+}
+
+/// Candidatas de uma aresta perdida pelo nome (ver [`sugerir_faces`]).
+pub fn sugerir_arestas(doc: &fenkra_core::Document, v: &View, key: Option<&EdgeKey>, hint: [f64; 3]) -> String {
+    let nomes: Vec<String> = candidatas_aresta(v, key, hint, 8).into_iter().filter_map(|e| v.edge_key(e)).map(|k| nome_aresta(doc, &k, &|s| s.to_string())).take(3).collect();
+    if nomes.is_empty() {
+        String::new()
+    } else {
+        format!(" (candidatas: {})", nomes.join("; "))
     }
 }
 
