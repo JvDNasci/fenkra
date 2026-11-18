@@ -110,6 +110,8 @@ pub fn campo_ativo(k: &FeatureKind) -> Option<Espera> {
         FeatureKind::SmLouver(x) if x.a == x.b => Some(Espera::Face),
         // B31: a aba curva vinda de outro modo ainda não tem a cadeia de arestas
         FeatureKind::SmCurveFlange(x) if x.edge.len() < 2 => Some(Espera::Aresta),
+        // B514: o laço de abas aberto sem aresta espera o clique numa aresta
+        FeatureKind::SmFlangeLoop(x) if x.edges.iter().all(|e| *e == z) => Some(Espera::Aresta),
         FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => match (&o.mode, &o.edges) {
             (EdgeMode::FaceFace(a, b), _) if *a == z || *b == z => Some(Espera::Face),
             (EdgeMode::FullRound { mid, a, b }, _) if [mid, a, b].iter().any(|p| **p == z) => Some(Espera::Face),

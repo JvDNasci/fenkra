@@ -22,31 +22,37 @@ pub struct Seed {
     pub modelo: std::sync::Arc<Vec<(String, CurveRef)>>,
 }
 
-/// B466: o campo vazio que o próximo clique no 3D preenche é o primeiro vazio na ordem do painel, que
-/// é a ordem da declaração (a mesma de `slots::fill`). O primeiro campo vazio desenhado no quadro
-/// fica marcado; os seguintes não. Devolve se este campo é o ativo.
-pub(crate) fn campo_ativo(ui: &egui::Ui, vazio: bool) -> bool {
-    if !vazio {
-        return false;
-    }
-    let chave = egui::Id::new("geo_campo_ativo");
-    let passo = ui.ctx().cumulative_pass_nr();
-    let ja = ui.ctx().data(|d| d.get_temp::<u64>(chave)) == Some(passo);
-    if !ja {
-        ui.ctx().data_mut(|d| d.insert_temp(chave, passo));
-    }
-    !ja
+/// B466/B514: o campo ativo (o que recebe o próximo clique no 3D) vem de `campos`: ao abrir, o
+/// primeiro campo vazio na ordem do painel, que é a ordem da declaração (a mesma de `slots::fill`);
+/// Tab, Enter e o clique no rótulo escolhem outro. Devolve o estado do campo `salt` neste quadro.
+pub(crate) fn campo_ativo(ui: &egui::Ui, salt: &str, vazio: bool) -> crate::campos::Estado {
+    crate::campos::selecao_campo(ui.ctx(), id_do_campo(salt), vazio, false)
 }
 
-/// Rótulo do campo: o ativo vem marcado na cor do papel, com a dica do que clicar.
-fn rotulo_do_campo(ui: &mut egui::Ui, label: &str, ativo: bool, espera: crate::entradas::Espera) {
+/// Identidade do campo de seleção `salt` para o registro de `campos`.
+pub(crate) fn id_do_campo(salt: &str) -> egui::Id {
+    egui::Id::new(("campo_de_selecao", salt))
+}
+
+/// O campo de um elemento usou o clique novo do 3D: o painel avisa e a vez passa ao seguinte.
+fn usou_o_clique(ui: &egui::Ui, salt: &str) {
+    crate::campos::consumido(ui.ctx());
+    crate::campos::avancar(ui.ctx(), id_do_campo(salt));
+}
+
+/// Rótulo do campo: o ativo vem marcado na cor do papel, com a dica do que clicar. Clicar no rótulo
+/// faz do campo o ativo (o próximo clique no 3D troca o que está nele).
+fn rotulo_do_campo(ui: &mut egui::Ui, salt: &str, label: &str, ativo: bool, espera: crate::entradas::Espera) {
     let txt = tr(label);
-    if ativo {
+    let r = if ativo {
         let cor = espera.cor();
-        ui.add_sized([96., 18.], egui::Label::new(RichText::new(format!("▶ {txt}")).strong().color(cor)).truncate())
-            .on_hover_text(format!("{}: {}", tr("Campo ativo"), tr(espera.dica())));
+        ui.add_sized([96., 18.], egui::Label::new(RichText::new(format!("▶ {txt}")).strong().color(cor)).truncate().sense(egui::Sense::click()))
+            .on_hover_text(format!("{}: {}", tr("Campo ativo"), tr(espera.dica())))
     } else {
-        ui.add_sized([96., 18.], egui::Label::new(txt).truncate());
+        ui.add_sized([96., 18.], egui::Label::new(txt).truncate().sense(egui::Sense::click())).on_hover_text(tr("Clique para escolher este campo: o próximo clique no 3D vem para cá (Tab passa ao seguinte)."))
+    };
+    if r.clicked() {
+        crate::campos::focar(ui.ctx(), id_do_campo(salt));
     }
 }
 
@@ -734,17 +740,16 @@ fn row(ui: &mut egui::Ui, label: &str, add: impl FnOnce(&mut egui::Ui)) {
     });
 }
 
-fn pick_button(ui: &mut egui::Ui, enabled: bool, what: &str) -> bool {
-    ui.add_enabled(enabled, egui::Button::new(tr("⊙")).small())
-        .on_hover_text(format!("usar {what} selecionado(a) na viewport"))
-        .on_disabled_hover_text(format!("selecione {what} na viewport (Shift soma) para usar aqui"))
-        .clicked()
-}
-
 pub(crate) fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, p: &mut PointRef, seed: &Seed) {
-    let ativo = campo_ativo(ui, matches!(p, PointRef::Ref(id) if crate::slots::is_unset(*id)));
+    let est = campo_ativo(ui, salt, matches!(p, PointRef::Ref(id) if crate::slots::is_unset(*id)));
+    // B514: campo ativo fora da ordem dos vazios: o clique no 3D entra direto (sem botão de usar a seleção)
+    if let (true, Some(x)) = (est.novo, seed.points.last()) {
+        *p = *x;
+        usou_o_clique(ui, salt);
+    }
+    let ativo = est.ativo;
     ui.scope(|ui| ui.horizontal(|ui| {
-        rotulo_do_campo(ui, label, ativo, crate::entradas::Espera::Ponto);
+        rotulo_do_campo(ui, salt, label, ativo, crate::entradas::Espera::Ponto);
         let w = largura_da_lista(ui, 1);
         na_faixa(ui, w, |ui| {
             egui::ComboBox::from_id_salt(salt).selected_text(point_name(doc, p)).width(w).truncate().show_ui(ui, |ui| {
@@ -757,9 +762,6 @@ pub(crate) fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docum
                 }
             });
         });
-        if pick_button(ui, !seed.points.is_empty(), "um vértice ou ponto") {
-            *p = *seed.points.last().unwrap();
-        }
     }))
     .response
     .context_menu(|ui| {
@@ -785,9 +787,15 @@ pub(crate) fn point_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docum
 
 pub(crate) fn curve_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, c: &mut CurveRef, seed: &Seed) {
     let vazio = matches!(c, CurveRef::Ref(id) if crate::slots::is_unset(*id));
-    let ativo = campo_ativo(ui, vazio);
+    let est = campo_ativo(ui, salt, vazio);
+    if let (true, Some(x)) = (est.novo, seed.curves.last()) {
+        *c = x.clone();
+        usou_o_clique(ui, salt);
+    }
+    let vazio = matches!(c, CurveRef::Ref(id) if crate::slots::is_unset(*id));
+    let ativo = est.ativo;
     ui.scope(|ui| ui.horizontal(|ui| {
-        rotulo_do_campo(ui, label, ativo, crate::entradas::Espera::Curva);
+        rotulo_do_campo(ui, salt, label, ativo, crate::entradas::Espera::Curva);
         // B466: aresta ou curva escolhida aparece com o rótulo da lista, não como "Aresta do modelo"
         let nome = seed.modelo.iter().find(|(_, x)| x == c).map(|(n, _)| n.clone()).unwrap_or_else(|| curve_name(doc, c));
         let w = largura_da_lista(ui, if vazio { 1 } else { 2 });
@@ -808,9 +816,6 @@ pub(crate) fn curve_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docum
                 }
             });
         });
-        if pick_button(ui, !seed.curves.is_empty(), "uma aresta ou curva") {
-            *c = seed.curves.last().unwrap().clone();
-        }
         // esvaziar o campo devolve a ele o próximo clique no 3D
         if !vazio && ui.small_button("✖").on_hover_text(tr("Esvaziar o campo: o próximo clique no 3D vem para cá.")).clicked() {
             *c = crate::slots::curve();
@@ -845,9 +850,14 @@ pub(crate) fn axis_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
         AxisRef::Edge { .. } => tr("Aresta do modelo").into(),
         AxisRef::Planes { .. } => tr("Interseção de planos").into(),
     };
-    let ativo = campo_ativo(ui, matches!(a, AxisRef::Ref(id) if crate::slots::is_unset(*id)));
+    let est = campo_ativo(ui, salt, matches!(a, AxisRef::Ref(id) if crate::slots::is_unset(*id)));
+    if let (true, Some(x)) = (est.novo, seed.curves.last()) {
+        *a = axis_of(x);
+        usou_o_clique(ui, salt);
+    }
+    let ativo = est.ativo;
     ui.scope(|ui| ui.horizontal(|ui| {
-        rotulo_do_campo(ui, label, ativo, crate::entradas::Espera::Eixo);
+        rotulo_do_campo(ui, salt, label, ativo, crate::entradas::Espera::Eixo);
         let w = largura_da_lista(ui, 1);
         na_faixa(ui, w, |ui| {
             egui::ComboBox::from_id_salt(salt).selected_text(name).width(w).truncate().show_ui(ui, |ui| {
@@ -866,9 +876,6 @@ pub(crate) fn axis_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
                 }
             });
         });
-        if pick_button(ui, !seed.curves.is_empty(), "uma aresta ou linha") {
-            *a = axis_of(seed.curves.last().unwrap());
-        }
     }))
     .response
     .context_menu(|ui| {
@@ -885,18 +892,26 @@ pub(crate) fn axis_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
 }
 
 fn plane_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, p: &mut PlaneRef, seed: &Seed) {
-    row(ui, label, |ui| {
+    let est = campo_ativo(ui, salt, matches!(p, PlaneRef::Datum(id) if crate::slots::is_unset(*id)));
+    if let (true, Some(x)) = (est.novo, seed.planes.last()) {
+        *p = *x;
+        usou_o_clique(ui, salt);
+    }
+    ui.horizontal(|ui| {
+        rotulo_do_campo(ui, salt, label, est.ativo, crate::entradas::Espera::Plano);
         plane_combo(ui, salt, doc, p, Some(me));
-        if pick_button(ui, !seed.planes.is_empty(), "um plano") {
-            *p = *seed.planes.last().unwrap();
-        }
     });
 }
 
 pub(crate) fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, s: &mut SurfRef, seed: &Seed) {
-    let ativo = campo_ativo(ui, matches!(s, SurfRef::Ref(id) if crate::slots::is_unset(*id)));
+    let est = campo_ativo(ui, salt, matches!(s, SurfRef::Ref(id) if crate::slots::is_unset(*id)));
+    if let (true, Some(x)) = (est.novo, seed.surface.or_else(|| seed.planes.last().map(|p| SurfRef::Plane(*p)))) {
+        *s = x;
+        usou_o_clique(ui, salt);
+    }
+    let ativo = est.ativo;
     ui.scope(|ui| ui.horizontal(|ui| {
-        rotulo_do_campo(ui, label, ativo, crate::entradas::Espera::Superficie);
+        rotulo_do_campo(ui, salt, label, ativo, crate::entradas::Espera::Superficie);
         let none = PlaneRef::Datum(Id(u64::MAX));
         let mut pl = match s {
             SurfRef::Plane(p) => *p,
@@ -923,9 +938,6 @@ pub(crate) fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
             *s = SurfRef::Ref(id);
         } else if pl != none && *s != SurfRef::Plane(pl) {
             *s = SurfRef::Plane(pl);
-        }
-        if pick_button(ui, seed.surface.is_some() || !seed.planes.is_empty(), "uma face ou plano") {
-            *s = seed.surface.unwrap_or_else(|| SurfRef::Plane(*seed.planes.last().unwrap()));
         }
     }))
     .response
@@ -1016,8 +1028,12 @@ fn radius_ui(ui: &mut egui::Ui, radius: &mut String, radius2: &mut Option<String
     }
 }
 
-/// Campo de seleção múltipla ("sacola"): botão com a contagem; aberto, mostra a lista de
-/// elementos (cada um editável e removível) e cada elemento novo clicado no 3D entra na lista.
+/// Campo de seleção múltipla (B514): a lista dos escolhidos fica dentro do próprio campo, com um
+/// "✖" por item. Quando é o campo ativo, cada clique no 3D acrescenta o elemento clicado (ou ocupa
+/// o primeiro item ainda vazio) e clicar de novo num escolhido o tira, sem botão de "+" e sem
+/// janela à parte. `vazio` é o marcador de item a escolher (os campos vazios de `slots`): abaixo do
+/// mínimo o item tirado volta a ele, e o comando continua pedindo o elemento. `mesmo` diz se dois
+/// itens são o mesmo elemento (a face clicada em outro ponto continua sendo a mesma face).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
     ui: &mut egui::Ui,
@@ -1029,78 +1045,142 @@ pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
     name: impl Fn(&T) -> String,
     mut edit: impl FnMut(&mut egui::Ui, usize, &mut T),
     blank: impl Fn() -> T,
+    vazio: Option<T>,
+    mesmo: impl Fn(&T, &T) -> bool,
 ) {
-    let key = egui::Id::unique(("sacola", salt));
-    let active_key = egui::Id::unique("sacola_ativa");
     let ctx = ui.ctx().clone();
-    let active = ctx.data(|m| m.get_temp::<egui::Id>(active_key)) == Some(key);
-    // aberta: o que for clicado no 3D (e ainda não estava escolhido) entra na lista
-    if active {
-        let prev: Vec<T> = ctx.data(|m| m.get_temp::<Vec<T>>(key)).unwrap_or_default();
-        for x in picked {
-            if !prev.contains(x) && !items.contains(x) {
-                items.push(x.clone());
-            }
-        }
-        ctx.data_mut(|m| m.insert_temp(key, picked.to_vec()));
+    let id = id_do_campo(salt);
+    let e_vazio = |x: &T| vazio.as_ref() == Some(x);
+    let reais = items.iter().filter(|x| !e_vazio(x)).count();
+    // vazio = abaixo do mínimo (uma lista opcional, de mínimo zero, nunca toma a vez de um campo vazio)
+    let est = crate::campos::selecao_campo(&ctx, id, reais < min, true);
+    if est.novo && !picked.is_empty() {
+        alternar_na_lista(items, picked, min, vazio.as_ref(), &mesmo);
+        crate::campos::consumido(&ctx);
     }
+    let reais = items.iter().filter(|x| !e_vazio(x)).count();
+    let cor = if est.ativo { crate::entradas::Espera::Superficie.cor() } else { ui.visuals().widgets.noninteractive.bg_stroke.color };
     ui.horizontal(|ui| {
-        ui.label(tr(label));
-        let b = ui
-            .add(egui::Button::new(RichText::new(format!("🛍 {}", items.len())).strong()).selected(active))
-            .on_hover_text(tr("lista de elementos: aberta, cada clique no 3D acrescenta um elemento"));
-        if b.clicked() {
-            if active {
-                ctx.data_mut(|m| m.remove::<egui::Id>(active_key));
-            } else {
-                ctx.data_mut(|m| {
-                    m.insert_temp(active_key, key);
-                    m.insert_temp(key, picked.to_vec());
-                });
-            }
+        let txt = format!("{} ({reais})", tr(label));
+        let r = if est.ativo {
+            ui.add(egui::Label::new(RichText::new(format!("▶ {txt}")).strong().color(cor)).sense(egui::Sense::click())).on_hover_text(tr("Campo ativo: cada clique no 3D soma um elemento; clicar de novo num escolhido o tira."))
+        } else {
+            ui.add(egui::Label::new(txt).sense(egui::Sense::click())).on_hover_text(tr("Clique para escolher este campo: o próximo clique no 3D vem para cá (Tab passa ao seguinte)."))
+        };
+        if r.clicked() {
+            crate::campos::focar(&ctx, id);
         }
-        let names: Vec<String> = items.iter().take(3).map(&name).collect();
-        let more = if items.len() > 3 { "…" } else { "" };
-        ui.label(RichText::new(format!("{}{more}", names.join(", "))).weak().small());
-        b.rect
     });
-    if !active {
+    let aberto_key = egui::Id::new(("lista_item_aberto", salt));
+    let mut aberto: Option<usize> = ctx.data(|d| d.get_temp::<Option<usize>>(aberto_key)).flatten();
+    let (mut del, mut novo) = (None, false);
+    let quadro = egui::Frame::NONE.stroke(egui::Stroke::new(if est.ativo { 1.5 } else { 1. }, cor)).corner_radius(4.).inner_margin(4.);
+    let resp = quadro
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            if items.is_empty() {
+                ui.label(RichText::new(tr("nenhum elemento: clique no 3D")).weak().small());
+            }
+            for (i, it) in items.iter_mut().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(format!("{}.", i + 1)).weak());
+                    let n = name(it);
+                    let w = (ui.available_width() - 52.).max(40.);
+                    let txt = if vazio.as_ref() == Some(&*it) { RichText::new(n).weak() } else { RichText::new(n) };
+                    ui.add_sized([w, 18.], egui::Label::new(txt).truncate());
+                    if ui.small_button("✎").on_hover_text(tr("Trocar este item pela lista ▾")).clicked() {
+                        aberto = if aberto == Some(i) { None } else { Some(i) };
+                    }
+                    if ui.small_button("✖").on_hover_text(tr("remover")).clicked() {
+                        del = Some(i);
+                    }
+                });
+                if aberto == Some(i) {
+                    // o editor do item não é um campo do painel: não entra na ordem do Tab
+                    crate::campos::suspender(&ctx, true);
+                    ui.indent(("item", i), |ui| edit(ui, i, it));
+                    crate::campos::suspender(&ctx, false);
+                }
+            }
+            if est.ativo {
+                ui.label(RichText::new(tr("Clique no 3D para somar; clique de novo num escolhido para tirar.")).weak().small());
+            }
+            ui.horizontal(|ui| {
+                if ui.small_button(tr("+ pela lista")).on_hover_text(tr("Acrescenta um item para escolher pela lista ▾, sem o 3D.")).clicked() {
+                    novo = true;
+                }
+                if reais > 0 && ui.small_button(tr("Limpar")).clicked() {
+                    items.truncate(min);
+                    if let Some(v) = &vazio {
+                        for x in items.iter_mut() {
+                            *x = v.clone();
+                        }
+                    }
+                    aberto = None;
+                }
+            });
+        })
+        .response;
+    if resp.interact(egui::Sense::click()).clicked() {
+        crate::campos::focar(&ctx, id);
+    }
+    if let Some(i) = del {
+        tirar_da_lista(items, i, min, vazio.as_ref());
+        aberto = None;
+    }
+    if novo {
+        items.push(blank());
+        aberto = Some(items.len() - 1);
+    }
+    ctx.data_mut(|d| d.insert_temp(aberto_key, aberto));
+}
+
+/// Tira o item `i`; abaixo do mínimo ele volta a ser o marcador de vazio (se houver).
+fn tirar_da_lista<T: Clone>(items: &mut Vec<T>, i: usize, min: usize, vazio: Option<&T>) {
+    if i >= items.len() {
         return;
     }
-    let (mut open, mut close, mut del) = (true, false, None);
-    crate::paineis::encaixado(&ctx, "lista_elementos", format!("{} — {}", tr("Lista de elementos"), tr(label)), &mut open, 340., |ui| {
-            ui.label(RichText::new(tr("Cada clique no 3D acrescenta um elemento; Ctrl+clique soma/tira da seleção.")).weak().small());
-            egui::ScrollArea::vertical().max_height(340.).show(ui, |ui| {
-                for (i, it) in items.iter_mut().enumerate() {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(format!("{}.", i + 1)).weak());
-                        ui.vertical(|ui| edit(ui, i, it));
-                        if ui.small_button("✖").on_hover_text(tr("remover")).clicked() {
-                            del = Some(i);
-                        }
-                    });
-                }
-            });
-            ui.separator();
-            ui.horizontal(|ui| {
-                if ui.button(tr("+ elemento")).clicked() {
-                    items.push(picked.last().cloned().unwrap_or_else(&blank));
-                }
-                if ui.add_enabled(items.len() > min, egui::Button::new(tr("Limpar"))).clicked() {
-                    items.truncate(min);
-                }
-                if ui.button(tr("✔ Concluir")).clicked() {
-                    close = true;
-                }
-            });
-        });
-    if let Some(i) = del {
-        if items.len() > min {
-            items.remove(i);
+    if items.len() > min {
+        items.remove(i);
+    } else if let Some(v) = vazio {
+        items[i] = v.clone();
+    }
+}
+
+/// B514: o que foi clicado entra na lista (no primeiro item vazio, ou no fim); o que já estava sai.
+pub(crate) fn alternar_na_lista<T: Clone + PartialEq>(items: &mut Vec<T>, picked: &[T], min: usize, vazio: Option<&T>, mesmo: &impl Fn(&T, &T) -> bool) {
+    for x in picked {
+        if let Some(k) = items.iter().position(|y| vazio != Some(y) && mesmo(y, x)) {
+            tirar_da_lista(items, k, min, vazio);
+        } else if let Some(k) = items.iter().position(|y| vazio == Some(y)) {
+            items[k] = x.clone();
+        } else {
+            items.push(x.clone());
         }
     }
-    if !open || close {
-        ctx.data_mut(|m| m.remove::<egui::Id>(active_key));
+}
+
+/// Mesma superfície: a face pela chave (dono e papel) quando há; o resto pela igualdade.
+pub(crate) fn mesma_superficie(a: &SurfRef, b: &SurfRef) -> bool {
+    match (a, b) {
+        (SurfRef::Face { key: Some(x), .. }, SurfRef::Face { key: Some(y), .. }) => x == y,
+        _ => a == b,
+    }
+}
+
+/// Mesma curva: a aresta do corpo pela chave; o resto pela igualdade.
+pub(crate) fn mesma_curva(a: &CurveRef, b: &CurveRef) -> bool {
+    match (a, b) {
+        (CurveRef::BodyEdge { key: x, .. }, CurveRef::BodyEdge { key: y, .. }) => x == y,
+        _ => a == b,
+    }
+}
+
+/// Mesmo ponto: o vértice clicado de novo (posição a menos de 1 µm) ou o mesmo elemento.
+pub(crate) fn mesmo_ponto(a: &PointRef, b: &PointRef) -> bool {
+    match (a, b) {
+        (PointRef::Vertex { point: x, .. }, PointRef::Vertex { point: y, .. }) | (PointRef::Fixed(x), PointRef::Fixed(y)) => (0..3).all(|k| (x[k] - y[k]).abs() < 1e-6),
+        _ => a == b,
     }
 }
 
@@ -1120,6 +1200,8 @@ pub(crate) fn curves_list(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docu
         |c| curve_name(doc, c),
         |ui, i, c| curve_slot(ui, &format!("{salt}{i}"), &format!("{label} {}", i + 1), doc, me, c, seed),
         || CurveRef::Axis(OriginAxis::X),
+        Some(crate::slots::curve()),
+        mesma_curva,
     );
 }
 
@@ -1136,6 +1218,8 @@ pub(crate) fn surfs_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id, 
         |s| surf_name(doc, s),
         |ui, i, s| surf_slot(ui, &format!("{salt}{i}"), &format!("Elemento {}", i + 1), doc, me, s, seed),
         || SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY)),
+        Some(crate::slots::surf()),
+        mesma_superficie,
     );
 }
 
@@ -1161,6 +1245,8 @@ pub(crate) fn points_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id,
         |p| point_name(doc, p),
         |ui, i, p| point_slot(ui, &format!("{salt}{i}"), &format!("Ponto {}", i + 1), doc, me, p, seed),
         || PointRef::Fixed([0.; 3]),
+        Some(crate::slots::point()),
+        mesmo_ponto,
     );
 }
 
@@ -2273,7 +2359,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         }
     }
     ui.add_space(4.);
-    ui.label(RichText::new(tr("⊙ usa o que está selecionado na viewport (Shift soma vértices, arestas, faces, planos, pontos e curvas).")).weak().small());
+    ui.label(RichText::new(tr("O campo marcado com ▶ recebe o clique no 3D; clique no nome de outro campo para trocar, Tab passa ao seguinte.")).weak().small());
 }
 
 /// Botões de ação de um link (atualizar, congelar, desativar, isolar, religar): mandam (ext, ação)

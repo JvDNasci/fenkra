@@ -52,6 +52,7 @@ pub fn suporte(ui: &mut egui::Ui, kind: &mut FeatureKind) {
             section(ui, "Suporte");
             let n = lp.edges.iter().filter(|e| **e != [0.; 3]).count();
             ui.label(RichText::new(format!("{n} {}", tr("aresta(s) escolhida(s)"))).small());
+            ui.label(RichText::new(tr("Clique nas arestas no 3D: cada clique soma uma; clique de novo numa escolhida para tirar.")).weak().small());
             crate::editor::check(ui, &mut lp.loop_all, "usar o laço da face inteira").on_hover_text(tr("Liga: a partir da primeira aresta escolhida, cria uma aba em cada aresta reta do contorno da face. Desliga: só as arestas escolhidas."));
             if ui.add_enabled(n > 0, egui::Button::new(tr("Limpar"))).on_hover_text(tr("Tira as arestas escolhidas para escolher de novo.")).clicked() {
                 lp.edges = vec![[0.; 3]];

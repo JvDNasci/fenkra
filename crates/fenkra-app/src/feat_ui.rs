@@ -231,11 +231,8 @@ fn suporte_aba_modos(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind
     match kind {
         FeatureKind::SmCurveFlange(cf) => {
             section(ui, "Suporte");
-            ui.label(RichText::new(if cf.edge.len() >= 2 { format!("{} {}", cf.edge.len(), tr("pontos na aresta")) } else { tr("⚠ clique numa aresta curva da chapa").to_string() }).small());
-            let picked = seed.curves.iter().find_map(|c| c.edge_pts().cloned());
-            if ui.add_enabled(picked.is_some(), egui::Button::new(tr("⊙ Usar a aresta selecionada"))).clicked() {
-                cf.edge = picked.unwrap_or_default();
-            }
+            // B514: a aresta vem do clique no 3D com o comando aberto (sem botão de usar a seleção)
+            ui.label(RichText::new(if cf.edge.len() >= 2 { format!("{} {} — {}", cf.edge.len(), tr("pontos na aresta"), tr("clique outra aresta para trocar")) } else { tr("⚠ clique numa aresta curva da chapa").to_string() }).small());
         }
         FeatureKind::SmProfileFlange(p) => {
             section(ui, "Suporte");
