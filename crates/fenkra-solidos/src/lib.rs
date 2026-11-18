@@ -115,6 +115,8 @@ mod chapa_laco;
 mod ancoras;
 #[cfg(test)]
 mod referencias_b516_tests;
+#[cfg(test)]
+mod tangencia_b513_tests;
 pub mod chapa_canto;
 pub mod chapa_desdobra;
 pub mod chapa_converte;
@@ -1640,7 +1642,13 @@ impl Ctx<'_> {
                 (f.origin, f.normal)
             }
             SurfRef::Face { key: Some(_), .. } => return self.surface_shape(sf, depth)?.surface_near(p).map_err(|e| e.0),
-            SurfRef::Face { point, normal, .. } => (*point, geo3d::unit(*normal).ok_or("normal da face nula")?),
+            // B513: face sem chave (arquivo antigo, face sem papel) também é a superfície de verdade. O
+            // plano no ponto clicado só vale para face plana: num cilindro, o plano tangente e a projeção
+            // ficavam presos ao clique, e não ao ponto pedido. O plano fica só de reserva, se a face sumiu.
+            SurfRef::Face { point, normal, .. } => match self.surface_shape(sf, depth).and_then(|f| f.surface_near(p).map_err(|e| e.0)) {
+                Ok(x) => return Ok(x),
+                Err(_) => (*point, geo3d::unit(*normal).ok_or("normal da face nula")?),
+            },
             SurfRef::Ref(id) => return self.surface(*id, depth)?.surface_near(p).map_err(|e| e.0),
         };
         Ok((geo3d::sub(p, geo3d::mul(n, geo3d::dot(geo3d::sub(p, o), n))), n))
@@ -3365,6 +3373,57 @@ impl Ctx<'_> {
         Ok(out)
     }
 
+    /// B513: loft sólido com condição Normal nas pontas (`pontas` = intensidade no início e no fim).
+    /// A superfície lateral sai de `loft::superficie`, que interpola as seções com a derivada presa:
+    /// cada ponto da seção da ponta parte na normal ao plano dela, então a lateral é tangente à
+    /// normal ali (e encosta G1 numa parede que continua na mesma direção). As tampas planas fecham
+    /// o sólido. Os vértices das seções se correspondem pela ordem (como no loft do kernel) quando as
+    /// seções têm o mesmo número de trechos.
+    fn loft_normal(&self, secoes: &[(Frame, Vec<fenkra_kernel::Seg2>)], pontas: [f64; 2]) -> Result<Shape, String> {
+        use fenkra_kernel::Seg2;
+        let curvas: Vec<Curve3> = secoes
+            .iter()
+            .map(|(fr, lacos)| Curve3::poly(profile::sample(lacos).iter().map(|q| fr.point(q[0], q[1])).collect(), true))
+            .collect::<Result<_, _>>()?;
+        let inicio = |s: &Seg2| match s {
+            Seg2::Line(a, _) | Seg2::Arc(a, _, _) => Some(*a),
+            Seg2::Spline(p) => p.first().copied(),
+            Seg2::Circle(..) | Seg2::Ellipse(..) => None,
+        };
+        let qtd = secoes[0].1.len();
+        let invertidas = loft::sentidos(&curvas, &[]);
+        let mut conectores: Vec<Vec<f64>> = vec![];
+        if qtd >= 2 && secoes.iter().all(|(_, l)| l.len() == qtd && l.iter().all(|s| inicio(s).is_some())) {
+            for v in 0..qtd {
+                let mut k = vec![];
+                for (i, ((fr, lacos), c)) in secoes.iter().zip(&curvas).enumerate() {
+                    // seção percorrida ao contrário: o vértice v da primeira é o (qtd − v) dela
+                    let j = if invertidas[i] { (qtd - v) % qtd } else { v };
+                    let q = inicio(&lacos[j]).expect("conferido acima");
+                    k.push(c.nearest(fr.point(q[0], q[1])).0 / c.length().max(1e-12));
+                }
+                conectores.push(k);
+            }
+        }
+        // intensidade 1 = derivada do tamanho do comprimento total (a mesma alça de 1/3 do vão de antes)
+        let centro = |c: &Curve3| {
+            let m = c.pts.len().saturating_sub(1).max(1);
+            geo3d::mul(c.pts.iter().take(m).fold([0.; 3], |a, p| geo3d::add(a, *p)), 1. / m as f64)
+        };
+        let total: f64 = curvas.windows(2).map(|w| geo3d::dist(centro(&w[0]), centro(&w[1]))).sum();
+        let entrada = loft::Entrada {
+            secoes: curvas,
+            guias: vec![],
+            conectores,
+            invertidas: vec![],
+            regrada: false,
+            fechar: false,
+            tangentes: [pontas[0] * total, pontas[1] * total],
+        };
+        let lateral = loft::superficie(&entrada)?;
+        lateral.closed_solid(1e-3).map_err(|e| e.0)
+    }
+
     /// Filete/chanfro "mínimo": o kernel sempre segue a cadeia tangente; aqui o resultado só vale
     /// dentro de tubos em volta das arestas escolhidas (tampas normais às pontas), e fora dele
     /// o corpo fica como estava: resultado = (corpo − (tubos − cadeia)) ∪ (tubos ∩ cadeia).
@@ -4875,43 +4934,34 @@ impl Ctx<'_> {
                 if condicionado && (l.ruled || l.closed) {
                     return Err("condição de ponta só vale em loft suave e aberto: desligue 'reto' e 'fechado' ou use a condição livre".into());
                 }
-                let mut faces: Vec<Shape> = vec![];
                 let n = secoes.len();
-                for (i, (frame, lacos)) in secoes.iter().enumerate() {
-                    let face = Shape::face(frame, std::slice::from_ref(lacos)).map_err(k)?;
-                    // condição Normal: uma cópia da própria seção, afastada na normal, faz o loft
-                    // sair perpendicular; a distância é a intensidade vezes um terço do vão
-                    let (ponta, vizinha) = if i == 0 { (&l.inicio, 1) } else if i + 1 == n { (&l.fim, n.saturating_sub(2)) } else { (&PontaLoft::default(), i) };
-                    let normal_pedida = n >= 2 && (i == 0 || i + 1 == n) && ponta.condicao == CondicaoPonta::Normal;
-                    let extra = if normal_pedida {
-                        let f = ev(if ponta.intensidade.trim().is_empty() { "1" } else { &ponta.intensidade }, &self.vars, "intensidade da ponta")?;
-                        if !(0. ..=3.).contains(&f) {
-                            return Err(format!("a intensidade da ponta precisa estar entre 0 e 3 (veio {f})"));
-                        }
-                        let outra = &secoes[vizinha].0;
-                        let vao = geo3d::dist(frame.origin, outra.origin);
-                        let sinal = if geo3d::dot(frame.normal, geo3d::sub(outra.origin, frame.origin)) >= 0. { 1. } else { -1. };
-                        let d = f * vao / 3.;
-                        (d > 1e-9).then(|| face.transformed(Xform::Translate(geo3d::mul(frame.normal, sinal * d)))).transpose().map_err(k)?
-                    } else {
-                        None
-                    };
-                    if i == 0 {
-                        faces.push(face);
-                        faces.extend(extra);
-                    } else if i + 1 == n {
-                        faces.extend(extra);
-                        faces.push(face);
-                    } else {
-                        faces.push(face);
+                // intensidade da condição Normal em cada ponta (0 = livre)
+                let intensidade = |ponta: &PontaLoft| -> Result<f64, String> {
+                    if ponta.condicao != CondicaoPonta::Normal {
+                        return Ok(0.);
                     }
-                }
-                let mut comp = Shape::empty();
+                    let f = ev(if ponta.intensidade.trim().is_empty() { "1" } else { &ponta.intensidade }, &self.vars, "intensidade da ponta")?;
+                    if !(0. ..=3.).contains(&f) {
+                        return Err(format!("a intensidade da ponta precisa estar entre 0 e 3 (veio {f})"));
+                    }
+                    Ok(f)
+                };
+                let pontas = [intensidade(&l.inicio)?, intensidade(&l.fim)?];
+                let faces: Vec<Shape> = secoes.iter().map(|(frame, lacos)| Shape::face(frame, std::slice::from_ref(lacos))).collect::<Result<_, _>>().map_err(k)?;
                 let (primeira, ultima) = (faces.first().cloned(), faces.last().cloned());
-                for face in faces {
-                    comp = if comp.is_null() { face } else { comp.compound(&face) };
-                }
-                let tool = comp.loft(l.ruled, l.closed, !l.torcao.iter().any(|t| *t != 0)).map_err(k)?;
+                let tool = if n >= 2 && pontas.iter().any(|f| *f > 1e-9) {
+                    // B513: condição Normal com derivada presa nas pontas. Antes uma cópia da seção,
+                    // afastada na normal, entrava como seção a mais; o kernel só passa pelas seções, sem
+                    // controlar a derivada, e a superfície estufava para fora e saía inclinada (5° com
+                    // intensidade 1, 16° com 3), deixando quina onde o loft devia encostar liso.
+                    self.loft_normal(&secoes, pontas).map_err(|e| format!("loft com ponta normal: {e}"))?
+                } else {
+                    let mut comp = Shape::empty();
+                    for face in faces {
+                        comp = if comp.is_null() { face } else { comp.compound(&face) };
+                    }
+                    comp.loft(l.ruled, l.closed, !l.torcao.iter().any(|t| *t != 0)).map_err(k)?
+                };
                 // B15: tampa inicial na primeira seção, final na última, laterais pelas arestas da primeira
                 let papeis = match (&primeira, &ultima) {
                     (Some(a), Some(b)) if !l.closed => papeis::por_perfil(&tool, a, papeis::Fim::Perfil(b)).filter(|r| r.len() == tool.face_count() as usize),
