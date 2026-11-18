@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 113280,
+ "tokens_total_k": 118820,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 7180,
-   "pct": 6.3
+   "pct": 6.0
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 10.2
+   "pct": 9.8
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 28.6
+   "pct": 27.2
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 24700,
-   "pct": 21.8
+   "pct": 20.8
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 37440,
-   "pct": 33.1
+   "tokens_k": 42980,
+   "pct": 36.2
   }
  },
  "itens": [
@@ -319,7 +319,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B16",
@@ -611,7 +611,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B29",
@@ -1231,7 +1231,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B59",
@@ -1433,7 +1433,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B72",
@@ -1485,7 +1485,7 @@
    "teste": "Auto",
    "area": "Sketch",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B75",
@@ -1533,7 +1533,7 @@
    "teste": "Auto",
    "area": "Chapa metálica",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B78",
@@ -1597,7 +1597,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B82",
@@ -1830,7 +1830,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B96",
@@ -1898,7 +1898,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B100",
@@ -1967,7 +1967,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B104",
@@ -1984,7 +1984,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B105",
@@ -2001,7 +2001,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B106",
@@ -2034,7 +2034,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B108",
@@ -2148,7 +2148,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B115",
@@ -2324,7 +2324,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B126",
@@ -2356,7 +2356,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B128",
@@ -2485,7 +2485,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B136",
@@ -2533,7 +2533,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B139",
@@ -2629,7 +2629,7 @@
    "teste": "Auto",
    "area": "Desenho técnico",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B145",
@@ -2725,7 +2725,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B151",
@@ -2789,7 +2789,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B155",
@@ -2885,7 +2885,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B161",
@@ -2933,7 +2933,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B164",
@@ -2965,7 +2965,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B166",
@@ -3093,7 +3093,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B174",
@@ -3125,7 +3125,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B176",
@@ -3333,7 +3333,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B189",
@@ -3801,7 +3801,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B218",
@@ -4009,7 +4009,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B231",
@@ -4281,7 +4281,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B248",
@@ -4585,7 +4585,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B267",
@@ -5241,7 +5241,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B308",
@@ -5785,7 +5785,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B342",
@@ -5801,7 +5801,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "em andamento",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B343",
@@ -6058,7 +6058,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B359",
@@ -6298,7 +6298,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B374",
@@ -6346,7 +6346,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B377",
@@ -6362,7 +6362,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B378",
@@ -6986,7 +6986,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B417",
@@ -8106,7 +8106,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B489",
@@ -8234,7 +8234,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B497",
@@ -8297,6 +8297,294 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B501",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Seleção vinda da árvore some no clique vazio, no Esc e ao selecionar outra coisa",
+   "oque": "Relato repetido do usuário (18/11, mais de 10 vezes): o recurso escolhido na árvore fica amarelo para sempre. A regra deve ser a mesma da seleção no 3D. Aceite: teste seleciona pela árvore e confere seleção e realce vazios depois do clique vazio no 3D, do Esc e da escolha de outro item.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B502",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Barras de comando soltas e encaixáveis de novo, com \"x\", restaurar e caixa própria",
+   "oque": "Regressão da alpha.37 (18/11): o B433 fixou as barras em app/barras.rs e perdeu o arraste com fantasma, a barra flutuante e o encaixe em qualquer borda (commit 686cc68, de 24/10). Volta tudo isso, mais fechar no \"x\", restaurar pelo menu Janela, montar uma caixa de comandos própria arrastando ícones e guardar o layout por bancada. ADR nova revisa a 0094. Aceite: teste solta uma barra, encaixa em outra borda, fecha, restaura e confere o layout gravado nas configurações.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B503",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Todos os painéis redimensionáveis e árvore transparente sobre o 3D",
+   "oque": "Regressão da alpha.37 (18/11): as barras da direita, do topo e de baixo têm tamanho fixo, e a árvore ganhou fundo opaco. Todos os painéis mudam de tamanho pela borda, e a árvore volta transparente, móvel e ampliável sobre o 3D. Aceite: teste muda o tamanho de cada painel e confere que ele fica gravado; captura mostra a peça visível atrás da árvore nos dois temas.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B504",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Arrastar na árvore com prévia de onde o item cai",
+   "oque": "Pedido de 18/11: ao arrastar, a árvore mostra a linha de inserção como no explorador de arquivos e recusa os lugares proibidos. Soltar sobre um item põe logo depois dele, inclusive dentro de pastas. Mover sketch para a pasta de geometria não pode falhar. Aceite: teste move sketch, superfície e recurso entre pastas e confere ordem e recálculo ok.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B505",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Comandos agrupados pelo elemento que resulta",
+   "oque": "Pedido de 18/11: hoje há vários ícones de plano e de ponto. Fica um único Ponto, Linha, Plano, Curva e Superfície, com os tipos escolhidos dentro do painel. Interseção, projeção, extrair e junção são operações à parte, e o resultado com vários pedaços se resolve com perto, longe e extrair. Aceite: teste confere que cada bancada de wireframe tem um ícone por elemento e que todos os tipos antigos continuam alcançáveis pelo painel.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B506",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Barra de propriedades gráficas no topo e barra de vistas completa embaixo",
+   "oque": "Pedido de 18/11: no topo, cor, transparência, tipo e espessura de linha, símbolo de ponto, material e textura, aplicados à seleção. Embaixo, as vistas no padrão da referência: enquadrar, vista normal, vistas padrão, estilos, ocultar e mostrar, trocar espaço visível, aplicar material. Aceite: teste muda cor e linha de uma face pela barra e confere no documento.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B507",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Painel do comando e assistente de reparo flutuam ou encaixam, à escolha",
+   "oque": "Pedido de 18/11: o painel do comando e o reparo de sketch e de recurso sempre encaixam. Passam a flutuar ou encaixar, e lembram a posição. O reparo aparece só quando há erro e some quando o problema é corrigido. Aceite: teste corrige o erro e confere que o reparo fechou.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B508",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Tela inicial com miniaturas 3D que giram e prévia das peças de referência",
+   "oque": "Regressão da alpha.37 (18/11): as miniaturas viraram foto parada e as peças de referência ficaram sem prévia. Aceite: teste da tela inicial confere que cada exemplo e cada referência têm prévia, e que a miniatura gira com o mouse em cima.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B509",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Medir: elemento único e entre elementos, com a medida na árvore",
+   "oque": "Pedido de 18/11, com base no comando de medida do software de referência de superfícies: medir um elemento (comprimento, raio, diâmetro, área, ângulo, centro) e entre dois (distância mínima, ângulo, plano a plano, eixo, geometria infinita). O rótulo fica na tela como malha simples, sem ser PMI. A medida pode ficar na árvore e se atualiza com o modelo. Aceite: teste mede um cilindro e duas faces, muda o modelo e confere a medida nova.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B510",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Recurso nasce no idioma da interface e mantém o nome",
+   "oque": "Relato de 18/11: na alpha.37 os recursos nasciam em português com o menu em inglês, e vice-versa. O nome nasce no idioma ativo, e o documento o guarda; trocar de idioma depois não renomeia. Aceite: teste cria recursos em cada idioma, troca de idioma e confere os nomes.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B511",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Forma livre integrada às outras bancadas",
+   "oque": "Relato de 18/11: a superfície da forma livre não pode ser escolhida em deslocamento, extrusão, espessar, furo ou chapa. Ela deve sair como superfície ou sólido comum, usável nas bancadas de superfícies, sólidos e chapa. Aceite: teste desloca, espessa e fura uma superfície da forma livre, com status ok e volume conferido.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Superfícies",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B512",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Editor simples de bloco de título e modelos de folha",
+   "oque": "Pedido de 18/11: montar o bloco de título com caixas, textos, campos ligados às propriedades e tabelas, usando os estilos já existentes, e guardar como modelo de folha. Não precisa desenhar linha por linha. Aceite: teste cria um modelo com três campos, aplica numa folha e confere os valores preenchidos.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Desenho",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B513",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Tangência entre faces de sólidos com defeito",
+   "oque": "Relato de 18/11: a tangência dos sólidos está com defeitos. Investigar com peças de teste, achar a causa e corrigir. Aceite: casos que falham viram testes com status ok.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Sólidos",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B514",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Campos de seleção do painel: vários elementos direto no 3D e Tab para o próximo campo",
+   "oque": "Relato de 18/11: o campo de seleção aceita um elemento e obriga o botão \"substituir pela viewport\". Na junção é preciso abrir uma lista fora do painel e clicar no mais a cada elemento. Ao abrir o comando, o primeiro campo já fica ativo, e o que se clica no 3D entra nele; campo que aceita vários acumula sem botão (clicar de novo tira). A lista dos escolhidos fica dentro do próprio campo. Tab ou Enter passa ao próximo campo de seleção ou parâmetro. Sai o botão de substituir. Vale para todos os comandos. Aceite: teste abre a junção, clica três superfícies, confere as três no campo, Tab cai no próximo campo e OK recalcula ok.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B515",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Subelementos de superfície, curva e wireframe selecionáveis",
+   "oque": "Relato de 18/11: a superfície não oferece arestas nem faces para escolher. Toda geometria expõe os seus subelementos: superfície tem faces, arestas e vértices; curva e linha têm arestas e vértices; e todos podem ser escolhidos nos comandos das outras bancadas. Aceite: teste cria uma superfície e uma curva, escolhe aresta, face e vértice de cada uma num comando seguinte (extrusão, deslocamento, plano por aresta) e confere o recálculo ok.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Superfícies",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B516",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Referências v2 em todos os comandos: face e aresta por dono e papel, nunca por coordenada",
+   "oque": "Pedido de 18/11: o painel mostra \"face em X Y Z\", mas a face precisa de uma identidade rastreável pelo modo como foi construída, que se possa trocar por outra pelo nome e não pela coordenada. Estende a ADR 0010 (hoje só filete, chanfro, casca, inclinação e espessura) para chapa (campos face dos Sm*), superfícies, estrutural, furo, rosca, planos de face e montagem, levando o histórico do OpenCASCADE às operações da fachada C++ onde o papel não basta. O painel mostra o nome da referência (dono, papel, índice) no lugar da coordenada. Referência que não resolve fica em erro com sugestão, nunca escolhe em silêncio. Arquivos antigos abrem e são promovidos. Aceite: teste muda o perfil base de peças de cada bancada e confere que filete, parede de chapa, furo e plano de face continuam na entidade certa; teste de abrir arquivo antigo.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 900,
+   "teste": "Auto",
+   "area": "Kernel",
+   "status": "a fazer",
+   "pct": 0.8
+  },
+  {
+   "id": "B517",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Filete entre superfícies e junção refeitos no padrão dos sólidos",
+   "oque": "Relato de 18/11: o filete entre uma superfície curva e uma base plana não gerou nada, e a junção ficou estranha e não funcionou. Os dois seguem o padrão dos sólidos: setas no 3D para escolher o lado de cada superfície, raio parametrizado, prévia por arestas. O resultado é uma superfície nova, com faces, arestas e vértices nomeados (B515, B516), e as entradas ficam ocultas. Editar refaz o resultado sem perder as referências. Aceite: teste faz o filete entre uma superfície de curva e um plano, muda o raio, inverte um lado pela seta e confere status ok, área e caixa envolvente; junção de três superfícies resulta em uma, com as entradas ocultas.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Superfícies",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B518",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Deslocamento e espessar de superfícies conectadas tratam os limites e resultam numa peça única e limpa",
+   "oque": "Relato de 18/11: deslocar superfícies conectadas, principalmente com curvas, desloca cada face sozinha e deixa sobrepostas ou abertas, sem aparar. O deslocamento costura as faces de entrada num só casco, desloca o casco inteiro (com as faces vizinhas recalculadas, aparadas e estendidas onde precisa) e devolve uma superfície conexa, sem folga nem sobreposição, que pode ser deslocada de novo. O espessar segue o mesmo caminho: casco costurado e deslocado inteiro, fechado nas bordas, resultando num sólido único, sem paredes que passam umas das outras na concordância (captura do usuário de 18/11: L com base plana, concordância curva e parede vertical, em que as paredes espessadas atravessaram a quina e não fecharam no limite; segunda captura: com espessura maior que o raio da concordância saem faces torcidas e cruzadas, um sólido inválido). Quando a curvatura não permite o valor, avisa o raio mínimo em vez de gerar lixo. Aceite: teste espessa o L da captura com valor pequeno e confere um sólido válido, volume esperado e caixa envolvente sem sobra; com valor maior que o raio da concordância, o comando avisa o raio mínimo ou resolve a autointerseção, e nunca entrega sólido inválido; teste desloca um casco com plano e cilindro concordantes e outro com quina viva, confere uma só superfície, arestas livres só na borda, área esperada e um segundo deslocamento ok.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Superfícies",
    "status": "a fazer",
    "pct": 0.3
   }

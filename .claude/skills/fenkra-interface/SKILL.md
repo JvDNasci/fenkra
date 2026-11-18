@@ -27,6 +27,20 @@ depurar. Escreva com suas palavras, sem copiar texto ou imagem, e registre as fo
 
 Preencha com o que for aprendido. Cada regra leva o motivo.
 
+- **Idioma por inteiro.** Todo texto novo de interface entra em `i18n.rs` e é conferido nos dois
+  idiomas, olhando a tela inteira e não só o campo novo. O nome de cada recurso nasce no idioma da
+  interface ativo no momento da criação, e o documento guarda esse idioma: se a pessoa trocar de
+  idioma depois, os nomes já criados ficam como estão. Motivo: na alpha.37 os recursos nasciam em
+  português com o menu em inglês, e vice-versa (18/11/2026).
+- **Personalização é do produto.** Barras se arrastam, flutuam, encaixam em qualquer borda, fecham no
+  "x" e se restauram. Todos os painéis mudam de tamanho. Nenhuma mudança de layout pode remover isso
+  sem o ok do usuário. Motivo: o B433 fixou as barras e o usuário sentiu como a maior perda da
+  alpha.37. Referência: `docs/benchmark/detalhe/interface-referencia-2026-11.md`.
+- **Seleção igual em toda parte.** A seleção vinda da árvore some com clique no vazio, com Esc e ao
+  selecionar outra coisa, igual à do 3D. Motivo: bug relatado mais de 10 vezes.
+- **Comando pelo elemento que resulta.** Há um só Ponto, Linha, Plano, Curva e Superfície, com os
+  tipos dentro do painel. Operações (interseção, projeção, extrair) ficam à parte.
+
 ## Como verificar
 
 `cargo test -p <crate> <filtro>`, com documento montado em código conferindo status, volume e caixa
