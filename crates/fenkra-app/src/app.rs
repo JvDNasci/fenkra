@@ -7568,19 +7568,18 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                             crate::entradas::definir_papel_do_clique(&ctx, cid, prox);
                         }
                     }
-                } else if let (Some(Some(sid)), true, Some(crate::picking::Pick::Edge { mid, .. })) = (
-                    self.session.as_ref().map(|x| x.id).map(|id| self.open.doc.feature(id).filter(|f| matches!(f.kind, FeatureKind::SmFlange(_) | FeatureKind::SmHem(_))).map(|f| f.id)),
+                } else if let (Some(Some(sid)), true, Some(crate::picking::Pick::Edge { mid, body, edge })) = (
+                    self.session.as_ref().map(|x| x.id).map(|id| self.open.doc.feature(id).filter(|f| crate::slots::recebe_aresta_clicada(&f.kind)).map(|f| f.id)),
                     resp.clicked_by(egui::PointerButton::Primary),
                     self.hover_pick,
                 ) {
-                    // aba/bainha aberta: clicar numa aresta troca a aresta da dobra
+                    // aba/bainha aberta: clicar numa aresta troca a aresta da dobra; B514: o laço de abas
+                    // soma a aresta (clicar de novo tira) e a aba curva troca a cadeia tangente
                     let m = mid.map(|v| v as f64);
+                    let key = r.bodies.get(body).and_then(|b| b.edge_key(edge));
+                    let cadeia = || crate::picking::tangent_chain(r, body, edge);
                     if let Some(f) = self.open.doc.feature_mut(sid) {
-                        match &mut f.kind {
-                            FeatureKind::SmFlange(fl) => fl.edge = m,
-                            FeatureKind::SmHem(h) => h.edge = m,
-                            _ => {}
-                        }
+                        crate::slots::aresta_clicada(&mut f.kind, m, key, cadeia);
                     }
                 } else if let (Some(sid), true) = (
                     self.session.as_ref().map(|x| x.id).filter(|id| crate::sup_spline::editavel(&self.open.doc, *id)),
@@ -8685,7 +8684,8 @@ impl eframe::App for App {
             if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.command) && crate::continuar::pode(self) {
                 // B20: Ctrl+Enter = aplicar e continuar
                 crate::continuar::aplicar_e_continuar(self);
-            } else if ctx.input(|i| i.key_pressed(egui::Key::Enter)) {
+            } else if ctx.input(|i| i.key_pressed(egui::Key::Enter)) && !crate::campos::enter_avanca(ctx) {
+                // B514: com um campo de seleção ativo e outro depois dele, o Enter é do painel (passa ao seguinte)
                 self.conclude_session();
             } else if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
                 // B468: o Esc desfaz um nível por vez (lista aberta, seleção, comando)
@@ -8732,12 +8732,14 @@ impl eframe::App for App {
                     self.view_choice = d;
                 }
             }
+            // B514: no painel de um comando aberto o Tab anda entre os campos (perfil com Tab = ocultar)
+            let tab_do_painel = self.session.is_some() && crate::campos::tab_do_painel(ctx) && ctx.input(|i| i.key_pressed(egui::Key::Tab));
             for (k, a) in [(K::Fit, Act::Fit), (K::Normal, Act::Normal), (K::Ortho, Act::Ortho), (K::HiddenEnv, Act::HiddenEnv)] {
-                if km.pressed(ctx, k) {
+                if km.pressed(ctx, k) && !(tab_do_painel && k == K::HiddenEnv) {
                     self.act(a);
                 }
             }
-            if km.pressed(ctx, K::Hide) {
+            if km.pressed(ctx, K::Hide) && !tab_do_painel {
                 self.toggle_hide_selected();
             }
             // F2 renomeia na árvore; F5 atualiza (no modo manual); Ctrl+F5 reconstrói tudo
@@ -9092,8 +9094,11 @@ impl eframe::App for App {
             }
         }
         if let Some(sid) = self.session.as_ref().map(|s| s.id) {
-            // campos vazios do comando em edição: a seleção (viewport ou árvore) preenche
-            if !self.picks.is_empty() && self.fill_from_selection(sid, None) {
+            // campos vazios do comando em edição: a seleção (viewport ou árvore) preenche. B514: com uma
+            // lista ou um campo escolhido pela pessoa ativo no painel, é o painel que usa o clique
+            if !self.picks.is_empty() && crate::campos::painel_consome(ctx) {
+                ctx.request_repaint();
+            } else if !self.picks.is_empty() && self.fill_from_selection(sid, None) {
                 self.picks.clear();
             }
             let still = matches!(self.sel, Sel::Feature(x) | Sel::Ref(x) if x == sid);

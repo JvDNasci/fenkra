@@ -305,6 +305,8 @@ pub fn fill_special(k: &mut FeatureKind, s: &Seed, edge_mid: Option<[f64; 3]>, f
     match k {
         FeatureKind::SmFlange(f) if f.edge == z => edge_mid.map(|e| f.edge = e).is_some(),
         FeatureKind::SmHem(h) if h.edge == z => edge_mid.map(|e| h.edge = e).is_some(),
+        // B514: o laço de abas aberto sem aresta recebe a primeira pela seleção
+        FeatureKind::SmFlangeLoop(l) if l.edges.iter().all(|e| *e == z) => edge_mid.map(|e| l.edges = vec![e]).is_some(),
         FeatureKind::Thread(t) if t.face == z => face_pt.map(|p| t.face = p).is_some(),
         FeatureKind::SmBend(b) if b.a == b.b && verts.len() >= 2 => {
             (b.a, b.b) = (verts[0], verts[1]);
@@ -352,6 +354,60 @@ pub fn fill_special(k: &mut FeatureKind, s: &Seed, edge_mid: Option<[f64; 3]>, f
     }
 }
 
+/// Comandos de chapa que pegam a aresta direto do clique no 3D, com o comando aberto.
+pub fn recebe_aresta_clicada(k: &FeatureKind) -> bool {
+    matches!(k, FeatureKind::SmFlange(_) | FeatureKind::SmHem(_) | FeatureKind::SmFlangeLoop(_) | FeatureKind::SmCurveFlange(_))
+}
+
+/// B514: clique numa aresta com um comando de chapa aberto. Aba e bainha trocam a aresta; o laço de
+/// abas soma a aresta clicada (clicar de novo numa escolhida a tira, como nas outras listas); a aba
+/// curva troca a cadeia tangente (`cadeia` só é calculada para ela). A chave (dono e papel das
+/// faces) acompanha o ponto. Devolve se mudou algo.
+pub fn aresta_clicada(k: &mut FeatureKind, mid: [f64; 3], key: Option<EdgeKey>, cadeia: impl FnOnce() -> Vec<[f64; 3]>) -> bool {
+    let z = [0.; 3];
+    let perto = |a: &[f64; 3]| (0..3).map(|i| (a[i] - mid[i]).powi(2)).sum::<f64>().sqrt() < 0.01;
+    match k {
+        FeatureKind::SmFlange(f) => {
+            f.edge = mid;
+            f.edge_key = key;
+            true
+        }
+        FeatureKind::SmHem(h) => {
+            h.edge = mid;
+            h.edge_key = key;
+            true
+        }
+        FeatureKind::SmFlangeLoop(l) => {
+            // as chaves andam junto com as arestas (uma por aresta; faltando, sem chave)
+            let mut pares: Vec<([f64; 3], Option<EdgeKey>)> = l.edges.iter().enumerate().filter(|(_, e)| **e != z).map(|(i, e)| (*e, l.edge_keys.get(i).copied().flatten())).collect();
+            let antes = pares.len();
+            match pares.iter().position(|(e, _)| perto(e)) {
+                Some(i) => {
+                    pares.remove(i);
+                }
+                None => pares.push((mid, key)),
+            }
+            // como na criação: uma aresta só vale pelo laço da face; várias valem como estão
+            if (antes <= 1) != (pares.len() <= 1) {
+                l.loop_all = pares.len() <= 1;
+            }
+            l.edges = if pares.is_empty() { vec![z] } else { pares.iter().map(|p| p.0).collect() };
+            l.edge_keys = if pares.iter().all(|p| p.1.is_none()) { vec![] } else { pares.iter().map(|p| p.1).collect() };
+            true
+        }
+        FeatureKind::SmCurveFlange(c) => {
+            let pts = cadeia();
+            if pts.len() < 2 {
+                return false;
+            }
+            c.edge = pts;
+            c.edge_key = key;
+            true
+        }
+        _ => false,
+    }
+}
+
 /// Algum campo ainda vazio (também os especiais)?
 pub fn feature_incomplete(k: &FeatureKind) -> bool {
     let z = [0.; 3];
@@ -359,6 +415,8 @@ pub fn feature_incomplete(k: &FeatureKind) -> bool {
         || match k {
             FeatureKind::SmFlange(f) => f.edge == z,
             FeatureKind::SmHem(h) => h.edge == z,
+            FeatureKind::SmFlangeLoop(l) => l.edges.iter().all(|e| *e == z),
+            FeatureKind::SmCurveFlange(c) => c.edge.len() < 2,
             FeatureKind::Thread(t) => t.face == z,
             FeatureKind::SmBend(b) => b.a == b.b,
             FeatureKind::SmLouver(b) => b.a == b.b,

@@ -110,6 +110,7 @@ mod pmi_baloes_ui;
 mod pmi_alvos_ui;
 mod pmi_gdt_ui;
 mod slots;
+mod campos;
 mod geom_fit;
 mod extract;
 mod pmi_draw;

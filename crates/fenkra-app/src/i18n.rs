@@ -3367,6 +3367,17 @@ static TABLE: &[(&str, &str)] = &[
     ("selecione linha + círculo/arco, dois círculos, ou spline + outra curva", "select line + circle/arc, two circles, or spline + another curve"),
     // B247: campo ativo e papéis da seleção do comando
     ("Campo ativo", "Active field"),
+    // B514: campos do painel (seleção direto no 3D, listas dentro do campo, Tab para o próximo)
+    ("Clique para escolher este campo: o próximo clique no 3D vem para cá (Tab passa ao seguinte).", "Click to choose this field: the next click in 3D comes here (Tab moves to the next one)."),
+    ("Campo ativo: cada clique no 3D soma um elemento; clicar de novo num escolhido o tira.", "Active field: each click in 3D adds an element; clicking a chosen one again removes it."),
+    ("nenhum elemento: clique no 3D", "no elements: click in 3D"),
+    ("Trocar este item pela lista ▾", "Change this item from the ▾ list"),
+    ("Clique no 3D para somar; clique de novo num escolhido para tirar.", "Click in 3D to add; click a chosen one again to remove it."),
+    ("+ pela lista", "+ from the list"),
+    ("Acrescenta um item para escolher pela lista ▾, sem o 3D.", "Adds an item to choose from the ▾ list, without the 3D view."),
+    ("Clique nas arestas no 3D: cada clique soma uma; clique de novo numa escolhida para tirar.", "Click edges in 3D: each click adds one; click a chosen one again to remove it."),
+    ("Guias", "Guides"),
+    ("O campo marcado com ▶ recebe o clique no 3D; clique no nome de outro campo para trocar, Tab passa ao seguinte.", "The field marked with ▶ takes the click in 3D; click another field's name to switch, Tab moves to the next one."),
     ("Entradas completas", "Inputs complete"),
     ("Arestas escolhidas", "Chosen edges"),
     ("Faces escolhidas", "Chosen faces"),

@@ -209,6 +209,8 @@ pub(crate) fn expr_lim(ui: &mut egui::Ui, label: &str, s: &mut String, vars: &Va
             te = te.text_color(crate::theme::st_err());
         }
         let resp = ui.add(te);
+        // B514: parâmetro do comando aberto entra na ordem do Tab e do Enter
+        crate::campos::numero(ui.ctx(), &resp);
         // roda do mouse sobre o campo soma/subtrai (Shift ×10, Ctrl ×0,1)
         crate::ui_ext::wheel_text(ui, &resp, s);
         // ao sair do campo, a unidade digitada vira o número convertido
@@ -679,7 +681,26 @@ fn used_by(ui: &mut egui::Ui, doc: &Document, id: Id, sel: &mut Option<Sel>) {
     }
 }
 
+/// Painel do que está selecionado. Com um comando aberto, os campos dele se registram em `campos`
+/// (B514): o campo ativo recebe o clique do 3D, Tab e Enter andam entre os campos.
 pub fn show(app: &mut App, ui: &mut egui::Ui) {
+    let sessao = app.session.as_ref().map(|s| s.id).filter(|id| matches!(app.sel, Sel::Feature(x) | Sel::Ref(x) if x == *id));
+    let Some(id) = sessao else {
+        show_painel(app, ui);
+        return;
+    };
+    crate::campos::inicio(ui.ctx(), id.0, crate::campos::assinatura(&app.picks));
+    show_painel(app, ui);
+    if crate::campos::fim(ui.ctx()) {
+        // o campo usou o clique: a seleção sai, e o clique seguinte (até no mesmo elemento) chega
+        // como novo; as entradas consumidas ficam ocultas, como no preenchimento pelos campos vazios
+        app.picks.clear();
+        app.open.doc.hide_consumed(id);
+        app.scene_dirty = true;
+    }
+}
+
+fn show_painel(app: &mut App, ui: &mut egui::Ui) {
     let vars = app.vars();
     let mut new_sel = None;
     let mut delete = None;
@@ -1672,19 +1693,9 @@ fn feature_ui(
                         ui.label(format!("{} {}", tr("aresta em"), crate::app::p3(p, 1)));
                     },
                     || [0.; 3],
+                    None,
+                    |a, b| (0..3).all(|k| (a[k] - b[k]).abs() < 0.01),
                 );
-                ui.horizontal(|ui| {
-                    if ui.add_enabled(!picked.is_empty(), egui::Button::new(format!("Usar seleção atual ({})", picked.len()))).clicked() {
-                        *m = picked.to_vec();
-                    }
-                    if !picked.is_empty() && ui.button(tr("Somar à lista")).clicked() {
-                        m.extend_from_slice(picked);
-                    }
-                    if !m.is_empty() && ui.button(tr("Limpar")).clicked() {
-                        m.clear();
-                    }
-                });
-                ui.label(RichText::new(tr("Clique nas arestas na viewport (Shift soma) e use 'Usar seleção atual'.")).weak().small());
                 ui.label(RichText::new(tr("Propagação")).weak());
                 let opts = [
                     ("prop_tangente", "Tangente", "Segue todas as arestas tangentes às escolhidas", o.prop == EdgeProp::Tangente),
