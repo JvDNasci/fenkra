@@ -27,10 +27,10 @@ pub enum Pick {
 impl Pick {
     pub fn label(&self, doc: &Document) -> String {
         match self {
-            Pick::Face { owner, .. } => format!("Face de {}", doc.name_of(*owner)),
-            Pick::Edge { body, .. } if *body >= SURF_BASE => "Aresta de superfície".into(),
-            Pick::Edge { edge, .. } => format!("Aresta #{edge}"),
-            Pick::Vertex { pos, .. } => format!("Vértice {}", crate::app::p3(pos, 1)),
+            Pick::Face { owner, .. } => format!("{} {}", crate::i18n::tr("Face de"), doc.name_of(*owner)),
+            Pick::Edge { body, .. } if *body >= SURF_BASE => crate::i18n::tr("Aresta de superfície").into(),
+            Pick::Edge { edge, .. } => format!("{} #{edge}", crate::i18n::tr("Aresta")),
+            Pick::Vertex { pos, .. } => format!("{} {}", crate::i18n::tr("Vértice"), crate::app::p3(pos, 1)),
             Pick::Plane(p) => crate::scene::plane_ref_name(doc, p),
             Pick::Geo(id) => doc.name_of(*id),
             Pick::SkCurve { sketch, curve, .. } => format!("{} · curva #{}", doc.name_of(*sketch), curve.0),

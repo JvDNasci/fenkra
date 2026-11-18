@@ -115,6 +115,9 @@ mod tests {
             let ctx = egui::Context::default();
             let mut app = App::new(&eframe::CreationContext::_new_kittest(ctx.clone()));
             app.started = true;
+            // B510: os nomes padrão seguem o idioma; o teste compara documentos montados em português
+            app.settings.english = false;
+            crate::i18n::set_english(false);
             // o documento que estava aberto antes de entrar na montagem
             app.load_doc_pub(bloco("Fora", 5.), Some(dir.join("fora.fkp")));
             std::fs::write(dir.join("fora.fkp"), app.open.doc.to_json()).unwrap();

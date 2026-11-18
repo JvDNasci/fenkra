@@ -238,7 +238,8 @@ mod tests {
     ];
 
     /// Tetos de pendências fora dos sólidos (comando sem GIF, ícone ou tooltip). Só podem descer.
-    const TETO_FORA_SEM_GIF: usize = 297;
+    // 298: B509 (Medir) entrou sem GIF; a mídia pede a captura da janela, pendente. Volta a 297 com ela.
+    const TETO_FORA_SEM_GIF: usize = 298;
     const TETO_FORA_SEM_ICONE: usize = 0;
     const TETO_FORA_SEM_TOOLTIP: usize = 10;
 

@@ -52,7 +52,7 @@ pub fn importar_para_doc(d: &mut Document, p: &Path) -> Result<Id, String> {
     let malha = fenkra_malha::juntar(&partes).soldada();
     let ativo = d.active_collector;
     if d.features.iter().any(|f| f.target == ativo && !matches!(f.kind, FeatureKind::Sketch(_))) {
-        let nome = p.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| "Malha".into());
+        let nome = p.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| crate::i18n::tr("Malha").into());
         d.active_collector = d.add_collector(&nome);
     }
     let dados = embutir(d, &malha);

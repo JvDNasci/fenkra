@@ -589,6 +589,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(geo_analise(GeoKind::AnConexao)),
             One(geo_analise(GeoKind::AnDesvio)),
             One(geo_analise(GeoKind::AnPente)),
+            One(crate::medir_ui::item()),
             One(it("verificar", "Requisitos", "Verificar requisitos da peça", "Declare o que a peça precisa cumprir (massa, furos, folga, interferência, tamanho, parâmetro que chega na forma) e confira um a um, com o que foi medido.", Verificar)),
             One(it("pl_regra", "Regra plástica", "Regra plástica da peça", "Espessura, saída e raio que casca, nervura, saída e os recursos de plástico seguem, vindos de uma biblioteca versionada; a árvore avisa quando um recurso sai da regra.", RegraPlastica)),
             One(it("an_sombreado", "Normal", "Voltar ao sombreado com arestas", "Sai da análise.", Display(DisplayMode::SombreadoArestas))),

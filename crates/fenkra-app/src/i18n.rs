@@ -11,6 +11,8 @@ global_por_teste! { static EN: AtomicBool = AtomicBool::new(false); }
 
 pub fn set_english(on: bool) {
     EN.store(on, Ordering::Relaxed);
+    // B510: os nomes padrão dos itens novos seguem o idioma escolhido
+    crate::arvore_nomes::registrar_nomes();
 }
 
 pub fn english() -> bool {
@@ -123,6 +125,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_features::TEXTOS.iter())
             .chain(crate::textos_forma::TEXTOS.iter())
             .chain(crate::props_geometria::TEXTOS.iter())
+            .chain(crate::textos_medir::TEXTOS.iter())
             .copied()
             .chain(crate::textos_campos::pares())
             .collect()
@@ -140,9 +143,13 @@ pub fn tr(s: &str) -> &str {
 }
 
 /// O texto tem versão em inglês.
-#[cfg(test)]
 pub fn tem_traducao(s: &str) -> bool {
     map().contains_key(s)
+}
+
+/// Versão em inglês do texto, qualquer que seja o idioma ativo (ou o próprio texto, sem tradução).
+pub fn em_ingles(s: &str) -> &str {
+    map().get(s).copied().unwrap_or(s)
 }
 
 static TABLE: &[(&str, &str)] = &[

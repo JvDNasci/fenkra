@@ -60,8 +60,44 @@ pub fn tipo_legivel(t: &str) -> &str {
         "RasgoCircular" => "Rasgo circular",
         "AbaSuperfície" => "Aba por superfície",
         "Intersecao" => "Interseção",
+        "DobraConica" => "Dobra cônica",
         outro => outro,
     }
+}
+
+/// Nomes-base do núcleo cuja tradução genérica não serve para nome de item (a mesma palavra quer
+/// dizer outra coisa noutra tela) ou que não têm forma legível em [`tipo_legivel`].
+const NOME_EM_INGLES: [(&str, &str); 6] = [
+    ("Medida", "Measure"),
+    ("Corpo", "Body"),
+    ("Corpo principal", "Main body"),
+    ("PlanoFace", "FacePlane"),
+    ("Copia", "Copy"),
+    ("Superficie", "Surface"),
+];
+
+/// B510: tradução de um nome-base do núcleo para o nome padrão em inglês, a mesma palavra que o
+/// menu mostra ("Recorte" → "Pocket", "PadrãoLinear" → "LinearPattern"). Nome-base com espaço
+/// continua com espaço ("Dobra por linha" → "Sketched bend"); colado continua colado.
+pub fn nome_padrao_em_ingles(base: &str) -> Option<String> {
+    if let Some((_, en)) = NOME_EM_INGLES.iter().find(|(pt, _)| *pt == base) {
+        return Some(en.to_string());
+    }
+    let legivel = tipo_legivel(base);
+    if !crate::i18n::tem_traducao(legivel) {
+        return None;
+    }
+    let en = crate::i18n::em_ingles(legivel);
+    Some(if base.contains(' ') { en.to_string() } else { fenkra_core::nomes::colar(en) })
+}
+
+/// Registra no núcleo o tradutor dos nomes padrão (uma vez por processo; o idioma é lido a cada
+/// nome novo, e nos testes é um por thread).
+pub fn registrar_nomes() {
+    fenkra_core::nomes::registrar(fenkra_core::nomes::Tradutor {
+        idioma: || if crate::i18n::english() { fenkra_core::nomes::Idioma::En } else { fenkra_core::nomes::Idioma::Pt },
+        traduzir: nome_padrao_em_ingles,
+    });
 }
 
 #[cfg(test)]
