@@ -22,6 +22,7 @@ use crate::i18n::tr;
 mod arvore;
 mod coluna;
 mod barras;
+mod barras_soltas;
 mod diag;
 mod gravar;
 mod gerenciador;
@@ -3044,11 +3045,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 self.toast(msg, false);
             }
             Act::Settings => self.settings_open = !self.settings_open,
-            Act::Dock(g, d) => self.settings.set_dock(g, d),
-            Act::DockDrag(g, r) => {
-                let p = self.ctx_pointer.unwrap_or(r.center());
-                self.dock_drag = Some(DockDrag { group: g, grab: p - r.min, size: r.size(), ghost: r });
-            }
+            Act::Barra(b, d) => self.settings.mover_barra(b, d),
+            Act::DockDrag(b, r) => self.comecar_arraste_de_barra(b, r),
             Act::SkTool(t) => {
                 if let Some(e) = self.sketch.as_mut() {
                     e.escolher(t)
@@ -3435,34 +3433,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                             ui.text_edit_singleline(&mut cg.name);
                         });
                         ui.checkbox(&mut cg.sketch, tr("aparece no modo sketch"));
-                        let mut mv: Option<(usize, isize)> = None;
-                        let mut del = None;
-                        for (i, k) in cg.items.iter().enumerate() {
-                            let Some(e) = all.iter().find(|e| entry_key(e) == *k) else { continue };
-                            let (icon, brief) = entry_title(e);
-                            ui.horizontal(|ui| {
-                                ui.add(egui::Image::new(crate::icons::get(icon)).fit_to_exact_size(egui::vec2(20., 20.)));
-                                ui.label(tr(brief));
-                                if ui.small_button("▲").clicked() {
-                                    mv = Some((i, -1));
-                                }
-                                if ui.small_button("▼").clicked() {
-                                    mv = Some((i, 1));
-                                }
-                                if ui.small_button("✖").clicked() {
-                                    del = Some(i);
-                                }
-                            });
-                        }
-                        if let Some((i, d)) = mv {
-                            let j = i as isize + d;
-                            if j >= 0 && (j as usize) < cg.items.len() {
-                                cg.items.swap(i, j as usize);
-                            }
-                        }
-                        if let Some(i) = del {
-                            cg.items.remove(i);
-                        }
+                        // B502: caixa de comandos própria, montada arrastando ícones (R1.5)
+                        let id_filtro = egui::Id::unique("caixa_comandos_filtro");
+                        let mut filtro = ui.data(|d| d.get_temp::<String>(id_filtro)).unwrap_or_default();
+                        crate::caixa_comandos::caixa(ui, &mut cg.items, &all, &mut filtro);
+                        ui.data_mut(|d| d.insert_temp(id_filtro, filtro));
+                        // sem arrastar: o mesmo pelo teclado
                         egui::ComboBox::from_id_salt("add_cmd").selected_text(tr("+ Adicionar comando")).width(260.).show_ui(ui, |ui| {
                             for e in &all {
                                 let (icon, brief) = entry_title(e);
@@ -3808,6 +3784,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 ui.menu_button(tr("Exibir"), |ui| {
                     if ui.button(tr("Restaurar a posição dos painéis")).on_hover_text(tr("Volta painéis e barras desta bancada ao lugar padrão")).clicked() {
                         self.settings.restaurar_paineis();
+                        self.settings.restaurar_barras();
+                        crate::barras_layout::esquecer_tamanhos(ui.ctx());
                         ui.close();
                     }
                     ui.menu_button(tr("Painéis"), |ui| crate::paineis::menu(ui, &mut self.settings));
@@ -3821,18 +3799,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         self.controle_visual(ui, &mut acts);
                         acts.into_iter().for_each(|a| self.act(a));
                     });
-                    ui.menu_button(tr("Barras de ferramentas"), |ui| {
-                        for g in crate::settings::Group::ALL {
-                            ui.menu_button(g.label(), |ui| {
-                                for d in Dock::ALL {
-                                    if ui.radio(self.settings.dock(g) == d, d.label()).clicked() {
-                                        self.settings.set_dock(g, d);
-                                        ui.close();
-                                    }
-                                }
-                            });
-                        }
-                    });
+                    ui.menu_button(tr("Barras de ferramentas"), |ui| self.menu_barras(ui));
                     if ui.button(tr("⚙ Personalizar comandos…")).clicked() {
                         self.customize_open = true;
                         ui.close();
@@ -8192,10 +8159,10 @@ pub struct ExtractOpts {
     pub publish: bool,
 }
 
-/// Arraste de um grupo da barra para outra doca.
+/// Arraste de uma barra pela alça, para outra borda ou para flutuar (B502).
 #[derive(Clone, Copy)]
 pub struct DockDrag {
-    pub group: crate::settings::Group,
+    pub barra: crate::barras_layout::Barra,
     /// onde o cursor pegou o bloco
     pub grab: egui::Vec2,
     pub size: egui::Vec2,
@@ -8779,6 +8746,8 @@ impl eframe::App for App {
 
         self.top(root);
         self.barra_de_documentos(root);
+        // B502: barras que a pessoa encaixou no topo, abaixo do menu e das abas de documento
+        self.barra_de_borda(root, crate::barras_layout::Borda::Topo);
         crate::desempenho::marca("top");
         self.hover_now.set(None);
         self.atualizar_conjunto();
@@ -8807,9 +8776,12 @@ impl eframe::App for App {
         // B182: o painel da cena divide a coluna com a árvore, como as propriedades de um item
         crate::cena_ui::preparar(self);
         let active = active || self.cena_no_painel();
-        self.coluna_esquerda(root, active, comando);
-        // B434: recursos da bancada à direita, só ícones
-        self.barra_direita(root);
+        // B502: barras encaixadas à esquerda ficam na beira da janela, antes da coluna
+        self.barra_de_borda(root, crate::barras_layout::Borda::Esquerda);
+        // B503: sem comando, a árvore fica transparente sobre a vista; com comando, a coluna reserva espaço
+        let arvore_sobre = self.coluna_esquerda(root, active, comando);
+        // B434: recursos da bancada à direita, só ícones (B502: e o que mais a pessoa encaixar ali)
+        self.barra_de_borda(root, crate::barras_layout::Borda::Direita);
         // `area`: onde os painéis encaixam (direita e base). A vista fica com o que sobra dela
         let area = root.available_rect_before_wrap();
         crate::paineis::publicar(ctx, area, &self.settings);
@@ -8866,6 +8838,9 @@ impl eframe::App for App {
         crate::chapa_fab_ui::janela(ctx, &self.open.doc);
         crate::st_ui::windows(self, ctx);
         self.ctx_pointer = ctx.input(|i| i.pointer.interact_pos().or(i.pointer.latest_pos()));
+        // B502: barras flutuantes e o arraste de uma barra pela alça
+        self.barras_flutuantes(ctx);
+        self.arraste_de_barra(ctx);
         self.settings_window(ctx);
         self.about_window(ctx);
         self.curso_quadro(ctx, area);
@@ -8903,6 +8878,11 @@ impl eframe::App for App {
             crate::pmi_ui::after_viewport(self);
         }
         crate::desempenho::marca("viewport");
+        // B503: depois da vista e na mesma camada: só as linhas capturam o mouse, o vazio continua sendo a peça
+        if arvore_sobre {
+            let area_vista = self.area_util;
+            self.arvore_sobre_modelo(root, area_vista);
+        }
         crate::paineis::recolher(ctx, &mut self.settings);
         crate::desempenho::marca("arvore_status");
         // realce dinâmico do item sob o mouse
@@ -9556,23 +9536,28 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 for g in crate::settings::Group::ALL {
                     ui.horizontal(|ui| {
                         ui.add_sized([110., 18.], egui::Label::new(g.label()));
-                        let mut d = s.dock(g);
+                        let antes = s.dock(g);
+                        let mut d = antes;
                         egui::ComboBox::from_id_salt(("dock", g.label())).selected_text(d.label()).show_ui(ui, |ui| {
                             for o in Dock::ALL {
                                 ui.selectable_value(&mut d, o, o.label());
                             }
                         });
-                        s.set_dock(g, d);
+                        if d != antes {
+                            s.set_dock(g, d);
+                        }
                     });
                 }
-                ui.label(RichText::new(tr("Dica: clique direito em um grupo para mudar onde ele fica.")).weak().small());
+                ui.label(RichText::new(tr("Dica: arraste a alça de um grupo para soltá-lo e solte perto de uma borda para encaixar. O clique direito no grupo também escolhe o lugar. O lugar vale para a bancada atual.")).weak().small());
             
             ui.add_space(8.);
             ui.label(RichText::new(tr("Painéis")).strong());
             if ui.button(tr("Restaurar a posição dos painéis")).on_hover_text(tr("Volta painéis e barras desta bancada ao lugar padrão")).clicked() {
                 s.restaurar_paineis();
+                s.restaurar_barras();
+                crate::barras_layout::esquecer_tamanhos(ui.ctx());
             }
-            ui.label(RichText::new(tr("Grupos flutuantes encaixam sozinhos quando soltos perto do topo ou das laterais; arraste o nome de um grupo encaixado para soltá-lo. Posições de janelas e painéis ficam salvas.")).weak().small());
+            ui.label(RichText::new(tr("Barras soltas encaixam quando soltas perto de qualquer borda; arraste a alça de uma barra encaixada para soltá-la. Posições e tamanhos ficam salvos por bancada.")).weak().small());
         }
         6 => {
             ui.checkbox(&mut s.auto_update, tr("atualizar automaticamente a cada mudança"));

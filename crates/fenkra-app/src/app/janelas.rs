@@ -181,6 +181,9 @@ impl App {
         // B363: os documentos abertos nesta janela, em abas
         self.menu_documentos(ui);
         ui.separator();
+        // B502: barras fechadas no "x" voltam por aqui, uma a uma, e o layout se restaura
+        ui.menu_button(tr("Barras de ferramentas"), |ui| self.menu_barras(ui));
+        ui.separator();
         let abertos = self.arquivos_abertos();
         let outros: Vec<PathBuf> = self.settings.recent_files.iter().map(PathBuf::from).filter(|p| p.exists() && Some(p) != atual.as_ref()).take(12).collect();
         ui.menu_button(tr("Abrir recente"), |ui| {

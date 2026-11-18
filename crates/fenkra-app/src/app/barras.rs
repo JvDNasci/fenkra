@@ -6,6 +6,9 @@
 //!   estado de versões/PLM do documento. O nome do documento vai para o título da janela do sistema.
 //! - **Direita**: os grupos de comandos da bancada (ou do sketch), só ícones. Cabem numa coluna; quando
 //!   não cabem (Superfícies), viram duas; passando disso, a barra rola.
+//! - **Qualquer borda** (B502, ADR 0104): cada grupo pode ir para o topo, a esquerda, a direita ou
+//!   embaixo, ou flutuar (`barras_soltas.rs`). Toda barra de borda muda de tamanho pela beira, e o
+//!   tamanho fica gravado por bancada (B503).
 //! - **Embaixo**: indicador de recalculado, "auto", os avisos que pedem ação e a navegação (vista,
 //!   projeção, modo de exibição e filtro de seleção).
 //!
@@ -14,6 +17,7 @@
 //! Propriedades da peça (`info_do_modelo`).
 
 use super::*;
+use crate::barras_layout::Borda;
 use crate::settings::{Bench, Group};
 use crate::toolbar::Forma;
 
@@ -115,35 +119,67 @@ impl App {
         }
     }
 
-    /// Barra de recursos: os grupos de comandos da bancada, só ícones, à direita (B434).
-    pub(super) fn barra_direita(&mut self, root: &mut egui::Ui) {
+    /// Barra de uma borda (B502, ADR 0104): os grupos e as caixas próprias que a pessoa encaixou ali.
+    /// À direita ficam, por padrão, os recursos da bancada (B434), com o "Mais" para o que não é do
+    /// contexto. Toda barra de borda muda de tamanho pela beira e o tamanho fica gravado por bancada
+    /// (B503). Sem barra nenhuma na borda, o painel não existe.
+    pub(super) fn barra_de_borda(&mut self, root: &mut egui::Ui, borda: Borda) {
         let sketching = self.sketch.is_some();
-        let ts = self.tool_state();
-        let (grupos, mais) = toolbar::contexto(&self.settings, toolbar::groups_at(&self.settings, Dock::Direita, sketching), sketching);
-        let meus: Vec<crate::settings::CustomGroup> = self.settings.custom.groups.iter().filter(|c| c.sketch == sketching && !c.items.is_empty()).cloned().collect();
+        let d = borda.doca();
+        let todos = toolbar::groups_at(&self.settings, d, sketching);
+        // o "Mais" é da barra de recursos; nas outras bordas está o que a pessoa pôs lá de propósito
+        let (grupos, mais) = if borda == Borda::Direita { toolbar::contexto(&self.settings, todos, sketching) } else { (todos, vec![]) };
+        let meus = toolbar::minhas_em(&self.settings, d, sketching);
         if grupos.is_empty() && mais.is_empty() && meus.is_empty() {
             return;
         }
+        let ts = self.tool_state();
         let celula = toolbar::celula(toolbar::tamanho_na_coluna(&self.settings));
-        let comandos: usize = grupos.iter().map(|g| toolbar::entradas_na_barra(*g, &self.settings).len()).sum::<usize>() + meus.iter().map(|c| c.items.len()).sum::<usize>() + usize::from(!mais.is_empty());
-        let altura = root.available_rect_before_wrap().height() - 8.;
-        let colunas = toolbar::colunas_para(comandos, grupos.len() + meus.len(), altura, celula.y);
-        let largura = colunas as f32 * celula.x + 4.;
+        let n_grupos = grupos.len() + meus.len() + usize::from(!mais.is_empty());
+        let comandos: usize = grupos.iter().map(|g| toolbar::entradas_na_barra(*g, &self.settings).len()).sum::<usize>() + meus.iter().map(|i| self.settings.custom.groups[*i].items.len()).sum::<usize>() + usize::from(!mais.is_empty());
+        let (automatico, faixa) = if borda.horizontal() {
+            // uma fila de ícones; mais alto, os grupos quebram em mais filas
+            let fila = celula.y + 12.;
+            (fila, (fila * 0.8)..=(fila * 4.))
+        } else {
+            let altura = root.available_rect_before_wrap().height() - 8.;
+            let colunas = toolbar::colunas_para(comandos, n_grupos, altura, celula.y) as f32;
+            (colunas * celula.x + 14., (celula.x + 10.)..=(celula.x * 6. + 14.))
+        };
         let mut acts = vec![];
         let fundo = root.visuals().panel_fill;
-        egui::Panel::right("barra_de_recursos").resizable(false).exact_size(largura + 8.).frame(egui::Frame::new().fill(fundo).inner_margin(egui::Margin::symmetric(4, 4))).show(root, |ui| {
-            egui::ScrollArea::vertical().id_salt("rolagem_recursos").scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden).auto_shrink([false, false]).show(ui, |ui| {
-                ui.set_width(largura);
+        let quadro = egui::Frame::new().fill(fundo).inner_margin(egui::Margin::symmetric(4, 4));
+        let salvo = self.settings.tamanho_da_barra(borda);
+        let nome = format!("barra_{borda:?}");
+        let (_, _, novo) = crate::barras_layout::painel_na_borda(root, &nome, borda, salvo, automatico, faixa, quadro, |ui| {
+            egui::ScrollArea::vertical().id_salt(("rolagem_barra", borda)).min_scrolled_height(0.).scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden).auto_shrink([false, false]).show(ui, |ui| {
+                ui.set_width(ui.available_width());
+                if borda.horizontal() {
+                    // topo e baixo: os grupos lado a lado, quebrando em filas pela largura
+                    ui.horizontal_wrapped(|ui| {
+                        for (i, g) in grupos.iter().enumerate() {
+                            if i > 0 {
+                                ui.separator();
+                            }
+                            acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, Forma::Fila));
+                        }
+                        for i in &meus {
+                            ui.separator();
+                            acts.extend(toolbar::show_custom(ui, *i, &mut self.settings, &ts, Forma::Fila, true));
+                        }
+                    });
+                    return;
+                }
                 for (i, g) in grupos.iter().enumerate() {
                     if i > 0 {
                         ui.separator();
                     }
                     acts.extend(toolbar::show_group(ui, *g, &mut self.settings, &ts, Forma::Coluna));
                 }
-                // grupos montados pelo usuário
-                for cg in &meus {
+                // caixas montadas pelo usuário
+                for i in &meus {
                     ui.separator();
-                    acts.extend(toolbar::show_custom(ui, cg, &mut self.settings, &ts, Forma::Coluna));
+                    acts.extend(toolbar::show_custom(ui, *i, &mut self.settings, &ts, Forma::Coluna, true));
                 }
                 // o que não é do contexto continua a um clique
                 if !mais.is_empty() {
@@ -152,6 +188,9 @@ impl App {
                 }
             });
         });
+        if let Some(n) = novo {
+            self.settings.guardar_tamanho_da_barra(borda, Some(n));
+        }
         for a in acts {
             self.act(a);
         }
@@ -261,14 +300,18 @@ impl App {
         }
     }
 
-    /// Barra de baixo (B434): recalculado, auto, avisos que pedem ação e a navegação.
+    /// Barra de baixo (B434): recalculado, auto, avisos que pedem ação e as barras encaixadas embaixo
+    /// (a navegação, por padrão). Muda de altura pela beira, gravada por bancada (B503).
     pub(super) fn barra_de_baixo(&mut self, root: &mut egui::Ui) {
         let fundo = root.visuals().panel_fill;
         let mut acts = vec![];
         let prox = crate::proximo::contexto(self);
-        egui::Panel::bottom("barra_de_baixo").resizable(false).frame(egui::Frame::new().fill(fundo).inner_margin(egui::Margin::symmetric(8, 2))).show(root, |ui| {
+        let linha = toolbar::TAMANHO_NA_LINHA + 6. + 4.;
+        let salvo = self.settings.tamanho_da_barra(Borda::Baixo);
+        let quadro = egui::Frame::new().fill(fundo).inner_margin(egui::Margin::symmetric(8, 2));
+        let (_, _, novo) = crate::barras_layout::painel_na_borda(root, "barra_de_baixo", Borda::Baixo, salvo, linha, linha..=(linha * 4.), quadro, |ui| {
             ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
+            ui.horizontal_centered(|ui| {
                 ui.set_min_height(toolbar::TAMANHO_NA_LINHA + 6.);
                 let busy = self.gen_done < self.gen_sent;
                 let (txt, cor) = self.indicador_de_recalculo(ui);
@@ -323,13 +366,18 @@ impl App {
                 // B363: os documentos abertos, a mesma lista da barra de abas
                 self.documentos_no_rodape(ui);
                 ui.separator();
-                // navegação: vista e seleção, só ícones
+                // barras encaixadas embaixo (a navegação, por padrão), só ícones
                 let ts = self.tool_state();
-                for (i, g) in toolbar::grupos_de_baixo(&self.settings, self.sketch.is_some()).into_iter().enumerate() {
+                let sketching = self.sketch.is_some();
+                for (i, g) in toolbar::groups_at(&self.settings, Dock::Baixo, sketching).into_iter().enumerate() {
                     if i > 0 {
                         ui.separator();
                     }
                     acts.extend(toolbar::show_group(ui, g, &mut self.settings, &ts, Forma::Linha));
+                }
+                for i in toolbar::minhas_em(&self.settings, Dock::Baixo, sketching) {
+                    ui.separator();
+                    acts.extend(toolbar::show_custom(ui, i, &mut self.settings, &ts, Forma::Linha, true));
                 }
                 // projeção e modo de exibição, por extenso, à direita
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -345,6 +393,9 @@ impl App {
                 });
             });
         });
+        if let Some(n) = novo {
+            self.settings.guardar_tamanho_da_barra(Borda::Baixo, Some(n));
+        }
         for a in acts {
             self.act(a);
         }
@@ -391,12 +442,14 @@ mod tests {
                 assert!(baixo.iter().all(|g| g.de_navegacao()));
             }
         }
-        // nenhuma doca antiga sobra: tudo é "na barra" ou oculto
+        // B502 (ADR 0104): a barra vai para qualquer borda ou flutua, e só aparece onde está
         s.bench = Bench::Solidos;
-        for d in [Dock::Topo, Dock::Lateral, Dock::Flutuante, Dock::Direita] {
+        for d in [Dock::Topo, Dock::Lateral, Dock::Flutuante, Dock::Baixo, Dock::Direita] {
             s.set_dock(Group::Solidos, d);
-            assert_eq!(s.dock(Group::Solidos), Dock::Direita, "{d:?}");
-            assert!(toolbar::groups_at(&s, Dock::Direita, false).contains(&Group::Solidos));
+            assert_eq!(s.dock(Group::Solidos), d, "{d:?}");
+            for outra in [Dock::Topo, Dock::Lateral, Dock::Flutuante, Dock::Baixo, Dock::Direita] {
+                assert_eq!(toolbar::groups_at(&s, outra, false).contains(&Group::Solidos), outra == d, "{d:?} em {outra:?}");
+            }
         }
         s.set_dock(Group::Solidos, Dock::Oculta);
         assert!(!toolbar::groups_at(&s, Dock::Direita, false).contains(&Group::Solidos));
@@ -404,7 +457,7 @@ mod tests {
         assert!(!toolbar::grupos_de_baixo(&s, false).contains(&Group::Vista));
         // a superfície, a bancada com mais comandos, cabe em duas colunas numa tela de 1080 px
         s.bench = Bench::Superficies;
-        s.docks.clear();
+        s.barras.clear();
         let (grupos, _) = toolbar::contexto(&s, toolbar::groups_at(&s, Dock::Direita, false), false);
         let n: usize = grupos.iter().map(|g| toolbar::custom_entries(*g, &s).len()).sum();
         assert!(n as f32 * celula.y / 2. < 950., "{n} comandos não cabem em duas colunas");

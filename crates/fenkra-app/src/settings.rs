@@ -345,16 +345,22 @@ pub enum Dock {
     Oculta,
     /// fixa na lateral direita
     Direita,
+    /// na faixa de baixo (B502)
+    Baixo,
 }
 
 impl Dock {
-    /// O que a pessoa pode escolher (B434): o grupo aparece na barra dele ou fica oculto. Topo, lateral
-    /// esquerda e flutuante continuam no formato do arquivo, para ler preferências antigas.
-    pub const ALL: [Dock; 2] = [Dock::Direita, Dock::Oculta];
+    /// Onde a pessoa pode pôr uma barra (B502, ADR 0104): qualquer borda, flutuando ou oculta.
+    /// `Lateral` é a borda esquerda.
+    pub const ALL: [Dock; 6] = [Dock::Topo, Dock::Lateral, Dock::Direita, Dock::Baixo, Dock::Flutuante, Dock::Oculta];
     pub fn label(self) -> &'static str {
         match self {
+            Dock::Topo => tr("Encaixada no topo"),
+            Dock::Lateral => tr("Encaixada à esquerda"),
+            Dock::Direita => tr("Encaixada à direita"),
+            Dock::Baixo => tr("Encaixada embaixo"),
+            Dock::Flutuante => tr("Flutuante"),
             Dock::Oculta => tr("Oculta"),
-            _ => tr("Na barra"),
         }
     }
 }
@@ -424,7 +430,8 @@ impl Graficos {
 
 /// Versão atual do layout da tela. 1: coluna da esquerda e painéis só na direita ou na base (B433).
 /// 2: barras de recursos à direita, só com ícones, e navegação embaixo (B434).
-pub const LAYOUT_VERSAO: u8 = 2;
+/// 3: barras soltas e encaixáveis, com o layout guardado por bancada (B502, ADR 0104).
+pub const LAYOUT_VERSAO: u8 = 3;
 
 /// O que a pessoa tinha arrumado antes de uma migração de layout. Fica no arquivo de preferências,
 /// para nada se perder e para a disposição antiga poder ser consultada (ADR 0094).
@@ -450,6 +457,12 @@ pub struct Settings {
     pub arvore_fechada: bool,
     /// largura da coluna da esquerda (árvore e painel do comando), B433
     pub coluna_largura: f32,
+    /// B503: canto da árvore transparente, contado do canto da área 3D
+    pub arvore_desloc: [f32; 2],
+    /// B503: largura da árvore transparente, arrastada pela beira
+    pub arvore_largura: f32,
+    /// B502: lugar das barras de comando e tamanho das barras de borda, por bancada (ADR 0104)
+    pub barras: Vec<crate::barras_layout::LayoutBarras>,
     /// até que versão do layout estas preferências já foram migradas (`migrar_layout`). O padrão é
     /// zero porque o `config.json` só guarda o que difere do padrão: arquivo antigo não traz a chave
     pub layout_versao: u8,
@@ -646,6 +659,9 @@ impl Default for Settings {
             arvore_minimizada: false,
             arvore_fechada: false,
             coluna_largura: crate::paineis::LARGURA_COLUNA,
+            arvore_desloc: ARVORE_DESLOC,
+            arvore_largura: crate::tree_ui::LARGURA,
+            barras: vec![],
             layout_versao: 0,
             layout_anterior: None,
             impressao: Default::default(),
@@ -748,6 +764,9 @@ pub const BACKGROUNDS: [(&str, [u8; 3], [u8; 3]); 6] = [
     ("Preto", [0, 0, 0], [0, 0, 0]),
 ];
 
+/// Canto padrão da árvore transparente, contado do canto da área 3D.
+pub const ARVORE_DESLOC: [f32; 2] = [6., 4.];
+
 fn raio_da_curvatura() -> f32 {
     10.
 }
@@ -819,6 +838,21 @@ impl Settings {
                 self.coluna_largura = l.clamp(240., 560.);
             }
         }
+        if self.layout_versao < 3 {
+            // B502: a barra oculta na doca antiga (que valia para todas as bancadas) fica fechada em
+            // cada bancada; o resto nasce no lugar padrão. `docks` fica como estava, só para leitura
+            for (g, d) in self.docks.clone() {
+                if d != Dock::Oculta {
+                    continue;
+                }
+                let atual = self.bench;
+                for b in crate::mapa_macro::BANCADAS {
+                    self.bench = b;
+                    self.mover_barra(crate::barras_layout::Barra::Grupo(g), Dock::Oculta);
+                }
+                self.bench = atual;
+            }
+        }
         if self.layout_versao < 2 {
             // B434: toda barra visível vai para o lugar dela (direita ou base); a oculta continua oculta
             for (_, d) in &mut self.docks {
@@ -863,20 +897,14 @@ impl Settings {
         self.save();
     }
 
-    /// Onde o grupo fica: na barra dele (recursos à direita; vista e seleção embaixo) ou oculto. Doca
-    /// antiga (topo, lateral esquerda, flutuante) vale como "na barra" (ADR 0094).
+    /// Onde o grupo fica na bancada atual: numa borda, flutuando ou oculto (B502, ADR 0104). A doca
+    /// antiga (`docks`, igual para todas as bancadas) só é lida pela migração.
     pub fn dock(&self, g: Group) -> Dock {
-        match self.docks.iter().find(|(x, _)| *x == g).map(|(_, d)| *d) {
-            Some(Dock::Oculta) => Dock::Oculta,
-            _ => Dock::Direita,
-        }
+        self.doca_da_barra(crate::barras_layout::Barra::Grupo(g))
     }
 
     pub fn set_dock(&mut self, g: Group, d: Dock) {
-        match self.docks.iter_mut().find(|(x, _)| *x == g) {
-            Some(e) => e.1 = d,
-            None => self.docks.push((g, d)),
-        }
+        self.mover_barra(crate::barras_layout::Barra::Grupo(g), d);
     }
 
     pub fn style(&self) -> ViewStyle {
@@ -924,10 +952,11 @@ mod tests {
         let mut s = Settings::default();
         assert_eq!(s.layout_versao, 0, "o padrão é zero: arquivo antigo não traz a chave");
         s.editor_left = false;
+        // doca antiga, igual para todas as bancadas (antes do B502 era o único lugar da barra)
         s.docks = Group::ALL.iter().map(|g| (*g, Dock::Topo)).collect();
-        s.set_dock(Group::Sketch, Dock::Flutuante);
-        s.set_dock(Group::Solidos, Dock::Lateral);
-        s.set_dock(Group::Padroes, Dock::Oculta);
+        for (g, d) in [(Group::Sketch, Dock::Flutuante), (Group::Solidos, Dock::Lateral), (Group::Padroes, Dock::Oculta)] {
+            s.docks.iter_mut().find(|(x, _)| *x == g).unwrap().1 = d;
+        }
         s.paineis = vec![
             salvo(Bench::Solidos, "comando", Posicao { encaixe: Encaixe::Livre, pos: Some([420., 180.]), largura: Some(380.), ..Default::default() }),
             salvo(Bench::Solidos, "features", Posicao { encaixe: Encaixe::Livre, pos: Some([500., 300.]), largura: Some(310.), altura: Some(222.), minimizado: true, fechado: true }),
@@ -962,6 +991,14 @@ mod tests {
         assert_eq!(m.dock(Group::Padroes), Dock::Oculta);
         assert!(m.docks.iter().all(|(_, d)| matches!(d, Dock::Direita | Dock::Oculta)), "{:?}", m.docks);
         assert_eq!(m.docks.len(), antes.docks.len(), "nenhum grupo some da lista");
+        // B502: a oculta fica fechada em toda bancada, e reabre no lugar padrão
+        for b in crate::mapa_macro::BANCADAS {
+            let mut x = m.clone();
+            x.bench = b;
+            assert_eq!(x.dock(Group::Padroes), Dock::Oculta, "{b:?}");
+            x.abrir_barra(crate::barras_layout::Barra::Grupo(Group::Padroes), true);
+            assert_eq!(x.dock(Group::Padroes), Dock::Direita, "{b:?}");
+        }
         // nada migrado fica livre sobre a peça
         assert!(m.paineis.iter().all(|p| p.nome == "comando" || matches!(p.posicao.encaixe, Encaixe::Direita | Encaixe::Base)));
         // a disposição antiga fica guardada inteira
@@ -972,6 +1009,7 @@ mod tests {
         iguais.paineis = antes.paineis.clone();
         iguais.docks = antes.docks.clone();
         iguais.coluna_largura = antes.coluna_largura;
+        iguais.barras = antes.barras.clone();
         iguais.layout_versao = 0;
         iguais.layout_anterior = None;
         assert_eq!(iguais, antes);
