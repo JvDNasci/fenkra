@@ -175,6 +175,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                     let partes: Vec<_> = i.partes.iter().map(|p| (&p.prototipo, p.aparencia)).collect();
                     for (prototipo, app) in if partes.is_empty() { &inteiro[..] } else { &partes[..] } {
                         let (rough, metal, alpha) = app.finish.params();
+                        let alpha = alpha * opacidade(doc.transparencia(collector));
                         let c = rgb(if app.color == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(app.color) } else { app.color });
                         let textura = app.texture.filter(|t| (*t as u32) < crate::render::TEX_LAYERS).map(|t| t as f32 + 1.).unwrap_or(0.);
                         let (copia, (lo, hi)) = copia_de(i, prototipo, c, [rough, metal, alpha, textura], if body_sel { HILITE } else { edge_col });
@@ -202,6 +203,8 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 }
                 let app = das_faces.get(fi).copied().flatten().or_else(|| owner.and_then(|w| feat_app.get(&w).copied())).unwrap_or(base);
                 let (rough, metal, alpha) = app.finish.params();
+                // B506: a do comando vence a do corpo
+                let alpha = alpha * opacidade(owner.and_then(|w| doc.transparencia(w)).or_else(|| doc.transparencia(collector)));
                 // corpo na cor padrão do documento ganha a cor de peça do tema
                 let c = rgb(if app.color == crate::theme::PECA_PADRAO { peca_tema.unwrap_or(app.color) } else { app.color });
                 let start = m.face_ranges[fi] as usize;
@@ -389,6 +392,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             }
             let app = rf.and_then(|x| x.appearance).unwrap_or(Appearance { color: [222, 170, 110], finish: fenkra_core::Finish::Acetinado, texture: None });
             let (rough, metal, alpha) = app.finish.params();
+            let alpha = alpha * opacidade(doc.transparencia(sf.id));
             let c = rgb(app.color);
             let m = r.exibicao.get(&sf.id).filter(|_| o.fantasma.is_none()).map_or(&sf.mesh, |m| &**m);
             let base = s.mesh.len() as u32;
@@ -785,4 +789,10 @@ mod testes_malha_de_tela {
         // fora do mapa o vértice leva a cor da peça
         assert!(cena(&d, &r, None, None).mesh.iter().all(|v| v.mat[3] >= 0.));
     }
+}
+
+/// B506: fator de opacidade da transparência própria. A peça nunca some no fundo: no máximo 85 %
+/// transparente, e as arestas continuam desenhadas.
+pub fn opacidade(t: Option<u8>) -> f32 {
+    1. - t.unwrap_or(0).min(85) as f32 / 100.
 }

@@ -125,6 +125,8 @@ pub struct LayoutBarras {
 /// Lugar padrão: navegação (vista e seleção) embaixo, o resto à direita (ADR 0094 e 0104).
 pub fn lugar_padrao(b: &ChaveBarra) -> Dock {
     match b {
+        // B506: propriedades gráficas no topo, aplicadas à seleção
+        ChaveBarra::Grupo(Group::Propriedades) => Dock::Topo,
         ChaveBarra::Grupo(g) if g.de_navegacao() => Dock::Baixo,
         _ => Dock::Direita,
     }
@@ -302,7 +304,7 @@ impl Settings {
     /// Todas as barras da bancada (abertas e fechadas): o que o menu Janela lista.
     pub fn barras_da_bancada(&self, sketching: bool) -> Vec<Barra> {
         let comandos = if sketching { crate::organizacao::DO_SKETCH.to_vec() } else { crate::organizacao::ordem(self.bench) };
-        let navegacao = [Group::Vista, Group::Selecao].into_iter().filter(|g| if sketching { *g == Group::Vista } else { g.in_bench(self.bench) });
+        let navegacao = [Group::Vista, Group::Selecao, Group::Propriedades].into_iter().filter(|g| if sketching { *g == Group::Vista } else { g.in_bench(self.bench) });
         let mut v: Vec<Barra> = comandos.into_iter().filter(|g| !g.de_navegacao()).chain(navegacao).map(Barra::Grupo).collect();
         v.extend(self.custom.groups.iter().enumerate().filter(|(_, c)| c.sketch == sketching).map(|(i, _)| Barra::Minha(i)));
         v

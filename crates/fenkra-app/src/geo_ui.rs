@@ -163,16 +163,24 @@ use GeoKind::*;
 pub const PLANES: [GeoKind; 14] = [
     PlaneOffset, PlaneParallelPoint, PlaneAngle, Plane3P, AxisSys, Plane2L, PlanePL, PlanePointNormal, PlaneMid, PlaneCurve, PlaneNormalCurve, PlaneTangent, PlaneEquation, PlaneMean,
 ];
-pub const POINTS: [GeoKind; 12] = [PtCoords, PtOnCurve, PtOnPlane, PtOnSurface, PtCenter, PtTangent, PtBetween, PtCurvePlane, PtCurveCurve, PtProject, PtProjectCurve, PtOffset];
+/// B505: um comando por elemento resultante. Cada lista é o "Tipo" do painel daquele elemento; o que
+/// produz o elemento a partir de outros (interseção, projeção, extração, junção) fica nas operações.
+pub const POINTS: [GeoKind; 8] = [PtCoords, PtOnCurve, PtOnPlane, PtOnSurface, PtCenter, PtTangent, PtBetween, PtOffset];
 pub const LINES: [GeoKind; 9] = [LinePts, LineDir, LineAngle, LineTangent, LineNormal, LinePlanes, LineBisector, LineAxis, Polyline];
-pub const CURVES: [GeoKind; 17] =
-    [Circle, Circle3, Spline, SplineControl, Helix, Spiral, Conic, Connect, Corner, Spine, CurveProject, CurveIntersect, CurveProjSurf, CurveParallel, OpBoundary, CurveCopy, CurveJoin];
-pub const SURFACES: [GeoKind; 14] = [SurfExtrude, SurfRevolve, SurfSphere, SurfCylinder, SurfOffset, SurfSweep, SurfSweepX, SurfTube, SurfLoft, SurfRuled, SurfBlend, SurfConnect, SurfFill, SurfExtract];
+pub const CURVES: [GeoKind; 11] = [Circle, Circle3, Conic, Spline, SplineControl, Connect, Corner, Helix, Spiral, Spine, CurveParallel];
+pub const SURFACES: [GeoKind; 13] = [SurfExtrude, SurfRevolve, SurfSphere, SurfCylinder, SurfOffset, SurfSweep, SurfSweepX, SurfTube, SurfLoft, SurfRuled, SurfBlend, SurfConnect, SurfFill];
+/// B505: operações à parte. O resultado pode ter vários pedaços (perto, longe ou extrair todos).
+pub const INTERSECOES: [GeoKind; 3] = [PtCurvePlane, PtCurveCurve, CurveIntersect];
+pub const PROJECOES: [GeoKind; 4] = [CurveProject, CurveProjSurf, PtProject, PtProjectCurve];
+pub const EXTRACOES: [GeoKind; 4] = [CurveCopy, SurfExtract, OpMulti, OpBoundary];
+pub const JUNCOES: [GeoKind; 3] = [CurveJoin, OpJoin, OpHeal];
 pub const ANALISES: [GeoKind; 3] = [AnConexao, AnDesvio, AnPente];
-/// Operações sobre superfícies (resultado é superfície).
-pub const OPERATIONS: [GeoKind; 9] = [OpJoin, OpHeal, OpCut, SurfFilletSS, SurfEdgeFillet, OpMulti, OpPart, OpUntrim, OpExtrapolate];
+/// Operações sobre superfícies (resultado é superfície). Dividir e aparar antigos abrem aqui.
+pub const OPERATIONS: [GeoKind; 8] = [OpCut, SurfFilletSS, SurfEdgeFillet, OpPart, OpUntrim, OpExtrapolate, OpSplit, OpTrim];
 /// Transformações de qualquer elemento (ponto, curva, plano, superfície).
 pub const TRANSFORMS: [GeoKind; 4] = [XfTranslate, XfRotate, XfMirror, XfScale];
+/// B505: todas as listas, para conferir que cada tipo mora em uma só.
+pub const FAMILIAS: [&[GeoKind]; 12] = [&PLANES, &POINTS, &LINES, &CURVES, &SURFACES, &INTERSECOES, &PROJECOES, &EXTRACOES, &JUNCOES, &ANALISES, &OPERATIONS, &TRANSFORMS];
 
 impl GeoKind {
     /// (ícone, nome curto, descrição breve, descrição avançada)
@@ -265,25 +273,14 @@ impl GeoKind {
         }
     }
 
-    /// Tipos irmãos (mesma família) para a troca de tipo no painel.
+    /// Tipos irmãos (mesma família) para a troca de tipo no painel (B505: o elemento ou a operação).
     pub fn family(self) -> &'static [GeoKind] {
-        if PLANES.contains(&self) {
-            &PLANES
-        } else if POINTS.contains(&self) {
-            &POINTS
-        } else if LINES.contains(&self) {
-            &LINES
-        } else if SURFACES.contains(&self) {
-            &SURFACES
-        } else if ANALISES.contains(&self) {
-            &ANALISES
-        } else if OPERATIONS.contains(&self) {
-            &OPERATIONS
-        } else if TRANSFORMS.contains(&self) {
-            &TRANSFORMS
-        } else {
-            &CURVES
-        }
+        FAMILIAS.into_iter().find(|f| f.contains(&self)).unwrap_or(&CURVES)
+    }
+
+    /// Classe do que o tipo cria (ponto, curva, plano ou superfície).
+    pub fn classe(self) -> RefClass {
+        self.make(&Seed::default()).class()
     }
 
     /// Usa um plano como entrada (o plano/face selecionado vira o plano base).
@@ -1359,6 +1356,17 @@ fn note_ui(ui: &mut egui::Ui, n: &fenkra_solidos::RefNote) {
     }
 }
 
+/// B505: tipos que o painel oferece para `k`: os da família que criam a mesma classe. As
+/// transformações valem para qualquer classe (a classe vem do elemento de origem).
+pub fn tipos_do_painel(k: GeoKind) -> Vec<GeoKind> {
+    let fam = k.family();
+    if TRANSFORMS.contains(&k) {
+        return fam.to_vec();
+    }
+    let c = k.classe();
+    fam.iter().copied().filter(|g| g.classe() == c).collect()
+}
+
 pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashMap<String, f64>, seed: &Seed, error: Option<&str>, note: Option<&fenkra_solidos::RefNote>) {
     let me = r.id;
     let class = r.kind.class();
@@ -1377,7 +1385,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
     }
     if let Some(k) = cur {
         section(ui, "Tipo");
-        let fam = k.family();
+        // B505: só os tipos que criam a mesma classe (ponto continua ponto): quem usa o elemento não quebra
+        let fam: Vec<GeoKind> = tipos_do_painel(k);
         let opts: Vec<(&str, &str, &str, bool)> = fam.iter().map(|g| {
             let (i, n, b, _) = g.info();
             (i, n, b, *g == k)
@@ -1391,9 +1400,14 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 s.planes.extend(seed.planes.iter().copied());
                 s.surface = s.surface.or(seed.surface);
                 r.kind = fam[i].make(&s);
+                crate::elementos::tipo_escolhido(ui.ctx(), fam[i]);
             }
         }
         ui.label(RichText::new(k.info().3).weak().small());
+        // B505: repetir pontos é uma função do Ponto (quantidade ou espaçamento ao longo da curva)
+        if class == RefClass::Point {
+            crate::elementos::botao_repetir(ui, &r.kind, seed);
+        }
     }
     section(ui, "Definição");
     if let Some(n) = note {
@@ -1675,8 +1689,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::PointCurvePlane { curve, plane, which } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
             plane_slot(ui, "g_pl", "Plano", doc, me, plane, seed);
-            let _ = which;
             crate::sup3d::dica_de_solucao(ui, note);
+            crate::elementos::pedacos_ui(ui, me, note, which, None);
         }
         R::PointCurveCurve { a, b } => {
             curve_slot(ui, "g_a", "Curva 1", doc, me, a, seed);
@@ -2289,8 +2303,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::CurveIntersect { a, b, which, near } => {
             surf_slot(ui, "g_a", "Elemento 1", doc, me, a, seed);
             surf_slot(ui, "g_b", "Elemento 2", doc, me, b, seed);
-            let _ = which;
             crate::sup3d::dica_de_solucao(ui, note);
+            crate::elementos::pedacos_ui(ui, me, note, which, Some(&mut *near));
             if near.is_some() {
                 ui.label(RichText::new(tr("A solução fica presa à posição no espaço.")).weak().small());
             }

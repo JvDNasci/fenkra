@@ -36,6 +36,7 @@ mod estado_doc;
 mod exportar;
 mod visualizacao;
 mod controle_visual;
+mod barra_vistas;
 mod janelas;
 mod docs_abertos;
 pub(crate) use visualizacao::abrir_no_navegador;
@@ -3043,6 +3044,15 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 }
             }
             Act::Normal => self.align_to_selection(),
+            Act::Grafico(m) => self.aplicar_grafico(m),
+            Act::ZoomSelecao => self.zoom_na_selecao(),
+            Act::IsoCiclica => self.iso_ciclica(),
+            Act::OcultarMostrar => {
+                self.toggle_hide_selected();
+                self.scene_dirty = true;
+            }
+            // os menus abrem na própria barra
+            Act::EstiloMenu | Act::MaterialMenu => {}
             Act::Ortho => {
                 self.settings.ortho = !self.settings.ortho;
                 if let Some(v) = self.viewport.as_mut() {
@@ -3235,6 +3245,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             check: self.sketch.as_ref().is_some_and(|e| e.check),
             chapa_plana: self.open.doc.sheet.as_ref().is_some_and(|sp| sp.flat),
             ctx: crate::proximo::contexto(self),
+            grafico: self.estado_grafico(),
         }
     }
 
@@ -6755,6 +6766,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     /// Repetição de pontos ao longo de uma curva: cada ponto é um "ponto na curva" associativo
     /// (razão ou distância), numa pasta própria; opcionalmente um plano normal à curva em cada um.
     fn repeat_window(&mut self, ctx: &egui::Context) {
+        // B505: o painel do elemento pede repetir pontos, lembrar o tipo ou extrair pedaços
+        self.pedidos_dos_elementos(ctx);
         if self.repeat.is_none() {
             return;
         }

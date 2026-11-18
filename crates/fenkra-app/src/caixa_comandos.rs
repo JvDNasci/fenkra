@@ -36,7 +36,9 @@ pub fn caixa(ui: &mut egui::Ui, itens: &mut Vec<String>, todos: &[Entry], filtro
                 ui.label(RichText::new(tr("Vazia: arraste comandos para cá.")).weak().italics());
             }
             for (i, k) in itens.iter().enumerate() {
-                let r = match todos.iter().find(|e| entry_key(e) == *k) {
+                // B505: chave de versão anterior aparece como o comando atual
+                let atual = crate::elementos::chave_atual(k);
+                let r = match todos.iter().find(|e| entry_key(e) == atual) {
                     Some(e) => {
                         let (icone, frase) = entry_title(e);
                         ui.dnd_drag_source(egui::Id::unique(("caixa_item", i, k.as_str())), Arraste { chave: k.clone(), de: Some(i) }, |ui| {
