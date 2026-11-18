@@ -238,7 +238,8 @@ mod tests {
     ];
 
     /// Tetos de pendências fora dos sólidos (comando sem GIF, ícone ou tooltip). Só podem descer.
-    const TETO_FORA_SEM_GIF: usize = 297;
+    // 298: B512 (bloco de título) entrou sem GIF; o roteiro de mídia só anima o 3D, não a folha
+    const TETO_FORA_SEM_GIF: usize = 298;
     const TETO_FORA_SEM_ICONE: usize = 0;
     const TETO_FORA_SEM_TOOLTIP: usize = 10;
 

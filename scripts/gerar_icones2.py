@@ -622,6 +622,7 @@ def desenhos():
     ic("des_inspecao_xlsx", B=TABELA(6, 8, 26, 32, 4, 2), R="M33 12l10 12M43 12l-10 12" + S(38, 28, 38, 42, 4))
     ic("pmi_empilhamento", B=Q(6, 30, 12, 10) + Q(18, 30, 10, 10) + Q(28, 30, 14, 10), R=S2(6, 20, 42, 20, 4) + "M6 16v8M42 16v8")
     ic("des_automatico", B=FOLHA(), R=Q(10, 14, 12, 9) + "M10 28h12M10 26v4M22 26v4" + FAISCA(34, 20, 7))
+    ic("des_bloco_titulo", B=Q(6, 8, 36, 32), R=Q(16, 26, 26, 14) + "M28 26v14M16 33h12M32 31h7M32 35h5")
     ic("des_bom", B=TABELA(6, 8, 36, 32, 4, 2), R="M6 16V8h36v8z")
     ic("des_esquema", B=L((10, 36), (22, 14), (40, 30)), R=C(10, 36, 4) + C(22, 14, 4) + C(40, 30, 4) + "M4 42h12")
     ic("des_nota", B="M26 16h16M26 24h16M26 32h10", R=S(20, 18, 7, 38, 5))
@@ -772,6 +773,7 @@ SO_INTERFACE |= {"asm_conjunto", "asm_regras_cor"}
 SO_INTERFACE |= {"verificar"}
 SO_INTERFACE |= {"des_esboco"}
 SO_INTERFACE |= {"des_automatico"}
+SO_INTERFACE |= {"des_bloco_titulo"}
 SO_INTERFACE |= {"pmi_empilhamento"}
 SO_INTERFACE |= {"des_inspecao", "des_inspecao_baloes", "des_inspecao_csv", "des_inspecao_xlsx"}
 SO_INTERFACE |= {"sm_dobra_conica"}

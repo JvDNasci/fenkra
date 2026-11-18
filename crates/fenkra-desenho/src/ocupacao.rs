@@ -31,6 +31,23 @@ pub fn area_moldura(sh: &Sheet) -> (V2, V2) {
     ([20., 10.], [w - 10., h - 10.])
 }
 
+/// Caixa da legenda da folha: a do modelo de folha (B512) quando a folha usa um, senão a da
+/// legenda pronta do desenho.
+pub fn legenda_da_folha(d: &Drawing, sh: &Sheet) -> (V2, V2) {
+    match d.modelo_da_folha(sh) {
+        Some(m) => m.caixa_do_bloco(sh.size()),
+        None => legenda_caixa(d.title.style, sh.size()),
+    }
+}
+
+/// Área dentro da moldura da folha, com as margens do modelo de folha (B512) quando houver.
+pub fn moldura_da_folha(d: &Drawing, sh: &Sheet) -> (V2, V2) {
+    match d.modelo_da_folha(sh) {
+        Some(m) => m.moldura(sh.size()),
+        None => area_moldura(sh),
+    }
+}
+
 fn cruza(a: (V2, V2), b: (V2, V2)) -> bool {
     a.0[0] < b.1[0] - 1e-9 && b.0[0] < a.1[0] - 1e-9 && a.0[1] < b.1[1] - 1e-9 && b.0[1] < a.1[1] - 1e-9
 }
@@ -77,10 +94,10 @@ pub fn avisos_de_tabelas(m: &mut Models, d: &Drawing) -> Vec<AvisoTabela> {
     for t in &d.tables {
         let Some(sh) = d.sheet(t.sheet) else { continue };
         let Some((lo, hi)) = layout::tabela_caixa(m, d, t, t.pos) else { continue };
-        let area = area_moldura(sh);
+        let area = moldura_da_folha(d, sh);
         if !dentro((lo, hi), area) {
             out.push(AvisoTabela { tabela: t.id, problema: Problema::ForaDaFolha });
-        } else if cruza((lo, hi), legenda_caixa(d.title.style, sh.size())) {
+        } else if cruza((lo, hi), legenda_da_folha(d, sh)) {
             out.push(AvisoTabela { tabela: t.id, problema: Problema::SobreLegenda });
         }
     }
@@ -111,8 +128,8 @@ pub fn posicao_livre(m: &mut Models, d: &Drawing, id: Id) -> Option<V2> {
     let sh = d.sheet(t.sheet)?;
     let (lo, hi) = layout::tabela_caixa(m, d, t, t.pos)?;
     let (w, h) = (hi[0] - lo[0], hi[1] - lo[1]);
-    let area = area_moldura(sh);
-    let legenda = legenda_caixa(d.title.style, sh.size());
+    let area = moldura_da_folha(d, sh);
+    let legenda = legenda_da_folha(d, sh);
     let vistas = caixas_das_vistas(m, d, t.sheet);
     let outras: Vec<(V2, V2)> = d.tables.iter().filter(|o| o.id != id && o.sheet == t.sheet).filter_map(|o| layout::tabela_caixa(m, d, o, o.pos)).collect();
     // cantos candidatos (canto superior esquerdo da tabela): alto à direita, alto à esquerda,

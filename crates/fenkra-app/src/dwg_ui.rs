@@ -15,6 +15,7 @@ use std::path::PathBuf;
 mod alcas;
 mod assistentes;
 mod baloes_ui;
+mod bloco_ui;
 mod automatico_ui;
 mod centros_ui;
 mod cota_inteligente;
@@ -82,6 +83,8 @@ pub mod c {
     /// desenho automático por regras (B144)
     pub const AUTO: u8 = 46;
     pub const SHEET: u8 = 50;
+    /// editor de bloco de título e modelo de folha (B512)
+    pub const BLOCO: u8 = 51;
 }
 
 pub struct DwgState {
@@ -168,12 +171,15 @@ pub struct DwgState {
     ci: cota_inteligente::Estado,
     /// esboço em edição na folha (B352)
     pub esb: esboco_ui::Estado,
+    /// bloco de título em edição (B512)
+    pub bloco: bloco_ui::Estado,
 }
 
 impl DwgState {
     /// Concluir: fecha a ferramenta em andamento e solta a seleção.
     pub fn conclude(&mut self) {
         esboco_ui::concluir(self);
+        bloco_ui::concluir(self);
         self.tool = None;
         self.clicks.clear();
         self.tool_view = None;
@@ -189,12 +195,12 @@ impl DwgState {
 
     /// Há um comando em andamento (ferramenta armada ou esboço em edição), e não só um item escolhido?
     pub fn em_comando(&self) -> bool {
-        self.tool.is_some() || self.esb.editando.is_some()
+        self.tool.is_some() || self.esb.editando.is_some() || self.bloco.editando.is_some()
     }
 
     /// Algo aberto no painel (ferramenta, item selecionado ou propriedades)?
     pub fn active(&self) -> bool {
-        self.tool.is_some() || self.sel.is_some() || self.props_open || self.esb.editando.is_some()
+        self.tool.is_some() || self.sel.is_some() || self.props_open || self.esb.editando.is_some() || self.bloco.editando.is_some()
     }
 
     pub fn new(d: Drawing, path: Option<PathBuf>) -> Self {
@@ -255,6 +261,7 @@ impl DwgState {
             corte_novo: Default::default(),
             ci: Default::default(),
             esb: Default::default(),
+            bloco: Default::default(),
         }
     }
 
@@ -567,10 +574,11 @@ pub fn command(app: &mut App, i: u8) {
             assistentes::abrir_exportar(st, ext);
         }
         c::SHEET => {
+            // a folha nova repete a atual: formato, orientação e modelo de folha (B512)
             let st = app.dwg.as_mut().unwrap();
-            let f = st.d.sheet(st.sheet).map(|s| s.format).unwrap_or(Format::A3);
-            st.sheet = st.d.add_sheet(f);
+            st.sheet = st.d.add_sheet_como(st.sheet);
         }
+        c::BLOCO => bloco_ui::abrir(app.dwg.as_mut().unwrap()),
         c::AUTO_BALLOONS => {
             // B149: prévia com lado, distância e janela antes de confirmar
             let st = app.dwg.as_mut().unwrap();
@@ -701,7 +709,9 @@ pub fn keys(app: &mut App, ctx: &egui::Context, save_k: bool, undo: bool, redo: 
             st.invalidate();
         }
     }
-    if !typing && ctx.input(|i| i.key_pressed(egui::Key::Escape)) && esboco_ui::esc(st) {
+    if !typing && ctx.input(|i| i.key_pressed(egui::Key::Escape)) && bloco_ui::esc(st) {
+        // Esc no editor de bloco: solta o arraste, depois conclui
+    } else if !typing && ctx.input(|i| i.key_pressed(egui::Key::Escape)) && esboco_ui::esc(st) {
         // Esc dentro do esboço: passo, ferramenta e, por fim, a edição
     } else if !typing && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         st.tool = None;
@@ -711,7 +721,9 @@ pub fn keys(app: &mut App, ctx: &egui::Context, save_k: bool, undo: bool, redo: 
         st.loose = false;
         st.reassign = None;
     }
-    if del && !typing && esboco_ui::apagar(st) {
+    if del && st.bloco.editando.is_some() {
+        // no editor de bloco, Delete não apaga nada da folha
+    } else if del && !typing && esboco_ui::apagar(st) {
         // Delete dentro do esboço apaga a seleção dele, não o esboço
     } else if del && !typing {
         if let Some(id) = st.sel.take().or(st.focus.take()) {
@@ -822,7 +834,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                 .min_by(|a, b| ((a.2[0] - a.1[0]) * (a.2[1] - a.1[1])).total_cmp(&((b.2[0] - b.1[0]) * (b.2[1] - b.1[1]))))
                 .map(|x| x.0)
         };
-        let hot = if st.tool.is_none() && st.esb.editando.is_none() { mouse_mm.and_then(|p| pick(st, p)) } else { None };
+        let hot = if st.tool.is_none() && st.esb.editando.is_none() && st.bloco.editando.is_none() { mouse_mm.and_then(|p| pick(st, p)) } else { None };
         let bold_fam = if crate::pmi_draw::fonts().iter().any(|f| f == "Arial negrito") { egui::FontFamily::Name("Arial negrito".into()) } else { egui::FontFamily::Proportional };
         let active = st.cur();
         let is_dim = |id: Option<Id>| id.is_some_and(|i| st.d.dims.iter().any(|d| d.id == i));
@@ -970,7 +982,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             }
         }
         // alças diretas da vista em foco (B250)
-        if st.tool.is_none() && st.reassign.is_none() && st.esb.editando.is_none() {
+        if st.tool.is_none() && st.reassign.is_none() && st.esb.editando.is_none() && st.bloco.editando.is_none() {
             // numa camada acima das janelas flutuantes (painel de comando): uma alça sob o painel
             // continua visível e clicável em vez de ficar escondida atrás dele
             let ctx = ui.ctx().clone();
@@ -1013,6 +1025,8 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
         };
         if let Some(target) = st.reassign {
             reassign_pass(st, ui, &painter, rect, &resp, mouse_mm, &to_scr, target);
+        } else if st.bloco.editando.is_some() {
+            bloco_ui::tratar(ui, &painter, st, &resp, mouse_mm, &to_scr, &to_mm, z, rect);
         } else if st.esb.editando.is_some() {
             esboco_ui::tratar(ui, &painter, st, &resp, mouse_mm, &to_scr, z, rect, &snap);
         } else if st.tool == Some(c::ESBOCO) {
@@ -1092,7 +1106,18 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
                             st.dim_edit = Some(id);
                         }
                     }
-                    None => st.origin = None,
+                    None => {
+                        // B512: dois cliques no bloco de título abrem o editor dele
+                        let no_bloco = mouse_mm.zip(st.d.sheet(st.sheet)).is_some_and(|(p, sh)| {
+                            let (lo, hi) = fenkra_desenho::ocupacao::legenda_da_folha(&st.d, sh);
+                            p[0] >= lo[0] && p[0] <= hi[0] && p[1] >= lo[1] && p[1] <= hi[1]
+                        });
+                        if no_bloco {
+                            bloco_ui::abrir(st);
+                        } else {
+                            st.origin = None;
+                        }
+                    }
                 }
             } else if resp.clicked_by(egui::PointerButton::Primary) {
                 // cabeçalho de tabela ordena; etiqueta de furo destaca a linha (B295)
@@ -1219,7 +1244,7 @@ pub fn canvas(app: &mut App, root: &mut egui::Ui) {
             }
             alcas::end_drag(st);
         }
-        if st.tool.is_none() && st.esb.editando.is_none() {
+        if st.tool.is_none() && st.esb.editando.is_none() && st.bloco.editando.is_none() {
             let item = st.ctx_item;
             resp.context_menu(|ui| ctx_menu(ui, st, item));
         }
@@ -2013,6 +2038,9 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
     let st = app.dwg.as_mut().unwrap();
     let mut changed_src = false;
     let mut refresh_now = false;
+    if bloco_ui::painel(ui, st) {
+        return;
+    }
     if esboco_ui::painel(ui, st) {
         return;
     }
@@ -2327,23 +2355,45 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             crate::editor::check(ui, &mut sh.zones, "Zoneamento");
         });
     }
-    // modelos prontos: formato + orientação + legenda
+    // modelos prontos (formato + orientação + legenda) e os modelos de folha do usuário (B512)
     let mut tpl = None;
+    let mut usuario: Option<fenkra_desenho::modelo_folha::ModeloFolha> = None;
     egui::ComboBox::from_id_salt("modelo_folha").selected_text(tr("📄 Modelo de folha…")).show_ui(ui, |ui| {
         for (i, (n, ..)) in TEMPLATES.iter().enumerate() {
             if ui.selectable_label(false, tr(n)).clicked() {
                 tpl = Some(i);
             }
         }
+        let do_desenho: Vec<_> = st.d.modelos.clone();
+        let biblioteca: Vec<_> = fenkra_desenho::modelo_folha::pasta_biblioteca().map(|p| fenkra_desenho::modelo_folha::listar(&p).into_iter().map(|x| x.1).filter(|m| !do_desenho.iter().any(|d| d.uid == m.uid)).collect()).unwrap_or_default();
+        if !do_desenho.is_empty() || !biblioteca.is_empty() {
+            ui.separator();
+        }
+        for m in do_desenho.into_iter().chain(biblioteca) {
+            if ui.selectable_label(false, format!("★ {}", m.nome)).on_hover_text(tr("Modelo de folha com bloco de título montado no editor")).clicked() {
+                usuario = Some(m);
+            }
+        }
     });
     if let Some(i) = tpl {
         let (_, f, portrait, style) = TEMPLATES[i];
+        let s = st.sheet;
+        st.d.tirar_modelo(s);
         if let Some(sh) = st.d.sheets.iter_mut().find(|s| s.id == st.sheet) {
             sh.format = f;
             sh.portrait = portrait;
         }
         st.d.title.style = style;
         st.origin = None;
+    }
+    if let Some(m) = usuario {
+        let s = st.sheet;
+        st.d.aplicar_modelo(s, m);
+        st.origin = None;
+    }
+    if ui.button(tr("✎ Editar bloco de título")).on_hover_text(tr("Monta o bloco de título com caixas, textos, campos ligados à peça, tabela de revisões e logotipo, e guarda como modelo de folha")).clicked() {
+        bloco_ui::abrir(st);
+        return;
     }
     ui.horizontal(|ui| {
         ui.label(tr("Texto das cotas (mm)"));

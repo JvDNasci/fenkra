@@ -1390,6 +1390,7 @@ dependencies = [
  "fenkra-montagem",
  "fenkra-solidos",
  "fenkra-tolerancias",
+ "image",
  "serde",
  "serde_json",
 ]

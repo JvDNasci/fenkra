@@ -20,6 +20,8 @@ pub mod export;
 pub mod importar;
 pub mod inspecao;
 pub mod layout;
+pub mod logo;
+pub mod modelo_folha;
 pub mod novo;
 pub mod ocupacao;
 pub mod opcoes;
@@ -127,7 +129,7 @@ pub const TEMPLATES: [(&str, Format, bool, TitleStyle); 9] = [
 ];
 
 /// Campos automáticos aceitos nos textos da legenda e das notas.
-pub const FIELDS: [(&str, &str); 14] = [
+pub const FIELDS: [(&str, &str); 21] = [
     ("{codigo}", "código (PN) da peça/montagem"),
     ("{descricao}", "descrição (ou nome)"),
     ("{material}", "material"),
@@ -142,6 +144,13 @@ pub const FIELDS: [(&str, &str); 14] = [
     ("{arquivo}", "nome do arquivo de origem"),
     ("{revisao}", "revisão da legenda"),
     ("{titulo}", "título do desenho"),
+    ("{nome}", "nome da peça/montagem"),
+    ("{empresa}", "empresa (legenda do desenho)"),
+    ("{desenhista}", "quem desenhou (legenda do desenho)"),
+    ("{verificado}", "quem verificou (legenda do desenho)"),
+    ("{aprovado}", "quem aprovou (legenda do desenho)"),
+    ("{observacoes}", "observações (legenda do desenho)"),
+    ("{data_revisao}", "data da última revisão"),
 ];
 
 /// Troca os campos `{chave}` pelos valores.
@@ -181,6 +190,9 @@ pub struct Sheet {
     /// zoneamento da margem (números e letras, ISO 5457)
     #[serde(default = "yes")]
     pub zones: bool,
+    /// modelo de folha (B512) que dá margens e bloco de título; `None` = legenda pronta do desenho
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub modelo: Option<String>,
 }
 
 impl Sheet {
@@ -759,6 +771,15 @@ pub struct Drawing {
     /// plano de inspeção (B117): balões numerados das características
     #[serde(default, skip_serializing_if = "is_default_inspecao")]
     pub inspecao: inspecao::OpcoesInspecao,
+    /// modelos de folha usados pelas folhas (B512): editar um atualiza todas as folhas que o usam
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub modelos: Vec<modelo_folha::ModeloFolha>,
+    /// tabela de revisões do desenho (B512), da mais antiga para a mais nova
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub revisoes: Vec<modelo_folha::Revisao>,
+    /// propriedades do próprio desenho (B512): completam os campos `{chave}` que a peça não tem
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub propriedades: Vec<(String, String)>,
 }
 
 fn is_default_inspecao(o: &inspecao::OpcoesInspecao) -> bool {
@@ -789,6 +810,9 @@ impl Drawing {
             projection: novo::Projecao::Primeiro,
             esbocos: vec![],
             inspecao: Default::default(),
+            modelos: vec![],
+            revisoes: vec![],
+            propriedades: vec![],
         };
         d.add_sheet(format);
         d
@@ -809,12 +833,83 @@ impl Drawing {
     pub fn add_sheet(&mut self, format: Format) -> Id {
         let id = self.alloc();
         let n = self.sheets.len() + 1;
-        self.sheets.push(Sheet { id, name: format!("Folha {n}"), format, portrait: false, zones: true });
+        self.sheets.push(Sheet { id, name: format!("Folha {n}"), format, portrait: false, zones: true, modelo: None });
         id
     }
 
     pub fn sheet(&self, id: Id) -> Option<&Sheet> {
         self.sheets.iter().find(|s| s.id == id)
+    }
+
+    /// Folha nova igual à `de`: mesmo formato, orientação, zoneamento e modelo de folha (B512).
+    pub fn add_sheet_como(&mut self, de: Id) -> Id {
+        let base = self.sheet(de).cloned();
+        let id = self.add_sheet(base.as_ref().map_or(Format::A3, |s| s.format));
+        if let (Some(b), Some(sh)) = (base, self.sheets.iter_mut().find(|s| s.id == id)) {
+            sh.portrait = b.portrait;
+            sh.zones = b.zones;
+            sh.modelo = b.modelo;
+        }
+        id
+    }
+
+    /// Modelo de folha da folha (B512), se ela usa um.
+    pub fn modelo_da_folha(&self, sh: &Sheet) -> Option<&modelo_folha::ModeloFolha> {
+        let uid = sh.modelo.as_ref()?;
+        self.modelos.iter().find(|m| &m.uid == uid)
+    }
+
+    pub fn modelo(&self, uid: &str) -> Option<&modelo_folha::ModeloFolha> {
+        self.modelos.iter().find(|m| m.uid == uid)
+    }
+
+    pub fn modelo_mut(&mut self, uid: &str) -> Option<&mut modelo_folha::ModeloFolha> {
+        self.modelos.iter_mut().find(|m| m.uid == uid)
+    }
+
+    /// Aplica o modelo à folha: o modelo entra no desenho (ou substitui o de mesmo `uid`) e a folha
+    /// passa a usar o formato, a orientação, as margens e o bloco dele.
+    pub fn aplicar_modelo(&mut self, folha: Id, m: modelo_folha::ModeloFolha) {
+        let uid = m.uid.clone();
+        if let Some(sh) = self.sheets.iter_mut().find(|s| s.id == folha) {
+            sh.modelo = Some(uid);
+        }
+        self.atualizar_modelo(m);
+        // o modelo que nenhuma folha usa mais sai do desenho
+        let usados: Vec<String> = self.sheets.iter().filter_map(|s| s.modelo.clone()).collect();
+        self.modelos.retain(|m| usados.contains(&m.uid));
+    }
+
+    /// Grava a versão nova do modelo no desenho e atualiza as folhas que o usam. Devolve quantas são.
+    pub fn atualizar_modelo(&mut self, m: modelo_folha::ModeloFolha) -> usize {
+        let uid = m.uid.clone();
+        match self.modelos.iter_mut().find(|x| x.uid == uid) {
+            Some(x) => *x = m,
+            None => self.modelos.push(m),
+        }
+        self.sincronizar_folhas();
+        self.sheets.iter().filter(|s| s.modelo.as_deref() == Some(uid.as_str())).count()
+    }
+
+    /// Folha volta à legenda pronta do desenho. O modelo sem nenhuma folha sai do desenho.
+    pub fn tirar_modelo(&mut self, folha: Id) {
+        if let Some(sh) = self.sheets.iter_mut().find(|s| s.id == folha) {
+            sh.modelo = None;
+        }
+        let usados: Vec<String> = self.sheets.iter().filter_map(|s| s.modelo.clone()).collect();
+        self.modelos.retain(|m| usados.contains(&m.uid));
+    }
+
+    /// Formato, orientação e zoneamento de cada folha seguem o modelo dela.
+    pub fn sincronizar_folhas(&mut self) {
+        for i in 0..self.sheets.len() {
+            let Some(m) = self.sheets[i].modelo.as_ref().and_then(|u| self.modelos.iter().find(|m| &m.uid == u)) else { continue };
+            let (f, r, z) = (m.formato, m.retrato, m.zonas);
+            let sh = &mut self.sheets[i];
+            sh.format = f;
+            sh.portrait = r;
+            sh.zones = z;
+        }
     }
 
     /// Esboço novo, vazio, preso à folha ou à vista (B352).

@@ -680,7 +680,7 @@ pub fn sheet(d: &Drawing, sheet: Id, m: &mut Models) -> Vec<Item> {
     let mut o = Out::default();
     let Some(sh) = d.sheet(sheet) else { return vec![] };
     let fields = sheet_fields(d, sh, m);
-    frame(&mut o, d, sh, &fields);
+    frame(&mut o, d, sh, &fields, m.dir.as_deref());
     let th = d.text_height;
     let views: Vec<&View> = d.views.iter().filter(|v| v.sheet == sheet).collect();
     for v in &views {
@@ -812,9 +812,33 @@ pub fn sheet_fields(d: &Drawing, sh: &Sheet, m: &mut Models) -> std::collections
     f.insert("data".into(), crate::today());
     f.insert("autor".into(), std::env::var("USERNAME").or_else(|_| std::env::var("USER")).unwrap_or_default());
     f.insert("arquivo".into(), first.map(|v| v.source.path.rsplit(['/', '\\']).next().unwrap_or("").to_string()).unwrap_or_default());
-    f.insert("revisao".into(), d.title.revision.clone());
+    f.insert("revisao".into(), d.revisoes.last().map_or_else(|| d.title.revision.clone(), |r| r.rev.clone()));
+    f.insert("data_revisao".into(), d.revisoes.last().map(|r| r.data.clone()).unwrap_or_default());
     f.insert("titulo".into(), d.name.clone());
+    // B512: legenda do desenho como campos (o bloco de título montado pelo usuário os usa)
+    let t = &d.title;
+    let base = f.clone();
+    let r = |s: &str| crate::resolve(s, &base);
+    f.insert("empresa".into(), r(&t.company));
+    f.insert("desenhista".into(), r(&t.drawn_by));
+    f.insert("verificado".into(), r(&t.checked_by));
+    f.insert("aprovado".into(), r(&t.approved_by));
+    f.insert("observacoes".into(), r(&t.notes));
+    // nome e propriedades personalizadas da peça ({cliente}…); as do desenho completam as que faltam
+    let (nome, pers) = first.map(|v| m.nome_e_personalizadas(&v.source)).unwrap_or_default();
+    f.insert("nome".into(), if nome.is_empty() { d.name.clone() } else { nome });
+    for (k, v) in pers.iter().chain(d.propriedades.iter()) {
+        let k = chave_de_campo(k);
+        if !k.is_empty() && !f.contains_key(&k) {
+            f.insert(k, v.clone());
+        }
+    }
     f
+}
+
+/// Chave `{x}` de uma propriedade personalizada: minúsculas, espaços viram `_` (B512).
+pub fn chave_de_campo(nome: &str) -> String {
+    nome.trim().to_lowercase().split_whitespace().collect::<Vec<_>>().join("_").replace(['{', '}'], "")
 }
 
 /// Célula da legenda: posição (mm a partir do canto inferior esquerdo da legenda), tamanho,
@@ -829,50 +853,57 @@ struct Cell<'a> {
     size: f64,
 }
 
-fn frame(o: &mut Out, d: &Drawing, sh: &Sheet, fields: &std::collections::HashMap<String, String>) {
+fn frame(o: &mut Out, d: &Drawing, sh: &Sheet, fields: &std::collections::HashMap<String, String>, dir: Option<&std::path::Path>) {
     let [w, h] = sh.size();
     o.rect([0., 0.], [w, h], Style::Thin);
-    // margem de arquivamento à esquerda (ISO 5457)
-    let (l, r) = (20., 10.);
-    o.rect([l, r], [w - r, h - r], Style::Thick);
+    // margem de arquivamento à esquerda (ISO 5457); o modelo de folha (B512) pode mudar as quatro
+    let modelo = d.modelo_da_folha(sh);
+    let mg = modelo.map(|m| m.margens).unwrap_or_default();
+    let (l, rr, top, bot) = (mg.esquerda, mg.direita, mg.cima, mg.baixo);
+    o.rect([l, bot], [w - rr, h - top], Style::Thick);
     // marcas de centro
-    for (a, b) in [([w / 2., 0.], [w / 2., r]), ([w / 2., h - r], [w / 2., h]), ([0., h / 2.], [l, h / 2.]), ([w - r, h / 2.], [w, h / 2.])] {
+    for (a, b) in [([w / 2., 0.], [w / 2., bot]), ([w / 2., h - top], [w / 2., h]), ([0., h / 2.], [l, h / 2.]), ([w - rr, h / 2.], [w, h / 2.])] {
         o.seg(a, b, Style::Thick);
     }
     // zoneamento: números na horizontal, letras na vertical (de cima para baixo), ~50 mm cada
     if sh.zones {
-        let (iw, ih) = (w - l - r, h - 2. * r);
+        let (iw, ih) = (w - l - rr, h - top - bot);
         let nx = ((iw / 50.).round() as usize).max(2);
         let ny = ((ih / 50.).round() as usize).max(2);
         for i in 0..=nx {
             let x = l + iw * i as f64 / nx as f64;
             if i > 0 && i < nx {
-                o.seg([x, r - 4.], [x, r], Style::Thin);
-                o.seg([x, h - r], [x, h - r + 4.], Style::Thin);
+                o.seg([x, bot - 4.], [x, bot], Style::Thin);
+                o.seg([x, h - top], [x, h - top + 4.], Style::Thin);
             }
             if i < nx {
                 let xc = l + iw * (i as f64 + 0.5) / nx as f64;
-                o.text([xc, r - 3.6], (i + 1).to_string(), 2.5, 0., Align::Center);
-                o.text([xc, h - r + 1.2], (i + 1).to_string(), 2.5, 0., Align::Center);
+                o.text([xc, bot - 3.6], (i + 1).to_string(), 2.5, 0., Align::Center);
+                o.text([xc, h - top + 1.2], (i + 1).to_string(), 2.5, 0., Align::Center);
             }
         }
         let letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
         for j in 0..=ny {
-            let y = r + ih * j as f64 / ny as f64;
+            let y = bot + ih * j as f64 / ny as f64;
             if j > 0 && j < ny {
                 o.seg([l - 4., y], [l, y], Style::Thin);
-                o.seg([w - r, y], [w - r + 4., y], Style::Thin);
+                o.seg([w - rr, y], [w - rr + 4., y], Style::Thin);
             }
             if j < ny {
-                let yc = h - r - ih * (j as f64 + 0.5) / ny as f64 - 1.2;
+                let yc = h - top - ih * (j as f64 + 0.5) / ny as f64 - 1.2;
                 let c = letters.chars().nth(j % letters.len()).unwrap().to_string();
                 o.text([l - 2., yc], c.clone(), 2.5, 0., Align::Center);
-                o.text([w - r + 2.4, yc], c, 2.5, 0., Align::Center);
+                o.text([w - rr + 2.4, yc], c, 2.5, 0., Align::Center);
             }
         }
         // linha de corte das zonas a 4 mm da moldura
-        o.rect([l - 4., r - 4.], [w - r + 4., h - r + 4.], Style::Thin);
+        o.rect([l - 4., bot - 4.], [w - rr + 4., h - top + 4.], Style::Thin);
     }
+    if let Some(m) = modelo {
+        bloco_do_modelo(o, d, m, [w, h], fields, dir);
+        return;
+    }
+    let r = 10.;
     let t = &d.title;
     let v = |s: &str| crate::resolve(s, fields);
     let get = |k: &str| fields.get(k).cloned().unwrap_or_default();
@@ -976,15 +1007,147 @@ fn frame(o: &mut Out, d: &Drawing, sh: &Sheet, fields: &std::collections::HashMa
     }
     // símbolo do 1º diedro: tronco de cone de frente e de lado
     let (sx, sy, sw) = diedro.map(|(x, y, ww)| (x0 + x, y0 + y, ww)).unwrap_or((w - r - 30., y0 + top + 2., 28.));
+    simbolo_diedro(o, d, sx, sy, sw, 1.);
+}
+
+/// Símbolo do método de projeção com a base em (`sx`, `sy`), centrado na largura `sw`; `k` escala.
+fn simbolo_diedro(o: &mut Out, d: &Drawing, sx: f64, sy: f64, sw: f64, k: f64) {
     // 1º diedro: cone à esquerda e círculos à direita; 3º diedro: trocados
     let terceiro = d.projection == crate::novo::Projecao::Terceiro;
     let cx = sx + sw * if terceiro { 0.68 } else { 0.32 };
-    let cy = sy + 8.;
-    o.line(vec![[cx - 7., cy - 3.], [cx + 3., cy - 5.], [cx + 3., cy + 5.], [cx - 7., cy + 3.], [cx - 7., cy - 3.]], Style::Visible);
+    let cy = sy + 8. * k;
+    o.line(vec![[cx - 7. * k, cy - 3. * k], [cx + 3. * k, cy - 5. * k], [cx + 3. * k, cy + 5. * k], [cx - 7. * k, cy + 3. * k], [cx - 7. * k, cy - 3. * k]], Style::Visible);
     let ex = sx + sw * if terceiro { 0.28 } else { 0.72 };
-    o.line(crate::source::circle([ex, cy], 5.), Style::Visible);
-    o.line(crate::source::circle([ex, cy], 3.), Style::Visible);
-    o.text([sx + sw / 2., sy + 1.2], d.projection.curto().to_string(), 2.2, 0., Align::Center);
+    o.line(crate::source::circle([ex, cy], 5. * k), Style::Visible);
+    o.line(crate::source::circle([ex, cy], 3. * k), Style::Visible);
+    o.text([sx + sw / 2., sy + 1.2 * k], d.projection.curto().to_string(), 2.2 * k.min(1.), 0., Align::Center);
+}
+
+/// Bloco de título montado por caixas (B512): contorno grosso, divisórias finas e o conteúdo de cada
+/// célula (texto com campos, logotipo, tabela de revisões ou diedro).
+fn bloco_do_modelo(o: &mut Out, d: &Drawing, m: &crate::modelo_folha::ModeloFolha, folha: V2, fields: &std::collections::HashMap<String, String>, dir: Option<&std::path::Path>) {
+    use crate::modelo_folha::{Alinhamento, Conteudo};
+    let origem = m.origem_do_bloco(folha);
+    let (blo, bhi) = m.bloco.caixa(origem);
+    for dv in m.bloco.divisorias(origem) {
+        o.seg(dv.de, dv.ate, Style::Thin);
+    }
+    o.rect(blo, bhi, Style::Thick);
+    // altura do texto "do estilo do desenho": a das cotas, um pouco menor (como na legenda pronta)
+    let padrao = (d.text_height * 0.86).max(1.8);
+    for (_, (lo, hi), cel) in m.bloco.celulas(origem) {
+        let (cw, ch) = (hi[0] - lo[0], hi[1] - lo[1]);
+        let tem_rotulo = !cel.rotulo.trim().is_empty();
+        let rot = if tem_rotulo { (1.8_f64).min(ch * 0.4) } else { 0. };
+        if tem_rotulo {
+            o.text([lo[0] + 1.2, hi[1] - rot - 0.6], crate::resolve(&cel.rotulo, fields), rot, 0., Align::Left);
+        }
+        // área útil abaixo do rótulo
+        let util_hi = if tem_rotulo { hi[1] - rot - 1.0 } else { hi[1] };
+        match &cel.conteudo {
+            Conteudo::Texto => {
+                let valor = crate::resolve(&cel.texto, fields);
+                let linhas: Vec<&str> = valor.lines().collect();
+                if linhas.is_empty() {
+                    continue;
+                }
+                let n = linhas.len() as f64;
+                let mut s = if cel.altura > 0. { cel.altura } else { padrao };
+                // texto que não cabe diminui (largura e altura)
+                let largura = |s: f64| linhas.iter().map(|l| text_width(l, s)).fold(0., f64::max);
+                while s > 1.4 && (largura(s) > cw - 2.4 || n * s * 1.4 > util_hi - lo[1] - 0.8) {
+                    s -= 0.1;
+                }
+                let (x, al) = match cel.alinhar {
+                    Alinhamento::Esquerda => (lo[0] + 1.2, Align::Left),
+                    Alinhamento::Centro => ((lo[0] + hi[0]) / 2., Align::Center),
+                    Alinhamento::Direita => (hi[0] - 1.2, Align::Right),
+                };
+                // bloco de linhas centrado na vertical da área útil (com rótulo, um pouco abaixo)
+                let alto = n * s * 1.4 - s * 0.4;
+                let base0 = (lo[1] + util_hi) / 2. + alto / 2. - s;
+                let antes = o.bold;
+                o.bold = cel.negrito;
+                for (i, l) in linhas.iter().enumerate() {
+                    o.text([x, base0 - i as f64 * s * 1.4], l.to_string(), s, 0., al);
+                }
+                o.bold = antes;
+            }
+            Conteudo::Imagem { caminho } => {
+                let cam = fenkra_montagem::load::full_path(dir, caminho);
+                let ret = (!caminho.is_empty()).then(|| crate::logo::carregar(&cam)).flatten();
+                match ret {
+                    Some(r) => {
+                        // cabe na célula com 1 mm de folga, mantendo a proporção, centrado
+                        let (aw, ah) = (cw - 2., util_hi - lo[1] - 2.);
+                        let px = (aw / r.largura as f64).min(ah / r.altura as f64);
+                        if px <= 0. {
+                            continue;
+                        }
+                        let x0 = lo[0] + 1. + (aw - px * r.largura as f64) / 2.;
+                        let y1 = util_hi - 1. - (ah - px * r.altura as f64) / 2.;
+                        let antes = o.color;
+                        for &(lin, c0, c1, cor) in &r.trechos {
+                            let (xa, xb) = (x0 + c0 as f64 * px, x0 + c1 as f64 * px);
+                            let (ya, yb) = (y1 - (lin + 1) as f64 * px, y1 - lin as f64 * px);
+                            o.color = Some(cor);
+                            o.fill(vec![[xa, ya], [xb, ya], [xb, yb], [xa, yb]]);
+                        }
+                        o.color = antes;
+                    }
+                    None => {
+                        // sem arquivo: a marca do lugar do logotipo (não some sem aviso)
+                        o.seg([lo[0] + 1., lo[1] + 1.], [hi[0] - 1., util_hi - 1.], Style::Thin);
+                        o.seg([lo[0] + 1., util_hi - 1.], [hi[0] - 1., lo[1] + 1.], Style::Thin);
+                    }
+                }
+            }
+            Conteudo::Revisoes { linhas } => {
+                let n = (*linhas).max(1) as usize;
+                let fracoes = [0.12, 0.5, 0.2, 0.18];
+                let cab = ["REV", "DESCRIÇÃO", "DATA", "AUTOR"];
+                let rh = (util_hi - lo[1]) / (n + 1) as f64;
+                let s = (d.text_height * 0.8).min(rh * 0.6).max(1.2);
+                let mut xs = vec![lo[0]];
+                for f in fracoes {
+                    xs.push(xs.last().unwrap() + f * cw);
+                }
+                for k in 1..fracoes.len() {
+                    o.seg([xs[k], lo[1]], [xs[k], util_hi], Style::Thin);
+                }
+                for i in 0..=n {
+                    let y = util_hi - (i + 1) as f64 * rh;
+                    if i < n {
+                        o.seg([lo[0], y], [hi[0], y], Style::Thin);
+                    }
+                }
+                let celula = |o: &mut Out, k: usize, y_topo: f64, t: &str| {
+                    let largura = xs[k + 1] - xs[k] - 1.6;
+                    let mut ss = s;
+                    while ss > 1.0 && text_width(t, ss) > largura {
+                        ss -= 0.1;
+                    }
+                    o.text([xs[k] + 0.8, y_topo - rh / 2. - ss / 2.], t.to_string(), ss, 0., Align::Left);
+                };
+                for (k, t) in cab.iter().enumerate() {
+                    celula(o, k, util_hi, t);
+                }
+                let ult: Vec<&crate::modelo_folha::Revisao> = d.revisoes.iter().rev().take(n).collect();
+                // a mais nova embaixo, como nas tabelas de revisão sobre a legenda
+                for (i, rv) in ult.iter().rev().enumerate() {
+                    let y = util_hi - (i + 1) as f64 * rh;
+                    for (k, t) in [&rv.rev, &rv.descricao, &rv.data, &rv.autor].iter().enumerate() {
+                        celula(o, k, y, t);
+                    }
+                }
+            }
+            Conteudo::Diedro => {
+                let k = ((util_hi - lo[1]) / 16.).min(cw / 30.).clamp(0.3, 1.5);
+                let alto = 16. * k;
+                simbolo_diedro(o, d, lo[0], lo[1] + ((util_hi - lo[1]) - alto).max(0.) / 2., cw, k);
+            }
+        }
+    }
 }
 
 /// Rugosidade com campos extras (B251), nas posições do símbolo: valor (com a amostragem) em cima da
