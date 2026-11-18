@@ -1125,6 +1125,10 @@ impl Cache {
 /// ele age em documentos muito grandes, trocando memória por tesselar de novo.
 const TETO_CACHE_MALHAS: usize = 512 * 1024 * 1024;
 
+/// B511: quem usa a superfície de uma forma livre com a gaiola aberta espera a edição acabar (inativo,
+/// sem erro), como os comandos depois dela.
+const FORMA_EM_EDICAO: &str = "a forma livre está em edição: conclua para atualizar";
+
 /// Valor exibível de uma referência (guardado no cache).
 #[derive(Clone)]
 enum RefViz {
@@ -1145,6 +1149,10 @@ fn feature_sig(f: &Feature) -> String {
 
 /// A referência (ou alguma entrada dela) lê faces/corpos? Então muda quando a linha do tempo muda.
 fn ref_reads_bodies(doc: &Document, id: Id, depth: u32) -> bool {
+    // B511: a superfície da forma livre sai da linha do tempo, como as faces dos corpos
+    if matches!(doc.feature(id).map(|f| &f.kind), Some(FeatureKind::Forma(_))) {
+        return true;
+    }
     let Some(r) = doc.reference(id) else { return false };
     if depth > 24 {
         return true;
@@ -1338,6 +1346,12 @@ impl Ctx<'_> {
     /// B515: superfície de referência dona da chave, se o dono for uma. `None` quando o dono é um comando
     /// de corpo (a chave segue pelos corpos); erro quando a superfície não calcula.
     fn surface_owner(&self, owner: Id) -> Option<Result<Shape, String>> {
+        // B511: a forma livre aberta é dona das faces da superfície dela, como uma de referência
+        if let Some(r) = self.forma_superficie(owner) {
+            // forma sólida: as faces dela estão no corpo e a chave segue pelos corpos
+            let solida = matches!(self.tools.get(&owner), Some((sh, _)) if sh.is_solid());
+            return (!solida).then_some(r);
+        }
         let r = self.doc.reference(owner)?;
         (r.kind.class() == RefClass::Surface).then(|| self.surface(owner, 8))
     }
@@ -1646,7 +1660,24 @@ impl Ctx<'_> {
         Ok((geo3d::sub(p, geo3d::mul(n, geo3d::dot(geo3d::sub(p, o), n))), n))
     }
 
+    /// B511: superfície que uma forma livre convertida entrega (casco aberto). `None` quando `id` não é
+    /// uma forma; erro quando é, mas não tem superfície agora (sem conversão, em edição, sólida).
+    fn forma_superficie(&self, id: Id) -> Option<Result<Shape, String>> {
+        let f = self.doc.feature(id)?;
+        let FeatureKind::Forma(fm) = &f.kind else { return None };
+        Some(match (self.tools.get(&id), fm.conversao.as_ref()) {
+            (Some((sh, _)), _) if !sh.is_solid() => Ok(sh.clone()),
+            (Some(_), _) => Err(format!("'{}' é um sólido: escolha uma face dele", f.name)),
+            (None, Some(c)) if c.pausada => Err(FORMA_EM_EDICAO.into()),
+            (None, Some(_)) => Err(format!("a forma livre '{}' não calculou (veja o status dela)", f.name)),
+            (None, None) => Err(format!("a forma livre '{}' ainda não virou superfície: conclua a edição ou converta", f.name)),
+        })
+    }
+
     fn surface(&self, id: Id, depth: u32) -> Result<Shape, String> {
+        if let Some(r) = self.forma_superficie(id) {
+            return r;
+        }
         match self.geo(id, depth + 1)? {
             Geo::Surface(s) => Ok(s),
             _ => Err(format!("'{}' não é uma superfície", self.doc.name_of(id))),
@@ -6347,12 +6378,11 @@ impl Ctx<'_> {
                 if sh.is_solid() {
                     self.apply_roles(f.target, sh, BoolOp::Add, f.id, Some(nomes))?;
                 } else {
-                    let n = sh.face_count() as usize;
-                    let corpo = match self.body(f.target) {
-                        Some(b) => fresh_body(b.compound(&sh), f.id),
-                        None => (sh, vec![f.id; n], nomes),
-                    };
-                    self.bodies.insert(f.target, corpo);
+                    // B511: casco aberto é superfície comum, não pedaço de corpo. Vai para as superfícies
+                    // (a forma é a dona, como uma superfície de referência), onde deslocar, espessar,
+                    // aparar, extrudar até a face e a chapa a acham por `SurfRef::Ref` ou pela chave.
+                    // Antes ia composto no corpo e só uma face de cada vez podia ser escolhida.
+                    self.tools.insert(f.id, (sh, BoolOp::Add));
                 }
                 Ok(aviso)
             }
@@ -7034,7 +7064,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 // seleção: inativa e sem erro, como os comandos (B459); campo apagado de verdade segue erro
                 let mut ids = vec![];
                 r.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
-                let espera = ids.iter().any(|x| x.a_escolher());
+                let espera = ids.iter().any(|x| x.a_escolher()) || e.contains(FORMA_EM_EDICAO);
                 cx.status.insert(r.id, if espera { Status::Inactive } else { Status::Error(e) });
             }
         }
@@ -7128,6 +7158,28 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         }
     }
     bodies.extend(doc.collectors.iter().filter_map(|c| cx.malhas.get(&c.id).map(|m| corpo_malha::resultado(c, m))));
+    // B511: a forma livre aberta e convertida entra nas superfícies: aparece, é escolhida inteira e tem
+    // faces, arestas e vértices com chave como qualquer superfície (a malha fica no cache dos corpos)
+    for f in &doc.features {
+        if !matches!(f.kind, FeatureKind::Forma(_)) || !matches!(cx.status.get(&f.id), Some(Status::Ok | Status::Warning(_))) {
+            continue;
+        }
+        let Some(Ok(sh)) = cx.forma_superficie(f.id) else { continue };
+        let key = (f.id, feat_out.get(&f.id).copied().unwrap_or(0));
+        vivas.insert(key);
+        let m = match cache.meshes.get(&key) {
+            Some(m) => Ok(m.clone()),
+            None => tesselar(&sh, &cx.qualidade).inspect(|m| {
+                cache.meshes.insert(key, m.clone());
+            }),
+        };
+        match m {
+            Ok(mesh) => surfaces.push(SurfaceViz { id: f.id, name: f.name.clone(), mesh }),
+            Err(e) => {
+                cx.status.insert(f.id, Status::Error(e.0));
+            }
+        }
+    }
     cache.limitar(&vivas, &fills_vivos, TETO_CACHE_MALHAS);
     let mut formas = formas_visiveis(doc, &cx.status, &cx.formas_resolvidas);
     cache.polir.formas(doc, &mut formas, &cx.formas_resolvidas);
@@ -7263,10 +7315,8 @@ pub fn surface_brep(doc: &Document, id: Id) -> Option<String> {
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
     }
-    match cx.geo(id, 0).ok()? {
-        Geo::Surface(s) => s.to_brep().ok(),
-        _ => None,
-    }
+    // B511: a forma livre aberta também é superfície
+    cx.surface(id, 0).ok()?.to_brep().ok()
 }
 
 /// Geometria de um membro estrutural.

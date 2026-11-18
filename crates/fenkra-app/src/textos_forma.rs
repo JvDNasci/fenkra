@@ -152,4 +152,5 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Anda um passo na direção dos dois últimos", "Takes one step in the direction of the last two"),
     ("Faixa", "Strip"),
     ("Pega o caminho entre as duas últimas faces ou os dois últimos nós", "Takes the path between the last two faces or the last two nodes"),
+    ("Forma grande: converta pelo botão Converter para usá-la nas outras bancadas", "Large form: convert it with the Convert button to use it in the other workbenches"),
 ];

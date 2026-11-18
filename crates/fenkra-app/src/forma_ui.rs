@@ -200,9 +200,20 @@ fn voltar_a_gaiola(app: &mut App, id: Id, no: Option<u32>) {
 }
 
 /// Concluir com a gaiola aberta refaz a conversão: é assim que a edição chega aos filhos.
+/// B511: forma nunca convertida também converte ao concluir (G1), para sair como superfície ou sólido
+/// comum que as outras bancadas escolhem. Só a forma cara (alerta de tempo) espera o botão Converter.
 pub fn ao_concluir(app: &mut App, id: Id) {
-    if let Some(c) = forma_mut(app, id).and_then(|f| f.conversao.as_mut()) {
+    let Some(f) = forma_mut(app, id) else { return };
+    if let Some(c) = f.conversao.as_mut() {
         c.pausada = false;
+        return;
+    }
+    let tempo = fe::custo_da_conversao(&f.gaiola, 1).2;
+    if tempo <= fe::SEGUNDOS_DE_ALERTA {
+        f.conversao = Some(ConversaoForma { continuidade: 1, tol: "0.01".into(), pausada: false });
+        app.scene_dirty = true;
+    } else {
+        app.toast(format!("{} ({} s)", tr("Forma grande: converta pelo botão Converter para usá-la nas outras bancadas"), fmt(tempo)), false);
     }
 }
 
@@ -1400,6 +1411,30 @@ mod testes {
         assert!(a[2] > 0. && b[0] - a[0] > 60. && b[0] - a[0] < 80., "{a:?} {b:?}");
         assert!(((a[0] + b[0]) / 2. - 40.).abs() < 1e-6);
         assert!(m.volume() > 0.);
+    }
+
+    /// B511: concluir a forma converte (G1); com borda ela vira superfície comum, que aparece e é escolhida
+    /// como as de referência, e o deslocamento consome (oculta) a forma como faz com elas.
+    #[test]
+    fn concluir_converte_e_a_forma_aberta_vira_superficie_comum() {
+        let mut app = App::new(&eframe::CreationContext::_new_kittest(egui::Context::default()));
+        let id = criar_feature(&mut app, Gaiola::plano([0.; 3], [60., 60.], [2, 2]));
+        app.conclude_session();
+        let f = forma(&app, id).expect("forma na árvore");
+        assert!(f.conversao.as_ref().is_some_and(|c| c.continuidade == 1 && !c.pausada), "{:?}", f.conversao);
+        assert!(f.e_superficie());
+        let r = fenkra_solidos::recompute(&app.open.doc);
+        assert!(r.surfaces.iter().any(|s| s.id == id), "a forma está nas superfícies");
+        // o documento de partida pode ter corpo próprio: nenhuma face dele é da forma
+        assert!(r.bodies.iter().all(|b| !b.face_owner.contains(&id)), "a superfície não vira corpo");
+        assert!(app.open.doc.superficie_mostrada(id));
+        let off = app.open.doc.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(id), dist: "4".into(), both: false, join: OffsetJoin::Automatico });
+        app.open.doc.hide_consumed(off);
+        assert!(!app.open.doc.superficie_mostrada(id), "deslocar consome a forma como uma superfície");
+        // fechada, a forma é sólido e não entra como superfície
+        let caixa = criar_feature(&mut app, Gaiola::caixa([0.; 3], [20.; 3], [2, 2, 2]));
+        app.conclude_session();
+        assert!(forma(&app, caixa).is_some_and(|f| f.conversao.is_some() && !f.e_superficie()));
     }
 
     #[test]

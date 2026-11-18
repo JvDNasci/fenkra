@@ -369,15 +369,18 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     }
 
     // superfícies: objetos opacos (como os corpos), com cor própria e contorno
-    if o.filter.planos_ref {
+    {
         for sf in &r.surfaces {
+            // B511: a forma livre aberta é resultado, não referência: o filtro de referências não a esconde
+            if !o.filter.planos_ref && doc.reference(sf.id).is_some() {
+                continue;
+            }
             // o corte por região desenha os pedaços; a superfície inteira ficaria na frente deles
             if o.fantasma.as_ref().is_some_and(|f| crate::sup3d::entrada_das_regioes(doc, f.id, sf.id)) {
                 continue;
             }
             let selected = hi(sf.id);
-            let rf = doc.reference(sf.id);
-            let vis = rf.is_some_and(|x| doc.ref_shown(x));
+            let vis = doc.superficie_mostrada(sf.id);
             if !selected && !shows(!vis, env) {
                 continue;
             }
@@ -390,7 +393,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 }
                 continue;
             }
-            let app = rf.and_then(|x| x.appearance).unwrap_or(Appearance { color: [222, 170, 110], finish: fenkra_core::Finish::Acetinado, texture: None });
+            let app = doc.aparencia_da_superficie(sf.id).unwrap_or(Appearance { color: [222, 170, 110], finish: fenkra_core::Finish::Acetinado, texture: None });
             let (rough, metal, alpha) = app.finish.params();
             let alpha = alpha * opacidade(doc.transparencia(sf.id));
             let c = rgb(app.color);

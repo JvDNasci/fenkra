@@ -850,6 +850,15 @@ mod imp {
         }
         /// Divide a ferramenta pela superfície e fica com o pedaço que passa por `start`.
         pub fn clip_until(&self, cutter: &Shape, start: [f64; 3], extend: bool) -> KResult<Shape> {
+            // B511: superfície de várias faces (forma livre, superfície costurada) corta como está primeiro.
+            // Estender cada face sozinha solta as faces umas das outras: a divisão vaza pelas emendas e a
+            // ferramenta não se separa em dois pedaços. A extensão fica para quando a superfície não cobre
+            // a ferramenta (face menor que o perfil).
+            if extend && cutter.face_count() > 1 {
+                if let Ok(s) = b::clip_until(&self.0, &cutter.0, start[0], start[1], start[2], false) {
+                    return Ok(Shape(s));
+                }
+            }
             b::clip_until(&self.0, &cutter.0, start[0], start[1], start[2], extend).map(Shape).map_err(err)
         }
         pub fn plane_face(o: [f64; 3], n: [f64; 3], half: f64) -> KResult<Shape> {

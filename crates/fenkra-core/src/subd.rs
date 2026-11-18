@@ -587,6 +587,14 @@ impl Gaiola {
         v
     }
 
+    /// B511: a gaiola tem borda (alguma aresta de uma face só)? Aberta, a conversão dá superfície; fechada,
+    /// sólido. Vale a gaiola como está: chame em [`Self::inteira`] para contar o reflexo da simetria.
+    pub fn tem_borda(&self) -> bool {
+        let mut v: Vec<(u32, u32)> = self.faces.iter().flat_map(|f| (0..f.nos.len()).map(|k| par(f.nos[k], f.nos[(k + 1) % f.nos.len()]))).collect();
+        v.sort_unstable();
+        v.chunk_by(|a, b| a == b).any(|g| g.len() == 1)
+    }
+
     pub fn peso(&self, a: u32, b: u32) -> f64 {
         let (a, b) = par(a, b);
         self.vincos.iter().find(|v| v.a == a && v.b == b).map_or(0., |v| v.peso)
