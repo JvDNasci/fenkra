@@ -120,6 +120,13 @@ mod ui_ext;
 mod sketch_ext;
 mod dwg_ui;
 mod measure;
+mod medir;
+mod medir_ui;
+#[cfg(test)]
+mod medir_testes;
+#[cfg(test)]
+mod nomes_idioma_testes;
+mod textos_medir;
 mod i18n;
 mod tree_ui;
 mod arvore_soltura_ui;

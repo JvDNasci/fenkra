@@ -4399,6 +4399,13 @@ pub struct Document {
     /// arquivo e da igualdade
     #[serde(skip)]
     pub pasta: crate::pasta_doc::PastaDoc,
+    /// idioma da interface quando o documento nasceu (B510); os nomes dos itens ficam gravados como
+    /// texto e não mudam quando a pessoa troca de idioma
+    #[serde(default, skip_serializing_if = "crate::nomes::Idioma::e_padrao")]
+    pub idioma: crate::nomes::Idioma,
+    /// medidas mantidas na árvore (B509): associativas, refeitas a cada cálculo
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub medidas: Vec<crate::medida::Medida>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -4462,8 +4469,11 @@ impl Document {
             origem: None,
             malhas: Default::default(),
             pasta: Default::default(),
+            idioma: crate::nomes::idioma(),
+            medidas: vec![],
         };
-        let c = d.add_collector("Corpo principal");
+        let n = crate::nomes::base("Corpo principal");
+        let c = d.add_collector(&n);
         d.active_collector = c;
         d
     }
@@ -4506,11 +4516,19 @@ impl Document {
         self.params.iter().any(|p| p.name == name)
             || self.references.iter().any(|r| r.name == name)
             || self.features.iter().any(|f| f.name == name)
+            || self.medidas.iter().any(|m| m.nome == name)
     }
 
     /// Próximo nome livre: "Extrusão1", "Extrusão2", ...
     pub fn unique_name(&self, base: &str) -> String {
         (1..).map(|i| format!("{base}{i}")).find(|n| !self.name_taken(n)).unwrap()
+    }
+
+    /// Nome livre de um item novo: o nome-base (escrito em português) vai para o idioma ativo da
+    /// interface antes de numerar (B510). Use para nomes padrão; nome vindo do usuário vai direto em
+    /// [`Self::unique_name`].
+    pub fn nome_padrao(&self, base: &str) -> String {
+        self.unique_name(&crate::nomes::base(base))
     }
 
     // ------------------------------------------------ coletores e pastas
@@ -4533,7 +4551,10 @@ impl Document {
     pub fn default_geometry_folder(&mut self) -> Id {
         match self.folders.iter().find(|f| f.kind == FolderKind::Geometria) {
             Some(f) => f.id,
-            None => self.add_geometry_folder("Geometria"),
+            None => {
+                let n = crate::nomes::base("Geometria");
+                self.add_geometry_folder(&n)
+            }
         }
     }
 
@@ -4578,7 +4599,7 @@ impl Document {
             // o conteúdo sobe para a pasta-mãe (ou outra pasta de geometria): sketches livres continuam livres
             let to = fo.parent.or_else(|| self.folders.iter().find(|f| f.kind == FolderKind::Geometria && f.id != id).map(|f| f.id));
             self.folders.retain(|f| f.id != id);
-            let to = to.unwrap_or_else(|| self.add_geometry_folder("Geometria"));
+            let to = to.unwrap_or_else(|| self.default_geometry_folder());
             for f in &mut self.features {
                 if f.folder == Some(id) {
                     f.folder = Some(to);
@@ -4721,7 +4742,11 @@ impl Document {
     /// Nome livre derivado de `name` (tira o número do fim e numera de novo).
     fn copy_name(&self, name: &str) -> String {
         let base = name.trim_end_matches(|c: char| c.is_ascii_digit());
-        self.unique_name(if base.is_empty() { "Copia" } else { base })
+        if base.is_empty() {
+            self.nome_padrao("Copia")
+        } else {
+            self.unique_name(base)
+        }
     }
 
     /// Duplica um item da geometria na pasta `to`; pastas são copiadas com o conteúdo.
@@ -4770,7 +4795,7 @@ impl Document {
 
     pub fn add_offset_plane(&mut self, base: PlaneRef, offset: &str) -> Id {
         let id = self.alloc();
-        let name = self.unique_name("Plano");
+        let name = self.nome_padrao("Plano");
         self.references.push(RefElement { id, name, kind: RefKind::OffsetPlane { base, offset: offset.into() }, visible: true, folder: None, published: false, appearance: None });
         self.file_last_reference();
         id
@@ -4779,7 +4804,7 @@ impl Document {
     /// Plano de uma face plana (criado ao clicar numa face para fazer um sketch).
     pub fn add_face_plane(&mut self, origin: [f64; 3], x: [f64; 3], normal: [f64; 3], owner: Option<Id>) -> Id {
         let id = self.alloc();
-        let name = self.unique_name("PlanoFace");
+        let name = self.nome_padrao("PlanoFace");
         self.references.push(RefElement { id, name, kind: RefKind::FacePlane { origin, x, normal, owner, key: None }, visible: true, folder: None, published: false, appearance: None });
         self.file_last_reference();
         id
@@ -4788,7 +4813,7 @@ impl Document {
     /// Plano que passa por um eixo, girado `angle` graus a partir de `base`.
     pub fn add_angle_plane(&mut self, base: PlaneRef, axis: AxisRef, angle: &str) -> Id {
         let id = self.alloc();
-        let name = self.unique_name("Plano");
+        let name = self.nome_padrao("Plano");
         self.references.push(RefElement { id, name, kind: RefKind::AnglePlane { base, axis, angle: angle.into() }, visible: true, folder: None, published: false, appearance: None });
         self.file_last_reference();
         id
@@ -4812,7 +4837,7 @@ impl Document {
                 _ => "Curva",
             },
         };
-        let name = self.unique_name(base);
+        let name = self.nome_padrao(base);
         self.references.push(RefElement { id, name, kind, visible: true, folder: None, published: false, appearance: None });
         self.file_last_reference();
         id
@@ -5076,7 +5101,7 @@ impl Document {
 
     pub fn add_feature(&mut self, kind: FeatureKind) -> Id {
         let id = self.alloc();
-        let name = self.unique_name(kind.type_name());
+        let name = self.nome_padrao(kind.type_name());
         let target = self.active_collector;
         let len = self.features.len();
         let marker = self.collectors.iter().find(|c| c.id == target).and_then(|c| c.marker);
@@ -5105,7 +5130,7 @@ impl Document {
     /// Sketch livre numa pasta de geometria (fora das linhas do tempo).
     pub fn add_free_sketch(&mut self, plane: PlaneRef, folder: Id) -> Id {
         let id = self.alloc();
-        let name = self.unique_name("Sketch");
+        let name = self.nome_padrao("Sketch");
         let target = self.active_collector;
         let kind = FeatureKind::Sketch(Sketch { plane, data: Default::default() });
         self.features.push(Feature { id, name, kind, suppressed: false, suppress_if: String::new(), folder: Some(folder), target, hidden: false, appearance: None, flat_space: false, ancoras: vec![] });
@@ -5347,7 +5372,7 @@ impl Document {
         if self.collectors.iter().any(|c| kill.contains(&c.id)) {
             self.collectors.retain(|c| !kill.contains(&c.id));
             if self.collectors.is_empty() {
-                let n = self.unique_name("Corpo");
+                let n = self.nome_padrao("Corpo");
                 self.add_collector(&n);
             }
             let first = self.collectors[0].id;

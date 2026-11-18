@@ -293,6 +293,8 @@ pub struct App {
     pub forma: crate::forma_ui::Estado,
     /// B438: o cubo de vistas que se prende na peça
     pub compasso: crate::compasso::Compasso,
+    /// B509: comando Medir aberto (paquímetro)
+    pub medir: Option<crate::medir_ui::Medir>,
     pub(crate) hover_pick: Option<crate::picking::Pick>,
     /// já passou da tela inicial
     pub(crate) started: bool,
@@ -510,6 +512,7 @@ impl App {
             new_view_name: String::new(),
             view_choice: None,
             compasso: crate::compasso::Compasso::novo(),
+            medir: None,
             hover_item: None,
             hover_now: std::cell::Cell::new(None),
             multi: Default::default(),
@@ -2197,7 +2200,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     /// Chave v2 da aresta escolhida (de corpo ou de superfície de referência, borda incluída).
-    fn edge_key_of(&self, body: usize, edge: usize) -> Option<EdgeKey> {
+    pub(crate) fn edge_key_of(&self, body: usize, edge: usize) -> Option<EdgeKey> {
         let r = self.result.as_ref()?;
         if body >= crate::picking::SURF_BASE {
             return r.surfaces.get(body - crate::picking::SURF_BASE)?.edge_key(edge);
@@ -2454,6 +2457,13 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             crate::forma_ui::comecar(self, p);
             return;
         }
+        // B509: Medir não cria recurso; abre o painel do paquímetro
+        if let Cmd::Medir = c {
+            self.sair_da_sessao();
+            crate::medir_ui::abrir(self);
+            return;
+        }
+        self.medir = None;
         self.sair_da_sessao();
         let snapshot = self.open.doc.clone();
         let sel_now = self.sel;
@@ -2504,7 +2514,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 let geo = match sel_now {
                     Sel::Folder(fo) if d.folder(fo).is_some_and(|x| x.kind == FolderKind::Geometria) => Some(fo),
                     _ if self.settings.sketch_in_geometry && !on_face => Some(
-                        d.folders.iter().find(|f| f.kind == FolderKind::Geometria).map(|f| f.id).unwrap_or_else(|| d.add_geometry_folder("Geometria")),
+                        d.folders.iter().find(|f| f.kind == FolderKind::Geometria).map(|f| f.id).unwrap_or_else(|| d.default_geometry_folder()),
                     ),
                     _ => None,
                 };
@@ -3034,18 +3044,18 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             // comandos de montagem são tratados em asm_ui::command
             Cmd::AsmNew | Cmd::AsmOpen | Cmd::AsmSave | Cmd::AsmInsert | Cmd::AsmSubAsm | Cmd::AsmNewPart | Cmd::AsmGroup | Cmd::AsmReplace | Cmd::AsmMate(_) | Cmd::AsmFix | Cmd::AsmRigid
             | Cmd::AsmSolve | Cmd::AsmNumber | Cmd::AsmInterf | Cmd::AsmPattern | Cmd::AsmJoint(_) | Cmd::AsmAutoJoints | Cmd::AsmSimulate | Cmd::AsmDisplay | Cmd::AsmBom
-            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmConjunto | Cmd::AsmRegrasCor | Cmd::AsmCatalogo | Cmd::AsmGears | Cmd::AsmChaveta | Cmd::AsmCalculo => return,
+            | Cmd::AsmSubFromSel | Cmd::AsmFeat(_) | Cmd::AsmLink | Cmd::AsmFasteners | Cmd::AsmConjunto | Cmd::AsmRegrasCor | Cmd::AsmCatalogo | Cmd::AsmGears | Cmd::AsmChaveta | Cmd::AsmCalculo | Cmd::Medir => return,
             Cmd::Param => {
                 let n = (1..).map(|i| format!("P{i}")).find(|n| !d.params.iter().any(|p| &p.name == n)).unwrap();
                 let _ = d.add_param(&n, "10", Unit::Comprimento);
                 Sel::Params
             }
             Cmd::Folder => {
-                let n = format!("Geometria {}", d.folders.iter().filter(|f| f.kind == FolderKind::Geometria).count() + 1);
+                let n = format!("{} {}", tr("Geometria"), d.folders.iter().filter(|f| f.kind == FolderKind::Geometria).count() + 1);
                 Sel::Folder(d.add_geometry_folder(&n))
             }
             Cmd::Collector => {
-                let n = format!("Corpo {}", d.collectors.len() + 1);
+                let n = format!("{} {}", tr("Corpo"), d.collectors.len() + 1);
                 let id = d.add_collector(&n);
                 d.active_collector = id;
                 Sel::Collector(id)
@@ -3190,6 +3200,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             crate::cena_ui::fechar();
         } else if self.compasso_no_painel() {
             self.compasso.devolver();
+        } else if crate::medir_ui::no_painel(self) {
+            crate::medir_ui::fechar(self);
         } else if self.session.is_some() {
             self.cancel_session();
         } else if self.sketch.is_some() {
@@ -4911,6 +4923,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             crate::cena_ui::abrir();
         }
 
+        // ---------- B509: medidas mantidas (associativas)
+        if !hide("medidas") {
+            crate::medir_ui::no_da_arvore(self, ui, &doc);
+        }
+
         if !hide("vistas") {
         // ---------- vistas salvas (câmeras)
         if !doc.views.is_empty() {
@@ -5979,7 +5996,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 }
             }
             TreeAction::NewGeometryFolder => {
-                let n = format!("Geometria {}", d.folders.iter().filter(|f| f.kind == FolderKind::Geometria).count() + 1);
+                let n = format!("{} {}", tr("Geometria"), d.folders.iter().filter(|f| f.kind == FolderKind::Geometria).count() + 1);
                 self.sel = Sel::Folder(d.add_geometry_folder(&n));
             }
             TreeAction::ObjetoTrabalho(id) => {
@@ -5996,11 +6013,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 }
             }
             TreeAction::NewCommandFolder => {
-                let n = format!("Pasta {}", d.folders.len() + 1);
+                let n = format!("{} {}", tr("Pasta"), d.folders.len() + 1);
                 self.sel = Sel::Folder(d.add_folder(&n));
             }
             TreeAction::NewCollector => {
-                let n = format!("Corpo {}", d.collectors.len() + 1);
+                let n = format!("{} {}", tr("Corpo"), d.collectors.len() + 1);
                 let id = d.add_collector(&n);
                 d.active_collector = id;
                 self.sel = Sel::Collector(id);
@@ -6014,7 +6031,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 self.sel = Sel::None;
             }
             TreeAction::NewSubfolder(parent) => {
-                let n = d.unique_name("Pasta");
+                let n = d.nome_padrao("Pasta");
                 let id = d.add_subfolder(&n, parent);
                 self.sel = Sel::Folder(id);
             }
@@ -6030,7 +6047,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 }
             }
             TreeAction::GroupInNewFolder(itens, pai) => {
-                let n = d.unique_name("Pasta");
+                let n = d.nome_padrao("Pasta");
                 match d.agrupar_em_pasta(&itens, pai, &n) {
                     Ok(id) => self.sel = Sel::Folder(id),
                     Err(_) => self.toast("Nenhum dos selecionados pode ir para uma pasta de geometria", true),
@@ -6859,7 +6876,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         }
         let n = n as usize;
         let d = &mut self.open.doc;
-        let folder = d.add_geometry_folder(&format!("Repetição ({n})"));
+        let folder = d.add_geometry_folder(&format!("{} ({n})", tr("Repetição")));
         let mut last = None;
         for i in 0..n {
             let at = if rp.by_spacing {
@@ -7805,11 +7822,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 }
                 if !self.picks.is_empty() {
                     let n = self.picks.len();
-                    let txt = if n == 1 { self.picks[0].label(&self.open.doc) } else { format!("{n} itens selecionados") };
-                    ui.painter().text(rect.center_bottom() + egui::vec2(0., -32.), egui::Align2::CENTER_BOTTOM, format!("Seleção: {txt}  ·  Esc limpa"), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), crate::theme::st_warn());
+                    let txt = if n == 1 { self.picks[0].label(&self.open.doc) } else { format!("{n} {}", tr("itens selecionados")) };
+                    ui.painter().text(rect.center_bottom() + egui::vec2(0., -32.), egui::Align2::CENTER_BOTTOM, format!("{} {txt}  ·  {}", tr("Seleção:"), tr("Esc limpa")), egui::FontId::proportional(crate::acessibilidade::fonte_3d(12.)), crate::theme::st_warn());
                 }
             }
             if self.sketch.is_none() {
+                crate::medir_ui::overlay(self, ui, rect, &cam);
                 crate::pmi_ui::overlay(self, ui, rect, &cam);
                 crate::asm_ui::context_overlay(self, ui, rect, &cam);
                 crate::asm_cmd::overlay(self, ui, rect, &cam);
@@ -8111,6 +8129,8 @@ pub enum Cmd {
     Param,
     Folder,
     Collector,
+    /// B509: medir item ou entre elementos (paquímetro)
+    Medir,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -8309,12 +8329,13 @@ pub fn done_bar(ui: &mut egui::Ui) -> bool {
 }
 
 /// Seções da árvore da peça que podem ser ocultadas: (chave, nome).
-pub const TREE_SECTIONS: [(&str, &str); 7] = [
+pub const TREE_SECTIONS: [(&str, &str); 8] = [
     ("origem", "📍 Origem"),
     ("externas", "🔗 Referências externas"),
     ("publicacoes", "📤 Publicações"),
     ("pmi", "📐 PMI"),
     ("parametros", "ƒ Parâmetros"),
+    ("medidas", "📏 Medidas mantidas"),
     ("vistas", "📷 Vistas salvas"),
     ("geometria", "📁 Pastas de geometria"),
 ];
@@ -8918,7 +8939,7 @@ impl eframe::App for App {
         } else {
             self.session.is_some() || self.sketch.is_some() || self.sketch_wait_plane || self.pmi_pending.is_some()
         };
-        let active = active || self.compasso_no_painel();
+        let active = active || self.compasso_no_painel() || crate::medir_ui::no_painel(self);
         // B182: o painel da cena divide a coluna com a árvore, como as propriedades de um item
         crate::cena_ui::preparar(self);
         let active = active || self.cena_no_painel();

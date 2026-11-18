@@ -135,6 +135,8 @@ impl App {
             tr("Cena").to_string()
         } else if self.compasso_no_painel() {
             tr("Compasso").to_string()
+        } else if crate::medir_ui::no_painel(self) {
+            tr("Medir").to_string()
         } else if self.sketch.is_some() {
             tr("Sketch").to_string()
         } else if let Some(s) = &self.session {
@@ -162,7 +164,7 @@ impl App {
 
     /// Concluir, Cancelar e companhia: ficam à vista também com a árvore aberta pela seta.
     fn barras_do_comando(&mut self, ui: &mut egui::Ui) {
-        if self.compasso_no_painel() || self.cena_no_painel() {
+        if self.compasso_no_painel() || self.cena_no_painel() || crate::medir_ui::no_painel(self) {
             return;
         }
         self.conclude_bar(ui);
@@ -183,6 +185,8 @@ impl App {
                 crate::cena_ui::painel(self, ui)
             } else if self.compasso_no_painel() {
                 crate::compasso::painel(self, ui)
+            } else if crate::medir_ui::no_painel(self) {
+                crate::medir_ui::painel(self, ui)
             } else if self.settings.bench == crate::settings::Bench::Desenho {
                 crate::dwg_ui::panel(self, ui)
             } else if crate::asm_inserir::na_coluna(self) {

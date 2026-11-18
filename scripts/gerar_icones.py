@@ -797,6 +797,14 @@ I["sel_clique"] = f'<path d="M14 6 L14 38 L22 30 L28 44 L33 42 L27 28 L38 28 Z" 
 I["sel_caixa_janela"] = f'<rect x="6" y="8" width="36" height="30" fill="{ACTION_L}" stroke="{ACTION}" stroke-width="2.2"/>' + box((24, 16), 9, w=10, hh=5)
 I["sel_caixa_cruzada"] = f'<rect x="6" y="8" width="36" height="30" fill="#e6f7ea" stroke="#2f9e44" stroke-width="2.2" stroke-dasharray="5 3"/>' + box((38, 22), 10, w=10, hh=5)
 I["sel_caixa_auto"] = f'<rect x="4" y="10" width="40" height="26" fill="none" stroke="{ACTION}" stroke-width="2"/>' + arrow(10, 44, 38, 44, ACTION, 2) + arrow(38, 4, 10, 4, "#2f9e44", 2)
+# ---------------- medir (B509): paquímetro; medida mantida na árvore e medida órfã
+PAQ = (f'<rect x="4" y="10" width="40" height="8" rx="1.5" fill="{LIGHT}" {S}/>'
+       + "".join(f'<path d="M{10 + 4 * k} 10 V{14 if k % 2 else 16}" stroke="{INK}" stroke-width="1.2"/>' for k in range(8))
+       + f'<path d="M6 18 V40 L12 34 V18 Z" fill="{MID}" {S}/>'
+       + f'<path d="M26 8 H36 V20 H32 V40 L26 34 Z" fill="{DARK}" {S}/>')
+I["medir"] = PAQ + arrow(14, 30, 24, 30, ACTION, 2) + arrow(24, 30, 14, 30, ACTION, 2)
+I["medida"] = PAQ + f'<rect x="16" y="26" width="28" height="14" rx="2" fill="#ffffff" stroke="{ACTION}" stroke-width="2"/>' + f'<path d="M20 33 H40" stroke="{ACTION}" stroke-width="2"/>'
+I["medida_orfa"] = PAQ + f'<circle cx="34" cy="34" r="10" fill="#fff4e0" stroke="#c77700" stroke-width="2.2"/>' + f'<path d="M34 28 V35" stroke="#c77700" stroke-width="3" stroke-linecap="round"/><circle cx="34" cy="39.5" r="1.6" fill="#c77700"/>'
 for name, body in I.items():
     with open(os.path.join(OUT, f"{name}.svg"), "w", encoding="utf8", newline="\n") as f:
         f.write(svg(body))

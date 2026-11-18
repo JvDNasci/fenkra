@@ -770,6 +770,12 @@ SO_INTERFACE |= {"pl_boss", "pl_snap", "pl_grelha", "pl_lip", "pl_ranhura"}
 SO_INTERFACE |= {"asm_chaveta", "asm_calculo", "pmi_captura", "pmi_captura_modelo"}
 SO_INTERFACE |= {"asm_conjunto", "asm_regras_cor"}
 SO_INTERFACE |= {"verificar"}
+
+# medir (B509): paquímetro; medida mantida na árvore e medida órfã (referência perdida)
+PAQ = Q(6, 8, 36, 7) + L((13, 15), (13, 30), (8, 36), (8, 15)) + Q(26, 6, 10, 11) + L((26, 17), (26, 36), (31, 30), (31, 17))
+ic("medir", B=PAQ, R=S2(15, 25, 24, 25, 3.5) + "M16 8v3M20 8v3")
+ic("medida", B=PAQ, R=Q(18, 30, 24, 12) + "M22 36h16")
+ic("medida_orfa", B=PAQ, R=C(35, 35, 8) + "M35 31v5", pr=[(35, 39.5)])
 SO_INTERFACE |= {"des_esboco"}
 SO_INTERFACE |= {"des_automatico"}
 SO_INTERFACE |= {"pmi_empilhamento"}
