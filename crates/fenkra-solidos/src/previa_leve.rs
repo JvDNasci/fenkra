@@ -56,13 +56,14 @@ pub fn cobre(k: &FeatureKind) -> bool {
 /// Chapa e estrutural: leves só quando são o último comando ativo (`cobre_no`). O desdobrar parcial
 /// fica de fora: ele não cria material, só muda o estado em que as abas aparecem. A dobra cônica
 /// também fica de fora (B470): o tronco é só um perfil de quatro retas girado, barato o bastante
-/// para sair inteiro na prévia; leve, ela mostrava só a caixa envolvente em vez do cone.
+/// para sair inteiro na prévia; leve, ela mostrava só a caixa envolvente em vez do cone. A parede
+/// base idem: é uma extrusão só, e leve a peça nova não aparecia enquanto o painel estava aberto
+/// (só a caixa em linhas), o que parecia "não fez nada".
 pub fn so_no_fim(k: &FeatureKind) -> bool {
     use FeatureKind as K;
     matches!(
         k,
-        K::SmWall(_)
-            | K::SmFlange(_)
+        K::SmFlange(_)
             | K::SmHem(_)
             | K::SmJoggle(_)
             | K::SmBend(_)

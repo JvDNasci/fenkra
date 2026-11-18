@@ -41,7 +41,10 @@ Consulte solidos, desenho quando a mudança atravessar a fronteira da área.
 Registre aqui erros que se repetiram.
 
 - Dobra por linha nasce sem linha (`a == b`): o recálculo trata isso como "esperando a face fixa" e o clique na face põe a linha no meio dela (`chapa_linha::linha_no_meio`). Valor padrão com `a != b` faz a dobra sair na ponta da peça (B469).
-- Comando de chapa na lista `previa_leve::so_no_fim` mostra só a caixa da zona durante a edição. Só entra nela o que é caro de construir; a dobra cônica saiu (B470).
+- Comando de chapa na lista `previa_leve::so_no_fim` mostra só a caixa da zona durante a edição. Só entra nela o que é caro de construir; a dobra cônica saiu (B470) e a parede base também (sem corpo com o painel aberto, a pessoa achava que o comando não fez nada).
+- Aba, bainha, laço e aba curva nascem com a aresta em (0,0,0) quando nada estava selecionado. Esse ponto é "a escolher" (`aresta_a_escolher`): nunca resolva a aresta mais perto da origem, que dava erro ou aba na aresta errada.
+- Teste de chapa que só monta o documento pronto não pega bug de interface. Use `chapa_fluxo_tests.rs`: `Cache::leve` com o comando aberto, aresta chegando depois, ponto em `f32` e chave promovida gravada.
+- No reconhecimento de espessura, faces paralelas só contam se estão de costas (normais opostas, material entre elas): a fenda de um rasgo também tem faces que se enfrentam, com ar no meio.
 
 ## Ao terminar
 

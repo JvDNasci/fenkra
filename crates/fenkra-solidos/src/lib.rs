@@ -116,10 +116,13 @@ pub mod chapa_canto;
 pub mod chapa_desdobra;
 pub mod chapa_converte;
 mod chapa_converte_mapa;
+mod chapa_converte_vivas;
 mod chapa_perfis;
 pub mod chapa_perfis_plana;
 #[cfg(test)]
 mod chapa_canto_tests;
+#[cfg(test)]
+mod chapa_fluxo_tests;
 pub use chapa_laco::{laco_de_malha, recuos_extensao};
 pub mod planificada;
 pub mod nesting;
@@ -207,6 +210,22 @@ impl BodyResult {
 /// Corpo de um coletor: forma, dono de cada face e papel de cada face (as duas listas na ordem
 /// das faces do kernel).
 type Body = (Shape, Vec<Id>, Vec<i32>);
+
+/// Motivo interno da aba ou bainha sem aresta escolhida (vira `Status::Inactive`).
+const ARESTA_A_ESCOLHER: &str = "clique numa aresta reta da chapa para pôr a aba";
+
+/// Aba, bainha, aba por laço ou aba curva ainda sem aresta: a aresta é (0,0,0) e sem chave, que é o
+/// valor com que o comando nasce quando nada estava selecionado.
+pub fn aresta_a_escolher(k: &FeatureKind) -> bool {
+    let z = [0.; 3];
+    match k {
+        FeatureKind::SmFlange(f) => f.edge == z && f.edge_key.is_none(),
+        FeatureKind::SmHem(h) => h.edge == z && h.edge_key.is_none(),
+        FeatureKind::SmFlangeLoop(l) => l.edges.iter().all(|e| *e == z) && l.edge_keys.iter().all(|k| k.is_none()),
+        FeatureKind::SmCurveFlange(c) => c.edge.is_empty() && c.edge_key.is_none(),
+        _ => false,
+    }
+}
 
 /// Corpo recém-criado por `fid`: todas as faces são dele, sem papel conhecido.
 fn fresh_body(s: Shape, fid: Id) -> Body {
@@ -4193,6 +4212,12 @@ impl Ctx<'_> {
     }
 
     fn run_feature(&mut self, f: &Feature) -> Result<Option<String>, String> {
+        // aba e bainha abertas antes do clique na aresta: o ponto (0,0,0) é o "ainda não escolhi"
+        // do painel. Resolver a aresta mais perto da origem dava erro na aba recém-aberta (ou uma
+        // aba na aresta errada); o comando espera a seleção, inativo (`recompute_efetivo`)
+        if aresta_a_escolher(&f.kind) {
+            return Err(ARESTA_A_ESCOLHER.into());
+        }
         if let Some(r) = self.previa_leve(f) {
             return r;
         }
@@ -6660,6 +6685,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                     // a origem pode tocar uma face de verdade (canto do corpo): a rosca sem face escolhida
                     // então reclama de outra coisa, mas segue sem escolha
                     Status::Error(_) if matches!(&f.kind, FeatureKind::Thread(t) if t.face == [0.; 3]) => Status::Inactive,
+                    Status::Error(m) if m == ARESTA_A_ESCOLHER => Status::Inactive,
                     st => st,
                 };
                 // cancelado no meio do kernel: o que veio é lixo (erro "cancelado" ou resultado parcial).

@@ -145,7 +145,14 @@ pub fn analisar_malha(m: &Mesh, volume: f64) -> Result<AnaliseChapa, String> {
         if geo3d::dot(info[planas[a]].dir, info[planas[b]].dir).abs() < 0.9999 || !se_enfrentam(a, b) {
             return None;
         }
-        let d = geo3d::dot(geo3d::sub(info[planas[b]].point, info[planas[a]].point), info[planas[a]].dir).abs();
+        // de costas: normais opostas e o material entre as duas. As faces de uma fenda (o rasgo do
+        // canto de uma caixa convertida) também se enfrentam, mas com ar entre elas, e não são espessura
+        let (na, nb) = (info[planas[a]].dir, info[planas[b]].dir);
+        let ab = geo3d::dot(geo3d::sub(info[planas[b]].point, info[planas[a]].point), na);
+        if geo3d::dot(na, nb) > 0. || ab > 0. {
+            return None;
+        }
+        let d = ab.abs();
         (d > 1e-6).then_some(d)
     };
     // espessura: a menor distância entre faces planas paralelas que se enfrentam
@@ -219,9 +226,9 @@ impl Ctx<'_> {
     /// reconheceu. O corpo não muda: os comandos de chapa seguintes passam a valer sobre ele.
     pub(super) fn run_convert(&mut self, f: &Feature, c: &fenkra_core::SmConvert) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
-        let corpo = self.body(f.target).ok_or("o corpo a converter precisa existir antes deste comando")?.clone();
-        let malha = tesselar(&corpo, &self.qualidade).map_err(k)?;
-        let a = analisar_malha(&malha, corpo.mass().volume)?;
+        let mut corpo = self.body(f.target).ok_or("o corpo a converter precisa existir antes deste comando")?.clone();
+        let mut malha = tesselar(&corpo, &self.qualidade).map_err(k)?;
+        let mut a = analisar_malha(&malha, corpo.mass().volume)?;
         if !c.thickness.trim().is_empty() {
             let pedida = super::chapa_laco::ev_faixa(&c.thickness, &self.vars, "espessura esperada", 0.01, f64::INFINITY, "mm")?;
             if (pedida - a.espessura).abs() > 0.02 * pedida.max(1e-6) {
@@ -237,7 +244,23 @@ impl Ctx<'_> {
                 return Err("a face fixa precisa ser uma face plana da chapa (não a lateral da espessura)".into());
             }
         }
-        let mut aviso = a.resumo();
+        // cantos vivos (caixa com casca, chapa dobrada sem raio): as arestas viram dobras com o raio
+        // da chapa, e os cantos entre paredes vizinhas ganham rasgo e alívio (`chapa_converte_vivas`)
+        let mut feito = String::new();
+        if self.sheet_maps.is_empty() {
+            let r = self.sheet().map(|s| s.r).unwrap_or(a.espessura);
+            if let Some(v) = super::chapa_converte_vivas::dobrar_arestas_vivas(&corpo, &malha, &a, c.face, r, &self.qualidade)? {
+                corpo = v.corpo;
+                malha = tesselar(&corpo, &self.qualidade).map_err(k)?;
+                a = analisar_malha(&malha, corpo.mass().volume).map_err(|e| format!("depois de dobrar as arestas vivas: {e}"))?;
+                self.bodies.insert(f.target, fresh_body(corpo.clone(), f.id));
+                feito = format!("{} aresta(s) viva(s) viraram dobra de raio {r:.2}", v.dobras);
+                if v.rasgos > 0 {
+                    feito = format!("{feito}, {} canto(s) com rasgo e alívio", v.rasgos);
+                }
+            }
+        }
+        let mut aviso = if feito.is_empty() { a.resumo() } else { format!("{}; {feito}", a.resumo()) };
         // mapa de dobras (B35): cada dobra reconhecida vira um `SheetMap`, como as de uma aba, e na
         // chapa planificada o corpo é desdobrado por elas. Corpo que já veio de comandos de chapa
         // tem o mapa deles e não é mapeado de novo.

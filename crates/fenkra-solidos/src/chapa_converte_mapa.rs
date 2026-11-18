@@ -26,10 +26,10 @@ use fenkra_kernel::Mesh;
 use std::collections::VecDeque;
 
 /// Um trecho plano da chapa: o plano médio (normal canônica e posição) e as faces principais.
-struct No {
-    n: V3,
-    d: f64,
-    faces: Vec<usize>,
+pub(super) struct No {
+    pub n: V3,
+    pub d: f64,
+    pub faces: Vec<usize>,
 }
 
 fn canonica(n: V3) -> V3 {
@@ -41,7 +41,7 @@ fn canonica(n: V3) -> V3 {
     }
 }
 
-fn nos_da_chapa(m: &Mesh, a: &AnaliseChapa) -> Vec<No> {
+pub(super) fn nos_da_chapa(m: &Mesh, a: &AnaliseChapa) -> Vec<No> {
     let t = a.espessura;
     let mut nos: Vec<No> = vec![];
     for &f in &a.planas {
@@ -225,7 +225,7 @@ pub(super) fn planificar(corpo: &Shape, maps: &[SheetMap]) -> Result<Shape, Stri
     }
     // 2. da última dobra à primeira: a perna gira ao plano do pai e a tira fecha o vão
     for m in maps.iter().rev() {
-        let reg = m.region(false)?;
+        let reg = perna(m, grande)?;
         let perna = corpo.boolean(&reg, Bool::Common).map_err(k)?;
         let resto = corpo.boolean(&reg, Bool::Cut).map_err(k)?;
         let movida = perna.transformed(Xform::Rotate(m.o, m.axis, -m.a.to_degrees())).map_err(k)?.transformed(Xform::Translate(geo3d::mul(m.u, m.ba))).map_err(k)?;
@@ -242,4 +242,15 @@ pub(super) fn planificar(corpo: &Shape, maps: &[SheetMap]) -> Result<Shape, Stri
         corpo = novo;
     }
     Ok(corpo)
+}
+
+/// Região da perna de uma dobra no dobrado: só a espessura dela (com folga fina) e larga ao longo
+/// do eixo. A região de `SheetMap::region` sobra `2t + 1` para cada lado, e numa caixa convertida a
+/// sobra pegava o canto da parede vizinha, separada só pela fenda do rasgo.
+fn perna(m: &SheetMap, grande: f64) -> Result<Shape, String> {
+    let folga = 0.01_f64.min(m.t / 10.);
+    let c = |uu: f64, ee: f64| geo3d::add(geo3d::add(m.c0, geo3d::mul(m.u, uu)), geo3d::add(geo3d::mul(m.ev, ee), geo3d::mul(m.n, -m.t - folga)));
+    let pts = [c(0., -grande), c(m.length, -grande), c(m.length, m.l + grande), c(0., m.l + grande)];
+    let laje = Shape::poly_prism(&pts, geo3d::mul(m.n, m.t + 2. * folga)).map_err(|e| e.0)?;
+    laje.transformed(Xform::Rotate(m.o, m.axis, m.a.to_degrees())).map_err(|e| e.0)
 }
