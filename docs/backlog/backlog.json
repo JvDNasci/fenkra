@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 119020,
+ "tokens_total_k": 119370,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -12,25 +12,25 @@
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 9.8
+   "pct": 9.7
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 27.2
+   "pct": 27.1
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 24700,
-   "pct": 20.8
+   "pct": 20.7
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 43180,
-   "pct": 36.3
+   "tokens_k": 43530,
+   "pct": 36.5
   }
  },
  "itens": [
@@ -8619,6 +8619,22 @@
    "area": "Interface",
    "status": "a fazer",
    "pct": 0.1
+  },
+  {
+   "id": "B521",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Polir o fluxo da forma livre",
+   "oque": "Sugestões do B511 (18/11), porque o usuário achou o fluxo fraco: (1) fundir os remendos regulares numa única face B-spline (a folha 4x4 sai com 256 faces), o maior ganho de limpeza e velocidade; (2) papel das subfaces pelo nome da face da gaiola, para as referências sobreviverem a corte em laço e extrusão; (3) Espessar, Deslocar e Fechar em sólido na barra da forma depois de concluir, com a forma já no campo; (4) relatório da conversão com superfície ou sólido e número de faces, avisando acima de umas 100; (5) Fechar bordas na gaiola; (6) prévia G0 leve durante o arraste e G1 só ao soltar. Aceite: folha 4x4 convertida em até 4 faces, referências mantidas após corte em laço, e os três atalhos na barra.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Superfícies",
+   "status": "a fazer",
+   "pct": 0.3
   }
  ]
 }

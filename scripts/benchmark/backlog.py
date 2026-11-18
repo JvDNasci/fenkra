@@ -1057,6 +1057,8 @@ c('B519', 4, 'P1', 'GIFs dos 10 comandos novos e teto de GIF de volta a 297', 'O
   ['USR-CHECK'], [], 80, 'Visual', 'Interface'),
 c('B520', 4, 'P1', 'Pincel de aparência na barra de propriedades gráficas', 'Pedido de 18/11: na barra de propriedades gráficas do topo (B506), um pincel copia a aparência de um elemento para outros: cor, transparência, tipo e espessura de linha, símbolo de ponto, material e textura. Clique no pincel, clique na origem e depois em um ou mais destinos; dois cliques no pincel o deixam ligado para vários destinos, e Esc o desliga. Vale entre peças e elementos do mesmo documento e entre documentos abertos, e entre tipos diferentes só copia o que se aplica. Aceite: teste copia cor, linha e material de uma face para outra face e para uma linha, confere no documento e confere que o desfazer volta tudo num passo.',
   ['USR-CHECK'], [], 120, 'Auto + Visual', 'Interface'),
+c('B521', 4, 'P1', 'Polir o fluxo da forma livre', 'Sugestões do B511 (18/11), porque o usuário achou o fluxo fraco: (1) fundir os remendos regulares numa única face B-spline (a folha 4x4 sai com 256 faces), o maior ganho de limpeza e velocidade; (2) papel das subfaces pelo nome da face da gaiola, para as referências sobreviverem a corte em laço e extrusão; (3) Espessar, Deslocar e Fechar em sólido na barra da forma depois de concluir, com a forma já no campo; (4) relatório da conversão com superfície ou sólido e número de faces, avisando acima de umas 100; (5) Fechar bordas na gaiola; (6) prévia G0 leve durante o arraste e G1 só ao soltar. Aceite: folha 4x4 convertida em até 4 faces, referências mantidas após corte em laço, e os três atalhos na barra.',
+  ['USR-CHECK'], [], 350, 'Auto + Visual', 'Superfícies'),
 ]
 def main():
     for x in B:

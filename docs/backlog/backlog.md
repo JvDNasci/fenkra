@@ -4,15 +4,15 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 119.0 M tokens (≈ 397 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 119.4 M tokens (≈ 398 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
 | Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 6.0% |
-| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 9.8% |
-| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 156 | ≈ 32350 k | 27.2% |
-| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 125 | ≈ 24700 k | 20.8% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 143 | ≈ 43180 k | 36.3% |
+| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 9.7% |
+| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 156 | ≈ 32350 k | 27.1% |
+| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 125 | ≈ 24700 k | 20.7% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 144 | ≈ 43530 k | 36.5% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
@@ -503,6 +503,7 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 | B513 | P1 | **Tangência entre faces de sólidos com defeito** — Relato de 18/11: a tangência dos sólidos está com defeitos. Investigar com peças de teste, achar a causa e corrigir. Aceite: casos que falham viram testes com status ok. | USR-CHECK |  | 200 k | 0.2% | Auto | a fazer |
 | B519 | P1 | **GIFs dos 10 comandos novos e teto de GIF de volta a 297** — O B506 (9 botões da barra de vistas) e o B509 (Medir) entraram sem o GIF do tooltip, porque a captura pede abrir a janela com o usuário fora do PC. O teto TETO_FORA_SEM_GIF de checklist_comandos.rs subiu para 307 de forma temporária. Aceite: os 10 GIFs gerados pelo roteiro de mídia e o teto de volta a 297. | USR-CHECK |  | 80 k | 0.1% | Visual | a fazer |
 | B520 | P1 | **Pincel de aparência na barra de propriedades gráficas** — Pedido de 18/11: na barra de propriedades gráficas do topo (B506), um pincel copia a aparência de um elemento para outros: cor, transparência, tipo e espessura de linha, símbolo de ponto, material e textura. Clique no pincel, clique na origem e depois em um ou mais destinos; dois cliques no pincel o deixam ligado para vários destinos, e Esc o desliga. Vale entre peças e elementos do mesmo documento e entre documentos abertos, e entre tipos diferentes só copia o que se aplica. Aceite: teste copia cor, linha e material de uma face para outra face e para uma linha, confere no documento e confere que o desfazer volta tudo num passo. | USR-CHECK |  | 120 k | 0.1% | Auto + Visual | a fazer |
+| B521 | P1 | **Polir o fluxo da forma livre** — Sugestões do B511 (18/11), porque o usuário achou o fluxo fraco: (1) fundir os remendos regulares numa única face B-spline (a folha 4x4 sai com 256 faces), o maior ganho de limpeza e velocidade; (2) papel das subfaces pelo nome da face da gaiola, para as referências sobreviverem a corte em laço e extrusão; (3) Espessar, Deslocar e Fechar em sólido na barra da forma depois de concluir, com a forma já no campo; (4) relatório da conversão com superfície ou sólido e número de faces, avisando acima de umas 100; (5) Fechar bordas na gaiola; (6) prévia G0 leve durante o arraste e G1 só ao soltar. Aceite: folha 4x4 convertida em até 4 faces, referências mantidas após corte em laço, e os três atalhos na barra. | USR-CHECK |  | 350 k | 0.3% | Auto + Visual | a fazer |
 | B111 | P2 | **Calculadora de rolamento, engrenagem e estriado** — Vida L10 e verificação de engrenagem. Dados do fabricante como camada. (BN01b; módulo Cálculo mecânico; depende de BN01, B44). | PESQ-MOD |  | 250 k | 0.2% | Auto | em andamento |
 | B115 | P2 | **Verificação por norma de barras (aço)** — Utilização por NBR 8800 / EN 1993 / AISC. Relatório. (BN03b; módulo Estrutural; depende de BN03). | PESQ-MOD |  | 300 k | 0.3% | Auto | em andamento |
 | B120 | P2 | **Lattice e preenchimento implícito** — Lattice e preenchimento implícito sobre corpo de malha: TPMS uniforme (giroide, Schwarz-P, diamante) intersectado com o corpo e casca externa, fração de volume como alvo, parede mínima por processo, superfície por marching cubes ou dual contouring sobre grade esparsa (OpenVDB Apache-2.0 ou grade própria em Rust). Vigas, 3MF Beam Lattice e gradiente por campo ficam em item separado. | PESQ-MOD |  | 450 k | 0.4% | Auto | a fazer |
