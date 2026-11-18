@@ -6,10 +6,155 @@
 #include <TColStd_Array1OfReal.hxx>
 #include <TColgp_Array2OfPnt.hxx>
 #include <BRepTopAdaptor_FClass2d.hxx>
+#include <BRepLProp_SLProps.hxx>
+#include <BRepOffsetAPI_MakeOffsetShape.hxx>
+#include <BRepAlgoAPI_BuilderAlgo.hxx>
+#include <BRepAdaptor_Curve.hxx>
+#include <GeomAdaptor_Surface.hxx>
+#include <climits>
+#include <functional>
 
 namespace fenkra {
 
 namespace {
+
+// Peças da costura: cada casco e cada face solta. Cada uma é deslocada ou engrossada por si.
+std::vector<TopoDS_Shape> pecas_da_costura(const TopoDS_Shape& sewed) {
+    std::vector<TopoDS_Shape> out;
+    if (sewed.IsNull()) return out;
+    if (sewed.ShapeType() == TopAbs_SHELL || sewed.ShapeType() == TopAbs_FACE) {
+        out.push_back(sewed);
+        return out;
+    }
+    for (TopExp_Explorer e(sewed, TopAbs_SHELL); e.More(); e.Next()) out.push_back(e.Current());
+    for (TopExp_Explorer e(sewed, TopAbs_FACE, TopAbs_SHELL); e.More(); e.Next()) out.push_back(e.Current());
+    return out;
+}
+
+// Domínios conexos: faces ligadas por arestas em comum (a mesma aresta, não só a mesma posição).
+int dominios(const TopoDS_Shape& s) {
+    TopTools_IndexedMapOfShape faces;
+    TopExp::MapShapes(s, TopAbs_FACE, faces);
+    const int nf = faces.Extent();
+    std::vector<int> up(nf + 1);
+    for (int i = 0; i <= nf; ++i) up[i] = i;
+    std::function<int(int)> raiz = [&](int x) { return up[x] == x ? x : up[x] = raiz(up[x]); };
+    TopTools_IndexedDataMapOfShapeListOfShape e2f;
+    TopExp::MapShapesAndAncestors(s, TopAbs_EDGE, TopAbs_FACE, e2f);
+    for (int i = 1; i <= e2f.Extent(); ++i) {
+        const TopTools_ListOfShape& fs = e2f(i);
+        if (fs.Extent() < 2) continue;
+        const int a = faces.FindIndex(fs.First());
+        for (TopTools_ListIteratorOfListOfShape it(fs); it.More(); it.Next()) up[raiz(faces.FindIndex(it.Value()))] = raiz(a);
+    }
+    int n = 0;
+    for (int i = 1; i <= nf; ++i) n += raiz(i) == i;
+    return n;
+}
+
+// B518: as faces de entrada viram um casco antes de deslocar ou engrossar. Sem a costura cada face
+// se desloca sozinha e as vizinhas ficam sobrepostas ou abertas na emenda (a parede que atravessa a
+// quina). A costura também acerta a orientação: todas as faces do casco olham para o mesmo lado.
+// A tolerância cresce até 0,01 mm (folga das aproximações de filete e preenchimento) e fica a menor
+// que dá o menor número de peças.
+TopoDS_Shape casco_costurado(const TopoDS_Shape& s, double& tol_usada, int& pecas) {
+    TopoDS_Shape melhor;
+    int nmelhor = INT_MAX;
+    tol_usada = 1e-4;
+    for (double t : {1e-4, 1e-3, 1e-2}) {
+        BRepBuilderAPI_Sewing sw(t);
+        int nf = 0;
+        for (TopExp_Explorer e(s, TopAbs_FACE); e.More(); e.Next(), ++nf) sw.Add(e.Current());
+        if (nf == 0) throw std::runtime_error("a entrada não tem faces");
+        sw.Perform();
+        TopoDS_Shape r = sw.SewedShape();
+        const int n = dominios(r);
+        if (n < nmelhor) melhor = r, nmelhor = n, tol_usada = t;
+        if (n <= 1) break;
+    }
+    pecas = nmelhor;
+    return melhor;
+}
+
+// Maior curvatura de cada lado da superfície, em 1/mm, pela normal orientada de cada face:
+// [0] lado da normal, [1] lado oposto. Deslocar `d` para um lado só é possível com |d| < 1/k desse
+// lado: no centro de curvatura a face deslocada degenera e, além dele, dobra sobre si (as faces
+// torcidas e cruzadas do engrossar). A curvatura com sinal das propriedades locais é positiva quando
+// a face se curva para o lado da normal da superfície; a face invertida troca o sinal.
+std::array<double, 2> curvatura_por_lado(const TopoDS_Shape& s) {
+    double kp = 0, kn = 0;
+    for (TopExp_Explorer e(s, TopAbs_FACE); e.More(); e.Next()) {
+        const TopoDS_Face& f = TopoDS::Face(e.Current());
+        BRepAdaptor_Surface a(f, Standard_True);
+        if (a.GetType() == GeomAbs_Plane) continue;
+        const double sg = f.Orientation() == TopAbs_REVERSED ? -1 : 1;
+        double u0, u1, v0, v1;
+        BRepTools::UVBounds(f, u0, u1, v0, v1);
+        BRepTopAdaptor_FClass2d cl(f, 1e-7);
+        const int n = 12;
+        for (int i = 0; i <= n; ++i)
+            for (int j = 0; j <= n; ++j) {
+                const double u = u0 + (u1 - u0) * i / n, v = v0 + (v1 - v0) * j / n;
+                if (cl.Perform(gp_Pnt2d(u, v)) == TopAbs_OUT) continue;
+                BRepLProp_SLProps p(a, u, v, 2, 1e-9);
+                if (!p.IsCurvatureDefined()) continue;
+                for (double k : {p.MaxCurvature(), p.MinCurvature()}) {
+                    kp = std::max(kp, k * sg);
+                    kn = std::max(kn, -k * sg);
+                }
+            }
+    }
+    return {kp, kn};
+}
+
+// Recusa o deslocamento que passa do centro de curvatura, com o raio mínimo no aviso: nunca entrega
+// superfície dobrada nem sólido inválido.
+void confere_raio(const TopoDS_Shape& s, double d, const char* oque) {
+    if (std::abs(d) < 1e-12) return;
+    const auto k = curvatura_por_lado(s);
+    const double kk = d > 0 ? k[0] : k[1];
+    if (kk < 1e-12) return;
+    const double r = 1 / kk;
+    if (std::abs(d) < r * (1 - 1e-6)) return;
+    char buf[512];
+    std::snprintf(buf, sizeof buf,
+                  "%s de %.4g mm passa do menor raio de curvatura desse lado (%.4g mm): a superfície dobraria sobre si; use menos que %.4g mm ou aumente o raio da curva",
+                  oque, std::abs(d), r, r);
+    throw std::runtime_error(buf);
+}
+
+// Resultado conferido: válido (com a cura de forma, se precisar) e não vazio.
+bool forma_valida(TopoDS_Shape& r) {
+    if (r.IsNull() || !TopExp_Explorer(r, TopAbs_FACE).More()) return false;
+    if (BRepCheck_Analyzer(r).IsValid()) return true;
+    Handle(ShapeFix_Shape) fx = new ShapeFix_Shape(r);
+    fx->Perform();
+    if (!BRepCheck_Analyzer(fx->Shape()).IsValid()) return false;
+    r = fx->Shape();
+    return true;
+}
+
+// Uma peça (casco ou face) deslocada inteira. Interseção apara e estende as vizinhas nos cantos
+// vivos; arco arredonda os cantos convexos. Devolve nulo quando não dá ou quando a peça se parte.
+TopoDS_Shape desloca_peca(const TopoDS_Shape& p, double d, double tol, int modo) {
+    TopoDS_Shape r;
+    try {
+        BRepOffsetAPI_MakeOffsetShape mk;
+        if (modo == 3) {
+            // deslocamento simples: cada face pela sua normal, arestas refeitas; vale para casco liso (G1)
+            mk.PerformBySimple(p, d);
+        } else {
+            const GeomAbs_JoinType j = modo == 2 ? GeomAbs_Intersection : GeomAbs_Arc;
+            mk.PerformByJoin(p, d, tol, BRepOffset_Skin, j == GeomAbs_Intersection, Standard_False, j);
+        }
+        if (!mk.IsDone()) return TopoDS_Shape();
+        r = mk.Shape();
+    } catch (const Standard_Failure&) {
+        return TopoDS_Shape();
+    }
+    if (!forma_valida(r) || dominios(r) != dominios(p)) return TopoDS_Shape();
+    return r;
+}
 
 // Curva (polilinha xyz) como aresta suave ou polilinha, igual à curva guia.
 TopoDS_Wire curve_wire(rust::Slice<const double> pts) { return spine_wire(pts); }
@@ -41,19 +186,43 @@ std::unique_ptr<Shape> offset_surface(const Shape& s, double d) {
     });
 }
 
-// join: 0 automático (arco; se falhar, interseção), 1 arco, 2 interseção (cantos vivos)
+// join: 0 automático (arco; se falhar, interseção; por fim o simples, para casco liso), 1 arco,
+// 2 interseção (cantos vivos). B518: as faces são costuradas num casco e o casco inteiro é deslocado,
+// com as vizinhas aparadas e estendidas pela ligação; antes disso, o deslocamento que passa do raio de
+// curvatura é recusado com o raio mínimo. O resultado é um casco por peça conexa da entrada.
 std::unique_ptr<Shape> offset_surface_j(const Shape& s, double d, uint8_t join) {
     return guard("superfície deslocada", [&] {
-        auto run = [&](GeomAbs_JoinType j) -> TopoDS_Shape {
-            BRepOffsetAPI_MakeOffsetShape mk;
-            mk.PerformByJoin(s.s, d, 1e-4, BRepOffset_Skin, j == GeomAbs_Intersection, Standard_False, j);
-            if (!mk.IsDone()) return TopoDS_Shape();
-            return mk.Shape();
-        };
-        TopoDS_Shape r = run(join == 2 ? GeomAbs_Intersection : GeomAbs_Arc);
-        if (r.IsNull() && join == 0) r = run(GeomAbs_Intersection);
-        if (r.IsNull()) throw std::runtime_error("não foi possível deslocar a superfície com essa ligação");
-        return wrap(r);
+        if (std::abs(d) < 1e-9) throw std::runtime_error("a distância precisa ser diferente de zero");
+        double tol = 1e-4;
+        int n = 0;
+        TopoDS_Shape base = casco_costurado(s.s, tol, n);
+        confere_raio(base, d, "o deslocamento");
+        std::vector<int> modos = join == 1 ? std::vector<int>{1} : join == 2 ? std::vector<int>{2} : std::vector<int>{1, 2, 3};
+        TopoDS_Compound c;
+        BRep_Builder bb;
+        bb.MakeCompound(c);
+        int feitas = 0;
+        TopoDS_Shape uma;
+        for (const TopoDS_Shape& p : pecas_da_costura(base)) {
+            TopoDS_Shape r;
+            for (int m : modos)
+                if (!(r = desloca_peca(p, d, std::max(tol, 1e-4), m)).IsNull()) break;
+            if (r.IsNull()) throw std::runtime_error("não foi possível deslocar a superfície com essa ligação");
+            bb.Add(c, r);
+            uma = r;
+            ++feitas;
+        }
+        return wrap(feitas == 1 ? uma : TopoDS_Shape(c));
+    });
+}
+
+// Casco costurado da superfície (B518): a mesma costura que o deslocamento e o engrossar usam, para a
+// seta mostrar a normal que eles vão seguir.
+std::unique_ptr<Shape> shell_of(const Shape& s) {
+    return guard("costurar", [&] {
+        double tol = 1e-4;
+        int n = 0;
+        return wrap(casco_costurado(s.s, tol, n));
     });
 }
 

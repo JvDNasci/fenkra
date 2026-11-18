@@ -4058,7 +4058,8 @@ pub struct FaceKey {
     /// comando que gerou a face
     pub owner: Id,
     /// o que a face é para o dono: 0 tampa inicial, 1 tampa final, 2+i lateral gerada pela aresta i
-    /// do perfil, -1 desconhecido
+    /// do perfil, -1 desconhecido. Na superfície de referência (B515) o dono é a superfície e o papel é
+    /// `PAPEL_SUPERFICIE + i`, a face i dela
     pub role: i32,
     /// 0 plano, 1 cilindro, 2 outro
     pub kind: u8,
@@ -4072,7 +4073,14 @@ pub struct FaceKey {
 pub struct EdgeKey {
     pub a: FaceKey,
     pub b: FaceKey,
+    /// B515: aresta de superfície de referência, pelo índice dela na superfície (o papel da aresta).
+    /// A aresta livre (borda) tem uma face só: aí `b` repete `a`. `None` nas arestas de corpo.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edge: Option<u32>,
 }
+
+/// Primeiro papel das faces de uma superfície de referência (B515): a face `i` tem `PAPEL_SUPERFICIE + i`.
+pub const PAPEL_SUPERFICIE: i32 = 1_000_000;
 
 /// Chaves v2 depois de editar a lista de pontos de um comando (acrescentar, tirar, trocar): o ponto
 /// que continua na lista (mesma posição) mantém a chave dele; o ponto novo fica sem chave e o

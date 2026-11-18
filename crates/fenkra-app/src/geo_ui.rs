@@ -1825,6 +1825,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             surf_slot(ui, "g_b", "Superfície 2", doc, me, b, seed);
             crate::sup3d::dica_de_lado(ui);
             radius_ui(ui, radius, radius2, vars);
+            ui.label(RichText::new(tr("As superfícies de entrada ficam ocultas quando o resultado sai; mostre-as de novo pela árvore.")).weak().small());
         }
         R::SurfEdgeFillet { surface, edges, radius, radius2 } => {
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
@@ -2009,6 +2010,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             surfs_list(ui, "g_j", doc, me, items, seed);
             curves_list(ui, "g_jc", "Curva", doc, me, curves, seed, 0);
             expr(ui, "Tolerância", tol, vars, "mm");
+            ui.label(RichText::new(tr("As superfícies de entrada ficam ocultas quando o resultado sai; mostre-as de novo pela árvore.")).weak().small());
         }
         R::SurfHeal { surface, tol } => {
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);

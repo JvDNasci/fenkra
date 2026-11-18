@@ -268,6 +268,8 @@ pub mod bridge {
         fn face_copy(s: &Shape, px: f64, py: f64, pz: f64) -> Result<UniquePtr<Shape>>;
         fn offset_surface(s: &Shape, d: f64) -> Result<UniquePtr<Shape>>;
         fn offset_surface_j(s: &Shape, d: f64, join: u8) -> Result<UniquePtr<Shape>>;
+        /// Casco costurado da superfície, com a tolerância que o deslocamento e o engrossar usam (B518).
+        fn shell_of(s: &Shape) -> Result<UniquePtr<Shape>>;
         /// Superfície que preenche o contorno das curvas (polilinhas; `ends` = fim de cada uma, em pontos).
         fn fill_surface(flat: &[f64], ends: &[u32]) -> Result<UniquePtr<Shape>>;
         fn fill_surface_x(flat: &[f64], ends: &[u32], orders: &[i32], weights: &[f64], support: &Shape, pts: &[f64], errs: &mut Vec<f64>) -> Result<UniquePtr<Shape>>;
@@ -313,6 +315,8 @@ pub mod bridge {
         fn boundary_pts(s: &Shape, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
         fn section_pts(a: &Shape, b: &Shape, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
         fn thicken(s: &Shape, t1: f64, t2: f64) -> Result<UniquePtr<Shape>>;
+        /// Filete entre duas superfícies: corte mútuo, lados escolhidos, filete na junta (B517).
+        fn surf_fillet(a: &Shape, b: &Shape, keep_a_pos: bool, keep_b_pos: bool, r: f64, r2: f64) -> Result<UniquePtr<Shape>>;
         fn close_surface(s: &Shape, tol: f64) -> Result<UniquePtr<Shape>>;
         fn volume_cells(s: &Shape, exclude: &[f64]) -> Result<UniquePtr<Shape>>;
         fn mesh_shape(tris: &[f64], solid: bool) -> Result<UniquePtr<Shape>>;

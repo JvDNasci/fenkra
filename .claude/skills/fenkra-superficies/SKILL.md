@@ -27,6 +27,21 @@ depurar. Escreva com suas palavras, sem copiar texto ou imagem, e registre as fo
 
 Preencha com o que for aprendido. Cada regra leva o motivo.
 
+- Deslocar e engrossar sempre sobre o casco costurado (`casco_costurado`, tolerância 1e-4 a 1e-2). Sem a
+  costura cada face anda sozinha e as vizinhas ficam sobrepostas ou abertas na emenda (B518).
+- Todo deslocamento de superfície passa por `confere_raio` antes do OpenCASCADE: além do raio de curvatura
+  do lado deslocado a face dobra sobre si, e o deslocamento simples não confere autointerseção e entrega
+  sólido torcido que às vezes passa no `BRepCheck` (B518). Aceite só sólido único, válido e com volume
+  perto de área × espessura (`solido_coerente`).
+- Engrossar casco aberto: `BRepOffset_MakeOffset::Initialize(..., Thickening = true)` + `MakeOffsetShape`
+  (o que o comando `thickshell` faz); o `MakeThickSolidBySimple` fica como reserva para casco liso.
+- Filete entre superfícies: o corte de cada uma pela outra estendida é separado, então a junta precisa da
+  costura adaptativa; superfície que só encosta (não atravessa) fica inteira (B517).
+- Subelemento de superfície de referência: dono = a superfície, papel = índice da face
+  (`PAPEL_SUPERFICIE + i`), aresta com `EdgeKey.edge`; borda repete a face nos dois lados (B515, ADR 0010).
+- Comando que consome superfícies inteiras (filete, junção, aparar) esconde as entradas ao sair o resultado
+  (`sup3d::entradas_consumidas`): entrada e resultado no mesmo lugar brigam pelo pixel (B517).
+
 ## Como verificar
 
 `cargo test -p <crate> <filtro>`, com documento montado em código conferindo status, volume e caixa
@@ -41,6 +56,9 @@ Consulte solidos, kernel quando a mudança atravessar a fronteira da área.
 Registre aqui erros que se repetiram.
 
 - Ordem dos campos vazios: `serde_json::Value` guarda objetos em ordem alfabética (sem `preserve_order`). Percorrer o `Value` para achar o próximo campo inverte campos do mesmo tipo (`apex` antes de `guide1`, B466). Use `slots::fill` / `slots::vazios_em_ordem`, que seguem a ordem da declaração.
+- A pasta de compilação é compartilhada entre os agentes (`F:/cargo-target/projeto-cad`): com compilação
+  incremental, duas sessões no mesmo crate quebram o cache ("failed to move dependency graph"). Compile com
+  `CARGO_INCREMENTAL=0` quando houver outros agentes compilando.
 - `ComboBox::width` é largura mínima e `truncate` só corta até a largura disponível: para caber na coluna com botões ao lado, ponha a lista numa faixa (`allocate_ui`), como `geo_ui::na_faixa`.
 
 ## Ao terminar

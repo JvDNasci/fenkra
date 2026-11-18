@@ -203,7 +203,7 @@ impl BodyResult {
         if p == fenkra_kernel::NO_FACE || q == fenkra_kernel::NO_FACE {
             return None;
         }
-        Some(EdgeKey { a: self.face_key(p as usize)?, b: self.face_key(q as usize)? })
+        Some(EdgeKey { a: self.face_key(p as usize)?, b: self.face_key(q as usize)?, edge: None })
     }
 }
 
@@ -646,6 +646,30 @@ pub struct SurfaceViz {
     pub id: Id,
     pub name: String,
     pub mesh: Mesh,
+}
+
+impl SurfaceViz {
+    /// Vista das faces da malha como as referências as veem (B515): a superfície é dona de todas e o
+    /// papel é o índice da face.
+    fn chaves<T>(&self, f: impl FnOnce(&refs::View) -> Option<T>) -> Option<T> {
+        let m = &self.mesh;
+        let faces = m.face_info.clone();
+        let edge_mids = m.edge_mids.chunks_exact(3).map(|v| [v[0] as f64, v[1] as f64, v[2] as f64]).collect();
+        let topo = fenkra_kernel::Topology { faces, edge_mids, edge_faces: m.edge_faces.clone() };
+        let owners = vec![self.id; topo.faces.len()];
+        let roles = refs::surface_roles(topo.faces.len());
+        f(&refs::View { topo: &topo, owners: &owners, roles: &roles })
+    }
+
+    /// Chave v2 da face `face` da superfície (índice na ordem de `mesh.face_ranges`, o do picking).
+    pub fn face_key(&self, face: usize) -> Option<FaceKey> {
+        self.chaves(|v| v.face_key(face))
+    }
+
+    /// Chave v2 da aresta `edge` da superfície (índice na ordem de `mesh.edge_ranges`), borda incluída.
+    pub fn edge_key(&self, edge: usize) -> Option<EdgeKey> {
+        self.chaves(|v| refs::surface_edge_key(v, edge))
+    }
 }
 
 /// Superfície lisa de uma forma livre, para desenhar (B153).
@@ -1274,6 +1298,10 @@ impl Ctx<'_> {
 
     /// Ponto da face viva: pela chave (dono + papel), ou pelo ponto, que tem de estar sobre a face.
     fn live_face(&self, p: V3, key: Option<&FaceKey>) -> Result<V3, String> {
+        if let Some(found) = key.and_then(|k| self.surface_face(k, Some(p))) {
+            let (_, topo, j) = found?;
+            return Ok(topo.faces[j].point);
+        }
         let Some(k) = key else {
             let on = self.bodies.values().any(|(b, _, _)| b.surface_near(p).is_ok_and(|(q, _)| geo3d::dist(q, p) < 1e-3));
             return if on { Ok(p) } else { Err("a face não existe mais no modelo — reedite".into()) };
@@ -1294,8 +1322,72 @@ impl Ctx<'_> {
         })
     }
 
+    /// B515: superfície de referência dona da chave, se o dono for uma. `None` quando o dono é um comando
+    /// de corpo (a chave segue pelos corpos); erro quando a superfície não calcula.
+    fn surface_owner(&self, owner: Id) -> Option<Result<Shape, String>> {
+        let r = self.doc.reference(owner)?;
+        (r.kind.class() == RefClass::Surface).then(|| self.surface(owner, 8))
+    }
+
+    /// B515: a face da superfície de referência que a chave indica: a forma da superfície, a topologia
+    /// dela e o índice da face. `None` quando a chave não é de superfície.
+    fn surface_face(&self, k: &FaceKey, hint: Option<V3>) -> Option<Result<(Shape, fenkra_kernel::Topology, usize), String>> {
+        let sh = self.surface_owner(k.owner)?;
+        let achar = || -> Result<(Shape, fenkra_kernel::Topology, usize), String> {
+            let sh = sh?;
+            let topo = sh.topology().map_err(|e| e.0)?;
+            let (owners, roles) = (vec![k.owner; topo.faces.len()], refs::surface_roles(topo.faces.len()));
+            let achada = refs::find_surface_face(&refs::View { topo: &topo, owners: &owners, roles: &roles }, k, hint);
+            match achada {
+                Ok(j) => Ok((sh, topo, j)),
+                Err(l) => {
+                    let who = format!("a {} de '{}'", refs::role_name(k.role), self.doc.name_of(k.owner));
+                    Err(match l {
+                        refs::Lost::Ambiguous(n) => format!("referência perdida: {who} tem {n} candidatas; escolha de novo"),
+                        refs::Lost::None => format!("referência perdida: {who} não existe mais; escolha de novo"),
+                    })
+                }
+            }
+        };
+        Some(achar())
+    }
+
+    /// B515: a aresta da superfície de referência que a chave indica, como polilinha.
+    fn surface_edge(&self, k: &EdgeKey, mid: V3) -> Option<Result<Vec<V3>, String>> {
+        let sh = self.surface_owner(k.a.owner)?;
+        let achar = || -> Result<Vec<V3>, String> {
+            let sh = sh?;
+            let topo = sh.topology().map_err(|e| e.0)?;
+            let (owners, roles) = (vec![k.a.owner; topo.faces.len()], refs::surface_roles(topo.faces.len()));
+            let achada = refs::find_surface_edge(&refs::View { topo: &topo, owners: &owners, roles: &roles }, k, Some(mid));
+            match achada {
+                Ok(e) => sh.edge_at(topo.edge_mids[e]).map_err(|e| e.0),
+                Err(l) => {
+                    let n = k.edge.map_or(String::new(), |i| format!("{} ", i + 1));
+                    let who = format!("a aresta {n}de '{}'", self.doc.name_of(k.a.owner));
+                    Err(match l {
+                        refs::Lost::Ambiguous(n) => format!("referência perdida: {who} tem {n} candidatas; escolha de novo"),
+                        refs::Lost::None => format!("referência perdida: {who} não existe mais; escolha de novo"),
+                    })
+                }
+            }
+        };
+        Some(achar())
+    }
+
+    /// Formas onde a face da chave vive: a superfície de referência dona dela ou os corpos.
+    fn shapes_of(&self, key: Option<&FaceKey>) -> Result<Vec<Shape>, String> {
+        match key.and_then(|k| self.surface_owner(k.owner)) {
+            Some(sh) => Ok(vec![sh?]),
+            None => Ok(self.bodies.values().map(|(b, _, _)| b.clone()).collect()),
+        }
+    }
+
     /// Polilinha atual da aresta: pela chave, ou pelo ponto médio.
     fn live_edge(&self, mid: V3, key: Option<&EdgeKey>) -> Result<Vec<V3>, String> {
+        if let Some(found) = key.and_then(|k| self.surface_edge(k, mid)) {
+            return found;
+        }
         let mut lost = refs::Lost::None;
         for (b, owners, roles) in self.bodies.values() {
             let topo = b.topology().map_err(|e| e.0)?;
@@ -1323,7 +1415,8 @@ impl Ctx<'_> {
     fn face_axis(&self, p: V3, key: Option<&FaceKey>) -> Result<(V3, V3, f64), String> {
         use geo3d::*;
         let q = self.live_face(p, key)?;
-        for (b, _, _) in self.bodies.values() {
+        let shapes = self.shapes_of(key)?;
+        for b in &shapes {
             if let Ok(cy) = b.cylinder_at(q) {
                 return Ok((add(cy.origin, mul(cy.dir, cy.h0)), cy.dir, (cy.h1 - cy.h0).max(1.)));
             }
@@ -1335,7 +1428,7 @@ impl Ctx<'_> {
         }
         // face plana: a normal dela, saindo do ponto escolhido
         if key.is_some() {
-            for (b, _, _) in self.bodies.values() {
+            for b in &shapes {
                 if let Ok((s, n)) = b.surface_near(q) {
                     if dist(s, q) < 1e-3 {
                         return Ok((self.on_face(p, key)?, n, 20.));
@@ -1351,7 +1444,7 @@ impl Ctx<'_> {
     fn on_face(&self, p: V3, key: Option<&FaceKey>) -> Result<V3, String> {
         use geo3d::*;
         let q = self.live_face(p, key)?;
-        for (b, _, _) in self.bodies.values() {
+        for b in &self.shapes_of(key)? {
             let Ok((s, n)) = b.surface_near(q) else { continue };
             if dist(s, q) > 1e-3 {
                 continue;
@@ -1368,6 +1461,15 @@ impl Ctx<'_> {
     fn face_plane_origin(&self, origin: V3, n: V3, owner: Option<Id>, key: Option<&FaceKey>) -> Result<V3, String> {
         use geo3d::*;
         let Some(who) = owner.or(key.map(|k| k.owner)) else { return Ok(origin) };
+        // B515: plano numa face de superfície de referência; a face plana leva o plano junto
+        if let Some(found) = key.and_then(|k| self.surface_face(k, Some(origin))) {
+            let (_, topo, j) = found?;
+            let f = &topo.faces[j];
+            if f.kind == 0 && dot(f.dir, n).abs() > 0.99 {
+                return Ok(add(origin, mul(n, dot(sub(f.point, origin), n))));
+            }
+            return Ok(origin);
+        }
         for (b, owners, roles) in self.bodies.values() {
             let topo = b.topology().map_err(|e| e.0)?;
             for (j, f) in topo.faces.iter().enumerate() {
@@ -1513,6 +1615,11 @@ impl Ctx<'_> {
     fn surface_shape(&self, sf: &SurfRef, depth: u32) -> Result<Shape, String> {
         match sf {
             SurfRef::Ref(id) => self.surface(*id, depth),
+            SurfRef::Face { point, key: Some(k), .. } if self.surface_owner(k.owner).is_some() => {
+                // B515: face de uma superfície de referência, pelo índice que a chave resolveu
+                let (sh, _, j) = self.surface_face(k, Some(*point)).ok_or("a face não é de superfície")??;
+                sh.nth_face(j as u32).map_err(|e| e.0)
+            }
             SurfRef::Face { point, key, .. } => self.face_of_bodies(self.live_face(*point, key.as_ref())?),
             SurfRef::Plane(_) => Err("use 'Plano deslocado' para deslocar um plano".into()),
         }
@@ -2228,7 +2335,9 @@ impl Ctx<'_> {
                     OffsetJoin::Plano => 2,
                 };
                 let v = e(dd, "distância")?;
-                // o kernel desloca pela normal orientada da face, e é essa normal que a seta mostra
+                // B518: o kernel costura as faces num casco e desloca o casco inteiro; a seta mostra a
+                // normal orientada desse casco, que é a que o deslocamento segue
+                let sh = sh.shell().map_err(|x| x.0)?;
                 let from = if let SurfRef::Face { point, .. } = surface { *point } else { sh.mass().center };
                 let arrow = sh.surface_near(from).map_err(|x| x.0)?;
                 self.notes.borrow_mut().insert(id, RefNote { arrow: Some(arrow), ..Default::default() });
@@ -2270,16 +2379,13 @@ impl Ctx<'_> {
                 Geo::Surface(self.sweep_x(kind, spine.as_ref(), *solution, *smooth, n, d, &ev)?)
             }
             SurfFillet { a, b, flip_a, flip_b, radius, radius2 } => {
+                // B517: o kernel corta uma pela outra num corte só (a junta sai como a mesma aresta nas
+                // duas), fica com o lado de cada uma que a seta indica e arredonda a junta; o resultado
+                // é uma superfície nova, e as entradas o app esconde
                 let (sa, sb) = (self.cut_shape(a, d)?, self.cut_shape(b, d)?);
-                let cut = sa.section(&sb).map_err(|x| x.0)?;
-                let line = cut.into_iter().max_by_key(|c| c.len()).ok_or("as superfícies não se cruzam: o filete precisa da junta entre elas")?;
-                // ponto do meio da junta (pelo comprimento)
-                let mid = Curve3::poly(line.clone(), false).map(|c| c.at_ratio(0.5).0).unwrap_or(line[line.len() / 2]);
-                // cada uma é aparada pela outra prolongada (as larguras não precisam bater)
-                let pa = sa.split_side(&sb, !*flip_a, true).map_err(|x| x.0)?;
-                let pb = sb.split_side(&sa, !*flip_b, true).map_err(|x| x.0)?;
-                let joined = pa.compound(&pb).sewn(1e-3).map_err(|x| x.0)?;
-                Geo::Surface(edge_fillet(&joined, &[mid], e(radius, "raio")?, radius2.as_ref().map(|r| e(r, "raio final")).transpose()?)?)
+                let r1 = e(radius, "raio")?;
+                let r2 = radius2.as_ref().map(|r| e(r, "raio final")).transpose()?;
+                Geo::Surface(sa.surf_fillet(&sb, !*flip_a, !*flip_b, r1, r2).map_err(|x| x.0)?)
             }
             SurfEdgeFillet { surface, edges, radius, radius2 } => {
                 if edges.is_empty() {
