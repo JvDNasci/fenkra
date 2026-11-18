@@ -45,7 +45,7 @@ fn peca(nome: &str) -> (Document, Document) {
     d.add_feature(chanfro("2", vec![[-40., 0., 0.]], vec![None]));
     let r = recompute(&d);
     assert!(problema_de_status(&d, &r).is_none(), "peça de partida: {:?}", problema_de_status(&d, &r));
-    let dir = std::env::temp_dir().join(format!("solidos6_b143_{nome}"));
+    let dir = std::env::temp_dir().join(format!("solidos6_b143_{nome}_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let alvo = dir.join("peca.step");
     final_shape(&d).unwrap().export_step(alvo.to_str().unwrap()).unwrap();
@@ -116,7 +116,7 @@ fn fase2_recria_e_confere_volume_area_e_centroide() {
 }
 
 fn via_step(d: &Document, nome: &str) -> Document {
-    let dir = std::env::temp_dir().join(format!("solidos6_b143_{nome}"));
+    let dir = std::env::temp_dir().join(format!("solidos6_b143_{nome}_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let alvo = dir.join("peca.step");
     final_shape(d).unwrap().export_step(alvo.to_str().unwrap()).unwrap();

@@ -32,7 +32,7 @@ fn peca() -> Document {
 /// A mesma peça gravada em STEP e lida de volta (sem histórico).
 fn peca_step(nome: &str) -> Document {
     let d = peca();
-    let dir = std::env::temp_dir().join(format!("solidos_b464_{nome}"));
+    let dir = std::env::temp_dir().join(format!("solidos_b464_{nome}_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let alvo = dir.join("peca.step");
     final_shape(&d).unwrap().export_step(alvo.to_str().unwrap()).unwrap();

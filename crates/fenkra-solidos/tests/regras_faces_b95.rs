@@ -27,7 +27,7 @@ fn bloco_ressaltos(nome: &str) -> Document {
     d.add_feature(ext(grande, BoolOp::Add, "25"));
     let fino = sk_circulos(&mut d, xy, &[([20., 20.], 5.)]);
     d.add_feature(ext(fino, BoolOp::Add, "30"));
-    let dir = std::env::temp_dir().join(format!("fenkra_b95_{nome}"));
+    let dir = std::env::temp_dir().join(format!("fenkra_b95_{nome}_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let alvo = dir.join("peca.step");
     fenkra_solidos::final_shape(&d).unwrap().export_step(alvo.to_str().unwrap()).unwrap();

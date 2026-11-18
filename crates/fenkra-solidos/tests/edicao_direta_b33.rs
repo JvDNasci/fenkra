@@ -37,7 +37,7 @@ fn peca_step(nome: &str) -> Document {
     d.add_feature(corte);
     let r = recompute(&d);
     assert!(problema_de_status(&d, &r).is_none(), "peça de partida: {:?}", problema_de_status(&d, &r));
-    let dir = std::env::temp_dir().join(format!("solidos5_b33_{nome}"));
+    let dir = std::env::temp_dir().join(format!("solidos5_b33_{nome}_{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let alvo = dir.join("peca.step");
     final_shape(&d).unwrap().export_step(alvo.to_str().unwrap()).unwrap();
