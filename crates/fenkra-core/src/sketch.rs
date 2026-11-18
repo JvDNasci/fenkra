@@ -1314,10 +1314,31 @@ impl Sys<'_> {
                             out.push(cross(d, sub(ctr, a)).abs() / len2(d).max(1e-12) - self.radius(x, c));
                         }
                         _ => {
-                            // círculo–círculo (tangência externa)
-                            if let (Some(p), Some(q)) = (self.center(x, *c1), self.center(x, *c2)) {
-                                out.push(len2(sub(p, q)) - self.radius(x, *c1) - self.radius(x, *c2));
+                            let (Some(p), Some(q)) = (self.center(x, *c1), self.center(x, *c2)) else { return };
+                            // B513: arcos com extremo comum são tangentes quando os dois raios nesse ponto
+                            // ficam na mesma reta. Vale para os dois casos: curvas em S (centros em lados
+                            // opostos) e arcos que curvam para o mesmo lado (um por dentro do outro). Só a
+                            // tangência externa forçava o segundo caso a virar S e deformava o perfil.
+                            let arco = |c: Id| match self.sk.curve(c).map(|k| &k.geom) {
+                                Some(Curve::Arc { s, e, .. }) => Some([*s, *e]),
+                                _ => None,
+                            };
+                            if let (Some(ea), Some(eb)) = (arco(*c1), arco(*c2)) {
+                                if let Some(comum) = ea.into_iter().find(|v| eb.contains(v)) {
+                                    let m = self.p(x, comum);
+                                    let (ra, rb) = (sub(m, p), sub(m, q));
+                                    out.push(cross(ra, rb) / (len2(ra) * len2(rb)).max(1e-12));
+                                    return;
+                                }
                             }
+                            // sem ponto comum: tangência externa (d = r1 + r2) ou interna (d = |r1 − r2|),
+                            // a que estiver mais perto do desenho atual; raios iguais só por fora (por
+                            // dentro seriam o mesmo círculo)
+                            let (ra, rb) = (self.radius(x, *c1), self.radius(x, *c2));
+                            let d = len2(sub(p, q));
+                            let (fora, dentro) = (d - ra - rb, d - (ra - rb).abs());
+                            let interna = (ra - rb).abs() > 1e-9 * ra.max(rb).max(1.) && dentro.abs() < fora.abs();
+                            out.push(if interna { dentro } else { fora });
                         }
                     }
                 }
@@ -2251,6 +2272,49 @@ mod tests {
         s.add_constraint(&mut al, Kind::Fixed(b));
         s.add_constraint(&mut al, Kind::Tangent(l, arc));
         (s, l, arc, [c, b, e])
+    }
+
+    /// B513: arcos com ponta comum que curvam para o mesmo lado (um por dentro do outro) já tangentes
+    /// não se movem; antes só a tangência externa existia e o solver desmanchava o perfil.
+    #[test]
+    fn arcos_tangentes_por_dentro_com_ponta_comum_ficam_parados() {
+        let mut s = SketchData::default();
+        let mut al = alloc();
+        let (c1, p, c2, q) = (s.add_point(&mut al, 40., 20.), s.add_point(&mut al, 60., 20.), s.add_point(&mut al, 50., 20.), s.add_point(&mut al, 50., 30.));
+        let a0 = s.add_point(&mut al, 40., 0.);
+        let a1 = s.add_curve(&mut al, Curve::Arc { c: c1, s: a0, e: p }, false);
+        let a2 = s.add_curve(&mut al, Curve::Arc { c: c2, s: p, e: q }, false);
+        for f in [c1, a0, c2] {
+            s.add_constraint(&mut al, Kind::Fixed(f));
+        }
+        s.add_constraint(&mut al, Kind::Tangent(a1, a2));
+        assert!(s.solve(&Vars::new(), &[]).converged);
+        assert!(len2(sub(s.pos(p), [60., 20.])) < 1e-9 && len2(sub(s.pos(q), [50., 30.])) < 1e-9, "o perfil mudou: {:?} {:?}", s.pos(p), s.pos(q));
+    }
+
+    /// B513: círculos sem ponto comum, um quase encostado por dentro do outro, encostam por dentro
+    /// (d = R − r), e não pulam para fora (d = R + r).
+    #[test]
+    fn circulos_tangentes_por_dentro_encostam_por_dentro() {
+        let mut s = SketchData::default();
+        let mut al = alloc();
+        let (o, c) = (s.add_point(&mut al, 0., 0.), s.add_point(&mut al, 14., 0.));
+        let g = s.add_curve(&mut al, Curve::Circle { c: o, r: 20. }, false);
+        let p = s.add_curve(&mut al, Curve::Circle { c, r: 5. }, false);
+        s.add_constraint(&mut al, Kind::Fixed(o));
+        s.add_constraint(&mut al, Kind::Radius(g, "20".into()));
+        s.add_constraint(&mut al, Kind::Radius(p, "5".into()));
+        s.add_constraint(&mut al, Kind::Tangent(g, p));
+        assert!(s.solve(&Vars::new(), &[]).converged);
+        let d = len2(s.pos(c));
+        assert!((d - 15.).abs() < 1e-6, "distância entre centros {d}: devia ser 20 − 5");
+        // longe de dentro, continua a tangência externa
+        let mut s2 = s.clone();
+        if let Some(x) = s2.points.iter_mut().find(|x| x.id == c) {
+            x.x = 23.;
+        }
+        assert!(s2.solve(&Vars::new(), &[]).converged);
+        assert!((len2(s2.pos(c)) - 25.).abs() < 1e-6, "{}", len2(s2.pos(c)));
     }
 
     /// B272: arrastar o arco por um ponto qualquer não quebra a tangência.
