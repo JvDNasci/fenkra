@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! Coluna da esquerda (B433, ADR 0094): a árvore e o painel do comando dividem uma coluna que reserva
-//! espaço. A área 3D começa depois dela, então nada cobre a peça.
+//! Coluna da esquerda (B433, ADR 0094) e árvore transparente sobre a vista (B503, ADR 0104).
 //!
-//! Sem comando aberto, a coluna mostra a árvore. Ao abrir um comando, o painel dele toma a coluna e a
-//! árvore recolhe numa seta, na primeira linha. Clicar na seta mostra a árvore no lugar dos campos, para
-//! escolher entradas; a barra de Concluir e Cancelar continua à vista e o comando segue aberto. Clicar de
-//! novo volta aos campos. Fechar o comando devolve a coluna à árvore.
+//! Sem comando aberto, não há coluna: a árvore fica transparente sobre a vista, no canto da área 3D,
+//! só com texto e ícones (contorno pela regra de contraste do tema), e se move pela alça do cabeçalho,
+//! muda de largura pela beira e amplia com Ctrl + roda. Ao abrir um comando, o painel dele toma a coluna,
+//! que reserva espaço, e a árvore recolhe numa seta, na primeira linha. Clicar na seta mostra a árvore
+//! no lugar dos campos, para escolher entradas; a barra de Concluir e Cancelar continua à vista e o
+//! comando segue aberto. Clicar de novo volta aos campos. Fechar o comando devolve a árvore à vista.
+//!
+//! Propriedades de um item escolhido (peça, parâmetros, anotação) ocupam a coluna, e a árvore continua
+//! transparente sobre a vista, ao lado, para escolher outro item.
 //!
 //! O painel do comando só sai da coluna para uma janela nativa do sistema (outro monitor, B366).
 
@@ -16,8 +20,6 @@ use crate::paineis::{self, Encaixe, Painel};
 pub const LARGURA: f32 = paineis::LARGURA_COLUNA;
 const LARGURA_MIN: f32 = 240.;
 const LARGURA_MAX: f32 = 560.;
-/// Largura do trilho que sobra quando a árvore está minimizada.
-const TRILHO: f32 = 26.;
 /// Altura da linha da seta e da linha do título.
 const LINHA: f32 = 22.;
 
@@ -55,6 +57,27 @@ pub fn conteudo(painel: bool, comando: bool, quer_arvore: bool, fechada: bool, m
 
 fn id_quer_arvore() -> egui::Id {
     egui::Id::unique("coluna_arvore_no_comando")
+}
+
+/// A árvore fica transparente sobre a vista (B503): sem comando, e também ao lado das propriedades de
+/// um item escolhido. Com comando, ela mora na coluna, pela seta.
+pub fn arvore_sobre_a_vista(o_que: Conteudo) -> bool {
+    matches!(o_que, Conteudo::Arvore | Conteudo::Trilho | Conteudo::ArvoreEPropriedades)
+}
+
+/// Menor largura da árvore transparente.
+const ARVORE_MIN: f32 = 160.;
+
+/// Árvore transparente inteira dentro da área 3D: a largura cabe na área e o cabeçalho nunca sai dela.
+pub fn arvore_na_area(desloc: [f32; 2], largura: f32, area: Rect) -> (egui::Vec2, f32) {
+    let largura = largura.clamp(ARVORE_MIN, (area.width() - 12.).max(ARVORE_MIN));
+    let x = desloc[0].clamp(0., (area.width() - largura).max(0.));
+    let y = desloc[1].clamp(0., (area.height() - LINHA * 2.).max(0.));
+    (egui::vec2(x, y), largura)
+}
+
+fn id_arvore_viva() -> egui::Id {
+    egui::Id::unique("arvore_sobre_viva")
 }
 
 /// A árvore está à vista porque a pessoa clicou na seta, com um comando aberto: os cliques nela são
@@ -193,8 +216,8 @@ impl App {
     }
 
     /// A coluna inteira. `painel`: há painel de comando ou de propriedades neste quadro. `comando`: é
-    /// um comando de verdade.
-    pub(super) fn coluna_esquerda(&mut self, root: &mut egui::Ui, painel: bool, comando: bool) {
+    /// um comando de verdade. Devolve se a árvore vai transparente sobre a vista neste quadro.
+    pub(super) fn coluna_esquerda(&mut self, root: &mut egui::Ui, painel: bool, comando: bool) -> bool {
         let ctx = root.ctx().clone();
         let nativa = painel && !ctx.embed_viewports() && self.settings.painel("comando", Encaixe::Esquerda).encaixe == Encaixe::Janela;
         let na_coluna = painel && !nativa;
@@ -206,17 +229,8 @@ impl App {
         let o_que = conteudo(na_coluna, comando, quer, self.settings.arvore_fechada, self.settings.arvore_minimizada);
         let quadro = egui::Frame::new().fill(root.visuals().panel_fill);
         match o_que {
-            Conteudo::Nada => {
-                self.arvore.regiao = Rect::NOTHING;
-                self.arvore.conteudo = Rect::NOTHING;
-            }
-            Conteudo::Trilho => {
-                egui::Panel::left("coluna_trilho").resizable(false).exact_size(TRILHO).frame(quadro).show(root, |ui| {
-                    ui.add_space(4.);
-                    if seta(ui, false, "", "", tr("Mostrar a árvore")) {
-                        self.settings.arvore_minimizada = false;
-                    }
-                });
+            // B503: a árvore vai sobre a vista, desenhada depois dela (`arvore_sobre_modelo`)
+            Conteudo::Nada | Conteudo::Arvore | Conteudo::Trilho => {
                 self.arvore.regiao = Rect::NOTHING;
                 self.arvore.conteudo = Rect::NOTHING;
             }
@@ -242,6 +256,7 @@ impl App {
             let area = root.available_rect_before_wrap();
             self.comando_em_janela(&ctx, area);
         }
+        arvore_sobre_a_vista(o_que) && !self.settings.arvore_fechada
     }
 
     /// Linha do título do painel, com o X. Devolve se a pessoa pediu para fechar. O botão direito no
@@ -289,18 +304,11 @@ impl App {
                 }
             }
             Conteudo::ArvoreEPropriedades => {
-                // árvore em cima, propriedades embaixo: escolher outro item troca as propriedades
-                let tudo = ui.available_rect_before_wrap();
-                let meio = tudo.top() + (tudo.height() * 0.5).round();
-                self.arvore_na_coluna(ui, Rect::from_min_max(tudo.min, egui::pos2(tudo.right(), meio - 4.)));
-                ui.painter().hline(tudo.x_range(), meio, ui.visuals().widgets.noninteractive.bg_stroke);
-                let baixo = Rect::from_min_max(egui::pos2(tudo.left(), meio + 4.), tudo.max);
-                let mut dentro = ui.new_child(egui::UiBuilder::new().id_salt("propriedades_da_selecao").max_rect(baixo));
-                dentro.set_clip_rect(baixo.intersect(ui.clip_rect()));
-                let fechar = self.titulo_do_painel(&mut dentro, &titulo);
-                self.barras_do_comando(&mut dentro);
-                self.campos_do_comando(&mut dentro);
-                ui.allocate_rect(tudo, egui::Sense::hover());
+                // B503: as propriedades ficam com a coluna; a árvore segue transparente sobre a vista,
+                // ao lado, e escolher outro item nela troca as propriedades
+                let fechar = self.titulo_do_painel(ui, &titulo);
+                self.barras_do_comando(ui);
+                self.campos_do_comando(ui);
                 if fechar {
                     self.fechar_comando();
                 }
@@ -319,6 +327,166 @@ impl App {
                 let resto = ui.available_rect_before_wrap();
                 self.arvore_na_coluna(ui, resto);
             }
+        }
+    }
+
+    /// B503: árvore transparente sobre a vista, no canto da área 3D. Só texto e ícones, com o contorno
+    /// da regra de contraste do tema; nada de placa. Move pela alça do cabeçalho, muda de largura pela
+    /// beira da direita e amplia com Ctrl + roda (ou Alt + mais e menos), sem mexer na câmera. Posição e
+    /// largura ficam nas preferências quando o botão solta.
+    pub(super) fn arvore_sobre_modelo(&mut self, root: &mut egui::Ui, area: Rect) {
+        use crate::tree_ui::{self, Contorno, Localizar};
+        if !area.is_positive() {
+            return;
+        }
+        let ctx = root.ctx().clone();
+        // enquanto arrasta, a posição e a largura vivem na memória; o arquivo só grava ao soltar
+        let viva = ctx.data(|d| d.get_temp::<([f32; 2], f32)>(id_arvore_viva()));
+        let (desloc, largura) = viva.unwrap_or((self.settings.arvore_desloc, self.settings.arvore_largura));
+        let (desloc, largura) = arvore_na_area(desloc, largura, area);
+        let topo = Rect::from_min_size(area.min + desloc, egui::vec2(largura, LINHA));
+        let regiao = Rect::from_min_max(topo.left_bottom() + egui::vec2(0., 2.), egui::pos2(topo.right(), area.bottom() - 6.));
+        self.arvore.regiao = regiao;
+        let (ponteiro, pinca) = ctx.input(|i| (i.pointer.latest_pos(), i.zoom_delta()));
+        let zona = self.arvore.conteudo.intersect(regiao);
+        let sobre = ponteiro.is_some_and(|p| zona.contains(p));
+        let centro = ponteiro.filter(|_| sobre).unwrap_or(regiao.min);
+        if sobre && pinca != 1. {
+            self.arvore.zoom_em(centro, pinca);
+        }
+        if self.arvore_com_roda {
+            self.arvore.pan += ctx.input(|i| i.smooth_scroll_delta);
+        }
+        // captura sem mouse (B447): FENKRA_DEMO_ARVORE=solta mostra a árvore solta e deslocada
+        if std::env::var("FENKRA_DEMO_ARVORE").is_ok_and(|v| v == "solta") {
+            self.settings.arvore_solta = true;
+            self.arvore.pan = egui::vec2(170., 60.);
+        }
+        let tecla = |k: egui::Key| ctx.input_mut(|i| i.consume_key(egui::Modifiers::ALT, k));
+        if tecla(egui::Key::Plus) || tecla(egui::Key::Equals) {
+            self.arvore.zoom_em(centro, 1.15);
+        }
+        if tecla(egui::Key::Minus) {
+            self.arvore.zoom_em(centro, 1. / 1.15);
+        }
+        if tecla(egui::Key::Num0) {
+            self.arvore.enquadrar();
+        }
+        if tecla(egui::Key::L) {
+            self.arvore.localizar = Localizar::Abrir;
+        }
+
+        // cabeçalho: fraco até o mouse chegar perto, para não pesar sobre a peça
+        let mut barra = root.new_child(egui::UiBuilder::new().id_salt("arvore_sobre_controles").max_rect(topo).layout(egui::Layout::left_to_right(egui::Align::Center)));
+        let perto = ponteiro.is_some_and(|p| topo.expand(6.).contains(p) || zona.contains(p));
+        barra.set_opacity(if perto { 1. } else { 0.6 });
+        let contorno = Contorno::reservar(&barra, topo);
+        tree_ui::estilo(&mut barra, 1.);
+        // alça: arrastar move a árvore pela vista
+        let (r_alca, alca) = barra.allocate_exact_size(egui::vec2(12., LINHA), egui::Sense::drag());
+        let cor_alca = if alca.hovered() || alca.dragged() { crate::theme::accent(barra.visuals()) } else { barra.visuals().weak_text_color() };
+        for k in [-1., 0., 1.] {
+            barra.painter().circle_filled(r_alca.center() + egui::vec2(0., k * 4.5), 1.5, cor_alca);
+        }
+        if alca.hovered() {
+            ctx.set_cursor_icon(egui::CursorIcon::Grab);
+        }
+        let alca = alca.on_hover_text(tr("Arraste para mover a árvore sobre a vista"));
+        let mut novo = (desloc, largura);
+        if alca.dragged() {
+            novo.0 += alca.drag_delta();
+        }
+        barra.selectable_value(&mut self.left, LeftTab::Peca, tr("Peça"));
+        barra.selectable_value(&mut self.left, LeftTab::Projeto, tr("Projeto"));
+        barra.add_space(6.);
+        if tree_ui::controle(&mut barra, "arvore_zoom_menos", tr("Diminuir a árvore (Alt + menos, ou Ctrl + roda)")) {
+            self.arvore.zoom_em(regiao.min, 1. / 1.15);
+        }
+        if tree_ui::controle(&mut barra, "arvore_zoom_mais", tr("Aumentar a árvore (Alt + mais, ou Ctrl + roda)")) {
+            self.arvore.zoom_em(regiao.min, 1.15);
+        }
+        if tree_ui::controle(&mut barra, "arvore_localizar", tr("Localizar o item ativo (Alt + L)")) {
+            self.arvore.localizar = Localizar::Abrir;
+        }
+        if tree_ui::controle(&mut barra, "arvore_enquadrar", tr("Voltar ao enquadramento (Alt + 0)")) {
+            self.arvore.enquadrar();
+        }
+        if tree_ui::controle(&mut barra, "arvore_recolher", tr("Recolher todos os ramos")) {
+            self.arvore.recolher = true;
+        }
+        let opcoes = barra.menu_button(RichText::new("⋯").weak(), |ui| {
+            let solta = self.settings.arvore_solta;
+            if ui.checkbox(&mut self.settings.arvore_solta, tr("Soltar a árvore")).on_hover_text(tr("Solta: arrastar o fundo desloca a árvore. Travada: ela fica no lugar e a roda do mouse rola a lista.")).changed() && solta {
+                self.arvore.pan = egui::Vec2::ZERO;
+            }
+            let rotulo = if self.settings.arvore_minimizada { tr("Expandir a árvore") } else { tr("Minimizar a árvore") };
+            if ui.button(rotulo).clicked() {
+                self.settings.arvore_minimizada = !self.settings.arvore_minimizada;
+                ui.close();
+            }
+            if ui.button(tr("Voltar a árvore ao canto")).on_hover_text(tr("Devolve a árvore ao canto da vista, com a largura padrão")).clicked() {
+                self.settings.arvore_desloc = crate::settings::ARVORE_DESLOC;
+                self.settings.arvore_largura = tree_ui::LARGURA;
+                ui.close();
+            }
+            if ui.button(tr("Fechar a árvore")).on_hover_text(tr("Volta pelo menu Exibir, em Árvore")).clicked() {
+                self.settings.arvore_fechada = true;
+                ui.close();
+            }
+        });
+        opcoes.response.on_hover_text(tr("Opções da árvore"));
+        contorno.aplicar(&barra);
+        let mut arrastando = alca.dragged();
+        if !self.settings.arvore_minimizada {
+            tree_ui::comecar(&self.arvore);
+            let zoom = self.arvore.zoom;
+            let caixa = Rect::from_min_size(regiao.min + self.arvore.pan, egui::vec2(largura * zoom, 1e5));
+            let mut ui = root.new_child(egui::UiBuilder::new().id_salt("arvore_sobre").max_rect(caixa));
+            ui.set_clip_rect(regiao.intersect(root.clip_rect()));
+            tree_ui::estilo(&mut ui, zoom);
+            // a área das linhas fica mesmo travada: senão o arraste sobre a árvore vaza para o 3D e gira a vista
+            if zona.is_positive() {
+                let arrasto = ui.interact(zona, egui::Id::unique("arvore_sobre_mover"), egui::Sense::drag());
+                if self.settings.arvore_solta {
+                    self.arvore.pan += arrasto.drag_delta();
+                }
+            }
+            let contorno = Contorno::reservar(&ui, regiao);
+            match self.left {
+                LeftTab::Peca if self.settings.bench == crate::settings::Bench::Desenho => crate::dwg_ui::tree(self, &mut ui),
+                LeftTab::Peca if self.settings.bench == crate::settings::Bench::Montagem => crate::medir_quadros::fase("arvore", || crate::asm_ui::tree(self, &mut ui)),
+                LeftTab::Peca => self.tree(&mut ui),
+                LeftTab::Projeto => self.project_panel(&mut ui),
+            }
+            contorno.aplicar(&ui);
+            self.arvore.conteudo = ui.min_rect();
+            self.arvore.pan = tree_ui::limitar_pan(self.arvore.pan, ui.min_rect().size(), regiao.size());
+            if !tree_ui::terminar(&ctx, &mut self.arvore) {
+                self.toast(tr("Nenhum item ativo para localizar").to_string(), false);
+            }
+            // beira da direita: arrastar muda a largura
+            let baixo = self.arvore.conteudo.bottom().clamp(regiao.top() + LINHA, regiao.bottom());
+            let beira = Rect::from_min_max(egui::pos2(regiao.right() - 3., topo.top()), egui::pos2(regiao.right() + 3., baixo));
+            let r = root.interact(beira, egui::Id::unique("arvore_sobre_largura"), egui::Sense::drag());
+            if r.hovered() || r.dragged() {
+                ctx.set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+                root.painter().vline(beira.center().x, beira.y_range(), egui::Stroke::new(1., crate::theme::accent(root.visuals()).gamma_multiply(0.6)));
+            }
+            let r = r.on_hover_text(tr("Arraste para mudar a largura da árvore"));
+            if r.dragged() {
+                novo.1 += r.drag_delta().x;
+                arrastando = true;
+            }
+        } else {
+            self.arvore.conteudo = Rect::NOTHING;
+        }
+        if arrastando {
+            ctx.data_mut(|d| d.insert_temp(id_arvore_viva(), ([novo.0.x, novo.0.y], novo.1)));
+        } else if viva.is_some() {
+            // soltou: grava a posição e a largura
+            ctx.data_mut(|d| d.remove::<([f32; 2], f32)>(id_arvore_viva()));
+            self.settings.arvore_desloc = [desloc.x, desloc.y];
+            self.settings.arvore_largura = largura;
         }
     }
 
@@ -460,6 +628,26 @@ mod tests {
         assert_eq!(conteudo(true, false, true, true, false), Conteudo::ArvoreNoComando);
         // um comando de verdade nunca divide: ele toma a coluna
         assert_ne!(conteudo(true, true, false, false, false), Conteudo::ArvoreEPropriedades);
+    }
+
+    /// B503: sem comando, e ao lado das propriedades de um item, a árvore fica transparente sobre a
+    /// vista; com comando (campos ou árvore pela seta), ela mora na coluna. A árvore movida ou alargada
+    /// além da área volta para dentro dela.
+    #[test]
+    fn arvore_transparente_sobre_a_vista_sem_comando() {
+        assert!(arvore_sobre_a_vista(conteudo(false, false, false, false, false)));
+        assert!(arvore_sobre_a_vista(conteudo(false, false, false, false, true)), "minimizada: só o cabeçalho, sobre a vista");
+        assert!(arvore_sobre_a_vista(conteudo(true, false, false, false, false)), "propriedades na coluna, árvore ao lado");
+        assert!(!arvore_sobre_a_vista(conteudo(true, true, false, false, false)));
+        assert!(!arvore_sobre_a_vista(conteudo(true, true, true, false, false)));
+        assert!(!arvore_sobre_a_vista(conteudo(false, false, false, true, false)), "fechada");
+        let area = Rect::from_min_size(egui::pos2(100., 60.), egui::vec2(900., 600.));
+        let (d, l) = arvore_na_area(crate::settings::ARVORE_DESLOC, crate::tree_ui::LARGURA, area);
+        assert_eq!((d, l), (egui::vec2(6., 4.), crate::tree_ui::LARGURA));
+        let (d, l) = arvore_na_area([5000., -40.], 5000., area);
+        assert!(l <= area.width() - 12. && d.x + l <= area.width() + 0.5 && d.y == 0., "{d:?} {l}");
+        let (_, l) = arvore_na_area([0., 0.], 10., area);
+        assert_eq!(l, ARVORE_MIN);
     }
 
     /// A coluna reserva espaço de verdade: a área que sobra para a vista começa depois dela, e o

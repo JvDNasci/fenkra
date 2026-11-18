@@ -9,6 +9,7 @@ use fenkra_core::subd_ops::PrimitivaForma;
 use fenkra_core::{BoolOp, PrimKind};
 use crate::icons::tool_button;
 use crate::render::DisplayMode;
+use crate::barras_layout::Barra;
 use crate::settings::{Dock, Group, Settings};
 use crate::sketch_ui::{CKind, Tool};
 use eframe::egui::{self, RichText};
@@ -30,9 +31,10 @@ pub enum Act {
     Ortho,
     HiddenEnv,
     Settings,
-    Dock(Group, Dock),
-    /// começou a arrastar um grupo encaixado pela alça (retângulo do bloco)
-    DockDrag(Group, egui::Rect),
+    /// B502: leva qualquer barra (grupo do sistema ou caixa própria) para uma borda, flutuando ou oculta
+    Barra(Barra, Dock),
+    /// começou a arrastar uma barra pela alça (retângulo da barra)
+    DockDrag(Barra, egui::Rect),
     ClearPicks,
     SkTool(Tool),
     SkConstruction,
@@ -113,11 +115,14 @@ pub fn all_entries() -> Vec<Entry> {
     out
 }
 
-/// Grupo do usuário na barra.
-pub fn show_custom(ui: &mut egui::Ui, cg: &crate::settings::CustomGroup, s: &mut Settings, st: &ToolState, forma: Forma) -> Vec<Act> {
+/// Caixa de comandos do usuário na barra (`i`: posição em `custom.groups`). Comando que não existe
+/// mais não derruba a caixa: só fica de fora.
+pub fn show_custom(ui: &mut egui::Ui, i: usize, s: &mut Settings, st: &ToolState, forma: Forma, alca: bool) -> Vec<Act> {
+    let Some(cg) = s.custom.groups.get(i).cloned() else { return vec![] };
     let all = all_entries();
     let list: Vec<Entry> = cg.items.iter().filter_map(|k| all.iter().find(|e| entry_key(e) == *k).cloned()).collect();
-    show_block(ui, None, cg.name.clone(), list, s, st, forma)
+    let barra = Barra::Minha(i);
+    show_block(ui, None, alca.then_some(barra), cg.name.clone(), list, s, st, forma)
 }
 
 const fn it(icon: &'static str, name: &'static str, brief: &'static str, advanced: &'static str, act: Act) -> Item {
@@ -737,6 +742,8 @@ pub enum Forma {
     Coluna,
     /// barra de baixo (vista e seleção): só ícones pequenos, em fila
     Linha,
+    /// barra do topo ou de baixo encaixada pela pessoa (B502): ícones do tamanho da coluna, em fila
+    Fila,
 }
 
 /// Lado do ícone na barra de recursos da direita.
@@ -780,16 +787,44 @@ pub fn entradas_na_barra(g: Group, s: &Settings) -> Vec<Entry> {
 }
 
 pub fn show_group(ui: &mut egui::Ui, g: Group, s: &mut Settings, st: &ToolState, forma: Forma) -> Vec<Act> {
-    let list = if forma == Forma::Bloco { custom_entries(g, s) } else { entradas_na_barra(g, s) };
-    show_block(ui, Some(g), g.label().to_string(), list, s, st, forma)
+    show_group_com(ui, g, s, st, forma, forma != Forma::Bloco)
 }
 
-fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entry>, s: &mut Settings, st: &ToolState, forma: Forma) -> Vec<Act> {
+/// Como `show_group`, escolhendo se a barra tem alça (a flutuante tem a alça no cabeçalho).
+pub fn show_group_com(ui: &mut egui::Ui, g: Group, s: &mut Settings, st: &ToolState, forma: Forma, alca: bool) -> Vec<Act> {
+    let list = if forma == Forma::Bloco { custom_entries(g, s) } else { entradas_na_barra(g, s) };
+    show_block(ui, Some(g), alca.then_some(Barra::Grupo(g)), g.label().to_string(), list, s, st, forma)
+}
+
+/// Lado da alça das barras (B502, R1.1).
+pub const ALCA: f32 = 8.;
+
+/// Alça da barra: três pontos na cor fraca do tema. Arrastar solta a barra (o egui só começa o arraste
+/// depois de alguns pixels, então um clique não a solta). Devolve se o arraste começou agora.
+pub fn alca(ui: &mut egui::Ui, tam: egui::Vec2, vertical: bool, nome: &str) -> bool {
+    let (r, resp) = ui.allocate_exact_size(tam, egui::Sense::drag());
+    if ui.is_rect_visible(r) {
+        let cor = if resp.hovered() || resp.dragged() { crate::theme::accent(ui.visuals()) } else { ui.visuals().weak_text_color() };
+        for k in [-1., 0., 1.] {
+            let d = if vertical { egui::vec2(0., k * 4.5) } else { egui::vec2(k * 4.5, 0.) };
+            ui.painter().circle_filled(r.center() + d, 1.5, cor);
+        }
+    }
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+    }
+    let resp = resp.on_hover_text(format!("{nome}\n{}", tr("Arraste para soltar a barra; solte numa borda para encaixar.")));
+    resp.drag_started()
+}
+
+fn show_block(ui: &mut egui::Ui, g: Option<Group>, barra: Option<Barra>, title: String, list: Vec<Entry>, s: &mut Settings, st: &ToolState, forma: Forma) -> Vec<Act> {
+    let mut soltar = false;
     let mut acts = vec![];
     let size = match forma {
         Forma::Bloco => s.icon_size,
         Forma::Coluna => tamanho_na_coluna(s),
         Forma::Linha => TAMANHO_NA_LINHA,
+        Forma::Fila => tamanho_na_coluna(s),
     };
     let labels = s.show_labels && forma == Forma::Bloco;
     let mut body = |ui: &mut egui::Ui| {
@@ -886,14 +921,27 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
         // só ícones, quebrando em colunas pela largura da barra; a seta fica colada ao botão
         Forma::Coluna => frame
             .show(ui, |ui| {
-                ui.spacing_mut().item_spacing = egui::vec2(0., 2.);
-                ui.horizontal_wrapped(|ui| body(ui)).response
+                ui.vertical(|ui| {
+                    if barra.is_some() {
+                        let w = ui.available_width().max(24.);
+                        soltar = alca(ui, egui::vec2(w, ALCA), false, &title);
+                    }
+                    ui.spacing_mut().item_spacing = egui::vec2(0., 2.);
+                    ui.horizontal_wrapped(|ui| body(ui));
+                })
+                .response
             })
             .inner,
-        Forma::Linha => {
+        Forma::Linha | Forma::Fila => {
             ui.scope(|ui| {
                 ui.spacing_mut().item_spacing.x = 1.;
-                ui.horizontal(|ui| body(ui)).response
+                ui.horizontal(|ui| {
+                    if barra.is_some() {
+                        soltar = alca(ui, egui::vec2(ALCA, size + 6.), true, &title);
+                    }
+                    body(ui)
+                })
+                .response
             })
             .inner
         }
@@ -909,12 +957,16 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, title: String, list: Vec<Entr
             })
             .inner,
     };
+    if let (true, Some(b)) = (soltar, barra) {
+        acts.push(Act::DockDrag(b, inner.rect));
+    }
     inner.context_menu(|ui| {
         ui.label(RichText::new(&title).strong());
-        if let Some(g) = g {
+        // B502: a mesma escolha do arraste, para quem prefere o menu
+        if let Some(b) = barra.or(g.map(Barra::Grupo)) {
             for d in Dock::ALL {
-                if ui.radio(s.dock(g) == d, d.label()).clicked() {
-                    acts.push(Act::Dock(g, d));
+                if ui.radio(s.doca_da_barra(b) == d, d.label()).clicked() {
+                    acts.push(Act::Barra(b, d));
                     ui.close();
                 }
             }
@@ -967,16 +1019,33 @@ fn fecha_ao_escolher(acts: &[Act]) -> bool {
     !acts.is_empty()
 }
 
-/// Grupos visíveis com determinada posição, na ordem da bancada (B436, `organizacao`): no modo sketch,
-/// os do sketch; fora dele, os da bancada. Vista e seleção moram na barra de baixo (B434).
+/// Grupos visíveis numa borda (ou flutuando), na ordem da bancada (B436, `organizacao`): no modo
+/// sketch, os do sketch; fora dele, os da bancada. Vista e seleção nascem embaixo e podem ir para
+/// qualquer borda (B502).
 pub fn groups_at(s: &Settings, d: Dock, sketching: bool) -> Vec<Group> {
-    let todos = if sketching { crate::organizacao::DO_SKETCH.to_vec() } else { crate::organizacao::ordem(s.bench) };
-    todos.into_iter().filter(|g| s.dock(*g) == d).filter(|g| !g.de_navegacao()).collect()
+    s.barras_em(d, sketching)
+        .into_iter()
+        .filter_map(|b| match b {
+            Barra::Grupo(g) => Some(g),
+            Barra::Minha(_) => None,
+        })
+        .collect()
+}
+
+/// Caixas próprias visíveis numa borda (ou flutuando); caixa vazia não aparece.
+pub fn minhas_em(s: &Settings, d: Dock, sketching: bool) -> Vec<usize> {
+    s.barras_em(d, sketching)
+        .into_iter()
+        .filter_map(|b| match b {
+            Barra::Minha(i) if s.custom.groups.get(i).is_some_and(|c| !c.items.is_empty()) => Some(i),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Grupos de navegação (vista e seleção) que a barra de baixo mostra agora.
 pub fn grupos_de_baixo(s: &Settings, sketching: bool) -> Vec<Group> {
-    [Group::Vista, Group::Selecao].into_iter().filter(|g| s.dock(*g) != Dock::Oculta).filter(|g| if sketching { *g == Group::Vista } else { g.in_bench(s.bench) }).collect()
+    groups_at(s, Dock::Baixo, sketching).into_iter().filter(|g| g.de_navegacao()).collect()
 }
 
 /// Item de análise: um comando de geometria com o nome e a dica dele.

@@ -54,6 +54,11 @@ Consulte todas as bancadas quando a mudança atravessar a fronteira da área.
 
 Registre aqui erros que se repetiram.
 
+- **Painel de borda novo passa por `barras_layout::painel_na_borda`.** Ele grava o tamanho só quando a
+  beira é solta (nunca a cada quadro) e troca o id do painel junto com o tamanho automático, porque o
+  egui guarda o tamanho no estado do painel e ignora o `default_size` depois do primeiro quadro.
+  Restaurar chama `esquecer_tamanhos`. Motivo: B503 (18/11/2026).
+
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.
