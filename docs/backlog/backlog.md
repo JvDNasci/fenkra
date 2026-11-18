@@ -4,7 +4,7 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 118.8 M tokens (≈ 396 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 119.0 M tokens (≈ 397 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
@@ -12,7 +12,7 @@ Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado a
 | Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 9.8% |
 | Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 156 | ≈ 32350 k | 27.2% |
 | Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 125 | ≈ 24700 k | 20.8% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 141 | ≈ 42980 k | 36.2% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 143 | ≈ 43180 k | 36.3% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
@@ -501,6 +501,8 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 | B511 | P1 | **Forma livre integrada às outras bancadas** — Relato de 18/11: a superfície da forma livre não pode ser escolhida em deslocamento, extrusão, espessar, furo ou chapa. Ela deve sair como superfície ou sólido comum, usável nas bancadas de superfícies, sólidos e chapa. Aceite: teste desloca, espessa e fura uma superfície da forma livre, com status ok e volume conferido. | USR-CHECK |  | 300 k | 0.3% | Auto + Visual | a fazer |
 | B512 | P1 | **Editor simples de bloco de título e modelos de folha** — Pedido de 18/11: montar o bloco de título com caixas, textos, campos ligados às propriedades e tabelas, usando os estilos já existentes, e guardar como modelo de folha. Não precisa desenhar linha por linha. Aceite: teste cria um modelo com três campos, aplica numa folha e confere os valores preenchidos. | USR-CHECK |  | 350 k | 0.3% | Auto + Visual | a fazer |
 | B513 | P1 | **Tangência entre faces de sólidos com defeito** — Relato de 18/11: a tangência dos sólidos está com defeitos. Investigar com peças de teste, achar a causa e corrigir. Aceite: casos que falham viram testes com status ok. | USR-CHECK |  | 200 k | 0.2% | Auto | a fazer |
+| B519 | P1 | **GIFs dos 10 comandos novos e teto de GIF de volta a 297** — O B506 (9 botões da barra de vistas) e o B509 (Medir) entraram sem o GIF do tooltip, porque a captura pede abrir a janela com o usuário fora do PC. O teto TETO_FORA_SEM_GIF de checklist_comandos.rs subiu para 307 de forma temporária. Aceite: os 10 GIFs gerados pelo roteiro de mídia e o teto de volta a 297. | USR-CHECK |  | 80 k | 0.1% | Visual | a fazer |
+| B520 | P1 | **Pincel de aparência na barra de propriedades gráficas** — Pedido de 18/11: na barra de propriedades gráficas do topo (B506), um pincel copia a aparência de um elemento para outros: cor, transparência, tipo e espessura de linha, símbolo de ponto, material e textura. Clique no pincel, clique na origem e depois em um ou mais destinos; dois cliques no pincel o deixam ligado para vários destinos, e Esc o desliga. Vale entre peças e elementos do mesmo documento e entre documentos abertos, e entre tipos diferentes só copia o que se aplica. Aceite: teste copia cor, linha e material de uma face para outra face e para uma linha, confere no documento e confere que o desfazer volta tudo num passo. | USR-CHECK |  | 120 k | 0.1% | Auto + Visual | a fazer |
 | B111 | P2 | **Calculadora de rolamento, engrenagem e estriado** — Vida L10 e verificação de engrenagem. Dados do fabricante como camada. (BN01b; módulo Cálculo mecânico; depende de BN01, B44). | PESQ-MOD |  | 250 k | 0.2% | Auto | em andamento |
 | B115 | P2 | **Verificação por norma de barras (aço)** — Utilização por NBR 8800 / EN 1993 / AISC. Relatório. (BN03b; módulo Estrutural; depende de BN03). | PESQ-MOD |  | 300 k | 0.3% | Auto | em andamento |
 | B120 | P2 | **Lattice e preenchimento implícito** — Lattice e preenchimento implícito sobre corpo de malha: TPMS uniforme (giroide, Schwarz-P, diamante) intersectado com o corpo e casca externa, fração de volume como alvo, parede mínima por processo, superfície por marching cubes ou dual contouring sobre grade esparsa (OpenVDB Apache-2.0 ou grade própria em Rust). Vigas, 3MF Beam Lattice e gradiente por campo ficam em item separado. | PESQ-MOD |  | 450 k | 0.4% | Auto | a fazer |
