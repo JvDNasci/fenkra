@@ -42,6 +42,8 @@ mod importar;
 mod features;
 mod esc_sessao;
 #[cfg(test)]
+mod desselecionar_testes;
+#[cfg(test)]
 mod abas_r3_testes;
 #[cfg(test)]
 mod vazios_r4_testes;
@@ -3226,6 +3228,45 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     /// Olha de frente para o plano do item selecionado (sketch, plano da Origem ou referência).
+    /// Há algo realçado em qualquer um dos lugares onde a seleção mora: o 3D (`picks`), a árvore
+    /// (`sel` e `multi`).
+    pub(crate) fn tem_selecao_qualquer(&self) -> bool {
+        !self.picks.is_empty() || !matches!(self.sel, Sel::None) || !self.multi.borrow().is_empty()
+    }
+
+    /// Esvazia a parte da árvore da seleção (item único e multisseleção). Com um comando ou um
+    /// esboço aberto o `sel` é o recurso em edição e fica: quem o solta é o fim do comando.
+    pub(crate) fn limpar_selecao_da_arvore(&mut self) {
+        let livre = self.session.is_none() && self.sketch.is_none();
+        Self::soltar_arvore(&mut self.sel, &self.multi, livre);
+    }
+
+    /// O clique esquerdo na viewport, por campos (a viewport mantém `self.result` emprestado).
+    /// Simples troca tudo: o novo item fica sozinho, também sobre o que veio da árvore, e o vazio
+    /// limpa os dois lugares. Shift/Ctrl só mexem no conjunto do 3D, como sempre.
+    fn clique_no_3d(picks: &mut Vec<crate::picking::Pick>, sel: &mut Sel, multi: &std::cell::RefCell<Vec<Id>>, livre: bool, alvo: Option<crate::picking::Pick>, ctrl: bool, add: bool) {
+        if !add {
+            Self::soltar_arvore(sel, multi, livre);
+        }
+        crate::selecao::aplicar(picks, alvo, crate::selecao::Modo::das_teclas(ctrl, add));
+    }
+
+    /// Versão por campos de `limpar_selecao_da_arvore`, para quem já tem `self.result` emprestado.
+    fn soltar_arvore(sel: &mut Sel, multi: &std::cell::RefCell<Vec<Id>>, livre: bool) {
+        multi.borrow_mut().clear();
+        if livre {
+            *sel = Sel::None;
+        }
+    }
+
+    /// A regra única do desselecionar (clique no vazio do 3D ou da árvore, Esc): o que está no 3D e
+    /// o que está na árvore saem juntos. Eram estados separados, e só o do 3D era zerado, então o
+    /// realce de um item escolhido na árvore ficava preso (o conjunto que acende a peça soma os dois).
+    pub(crate) fn limpar_toda_selecao(&mut self) {
+        self.picks.clear();
+        self.limpar_selecao_da_arvore();
+    }
+
     /// B95: o conjunto único. Reúne a seleção da árvore e o dono de cada escolha do 3D; quando muda,
     /// a cena é refeita para mostrar no 3D o que a árvore selecionou (e a árvore realça o que o 3D escolheu).
     fn atualizar_conjunto(&mut self) {
@@ -5029,8 +5070,18 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         if crate::arvore_soltura_ui::soltando(ui.ctx()) {
             new_sel = None;
         }
+        // clique no vazio da árvore: desseleciona, como no vazio do 3D
+        let sobra = (ui.clip_rect().max.y - ui.cursor().min.y).max(8.);
+        let vazio = ui.allocate_response(egui::vec2(ui.available_width(), sobra), egui::Sense::click());
+        if vazio.clicked() && new_sel.is_none() && !crate::arvore_soltura_ui::soltando(ui.ctx()) {
+            self.limpar_toda_selecao();
+        }
         if let Some(s) = new_sel {
             self.sel = s;
+            // escolher na árvore troca a seleção do 3D (só o novo fica realçado)
+            if self.session.is_none() && self.sketch.is_none() {
+                self.picks.clear();
+            }
             // B449: escolheu na árvore, as setas ficam com ela
             crate::teclado::marcar_arvore_ativa(ui.ctx(), true);
         }
@@ -7610,12 +7661,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         (_, Some(p)) => {
                             // mesmas regras da árvore (B95): Ctrl soma/tira, Shift soma, simples troca
                             let ctrl = ctx.input(|i| i.modifiers.command);
-                            crate::selecao::aplicar(&mut self.picks, Some(p), crate::selecao::Modo::das_teclas(ctrl, add));
+                            let livre = self.session.is_none() && self.sketch.is_none();
+                            Self::clique_no_3d(&mut self.picks, &mut self.sel, &self.multi, livre, Some(p), ctrl, add);
                         }
                         (_, None) => {
-                            if !add {
-                                self.picks.clear();
-                            }
+                            let livre = self.session.is_none() && self.sketch.is_none();
+                            Self::clique_no_3d(&mut self.picks, &mut self.sel, &self.multi, livre, None, false, add);
                         }
                     }
                 }
@@ -7664,6 +7715,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         self.selecao_extra.laco.clear();
                         if !ctx.input(|i| i.modifiers.shift) {
                             self.picks.clear();
+                            Self::soltar_arvore(&mut self.sel, &self.multi, self.session.is_none() && self.sketch.is_none());
                         }
                         got.retain(|p| !self.picks.contains(p));
                         let n = got.len();
@@ -8640,12 +8692,14 @@ impl eframe::App for App {
                 // B468: o Esc desfaz um nível por vez (lista aberta, seleção, comando)
                 match esc_sessao::decidir(egui::Popup::is_any_open(ctx), !self.picks.is_empty()) {
                     esc_sessao::Esc::FechaLista => {}
-                    esc_sessao::Esc::LimpaSelecao => self.picks.clear(),
+                    esc_sessao::Esc::LimpaSelecao => self.limpar_toda_selecao(),
                     esc_sessao::Esc::Cancela => self.cancel_session(),
                 }
             }
-        } else if self.sketch.is_none() && !self.picks.is_empty() && !ctx.egui_wants_keyboard_input() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-            self.picks.clear();
+        } else if self.sketch.is_none() && self.tem_selecao_qualquer() && !ctx.text_edit_focused() && !egui::Popup::is_any_open(ctx) && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            // um clique numa linha da árvore deixa o foco no botão dela e o egui passa a "querer o teclado":
+            // só campo de texto em edição segura o Esc (senão o realce da árvore ficava preso)
+            self.limpar_toda_selecao();
         }
         if self.sketch.is_some() && crate::sketch_ui::keys(self, ctx) {
             self.finish_sketch();
