@@ -514,6 +514,17 @@ impl Document {
     pub fn line_style(&self, id: Id) -> Option<LineStyle> {
         self.line_styles.iter().find(|(x, _)| *x == id).map(|(_, s)| *s)
     }
+    /// B506: transparência própria do elemento (0 a 100 %), se tiver.
+    pub fn transparencia(&self, id: Id) -> Option<u8> {
+        self.transparencias.iter().find(|(x, _)| *x == id).map(|(_, t)| *t)
+    }
+    /// B506: grava a transparência; 0 tira a marca (volta ao opaco do acabamento).
+    pub fn set_transparencia(&mut self, id: Id, t: u8) {
+        self.transparencias.retain(|(x, _)| *x != id);
+        if t > 0 {
+            self.transparencias.push((id, t.min(100)));
+        }
+    }
     pub fn set_line_style(&mut self, id: Id, st: Option<LineStyle>) {
         self.line_styles.retain(|(x, _)| *x != id);
         if let Some(st) = st {
@@ -4360,6 +4371,9 @@ pub struct Document {
     /// estilo próprio de linha/ponto de elementos de geometria (espessura, tipo de linha, símbolo)
     #[serde(default)]
     pub line_styles: Vec<(Id, LineStyle)>,
+    /// B506: transparência própria (0 a 100 %) de corpo, comando ou superfície; só exibição
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub transparencias: Vec<(Id, u8)>,
     /// regras de dobra de tubo cadastradas pelo usuário (B330)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tube_rules: Vec<TubeRule>,
@@ -4437,6 +4451,7 @@ impl Document {
             pmi: vec![],
             pmi_captures: vec![],
             line_styles: vec![],
+            transparencias: vec![],
             tube_rules: vec![],
             plastico: None,
             features: vec![],

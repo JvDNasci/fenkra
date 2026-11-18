@@ -776,6 +776,15 @@ SO_INTERFACE |= {"pmi_empilhamento"}
 SO_INTERFACE |= {"des_inspecao", "des_inspecao_baloes", "des_inspecao_csv", "des_inspecao_xlsx"}
 SO_INTERFACE |= {"sm_dobra_conica"}
 
+# B506: barra de vistas. A face tracejada é a de trás (ou de baixo) que a vista mostra; vista normal é
+# a seta perpendicular ao plano; zoom na seleção é a lupa sobre a peça.
+SO_INTERFACE |= {"vista_tras", "vista_esquerda", "vista_base", "vista_normal", "zoom_selecao"}
+ic("vista_tras", B=CUBO(), r=Z((24, 6), (40, 14), (40, 32), (24, 24)))
+ic("vista_esquerda", B=CUBO(), r=Z((24, 6), (8, 14), (8, 32), (24, 24)))
+ic("vista_base", B=CUBO(), r=Z((8, 32), (24, 24), (40, 32), (24, 40)))
+ic("vista_normal", B=Z((6, 34), (28, 27), (42, 35), (20, 42)), R=S(24, 6, 24, 31) + L((24, 25), (29.5, 23.3), (29.5, 29.3)))
+ic("zoom_selecao", B=CUBO(18, 6, 11, 5.5, 11), R=C(30, 30, 8) + L((35.7, 35.7), (43, 43)))
+
 # topo fino (B434): menu em ícone e uma aba por bancada
 ic("menu", B=L((10, 14), (38, 14)) + L((10, 34), (38, 34)), R=L((10, 24), (38, 24)))
 ic("banc_solidos", B=CUBO_OCULTO(), R=CUBO())

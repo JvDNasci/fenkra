@@ -312,7 +312,7 @@ pub fn carregar_de(usuario: Option<&Path>, empresa: Option<&Path>) -> Settings {
     let r = config::resolver(&programa, e.empresa.as_ref(), e.projeto.as_ref(), &usuario_mapa, None, CHAVES_DOC);
     e.avisos.extend(avisos);
     e.ultima = None;
-    settings_de(r.valores).migrar_tema().migrar_layout()
+    settings_de(r.valores).migrar_tema().migrar_layout().migrar_comandos()
 }
 
 /// O que vai para o `config.json`: só o que a pessoa mudou em relação às camadas de baixo. Com um
@@ -478,7 +478,7 @@ pub fn importar_perfil(texto: &str, s: &mut Settings) -> Result<ResumoPerfil, St
     for (k, v) in p.valores {
         m.insert(k, v);
     }
-    *s = settings_de(m).migrar_tema().migrar_layout();
+    *s = settings_de(m).migrar_tema().migrar_layout().migrar_comandos();
     Ok(ResumoPerfil { aplicadas, ignoradas: p.ignoradas, travadas: p.travadas, aviso: p.aviso })
 }
 

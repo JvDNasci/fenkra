@@ -73,10 +73,12 @@ pub enum Group {
     AsmRecursos,
     Biblioteca,
     DesGerar,
+    /// B506: propriedades gráficas da seleção (cor, transparência, linha, símbolo, material, textura)
+    Propriedades,
 }
 
 impl Group {
-    pub const ALL: [Group; 43] = [
+    pub const ALL: [Group; 44] = [
         Group::DesArquivo,
         Group::DesVistas,
         Group::DesCotas,
@@ -120,12 +122,17 @@ impl Group {
         Group::AsmRecursos,
         Group::Biblioteca,
         Group::DesGerar,
+        Group::Propriedades,
     ];
     /// Em que bancada o grupo aparece: os grupos de sketch valem em toda bancada que desenha sketch;
     /// os demais seguem a ordem da bancada (B436, `organizacao::ordem`).
     pub fn in_bench(self, b: Bench) -> bool {
         if self.sketch_only() {
             return matches!(b, Bench::Solidos | Bench::Superficies);
+        }
+        // B506: a barra de propriedades gráficas vale onde se modela a peça
+        if self == Group::Propriedades {
+            return matches!(b, Bench::Solidos | Bench::Superficies | Bench::Chapa | Bench::Estrutural | Bench::FormaLivre);
         }
         crate::organizacao::ordem(b).contains(&self)
     }
@@ -154,6 +161,7 @@ impl Group {
             Group::Organizacao => tr("Organização"),
             Group::Selecao => tr("Seleção"),
             Group::Vista => tr("Vista"),
+            Group::Propriedades => tr("Propriedades gráficas"),
             Group::Padroes => tr("Transformações"),
             Group::Superficies => tr("Superfícies"),
             Group::Wireframe => tr("Wireframe (pontos, linhas, planos, curvas)"),
@@ -787,6 +795,19 @@ impl Settings {
     /// Lê as camadas (programa, empresa, projeto, usuário) e devolve as configurações em vigor (B100).
     pub fn load() -> Self {
         crate::config_camadas::carregar()
+    }
+
+    /// B505: chaves de comandos de versões anteriores (caixas próprias, ocultos e ordem) vão para o
+    /// comando atual. Pode rodar quantas vezes for: chave atual fica igual.
+    pub fn migrar_comandos(mut self) -> Self {
+        for g in &mut self.custom.groups {
+            crate::elementos::migrar_lista(&mut g.items);
+        }
+        crate::elementos::migrar_lista(&mut self.custom.hidden);
+        for (_, o) in &mut self.custom.order {
+            crate::elementos::migrar_lista(o);
+        }
+        self
     }
 
     /// Quem tinha um tema que não existe mais (removido) cai no padrão, com o fundo da viewport dele.

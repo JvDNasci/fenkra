@@ -238,7 +238,9 @@ mod tests {
     ];
 
     /// Tetos de pendências fora dos sólidos (comando sem GIF, ícone ou tooltip). Só podem descer.
-    const TETO_FORA_SEM_GIF: usize = 297;
+    /// B506 subiu 9: a barra de vistas ganhou zoom na seleção, vista normal, trás, esquerda, base,
+    /// estilo, ocultar, trocar espaço e material como botões, ainda sem GIF (pendência do B506).
+    const TETO_FORA_SEM_GIF: usize = 306;
     const TETO_FORA_SEM_ICONE: usize = 0;
     const TETO_FORA_SEM_TOOLTIP: usize = 10;
 

@@ -51,7 +51,23 @@ pub enum Act {
     Verificar,
     /// abre o painel da regra plástica da peça (B198)
     RegraPlastica,
+    /// B506: muda uma propriedade gráfica da seleção
+    Grafico(crate::propriedades_graficas::Mudanca),
+    /// B506: enquadra só o que está selecionado
+    ZoomSelecao,
+    /// B506: isométrica; clique repetido gira entre as oito direções
+    IsoCiclica,
+    /// B506: esconde ou mostra a seleção (tecla H)
+    OcultarMostrar,
+    /// B506: lugar do menu de estilos de exibição na barra de vistas
+    EstiloMenu,
+    /// B506: lugar do menu de materiais na barra de vistas
+    MaterialMenu,
 }
+
+/// B506 (R4.1): ordem da barra de vistas, da esquerda para a direita. Multivistas fica de fora
+/// enquanto a viewport tiver uma câmera só.
+pub const ORDEM_VISTAS: [&str; 8] = ["ajustar", "zoom_selecao", "vista_normal", "vistas", "estilo", "ocultar", "ocultos", "aparencia"];
 
 /// Botão: ícone, nome, descrição breve, descrição avançada, ação.
 #[derive(Clone, Copy)]
@@ -119,10 +135,25 @@ pub fn all_entries() -> Vec<Entry> {
 /// mais não derruba a caixa: só fica de fora.
 pub fn show_custom(ui: &mut egui::Ui, i: usize, s: &mut Settings, st: &ToolState, forma: Forma, alca: bool) -> Vec<Act> {
     let Some(cg) = s.custom.groups.get(i).cloned() else { return vec![] };
-    let all = all_entries();
-    let list: Vec<Entry> = cg.items.iter().filter_map(|k| all.iter().find(|e| entry_key(e) == *k).cloned()).collect();
+    let list = itens_da_caixa(&cg.items);
     let barra = Barra::Minha(i);
     show_block(ui, None, alca.then_some(barra), cg.name.clone(), list, s, st, forma)
+}
+
+/// Entradas de uma caixa própria pelas chaves gravadas. Chave de versão anterior vai para o comando
+/// atual (B505: `elementos::chave_atual`); a que não existe mais fica de fora, sem derrubar a caixa.
+pub fn itens_da_caixa(chaves: &[String]) -> Vec<Entry> {
+    let all = all_entries();
+    let mut out: Vec<Entry> = vec![];
+    for k in chaves {
+        let k = crate::elementos::chave_atual(k);
+        if let Some(e) = all.iter().find(|e| entry_key(e) == k) {
+            if !out.iter().any(|x| entry_key(x) == k) {
+                out.push(e.clone());
+            }
+        }
+    }
+    out
 }
 
 const fn it(icon: &'static str, name: &'static str, brief: &'static str, advanced: &'static str, act: Act) -> Item {
@@ -235,21 +266,11 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("edit_raio_filete", "Raio do filete", "Trocar o raio de um filete (edição direta)", "Escolha a face curva de um filete existente e dê o raio novo; zero desfaz o filete.", Cmd(C::DirectEdit(3))),
             ]),
         ],
+        // B505: um botão por elemento (o tipo fica no painel) e as operações à parte
         Group::Referencias => {
-            let fam = |ks: &[GeoKind]| -> Vec<Item> {
-                ks.iter().map(|k| {
-                    let (i, n, b, a) = k.info();
-                    it(i, n, b, a, Cmd(C::Geo(*k)))
-                }).collect()
-            };
-            vec![
-                Family("plano", fam(&geo_ui::PLANES)),
-                Family("ponto", fam(&geo_ui::POINTS)),
-                Family("linha", fam(&geo_ui::LINES)),
-                Family("curva", fam(&geo_ui::CURVES)),
-                Family("superficie", fam(&geo_ui::SURFACES)),
-                One(it("wf_repetir", "Repetir pontos", "Repetir pontos na curva", "Selecione uma curva e crie N pontos associativos ao longo dela (por quantidade ou espaçamento), com planos normais opcionais em cada ponto.", Cmd(C::PointRepeat))),
-            ]
+            let mut v: Vec<Entry> = crate::elementos::ELEMENTOS.iter().map(|e| crate::elementos::entrada_do_elemento(e.chave)).collect();
+            v.extend(crate::elementos::OPERACOES.iter().map(|(k, _)| crate::elementos::entrada_da_operacao(k)));
+            v
         }
         Group::Montagem => vec![
             Family("asm_arquivo", vec![
@@ -496,56 +517,29 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 One(it("mec_simular", "Simular", "Simulação cinemática", "Comandos por cursor ou por leis no tempo (t), quadros, velocidade e aceleração; análise de graus de liberdade.", Cmd(C::AsmSimulate))),
             ]
         }
+        // B505: Ponto, Linha, Plano e Curva com os tipos no painel; interseção e projeção à parte
         Group::Wireframe => {
-            let g = |k: GeoKind| {
-                let (i, n, b, a) = k.info();
-                it(i, n, b, a, Cmd(C::Geo(k)))
-            };
-            let fam = |ks: &[GeoKind]| -> Vec<Item> { ks.iter().map(|k| g(*k)).collect() };
-            vec![
-                Family("wf_ponto", fam(&[GeoKind::PtCoords, GeoKind::PtOnCurve, GeoKind::PtOnSurface, GeoKind::PtOnPlane, GeoKind::PtCenter, GeoKind::PtBetween, GeoKind::PtProject, GeoKind::PtCurvePlane, GeoKind::PtCurveCurve, GeoKind::PtOffset, GeoKind::PtTangent, GeoKind::PtProjectCurve])),
-                Family("wf_linha", fam(&[GeoKind::LinePts, GeoKind::LineDir, GeoKind::LineNormal, GeoKind::LineAngle, GeoKind::LineTangent, GeoKind::LinePlanes, GeoKind::LineBisector, GeoKind::LineAxis])),
-                One(it("wf_repetir", "Repetir pontos", "Repetir pontos na curva", "Selecione uma curva e crie N pontos associativos ao longo dela (por quantidade ou espaçamento), com planos normais opcionais em cada ponto.", Cmd(C::PointRepeat))),
-                One(g(GeoKind::Polyline)),
-                One(g(GeoKind::CurveJoin)),
-                Family("wf_plano", fam(&geo_ui::PLANES)),
-                Family("wf_circulo", fam(&[GeoKind::Circle, GeoKind::Circle3, GeoKind::Conic])),
-                Family("wf_spline", fam(&[GeoKind::Spline, GeoKind::SplineControl, GeoKind::Connect, GeoKind::Corner])),
-                Family("wf_helice", fam(&[GeoKind::Helix, GeoKind::Spiral, GeoKind::Spine])),
-                Family("wf_projecao", fam(&[GeoKind::CurveProjSurf, GeoKind::CurveProject, GeoKind::PtProject])),
-                One(g(GeoKind::CurveIntersect)),
-                One(g(GeoKind::CurveParallel)),
-                One(it("extrair", "Extrair", "Extrair a seleção (faces, arestas, vértices)", "Faces, arestas e vértices viram superfície, curva ou ponto de referência. Simples = um elemento por item; múltipla = um só. Propagação por ponto, tangente ou curvatura; o resultado pode ser publicado.", Cmd(C::Extract))),
-            ]
+            let el = crate::elementos::entrada_do_elemento;
+            let op = crate::elementos::entrada_da_operacao;
+            vec![el("el_ponto"), el("el_linha"), el("el_plano"), el("el_curva"), op("op_intersecao"), op("op_projecao")]
         }
         Group::Superficies => {
             let g = |k: GeoKind| {
                 let (i, n, b, a) = k.info();
                 it(i, n, b, a, Cmd(C::Geo(k)))
             };
-            vec![
-                Family("sup_basica", vec![g(GeoKind::SurfExtrude), g(GeoKind::SurfRevolve), g(GeoKind::SurfSphere), g(GeoKind::SurfCylinder)]),
-                One(g(GeoKind::SurfOffset)),
-                Family("sup_varrer", vec![g(GeoKind::SurfSweep), g(GeoKind::SurfSweepX), g(GeoKind::SurfTube)]),
-                Family("sup_multi", vec![g(GeoKind::SurfLoft), g(GeoKind::SurfRuled), g(GeoKind::SurfBlend), g(GeoKind::SurfConnect)]),
-                Family("sup_filete", vec![g(GeoKind::SurfFilletSS), g(GeoKind::SurfEdgeFillet)]),
-                One(g(GeoKind::SurfFill)),
-            ]
+            vec![crate::elementos::entrada_do_elemento("el_superficie"), Family("sup_filete", vec![g(GeoKind::SurfFilletSS), g(GeoKind::SurfEdgeFillet)])]
         }
         Group::Operacoes => {
             let g = |k: GeoKind| {
                 let (i, n, b, a) = k.info();
                 it(i, n, b, a, Cmd(C::Geo(k)))
             };
+            let op = crate::elementos::entrada_da_operacao;
             vec![
-                Family("op_juntar", vec![g(GeoKind::OpJoin), g(GeoKind::OpHeal)]),
+                op("op_juntar"),
                 One(g(GeoKind::OpCut)),
-                Family("op_extrair", vec![
-                    it("extrair", "Extrair", "Extrair a seleção (faces, arestas, vértices)", "Faces, arestas e vértices viram superfície, curva ou ponto de referência. Simples = um elemento por item; múltipla = um só. Propagação por ponto, tangente ou curvatura; o resultado pode ser publicado.", Cmd(C::Extract)),
-                    g(GeoKind::SurfExtract),
-                    g(GeoKind::OpMulti),
-                    g(GeoKind::OpBoundary),
-                ]),
+                op("op_extrair"),
                 Family("op_desmontar", vec![g(GeoKind::OpUntrim), g(GeoKind::OpPart)]),
                 One(g(GeoKind::OpExtrapolate)),
                 Family("xf", vec![g(GeoKind::XfTranslate), g(GeoKind::XfRotate), g(GeoKind::XfMirror), g(GeoKind::XfScale)]),
@@ -608,16 +602,27 @@ pub fn entries(g: Group) -> Vec<Entry> {
                 it("sel_caixa_auto", "Automática", "Caixa pela direção", "Arrastar com o esquerdo faz a caixa: para a direita = janela, para a esquerda = cruzada.", SelMode(3)),
             ]),
         ],
+        // B506: barra de vistas no padrão da referência (R4.1), na ordem de `ORDEM_VISTAS`
         Group::Vista => vec![
-            One(it("ajustar", "Ajustar", "Ajustar à tela  (F)", "Enquadra todo o modelo.", Fit)),
+            One(it("ajustar", "Enquadrar tudo", "Enquadrar tudo  (F)", "Ajusta o zoom para caber todo o modelo visível; ocultos, origem e rótulos não contam.", Fit)),
+            One(it("zoom_selecao", "Zoom na seleção", "Zoom na seleção", "Enquadra só o que está selecionado (faces, arestas, corpos ou elementos).", ZoomSelecao)),
+            One(it("vista_normal", "Vista normal", "Vista normal à seleção  (N)", "Olha de frente para a face, o plano ou o sketch selecionado. Sem seleção, para o plano de trabalho ativo.", Normal)),
             Family("vistas", vec![
-                it("vista_iso", "Iso", "Vista isométrica  (Ctrl+7)", "Leva a câmera à vista isométrica, que mostra três lados da peça de uma vez.", View(-0.785, 0.6)),
+                it("vista_iso", "Iso", "Vista isométrica  (Ctrl+7)", "Leva a câmera à vista isométrica. Clique de novo para girar entre as oito direções isométricas.", IsoCiclica),
                 it("vista_frente", "Frente", "Vista frontal  (Ctrl+1)", "Leva a câmera a olhar a peça de frente.", View(-1.5708, 0.0)),
-                it("vista_topo", "Topo", "Vista superior  (Ctrl+5)", "Leva a câmera a olhar a peça de cima.", View(-1.5708, 1.5706)),
+                it("vista_tras", "Trás", "Vista posterior", "Leva a câmera a olhar a peça por trás.", View(1.5708, 0.0)),
+                it("vista_esquerda", "Esquerda", "Vista lateral esquerda", "Leva a câmera a olhar a peça pelo lado esquerdo.", View(3.14159, 0.0)),
                 it("vista_direita", "Direita", "Vista lateral direita  (Ctrl+3)", "Leva a câmera a olhar a peça pelo lado direito.", View(0.0, 0.0)),
+                it("vista_topo", "Topo", "Vista superior  (Ctrl+5)", "Leva a câmera a olhar a peça de cima.", View(-1.5708, 1.5706)),
+                it("vista_base", "Base", "Vista inferior", "Leva a câmera a olhar a peça por baixo.", View(-1.5708, -1.5706)),
             ]),
+            One(it("estilo", "Estilo", "Estilo de exibição", "Sombreado, sombreado com arestas, arestas ocultas, aramado ou com material.", EstiloMenu)),
+            One(it("ocultar", "Ocultar/mostrar", "Ocultar ou mostrar a seleção  (H)", "Esconde o que está selecionado; com o oculto selecionado, mostra de novo. O modelo não muda.", OcultarMostrar)),
+            One(it("ocultos", "Trocar espaço", "Trocar o espaço visível  (Shift+H)", "Mostra só os itens ocultos, para trazer de volta o que precisar. Clique de novo para voltar. Nada é apagado.", HiddenEnv)),
+            One(it("aparencia", "Material", "Aplicar material", "Aplica um material pronto (cor e acabamento) à seleção: faces, comandos, corpos e superfícies.", MaterialMenu)),
             One(it("ortho", "Ortogonal", "Projeção ortogonal  (O)", "Perspectiva ou projeção ortogonal (ideal para sketches).", Ortho)),
         ],
+        Group::Propriedades => vec![],
         Group::SkCriacao => vec![
             One(tool(Tool::Line)),
             One(tool(Tool::Spline)),
@@ -675,6 +680,8 @@ pub struct ToolState {
     pub chapa_plana: bool,
     /// B441: o que o documento tem, para dizer o passo que falta a cada comando
     pub ctx: crate::proximo::Contexto,
+    /// B506: valores gráficos da seleção, para a barra de propriedades e o menu de material
+    pub grafico: crate::propriedades_graficas::Estado,
 }
 
 fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
@@ -830,11 +837,55 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, barra: Option<Barra>, title: 
     let mut body = |ui: &mut egui::Ui| {
         for e in list.clone() {
             match e {
+                Entry::One(i) if i.act == Act::EstiloMenu => {
+                    let r = tool_button(ui, i.icon, i.name, size, labels, false, i.brief, i.advanced);
+                    egui::Popup::menu(&r).show(|ui| {
+                        for m in DisplayMode::ALL.into_iter().filter(|m| !m.e_analise()) {
+                            ui.radio_value(&mut s.display, m, m.label());
+                        }
+                        ui.separator();
+                        ui.checkbox(&mut s.edges_in_render, tr("arestas no semi-renderizado"));
+                        ui.checkbox(&mut s.tangent_edges, tr("arestas de tangência (fim dos raios)"));
+                    });
+                }
+                Entry::One(i) if i.act == Act::MaterialMenu => {
+                    let pode = st.grafico.material.aplica();
+                    let r = tool_button(ui, i.icon, i.name, size, labels, false, i.brief, i.advanced);
+                    egui::Popup::menu(&r).show(|ui| {
+                        if !pode {
+                            ui.label(RichText::new(tr("Selecione faces, comandos, corpos ou superfícies para aplicar o material.")).weak().small());
+                        }
+                        ui.add_enabled_ui(pode, |ui| {
+                            for (k, (n, _)) in fenkra_core::APPEARANCE_PRESETS.iter().enumerate() {
+                                if ui.selectable_label(st.grafico.material.um().is_some_and(|x| x == n), tr(n)).clicked() {
+                                    acts.push(Act::Grafico(crate::propriedades_graficas::Mudanca::Material(k)));
+                                    ui.close();
+                                }
+                            }
+                        });
+                    });
+                }
                 Entry::One(i) => {
                     let r = tool_button(ui, i.icon, i.name, size, labels, is_selected(i.act, s, st), i.brief, i.advanced);
                     // B441: sem o passo anterior, o botão esmaece e o clique explica o que falta
                     crate::proximo::clique(ui, &r, i.act, &st.ctx, &mut acts);
                     // na coluna, o comando sem variações guarda o lugar da seta: os ícones ficam alinhados
+                    if forma == Forma::Coluna {
+                        ui.allocate_exact_size(egui::vec2(SETA, size + 6.), egui::Sense::hover());
+                    }
+                }
+                Entry::Family(key, items) if crate::elementos::e_elemento(key) => {
+                    // B505: um botão por elemento, sem seta; o tipo é escolhido no painel e o botão
+                    // abre o último tipo usado
+                    let cur = s.family(key).min(items.len() - 1);
+                    let el = crate::elementos::elemento(key).expect("elemento");
+                    let atual = tr(items[cur].name);
+                    let passos = format!("{}
+{} {atual}.", tr(el.passos), tr("Tipo da próxima vez:"));
+                    let r = tool_button(ui, el.icone, el.nome, size, labels, items.iter().any(|x| is_selected(x.act, s, st)), el.frase, &passos);
+                    let icones: Vec<&str> = items.iter().map(|x| x.icon).collect();
+                    crate::curso_ui::destaque_em_familia(ui, r.rect, &icones, el.icone);
+                    crate::proximo::clique(ui, &r, items[cur].act, &st.ctx, &mut acts);
                     if forma == Forma::Coluna {
                         ui.allocate_exact_size(egui::vec2(SETA, size + 6.), egui::Sense::hover());
                     }
@@ -874,16 +925,12 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, barra: Option<Barra>, title: 
                 }
             }
         }
+        if g == Some(Group::Propriedades) {
+            if let Some(m) = crate::propriedades_graficas::barra(ui, &st.grafico) {
+                acts.push(Act::Grafico(m));
+            }
+        }
         if g == Some(Group::Vista) {
-            let r = tool_button(ui, "estilo", "Estilo", size, labels, false, "Estilo de exibição", "Sombreado com/sem arestas, linhas ocultas, arame, raio-X ou semi-renderizado.");
-            egui::Popup::menu(&r).show(|ui| {
-                for m in DisplayMode::ALL {
-                    ui.radio_value(&mut s.display, m, m.label());
-                }
-                ui.separator();
-                ui.checkbox(&mut s.edges_in_render, tr("arestas no semi-renderizado"));
-                ui.checkbox(&mut s.tangent_edges, tr("arestas de tangência (fim dos raios)"));
-            });
             let r = tool_button(ui, "filtro", "Exibir", size, labels, false, "Filtro de exibição", "Escolha quais tipos de elemento aparecem na viewport.");
             egui::Popup::menu(&r).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
                 let f = &mut s.filter;
@@ -896,9 +943,6 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, barra: Option<Barra>, title: 
                 ui.checkbox(&mut f.eixos, tr("Eixos da Origem"));
                 ui.checkbox(&mut f.rotulos, tr("Rótulos dos planos"));
             });
-            if tool_button(ui, "ocultos", "Ocultos", size, labels, st.hidden_env, "Ambiente de ocultos  (Shift+H)", "Mostra só os itens ocultos, para reexibir o que precisar.").clicked() {
-                acts.push(Act::HiddenEnv);
-            }
             if tool_button(ui, "config", "Ajustes", size, labels, false, "Configurações", "Tema, fundo, navegação, barras, cotagem e sketch.").clicked() {
                 acts.push(Act::Settings);
             }

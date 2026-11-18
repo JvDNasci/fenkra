@@ -156,7 +156,7 @@ modelos!(
     "st_reforco", "st_solda", "sup_cilindro", "sup_concordancia", "sup_conectar", "sup_deslocada", "sup_esfera",
     "sup_extraida", "sup_extrudada", "sup_filete", "sup_filete_aresta", "sup_multisecoes", "sup_preenchida",
     "sup_regrada", "sup_revolucao", "sup_tubo", "sup_varredura", "sup_varredura_av", "sweep_corrigido", "sweep_fixo",
-    "sweep_frenet", "vista_direita", "vista_frente", "vista_iso", "vista_topo", "wf_repetir", "xf_afinidade",
+    "sweep_frenet", "vista_direita", "vista_frente", "vista_iso", "vista_topo", "vista_tras", "vista_esquerda", "vista_base", "vista_normal", "zoom_selecao", "wf_repetir", "xf_afinidade",
     "xf_escala", "xf_girar", "xf_mover", "xf_simetria", "arvore_zoom_mais", "arvore_zoom_menos",
     "arvore_localizar", "arvore_enquadrar", "arvore_recolher", "painel_restaurar", "barra_mais",
     "qualidade_modelo", "comparar_versoes",

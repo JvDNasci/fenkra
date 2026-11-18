@@ -100,6 +100,8 @@ mod tests {
         for linha in ANTES.lines().filter(|l| !l.trim().is_empty()) {
             let (banc, acao) = linha.split_once('\t').unwrap();
             let b = TODAS.into_iter().find(|b| format!("{b:?}") == banc).unwrap();
+            // B506: a isométrica virou a cíclica (o primeiro clique dá a mesma vista)
+            let acao = if acao == "View(-0.785, 0.6)" { "IsoCiclica" } else { acao };
             if !acoes_da_bancada(b).iter().any(|a| a == acao) {
                 faltam.push(format!("{banc}: {acao}"));
             }
