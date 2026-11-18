@@ -6,7 +6,7 @@
 //! Aqui ficam as funções puras sobre a topologia do corpo atual; o recompute (lib.rs) as chama
 //! antes de entregar pontos ao kernel.
 
-use fenkra_core::{EdgeKey, FaceKey, Id};
+use fenkra_core::{EdgeKey, FaceKey, Id, PAPEL_SUPERFICIE};
 use fenkra_kernel::{Topology, NO_FACE};
 
 /// Corpo visto pelas referências: topologia e dono/papel de cada face (mesma ordem de faces).
@@ -45,6 +45,7 @@ fn dist(a: [f64; 3], b: [f64; 3]) -> f64 {
 /// Nome do papel para mensagens.
 pub fn role_name(role: i32) -> String {
     match role {
+        r if r >= PAPEL_SUPERFICIE => format!("face {}", r - PAPEL_SUPERFICIE + 1),
         0 => "tampa inicial".into(),
         1 => "tampa final".into(),
         r if r >= crate::papeis::PAPEL_FURO => crate::papeis::nome_furo(r).unwrap_or_default(),
@@ -96,7 +97,7 @@ impl View<'_> {
         if p == NO_FACE || q == NO_FACE {
             return None;
         }
-        Some(EdgeKey { a: self.face_key(p as usize)?, b: self.face_key(q as usize)? })
+        Some(EdgeKey { a: self.face_key(p as usize)?, b: self.face_key(q as usize)?, edge: None })
     }
 }
 
@@ -230,6 +231,82 @@ pub fn arestas_criadas(v: &View, id: Id) -> Vec<usize> {
         .collect()
 }
 
+/// Papéis das faces de uma superfície de referência (B515): a superfície é a dona de todas e o papel
+/// de cada face é o índice dela, `PAPEL_SUPERFICIE + i`.
+pub fn surface_roles(n: usize) -> Vec<i32> {
+    (0..n as i32).map(|i| PAPEL_SUPERFICIE + i).collect()
+}
+
+/// Chave da aresta `e` de uma superfície de referência: as faces vizinhas e o índice da aresta. A borda
+/// (aresta livre) tem uma face só, que entra nos dois lados da chave. Costura e aresta degenerada não têm.
+pub fn surface_edge_key(v: &View, e: usize) -> Option<EdgeKey> {
+    let [p, q] = *v.topo.edge_faces.get(e)?;
+    let (p, q) = match (p == NO_FACE, q == NO_FACE) {
+        (true, true) => return None,
+        (false, true) => (p, p),
+        (true, false) => (q, q),
+        _ => (p, q),
+    };
+    Some(EdgeKey { a: v.face_key(p as usize)?, b: v.face_key(q as usize)?, edge: Some(e as u32) })
+}
+
+/// Acha a face de uma superfície de referência pela chave (B515). O papel é o índice: a face do mesmo
+/// índice vale se ainda for do mesmo tipo. Se não for (a superfície ganhou ou perdeu faces), ficam as
+/// do mesmo tipo e normal/eixo, e desempatam a área e, por último, o ponto clicado.
+pub fn find_surface_face(v: &View, key: &FaceKey, hint: Option<[f64; 3]>) -> Result<usize, Lost> {
+    let n = v.faces();
+    let j = key.role - PAPEL_SUPERFICIE;
+    if j >= 0 && (j as usize) < n && v.owners[j as usize] == key.owner && kind_of(v.topo.faces[j as usize].kind) == key.kind {
+        return Ok(j as usize);
+    }
+    let c: Vec<usize> = (0..n).filter(|j| v.owners[*j] == key.owner && v.same_shape(*j, key)).collect();
+    match c.len() {
+        0 => return Err(Lost::None),
+        1 => return Ok(c[0]),
+        _ => {}
+    }
+    if let Some(j) = clear_best(c.iter().map(|j| (*j, v.area_diff(*j, key))).collect()) {
+        return Ok(j);
+    }
+    if let Some(h) = hint {
+        if let Some(j) = clear_best(c.iter().map(|j| (*j, dist(v.topo.faces[*j].point, h))).collect()) {
+            return Ok(j);
+        }
+    }
+    Err(Lost::Ambiguous(c.len()))
+}
+
+/// Acha a aresta de uma superfície de referência pela chave (B515): a do mesmo índice, se ainda ficar
+/// entre as mesmas faces; senão as que ficam entre as faces da chave, desempatadas pelo ponto.
+pub fn find_surface_edge(v: &View, key: &EdgeKey, hint: Option<[f64; 3]>) -> Result<usize, Lost> {
+    let total = v.topo.edge_faces.len().min(v.topo.edge_mids.len());
+    let entre = |e: usize| -> bool {
+        let [p, q] = v.topo.edge_faces[e];
+        let face = |f: u32, k: &FaceKey| f != NO_FACE && v.is(f as usize, k);
+        if key.a == key.b {
+            // borda: uma face só
+            (face(p, &key.a) && q == NO_FACE) || (face(q, &key.a) && p == NO_FACE)
+        } else {
+            (face(p, &key.a) && face(q, &key.b)) || (face(p, &key.b) && face(q, &key.a))
+        }
+    };
+    if let Some(i) = key.edge.map(|i| i as usize).filter(|i| *i < total && entre(*i)) {
+        return Ok(i);
+    }
+    let c: Vec<usize> = (0..total).filter(|e| entre(*e)).collect();
+    match c.len() {
+        0 => return Err(Lost::None),
+        1 => return Ok(c[0]),
+        _ => {}
+    }
+    if let Some(h) = hint {
+        if let Some(e) = clear_best(c.iter().map(|e| (*e, dist(v.topo.edge_mids[*e], h))).collect()) {
+            return Ok(e);
+        }
+    }
+    Err(Lost::Ambiguous(c.len()))
+}
+
 /// Candidatas de uma face perdida, para o assistente de reparo mostrar no 3D: as do mesmo dono e
 /// papel (ambígua) ou, se nenhuma, as de mesmo tipo mais perto do último ponto conhecido.
 pub fn candidatas_face(v: &View, key: Option<&FaceKey>, hint: [f64; 3], max: usize) -> Vec<usize> {
@@ -293,12 +370,35 @@ mod tests {
     }
 
     #[test]
+    fn subelementos_de_superficie_seguem_indice_e_vizinhas() {
+        // duas faces planas da superfície 9: aresta 0 entre elas, 1 e 2 bordas da face 0, 3 borda da face 1
+        let t = topo(2, &[[0, 1], [0, NO_FACE], [NO_FACE, 0], [1, NO_FACE]]);
+        let owners = [Id(9); 2];
+        let roles = surface_roles(2);
+        let v = View { topo: &t, owners: &owners, roles: &roles };
+        let fk = v.face_key(1).unwrap();
+        assert_eq!(fk.role, PAPEL_SUPERFICIE + 1);
+        assert_eq!(find_surface_face(&v, &fk, None), Ok(1));
+        assert_eq!(role_name(fk.role), "face 2");
+        let ek = surface_edge_key(&v, 2).unwrap();
+        assert_eq!((ek.a, ek.b, ek.edge), (v.face_key(0).unwrap(), v.face_key(0).unwrap(), Some(2)));
+        assert_eq!(find_surface_edge(&v, &ek, None), Ok(2));
+        // o índice mudou: entre as bordas da face 0, decide o ponto
+        let longe = EdgeKey { edge: Some(7), ..ek };
+        assert_eq!(find_surface_edge(&v, &longe, Some([1.1, 0., 0.])), Ok(1));
+        assert_eq!(find_surface_edge(&v, &longe, None), Err(Lost::Ambiguous(2)));
+        // a aresta entre as duas faces
+        let meio = surface_edge_key(&v, 0).unwrap();
+        assert_eq!(find_surface_edge(&v, &EdgeKey { edge: None, ..meio }, None), Ok(0));
+    }
+
+    #[test]
     fn candidatas_da_aresta_ambigua_sao_as_do_par_de_faces() {
         let t = topo(4, &[[0, 1], [0, 2], [1, 2], [0, 1]]);
         let owners = [Id(7); 4];
         let roles = [0, 2, 3, 1];
         let v = View { topo: &t, owners: &owners, roles: &roles };
-        let k = EdgeKey { a: v.face_key(0).unwrap(), b: v.face_key(1).unwrap() };
+        let k = EdgeKey { a: v.face_key(0).unwrap(), b: v.face_key(1).unwrap(), edge: None };
         // duas arestas entre a tampa e a lateral 1: as duas são candidatas, a mais perto primeiro
         assert_eq!(candidatas_aresta(&v, Some(&k), [3., 0., 0.], 5), vec![3, 0]);
         assert_eq!(candidatas_aresta(&v, None, [2.1, 0., 0.], 2), vec![2, 3]);

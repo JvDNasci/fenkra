@@ -1611,6 +1611,7 @@ static TABLE: &[(&str, &str)] = &[
     ("Fixo", "Fixed"),
     ("Frenet corrigido: acompanha a guia sem torcer", "Corrected Frenet: follows the guide without twisting"),
     ("Frestas menores que a tolerância são fechadas.", "Gaps smaller than the tolerance are closed."),
+    ("As superfícies de entrada ficam ocultas quando o resultado sai; mostre-as de novo pela árvore.", "The input surfaces are hidden once the result is built; show them again from the tree."),
     ("Gira o elemento em torno de um eixo.", "Rotates the element about an axis."),
     ("Girar", "Rotate"),
     ("Guia", "Guide"),

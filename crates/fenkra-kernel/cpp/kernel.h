@@ -93,6 +93,7 @@ std::unique_ptr<Shape> thread_tool_ext_x(double ox, double oy, double oz, double
 std::unique_ptr<Shape> face_copy(const Shape& s, double px, double py, double pz);
 std::unique_ptr<Shape> offset_surface(const Shape& s, double d);
 std::unique_ptr<Shape> offset_surface_j(const Shape& s, double d, uint8_t join);
+std::unique_ptr<Shape> shell_of(const Shape& s);
 std::unique_ptr<Shape> fill_surface(rust::Slice<const double> flat, rust::Slice<const uint32_t> ends);
 std::unique_ptr<Shape> fill_surface_x(rust::Slice<const double> flat, rust::Slice<const uint32_t> ends, rust::Slice<const int32_t> orders, rust::Slice<const double> weights,
                                       const Shape& support, rust::Slice<const double> pts, rust::Vec<double>& errs);
@@ -131,6 +132,7 @@ std::unique_ptr<Shape> extrapolate_face(const Shape& s, double px, double py, do
 rust::Vec<double> boundary_pts(const Shape& s, rust::Vec<uint32_t>& ends);
 rust::Vec<double> section_pts(const Shape& a, const Shape& b, rust::Vec<uint32_t>& ends);
 std::unique_ptr<Shape> thicken(const Shape& s, double t1, double t2);
+std::unique_ptr<Shape> surf_fillet(const Shape& a, const Shape& b, bool keep_a_pos, bool keep_b_pos, double r, double r2);
 std::unique_ptr<Shape> close_surface(const Shape& s, double tol);
 std::unique_ptr<Shape> volume_cells(const Shape& s, rust::Slice<const double> exclude);
 std::unique_ptr<Shape> mesh_shape(rust::Slice<const double> tris, bool solid);

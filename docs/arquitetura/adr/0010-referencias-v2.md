@@ -82,3 +82,12 @@ promovida para v2 no primeiro recompute bem-sucedido.
   direção fixa que coincide com uma aresta reta (mesmo sentido) ou com a normal de uma face plana vira `AxisRef::Edge` ou
   `AxisRef::Face` (`Promoted::Furo`, `fixos.rs`); coordenada fora da peça continua fixa, porque pode ter sido digitada de
   propósito. Com isso a fase 2 fecha; o histórico completo do OCCT (alternativa 2) segue como evolução.
+- **Subelementos de superfície (B515, 18/11/2026):** a face, a aresta e o vértice de uma superfície de referência
+  ganham chave como os de corpo. O dono é a própria superfície e o papel da face é o índice dela
+  (`PAPEL_SUPERFICIE + i`); a aresta guarda as faces vizinhas e o próprio índice (`EdgeKey.edge`), e a borda (aresta
+  livre, com uma face só) repete a face nos dois lados da chave. A resolução (`refs::find_surface_face`,
+  `refs::find_surface_edge`) fica com o mesmo índice enquanto ele for do mesmo tipo (face) ou ficar entre as mesmas
+  faces (aresta); se a superfície ganhou ou perdeu faces, desempatam a assinatura e o ponto, e o que não separa vira
+  referência perdida. Com isso `SurfRef::Face`, `CurveRef::BodyEdge`, `AxisRef::Edge/Face`, `PointRef::Vertex` e o
+  plano de face aceitam subelementos de superfície em qualquer comando. Limite conhecido: superfície que reordena faces
+  do mesmo tipo sem mudar a contagem segue pelo índice.

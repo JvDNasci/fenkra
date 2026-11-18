@@ -349,6 +349,8 @@ pub struct App {
     /// assistente de referências quebradas
     pub(crate) wizard_open: bool,
     errors_prev: usize,
+    /// B517: entradas que o filete entre superfícies ou a junção já esconderam, por comando
+    entradas_ocultas: std::collections::HashMap<Id, Vec<Id>>,
     /// link sendo religado pelo assistente (a janela de importação vira "religar")
     relink_ext: Option<Id>,
     /// montagem aberta (bancada Montagem)
@@ -514,6 +516,7 @@ impl App {
             sweep_t0: -10.,
             wizard_open: false,
             errors_prev: 0,
+            entradas_ocultas: std::collections::HashMap::new(),
             relink_ext: None,
             asm: None,
             sheet_open: false,
@@ -2128,22 +2131,32 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     /// Chave v2 da face escolhida, se ela for de um corpo e tiver papel conhecido.
     pub(crate) fn face_key_of(&self, p: Option<&crate::picking::Pick>) -> Option<FaceKey> {
         let crate::picking::Pick::Face { body, face, .. } = *p? else { return None };
-        self.result.as_ref()?.bodies.get(body)?.face_key(face)
+        let r = self.result.as_ref()?;
+        // B515: a face de uma superfície de referência tem chave própria (a superfície e o índice)
+        if body >= crate::picking::SURF_BASE {
+            return r.surfaces.get(body - crate::picking::SURF_BASE)?.face_key(face);
+        }
+        r.bodies.get(body)?.face_key(face)
     }
 
-    /// Chave v2 da aresta escolhida.
+    /// Chave v2 da aresta escolhida (de corpo ou de superfície de referência, borda incluída).
     fn edge_key_of(&self, body: usize, edge: usize) -> Option<EdgeKey> {
-        self.result.as_ref()?.bodies.get(body)?.edge_key(edge)
+        let r = self.result.as_ref()?;
+        if body >= crate::picking::SURF_BASE {
+            return r.surfaces.get(body - crate::picking::SURF_BASE)?.edge_key(edge);
+        }
+        r.bodies.get(body)?.edge_key(edge)
     }
 
     /// Ponta de aresta com chave no vértice clicado: o ponto passa a seguir a aresta.
     pub(crate) fn vertex_ref(&self, body: usize, pos: [f64; 3]) -> PointRef {
         let found = self.result.as_ref().and_then(|r| {
-            let m = &r.bodies.get(body)?.mesh;
+            // B515: vértice de superfície de referência também segue a aresta dela
+            let m = crate::picking::mesh_of(r, body)?;
             (0..m.edge_ranges.len()).find_map(|e| {
                 let l = crate::picking::edge_polyline(r, body, e);
                 let near = |q: &[f64; 3]| (0..3).map(|i| (q[i] - pos[i]).powi(2)).sum::<f64>() < 1e-4;
-                (l.first().is_some_and(near) || l.last().is_some_and(near)).then(|| r.bodies[body].edge_key(e)).flatten()
+                (l.first().is_some_and(near) || l.last().is_some_and(near)).then(|| self.edge_key_of(body, e)).flatten()
             })
         });
         found.map_or(PointRef::Fixed(pos), |edge| PointRef::Vertex { point: pos, edge })
@@ -8503,6 +8516,25 @@ impl eframe::App for App {
                 let promoted = std::mem::take(&mut r.promoted);
                 if g == self.gen_sent && self.chapa_anim.is_none() && !promoted.is_empty() {
                     self.apply_promoted(&promoted);
+                }
+                // B517: filete entre superfícies e junção escondem as entradas quando o resultado sai
+                // (a entrada visível por baixo do resultado brigava pelo pixel e a junção parecia
+                // estranha); só as entradas novas, para não desfazer o que a pessoa mostrou de volta
+                if g == self.gen_sent {
+                    if let Sel::Ref(id) = self.sel {
+                        if matches!(r.status.get(&id), Some(Status::Ok)) {
+                            let ent = crate::sup3d::entradas_consumidas(&self.open.doc, id);
+                            let antes = self.entradas_ocultas.get(&id).cloned().unwrap_or_default();
+                            let novas: Vec<Id> = ent.iter().copied().filter(|x| !antes.contains(x)).collect();
+                            if !novas.is_empty() {
+                                for rf in self.open.doc.references.iter_mut().filter(|x| novas.contains(&x.id)) {
+                                    rf.visible = false;
+                                }
+                                self.entradas_ocultas.insert(id, ent);
+                                self.scene_dirty = true;
+                            }
+                        }
+                    }
                 }
                 // B392: recorte recém-criado que foi para o lado sem material vira o sentido, uma vez
                 if g == self.gen_sent && self.chapa_anim.is_none() && crate::sentido_corte_ui::ajusta(&mut self.open.doc, self.sent_doc.as_ref(), self.session.as_ref().filter(|s| s.is_new).map(|s| s.id), &r.status) {

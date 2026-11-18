@@ -785,6 +785,11 @@ mod imp {
         pub fn offset_surface_join(&self, d: f64, join: u8) -> KResult<Shape> {
             b::offset_surface_j(&self.0, d, join).map(Shape).map_err(err)
         }
+        /// Casco costurado (B518): as faces juntas e orientadas para o mesmo lado, como o deslocamento e o
+        /// engrossar as veem.
+        pub fn shell(&self) -> KResult<Shape> {
+            b::shell_of(&self.0).map(Shape).map_err(err)
+        }
         pub fn fill_surface(curves: &[Vec<[f64; 3]>]) -> KResult<Shape> {
             let mut flat = vec![];
             let mut ends = vec![];
@@ -983,6 +988,11 @@ mod imp {
         }
         pub fn thicken(&self, t1: f64, t2: f64) -> KResult<Shape> {
             b::thicken(&self.0, t1, t2).map(Shape).map_err(err)
+        }
+        /// Filete entre esta superfície e `other` (B517): de cada uma fica o lado da normal da outra
+        /// (`keep_*_pos`) ou o oposto; raio `r`, variando até `r2` quando há.
+        pub fn surf_fillet(&self, other: &Shape, keep_a_pos: bool, keep_b_pos: bool, r: f64, r2: Option<f64>) -> KResult<Shape> {
+            b::surf_fillet(&self.0, &other.0, keep_a_pos, keep_b_pos, r, r2.unwrap_or(0.)).map(Shape).map_err(err)
         }
         pub fn closed_solid(&self, tol: f64) -> KResult<Shape> {
             b::close_surface(&self.0, tol).map(Shape).map_err(err)
@@ -1425,6 +1435,9 @@ mod imp {
         pub fn offset_surface_join(&self, _: f64, _: u8) -> KResult<Shape> {
             no()
         }
+        pub fn shell(&self) -> KResult<Shape> {
+            no()
+        }
         pub fn fill_surface(_: &[Vec<[f64; 3]>]) -> KResult<Shape> {
             no()
         }
@@ -1528,6 +1541,9 @@ mod imp {
             no()
         }
         pub fn thicken(&self, _: f64, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn surf_fillet(&self, _: &Shape, _: bool, _: bool, _: f64, _: Option<f64>) -> KResult<Shape> {
             no()
         }
         pub fn closed_solid(&self, _: f64) -> KResult<Shape> {

@@ -341,7 +341,8 @@ fn termino_ate(e: &Extent) -> bool {
 /// próprio comando não valem: a ferramenta não pode parar nela mesma.
 pub(super) fn ate_face_sob_cursor(pick: &crate::picking::Pick, comando: Id, chave: Option<FaceKey>) -> Option<Extent> {
     match pick {
-        crate::picking::Pick::Face { owner, point, normal, body, .. } if *owner != comando && *body < crate::picking::SURF_BASE => Some(Extent::UpToSurface(SurfRef::Face {
+        // B515: face de superfície de referência vale também, pela chave dela (superfície e índice)
+        crate::picking::Pick::Face { owner, point, normal, body, .. } if *owner != comando && (*body < crate::picking::SURF_BASE || chave.is_some()) => Some(Extent::UpToSurface(SurfRef::Face {
             point: point.map(|v| v as f64),
             normal: normal.map(|v| v as f64),
             owner: Some(*owner),

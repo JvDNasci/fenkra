@@ -804,33 +804,273 @@ rust::Vec<double> section_pts(const Shape& a, const Shape& b, rust::Vec<uint32_t
     });
 }
 
+namespace {
+
+// Um sólido só, válido e com volume coerente com a área vezes a espessura. A faixa larga cobre a
+// curvatura (a parede de dentro de uma curva é mais curta que a de fora) e os cantos vivos; o que sai
+// dela é parede dobrada ou duplicada, que a conferência de forma às vezes deixa passar.
+bool solido_coerente(TopoDS_Shape& r, double area, double t) {
+    if (r.IsNull()) return false;
+    int n = 0;
+    TopoDS_Shape so;
+    for (TopExp_Explorer e(r, TopAbs_SOLID); e.More(); e.Next(), ++n) so = e.Current();
+    if (n != 1) return false;
+    if (!forma_valida(so)) return false;
+    GProp_GProps g;
+    BRepGProp::VolumeProperties(so, g);
+    double v = g.Mass();
+    if (v < 0) so.Reverse(), v = -v;  // casco com a normal para dentro
+    const double esperado = area * t;
+    if (!(v > 0.4 * esperado && v < 2.5 * esperado)) return false;
+    r = so;
+    return true;
+}
+
+// Uma peça (casco ou face) engrossada de `t` para o lado da normal. Primeiro pelo deslocamento com
+// ligação, que refaz as vizinhas e fecha as bordas com paredes; depois pelo simples, que só serve para
+// casco liso. Nulo quando nenhum dá um sólido coerente.
+TopoDS_Shape engrossa_peca(const TopoDS_Shape& p, double t, double tol) {
+    GProp_GProps g;
+    BRepGProp::SurfaceProperties(p, g);
+    const double area = g.Mass();
+    for (GeomAbs_JoinType j : {GeomAbs_Intersection, GeomAbs_Arc}) {
+        try {
+            BRepOffset_MakeOffset mo;
+            mo.Initialize(p, t, tol, BRepOffset_Skin, j == GeomAbs_Intersection, Standard_False, j, Standard_True);
+            mo.MakeOffsetShape();
+            if (mo.IsDone()) {
+                TopoDS_Shape r = mo.Shape();
+                if (solido_coerente(r, area, t)) return r;
+            }
+        } catch (const Standard_Failure&) {
+        }
+    }
+    try {
+        BRepOffsetAPI_MakeThickSolid mk;
+        mk.MakeThickSolidBySimple(p, t);
+        if (mk.IsDone()) {
+            // B386: no tubo de varredura em guia 3D a tampa anular sai com as curvas da borda fora da
+            // tolerância da face; a cura de forma dentro de `solido_coerente` refaz curvas e tolerâncias
+            TopoDS_Shape r = mk.Shape();
+            if (solido_coerente(r, area, t)) return r;
+        }
+    } catch (const Standard_Failure&) {
+    }
+    return TopoDS_Shape();
+}
+
+}  // namespace
+
 // Engrossar: superfície vira sólido com espessura t1 para o lado da normal e t2 para o outro.
+// B518: as faces viram um casco costurado, que é deslocado e fechado inteiro (sem paredes que passam
+// umas das outras na concordância); espessura maior que o raio de curvatura daquele lado é recusada
+// com o raio mínimo, e o resultado só sai se for um sólido válido por peça conexa.
 std::unique_ptr<Shape> thicken(const Shape& s, double t1, double t2) {
     return guard("engrossar", [&] {
         if (t1 + t2 <= 1e-9) throw std::runtime_error("a espessura total precisa ser positiva");
-        TopoDS_Shape base = sewn(s.s, 1e-4);
-        if (std::abs(t2) > 1e-9) {
-            BRepOffsetAPI_MakeOffsetShape off;
-            off.PerformBySimple(base, -t2);
-            if (!off.IsDone()) throw std::runtime_error("não foi possível deslocar a superfície");
-            base = off.Shape();
+        double tol = 1e-4;
+        int n = 0;
+        TopoDS_Shape base = casco_costurado(s.s, tol, n);
+        confere_raio(base, t1, "a espessura 1 (lado da normal)");
+        confere_raio(base, -t2, "a espessura 2 (lado oposto)");
+        TopoDS_Compound c;
+        BRep_Builder bb;
+        bb.MakeCompound(c);
+        int feitos = 0;
+        TopoDS_Shape um;
+        for (const TopoDS_Shape& p0 : pecas_da_costura(base)) {
+            TopoDS_Shape p = p0;
+            if (t2 > 1e-9) {
+                for (int m : {1, 2, 3})
+                    if (!(p = desloca_peca(p0, -t2, std::max(tol, 1e-4), m)).IsNull()) break;
+                if (p.IsNull()) throw std::runtime_error("não foi possível deslocar a superfície para o lado da espessura 2");
+            }
+            TopoDS_Shape r = engrossa_peca(p, t1 + t2, std::max(tol, 1e-4));
+            if (r.IsNull()) throw std::runtime_error("não foi possível engrossar num sólido válido: confira se as faces se tocam e se a espessura cabe nas curvas");
+            bb.Add(c, r);
+            um = r;
+            ++feitos;
         }
-        BRepOffsetAPI_MakeThickSolid mk;
-        mk.MakeThickSolidBySimple(base, t1 + t2);
-        if (!mk.IsDone()) throw std::runtime_error("não foi possível engrossar (raio de curvatura menor que a espessura?)");
-        TopoDS_Shape r = mk.Shape();
-        // B386: no tubo de varredura em guia 3D, a tampa anular que o engrosse cria sai com as
-        // curvas da borda fora da tolerância da face (BRepCheck reprova a face, o volume fica certo).
-        // A cura de forma refaz curvas e tolerâncias; só fica se o resultado passar na conferência
-        if (!BRepCheck_Analyzer(r).IsValid()) {
-            Handle(ShapeFix_Shape) fx = new ShapeFix_Shape(r);
-            fx->Perform();
-            if (BRepCheck_Analyzer(fx->Shape()).IsValid()) r = fx->Shape();
+        return wrap(feitos == 1 ? um : TopoDS_Shape(c));
+    });
+}
+
+namespace {
+
+// Ponto de dentro da face (o centro de massa de uma face curva pode cair fora dela).
+gp_Pnt ponto_dentro(const TopoDS_Face& f) {
+    double u0, u1, v0, v1;
+    BRepTools::UVBounds(f, u0, u1, v0, v1);
+    BRepTopAdaptor_FClass2d cl(f, 1e-7);
+    BRepAdaptor_Surface a(f, Standard_True);
+    for (int k = 1; k <= 9; k += 2)
+        for (int i = 1; i < 2 * k; i += 2)
+            for (int j = 1; j < 2 * k; j += 2) {
+                const double u = u0 + (u1 - u0) * i / (2.0 * k), v = v0 + (v1 - v0) * j / (2.0 * k);
+                if (cl.Perform(gp_Pnt2d(u, v)) == TopAbs_IN) return a.Value(u, v);
+            }
+    return center_of(f);
+}
+
+// Superfície estendida para o corte do filete (B517). Os lados infinitos (plano, cilindro, extrusão)
+// ficam limitados a ±L, como em `extended_faces`; os lados finitos de uma superfície de forma livre
+// (a parede vinda de uma curva mais curta que a base) são prolongados em tangência por L. Sem isso a
+// parede não atravessava a base inteira, a base não se dividia e a junta não aparecia.
+TopoDS_Shape estendida_para_corte(const TopoDS_Shape& s, double L) {
+    TopoDS_Compound c;
+    BRep_Builder bb;
+    bb.MakeCompound(c);
+    for (TopExp_Explorer e(s, TopAbs_FACE); e.More(); e.Next()) {
+        Handle(Geom_Surface) g = BRep_Tool::Surface(TopoDS::Face(e.Current()));
+        if (auto t = Handle(Geom_RectangularTrimmedSurface)::DownCast(g)) g = t->BasisSurface();
+        double u1, u2, v1, v2;
+        g->Bounds(u1, u2, v1, v2);
+        const bool fu = !Precision::IsInfinite(u1) && !Precision::IsInfinite(u2);
+        const bool fv = !Precision::IsInfinite(v1) && !Precision::IsInfinite(v2);
+        const GeomAbs_SurfaceType tipo = GeomAdaptor_Surface(g).GetType();
+        const bool analitica = tipo == GeomAbs_Plane || tipo == GeomAbs_Cylinder || tipo == GeomAbs_Cone || tipo == GeomAbs_Sphere || tipo == GeomAbs_Torus;
+        u1 = std::max(u1, -L), u2 = std::min(u2, L), v1 = std::max(v1, -L), v2 = std::min(v2, L);
+        if (!analitica && (fu || fv) && !g->IsUPeriodic() && !g->IsVPeriodic()) {
+            try {
+                Handle(Geom_BoundedSurface) b = GeomConvert::SurfaceToBSplineSurface(new Geom_RectangularTrimmedSurface(g, u1, u2, v1, v2));
+                for (bool depois : {false, true}) {
+                    if (fu) GeomLib::ExtendSurfByLength(b, L, 1, Standard_True, depois);
+                    if (fv) GeomLib::ExtendSurfByLength(b, L, 1, Standard_False, depois);
+                }
+                g = b;
+                g->Bounds(u1, u2, v1, v2);
+            } catch (const Standard_Failure&) {
+            }
         }
-        GProp_GProps g;
-        BRepGProp::VolumeProperties(r, g);
-        if (g.Mass() < 0) r.Reverse();  // casco com a normal para dentro
-        return wrap(r);
+        BRepBuilderAPI_MakeFace mf(g, u1, u2, v1, v2, Precision::Confusion());
+        if (mf.IsDone()) bb.Add(c, mf.Face());
+    }
+    return c;
+}
+
+// O lado escolhido de `s` cortada pela outra superfície estendida `outra` (`pos`: lado da normal dela).
+// A superfície que só encosta na outra, sem atravessar, não se divide: fica inteira se estiver do lado
+// escolhido. Lado de cada pedaço medido num ponto de dentro dele.
+TopoDS_Shape parte_do_lado(const TopoDS_Shape& s, const TopoDS_Shape& outra, bool pos, const char* qual) {
+    BRepAlgoAPI_Splitter sp;
+    TopTools_ListOfShape args, tools;
+    args.Append(s);
+    tools.Append(outra);
+    sp.SetArguments(args);
+    sp.SetTools(tools);
+    sp.Build();
+    if (sp.HasErrors()) throw std::runtime_error("não foi possível cortar uma superfície pela outra");
+    TopoDS_Compound c;
+    BRep_Builder bb;
+    bb.MakeCompound(c);
+    int kept = 0;
+    for (TopExp_Explorer e(sp.Shape(), TopAbs_FACE); e.More(); e.Next()) {
+        const gp_Pnt m = ponto_dentro(TopoDS::Face(e.Current()));
+        gp_Pnt q;
+        gp_Vec nn;
+        near_normal(outra, m, q, nn);
+        const double h = gp_Vec(q, m).Dot(nn);
+        if (std::abs(h) < 1e-7) continue;  // pedaço deitado sobre a outra
+        if ((h > 0) == pos) bb.Add(c, e.Current()), ++kept;
+    }
+    if (kept == 0) {
+        char buf[256];
+        std::snprintf(buf, sizeof buf, "nada sobra da %s desse lado: inverta a seta dela", qual);
+        throw std::runtime_error(buf);
+    }
+    return c;
+}
+
+// A face está sobre a forma (a distância de um ponto de dentro dela até a forma cabe na tolerância)?
+bool face_sobre(const TopoDS_Face& f, const TopoDS_Shape& s, double tol) {
+    BRepExtrema_DistShapeShape d(s, BRepBuilderAPI_MakeVertex(ponto_dentro(f)).Vertex());
+    return d.IsDone() && d.NbSolution() > 0 && d.Value() <= tol;
+}
+
+// Filete nas arestas da junta: o casco do jeito que veio e, se a bola não couber daquele lado, o casco
+// invertido (o filete de casco aberto rola do lado oposto à normal das faces).
+TopoDS_Shape filete_na_junta(const TopoDS_Shape& casco, const std::vector<gp_Pnt>& meios, double r, double r2) {
+    for (bool inv : {false, true}) {
+        TopoDS_Shape sh = inv ? casco.Reversed() : casco;
+        try {
+            BRepFilletAPI_MakeFillet mf(sh);
+            TopTools_IndexedMapOfShape es;
+            TopExp::MapShapes(sh, TopAbs_EDGE, es);
+            int n = 0;
+            for (const gp_Pnt& m : meios)
+                for (int i = 1; i <= es.Extent(); ++i) {
+                    const TopoDS_Edge& e = TopoDS::Edge(es(i));
+                    if (BRep_Tool::Degenerated(e)) continue;
+                    BRepAdaptor_Curve cv(e);
+                    if (cv.Value((cv.FirstParameter() + cv.LastParameter()) / 2).Distance(m) > 1e-6) continue;
+                    if (mf.Contour(e) == 0) {
+                        if (r2 > 0) mf.Add(r, r2, e);
+                        else mf.Add(r, e);
+                        ++n;
+                    }
+                }
+            if (n == 0) continue;
+            mf.Build();
+            if (!mf.IsDone()) continue;
+            TopoDS_Shape out = mf.Shape();
+            if (forma_valida(out) && dominios(out) == 1) return inv ? out.Reversed() : out;
+        } catch (const Standard_Failure&) {
+        }
+    }
+    return TopoDS_Shape();
+}
+
+}  // namespace
+
+// B517: filete entre duas superfícies. Cada uma é cortada pela outra estendida e fica o lado que a seta
+// escolhe (`keep_*_pos`: lado da normal da outra); a que só encosta na outra, sem atravessar, fica
+// inteira (antes o corte dizia "não atravessa" e o filete não saía). As partes são costuradas com a
+// tolerância que cresce até 0,01 mm: as duas curvas da junta saem de interseções separadas e não
+// coincidem exatamente, e com a costura de 0,001 mm fixa a junta ficava aberta numa superfície curva
+// (sem aresta entre duas faces, o filete não tinha onde rolar). As arestas da junta são as que ficam
+// entre uma face de cada entrada; o filete de raio `r` (até `r2`, se > 0) roda nelas e o resultado é um
+// casco só.
+std::unique_ptr<Shape> surf_fillet(const Shape& a, const Shape& b, bool keep_a_pos, bool keep_b_pos, double r, double r2) {
+    return guard("filete entre superfícies", [&] {
+        if (r <= 0) throw std::runtime_error("o raio precisa ser positivo");
+        const double L = size_of(a.s, b.s);
+        const TopoDS_Shape pa = parte_do_lado(a.s, estendida_para_corte(b.s, L), keep_a_pos, "superfície 1");
+        const TopoDS_Shape pb = parte_do_lado(b.s, estendida_para_corte(a.s, L), keep_b_pos, "superfície 2");
+        TopoDS_Compound kept;
+        BRep_Builder bb;
+        bb.MakeCompound(kept);
+        bb.Add(kept, pa);
+        bb.Add(kept, pb);
+        double tol = 1e-4;
+        int pecas = 0;
+        const TopoDS_Shape casco = casco_costurado(kept, tol, pecas);
+        if (pecas != 1)
+            throw std::runtime_error("as superfícies não se encontram: prolongue uma até a outra (Extrapolar) ou mova-as até se cruzarem");
+        // arestas da junta: entre uma face sobre a entrada 1 e outra sobre a entrada 2
+        TopTools_IndexedDataMapOfShapeListOfShape e2f;
+        TopExp::MapShapesAndAncestors(casco, TopAbs_EDGE, TopAbs_FACE, e2f);
+        const double perto = std::max(10 * tol, 1e-3);
+        std::vector<gp_Pnt> meios;
+        for (int i = 1; i <= e2f.Extent(); ++i) {
+            const TopoDS_Edge& e = TopoDS::Edge(e2f.FindKey(i));
+            if (BRep_Tool::Degenerated(e) || e2f(i).Extent() != 2) continue;
+            const TopoDS_Face& f1 = TopoDS::Face(e2f(i).First());
+            const TopoDS_Face& f2 = TopoDS::Face(e2f(i).Last());
+            const bool a1 = face_sobre(f1, a.s, perto), b1 = face_sobre(f1, b.s, perto);
+            const bool a2 = face_sobre(f2, a.s, perto), b2 = face_sobre(f2, b.s, perto);
+            if (!((a1 && b2 && !b1 && !a2) || (b1 && a2 && !a1 && !b2))) continue;
+            BRepAdaptor_Curve cv(e);
+            meios.push_back(cv.Value((cv.FirstParameter() + cv.LastParameter()) / 2));
+        }
+        if (meios.empty())
+            throw std::runtime_error("as superfícies não se encontram: prolongue uma até a outra (Extrapolar) ou mova-as até se cruzarem");
+        TopoDS_Shape out = filete_na_junta(casco, meios, r, r2);
+        if (out.IsNull()) {
+            char buf[256];
+            std::snprintf(buf, sizeof buf, "o raio %.4g mm não cabe entre as partes que ficam: diminua o raio ou troque o lado pelas setas", r);
+            throw std::runtime_error(buf);
+        }
+        return wrap(out);
     });
 }
 

@@ -458,6 +458,22 @@ fn pintar_regioes(r: &RecomputeResult, f: &crate::previa::Fantasma, s: &mut Scen
     }
 }
 
+/// B517: superfícies de referência que o comando consome por inteiro e que ficam ocultas quando o
+/// resultado sai: as duas do filete entre superfícies, as da junção e as do aparar. Face de corpo e
+/// plano não entram (não são elementos que se escondem).
+pub fn entradas_consumidas(doc: &Document, id: Id) -> Vec<Id> {
+    use RefKind as R;
+    let Some(rf) = doc.reference(id) else { return vec![] };
+    let refs: Vec<&SurfRef> = match &rf.kind {
+        R::SurfFillet { a, b, .. } | R::SurfTrim { a, b, .. } => vec![a, b],
+        R::SurfJoin { items, .. } => items.iter().collect(),
+        _ => vec![],
+    };
+    let mut out: Vec<Id> = refs.into_iter().filter_map(|s| if let SurfRef::Ref(x) = s { Some(*x) } else { None }).filter(|x| *x != id).collect();
+    out.dedup();
+    out
+}
+
 // ---------------------------------------------------------------- camada 3D
 
 /// O resultado do comando fica em cima da entrada? Então a entrada só tem contorno: duas camadas
@@ -834,6 +850,20 @@ mod tests {
 
     fn reta(d: &mut Document, a: [f64; 3], b: [f64; 3]) -> CurveRef {
         CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: t("0"), end: t("0") }))
+    }
+
+    #[test]
+    fn filete_e_juncao_consomem_as_superficies_de_entrada() {
+        let mut d = Document::new("entradas");
+        let a = d.add_geometry(RefKind::SurfSphere { center: PointRef::Origin, radius: t("5") });
+        let b = d.add_geometry(RefKind::SurfSphere { center: PointRef::Origin, radius: t("8") });
+        let c = d.add_geometry(RefKind::SurfSphere { center: PointRef::Origin, radius: t("9") });
+        let fil = d.add_geometry(RefKind::SurfFillet { a: SurfRef::Ref(a), b: SurfRef::Ref(b), flip_a: false, flip_b: false, radius: t("1"), radius2: None });
+        let jun = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(a), SurfRef::Ref(b), SurfRef::Ref(c)], tol: t("0.01"), curves: vec![] });
+        let off = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(a), dist: t("1"), both: false, join: OffsetJoin::Automatico });
+        assert_eq!(entradas_consumidas(&d, fil), vec![a, b]);
+        assert_eq!(entradas_consumidas(&d, jun), vec![a, b, c]);
+        assert!(entradas_consumidas(&d, off).is_empty(), "o deslocamento não consome a entrada");
     }
 
     /// Folha vertical pela reta `a`→`b`, 30 mm para cima e para baixo.
