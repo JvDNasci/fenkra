@@ -11,7 +11,7 @@
 use crate::app::{DragItem, TreeAction};
 use crate::i18n::tr;
 use eframe::egui;
-use fenkra_core::{Document, Id, RecusaSoltura};
+use fenkra_core::{Document, FolderKind, Id, RecusaSoltura};
 
 /// Onde o item foi solto.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -25,13 +25,19 @@ pub(crate) enum Alvo {
     /// cabeça de um grupo da árvore (`externas`, `publicacoes`, `pmi`, `capturas`, `parametros`)
     /// ou o nó "Grupos vazios" (`vazios`)
     Grupo(&'static str),
+    /// B504: solto sobre a linha de um item (comando, sketch ou elemento de referência): o arrastado
+    /// fica logo depois dele, no mesmo lugar da árvore (corpo, pasta de comandos ou de geometria)
+    Depois(Id),
+    /// B504: o grupo "Geometria" de documento que ainda não tem pasta de geometria: a soltura cria a
+    /// pasta padrão e põe o item nela
+    GeometriaPadrao,
 }
 
 impl Alvo {
     fn id(self) -> Option<Id> {
         match self {
-            Alvo::Pasta(i) | Alvo::Corpo(i) | Alvo::Parametro(i) => Some(i),
-            Alvo::Grupo(_) => None,
+            Alvo::Pasta(i) | Alvo::Corpo(i) | Alvo::Parametro(i) | Alvo::Depois(i) => Some(i),
+            Alvo::Grupo(_) | Alvo::GeometriaPadrao => None,
         }
     }
 }
@@ -61,7 +67,96 @@ pub(crate) fn aplicar(d: &mut Document, item: Id, alvo: Alvo) -> Result<(), Recu
             Ok(())
         }
         Alvo::Grupo(_) => Err(RecusaSoltura::NaoAceita),
+        Alvo::GeometriaPadrao => {
+            let g = d.default_geometry_folder();
+            d.soltar_em_pasta(item, g)
+        }
+        Alvo::Depois(alvo) => {
+            // a soltura mexe em várias coisas (corpo, ordem, pasta): recusada no meio, volta tudo
+            let antes = d.clone();
+            let r = soltar_depois(d, item, alvo);
+            if r.is_err() {
+                *d = antes;
+            }
+            r
+        }
     }
+}
+
+/// Posição (depois de tirar o item da lista) que deixa `item` logo depois de `alvo`.
+fn indice_depois(de: usize, alvo: usize) -> usize {
+    if de < alvo {
+        alvo
+    } else {
+        alvo + 1
+    }
+}
+
+/// O item vai para logo depois de `alvo` (B504). Na linha do tempo de um corpo: muda de corpo se
+/// preciso (com as regras do nó do corpo), reordena validando pais e filhos e entra ou sai da pasta
+/// de comandos do vizinho. Na geometria (elemento de referência ou sketch livre): entra na pasta do
+/// vizinho; elemento sobre elemento também reordena a lista.
+fn soltar_depois(d: &mut Document, item: Id, alvo: Id) -> Result<(), RecusaSoltura> {
+    if item == alvo {
+        return Err(RecusaSoltura::NaoAceita);
+    }
+    let na_linha_do_tempo = d.feature(alvo).filter(|f| !d.is_free(f)).map(|f| (f.target, f.folder));
+    if let Some((corpo, pasta_do_vizinho)) = na_linha_do_tempo {
+        if d.reference(item).is_some() {
+            return Err(RecusaSoltura::Referencia);
+        }
+        let Some(f) = d.feature(item) else { return Err(RecusaSoltura::NaoEComando) };
+        if f.target != corpo || d.is_free(f) {
+            d.soltar_no_corpo(item, corpo)?;
+        }
+        let pasta_de_comandos = |d: &Document, p: Option<Id>| p.filter(|p| d.folder(*p).is_some_and(|fo| fo.kind == FolderKind::Comandos));
+        let destino = pasta_de_comandos(d, pasta_do_vizinho);
+        // sai da pasta de comandos antes de mudar de lugar: num contêiner ordenado, o bloco seria conferido
+        // com ele ainda dentro
+        if pasta_de_comandos(d, d.feature(item).and_then(|f| f.folder)) != destino {
+            if let Some(f) = d.feature_mut(item) {
+                f.folder = None;
+            }
+        }
+        let de = d.feature_index(item).ok_or(RecusaSoltura::NaoEncontrado)?;
+        let para = d.feature_index(alvo).ok_or(RecusaSoltura::NaoEncontrado)?;
+        let para = indice_depois(de, para);
+        if para != de {
+            d.reordenar_comando(item, para).map_err(|e| match e {
+                fenkra_core::DocError::Order(n) => RecusaSoltura::Ordem(n),
+                _ => RecusaSoltura::NaoEncontrado,
+            })?;
+        }
+        if let Some(p) = destino {
+            if d.feature(item).and_then(|f| f.folder) != Some(p) {
+                d.mover_comando_para_conteiner(item, p).map_err(|e| match e {
+                    fenkra_core::DocError::Order(n) => RecusaSoltura::Ordem(n),
+                    _ => RecusaSoltura::NaoEComando,
+                })?;
+            }
+        }
+        return Ok(());
+    }
+    // vizinho na geometria: elemento de referência ou sketch livre
+    let pasta = if let Some(r) = d.reference(alvo) {
+        r.folder.filter(|p| d.folder(*p).is_some())
+    } else if let Some(f) = d.feature(alvo) {
+        f.folder
+    } else {
+        return Err(RecusaSoltura::NaoEncontrado);
+    };
+    let pasta = match pasta {
+        Some(p) => p,
+        None => d.default_geometry_folder(),
+    };
+    d.soltar_em_pasta(item, pasta)?;
+    // elemento sobre elemento: a ordem da lista também segue o que a pessoa mostrou
+    if let (Some(de), Some(_)) = (d.references.iter().position(|r| r.id == item), d.reference(alvo)) {
+        let r = d.references.remove(de);
+        let para = d.references.iter().position(|x| x.id == alvo).map_or(d.references.len(), |i| i + 1);
+        d.references.insert(para, r);
+    }
+    Ok(())
 }
 
 /// A soltura seria aceita? Testa num clone, sem tocar o documento.
@@ -113,6 +208,15 @@ pub(crate) fn ligar(ui: &egui::Ui, r: &egui::Response, doc: &Document, alvo: Alv
     let item = p.0;
     let res = testar(doc, item, alvo);
     match &res {
+        // B504: sobre um item, a linha de inserção logo abaixo dele (é ali que ele cai); sobre um
+        // contêiner, o contorno dele inteiro (entra nele). Só uma indicação por vez.
+        Ok(()) if matches!(alvo, Alvo::Depois(_)) => {
+            let largura = r.rect.x_range();
+            let y = r.rect.bottom() + 1.;
+            let cor = crate::theme::accent(ui.visuals());
+            ui.painter().hline(largura, y, egui::Stroke::new(2., cor));
+            ui.painter().circle_filled(egui::pos2(largura.min, y), 3., cor);
+        }
         Ok(()) => {
             ui.painter().rect_stroke(r.rect.expand(2.), 3., egui::Stroke::new(1.5, crate::theme::accent(ui.visuals())), egui::StrokeKind::Outside);
         }

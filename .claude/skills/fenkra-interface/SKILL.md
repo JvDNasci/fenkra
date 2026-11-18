@@ -54,6 +54,14 @@ Consulte todas as bancadas quando a mudança atravessar a fronteira da área.
 
 Registre aqui erros que se repetiram.
 
+- **Resposta ao gesto não é enfeite.** Giro da miniatura com o mouse em cima, prévia de soltura e
+  realce de alvo não podem depender do "reduzir movimento" do sistema nem do modo leve; só da opção
+  explícita do usuário. Motivo: B455 ligou o giro à animação inteira e, com os efeitos do Windows
+  desligados, as miniaturas viraram foto parada (B508).
+- **Todo item desenhado na árvore é alvo de soltura.** Grupo que só existe na tela (como "Geometria"
+  sem pasta) e linhas de elementos também recebem o arraste; o que não aceita recusa com motivo.
+  Motivo: sketch solto ali caía sem efeito (B504).
+
 - **Painel de borda novo passa por `barras_layout::painel_na_borda`.** Ele grava o tamanho só quando a
   beira é solta (nunca a cada quadro) e troca o id do painel junto com o tamanho automático, porque o
   egui guarda o tamanho no estado do painel e ignora o `default_size` depois do primeiro quadro.

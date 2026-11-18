@@ -45,6 +45,10 @@ mod esc_sessao;
 #[cfg(test)]
 mod desselecionar_testes;
 #[cfg(test)]
+mod arvore_arraste_testes;
+#[cfg(test)]
+mod paineis_flutuam_testes;
+#[cfg(test)]
 mod abas_r3_testes;
 #[cfg(test)]
 mod vazios_r4_testes;
@@ -1880,9 +1884,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let ex_meta: Vec<(&'static str, &'static str, crate::settings::Bench)> = crate::examples::all().into_iter().map(|e| (e.name, e.desc, e.bench)).collect();
         let arquivos = self.settings.recent_files.clone();
         let projetos = self.settings.recent.clone();
+        let contexto = crate::tela_inicial::contexto_de(&self.settings);
+        let giro = std::cell::RefCell::new(std::mem::take(&mut self.card_spin));
         let entrada = crate::tela_inicial::Entrada {
             pal: crate::inicio_tema::Paleta::atual(),
             ligada,
+            gira: crate::tela_inicial::gira_com_mouse(contexto),
             t: (now - t0) as f32,
             dt,
             voltar: self.inicio_pelo_menu,
@@ -1890,10 +1897,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             projetos: &projetos,
             mostrar_ao_iniciar: &mut self.settings.show_start,
             previews: &self.previews,
-            giro: &mut self.card_spin,
+            giro: &giro,
             exemplos: &ex_meta,
         };
-        match crate::tela_inicial::mostrar(root, entrada) {
+        let escolha = crate::tela_inicial::mostrar(root, entrada);
+        self.card_spin = giro.into_inner();
+        match escolha {
             Some(Escolha::Voltar) => self.started = true,
             Some(Escolha::Comecar(c)) => action = Some(c),
             Some(Escolha::Projeto(r)) => recent_open = Some(r),
@@ -4423,15 +4432,18 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 errs.push((x.id, x.name.clone(), m.clone(), false));
             }
         }
+        // B507: o assistente só existe com erro; corrigido o último, fecha sozinho (não fica preso na tela)
+        if !crate::reparo_ui::assistente_aberto(errs.len()) {
+            self.wizard_open = false;
+            return;
+        }
         let tipos = r.tipos_de_erro(doc);
         let diag: Vec<crate::erro_acao::Acionavel> = errs.iter().map(|(id, name, msg, _)| crate::erro_acao::diagnosticar(tipos.get(id).copied(), name, msg)).collect();
         let mut open = true;
         let mut act: Option<(Id, u8)> = None;
-        crate::paineis::encaixado(ctx, "reparo", tr("🩹 Assistente de reparo"), &mut open, 460., |ui| {
-                if errs.is_empty() {
-                    ui.label(RichText::new(tr("✔ Nada quebrado: todos os comandos e elementos foram calculados.")).color(Color32::from_rgb(120, 210, 130)));
-                    return;
-                }
+        // B507: flutua sobre a vista ou encaixa, à escolha, e lembra a posição
+        let op = crate::paineis::Opcoes { flutua: true, ..Default::default() };
+        crate::paineis::encaixado_com(ctx, "reparo", tr("🩹 Assistente de reparo"), &mut open, 460., op, |ui| {
                 ui.label(RichText::new(tr("Estes itens não puderam ser calculados (referência apagada, face que mudou, entrada inválida). Escolha refazer a referência ou apagar.")).weak());
                 ui.add_space(6.);
                 egui::ScrollArea::vertical().max_height(380.).show(ui, |ui| {
@@ -4866,7 +4878,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         }
         // planos antigos sem pasta, quando ainda não existe pasta de geometria
         if first_geo.is_none() && !doc.references.is_empty() {
-            let h = crate::tree_ui::grupo(ui, "arvore_geometria", Some("pasta"), tr("Geometria"), true).corpo(ui, |ui| {
+            let g = crate::tree_ui::grupo(ui, "arvore_geometria", Some("pasta"), tr("Geometria"), true);
+            // B504: este grupo ainda não é pasta; soltar nele cria a pasta de geometria e põe o item lá
+            crate::arvore_soltura_ui::ligar(ui, &g.cabeca, &doc, crate::arvore_soltura_ui::Alvo::GeometriaPadrao, &mut actions);
+            let h = g.corpo(ui, |ui| {
                 for r in &doc.references {
                     self.ref_row(ui, &doc, r, &mut new_sel, &mut actions);
                 }
@@ -5543,6 +5558,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             })
             .inner;
         let resp = drag_item(ui, resp, r.id, self.renaming != Some(r.id));
+        // B504: soltar sobre um elemento põe o arrastado logo depois dele, na mesma pasta
+        crate::arvore_soltura_ui::ligar(ui, &resp, doc, crate::arvore_soltura_ui::Alvo::Depois(r.id), actions);
         if resp.clicked() {
             *new_sel = Some(Sel::Ref(r.id));
         }
@@ -5654,25 +5671,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         }
         let free = doc.is_free(f);
         let resp = drag_item(ui, resp, f.id, self.renaming != Some(f.id));
-        // soltar um recurso sobre outro leva ao lugar dele; pai e filho seguem validados no documento
-        if let Some(p) = resp.dnd_release_payload::<DragItem>() {
-            if p.0 != f.id && doc.feature(p.0).is_some() {
-                actions.push(TreeAction::Move(p.0, i));
-            } else if p.0 != f.id {
-                // B446: o que não é comando não cai em silêncio
-                actions.push(TreeAction::SolturaRecusada(crate::arvore_soltura_ui::motivo(&fenkra_core::RecusaSoltura::NaoEComando)));
-            }
-        }
-        if resp.dnd_hover_payload::<DragItem>().is_some_and(|p| p.0 != f.id && doc.feature(p.0).is_none()) {
-            ui.ctx().set_cursor_icon(egui::CursorIcon::NoDrop);
-            resp.show_tooltip_text(crate::arvore_soltura_ui::motivo(&fenkra_core::RecusaSoltura::NaoEComando));
-        }
-        let origem = resp.dnd_hover_payload::<DragItem>().filter(|p| p.0 != f.id).and_then(|p| doc.features.iter().position(|x| x.id == p.0));
-        if let Some(de) = origem {
-            // quem desce fica depois deste, quem sobe fica antes
-            let y = if de < i { resp.rect.bottom() } else { resp.rect.top() };
-            ui.painter().hline(resp.rect.x_range(), y, egui::Stroke::new(2., crate::theme::accent(ui.visuals())));
-        }
+        // B504: soltar sobre um comando põe o arrastado logo depois dele (no corpo e na pasta dele), com
+        // a linha de inserção como prévia; o que a dependência proíbe é recusado com o motivo
+        crate::arvore_soltura_ui::ligar(ui, &resp, doc, crate::arvore_soltura_ui::Alvo::Depois(f.id), actions);
         let resp = match st.and_then(|s| s.message()) {
             Some(m) => resp.on_hover_text(m),
             None => resp,

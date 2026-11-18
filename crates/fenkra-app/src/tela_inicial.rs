@@ -53,6 +53,15 @@ pub fn animacao_ligada(c: Contexto) -> bool {
     c.opcao && !c.modo_leve && !c.reduzir_movimento && !c.sistema_reduz && !c.software
 }
 
+/// A miniatura gira com o mouse em cima (B508)? É resposta direta ao gesto, não movimento de enfeite:
+/// vale sempre que a pessoa não desligou as animações da tela nem pediu "reduzir movimento" no Fenkra.
+/// O pedido do sistema, o modo leve e o adaptador por software param só a grade do fundo e as
+/// transições; antes paravam o giro também, e numa máquina com os efeitos de animação do Windows
+/// desligados as miniaturas viravam foto parada (regressão da alpha.37, B455).
+pub fn gira_com_mouse(c: Contexto) -> bool {
+    c.opcao && !c.reduzir_movimento
+}
+
 /// Contexto lido das configurações, do hardware medido na partida e do sistema.
 pub fn contexto_de(s: &crate::settings::Settings) -> Contexto {
     Contexto {
@@ -156,6 +165,8 @@ pub const COMECAR: [(u8, &str, &str, &str); 6] = [
 pub struct Entrada<'a> {
     pub pal: Paleta,
     pub ligada: bool,
+    /// a miniatura gira com o mouse em cima ([`gira_com_mouse`])
+    pub gira: bool,
     /// segundos desde que a tela abriu
     pub t: f32,
     pub dt: f32,
@@ -164,7 +175,7 @@ pub struct Entrada<'a> {
     pub projetos: &'a [String],
     pub mostrar_ao_iniciar: &'a mut bool,
     pub previews: &'a crate::examples::PreviewCache,
-    pub giro: &'a mut std::collections::HashMap<String, f32>,
+    pub giro: &'a std::cell::RefCell<std::collections::HashMap<String, f32>>,
     pub exemplos: &'a [(&'static str, &'static str, crate::settings::Bench)],
 }
 
@@ -172,6 +183,8 @@ pub struct Entrada<'a> {
 pub fn mostrar(root: &mut egui::Ui, e: Entrada) -> Option<Escolha> {
     let mut escolha = None;
     let mut transicao = false;
+    // B508: alguma miniatura girando neste quadro (pede o próximo mesmo com a animação desligada)
+    let girando = std::cell::Cell::new(false);
     let pal = e.pal;
     let tt = tempo_transicao(e.ligada);
     egui::CentralPanel::default().frame(egui::Frame::NONE).show(root, |ui| {
@@ -229,7 +242,22 @@ pub fn mostrar(root: &mut egui::Ui, e: Entrada) -> Option<Escolha> {
                             };
                             let nome = p.file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| f.to_string());
                             let pasta = p.parent().map(|d| d.to_string_lossy().to_string());
-                            if linha(ui, ("rec_arq", i), icone, &nome, pasta.as_deref(), &pal, tt, transicao).on_hover_text(f.as_str()).clicked() {
+                            // B508: peça recente com a prévia 3D dela no lugar do ícone, girando com o mouse em cima
+                            let chave = chave_recente(f);
+                            let pv = (icone == "nova_peca")
+                                .then(|| {
+                                    let ff = f.to_string();
+                                    e.previews.get(&chave, move || std::fs::read_to_string(&ff).ok().and_then(|s| fenkra_core::Document::from_json(&s).ok()))
+                                })
+                                .flatten();
+                            let mut giros = e.giro.borrow_mut();
+                            let giro = giros.entry(chave).or_insert(i as f32 * 0.7);
+                            let (r, quente) = linha_com_previa(ui, ("rec_arq", i), icone, &nome, pasta.as_deref(), pv.as_deref().map(|pv| (pv, *giro)), &pal, tt, transicao);
+                            if e.gira && pv.is_some() && quente > 0.001 {
+                                *giro += e.dt * 1.4 * quente;
+                                girando.set(true);
+                            }
+                            if r.on_hover_text(f.as_str()).clicked() {
                                 *escolha = Some(Escolha::Arquivo(f.to_string()));
                             }
                         }
@@ -244,22 +272,24 @@ pub fn mostrar(root: &mut egui::Ui, e: Entrada) -> Option<Escolha> {
                         ui.add_space(16.);
                         ui.checkbox(e.mostrar_ao_iniciar, tr("mostrar esta tela ao iniciar"));
                     };
-                    let mut galeria = |ui: &mut egui::Ui, escolha: &mut Option<Escolha>, transicao: &mut bool| {
+                    let galeria = |ui: &mut egui::Ui, escolha: &mut Option<Escolha>, transicao: &mut bool| {
                         rotulo(ui, "Exemplos", &pal);
                         ui.horizontal_wrapped(|ui| {
                             ui.spacing_mut().item_spacing = egui::vec2(20., 22.);
                             for (i, (nome, desc, bench)) in e.exemplos.iter().enumerate() {
                                 let chave = format!("ex:{i}");
                                 let pv = e.previews.get(&chave, move || crate::examples::all().into_iter().nth(i).map(|x| x.doc));
-                                let giro = e.giro.entry(chave.clone()).or_insert(i as f32 * 0.9);
+                                let mut giros = e.giro.borrow_mut();
+                                let giro = giros.entry(chave.clone()).or_insert(i as f32 * 0.9);
                                 let (r, quente) = miniatura(ui, &chave, tr(nome), tr(desc), bancada(*bench), pv.as_deref(), *giro, &pal, tt);
                                 if quente > 0.001 && quente < 0.999 {
                                     *transicao = true;
                                 }
-                                // a peça só gira com o mouse em cima e com animação ligada
-                                if e.ligada && quente > 0.001 {
+                                // a peça só gira com o mouse em cima (B222: parada, não gasta quadros); o giro
+                                // não depende do pedido do sistema nem do modo leve (B508, `gira_com_mouse`)
+                                if e.gira && quente > 0.001 {
                                     *giro += e.dt * 1.4 * quente;
-                                    *transicao = true;
+                                    girando.set(true);
                                 }
                                 if r.clicked() {
                                     *escolha = Some(Escolha::Exemplo(i));
@@ -284,9 +314,11 @@ pub fn mostrar(root: &mut egui::Ui, e: Entrada) -> Option<Escolha> {
         });
     });
     let visivel = root.ctx().input(|i| i.viewport().focused.unwrap_or(true) && !i.viewport().minimized.unwrap_or(false));
-    match proximo_quadro(e.ligada, visivel, transicao) {
+    let girando = girando.get();
+    match proximo_quadro(e.ligada, visivel, transicao || girando) {
         Some(d) if d.is_zero() => root.ctx().request_repaint(),
         Some(d) => root.ctx().request_repaint_after(d),
+        None if girando && visivel => root.ctx().request_repaint(),
         None => {}
     }
     escolha
@@ -335,6 +367,18 @@ fn rotulo(ui: &mut egui::Ui, t: &str, pal: &Paleta) {
 /// Ao apertar: afunda 1 px e o traço fica cheio.
 #[allow(clippy::too_many_arguments)]
 fn linha(ui: &mut egui::Ui, id: (&str, usize), icone: &str, nome: &str, pasta: Option<&str>, pal: &Paleta, tt: f32, transicao: &mut bool) -> egui::Response {
+    linha_com_previa(ui, id, icone, nome, pasta, None, pal, tt, transicao).0
+}
+
+/// Chave da prévia de uma peça recente no cache.
+pub fn chave_recente(arquivo: &str) -> String {
+    format!("arq:{arquivo}")
+}
+
+/// Como [`linha`], com a prévia 3D da peça (e o ângulo dela) no lugar do ícone quando há prévia.
+/// Devolve também o realce, para quem chama girar a peça com o mouse em cima.
+#[allow(clippy::too_many_arguments)]
+fn linha_com_previa(ui: &mut egui::Ui, id: (&str, usize), icone: &str, nome: &str, pasta: Option<&str>, previa: Option<(&crate::examples::Preview, f32)>, pal: &Paleta, tt: f32, transicao: &mut bool) -> (egui::Response, f32) {
     let alt = if pasta.is_some() { 42. } else { 32. };
     let (r, resp) = ui.allocate_exact_size(egui::vec2(ui.available_width(), alt), Sense::click());
     let resp = crate::teclado::anel(ui, resp);
@@ -352,7 +396,12 @@ fn linha(ui: &mut egui::Ui, id: (&str, usize), icone: &str, nome: &str, pasta: O
     }
     let x = r.left() + 12. + 4. * quente;
     let mut tx = x;
-    if !icone.is_empty() {
+    if let Some((pv, giro)) = previa {
+        let ir = Rect::from_center_size(egui::pos2(x + 13., r.center().y), egui::vec2(30., 30.));
+        crate::examples::paint_preview(&ui.painter().with_clip_rect(ir.expand(2.)), ir, pv, giro);
+        marcar_previa(ui.ctx(), id.0, id.1, r);
+        tx += 36.;
+    } else if !icone.is_empty() {
         let ir = Rect::from_center_size(egui::pos2(x + 9., r.top() + 16.), egui::vec2(18., 18.));
         egui::Image::new(crate::icons::get(icone)).paint_at(ui, ir);
         tx += 30.;
@@ -365,7 +414,18 @@ fn linha(ui: &mut egui::Ui, id: (&str, usize), icone: &str, nome: &str, pasta: O
         let d = if d.chars().count() > max { format!("…{}", d.chars().rev().take(max.saturating_sub(1)).collect::<Vec<_>>().into_iter().rev().collect::<String>()) } else { d.to_string() };
         p.text(egui::pos2(tx, r.top() + 31.), egui::Align2::LEFT_CENTER, d, egui::FontId::proportional(11.), pal_fraco(pal));
     }
-    resp.on_hover_cursor(egui::CursorIcon::PointingHand)
+    (resp.on_hover_cursor(egui::CursorIcon::PointingHand), quente)
+}
+
+/// Guarda onde o item com prévia foi pintado neste quadro (para o teste achar e passar o mouse).
+fn marcar_previa(ctx: &egui::Context, grupo: &str, i: usize, r: Rect) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(("ini_previa_rect", grupo, i)), r));
+}
+
+/// Retângulo do item com prévia pintada no último quadro: grupo `ex` (exemplos) ou `rec_arq` (recentes).
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn previa_pintada(ctx: &egui::Context, grupo: &str, i: usize) -> Option<Rect> {
+    ctx.data(|d| d.get_temp(egui::Id::new(("ini_previa_rect", grupo, i))))
 }
 
 /// Traço vertical à esquerda da linha, crescendo do centro para as pontas com `k` de 0 a 1.
@@ -420,7 +480,12 @@ fn miniatura(ui: &mut egui::Ui, chave: &str, nome: &str, desc: &str, bancada: &s
     m.add_triangle(0, 2, 3);
     p.add(egui::Shape::mesh(m));
     match pv {
-        Some(pv) => crate::examples::paint_preview(&p.with_clip_rect(pr), pr.shrink(10.), pv, giro),
+        Some(pv) => {
+            crate::examples::paint_preview(&p.with_clip_rect(pr), pr.shrink(10.), pv, giro);
+            if let Some(i) = chave.strip_prefix("ex:").and_then(|i| i.parse().ok()) {
+                marcar_previa(&ctx, "ex", i, r0);
+            }
+        }
         None => {
             // carregando: um traço curto girando, sem pedir quadro (o cache avisa quando termina)
             p.circle_stroke(pr.center(), 10., Stroke::new(1.5, com_alfa(pal.texto, 60)));
@@ -539,14 +604,14 @@ mod tests {
         let ctx = egui::Context::default();
         egui_extras::install_image_loaders(&ctx);
         let cache = crate::examples::PreviewCache::default();
-        let mut giro = Default::default();
+        let giro: std::cell::RefCell<std::collections::HashMap<String, f32>> = Default::default();
         let mut mostra = true;
         let mut pedidos = (false, None);
         // quadros de aquecimento: o carregador de imagens termina em outra thread e pede um quadro ao
         // terminar; sob carga isso caía dentro da medição. Mede-se só depois de as imagens assentarem.
         for _ in 0..40 {
             let mut s = ctx.run_ui(egui::RawInput { time: Some(0.), screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1280., 800.))), ..Default::default() }, |ui| {
-                let e = Entrada { pal: Paleta::atual(), ligada: false, t: 0., dt: 0.016, voltar: false, arquivos: &[], projetos: &[], mostrar_ao_iniciar: &mut mostra, previews: &cache, giro: &mut giro, exemplos: &[] };
+                let e = Entrada { pal: Paleta::atual(), ligada: false, t: 0., dt: 0.016, voltar: false, arquivos: &[], projetos: &[], mostrar_ao_iniciar: &mut mostra, previews: &cache, giro: &giro, gira: false, exemplos: &[] };
                 mostrar(ui, e);
             });
             s.textures_delta.clear();
@@ -557,7 +622,7 @@ mod tests {
         }
         for quadro in 0..3 {
             let mut saida = ctx.run_ui(egui::RawInput { time: Some(quadro as f64 * 0.5), screen_rect: Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1280., 800.))), ..Default::default() }, |ui| {
-                let e = Entrada { pal: Paleta::atual(), ligada, t: quadro as f32 * 0.5 + 1., dt: 0.016, voltar: false, arquivos: &[], projetos: &[], mostrar_ao_iniciar: &mut mostra, previews: &cache, giro: &mut giro, exemplos: &[] };
+                let e = Entrada { pal: Paleta::atual(), ligada, t: quadro as f32 * 0.5 + 1., dt: 0.016, voltar: false, arquivos: &[], projetos: &[], mostrar_ao_iniciar: &mut mostra, previews: &cache, giro: &giro, gira: false, exemplos: &[] };
                 mostrar(ui, e);
             });
             let vp = &saida.viewport_output[&egui::ViewportId::ROOT];
@@ -573,6 +638,99 @@ mod tests {
         assert_eq!(desligada, None, "desligada, a tela parada não pode pedir quadro");
         let (_, ligada) = quadros(true);
         assert!(ligada.is_some_and(|d| d <= Duration::from_millis(QUADRO_MS)), "ligada, a grade pede quadro: {ligada:?}");
+    }
+
+    #[test]
+    fn giro_com_mouse_nao_depende_do_sistema_nem_do_modo_leve() {
+        // B508: com os efeitos de animação do Windows desligados a tela fica sem grade e sem transição,
+        // mas a miniatura ainda gira com o mouse em cima
+        let sistema = Contexto { sistema_reduz: true, ..ctx_ligado() };
+        assert!(!animacao_ligada(sistema) && gira_com_mouse(sistema));
+        assert!(gira_com_mouse(Contexto { modo_leve: true, software: true, ..ctx_ligado() }));
+        // quem desliga de propósito, desliga também o giro
+        assert!(!gira_com_mouse(Contexto { reduzir_movimento: true, ..ctx_ligado() }));
+        assert!(!gira_com_mouse(Contexto { opcao: false, ..ctx_ligado() }));
+    }
+
+    /// B508: cada exemplo e cada peça recente tem prévia, e ela gira com o mouse em cima, mesmo com a
+    /// animação da tela desligada (o caso do sistema que pede menos movimento).
+    #[test]
+    fn exemplos_e_recentes_tem_previa_que_gira_com_o_mouse_em_cima() {
+        if !fenkra_kernel::AVAILABLE {
+            return;
+        }
+        let pasta = std::env::temp_dir().join(format!("fenkra_b508_{}", std::process::id()));
+        std::fs::create_dir_all(&pasta).unwrap();
+        let arq = pasta.join("Placa.fkp");
+        std::fs::write(&arq, fenkra_solidos::example_document().to_json()).unwrap();
+        let arquivos = vec![arq.to_string_lossy().to_string()];
+        let exemplos: Vec<(&'static str, &'static str, crate::settings::Bench)> = crate::examples::all().into_iter().map(|e| (e.name, e.desc, e.bench)).collect();
+        let ctx = egui::Context::default();
+        egui_extras::install_image_loaders(&ctx);
+        let cache = crate::examples::PreviewCache::default();
+        let giro: std::cell::RefCell<std::collections::HashMap<String, f32>> = Default::default();
+        let mut mostra = true;
+        let mut t = 0f64;
+        let tela = Rect::from_min_size(Pos2::ZERO, egui::vec2(1280., 1600.));
+        let mut quadro = |ponteiro: Option<Pos2>| -> Duration {
+            t += 0.05;
+            // sem ponteiro, nenhum evento: evento de entrada já faz o egui pedir mais um quadro
+            let eventos = ponteiro.map_or_else(Vec::new, |p| vec![egui::Event::PointerMoved(p)]);
+            let mut s = ctx.run_ui(egui::RawInput { time: Some(t), screen_rect: Some(tela), events: eventos, ..Default::default() }, |ui| {
+                let e = Entrada { pal: Paleta::atual(), ligada: false, gira: true, t: 1., dt: 0.05, voltar: false, arquivos: &arquivos, projetos: &[], mostrar_ao_iniciar: &mut mostra, previews: &cache, giro: &giro, exemplos: &exemplos };
+                mostrar(ui, e);
+            });
+            s.textures_delta.clear();
+            s.viewport_output[&egui::ViewportId::ROOT].repaint_delay
+        };
+        // as prévias são calculadas em outra thread: espera todas ficarem prontas
+        let chave = chave_recente(&arquivos[0]);
+        let prontas = |cache: &crate::examples::PreviewCache| (0..exemplos.len()).all(|i| cache.get(&format!("ex:{i}"), || None).is_some()) && cache.get(&chave, || None).is_some();
+        for _ in 0..600 {
+            quadro(None);
+            if prontas(&cache) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        quadro(None);
+        for (i, (nome, _, _)) in exemplos.iter().enumerate() {
+            assert!(cache.get(&format!("ex:{i}"), || None).is_some(), "exemplo sem prévia: {nome}");
+            assert!(previa_pintada(&ctx, "ex", i).is_some(), "prévia não pintada: {nome}");
+        }
+        assert!(cache.get(&chave, || None).is_some(), "peça recente sem prévia");
+        let rec = previa_pintada(&ctx, "rec_arq", 0).expect("prévia da peça recente pintada");
+        // parada sem o mouse: não gira nem pede quadro
+        // (o carregador de ícones pede quadros ao terminar em outra thread: espera assentar)
+        let antes = giro.borrow().clone();
+        let mut espera = Duration::ZERO;
+        for _ in 0..60 {
+            espera = quadro(None);
+            if espera > Duration::from_secs(1) {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        assert_eq!(*giro.borrow(), antes);
+        assert!(espera > Duration::from_secs(1), "parada, não pede quadro: {espera:?}");
+        // mouse sobre cada miniatura: gira e pede o próximo quadro
+        for (i, (nome, _, _)) in exemplos.iter().enumerate() {
+            let c = previa_pintada(&ctx, "ex", i).unwrap().center();
+            let k = format!("ex:{i}");
+            let a0 = giro.borrow()[&k];
+            let mut espera = Duration::MAX;
+            for _ in 0..4 {
+                espera = quadro(Some(c));
+            }
+            assert!(giro.borrow()[&k] > a0 + 0.01, "{nome} não girou com o mouse em cima");
+            assert!(espera.is_zero(), "girando, pede o próximo quadro");
+        }
+        let a0 = giro.borrow()[&chave];
+        for _ in 0..4 {
+            quadro(Some(rec.center()));
+        }
+        assert!(giro.borrow()[&chave] > a0 + 0.01, "a peça recente não girou com o mouse em cima");
+        let _ = std::fs::remove_dir_all(&pasta);
     }
 
     #[test]
