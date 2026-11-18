@@ -793,6 +793,10 @@ ic("vista_base", B=CUBO(), r=Z((8, 32), (24, 24), (40, 32), (24, 40)))
 ic("vista_normal", B=Z((6, 34), (28, 27), (42, 35), (20, 42)), R=S(24, 6, 24, 31) + L((24, 25), (29.5, 23.3), (29.5, 29.3)))
 ic("zoom_selecao", B=CUBO(18, 6, 11, 5.5, 11), R=C(30, 30, 8) + L((35.7, 35.7), (43, 43)))
 
+# B520: pincel de aparência. O cabo é a base; as cerdas molhadas são o que o comando leva adiante.
+SO_INTERFACE |= {"pincel_aparencia"}
+ic("pincel_aparencia", B=Z((33, 5), (43, 15), (36, 22), (26, 12)), R="M27 21C22 20 15 24 14 30c-1 5-4 8-7 9 8 3 15 0 17-6 1-3 3-5 6-8z")
+
 # topo fino (B434): menu em ícone e uma aba por bancada
 ic("menu", B=L((10, 14), (38, 14)) + L((10, 34), (38, 34)), R=L((10, 24), (38, 24)))
 ic("banc_solidos", B=CUBO_OCULTO(), R=CUBO())

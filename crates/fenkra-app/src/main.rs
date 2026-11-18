@@ -170,6 +170,7 @@ mod textos_transmissao;
 mod eixo_ui;
 mod elementos;
 mod propriedades_graficas;
+mod pincel_aparencia;
 mod textos_biblioteca3;
 mod textos_biblioteca4;
 mod textos_biblioteca5;

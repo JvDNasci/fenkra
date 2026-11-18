@@ -128,6 +128,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::textos_forma::TEXTOS.iter())
             .chain(crate::props_geometria::TEXTOS.iter())
             .chain(crate::textos_medir::TEXTOS.iter())
+            .chain(crate::pincel_aparencia::TEXTOS.iter())
             .copied()
             .chain(crate::textos_campos::pares())
             .collect()

@@ -393,6 +393,8 @@ pub struct App {
     pub st_cut_hi: Vec<Id>,
     /// B363: documentos abertos em abas (os de fundo e a ordem da barra)
     documentos: docs_abertos::Documentos,
+    /// B520: pincel de aparência (a amostra vale entre os documentos abertos)
+    pub pincel: crate::pincel_aparencia::Pincel,
 }
 
 /// Edição de um comando como "ambiente": só termina com Concluir (mantém) ou Cancelar (desfaz).
@@ -555,6 +557,7 @@ impl App {
             st_cut_hi: vec![],
             st_lib_sel: 0,
             documentos: Default::default(),
+            pincel: Default::default(),
         };
         app.started = !app.settings.show_start;
         // desenvolvimento: FENKRA_DEMO_EXEMPLO=<n> abre o exemplo n da tela inicial
@@ -3110,6 +3113,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
             Act::Normal => self.align_to_selection(),
             Act::Grafico(m) => self.aplicar_grafico(m),
+            Act::Pincel(duplo) => self.pedir_pincel(duplo),
             Act::ZoomSelecao => self.zoom_na_selecao(),
             Act::IsoCiclica => self.iso_ciclica(),
             Act::OcultarMostrar => {
@@ -3313,6 +3317,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             chapa_plana: self.open.doc.sheet.as_ref().is_some_and(|sp| sp.flat),
             ctx: crate::proximo::contexto(self),
             grafico: self.estado_grafico(),
+            pincel: self.pincel.modo,
         }
     }
 
@@ -7619,7 +7624,17 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if regiao.is_some() {
                     ctx.set_cursor_icon(egui::CursorIcon::PointingHand);
                 }
-                if let (Some((rid, i)), true) = (regiao, resp.clicked_by(egui::PointerButton::Primary)) {
+                // B520: pincel de aparência; o clique escolhe a origem e depois cada destino
+                let pincel = self.pincel_vale();
+                if pincel && resp.hovered() {
+                    crate::pincel_aparencia::cursor(&ctx, resp.hover_pos(), &self.pincel);
+                }
+                if pincel && resp.clicked_by(egui::PointerButton::Primary) {
+                    let alvo = self.hover_pick.and_then(|p| crate::propriedades_graficas::alvos(&self.open.doc, Sel::None, &[], &[p]).first().copied());
+                    if self.pincel.clique_com_aviso(&mut self.open.doc, alvo) == crate::pincel_aparencia::Resultado::Aplicou {
+                        self.scene_dirty = true;
+                    }
+                } else if let (Some((rid, i)), true) = (regiao, resp.clicked_by(egui::PointerButton::Primary)) {
                     crate::sup3d::alternar_regiao(&mut self.open.doc, r, rid, i);
                 } else if let (Some(fid), true, Some(crate::picking::Pick::Face { point, body, face, .. })) = (face_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
                     // a mesma face do corpo (pela malha atual) é tirada em vez de repetida
@@ -8683,6 +8698,7 @@ impl eframe::App for App {
         }
         let km = self.settings.keys.clone();
         let typing = ctx.egui_wants_keyboard_input() || self.sketch.as_ref().is_some_and(|e| e.entry.typing());
+        self.pincel_teclas(ctx, typing);
         crate::desempenho::marca("pre_teclas");
         self.roda_passo(ctx, typing);
         crate::desempenho::marca("pre_roda");

@@ -82,11 +82,13 @@ pub enum Mudanca {
     /// índice em `APPEARANCE_PRESETS`
     Material(usize),
     Textura(Option<u8>),
+    /// B520: acabamento sozinho (o pincel copia o do material sem trocar a cor)
+    Acabamento(Finish),
 }
 
 pub const TIPOS_DE_LINHA: [&str; 4] = ["Contínua", "Tracejada", "Traço-ponto", "Pontilhada"];
 pub const SIMBOLOS: [&str; 6] = ["Cruz 3D", "Asterisco", "X", "Círculo", "Quadrado", "Ponto"];
-const ESTILO_PADRAO: LineStyle = LineStyle { width: 2., dash: 0, point: 1, size: 8. };
+pub(crate) const ESTILO_PADRAO: LineStyle = LineStyle { width: 2., dash: 0, point: 1, size: 8. };
 const COR_REF: [u8; 3] = [222, 170, 110];
 
 /// Alvos da seleção: faces e elementos clicados no 3D, mais o item (ou os itens) da árvore.
@@ -129,7 +131,7 @@ pub fn alvos(d: &Document, sel: Sel, multi: &[Id], picks: &[Pick]) -> Vec<Alvo> 
 }
 
 /// Aparência em vigor do alvo (a própria ou a herdada), se o alvo tiver cor.
-fn aparencia(d: &Document, a: Alvo) -> Option<Appearance> {
+pub(crate) fn aparencia(d: &Document, a: Alvo) -> Option<Appearance> {
     let do_corpo = |id: Id| d.collectors.iter().find(|c| c.id == id).map(|c| Appearance { color: c.color, finish: c.finish, texture: c.texture });
     match a {
         Alvo::Corpo(id) => do_corpo(id),
@@ -139,16 +141,16 @@ fn aparencia(d: &Document, a: Alvo) -> Option<Appearance> {
     }
 }
 
-fn tem_face(a: Alvo) -> bool {
+pub(crate) fn tem_face(a: Alvo) -> bool {
     matches!(a, Alvo::Corpo(_) | Alvo::Recurso(_) | Alvo::Ref(_, RefClass::Surface))
 }
-fn tem_linha(a: Alvo) -> bool {
+pub(crate) fn tem_linha(a: Alvo) -> bool {
     matches!(a, Alvo::Ref(_, RefClass::Curve) | Alvo::CurvaSketch(_))
 }
-fn tem_ponto(a: Alvo) -> bool {
+pub(crate) fn tem_ponto(a: Alvo) -> bool {
     matches!(a, Alvo::Ref(_, RefClass::Point) | Alvo::PontoSketch(_))
 }
-fn id_de(a: Alvo) -> Id {
+pub(crate) fn id_de(a: Alvo) -> Id {
     match a {
         Alvo::Corpo(id) | Alvo::Recurso(id) | Alvo::Ref(id, _) | Alvo::CurvaSketch(id) | Alvo::PontoSketch(id) => id,
     }
@@ -224,6 +226,7 @@ pub fn aplicar(d: &mut Document, alvos: &[Alvo], m: Mudanca) -> usize {
                 None => false,
             },
             Mudanca::Textura(t) if tem_face(a) => mudar_aparencia(d, a, |ap| ap.texture = t),
+            Mudanca::Acabamento(f) if tem_face(a) => mudar_aparencia(d, a, |ap| ap.finish = f),
             Mudanca::Transparencia(t) if tem_face(a) => {
                 d.set_transparencia(id_de(a), t);
                 true

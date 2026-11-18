@@ -53,6 +53,8 @@ pub enum Act {
     RegraPlastica,
     /// B506: muda uma propriedade gráfica da seleção
     Grafico(crate::propriedades_graficas::Mudanca),
+    /// B520: pincel de aparência; `true` = duplo clique (fica ligado para vários destinos)
+    Pincel(bool),
     /// B506: enquadra só o que está selecionado
     ZoomSelecao,
     /// B506: isométrica; clique repetido gira entre as oito direções
@@ -624,7 +626,8 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("aparencia", "Material", "Aplicar material", "Aplica um material pronto (cor e acabamento) à seleção: faces, comandos, corpos e superfícies.", MaterialMenu)),
             One(it("ortho", "Ortogonal", "Projeção ortogonal  (O)", "Perspectiva ou projeção ortogonal (ideal para sketches).", Ortho)),
         ],
-        Group::Propriedades => vec![],
+        // B520: o pincel de aparência abre a barra; os campos vêm de `propriedades_graficas::barra`
+        Group::Propriedades => vec![One(it("pincel_aparencia", "Pincel", "Pincel de aparência", "Copia a aparência de um elemento para outros: clique no pincel, no elemento de origem e depois nos destinos. Duplo clique no pincel o mantém ligado; Esc desliga.", Pincel(false)))],
         Group::SkCriacao => vec![
             One(tool(Tool::Line)),
             One(tool(Tool::Spline)),
@@ -684,6 +687,8 @@ pub struct ToolState {
     pub ctx: crate::proximo::Contexto,
     /// B506: valores gráficos da seleção, para a barra de propriedades e o menu de material
     pub grafico: crate::propriedades_graficas::Estado,
+    /// B520: o pincel de aparência está ligado
+    pub pincel: crate::pincel_aparencia::Modo,
 }
 
 fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
@@ -849,6 +854,15 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, barra: Option<Barra>, title: 
                         ui.checkbox(&mut s.edges_in_render, tr("arestas no semi-renderizado"));
                         ui.checkbox(&mut s.tangent_edges, tr("arestas de tangência (fim dos raios)"));
                     });
+                }
+                Entry::One(i) if matches!(i.act, Act::Pincel(_)) => {
+                    // clique liga ou desliga; duplo clique mantém ligado para vários destinos (B520)
+                    let r = tool_button(ui, i.icon, i.name, size, labels, st.pincel.ativo(), i.brief, i.advanced);
+                    if r.double_clicked() {
+                        acts.push(Act::Pincel(true));
+                    } else if r.clicked() {
+                        acts.push(Act::Pincel(false));
+                    }
                 }
                 Entry::One(i) if i.act == Act::MaterialMenu => {
                     let pode = st.grafico.material.aplica();
