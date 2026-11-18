@@ -116,3 +116,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
         aplicar(app, id, &l, i);
     }
 }
+
+/// B507: o assistente de reparo aparece só quando há erro. Sem nenhum item quebrado ele fecha sozinho,
+/// inclusive quando a pessoa o abriu pela barra de estado e corrigiu o último erro.
+pub fn assistente_aberto(itens_com_erro: usize) -> bool {
+    itens_com_erro > 0
+}

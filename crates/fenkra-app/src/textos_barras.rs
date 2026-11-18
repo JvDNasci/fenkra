@@ -33,4 +33,8 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Voltar a árvore ao canto", "Put the tree back in the corner"),
     ("Devolve a árvore ao canto da vista, com a largura padrão", "Puts the tree back in the corner of the view, at the default width"),
     ("Arraste para mudar a largura da árvore", "Drag to change the tree's width"),
+    // B507: painel do comando e assistente de reparo flutuam ou encaixam
+    ("Flutuar sobre a vista", "Float over the view"),
+    ("Flutuar: o painel sai da borda e fica sobre a vista, onde você o arrastar. A posição fica guardada.", "Float: the panel leaves the edge and stays over the view, wherever you drag it. Its position is remembered."),
+    ("Encaixar: o painel volta para a borda e reserva espaço. Arrastar até uma borda faz o mesmo.", "Dock: the panel goes back to the edge and reserves space. Dragging it to an edge does the same."),
 ];

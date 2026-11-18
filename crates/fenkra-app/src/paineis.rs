@@ -17,8 +17,14 @@
 //! a pessoa escolheu. Os painéis também se registram a cada quadro, e o menu Exibir lista os que estão
 //! vivos para reabrir os fechados (`menu`).
 //!
-//! Segunda tela (B366): `Encaixe::Janela` leva o painel para uma janela nativa do sistema, o único jeito
-//! de um painel ficar solto. Veja os ADRs 0012 e 0094.
+//! Segunda tela (B366): `Encaixe::Janela` leva o painel para uma janela nativa do sistema. Veja os ADRs
+//! 0012 e 0094.
+//!
+//! Painel que flutua (B507): o painel do comando e o assistente de reparo pedem `Opcoes::flutua`. Neles,
+//! `Encaixe::Livre` vale de verdade: o painel fica sobre a vista, onde a pessoa o soltou, sem reservar
+//! espaço, e a posição guardada é conferida contra a área a cada quadro (`posicao_livre`), para nunca
+//! abrir fora da tela depois de trocar de monitor ou de resolução. O botão do cabeçalho alterna entre
+//! flutuar e encaixar; arrastar até uma borda encaixa e soltar longe delas deixa flutuando.
 
 use crate::settings::{Bench, Settings};
 use crate::theme;
@@ -239,6 +245,29 @@ pub struct Opcoes {
     pub persiste: bool,
     /// separa o estado de janela do mesmo painel em formatos diferentes (barra vertical e horizontal)
     pub variante: u8,
+    /// B507: o painel pode flutuar sobre a vista (`Encaixe::Livre`), à escolha da pessoa
+    pub flutua: bool,
+    /// B507: onde o painel encaixa quando sai de flutuante (botão ou arraste até uma borda). Sem valor,
+    /// na borda em que foi solto (ou na direita, pelo botão). O painel do comando usa a esquerda, que é
+    /// a coluna dele.
+    pub encaixe_ao_fixar: Option<Encaixe>,
+}
+
+/// B507: canto do painel flutuante. A posição guardada (ou a padrão) volta para dentro da área, com
+/// o painel inteiro à vista: guardada num monitor que não existe mais, ou numa tela maior, não some.
+pub fn posicao_livre(guardada: Option<[f32; 2]>, padrao: Pos2, tam: Vec2, area: Rect) -> Pos2 {
+    let base = guardada.map_or(padrao, |[x, y]| egui::pos2(x, y));
+    let base = if base.x.is_finite() && base.y.is_finite() { base } else { padrao };
+    dentro(base, tam, area.shrink(MARGEM))
+}
+
+/// Borda de encaixe perto do ponteiro para um painel que flutua. Com `esquerda`, a borda esquerda
+/// também conta (é a coluna do painel do comando).
+fn borda_perto_flutuante(p: Pos2, area: Rect, esquerda: bool) -> Option<Encaixe> {
+    if esquerda && area.expand(ALCANCE).contains(p) && p.x < area.left() + ALCANCE {
+        return Some(Encaixe::Esquerda);
+    }
+    borda_perto(p, area)
 }
 
 /// O que aconteceu com o painel neste quadro.
@@ -475,6 +504,8 @@ enum Acao {
     Nada,
     Alternar,
     Fechar,
+    /// B507: alterna entre flutuar e encaixar
+    Flutuar,
 }
 
 #[derive(Clone, Copy)]
@@ -482,7 +513,15 @@ enum Icone {
     Minimizar,
     Expandir,
     Fechar,
+    /// janela sobre outra: soltar o painel para flutuar
+    Flutuar,
+    /// retângulo preso à borda: voltar a encaixar
+    Encaixar,
 }
+
+/// Dicas do botão de flutuar e encaixar (B507).
+pub const DICA_FLUTUAR: &str = "Flutuar: o painel sai da borda e fica sobre a vista, onde você o arrastar. A posição fica guardada.";
+pub const DICA_ENCAIXAR: &str = "Encaixar: o painel volta para a borda e reserva espaço. Arrastar até uma borda faz o mesmo.";
 
 /// Botão do cabeçalho, desenhado com traços na cor do tema.
 fn botao_janela(ui: &mut egui::Ui, icone: Icone, dica: &str) -> egui::Response {
@@ -508,6 +547,17 @@ fn botao_janela(ui: &mut egui::Ui, icone: Icone, dica: &str) -> egui::Response {
                 p.line_segment([c + egui::vec2(-4., -4.), c + egui::vec2(4., 4.)], tr);
                 p.line_segment([c + egui::vec2(-4., 4.), c + egui::vec2(4., -4.)], tr);
             }
+            Icone::Flutuar => {
+                // duas janelas deslocadas: a da frente solta da de trás
+                p.rect_stroke(Rect::from_min_size(c + egui::vec2(-5., -2.), egui::vec2(7., 7.)), 1., tr, egui::StrokeKind::Middle);
+                p.line_segment([c + egui::vec2(-2., -5.), c + egui::vec2(5., -5.)], tr);
+                p.line_segment([c + egui::vec2(5., -5.), c + egui::vec2(5., 2.)], tr);
+            }
+            Icone::Encaixar => {
+                // retângulo com a faixa grossa da borda em que encaixa
+                p.rect_stroke(Rect::from_center_size(c, egui::vec2(10., 9.)), 1., tr, egui::StrokeKind::Middle);
+                p.line_segment([c + egui::vec2(3., -4.5), c + egui::vec2(3., 4.5)], tr);
+            }
         }
     }
     resp.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, dica));
@@ -519,9 +569,14 @@ pub fn botao_fechar(ui: &mut egui::Ui, dica: &str) -> egui::Response {
     botao_janela(ui, Icone::Fechar, dica)
 }
 
+/// Botão de flutuar no desenho dos painéis, para o cabeçalho próprio da coluna da esquerda (B507).
+pub fn botao_flutuar(ui: &mut egui::Ui, dica: &str) -> egui::Response {
+    botao_janela(ui, Icone::Flutuar, dica)
+}
+
 /// Cabeçalho: título à esquerda, minimizar/expandir e fechar à direita. Duplo clique no título
 /// também minimiza e expande.
-fn cabecalho(ui: &mut egui::Ui, titulo: &str, minimizado: bool) -> Acao {
+fn cabecalho(ui: &mut egui::Ui, titulo: &str, minimizado: bool, flutuando: Option<bool>) -> Acao {
     use crate::i18n::tr;
     let mut acao = Acao::Nada;
     let mut area_titulo = Rect::NOTHING;
@@ -535,6 +590,13 @@ fn cabecalho(ui: &mut egui::Ui, titulo: &str, minimizado: bool) -> Acao {
         let (icone, dica) = if minimizado { (Icone::Expandir, tr("expandir")) } else { (Icone::Minimizar, tr("minimizar")) };
         if botao_janela(ui, icone, dica).clicked() {
             acao = Acao::Alternar;
+        }
+        // B507: flutuar sobre a vista ou voltar a encaixar
+        if let Some(livre) = flutuando {
+            let (icone, dica) = if livre { (Icone::Encaixar, tr(DICA_ENCAIXAR)) } else { (Icone::Flutuar, tr(DICA_FLUTUAR)) };
+            if botao_janela(ui, icone, dica).clicked() {
+                acao = Acao::Flutuar;
+            }
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
             ui.set_height(BOTAO);
@@ -611,6 +673,12 @@ pub fn previa_de(ctx: &egui::Context, nome: &str) -> Option<Rect> {
     ctx.data(|d| d.get_temp::<Option<Rect>>(Id::unique(("painel_previa", nome)))).flatten()
 }
 
+/// Retângulo que o painel `nome` ocupou no último quadro (para conferir em teste).
+#[cfg_attr(not(test), allow(dead_code))]
+pub fn retangulo_de(ctx: &egui::Context, nome: &str) -> Option<Rect> {
+    ctx.data(|d| d.get_temp::<Rect>(Id::unique(("painel", nome, 0u8)).with("rect")))
+}
+
 /// Sombra de onde o painel vai encaixar: a faixa da borda e o retângulo exato em que ele vai ficar.
 fn sombra(ctx: &egui::Context, faixa: Rect, destino: Rect, rotulo: &str) {
     let destaque = theme::accent(&ctx.global_style().visuals);
@@ -658,8 +726,12 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
         posicao.encaixe = Encaixe::Direita;
         posicao.pos = None;
     }
-    // ADR 0094: nenhum painel fica livre; o que não tem borda válida vai para a direita ou a base
-    posicao.encaixe = posicao.encaixe.efetivo_para(posicao.largura.unwrap_or(cfg.largura));
+    // B507: painel que flutua, se a pessoa o soltou; os demais seguem o ADR 0094 (sem borda válida, vão
+    // para a direita ou a base)
+    let livre = op.flutua && posicao.encaixe == Encaixe::Livre;
+    if !livre {
+        posicao.encaixe = posicao.encaixe.efetivo_para(posicao.largura.unwrap_or(cfg.largura));
+    }
     // os painéis da base ficam à esquerda da faixa que os da direita reservam
     let area = if posicao.encaixe == Encaixe::Base {
         let (direita, _) = reservas(ctx, area);
@@ -715,7 +787,7 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
 
     let ordem = if op.persiste { 0 } else { 1 };
     let outros = encaixados(ctx, nr, &cfg.nome, ordem);
-    let alvo = colocar_empilhado(posicao, cfg.padrao, tam, area, &outros);
+    let alvo = if livre { posicao_livre(posicao.pos, cfg.padrao, tam, area) } else { colocar_empilhado(posicao, cfg.padrao, tam, area, &outros) };
     let extra = ctx.data(|d| d.get_temp::<f32>(id_extra)).unwrap_or(EXTRA_INICIAL);
     let corpo_h = if posicao.minimizado { None } else { altura_viva.or(posicao.altura).map(|h| (h.min(max_alto) - extra).max(ALTURA_MIN - extra).max(30.)) };
     let corpo_max = (max_alto - extra).max(40.);
@@ -739,7 +811,7 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
     }
     let titulo = cfg.titulo.as_str();
     let r = w.show(ctx, |ui| {
-        let acao = cabecalho(ui, titulo, minimizado);
+        let acao = cabecalho(ui, titulo, minimizado, op.flutua.then_some(livre));
         let mut dentro = None;
         let mut corpo = None;
         if !minimizado {
@@ -789,6 +861,19 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
             base.fechado = true;
             saida.movido = Some(base);
         }
+        Acao::Flutuar => {
+            if livre {
+                base.encaixe = op.encaixe_ao_fixar.unwrap_or(Encaixe::Direita);
+            } else {
+                base.encaixe = Encaixe::Livre;
+                // nasce um pouco para dentro de onde estava encaixado, já com a posição guardada
+                if base.pos.is_none() {
+                    let p = posicao_livre(Some([rect.min.x - 24., rect.min.y + 24.]), cfg.padrao, rect.size(), area);
+                    base.pos = Some([p.x, p.y]);
+                }
+            }
+            saida.movido = Some(base);
+        }
         Acao::Nada => {}
     }
 
@@ -813,17 +898,23 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
 
     // o egui move a janela sem marcar a resposta dela como arrastada; quem denuncia o arraste é a janela
     // sair de onde a pusemos com o botão apertado sobre ela
-    let borda = ponteiro.and_then(|p| borda_perto(p, area));
+    let fixa_na_coluna = op.encaixe_ao_fixar == Some(Encaixe::Esquerda);
+    let borda = ponteiro.and_then(|p| if op.flutua { borda_perto_flutuante(p, area, fixa_na_coluna) } else { borda_perto(p, area) });
     let pegou = origem.is_some_and(|o| Rect::from_min_size(alvo, tam).expand(4.).contains(o));
     let saiu_do_lugar = (rect.min - alvo).length() > 0.5;
     if apertado && (arrastando || (pegou && saiu_do_lugar)) {
         ctx.data_mut(|d| d.insert_temp(id_arrasto, true));
         let previa = borda.map(|e| {
+            if fixa_na_coluna {
+                // o painel do comando encaixa na coluna da esquerda, em qualquer borda que chegue
+                return Rect::from_min_size(area.left_top(), egui::vec2(LARGURA_COLUNA, area.height()));
+            }
             let p = colocar_empilhado(Posicao { encaixe: e, pos: Some([rect.min.x, rect.min.y]), ..base }, cfg.padrao, rect.size(), area, &outros);
             Rect::from_min_size(p, rect.size())
         });
         if let (Some(e), Some(destino)) = (borda, previa) {
-            if let Some(f) = faixa_da_guia(e, rect.size(), area) {
+            let faixa = if fixa_na_coluna { Some(destino) } else { faixa_da_guia(e, rect.size(), area) };
+            if let Some(f) = faixa {
                 sombra(ctx, f, destino, crate::i18n::tr("solte para encaixar"));
             }
         }
@@ -838,8 +929,13 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
             ctx.data_mut(|d| d.remove::<bool>(id_arrasto));
             saida.solto_em = borda;
             let mut n = base;
-            // solto longe das bordas, volta para a borda em que estava: painel não fica livre
-            n.encaixe = borda.unwrap_or(posicao.encaixe);
+            // solto longe das bordas: o painel que flutua fica onde caiu (B507); os outros voltam para a
+            // borda em que estavam
+            n.encaixe = match borda {
+                Some(e) => op.encaixe_ao_fixar.filter(|_| op.flutua).unwrap_or(e),
+                None if op.flutua => Encaixe::Livre,
+                None => posicao.encaixe,
+            };
             n.pos = Some([rect.min.x, rect.min.y]);
             // B366: solto fora da janela principal vira janela nativa, no ponto em que o mouse soltou
             if let (true, Some(p), false) = (soltou_fora(ponteiro, ctx.content_rect()), ponteiro, ctx.embed_viewports()) {
@@ -853,7 +949,10 @@ pub fn mostrar_com<R>(ctx: &egui::Context, area: Rect, cfg: &Painel, posicao: Po
             saida.movido = Some(n);
         }
         ctx.data_mut(|d| d.insert_temp(Id::unique(("painel_previa", cfg.nome.as_str())), None::<Rect>));
-        marcar_encaixado(ctx, &cfg.nome, posicao.encaixe, rect, nr, ordem);
+        // flutuando, o painel fica sobre a vista e não reserva espaço
+        if !livre {
+            marcar_encaixado(ctx, &cfg.nome, posicao.encaixe, rect, nr, ordem);
+        }
     }
     saida
 }
@@ -898,6 +997,11 @@ pub fn area_dos_paineis(ctx: &egui::Context) -> Rect {
 /// deixa de flutuar sobre a peça e passa a encaixar na direita (ou na base, se for larga), reservando
 /// espaço. O X fecha (`aberto = false`); a borda e o tamanho ficam nas preferências.
 pub fn encaixado<R>(ctx: &egui::Context, nome: &str, titulo: impl Into<String>, aberto: &mut bool, largura: f32, conteudo: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
+    encaixado_com(ctx, nome, titulo, aberto, largura, Opcoes::default(), conteudo)
+}
+
+/// `encaixado` com ajustes (B507: `Opcoes::flutua` deixa a janela flutuar ou encaixar, à escolha).
+pub fn encaixado_com<R>(ctx: &egui::Context, nome: &str, titulo: impl Into<String>, aberto: &mut bool, largura: f32, op: Opcoes, conteudo: impl FnOnce(&mut egui::Ui) -> R) -> Option<R> {
     if !*aberto {
         return None;
     }
@@ -905,7 +1009,7 @@ pub fn encaixado<R>(ctx: &egui::Context, nome: &str, titulo: impl Into<String>, 
     let guardada = ctx.data(|d| d.get_temp::<Publicado>(id_publicado())).and_then(|p| p.posicoes.iter().find(|(n, _)| n == nome).map(|(_, p)| *p));
     let posicao = Posicao { fechado: false, ..guardada.unwrap_or_default() };
     let cfg = Painel { nome: nome.to_string(), titulo: titulo.into(), padrao: egui::pos2(area.left() + MARGEM, area.top() + MARGEM), largura, redimensiona: true };
-    let saida = mostrar(ctx, area, &cfg, posicao, conteudo);
+    let saida = mostrar_com(ctx, area, &cfg, posicao, op, conteudo);
     if let Some(mut p) = saida.movido {
         if std::mem::take(&mut p.fechado) {
             *aberto = false;
@@ -1233,6 +1337,99 @@ mod tests {
                 _ => assert!((r.bottom() - (tela().bottom() - MARGEM)).abs() < 1.5, "{r:?}"),
             }
         }
+    }
+
+    // ----- B507: painel que flutua ou encaixa, à escolha -----
+
+    fn botao_flutuar_de(r: Rect) -> Pos2 {
+        botao_minimizar(r) - vec2(BOTAO + 4., 0.)
+    }
+
+    #[test]
+    fn posicao_livre_guardada_fora_da_tela_volta_para_dentro() {
+        let t = vec2(300., 200.);
+        for fora in [[5000., 5000.], [-900., -900.], [1190., 300.], [f32::NAN, 10.]] {
+            let p = posicao_livre(Some(fora), pos2(500., 300.), t, tela());
+            assert!(tela().contains_rect(Rect::from_min_size(p, t)), "{fora:?} ficou em {p:?}");
+        }
+        // dentro da área, fica onde a pessoa deixou; sem posição, usa a padrão
+        assert_eq!(posicao_livre(Some([400., 300.]), pos2(0., 0.), t, tela()), pos2(400., 300.));
+        assert_eq!(posicao_livre(None, pos2(500., 300.), t, tela()), pos2(500., 300.));
+    }
+
+    #[test]
+    fn painel_que_flutua_fica_onde_foi_solto_sem_reservar_espaco() {
+        let mut b = Banco::novo("flutua");
+        b.op = Opcoes { flutua: true, ..Default::default() };
+        b.posicao.encaixe = Encaixe::Direita;
+        let r = b.assentar();
+        assert!((r.right() - (tela().right() - MARGEM)).abs() < 1.5, "começa encaixado: {r:?}");
+        // arrastado para o meio da vista, longe das bordas: flutua ali
+        let de = titulo_de(r);
+        let ate = pos2(500., 400.);
+        b.arrastar(de, ate);
+        assert_eq!(b.posicao.encaixe, Encaixe::Livre);
+        let [x, y] = b.posicao.pos.expect("posição guardada");
+        let n = b.assentar();
+        assert!((n.min - pos2(x, y)).length() < 1.5, "fica onde caiu: {n:?} x {:?}", (x, y));
+        assert_eq!(reservas(&b.ctx, tela()), (0., 0.), "flutuando, não reserva espaço");
+        // arrastado até a borda, encaixa de novo
+        b.arrastar(titulo_de(n), pos2(1195., 500.));
+        assert_eq!(b.posicao.encaixe, Encaixe::Direita);
+        b.assentar();
+        assert!(reservas(&b.ctx, tela()).0 > 0., "encaixado, reserva a faixa");
+    }
+
+    #[test]
+    fn botao_alterna_entre_flutuar_e_encaixar_e_lembra_a_posicao() {
+        let mut b = Banco::novo("alterna");
+        b.op = Opcoes { flutua: true, ..Default::default() };
+        b.posicao.encaixe = Encaixe::Direita;
+        let r = b.assentar();
+        b.clicar(botao_flutuar_de(r));
+        assert_eq!(b.posicao.encaixe, Encaixe::Livre, "o botão solta o painel");
+        let guardada = b.posicao.pos.expect("posição");
+        let n = b.assentar();
+        assert!(tela().contains_rect(n.shrink(0.5)), "{n:?}");
+        b.clicar(botao_flutuar_de(n));
+        assert_eq!(b.posicao.encaixe, Encaixe::Direita, "o mesmo botão encaixa");
+        let e = b.assentar();
+        b.clicar(botao_flutuar_de(e));
+        assert_eq!(b.posicao.encaixe, Encaixe::Livre);
+        assert_eq!(b.posicao.pos, Some(guardada), "volta a flutuar onde estava");
+    }
+
+    #[test]
+    fn flutuante_guardado_fora_da_tela_abre_inteiro_na_area() {
+        let mut b = Banco::novo("fora");
+        b.op = Opcoes { flutua: true, ..Default::default() };
+        b.posicao = Posicao { encaixe: Encaixe::Livre, pos: Some([4000., -2000.]), ..Default::default() };
+        let r = b.assentar();
+        assert!(tela().contains_rect(r.shrink(0.5)), "{r:?}");
+    }
+
+    #[test]
+    fn painel_do_comando_encaixa_na_coluna_por_qualquer_borda() {
+        let mut b = Banco::novo("comando_teste");
+        b.op = Opcoes { flutua: true, encaixe_ao_fixar: Some(Encaixe::Esquerda), ..Default::default() };
+        b.posicao = Posicao { encaixe: Encaixe::Livre, pos: Some([500., 300.]), ..Default::default() };
+        let r = b.assentar();
+        b.arrastar(titulo_de(r), pos2(10., 450.));
+        assert_eq!(b.posicao.encaixe, Encaixe::Esquerda, "a esquerda é a coluna do comando");
+        let mut b = Banco::novo("comando_teste2");
+        b.op = Opcoes { flutua: true, encaixe_ao_fixar: Some(Encaixe::Esquerda), ..Default::default() };
+        b.posicao = Posicao { encaixe: Encaixe::Livre, pos: Some([500., 300.]), ..Default::default() };
+        let r = b.assentar();
+        b.clicar(botao_flutuar_de(r));
+        assert_eq!(b.posicao.encaixe, Encaixe::Esquerda, "o botão de encaixar também leva à coluna");
+    }
+
+    #[test]
+    fn painel_sem_a_opcao_continua_sem_flutuar() {
+        let mut b = Banco::novo("fixo");
+        b.posicao = Posicao { encaixe: Encaixe::Livre, pos: Some([500., 300.]), ..Default::default() };
+        let r = b.assentar();
+        assert!((r.right() - (tela().right() - MARGEM)).abs() < 1.5, "ADR 0094: vai para a direita: {r:?}");
     }
 
     /// ADR 0094: o topo e a esquerda não recebem painel. Arrastado até lá, ele não mostra sombra de
@@ -1624,7 +1821,7 @@ mod tests {
                 let ctx = ui.ctx().clone();
                 // como no app: o comando é desenhado antes, as barras por último
                 rects.0 = mostrar(&ctx, tela(), &comando, na_direita, |ui| ui.label("comando")).rect;
-                rects.1 = mostrar_com(&ctx, tela(), &barra, na_direita, Opcoes { persiste: true, variante: 0 }, |ui| ui.label("b")).rect;
+                rects.1 = mostrar_com(&ctx, tela(), &barra, na_direita, Opcoes { persiste: true, variante: 0, ..Default::default() }, |ui| ui.label("b")).rect;
             });
         }
         let (rc, rb) = (rects.0.expect("comando"), rects.1.expect("barra"));

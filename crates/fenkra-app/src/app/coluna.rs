@@ -11,7 +11,10 @@
 //! Propriedades de um item escolhido (peça, parâmetros, anotação) ocupam a coluna, e a árvore continua
 //! transparente sobre a vista, ao lado, para escolher outro item.
 //!
-//! O painel do comando só sai da coluna para uma janela nativa do sistema (outro monitor, B366).
+//! O painel do comando sai da coluna de dois jeitos: flutuando sobre a vista (B507), pelo botão do
+//! título ou arrastado, e numa janela nativa do sistema (outro monitor, B366). Flutuando, ele lembra a
+//! posição, conferida contra a área a cada quadro, e volta para a coluna pelo botão de encaixar ou
+//! arrastado até uma borda.
 
 use super::*;
 use crate::paineis::{self, Encaixe, Painel};
@@ -197,11 +200,14 @@ impl App {
         });
     }
 
-    /// Painel do comando numa janela nativa do sistema (outro monitor): o único jeito de ele sair da coluna.
-    fn comando_em_janela(&mut self, ctx: &egui::Context, area: Rect) {
+    /// Painel do comando fora da coluna: flutuando sobre a vista (B507) ou numa janela nativa do sistema
+    /// (outro monitor, B366). Encaixar (botão ou arraste até uma borda) devolve o painel à coluna.
+    fn comando_solto(&mut self, ctx: &egui::Context, area: Rect) {
         let posicao = paineis::Posicao { fechado: false, ..self.settings.painel("comando", Encaixe::Janela) };
-        let cfg = Painel { nome: "comando".into(), titulo: self.titulo_do_comando(), padrao: area.left_top(), largura: LARGURA, redimensiona: true };
-        let saida = paineis::mostrar(ctx, area, &cfg, posicao, |ui| {
+        // primeira vez flutuando: perto da borda direita, abaixo do cubo, longe da seleção em curso
+        let cfg = Painel { nome: "comando".into(), titulo: self.titulo_do_comando(), padrao: paineis::abaixo_do_cubo(area, LARGURA), largura: LARGURA, redimensiona: true };
+        let op = paineis::Opcoes { flutua: true, encaixe_ao_fixar: Some(Encaixe::Esquerda), ..Default::default() };
+        let saida = paineis::mostrar_com(ctx, area, &cfg, posicao, op, |ui| {
             self.barras_do_comando(ui);
             self.campos_do_comando(ui);
         });
@@ -219,8 +225,11 @@ impl App {
     /// um comando de verdade. Devolve se a árvore vai transparente sobre a vista neste quadro.
     pub(super) fn coluna_esquerda(&mut self, root: &mut egui::Ui, painel: bool, comando: bool) -> bool {
         let ctx = root.ctx().clone();
-        let nativa = painel && !ctx.embed_viewports() && self.settings.painel("comando", Encaixe::Esquerda).encaixe == Encaixe::Janela;
-        let na_coluna = painel && !nativa;
+        let lugar = self.settings.painel("comando", Encaixe::Esquerda).encaixe;
+        let nativa = painel && !ctx.embed_viewports() && lugar == Encaixe::Janela;
+        // B507: o painel do comando flutua sobre a vista quando a pessoa o soltou
+        let flutuando = painel && lugar == Encaixe::Livre;
+        let na_coluna = painel && !nativa && !flutuando;
         if !na_coluna {
             ctx.data_mut(|d| d.remove::<bool>(id_quer_arvore()));
         }
@@ -252,9 +261,9 @@ impl App {
                 }
             }
         }
-        if nativa {
+        if nativa || flutuando {
             let area = root.available_rect_before_wrap();
-            self.comando_em_janela(&ctx, area);
+            self.comando_solto(&ctx, area);
         }
         arvore_sobre_a_vista(o_que) && !self.settings.arvore_fechada
     }
@@ -264,27 +273,50 @@ impl App {
     fn titulo_do_painel(&mut self, ui: &mut egui::Ui, titulo: &str) -> bool {
         let ctx = ui.ctx().clone();
         let mut fechar = false;
+        let mut flutuar = false;
         let linha = ui.allocate_ui_with_layout(egui::vec2(ui.available_width(), LINHA), egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if paineis::botao_fechar(ui, tr("Cancelar o comando")).clicked() {
                 fechar = true;
+            }
+            // B507: o painel do comando também flutua sobre a vista, à escolha
+            if paineis::botao_flutuar(ui, tr(paineis::DICA_FLUTUAR)).clicked() {
+                flutuar = true;
             }
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 ui.add(egui::Label::new(RichText::new(titulo).strong()).truncate().selectable(false));
             });
         });
-        // segunda tela: o painel só deixa a coluna para uma janela do sistema
-        if !ctx.embed_viewports() {
-            linha.response.interact(egui::Sense::click()).context_menu(|ui| {
-                if ui.button(tr("Abrir numa janela própria")).on_hover_text(tr("Leva o painel para uma janela do sistema, que pode ir para outro monitor")).clicked() {
-                    let mut p = self.settings.painel("comando", Encaixe::Esquerda);
-                    p.encaixe = Encaixe::Janela;
-                    p.pos = None;
-                    self.settings.guardar_painel("comando", p);
-                    ui.close();
-                }
-            });
+        let mut janela = false;
+        linha.response.interact(egui::Sense::click()).context_menu(|ui| {
+            if ui.button(tr("Flutuar sobre a vista")).on_hover_text(tr(paineis::DICA_FLUTUAR)).clicked() {
+                flutuar = true;
+                ui.close();
+            }
+            // segunda tela: o painel também deixa a coluna para uma janela do sistema
+            if !ctx.embed_viewports() && ui.button(tr("Abrir numa janela própria")).on_hover_text(tr("Leva o painel para uma janela do sistema, que pode ir para outro monitor")).clicked() {
+                janela = true;
+                ui.close();
+            }
+        });
+        if flutuar {
+            self.soltar_comando();
+        }
+        if janela {
+            let mut p = self.settings.painel("comando", Encaixe::Esquerda);
+            p.encaixe = Encaixe::Janela;
+            p.pos = None;
+            self.settings.guardar_painel("comando", p);
         }
         fechar
+    }
+
+    /// B507: o painel do comando sai da coluna e flutua sobre a vista, na última posição guardada (ou,
+    /// na primeira vez, perto da borda direita).
+    pub(super) fn soltar_comando(&mut self) {
+        let mut p = self.settings.painel("comando", Encaixe::Esquerda);
+        p.encaixe = Encaixe::Livre;
+        p.fechado = false;
+        self.settings.guardar_painel("comando", p);
     }
 
     fn conteudo_da_coluna(&mut self, ui: &mut egui::Ui, o_que: Conteudo) {
