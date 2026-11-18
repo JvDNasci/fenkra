@@ -2333,6 +2333,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             match self.sel {
                 Sel::Origin(o) => s.planes.push(PlaneRef::Origin(o)),
                 Sel::Ref(id) => add_ref(&mut s, id),
+                // B511: forma livre aberta escolhida na árvore entra como superfície inteira
+                Sel::Feature(id) if matches!(d.feature(id).map(|f| &f.kind), Some(FeatureKind::Forma(fm)) if fm.e_superficie()) => s.surface = Some(SurfRef::Ref(id)),
                 // sketch escolhido na árvore: vale o plano dele e as curvas de verdade (os perfis)
                 Sel::Feature(id) if crate::sketch_pub::plano(d, id).is_some() => {
                     s.planes.extend(crate::sketch_pub::plano(d, id));

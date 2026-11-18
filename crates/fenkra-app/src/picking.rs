@@ -223,9 +223,13 @@ fn pickable<'a>(r: &'a RecomputeResult, doc: &Document, f: &Filter) -> Vec<(usiz
             out.push((bi, &b.mesh, None));
         }
     }
-    if f.planes {
+    {
         for (si, sf) in r.surfaces.iter().enumerate() {
-            let vis = doc.reference(sf.id).is_some_and(|x| doc.ref_shown(x));
+            // B511: a forma livre aberta é superfície de resultado: escolhível mesmo sem o filtro de referências
+            if !f.planes && doc.reference(sf.id).is_some() {
+                continue;
+            }
+            let vis = doc.superficie_mostrada(sf.id);
             if vis != f.hidden_env && f.fantasma != Some(sf.id) {
                 out.push((SURF_BASE + si, &sf.mesh, Some(sf.id)));
             }

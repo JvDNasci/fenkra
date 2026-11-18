@@ -39,6 +39,12 @@ Preencha com o que for aprendido. Cada regra leva o motivo.
   costura adaptativa; superfície que só encosta (não atravessa) fica inteira (B517).
 - Subelemento de superfície de referência: dono = a superfície, papel = índice da face
   (`PAPEL_SUPERFICIE + i`), aresta com `EdgeKey.edge`; borda repete a face nos dois lados (B515, ADR 0010).
+- Forma livre com borda, convertida, é superfície comum: o casco fica em `tools` da feature `Forma` (não no
+  corpo) e `forma_superficie`/`surface`/`surface_owner` resolvem `SurfRef::Ref(forma)` e as chaves com a forma
+  como dona. Quem pergunta "é superfície?" pelo `doc.reference(id)` deixa a forma de fora: use
+  `Document::superficie_mostrada`, `aparencia_da_superficie` e `Forma::e_superficie` (B511).
+- Término "até a superfície" com superfície de várias faces corta primeiro sem estender: estender cada face
+  sozinha solta as emendas e a ferramenta não se divide em dois pedaços (B511, `Shape::clip_until`).
 - Comando que consome superfícies inteiras (filete, junção, aparar) esconde as entradas ao sair o resultado
   (`sup3d::entradas_consumidas`): entrada e resultado no mesmo lugar brigam pelo pixel (B517).
 

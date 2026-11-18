@@ -1927,6 +1927,14 @@ pub struct Forma {
     pub vinculos: crate::subd_vinculo::Vinculos,
 }
 
+impl Forma {
+    /// B511: a forma entrega uma superfície comum (convertida e com borda), que os comandos de superfície,
+    /// de sólido e de chapa escolhem como qualquer superfície.
+    pub fn e_superficie(&self) -> bool {
+        self.conversao.is_some() && self.gaiola.inteira().tem_borda()
+    }
+}
+
 /// Como a forma vira B-rep (B179).
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct ConversaoForma {
@@ -4658,6 +4666,23 @@ impl Document {
         r.visible && !self.folder_hidden(r.folder)
     }
 
+    /// B511: a superfície `id` aparece? Vale para as de referência e para a forma livre aberta, que é
+    /// superfície sem ser elemento de referência (oculta como um sketch: ela, a pasta ou o corpo).
+    pub fn superficie_mostrada(&self, id: Id) -> bool {
+        if let Some(r) = self.reference(id) {
+            return self.ref_shown(r);
+        }
+        self.feature(id).is_some_and(|f| matches!(f.kind, FeatureKind::Forma(_)) && !self.sketch_hidden(f))
+    }
+
+    /// B511: aparência da superfície `id` (de referência ou forma livre aberta).
+    pub fn aparencia_da_superficie(&self, id: Id) -> Option<Appearance> {
+        match self.reference(id) {
+            Some(r) => r.appearance,
+            None => self.feature(id).and_then(|f| f.appearance),
+        }
+    }
+
     /// Sketch oculto de fato: o seu estado, o de uma pasta acima ou, para os sketches da linha do
     /// tempo de um corpo, o do corpo (B16: o pai oculta os filhos sem mexer no estado de cada um).
     pub fn sketch_hidden(&self, f: &Feature) -> bool {
@@ -5211,7 +5236,8 @@ impl Document {
         if let Some(r) = self.references.iter_mut().find(|r| r.id == id) {
             r.visible = shown;
         } else if let Some(f) = self.features.iter_mut().find(|f| f.id == id) {
-            if matches!(f.kind, FeatureKind::Sketch(_)) {
+            // B511: a forma livre aberta consumida (deslocar, espessar) some como uma superfície
+            if matches!(f.kind, FeatureKind::Sketch(_) | FeatureKind::Forma(_)) {
                 f.hidden = !shown;
             }
         }

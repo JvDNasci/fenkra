@@ -425,7 +425,10 @@ mod testes {
         let r = recompute(&d);
         assert!(matches!(r.status.get(&id), Some(Status::Ok)), "{:?}", r.status.get(&id));
         assert!(!r.relatorios_forma[0].1.solido);
-        assert_eq!(r.bodies[0].mesh.face_ranges.len(), 64 * 4);
+        // B511: casco aberto é superfície comum (dona: a forma), não pedaço de corpo
+        assert!(r.bodies.is_empty(), "a superfície não vira corpo");
+        let s = r.surfaces.iter().find(|s| s.id == id).expect("a forma está nas superfícies");
+        assert_eq!(s.mesh.face_ranges.len(), 64 * 4);
     }
 
     #[test]

@@ -726,7 +726,12 @@ fn fmt(v: f64) -> String {
 /// Elementos de uma classe que podem ser usados por `me` (sem ele e sem quem depende dele).
 fn candidates(doc: &Document, class: RefClass, me: Id) -> Vec<(Id, String)> {
     let deps = doc.dependents(me);
-    doc.references.iter().filter(|r| r.kind.class() == class && r.id != me && !deps.contains(&r.id)).map(|r| (r.id, r.name.clone())).collect()
+    let mut v: Vec<(Id, String)> = doc.references.iter().filter(|r| r.kind.class() == class && r.id != me && !deps.contains(&r.id)).map(|r| (r.id, r.name.clone())).collect();
+    // B511: a forma livre aberta e convertida é superfície como as de referência
+    if class == RefClass::Surface {
+        v.extend(doc.features.iter().filter(|f| f.id != me && !deps.contains(&f.id) && matches!(&f.kind, FeatureKind::Forma(fm) if fm.e_superficie())).map(|f| (f.id, f.name.clone())));
+    }
+    v
 }
 
 // ---------------------------------------------------------------- entradas
