@@ -1788,6 +1788,9 @@ pub struct Feature {
     /// para o dobrado), senão valem no dobrado
     #[serde(default)]
     pub flat_space: bool,
+    /// B516: chaves (dono + papel) dos campos que guardam só o ponto; ver [`Ancora`]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ancoras: Vec<Ancora>,
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -4082,6 +4085,59 @@ pub struct EdgeKey {
 /// Primeiro papel das faces de uma superfície de referência (B515): a face `i` tem `PAPEL_SUPERFICIE + i`.
 pub const PAPEL_SUPERFICIE: i32 = 1_000_000;
 
+/// B516: identidade de uma entidade escolhida num campo que só guardava o ponto (campos `face`, `a`, `b`,
+/// `center`, `at` dos comandos de chapa e estrutural). A chave vive no comando (`Feature::ancoras`) e
+/// vale só enquanto o campo ainda tiver o mesmo ponto: trocar o ponto (clicar outra face) invalida a
+/// chave sem precisar mexer nela, e o próximo cálculo faz a chave nova (promoção).
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub struct Ancora {
+    /// nome do campo no comando (`"face"`, `"a"`, `"center"`, `"at"`, `"points.2"`...)
+    pub campo: String,
+    /// ponto do campo quando a chave foi feita
+    pub ponto: [f64; 3],
+    pub chave: ChaveAncora,
+}
+
+/// O que a âncora identifica.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum ChaveAncora {
+    Face(FaceKey),
+    Aresta(EdgeKey),
+    /// ponta de um membro estrutural: o comando, o trecho (na ordem em que o membro corta as linhas
+    /// guia) e qual ponta (`fim` = a de chegada)
+    PontaMembro { membro: Id, trecho: u32, fim: bool },
+}
+
+impl Ancora {
+    /// A âncora ainda é do ponto `p` (mesmo ponto, até o arredondamento da gravação)?
+    pub fn de(&self, campo: &str, p: [f64; 3]) -> bool {
+        self.campo == campo && (0..3).all(|i| (self.ponto[i] - p[i]).abs() < 1e-6)
+    }
+}
+
+impl Feature {
+    /// Chave guardada para o campo `campo` com o ponto `p` (B516); `None` se o ponto mudou.
+    pub fn ancora(&self, campo: &str, p: [f64; 3]) -> Option<&ChaveAncora> {
+        self.ancoras.iter().find(|a| a.de(campo, p)).map(|a| &a.chave)
+    }
+
+    /// Face guardada para o campo (ver [`Feature::ancora`]).
+    pub fn ancora_face(&self, campo: &str, p: [f64; 3]) -> Option<&FaceKey> {
+        match self.ancora(campo, p)? {
+            ChaveAncora::Face(k) => Some(k),
+            _ => None,
+        }
+    }
+
+    /// Junta âncoras novas às do comando: a do mesmo campo é trocada.
+    pub fn guardar_ancoras(&mut self, novas: &[Ancora]) {
+        for a in novas {
+            self.ancoras.retain(|b| b.campo != a.campo);
+            self.ancoras.push(a.clone());
+        }
+    }
+}
+
 /// Chaves v2 depois de editar a lista de pontos de um comando (acrescentar, tirar, trocar): o ponto
 /// que continua na lista (mesma posição) mantém a chave dele; o ponto novo fica sem chave e o
 /// próximo recompute a calcula (promoção). Assim a chave nunca fica associada ao ponto errado.
@@ -5017,7 +5073,7 @@ impl Document {
             None => self.rollback.min(len),
         };
         let flat_space = self.sheet.as_ref().is_some_and(|s| s.flat);
-        self.features.insert(at, Feature { id, name, kind, suppressed: false, suppress_if: String::new(), folder: None, target, hidden: false, appearance: None, flat_space });
+        self.features.insert(at, Feature { id, name, kind, suppressed: false, suppress_if: String::new(), folder: None, target, hidden: false, appearance: None, flat_space, ancoras: vec![] });
         if at < self.rollback {
             self.rollback += 1;
         } else {
@@ -5037,7 +5093,7 @@ impl Document {
         let name = self.unique_name("Sketch");
         let target = self.active_collector;
         let kind = FeatureKind::Sketch(Sketch { plane, data: Default::default() });
-        self.features.push(Feature { id, name, kind, suppressed: false, suppress_if: String::new(), folder: Some(folder), target, hidden: false, appearance: None, flat_space: false });
+        self.features.push(Feature { id, name, kind, suppressed: false, suppress_if: String::new(), folder: Some(folder), target, hidden: false, appearance: None, flat_space: false, ancoras: vec![] });
         if self.rollback == self.features.len() - 1 {
             self.rollback += 1;
         }

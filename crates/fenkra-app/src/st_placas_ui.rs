@@ -33,9 +33,18 @@ pub fn meio_da_aresta(seed: &Seed) -> Option<[f64; 3]> {
     Some(if pts.len() > 2 { m } else { [0, 1, 2].map(|i| (a[i] + b[i]) / 2.) })
 }
 
-pub fn placa_panel(ui: &mut egui::Ui, p: &mut StructPlate, vars: &Vars, seed: &Seed) {
+/// Nome da ponta de membro guardada no campo `at` (B516), ou o ponto se ainda não tem nome.
+fn nome_ponta(doc: &fenkra_core::Document, me: fenkra_core::Id, at: [f64; 3]) -> String {
+    match doc.feature(me) {
+        Some(f) => crate::ref_nome::campo_ancora(doc, f, "at", at),
+        None => crate::app::p3(at, 1),
+    }
+}
+
+pub fn placa_panel(ui: &mut egui::Ui, doc: &fenkra_core::Document, me: fenkra_core::Id, p: &mut StructPlate, vars: &Vars, seed: &Seed) {
     section(ui, "Placa de extremidade");
-    ui.label(RichText::new(format!("{} {}", tr("face da ponta perto de"), crate::app::p3(p.at, 1))).small());
+    // B516: a ponta pelo nome (membro, trecho e ponta), guardado no comando
+    ui.label(RichText::new(nome_ponta(doc, me, p.at)).small()).on_hover_text(crate::app::p3(p.at, 1));
     ui.label(RichText::new(tr("Clique a face da ponta do membro no 3D: a placa vai para a ponta que tem essa face.")).weak().small());
     if let Some(q) = seed.points.iter().find_map(|x| if let PointRef::Fixed(q) = x { Some(*q) } else { None }) {
         if ui.button(tr("⊙ Usar o vértice selecionado")).clicked() {
@@ -80,9 +89,9 @@ pub fn placa_panel(ui: &mut egui::Ui, p: &mut StructPlate, vars: &Vars, seed: &S
     }
 }
 
-pub fn reforco_panel(ui: &mut egui::Ui, g: &mut StructGusset, vars: &Vars, seed: &Seed) {
+pub fn reforco_panel(ui: &mut egui::Ui, doc: &fenkra_core::Document, me: fenkra_core::Id, g: &mut StructGusset, vars: &Vars, seed: &Seed) {
     section(ui, "Reforço");
-    ui.label(RichText::new(format!("{} {}", tr("encontro perto de"), crate::app::p3(g.at, 1))).small());
+    ui.label(RichText::new(nome_ponta(doc, me, g.at)).small()).on_hover_text(crate::app::p3(g.at, 1));
     ui.label(RichText::new(tr("Clique a aresta de encontro dos dois membros no 3D: o reforço vai para ela.")).weak().small());
     // clicar uma aresta nova no 3D leva o reforço para ela
     let chave = egui::Id::unique("st_reforco_aresta");

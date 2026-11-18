@@ -62,13 +62,15 @@ fn medida(v: f64) -> String {
     crate::app::fmt(v)
 }
 
-fn lista_de_faces(ui: &mut egui::Ui, w: &mut StructWeld, segundo: bool) {
+fn lista_de_faces(ui: &mut egui::Ui, doc: &Document, w: &mut StructWeld, segundo: bool) {
     let (n1, total) = (w.split.min(w.faces.len()), w.faces.len());
     let faixa = if segundo { n1..total } else { 0..n1 };
     let mut tirar = None;
     for i in faixa {
         ui.horizontal(|ui| {
-            ui.label(RichText::new(format!("{} {} · {}", tr("Face"), i + 1, crate::app::p3(&w.faces[i], 1))).small());
+            // B516: a face pelo nome (dono e papel), não pela coordenada
+            let nome = crate::ref_nome::campo_face(doc, w.face_keys.get(i).and_then(|k| k.as_ref()), w.faces[i]);
+            ui.label(RichText::new(format!("{} {} · {nome}", tr("Face"), i + 1)).small()).on_hover_text(crate::ref_nome::dica_face());
             if ui.small_button("✖").on_hover_text(tr("Tira esta face do conjunto")).clicked() {
                 tirar = Some(i);
             }
@@ -91,7 +93,7 @@ pub fn solda_panel(ui: &mut egui::Ui, doc: &Document, me: Id, w: &mut StructWeld
         }
     });
     ui.label(RichText::new(if w.picking_b { tr("Conjunto 2") } else { tr("Conjunto 1") }).strong().small());
-    lista_de_faces(ui, w, w.picking_b);
+    lista_de_faces(ui, doc, w, w.picking_b);
     ui.horizontal(|ui| {
         if ui.button(tr("Limpar o conjunto")).on_hover_text(tr("Tira todas as faces do conjunto ativo.")).clicked() {
             let n = w.split.min(w.faces.len());

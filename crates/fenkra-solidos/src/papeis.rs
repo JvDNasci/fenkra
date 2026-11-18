@@ -263,9 +263,114 @@ pub fn furos_topo(t: &Topology, seats: &[([f64; 3], [f64; 3])], d: f64, prof: &[
     Some(out)
 }
 
+/// Primeiro papel das abas de chapa (B516): `PAPEL_ABA + 16 * aba + parte`, com `aba` na ordem das abas
+/// do mesmo comando (a aba por laço faz várias). Fica abaixo de `PAPEL_SUPERFICIE` e acima de qualquer
+/// furo que caiba num comando.
+pub const PAPEL_ABA: i32 = 900_000;
+
+/// Partes de uma aba de chapa.
+pub const PARTES_ABA: [&str; 10] =
+    ["dobra interna", "dobra externa", "face interna", "face externa", "ponta", "lado 1", "lado 2", "lado 1 da dobra", "lado 2 da dobra", "raiz"];
+
+/// Papéis da ferramenta de uma aba dobrada (B516). O kernel faz a aba girando a tira lateral da chapa
+/// em torno do eixo da dobra (raio `r` a partir da face de referência) e somando o prisma reto na
+/// ponta; aqui cada face sai da geometria, como nas outras ferramentas sem histórico:
+///
+/// - cilindros: a dobra interna fica a `r` do eixo, a externa a `r + t`;
+/// - planos quase normais à aresta: os lados (1 perto da ponta inicial da aresta, 2 da final), os da
+///   dobra separados dos da parte reta pela distância ao eixo; a meia-esquadria corta os lados, e o
+///   lado cortado fica com o mesmo papel;
+/// - planos que contêm a aresta: a raiz (a tira na parede, que some na soma), a ponta (normal na
+///   direção em que a parte reta sai) e as faces interna e externa da parte reta (a `r` e a `r + t`
+///   do eixo).
+///
+/// `ends` são as pontas da aresta, `n` a normal da face de referência e `u` a normal da lateral da
+/// chapa (para onde a aba sai antes de girar). Na dúvida (face sem papel, ou duas faces com papel
+/// que não pode repetir), a ferramenta fica sem papéis.
+#[allow(clippy::too_many_arguments)]
+pub fn aba_topo(t: &Topology, ends: [[f64; 3]; 2], n: [f64; 3], u: [f64; 3], r: f64, esp: f64, angulo_graus: f64, aba: usize) -> Option<Vec<i32>> {
+    let unit = |v: [f64; 3]| {
+        let l = dot(v, v).sqrt();
+        (l > 1e-12).then(|| v.map(|x| x / l))
+    };
+    let cross = |a: [f64; 3], b: [f64; 3]| [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+    let e = unit(sub(ends[1], ends[0]))?;
+    let comp = dist(ends[0], ends[1]);
+    let r = r.max(1e-3);
+    let o = [ends[0][0] + n[0] * r, ends[0][1] + n[1] * r, ends[0][2] + n[2] * r];
+    let eixo = unit(cross(u, n))?;
+    // direção em que a parte reta sai: `u` girado do ângulo em torno do eixo
+    let a = angulo_graus.to_radians();
+    let w = cross(eixo, u);
+    let d = [0, 1, 2].map(|i| u[i] * a.cos() + w[i] * a.sin());
+    let ate_eixo = |q: [f64; 3]| {
+        let v = sub(q, o);
+        let s = dot(v, eixo);
+        dist(v, eixo.map(|x| x * s))
+    };
+    let tol = (esp * 1e-3).max(1e-5);
+    let mut out = Vec::with_capacity(t.faces.len());
+    for f in &t.faces {
+        let parte = match f.kind {
+            1 => {
+                let dr = ate_eixo(f.point);
+                if (dr - r).abs() <= tol * 10. {
+                    0
+                } else if (dr - r - esp).abs() <= tol * 10. {
+                    1
+                } else {
+                    return None;
+                }
+            }
+            0 if dot(f.dir, e).abs() > 0.5 => {
+                let s = dot(sub(f.point, ends[0]), e);
+                let dobra = ate_eixo(f.point) <= r + esp + tol;
+                match (s < comp / 2., dobra) {
+                    (true, false) => 5,
+                    (false, false) => 6,
+                    (true, true) => 7,
+                    (false, true) => 8,
+                }
+            }
+            // a raiz fica do lado da face de referência em relação ao eixo; a ponta de uma bainha a 180° cai
+            // no mesmo plano, do outro lado
+            0 if dot(f.dir, u).abs() > 0.99 && dot(sub(f.point, ends[0]), u).abs() <= tol && dot(sub(f.point, o), n) < 0. => 9,
+            0 if dot(f.dir, d).abs() > 0.99 => 4,
+            0 => {
+                let h = dot(sub(f.point, o), f.dir).abs();
+                if (h - r).abs() <= tol * 10. {
+                    2
+                } else if (h - r - esp).abs() <= tol * 10. {
+                    3
+                } else {
+                    return None;
+                }
+            }
+            _ => return None,
+        };
+        out.push(parte);
+    }
+    // dobra, faces da parte reta e ponta não se repetem; os lados podem (a meia-esquadria os corta)
+    for unica in [0, 1, 2, 3, 4] {
+        if out.iter().filter(|p| **p == unica).count() > 1 {
+            return None;
+        }
+    }
+    Some(out.into_iter().map(|p| PAPEL_ABA + 16 * aba as i32 + p).collect())
+}
+
+/// Nome de um papel de aba (para mensagens), ou `None` se o papel não é de aba.
+pub fn nome_aba(role: i32) -> Option<(usize, &'static str)> {
+    if !(PAPEL_ABA..fenkra_core::PAPEL_SUPERFICIE).contains(&role) {
+        return None;
+    }
+    let r = role - PAPEL_ABA;
+    Some(((r / 16) as usize, PARTES_ABA.get((r % 16) as usize).copied().unwrap_or("parte")))
+}
+
 /// Nome de um papel de furo (para mensagens), ou `None` se o papel não é de furo.
 pub fn nome_furo(role: i32) -> Option<String> {
-    if role < PAPEL_FURO {
+    if !(PAPEL_FURO..PAPEL_ABA).contains(&role) {
         return None;
     }
     let r = role - PAPEL_FURO;

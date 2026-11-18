@@ -1,6 +1,6 @@
 # ADR 0010: Referências v2 — dono + papel + assinatura, com ponto como reserva
 
-- **Status:** aceita — fase 1 implementada em 30/10/2026 (filete, chanfro, casca, draft, espessura)
+- **Status:** aceita — fase 1 em 30/10/2026 (filete, chanfro, casca, draft, espessura); fase 2 em todas as bancadas em 18/11/2026 (B516)
 - **Data:** 2026-10-29
 - **Revê:** [ADR 0004](0004-naming-topologico.md) (parcialmente implementada)
 
@@ -91,3 +91,46 @@ promovida para v2 no primeiro recompute bem-sucedido.
   referência perdida. Com isso `SurfRef::Face`, `CurveRef::BodyEdge`, `AxisRef::Edge/Face`, `PointRef::Vertex` e o
   plano de face aceitam subelementos de superfície em qualquer comando. Limite conhecido: superfície que reordena faces
   do mesmo tipo sem mudar a contagem segue pelo índice.
+- **Fase 2 em todas as bancadas (B516, 18/11/2026):** o painel mostrava "face em X Y Z"; agora toda face, aresta ou
+  ponta escolhida tem identidade pelo modo como foi construída, e o painel mostra o nome dela
+  (`refs::nome_face`, `refs::nome_aresta`, `refs::nome_ancora`; no app, `ref_nome.rs`, com tradução em
+  `textos_referencias.rs`): "Extrusão 2 · tampa final", "Parede 1 · aresta 3 · tampa final", "Furo 1 · furo 2, boca",
+  "Aba 1 · ponta", "Membro 1 · trecho 1 · início". A aresta entre a tampa e uma lateral do mesmo comando leva o número
+  da aresta do perfil que gerou a lateral. As mensagens de referência perdida citam o nome e as candidatas pelo nome
+  (`refs::sugerir_faces`, `refs::sugerir_arestas`).
+  - **Âncoras de campo (`Feature::ancoras`):** os campos que só guardavam o ponto (linha da dobra, do joggle e da
+    veneziana, com a âncora no ponto médio; face da aba por superfície e da conversão em chapa; centro do rasgo em
+    arco; centros do furo flangeado, `points.i`; ponto da placa de extremidade e do reforço) ganham uma chave no próprio
+    comando, `Ancora { campo, ponto, chave }`. A chave vale só enquanto o campo tiver o mesmo ponto: clicar outra face
+    troca o ponto e a âncora velha deixa de valer sozinha, sem o painel saber dela (o mesmo cuidado de `carry_keys`).
+    Foi escolhida a lista no comando, e não um campo `*_key` em cada struct, porque são dezenas de structs com uma
+    centena de literais no código e nos testes; a regra "a chave só vale para o ponto em que nasceu" fica num lugar só
+    (`Ancora::de`). Resolução (`ancoras.rs`): com âncora, a face sai de `find_face`; o ponto fica onde está se ainda
+    estiver na face, e vai até ela pela normal se a face plana andou (a chapa engrossou); face sumida, ambígua ou que
+    deixou o ponto fora dela é referência perdida com candidatas. Sem âncora, vale o ponto como antes e a face dele vira
+    âncora (promoção, `Promoted::Ancoras`). Na chapa, a âncora só vale no estado (dobrado ou planificado) em que o ponto
+    nasceu. A ponta de membro (`ChaveAncora::PontaMembro { membro, trecho, fim }`) identifica a ponta pelo comando e pelo
+    trecho: a placa vai com a ponta mesmo quando outra fica mais perto do ponto antigo.
+  - **Papéis da aba de chapa (`papeis::aba_topo`, `PAPEL_ABA = 900 000`):** a aba não tinha papel, e a aresta da ponta
+    da aba (onde vai a bainha) e as da dobra ficavam só com o ponto (era a "exceção até as chaves de chapa saírem"). O
+    papel sai da geometria da ferramenta, como nas varreduras: cilindros a `r` e `r + t` do eixo da dobra (dobra
+    interna e externa), planos quase normais à aresta (lados 1 e 2, da dobra ou da parte reta), a raiz (a tira na
+    parede, do lado da face de referência), a ponta (normal na direção em que a parte reta sai) e as faces interna e
+    externa da parte reta (a `r` e `r + t` do eixo). Dobra, faces da parte reta e ponta não podem repetir; os lados
+    podem, porque a meia-esquadria os corta. A aba por laço numera as abas do mesmo comando (`16 × aba + parte`). Não
+    foi preciso levar o `BRepTools_History` à fachada C++: a booleana que soma a aba já devolve a origem de cada face
+    (`boolean_tagged_src`), e o papel da ferramenta sai da geometria.
+  - **Referências da pasta e términos:** plano de face, face extraída e eixo de face ou de aresta de arquivo antigo
+    ganham a chave no fim da linha do tempo (`Promoted::Referencia`); o término "até a face" da extrusão e do furo
+    ganha a chave (`Promoted::Ate`); a linha guia de membro que era o polígono de uma aresta (`CurveRef::Edge`) vira
+    `CurveRef::BodyEdge` com chave (`Promoted::Caminhos`). O plano de face com chave passa a usar a consulta em camadas
+    (`find_face` em todos os corpos); antes ficava com a primeira face do mesmo dono e papel que aparecesse.
+  - **Montagem:** a aresta de arquivo antigo (`Viva::Aresta`, só o ponto) ganha o nome das duas faces na releitura,
+    quando dá (`Viva::ArestaNomeada`).
+  - **Sem escolha silenciosa:** a aba e a bainha sem chave entregavam o ponto ao kernel, que pega a aresta mais perto
+    sem limite; agora só quando alguma aresta passa de fato pelo ponto (0,01 mm). Ponto no ar é referência perdida.
+  - **Limites conhecidos:** o furo que promove centros (`Promoted::Furo`) e término no mesmo cálculo grava o término no
+    cálculo seguinte (uma promoção por comando e por cálculo); a rosca não promove o término. Alívio e fechamento de
+    canto (`SmCornerRelief.at`, `SmCornerClose.at`) apontam para um encontro de abas, e não uma face, e seguem pelo
+    ponto. A tolerância antiga de aresta sem chave em documentos de chapa continua para os pontos ainda não
+    promovidos. O assistente de reparo ainda não mostra no 3D as candidatas das âncoras (a mensagem já as cita).

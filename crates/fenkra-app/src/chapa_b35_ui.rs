@@ -54,7 +54,9 @@ pub fn painel_desdobra(ui: &mut egui::Ui, doc: &Document, idx: usize, u: &mut Sm
 /// Converter sólido em chapa: face fixa, espessura esperada e a medição do corpo.
 pub fn painel_converte(ui: &mut egui::Ui, doc: &Document, me: Id, c: &mut SmConvert, vars: &Vars) {
     section(ui, "Converter em chapa");
-    ui.label(RichText::new(if c.face == [0.; 3] { tr("Face fixa: nenhuma (clique numa face plana da chapa para escolher)").to_string() } else { format!("{} {} — {}", tr("face fixa em"), crate::app::p3(c.face, 1), tr("clique outra face para trocar")) }).small());
+    // B516: a face fixa pelo nome (dono e papel), guardado no comando
+    let nome = doc.feature(me).map_or_else(|| crate::app::p3(c.face, 1), |f| crate::ref_nome::campo_ancora(doc, f, "face", c.face));
+    ui.label(RichText::new(if c.face == [0.; 3] { tr("Face fixa: nenhuma (clique numa face plana da chapa para escolher)").to_string() } else { format!("{nome} — {}", tr("clique outra face para trocar")) }).small()).on_hover_text(crate::ref_nome::dica_face());
     // vazio mede a espessura do corpo; com valor, o comando confere que o corpo tem essa espessura
     let mut medir = c.thickness.trim().is_empty();
     if check(ui, &mut medir, "medir a espessura do corpo").changed() {

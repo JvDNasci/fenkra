@@ -52,6 +52,17 @@ Registre aqui erros que se repetiram.
   NURBS racional (furo vindo de 3DM: 1130,84 em vez de 1130,97), com a geometria certa. Antes de culpar a
   tradução, compare a malha fina ou use `Shape::volume_preciso` (B211). E não converta cilindro, cone, esfera e toro
   para NURBS sem precisar: a forma racional tem outro parâmetro e o volume medido nela erra 1 %.
+- Referência a face, aresta ou ponta nunca é coordenada (ADR 0010, B516). Campo novo que guarda um ponto clicado
+  precisa de chave: os que já têm slot usam `FaceKey`/`EdgeKey` ao lado do ponto; os demais usam a âncora do comando
+  (`Feature::ancoras`, resolvida em `ancoras.rs`). A âncora só vale para o ponto em que nasceu: trocar o ponto a
+  invalida sozinho. Sem chave, nunca entregue o ponto ao kernel quando ele não cai em nada: o `sm_flange` (e outros que
+  usam `BRepExtrema_DistShapeShape` para achar "a aresta perto") pega a mais perto sem limite, e isso é escolha
+  silenciosa. Confira antes com `edges_through`/`face_index` e devolva "referência perdida" com candidatas.
+- Ferramenta nova sem papéis deixa as arestas dela sem nome, e o comando seguinte que clicar nelas volta ao ponto. Dê
+  papel na saída (`extrude_roles`, `revolve_roles`) ou pela geometria (`papeis.rs`: varredura, loft, furos, aba de
+  chapa) e passe em `apply_roles`. A booleana já leva a origem de cada face (`boolean_tagged_src`, histórico do
+  OCCT); em geral não é preciso `BRepTools_History` novo na fachada. Na dúvida (face sem papel ou papel único que
+  repete), devolva `None`: sem papel a referência segue pelo ponto; papel errado escolhe a face errada sem aviso.
 - `posicionado` (montagem) copia a forma sem a malha: quem tessela a peça posicionada refaz a malha inteira a cada
   vez. Use a malha da vista quando ela basta, ou tessele em threads (B394).
 

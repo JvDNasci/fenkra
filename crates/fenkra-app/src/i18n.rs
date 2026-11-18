@@ -102,6 +102,7 @@ fn map() -> &'static HashMap<&'static str, &'static str> {
             .chain(crate::alca_estado::TEXTOS.iter())
             .chain(crate::textos_superficies::TEXTOS.iter())
             .chain(crate::textos_solidos::TEXTOS.iter())
+            .chain(crate::textos_referencias::TEXTOS.iter())
             .chain(crate::textos_furo_rosca::TEXTOS.iter())
             .chain(crate::textos_edicao_direta::TEXTOS.iter())
             .chain(crate::textos_dfm::TEXTOS.iter())

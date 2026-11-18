@@ -226,6 +226,13 @@ impl Ctx<'_> {
     /// reconheceu. O corpo não muda: os comandos de chapa seguintes passam a valer sobre ele.
     pub(super) fn run_convert(&mut self, f: &Feature, c: &fenkra_core::SmConvert) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
+        // B516: a face fixa segue a face pela âncora (dono + papel), não pelo ponto
+        let c = &if c.face != [0.; 3] {
+            let face = self.ponto_na_face("conversão em chapa", f, "face", c.face, f.flat_space)?;
+            fenkra_core::SmConvert { face, ..c.clone() }
+        } else {
+            c.clone()
+        };
         let mut corpo = self.body(f.target).ok_or("o corpo a converter precisa existir antes deste comando")?.clone();
         let mut malha = tesselar(&corpo, &self.qualidade).map_err(k)?;
         let mut a = analisar_malha(&malha, corpo.mass().volume)?;
