@@ -1788,6 +1788,7 @@ static TABLE: &[(&str, &str)] = &[
     ("comprimento total", "total length"),
     ("direção por linha, aresta ou eixo", "direction by line, edge or axis"),
     ("entradas do comando", "command inputs"),
+    ("recursos gerados e entradas (arraste um recurso para o nó do corpo para tirá-lo daqui, ou para esta linha para pô-lo de volta)", "generated features and inputs (drag a feature onto the body node to take it out of here, or onto this row to put it back)"),
     ("espaçamento", "spacing"),
     ("fundo em V (ponta da broca)", "V-bottom (drill point)"),
     ("linear (tangente)", "linear (tangent)"),
