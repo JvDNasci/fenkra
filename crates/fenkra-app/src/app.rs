@@ -395,6 +395,11 @@ pub struct App {
     documentos: docs_abertos::Documentos,
     /// B520: pincel de aparência (a amostra vale entre os documentos abertos)
     pub pincel: crate::pincel_aparencia::Pincel,
+    /// B554: comando preso por duplo clique, a sessão dele e o pedido de reabrir no próximo quadro
+    pub preso: crate::preso::Preso,
+    pub preso_sessao: Option<Id>,
+    pub reabrir_preso: Option<Cmd>,
+    pub reabrindo: bool,
 }
 
 /// Edição de um comando como "ambiente": só termina com Concluir (mantém) ou Cancelar (desfaz).
@@ -558,6 +563,10 @@ impl App {
             st_lib_sel: 0,
             documentos: Default::default(),
             pincel: Default::default(),
+            preso: Default::default(),
+            preso_sessao: None,
+            reabrir_preso: None,
+            reabrindo: false,
         };
         app.started = !app.settings.show_start;
         // desenvolvimento: FENKRA_DEMO_EXEMPLO=<n> abre o exemplo n da tela inicial
@@ -2445,6 +2454,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     fn command(&mut self, c: Cmd) {
+        // B554: escolher um comando (inclusive o mesmo ícone de novo) solta o preso; só a reabertura mantém
+        if !self.reabrindo {
+            self.preso.soltar();
+        }
         // B441: lembra o comando para sugerir os próximos quando ele terminar
         crate::proximo::registrar(c, &crate::proximo::contexto(self));
         if let Cmd::Pmi(i) = c {
@@ -3094,6 +3107,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         self.roda_registrar(a);
         match a {
             Act::Cmd(c) => self.command(c),
+            Act::Preso(a) => self.prender(a),
             Act::Fit => self.fit_pending = true,
             Act::SelMode(m) => {
                 self.settings.box_mode = m;
@@ -3143,6 +3157,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             Act::DockDrag(b, r) => self.comecar_arraste_de_barra(b, r),
             Act::SkTool(t) => {
                 if let Some(e) = self.sketch.as_mut() {
+                    // B554: clicar de novo no ícone preso o solta
+                    if e.preso.esta(crate::preso::Alvo::Sk(t)) {
+                        e.preso.soltar();
+                    }
                     e.escolher(t)
                 }
             }
@@ -3226,6 +3244,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     /// Saída sem Concluir (outro comando, clique fora): comando novo que não ficou válido não
     /// sobra na árvore; o restante é mantido.
     fn sair_da_sessao(&mut self) {
+        if !self.reabrindo {
+            self.preso.soltar();
+        }
         let invalido = self.session.as_ref().is_some_and(|s| crate::selecao::descartar_ao_sair(s.is_new, self.status_of(s.id)));
         if invalido {
             self.cancel_session();
@@ -3236,6 +3257,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
 
     /// Concluir: mantém as alterações.
     pub fn conclude_session(&mut self) {
+        self.reabrir_se_preso();
         if let Some(id) = self.session.as_ref().map(|s| s.id) {
             crate::forma_ui::ao_concluir(self, id);
         }
@@ -3268,6 +3290,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
 
     /// Cancelar: volta ao estado de antes de abrir o comando (um comando novo some).
     pub fn cancel_session(&mut self) {
+        self.preso.soltar();
         if let Some(s) = self.session.take() {
             self.open.doc = s.snapshot;
             if s.is_new {
@@ -3308,6 +3331,47 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         }
     }
 
+    /// B554: duplo clique no ícone. O 1º clique já abriu o comando; aqui só o prende. Comando que
+    /// não passa por sessão (sem o que concluir) não prende.
+    fn prender(&mut self, a: crate::preso::Alvo) {
+        match a {
+            crate::preso::Alvo::Sk(_) => {
+                if let Some(e) = self.sketch.as_mut() {
+                    e.preso.prender(a);
+                }
+            }
+            crate::preso::Alvo::Cmd(_) => {
+                if let Some(id) = self.session.as_ref().map(|s| s.id) {
+                    self.preso.prender(a);
+                    self.preso_sessao = Some(id);
+                }
+            }
+        }
+    }
+
+    /// B554: ao concluir a sessão do comando preso, pede para reabri-lo (no começo do próximo quadro,
+    /// para não abrir um comando dentro de outro).
+    fn reabrir_se_preso(&mut self) {
+        let id = self.session.as_ref().map(|s| s.id);
+        if let (Some(crate::preso::Alvo::Cmd(c)), true) = (self.preso.0, id.is_some() && id == self.preso_sessao) {
+            if self.preso.ao_concluir(crate::preso::Alvo::Cmd(c)) == crate::preso::Depois::Reabrir(crate::preso::Alvo::Cmd(c)) {
+                self.reabrir_preso = Some(c);
+            }
+        }
+    }
+
+    fn reabrir_preso_no_quadro(&mut self) {
+        if let Some(c) = self.reabrir_preso.take() {
+            self.reabrindo = true;
+            self.command(c);
+            self.reabrindo = false;
+            self.preso_sessao = self.session.as_ref().map(|s| s.id);
+            if self.preso_sessao.is_none() {
+                self.preso.soltar();
+            }
+        }
+    }
+
     fn tool_state(&self) -> toolbar::ToolState {
         toolbar::ToolState {
             hidden_env: self.hidden_env,
@@ -3318,6 +3382,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             ctx: crate::proximo::contexto(self),
             grafico: self.estado_grafico(),
             pincel: self.pincel.modo,
+            preso: self.preso.0.or(self.sketch.as_ref().and_then(|e| e.preso.0)),
         }
     }
 
@@ -8699,6 +8764,7 @@ impl eframe::App for App {
         let km = self.settings.keys.clone();
         let typing = ctx.egui_wants_keyboard_input() || self.sketch.as_ref().is_some_and(|e| e.entry.typing());
         self.pincel_teclas(ctx, typing);
+        self.reabrir_preso_no_quadro();
         crate::desempenho::marca("pre_teclas");
         self.roda_passo(ctx, typing);
         crate::desempenho::marca("pre_roda");
