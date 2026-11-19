@@ -2765,7 +2765,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 });
                 let support = seed.surface.unwrap_or_else(|| SurfRef::Plane(seed.planes.last().copied().unwrap_or(PlaneRef::Origin(OriginPlane::YZ))));
                 let d = &mut self.open.doc;
-                Sel::Feature(d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support, face: face.unwrap_or([0.; 3]), length: s("20"), radius: None, flip: false, keep_base: false, mode: 0, angle: "90".into() })))
+                Sel::Feature(d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support, face: face.unwrap_or([0.; 3]), length: s("20"), radius: None, flip: false, keep_base: false, mode: 0, angle: "90".into(), limites: Default::default() })))
             }
             Cmd::SmCurveFlange | Cmd::SmCornerRelief | Cmd::SmCornerClose | Cmd::SmArcSlot => {
                 if d.sheet.is_none() {

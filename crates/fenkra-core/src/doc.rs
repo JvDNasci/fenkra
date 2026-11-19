@@ -2691,6 +2691,47 @@ pub struct SmSurfFlange {
     /// ângulo da aba no modo 2 (graus, a partir da web)
     #[serde(default)]
     pub angle: String,
+    /// B556: limites dos lados, da borda final e tratamento dos cantos (tudo opcional)
+    #[serde(default, skip_serializing_if = "LimitesAba::vazio")]
+    pub limites: LimitesAba,
+}
+
+/// B556: elemento que limita a aba por superfície. O comando sempre tenta estender, recortar e
+/// projetar o suporte até ele.
+#[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
+pub enum LimiteAba {
+    /// plano, face plana ou superfície (a aba para onde o elemento a corta)
+    Superficie(SurfRef),
+    /// curva, aresta, linha do 3D, linha ou curva de sketch ou elemento de construção (é projetada
+    /// no plano da web ou, na borda final, estendida normal à aba)
+    Curva(CurveRef),
+}
+
+/// B556: tratamento do canto de uma ponta da aba: nada, filete (raio) ou chanfro (distância).
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub enum CantoAba {
+    #[default]
+    Nenhum,
+    Filete(String),
+    Chanfro(String),
+}
+
+/// B556: limites e cantos da aba por superfície. `lado1` e `lado2` são as duas pontas da aba ao
+/// longo da linha de dobra (o lado 1 é a ponta de menor coordenada, na ordem X, Y, Z); `ponta`
+/// limita a borda final (a aresta livre da aba).
+#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
+pub struct LimitesAba {
+    pub lado1: Option<LimiteAba>,
+    pub lado2: Option<LimiteAba>,
+    pub ponta: Option<LimiteAba>,
+    pub canto1: CantoAba,
+    pub canto2: CantoAba,
+}
+
+impl LimitesAba {
+    pub fn vazio(&self) -> bool {
+        *self == LimitesAba::default()
+    }
 }
 
 /// Fechamento de canto (B293): fecha o vão que fica no canto entre duas abas de 90° da mesma
