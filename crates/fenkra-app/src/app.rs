@@ -53,6 +53,8 @@ mod paineis_flutuam_testes;
 mod abas_r3_testes;
 #[cfg(test)]
 mod vazios_r4_testes;
+#[cfg(test)]
+mod forma_espessada_testes;
 mod lote;
 mod plm;
 pub(crate) use plm::medidas_do_resultado;
@@ -3205,6 +3207,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let snapshot = snapshot.unwrap_or_else(|| self.open.doc.clone());
         let corpos_antes = crate::previa::corpos_base(self.result.as_ref());
         self.session = Some(Session { id, snapshot, is_new, corpos_antes, ultima_valida: vec![] });
+        // B537: forma convertida abre na gaiola (o retrato de antes fica no snapshot, para o Cancelar)
+        crate::forma_ui::ao_abrir(self, id);
         // rosca modelada aberta para edição: refaz já na versão leve (só linhas), sem esperar a primeira alteração
         if self.open.doc.feature(id).is_some_and(|f| fenkra_solidos::rosca_furo::modelada(&f.kind) || fenkra_solidos::previa_leve::cobre(&f.kind)) {
             self.request_recompute();
