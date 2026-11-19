@@ -57,6 +57,30 @@ pub fn painel_converte(ui: &mut egui::Ui, doc: &Document, me: Id, c: &mut SmConv
     // B516: a face fixa pelo nome (dono e papel), guardado no comando
     let nome = doc.feature(me).map_or_else(|| crate::app::p3(c.face, 1), |f| crate::ref_nome::campo_ancora(doc, f, "face", c.face));
     ui.label(RichText::new(if c.face == [0.; 3] { tr("Face fixa: nenhuma (clique numa face plana da chapa para escolher)").to_string() } else { format!("{nome} — {}", tr("clique outra face para trocar")) }).small()).on_hover_text(crate::ref_nome::dica_face());
+    // B522: sólido maciço (um cubo, por exemplo): espessura da chapa e faces a abrir
+    if check(ui, &mut c.solido, "sólido maciço: esvaziar em chapa").changed() && c.solido && c.thickness.trim().is_empty() {
+        c.thickness = "2".into();
+    }
+    if c.solido {
+        expr_lim(ui, "Espessura da chapa", &mut c.thickness, vars, "mm", Some((0.01, f64::INFINITY)));
+        ui.label(RichText::new(tr("Clique no 3D nas faces a abrir (ao menos uma). A face fixa padrão é a maior face; clique numa face plana com o modo desligado para trocar.")).weak().small());
+        let mut tirar = None;
+        for (i, p) in c.open_faces.iter().enumerate() {
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(format!("{} {} — {}", tr("Face aberta"), i + 1, crate::app::p3(*p, 1))).small());
+                if ui.small_button("✕").on_hover_text(tr("Remover esta face aberta")).clicked() {
+                    tirar = Some(i);
+                }
+            });
+        }
+        if let Some(i) = tirar {
+            c.open_faces.remove(i);
+        }
+        if c.open_faces.is_empty() {
+            ui.label(RichText::new(tr("Falta escolher a face a abrir: sem ela o sólido não vira chapa.")).small().color(crate::theme::st_err()));
+        }
+        return;
+    }
     // vazio mede a espessura do corpo; com valor, o comando confere que o corpo tem essa espessura
     let mut medir = c.thickness.trim().is_empty();
     if check(ui, &mut medir, "medir a espessura do corpo").changed() {

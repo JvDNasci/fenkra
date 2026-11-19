@@ -160,7 +160,7 @@ fn chapa_converte_caixa_aberta_e_planifica() {
     }
     let mut d = caixa_aberta();
     // a face fixa: o fundo, clicado por fora
-    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [50., 25., 0.], thickness: String::new() }));
+    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [50., 25., 0.], thickness: String::new(), open_faces: vec![], solido: false }));
     let r = recompute(&d);
     match &r.status[&id] {
         Status::Warning(m) => assert!(m.contains("4 aresta(s) viva(s)") && m.contains("4 canto(s)") && m.contains("4 dobra(s) no mapa"), "{m}"),

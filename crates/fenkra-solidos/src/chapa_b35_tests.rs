@@ -307,7 +307,7 @@ fn converte_reconhece_espessura_e_dobras_de_uma_chapa_dobrada() {
     let mut d = placa();
     aba(&mut d, [100., 25., 2.]);
     aba(&mut d, [0., 25., 2.]);
-    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: String::new() }));
+    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: String::new(), open_faces: vec![], solido: false }));
     let a = chapa_converte::analisar_corpo(&d, id).unwrap();
     assert!((a.espessura - 2.).abs() < 1e-3, "espessura {}", a.espessura);
     assert_eq!(a.dobras.len(), 2, "{:?}", a.dobras);
@@ -337,7 +337,7 @@ fn converte_chapa_plana_sem_dobras() {
         return;
     }
     let mut d = placa();
-    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [50., 25., 2.], thickness: s("2") }));
+    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [50., 25., 2.], thickness: s("2"), open_faces: vec![], solido: false }));
     let a = chapa_converte::analisar_corpo(&d, id).unwrap();
     assert_eq!(a.dobras.len(), 0);
     assert!(a.resumo().contains("chapa plana"));
@@ -350,15 +350,15 @@ fn converte_recusa_bloco_maciço_e_espessura_errada() {
         return;
     }
     let mut d = bloco();
-    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: String::new() }));
+    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: String::new(), open_faces: vec![], solido: false }));
     assert!(erro(&d, id).contains("espessura não é constante"), "{}", erro(&d, id));
     // espessura pedida diferente da medida
     let mut d = placa();
-    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: s("3") }));
+    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: s("3"), open_faces: vec![], solido: false }));
     assert!(erro(&d, id).contains("pedidos"));
     // face fixa que não é da chapa
     let mut d = placa();
-    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [100., 25., 1.], thickness: String::new() }));
+    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [100., 25., 1.], thickness: String::new(), open_faces: vec![], solido: false }));
     assert!(erro(&d, id).contains("face fixa"));
 }
 
@@ -369,7 +369,7 @@ fn converte_libera_os_comandos_de_chapa_sobre_o_corpo() {
     }
     // um corpo convertido recebe uma aba depois, como qualquer chapa
     let mut d = placa();
-    d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: String::new() }));
+    d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: String::new(), open_faces: vec![], solido: false }));
     aba(&mut d, [100., 25., 2.]);
     let m = mede(&d);
     assert!(perto(m.volume, 10000. + volume_dobrada(50.), 1e-3));
@@ -427,7 +427,7 @@ fn converter_cria_o_mapa_de_dobras_e_planifica_o_corpo() {
         return;
     }
     let mut d = canal_u();
-    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: s("2") }));
+    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: s("2"), open_faces: vec![], solido: false }));
     let r = recompute(&d);
     let aviso = match &r.status[&id] {
         Status::Warning(m) => m.clone(),
@@ -480,7 +480,7 @@ fn converter_com_face_fixa_numa_aba_planifica_igual() {
     }
     let mut d = canal_u();
     // face externa da aba esquerda (x = 0, no meio da altura reta)
-    d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0., 12., 25.], thickness: String::new() }));
+    d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0., 12., 25.], thickness: String::new(), open_faces: vec![], solido: false }));
     let mut plana = d.clone();
     plana.sheet.as_mut().unwrap().flat = true;
     let ba = chapa::compensacao(2., 2., 90., 0.44).ba;
@@ -498,7 +498,7 @@ fn converter_chapa_plana_planifica_sem_mapa() {
         return;
     }
     let mut d = placa();
-    d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: String::new() }));
+    d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: String::new(), open_faces: vec![], solido: false }));
     d.sheet.as_mut().unwrap().flat = true;
     let (_, _, v) = extensao(&d);
     assert!(perto(v, 10000., 1e-6));

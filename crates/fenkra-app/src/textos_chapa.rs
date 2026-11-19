@@ -91,6 +91,13 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("face fixa em", "fixed face at"),
     ("clique outra face para trocar", "click another face to replace"),
     ("Espessura esperada", "Expected thickness"),
+    // B522: converter sólido maciço em chapa
+    ("sólido maciço: esvaziar em chapa", "solid body: hollow out into sheet metal"),
+    ("Espessura da chapa", "Sheet thickness"),
+    ("Clique no 3D nas faces a abrir (ao menos uma). A face fixa padrão é a maior face; clique numa face plana com o modo desligado para trocar.", "Click the faces to open in 3D (at least one). The default fixed face is the largest face; click a flat face with the mode off to change it."),
+    ("Face aberta", "Open face"),
+    ("Remover esta face aberta", "Remove this open face"),
+    ("Falta escolher a face a abrir: sem ela o sólido não vira chapa.", "Pick the face to open: without it the solid cannot become sheet metal."),
     ("medir a espessura do corpo", "measure the body thickness"),
     ("Medir o corpo", "Measure the body"),
     ("Reconhece a espessura e as dobras do corpo antes deste comando.", "Recognizes the thickness and the bends of the body before this command."),

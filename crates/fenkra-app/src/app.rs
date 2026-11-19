@@ -812,7 +812,7 @@ impl App {
                 "converter" => {
                     d.features.truncate(2);
                     d.add_feature(FeatureKind::SmFlange(SmFlange { edge: [100., 30., 2.], length: s("25"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
-                    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [50., 30., 2.], thickness: String::new() }));
+                    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [50., 30., 2.], thickness: String::new(), open_faces: vec![], solido: false }));
                     d.feature_mut(id).map(|f| f.name = "ConverterEmChapa".into());
                 }
                 // converter em chapa sobre um canal de fora, sem comando de chapa (B35): o mapa de
@@ -2693,7 +2693,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SmLoftFlange => FeatureKind::SmLoftFlange(SmLoftFlange { a: crate::slots::UNSET_SKETCH, b: crate::slots::UNSET_SKETCH, ruled: true, flip: false }),
                     Cmd::SmUnfoldPartial(refold) => FeatureKind::SmUnfoldPartial(SmUnfoldPartial { features: vec![], refold }),
-                    _ => FeatureKind::SmConvert(SmConvert { face: face.unwrap_or([0.; 3]), thickness: String::new() }),
+                    _ => FeatureKind::SmConvert(SmConvert { face: face.unwrap_or([0.; 3]), thickness: String::new(), open_faces: vec![], solido: false }),
                 }))
             }
             Cmd::SmWall | Cmd::SmStamp | Cmd::SmFlangedHole | Cmd::SmCut | Cmd::SmProfileFlange => {
