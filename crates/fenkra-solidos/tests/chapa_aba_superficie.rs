@@ -128,6 +128,7 @@ fn placa_com_spline(y0: f64, y1: f64, amp: f64) -> (Document, Id) {
 fn confere_b529(nome: &str, d: &Document, aba: Id, x_max: f64) {
     let r = recalcula(d, false);
     assert_eq!(r.status[&aba], Status::Ok, "{nome}: {:?}", r.status[&aba]);
+    assert!(r.bodies.iter().all(|b| !b.mesh.positions.is_empty() && b.mass.volume > 1000.), "{nome}: corpo vazio com status Ok");
     let (lo, hi) = caixa_da_malha(&r);
     assert!(lo[0].abs() < 0.1, "{nome}: {lo:?}");
     assert!(hi[0] < x_max, "{nome}: a base não foi relimitada pelo suporte ({hi:?} >= {x_max})");

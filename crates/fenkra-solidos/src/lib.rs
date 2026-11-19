@@ -4237,22 +4237,23 @@ impl Ctx<'_> {
         let it = [ie[0] + up[0] * len, ie[1] + up[1] * len];
         let ot = [oe[0] + up[0] * len, oe[1] + up[1] * len];
         let arc3 = |v: &[[f64; 2]]| fenkra_kernel::Seg2::Arc(v[0], v[v.len() / 2], v[v.len() - 1]);
-        // a seção entra 0,05 mm na chapa: a fusão encontra volume comum (sem faces coincidentes)
-        let e0 = 0.05;
+        // a seção entra na chapa (0,05 mm; mais se a fusão falhar): a fusão encontra volume comum
+        // (sem faces coincidentes). Trecho que já é chapa não muda o resultado.
         let ob = outer_arc[outer_arc.len() - 1];
         let ib = inner_arc[0];
-        let (ob2, ib2) = ([ob[0] - e0, ob[1]], [ib[0] - e0, ib[1]]);
-        let lp = vec![
-            arc3(&inner_arc),
-            fenkra_kernel::Seg2::Line(ie, it),
-            fenkra_kernel::Seg2::Line(it, ot),
-            fenkra_kernel::Seg2::Line(ot, oe),
-            arc3(&outer_arc),
-            fenkra_kernel::Seg2::Line(ob, ob2),
-            fenkra_kernel::Seg2::Line(ob2, ib2),
-            fenkra_kernel::Seg2::Line(ib2, ib),
-        ];
-        let face = Shape::face(&fr, &[lp]).map_err(k)?;
+        let secao = |e0: f64| {
+            let (ob2, ib2) = ([ob[0] - e0, ob[1]], [ib[0] - e0, ib[1]]);
+            vec![
+                arc3(&inner_arc),
+                fenkra_kernel::Seg2::Line(ie, it),
+                fenkra_kernel::Seg2::Line(it, ot),
+                fenkra_kernel::Seg2::Line(ot, oe),
+                arc3(&outer_arc),
+                fenkra_kernel::Seg2::Line(ob, ob2),
+                fenkra_kernel::Seg2::Line(ob2, ib2),
+                fenkra_kernel::Seg2::Line(ib2, ib),
+            ]
+        };
         // cadeia reta: extrusão da seção (a varredura de Frenet numa reta sai inválida)
         let first = inner[0];
         let last = inner[inner.len() - 1];
@@ -4263,7 +4264,35 @@ impl Ctx<'_> {
                 geo3d::norm(geo3d::sub(q, geo3d::mul(e, geo3d::dot(q, e)))) < 1e-3
             })
         });
-        let tool = if straight { face.extrude(geo3d::unit(axis).unwrap_or([1., 0., 0.]), geo3d::norm(axis), 0.).map_err(k)? } else { face.sm_chain_sweep(&inner, n).map_err(k)? };
+        let base_vol = self.body(f.target).map(|x| x.mass().volume).unwrap_or(0.);
+        // B529: a fusão da varredura com a base pode falhar sem erro (volume vazio ou de um lado só)
+        // com cadeia curva e a seção entrando só 0,05 mm: confere o volume da fusão e repete com a
+        // seção entrando mais. Se nenhuma fechar, é erro explícito (nunca corpo vazio com status Ok).
+        let mut tool = None;
+        let mut ultimo = String::from("a aba não pôde ser unida à chapa");
+        for (e0, dec) in [(0.05, 1usize), (0.3, 1), (0.3, 4), (0.5, 8)] {
+            // pontos muito próximos (amostragem densa de uma spline) fazem a varredura ondular
+            let mut ch: Vec<V3> = inner.iter().step_by(dec).copied().collect();
+            if dec > 1 && ch.last() != inner.last() {
+                ch.push(inner[inner.len() - 1]);
+            }
+            let face = Shape::face(&fr, &[secao(e0)]).map_err(k)?;
+            let t = if straight { face.extrude(geo3d::unit(axis).unwrap_or([1., 0., 0.]), geo3d::norm(axis), 0.).map_err(k)? } else { face.sm_chain_sweep(&ch, n).map_err(k)? };
+            let tv = t.mass().volume;
+            match self.body(f.target).map(|x| x.boolean(&t, Bool::Fuse)) {
+                None => {
+                    tool = Some(t);
+                    break;
+                }
+                Some(Ok(s)) if tv > 1e-6 && s.is_valid() && s.mass().volume > base_vol + 0.5 * tv => {
+                    tool = Some(t);
+                    break;
+                }
+                Some(Ok(s)) => ultimo = format!("a união da aba com a chapa saiu inválida ou vazia (volume {:.1}, chapa {:.1}, aba {:.1})", s.mass().volume, base_vol, tv),
+                Some(Err(e)) => ultimo = e.0,
+            }
+        }
+        let tool = tool.ok_or(ultimo)?;
         self.apply(f.target, tool, BoolOp::Add, f.id)?;
         self.marca_cadeia(f.id, &inner, &outs, ang, r, sobe, &cmp, false);
         Ok(None)

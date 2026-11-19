@@ -211,9 +211,12 @@ std::unique_ptr<Shape> sm_chain_sweep(const Shape& face, rust::Slice<const doubl
         ps.SetMode(gp_Dir(nx, ny, nz));
         ps.SetTransitionMode(BRepBuilderAPI_RoundCorner);
         // paredes retas de uma cadeia fechada saíam com 0,5 mm de ondulação com a tolerância padrão
-        ps.SetTolerance(1e-6, 1e-6, 1e-4);
-        ps.SetMaxDegree(8);
-        ps.SetMaxSegments(300);
+        // (só na cadeia fechada: numa spline aberta a tolerância apertada fazia a varredura falhar, B529)
+        if (p.front().Distance(p.back()) < 1e-6) {
+            ps.SetTolerance(1e-6, 1e-6, 1e-4);
+            ps.SetMaxDegree(8);
+            ps.SetMaxSegments(300);
+        }
         TopoDS_Wire prof;
         for (TopExp_Explorer ex(face.s, TopAbs_WIRE); ex.More(); ex.Next()) prof = TopoDS::Wire(ex.Current());
         if (prof.IsNull()) throw std::runtime_error("seção da aba sem contorno");
