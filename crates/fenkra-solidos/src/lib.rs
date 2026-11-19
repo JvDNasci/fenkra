@@ -3997,9 +3997,48 @@ impl Ctx<'_> {
         Ok((Shape::face(frame, &loops).map_err(k)?, warn))
     }
 
+    /// B529: ferramenta de corte do lado da base que sai pela linha de dobra de uma aba por
+    /// superfície. A OML (`oml`, no plano da base de normal `n`) é prolongada pelas tangentes das
+    /// pontas por `big / 2` (passa da placa mesmo que o suporte termine dentro dela) e fechada
+    /// pelo lado de fora (afastado de `ctr`) com duas retas paralelas, que nunca se cruzam.
+    /// A região vira prisma que atravessa a espessura nos dois sentidos.
+    fn ferramenta_lado_oml(oml: &[V3], n: V3, ctr: V3, big: f64, t: f64) -> Result<Shape, String> {
+        let k = |e: KernelError| e.0;
+        let mut p: Vec<V3> = oml.to_vec();
+        p.dedup_by(|a, b| geo3d::dist(*a, *b) < 1e-6);
+        if p.len() < 2 {
+            return Err("linha de dobra curta demais".into());
+        }
+        let m = (p.len() / 10).max(1).min(p.len() - 1);
+        let ts = geo3d::unit(geo3d::sub(p[0], p[m])).ok_or("linha de dobra nula")?;
+        let te = geo3d::unit(geo3d::sub(p[p.len() - 1], p[p.len() - 1 - m])).ok_or("linha de dobra nula")?;
+        let ext = big / 2.;
+        let a = geo3d::add(p[0], geo3d::mul(ts, ext));
+        let z = geo3d::add(p[p.len() - 1], geo3d::mul(te, ext));
+        let mid = p[p.len() / 2];
+        let tm = geo3d::unit(geo3d::sub(p[(p.len() / 2 + 1).min(p.len() - 1)], p[(p.len() / 2).saturating_sub(1)])).ok_or("linha de dobra nula")?;
+        let mut o = geo3d::unit(fenkra_kernel::cross(tm, n)).ok_or("linha de dobra normal à base")?;
+        if geo3d::dot(o, geo3d::sub(mid, ctr)) < 0. {
+            o = geo3d::mul(o, -1.);
+        }
+        let fr = Frame { origin: p[0], x: tm, normal: n };
+        let y = fenkra_kernel::cross(n, tm);
+        let loc = |q: V3| {
+            let d = geo3d::sub(q, fr.origin);
+            [geo3d::dot(d, fr.x), geo3d::dot(d, y)]
+        };
+        let mut chain: Vec<[f64; 2]> = vec![loc(a)];
+        chain.extend(p.iter().map(|q| loc(*q)));
+        chain.push(loc(z));
+        let (zf, af) = (loc(geo3d::add(z, geo3d::mul(o, big))), loc(geo3d::add(a, geo3d::mul(o, big))));
+        let last = chain[chain.len() - 1];
+        let first = chain[0];
+        let lp = [chapa::chain_segs(&chain), vec![fenkra_kernel::Seg2::Line(last, zf), fenkra_kernel::Seg2::Line(zf, af), fenkra_kernel::Seg2::Line(af, first)]].concat();
+        Shape::face(&fr, &[lp]).map_err(k)?.extrude(n, t * 2. + 1., t * 2. + 1.).map_err(k)
+    }
+
     /// Aba ao longo de uma cadeia de pontos na borda da chapa: seção com o arco de dobra varrida
     /// pela cadeia (dobrado) ou a faixa desenvolvida (planificado). `want` força o lado da aba.
-    #[allow(clippy::too_many_arguments)]
     #[allow(clippy::too_many_arguments)]
     fn curve_flange(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, len: f64, flip: bool, want: Option<V3>, side: u8) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
@@ -5772,9 +5811,25 @@ impl Ctx<'_> {
                 // relimita a web pelo suporte (fica o lado com o grosso do material)
                 if !sf.keep_base {
                     let keep_pos = geo3d::dot(ns, geo3d::sub(ctr, mid)) > 0.;
-                    let trimmed = b.split_side(&support, keep_pos, true).map_err(k)?;
-                    if !trimmed.is_null() && trimmed.face_count() > 0 {
-                        self.bodies.insert(f.target, fresh_body(trimmed, f.id));
+                    // B529: o suporte só relimita a base se de fato atravessa a placa. Suporte finito
+                    // (arco curto, spline que termina dentro da placa) não divide: erro ou nada muda.
+                    // Nesse caso a linha de dobra (OML) é prolongada pelas tangentes das pontas até
+                    // passar da placa e vira a ferramenta de corte do lado que sai.
+                    let v0 = b.mass().volume;
+                    let cortou = match b.split_side(&support, keep_pos, true) {
+                        Ok(t) if !t.is_null() && t.face_count() > 0 && t.mass().volume < v0 - 1e-4 * v0.abs().max(1.) => Some(t),
+                        _ => None,
+                    };
+                    if let Some(t) = cortou {
+                        self.bodies.insert(f.target, fresh_body(t, f.id));
+                    } else {
+                        let tool = Self::ferramenta_lado_oml(&best, n, ctr, big, sp.t).map_err(|e| format!("não foi possível relimitar a base pelo suporte ({e})"))?;
+                        let antes = self.body(f.target).map(|x| x.mass().volume).unwrap_or(v0);
+                        self.apply(f.target, tool, BoolOp::Cut, f.id)?;
+                        let depois = self.body(f.target).map(|x| x.mass().volume).unwrap_or(antes);
+                        if depois >= antes - 1e-4 * antes.abs().max(1.) {
+                            return Err("o suporte não relimita a base: a linha de dobra não atravessa a placa".into());
+                        }
                     }
                 }
                 // ângulo da aba: direção do suporte (perpendicular à OML) em relação à web

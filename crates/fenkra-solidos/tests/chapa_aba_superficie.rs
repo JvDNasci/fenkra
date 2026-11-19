@@ -89,3 +89,92 @@ fn aba_por_superficie_entra_no_mapa_de_dobras() {
     assert!((linha.angle - 90.).abs() < 1e-9 && (linha.radius - 2.).abs() < 1e-9, "{linha:?}");
     assert!((linha.allowance - std::f64::consts::FRAC_PI_2 * (2. + 0.44 * 2.)).abs() < 1e-6, "{}", linha.allowance);
 }
+
+/// B529: placa de 100 × 80 e suporte em arco (cilindro de raio `raio`, eixo em Z, centro fora da
+/// placa em x = `cx`) que corta a placa perto da borda direita.
+fn placa_com_arco(raio: f64, cx: f64, ang0: f64, ang1: f64) -> (Document, Id) {
+    let mut d = Document::new("arco");
+    d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
+    let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [100., 80.]);
+    d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+    let pt = |a: f64| PointRef::Fixed([cx + raio * a.to_radians().cos(), 40. + raio * a.to_radians().sin(), 0.]);
+    let curva = d.add_geometry(RefKind::Circle3 { a: pt(ang0), b: pt((ang0 + ang1) / 2.), c: pt(ang1), full: false });
+    let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(curva), dir: AxisRef::Origin(OriginAxis::Z), length: s("60"), length2: s("0"), until: None, until2: None });
+    let aba = d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Ref(sup), face: [40., 40., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90") }));
+    (d, aba)
+}
+
+/// Placa de 100 × 80 e suporte em spline com y entre `y0` e `y1` (abaulado em torno de x = 80).
+fn placa_com_spline(y0: f64, y1: f64, amp: f64) -> (Document, Id) {
+    let mut d = Document::new("spline");
+    d.sheet = Some(SheetParams { thickness: s("2"), radius: s("2"), k: s("0.44"), flat: false, ..Default::default() });
+    let sk = sk_rect(&mut d, PlaneRef::Origin(OriginPlane::XY), [0., 0.], [100., 80.]);
+    d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+    let pts: Vec<PointRef> = (0..=10)
+        .map(|i| {
+            let y = y0 + (y1 - y0) * i as f64 / 10.;
+            PointRef::Fixed([80. + amp * (y / 80. * 2. * std::f64::consts::PI).sin(), y, 0.])
+        })
+        .collect();
+    let curva = d.add_geometry(RefKind::Spline { points: pts, closed: false, tangents: vec![] });
+    let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(curva), dir: AxisRef::Origin(OriginAxis::Z), length: s("60"), length2: s("0"), until: None, until2: None });
+    let aba = d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Ref(sup), face: [40., 40., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90") }));
+    (d, aba)
+}
+
+/// Confere o que o B529 pede: status Ok, base relimitada (nada além de `x_max`), dobra de verdade
+/// (a malha tem vértices na altura do arco, entre a face da chapa e o início da parede reta),
+/// altura da aba = comprimento + raio + espessura e planificação plana e Ok.
+fn confere_b529(nome: &str, d: &Document, aba: Id, x_max: f64) {
+    let r = recalcula(d, false);
+    assert_eq!(r.status[&aba], Status::Ok, "{nome}: {:?}", r.status[&aba]);
+    let (lo, hi) = caixa_da_malha(&r);
+    assert!(lo[0].abs() < 0.1, "{nome}: {lo:?}");
+    assert!(hi[0] < x_max, "{nome}: a base não foi relimitada pelo suporte ({hi:?} >= {x_max})");
+    assert!((hi[2] - 19.).abs() < 0.3, "{nome}: altura da aba {} (15 + raio 2 + espessura 2)", hi[2]);
+    let dobra = r.bodies.iter().flat_map(|b| b.mesh.positions.chunks_exact(3)).any(|p| p[2] > 2.6 && p[2] < 3.8 && p[0] > 60.);
+    assert!(dobra, "{nome}: sem a face da dobra (raio) entre a base e a parede");
+    let plana = recalcula(d, true);
+    assert_eq!(plana.status[&aba], Status::Ok, "{nome} plana: {:?}", plana.status[&aba]);
+    let (_, hip) = caixa_da_malha(&plana);
+    assert!(hip[2] < 2.1, "{nome}: planificada fica plana {}", hip[2]);
+    assert!(volume_total(&plana) > 14000., "{nome}: volume planificado {}", volume_total(&plana));
+}
+
+/// B529: suporte em arco que atravessa a placa de ponta a ponta (a divisão exata relimita a base).
+#[test]
+fn b529_arco_que_atravessa_relimita_a_base_e_dobra() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let (d, aba) = placa_com_arco(115., 200., 150., 210.);
+    confere_b529("arco passante", &d, aba, 97.);
+}
+
+/// B529: suporte em arco finito que termina dentro da placa (não atravessa): a linha de dobra é
+/// prolongada e a base é cortada mesmo assim, antes ficava inteira.
+#[test]
+fn b529_arco_curto_relimita_a_base_e_dobra() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let (d, aba) = placa_com_arco(115., 200., 165., 195.);
+    confere_b529("arco curto", &d, aba, 94.);
+    // arco de raio 40 com o centro fora da placa: o lado do centro sai, os cantos ficam
+    let (d, aba) = placa_com_arco(40., 125., 150., 210.);
+    let r = recalcula(&d, false);
+    assert_eq!(r.status[&aba], Status::Ok, "{:?}", r.status[&aba]);
+    assert!(volume_total(&r) < 16500., "o lado cortado saiu: {}", volume_total(&r));
+}
+
+/// B529: suporte em spline de curvatura variável, atravessando e terminando dentro da placa.
+#[test]
+fn b529_spline_relimita_a_base_e_dobra() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let (d, aba) = placa_com_spline(-10., 90., 3.);
+    confere_b529("spline passante", &d, aba, 90.);
+    let (d, aba) = placa_com_spline(15., 65., 3.);
+    confere_b529("spline curta", &d, aba, 90.);
+}
