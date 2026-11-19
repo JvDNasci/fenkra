@@ -2374,9 +2374,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         }
                     }
                 }
-                Pick::Face { body, .. } if body >= crate::picking::SURF_BASE => {
+                Pick::Face { body, point, normal, .. } if body >= crate::picking::SURF_BASE => {
                     if let Some(id) = self.result.as_ref().and_then(|r| crate::picking::surface_of(r, body)) {
                         s.surface = Some(SurfRef::Ref(id));
+                        // B534: a face clicada, para a extração (dona = a superfície, chave = o índice)
+                        s.face_sup = Some(SurfRef::Face { point: point.map(|v| v as f64), normal: normal.map(|v| v as f64), owner: Some(id), key: self.face_key_of(Some(p)) });
                     }
                 }
                 Pick::Face { point, normal, owner, .. } => {
@@ -6699,20 +6701,32 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         use crate::picking::Pick;
         // o resultado sai emprestado durante a coleta e volta logo depois
         let Some(r) = self.result.take() else { return };
-        let (mut edges, mut faces, mut made): (Vec<Vec<CurveRef>>, Vec<Vec<[f64; 3]>>, Vec<Id>) = (vec![], vec![], vec![]);
+        let (mut edges, mut faces, mut made): (Vec<Vec<CurveRef>>, Vec<Vec<([f64; 3], Option<FaceKey>)>>, Vec<Id>) = (vec![], vec![], vec![]);
+        // chave v2 da face (ADR 0010): de corpo, ou de superfície de referência e forma livre (B534)
+        let chave = |body: usize, f: usize| {
+            if body >= crate::picking::SURF_BASE {
+                r.surfaces.get(body - crate::picking::SURF_BASE).and_then(|s| s.face_key(f))
+            } else {
+                r.bodies.get(body).and_then(|b| b.face_key(f))
+            }
+        };
         let mut seen_e: Vec<(usize, usize)> = vec![];
         let mut seen_f: Vec<(usize, usize)> = vec![];
         let mut seen_sk: Vec<CurveRef> = vec![];
         for p in self.picks.clone() {
             match p {
                 Pick::Face { body, face, point, owner, .. } => {
-                    // face de corpo: a propagação fica gravada e o recálculo a refaz
-                    if !o.multi && body < crate::picking::SURF_BASE {
-                        gravadas.push((point.map(|v| v as f64), owner, r.bodies.get(body).and_then(|b| b.face_key(face))));
-                        continue;
+                    // a propagação fica gravada e o recálculo a refaz; a face vai por dono e papel. Na
+                    // superfície (de referência ou forma livre) a dona é ela e o papel, o índice (B534)
+                    if !o.multi {
+                        let dono = if body >= crate::picking::SURF_BASE { crate::picking::surface_of(&r, body) } else { Some(owner) };
+                        if let Some(dono) = dono {
+                            gravadas.push((point.map(|v| v as f64), dono, chave(body, face)));
+                            continue;
+                        }
                     }
                     let Some(m) = crate::picking::mesh_of(&r, body) else { continue };
-                    let set: Vec<[f64; 3]> = face_set(m, face, o.prop)
+                    let set: Vec<([f64; 3], Option<FaceKey>)> = face_set(m, face, o.prop)
                         .into_iter()
                         .filter(|f| {
                             let new = !seen_f.contains(&(body, *f));
@@ -6721,7 +6735,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                             }
                             new
                         })
-                        .filter_map(|f| face_point(m, f))
+                        .filter_map(|f| face_point(m, f).map(|p| (p, chave(body, f))))
                         .collect();
                     if !set.is_empty() {
                         faces.push(set);
@@ -6806,7 +6820,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             if !all_e.is_empty() {
                 edges.push(all_e);
             }
-            let all_f: Vec<[f64; 3]> = faces.drain(..).flatten().collect();
+            let all_f: Vec<([f64; 3], Option<FaceKey>)> = faces.drain(..).flatten().collect();
             if !all_f.is_empty() {
                 faces.push(all_f);
             }
@@ -6820,7 +6834,13 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             });
         }
         for set in faces {
-            made.push(if set.len() == 1 { d.add_geometry(RefKind::SurfExtract { face: set[0], owner: None, prop: Propagation::Nenhuma, complement: false, expected: None, key: None }) } else { d.add_geometry(RefKind::SurfMulti { faces: set, keys: vec![] }) });
+            made.push(if set.len() == 1 {
+                let (face, key) = set[0];
+                d.add_geometry(RefKind::SurfExtract { face, owner: key.map(|k| k.owner), prop: Propagation::Nenhuma, complement: false, expected: None, key })
+            } else {
+                let (faces, keys) = set.into_iter().unzip();
+                d.add_geometry(RefKind::SurfMulti { faces, keys })
+            });
         }
         for (face, owner, key) in gravadas {
             made.push(d.add_geometry(RefKind::SurfExtract { face, owner: Some(owner), prop: o.prop.gravada(), complement: false, expected: None, key }));

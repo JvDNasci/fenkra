@@ -20,6 +20,9 @@ pub struct Seed {
     pub apoios: Vec<(CurveRef, SurfRef)>,
     /// B466: curvas dos sketches e arestas dos corpos, para a lista ▾ dos campos de curva
     pub modelo: std::sync::Arc<Vec<(String, CurveRef)>>,
+    /// B534: face clicada numa superfície (de referência ou forma livre), com a superfície como dona e a
+    /// chave do índice. `surface` fica com a superfície inteira (deslocar, aparar...); a extração quer a face
+    pub face_sup: Option<SurfRef>,
 }
 
 /// B466/B514: o campo ativo (o que recebe o próximo clique no 3D) vem de `campos`: ao abrir, o
@@ -450,10 +453,10 @@ impl GeoKind {
             SplineControl => R::SplineControl { points: pts(4), closed: false },
             CurveCopy => R::CurveCopy { curve: c(0) },
             CurveJoin => R::CurveJoin { curves: if s.curves.len() >= 2 { s.curves.clone() } else { vec![c(0), c(1)] } },
-            SurfExtract => R::SurfExtract { prop: Propagation::Nenhuma, complement: false, expected: None, key: if let Some(SurfRef::Face { key, .. }) = s.surface { key } else { None }, face: face_pt(s), owner: match s.surface {
-                Some(SurfRef::Face { owner, .. }) => owner,
-                _ => None,
-            } },
+            SurfExtract => match face_da_extracao(s) {
+                Some(SurfRef::Face { point, owner, key, .. }) => R::SurfExtract { face: point, owner, prop: Propagation::Nenhuma, complement: false, expected: None, key },
+                _ => R::SurfExtract { face: face_pt(s), owner: None, prop: Propagation::Nenhuma, complement: false, expected: None, key: None },
+            },
             SurfOffset => R::SurfOffset { surface: sf, dist: t("2"), both: false, join: OffsetJoin::Automatico },
             SurfConnect => {
                 let mut k = R::SurfConnect { a: sf, b: crate::slots::surf(), cont: Continuity::G1, tension: t("1"), tension2: None, near: [None; 2] };
@@ -528,6 +531,14 @@ fn source_of(s: &Seed) -> (Id, RefClass) {
         return (*id, RefClass::Plane);
     }
     (Id(u64::MAX), RefClass::Surface)
+}
+
+/// B534: face que a extração usa: a de corpo clicada, ou a de superfície (referência ou forma livre).
+pub(crate) fn face_da_extracao(s: &Seed) -> Option<SurfRef> {
+    match s.surface {
+        Some(f @ SurfRef::Face { .. }) => Some(f),
+        _ => s.face_sup,
+    }
 }
 
 /// Ponto clicado numa face (para eixo de face e superfície extraída).
@@ -1725,13 +1736,16 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             curve_slot(ui, "g_b", "Linha 2", doc, me, b, seed);
             expr(ui, "Comprimento", length, vars, "mm");
         }
-        R::SurfExtract { face, prop, complement, expected, key, .. } => {
+        R::SurfExtract { face, owner, prop, complement, expected, key } => {
             // B516: a face pelo nome (dono e papel), não pela coordenada
             ui.label(RichText::new(crate::ref_nome::campo_face(doc, key.as_ref(), *face)).small()).on_hover_text(crate::ref_nome::dica_face());
-            if let Some(SurfRef::Face { point, key: k, .. }) = seed.surface {
+            // B534: a face pode ser de corpo, de superfície de referência ou de forma livre; o dono vai
+            // junto, e a chave faz a extração seguir a face quando o recurso de origem muda
+            if let Some(SurfRef::Face { point, owner: o, key: k, .. }) = face_da_extracao(seed) {
                 if ui.button(tr("⊙ Usar a face selecionada")).clicked() {
                     *face = point;
                     *key = k;
+                    *owner = o;
                     *expected = None;
                 }
             }
