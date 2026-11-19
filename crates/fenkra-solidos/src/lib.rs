@@ -103,6 +103,7 @@ pub mod previa_leve;
 pub mod chapa_animacao;
 pub mod chapa_linha;
 mod chapa_dobra_curva;
+mod chapa_aba_limites;
 pub mod chapa_cega;
 pub mod chapa_cone;
 #[cfg(test)]
@@ -4132,6 +4133,14 @@ impl Ctx<'_> {
     /// pela cadeia (dobrado) ou a faixa desenvolvida (planificado). `want` força o lado da aba.
     #[allow(clippy::too_many_arguments)]
     fn curve_flange(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, len: f64, flip: bool, want: Option<V3>, side: u8) -> Result<Option<String>, String> {
+        self.curve_flange_lim(f, pts, ang, r, len, flip, want, side, &chapa_aba_limites::AbaLim::default())
+    }
+
+    /// `curve_flange` com os recortes e cantos da aba por superfície (B556): a ferramenta da aba é
+    /// recortada pelo limite da borda final e ganha os cantos antes de se unir à chapa. A ponta 1 é
+    /// o começo de `pts`; a ponta 2, o fim.
+    #[allow(clippy::too_many_arguments)]
+    fn curve_flange_lim(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, len: f64, flip: bool, want: Option<V3>, side: u8, lim: &chapa_aba_limites::AbaLim) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
         let sp = self.sheet()?;
         if !(1.0..=179.0).contains(&ang) {
@@ -4211,7 +4220,11 @@ impl Ctx<'_> {
             q2.reverse();
             let lp = [chapa::chain_segs(&p2), vec![fenkra_kernel::Seg2::Line(p2[p2.len() - 1], q2[0])], chapa::chain_segs(&q2), vec![fenkra_kernel::Seg2::Line(q2[q2.len() - 1], p2[0])]].concat();
             let face = Shape::face(&fr, &[lp]).map_err(k)?;
-            let tool = face.extrude(geo3d::mul(d, -1.), sp.t, 0.).map_err(k)?;
+            let mut tool = face.extrude(geo3d::mul(d, -1.), sp.t, 0.).map_err(k)?;
+            if lim.cantos.iter().any(|c| c.is_some()) {
+                let n_ = inner.len() - 1;
+                tool = self.aba_cantos_planos(tool, lim, [(inner[0], outs[0]), (inner[n_], outs[n_])], dev, d, sp.t)?;
+            }
             self.apply(f.target, tool, BoolOp::Add, f.id)?;
             self.marca_cadeia(f.id, &inner, &outs, ang, r, sobe, &cmp, true);
             return Ok(None);
@@ -4280,6 +4293,20 @@ impl Ctx<'_> {
             }
             let face = Shape::face(&fr, &[secao(e0)]).map_err(k)?;
             let t = if straight { face.extrude(geo3d::unit(axis).unwrap_or([1., 0., 0.]), geo3d::norm(axis), 0.).map_err(k)? } else { face.sm_chain_sweep(&ch, n).map_err(k)? };
+            let t = if lim.ponta.is_some() || !lim.lados.is_empty() || lim.cantos.iter().any(|c| c.is_some()) {
+                let (n_, tg0, tg1) = (inner.len() - 1, tan(0), tan(inner.len() - 1));
+                let geo = chapa_aba_limites::CantoGeo {
+                    pontas: [(inner[0], outs[0], tg0), (inner[n_], outs[n_], geo3d::mul(tg1, -1.))],
+                    d,
+                    sv,
+                    meio: [(ie[0] + oe[0]) / 2., (ie[1] + oe[1]) / 2.],
+                    sobe: up,
+                    espessura: sp.t,
+                };
+                self.aba_pos_ferramenta(t, lim, &geo)?
+            } else {
+                t
+            };
             let tv = t.mass().volume;
             match self.body(f.target).map(|x| x.boolean(&t, Bool::Fuse)) {
                 None => {
@@ -5982,6 +6009,24 @@ impl Ctx<'_> {
                 } else {
                     geo3d::dot(u, d).atan2(geo3d::dot(u, out)).to_degrees()
                 };
+                // B556: limites dos lados 1 e 2 (a OML é estendida, aparada e projetada até eles)
+                let lm = &sf.limites;
+                let mut best = best;
+                let mut lim = chapa_aba_limites::AbaLim::default();
+                if lm.lado1.is_some() || lm.lado2.is_some() {
+                    chapa_aba_limites::orienta_oml(&mut best);
+                    let no_plano = |l: &Option<LimiteAba>| -> Result<Option<Vec<Vec<V3>>>, String> { l.as_ref().map(|l| self.aba_limite_no_plano(l, on, n, big)).transpose() };
+                    let (l1, l2) = (no_plano(&lm.lado1)?, no_plano(&lm.lado2)?);
+                    let margem = 2. * (len + 2. * (r + sp.t)) + 1.;
+                    let (apar, raiz) = chapa_aba_limites::aparar_oml(&best, on, n, l1.as_deref(), l2.as_deref(), big, margem)?;
+                    best = apar;
+                    // a varredura passa do limite e é cortada nele: o fim da aba segue o limite, oblíquo ou não
+                    for l in [&lm.lado1, &lm.lado2].into_iter().flatten() {
+                        lim.lados.push((self.aba_cortador_ponta(l, n, big)?, raiz));
+                    }
+                } else if lm.canto1 != CantoAba::Nenhum || lm.canto2 != CantoAba::Nenhum {
+                    chapa_aba_limites::orienta_oml(&mut best);
+                }
                 // a OML fica na face e só onde há web (depois de relimitar)
                 let web = self.body(f.target).cloned().unwrap_or(b);
                 let pts: Vec<V3> = best
@@ -5990,9 +6035,49 @@ impl Ctx<'_> {
                     .filter(|q| web.surface_near(*q).map(|(p, _)| geo3d::dist(p, *q) < 0.05).unwrap_or(false))
                     .collect();
                 if pts.len() < 2 {
-                    return Err("o suporte não encontra a borda da web".into());
+                    return Err(if lm.lado1.is_some() || lm.lado2.is_some() { "os limites dos lados não deixam trecho da aba sobre a web".into() } else { "o suporte não encontra a borda da web".to_string() });
                 }
-                self.curve_flange(f, pts, ang, r, len, sf.flip, Some(d), 0)
+                // B556: borda final limitada e cantos
+                let mut len = len;
+                if let Some(pl) = &lm.ponta {
+                    let ma = pts[pts.len() / 2];
+                    let ta = geo3d::unit(geo3d::sub(pts[(pts.len() / 2 + 1).min(pts.len() - 1)], pts[(pts.len() / 2).saturating_sub(1)])).ok_or("OML nula")?;
+                    let outm = {
+                        let o = geo3d::unit(fenkra_kernel::cross(ta, n)).ok_or("OML normal à web")?;
+                        if geo3d::dot(o, geo3d::sub(ma, ctr)) < 0. { geo3d::mul(o, -1.) } else { o }
+                    };
+                    let a = ang.to_radians();
+                    let up3 = geo3d::add(geo3d::mul(outm, a.cos()), geo3d::mul(d, a.sin()));
+                    let nw = geo3d::unit(fenkra_kernel::cross(ta, up3)).ok_or("aba tangente à web")?;
+                    let cut = self.aba_cortador_ponta(pl, nw, big)?;
+                    // quanto a parede precisa subir para passar do limite: raios ao longo da OML
+                    let mut falta: Option<f64> = None;
+                    for i in 0..=10 {
+                        let j = (pts.len() - 1) * i / 10;
+                        let tg = geo3d::unit(geo3d::sub(pts[(j + 1).min(pts.len() - 1)], pts[j.saturating_sub(1)])).unwrap_or(ta);
+                        let mut o = geo3d::unit(fenkra_kernel::cross(tg, n)).unwrap_or(outm);
+                        if geo3d::dot(o, outm) < 0. {
+                            o = geo3d::mul(o, -1.);
+                        }
+                        let u = geo3d::add(geo3d::mul(o, a.cos()), geo3d::mul(d, a.sin()));
+                        if let Ok(h) = cut.ray_hits(pts[j], u) {
+                            if let Some(h) = h.into_iter().filter(|h| *h > 1e-6).reduce(f64::max) {
+                                falta = Some(falta.map_or(h, |m: f64| m.max(h)));
+                            }
+                        }
+                    }
+                    let falta = falta.ok_or("o limite da borda final não intercepta a aba (nem estendida): escolha outro elemento")?;
+                    len = falta + 2. * (r + sp.t) + 1.;
+                    lim.ponta = Some((cut, geo3d::add(ma, geo3d::mul(d, sp.t * 0.5))));
+                }
+                for (i, c) in [&lm.canto1, &lm.canto2].into_iter().enumerate() {
+                    lim.cantos[i] = match c {
+                        CantoAba::Nenhum => None,
+                        CantoAba::Filete(v) => Some((false, chapa_laco::ev_faixa(v, &self.vars, &format!("raio do canto {}", i + 1), 0.01, f64::INFINITY, "mm")?)),
+                        CantoAba::Chanfro(v) => Some((true, chapa_laco::ev_faixa(v, &self.vars, &format!("distância do chanfro {}", i + 1), 0.01, f64::INFINITY, "mm")?)),
+                    };
+                }
+                self.curve_flange_lim(f, pts, ang, r, len, sf.flip, Some(d), 0, &lim)
             }
             FeatureKind::SmArcSlot(sl) => {
                 let sp = self.sheet()?;
@@ -11282,7 +11367,7 @@ mod tests_aba_superficie {
         d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
         // suporte: plano vertical em x = 80
         let pl = d.add_offset_plane(PlaneRef::Origin(OriginPlane::YZ), "80");
-        d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Plane(PlaneRef::Datum(pl)), face: [40., 25., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90") }));
+        d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Plane(PlaneRef::Datum(pl)), face: [40., 25., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90"), limites: Default::default() }));
         let r = recompute(&d);
         for f in &d.features {
             assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);

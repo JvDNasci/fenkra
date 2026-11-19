@@ -136,6 +136,7 @@ pub fn converter_aba(k: &FeatureKind, novo: ModoAba) -> Option<FeatureKind> {
             keep_base: false,
             mode: 0,
             angle: c.angulo,
+            limites: LimitesAba::default(),
         }),
     })
 }

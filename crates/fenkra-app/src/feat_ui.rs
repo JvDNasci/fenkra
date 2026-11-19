@@ -976,6 +976,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 crate::editor::expr_lim(ui, "Raio de dobra", r, vars, "mm", Some((0.01, f64::INFINITY)));
             }
             crate::chapa_unif_ui::inverter(ui, &mut sf.flip);
+            crate::chapa_aba_limites_ui::painel(ui, doc, me, &mut sf.limites, vars, seed);
             let help = match sf.mode {
                 1 => "Aproximação: suporte trocado pelo plano tangente no meio da OML (dobra reta).",
                 2 => "Ângulo: linha de dobra no suporte, aba com o ângulo dado a partir da web.",
