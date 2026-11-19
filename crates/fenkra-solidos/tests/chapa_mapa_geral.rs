@@ -54,7 +54,7 @@ fn dobra(sketch: Option<Id>) -> SmBend {
 fn aba_curva_e_joggle_entram_no_mapa_e_no_dxf() {
     let (mut d, _) = chapa_base();
     let edge = vec![[100., 0., 2.], [100., 25., 2.], [100., 50., 2.]];
-    let aba = d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false }));
+    let aba = d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false, reta: None }));
     let jog = d.add_feature(FeatureKind::SmJoggle(SmJoggle { a: [40., 0., 2.], b: [40., 50., 2.], depth: s("3"), run: s("5"), flip: true, angle: None, plane: None, keep_length: false }));
     for flat in [false, true] {
         let r = recalcula(&d, flat);
@@ -117,7 +117,7 @@ fn dobra_em_curva_que_nao_divide_a_chapa_recusa() {
 fn cadeia_da_aba_curva_nasce_do_brep_quando_a_chapa_muda() {
     let (mut d, sk) = chapa_base();
     let edge = vec![[100., 0., 2.], [100., 25., 2.], [100., 50., 2.]];
-    let aba = d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false }));
+    let aba = d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false, reta: None }));
     let r = recompute(&d);
     let Some(Promoted::Edges(k)) = r.promoted.get(&aba) else { panic!("sem chave: {:?}", r.status[&aba]) };
     let key = k[0].clone();

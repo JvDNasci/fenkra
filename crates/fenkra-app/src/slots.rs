@@ -412,6 +412,16 @@ pub fn aresta_clicada(k: &mut FeatureKind, mid: [f64; 3], key: Option<EdgeKey>, 
             if pts.len() < 2 {
                 return false;
             }
+            // B531: seletor inteligente. Uma aresta reta sozinha (sem curva emendada) volta ao modo
+            // reta, devolvendo os recuos e o alívio que a aba tinha antes de virar curva
+            if reta && polilinha_reta(&pts) {
+                if let Some(FeatureKind::SmFlange(mut f)) = fenkra_core::aba_unif::converter_aba(&FeatureKind::SmCurveFlange(c.clone()), fenkra_core::aba_unif::ModoAba::Aresta) {
+                    f.edge = mid;
+                    f.edge_key = key;
+                    *k = FeatureKind::SmFlange(f);
+                    return true;
+                }
+            }
             c.edge = pts;
             c.edge_key = key;
             true
@@ -452,9 +462,22 @@ pub fn face_clicada_no_laco(k: &mut FeatureKind, mid: [f64; 3], key: Option<Edge
     true
 }
 
-/// A aba curva com os parâmetros da aba de aresta `f`, na cadeia `pts`.
+/// B531: clique numa FACE com a aba de aresta ou de aresta curva aberta: o seletor escolhe o modo
+/// sozinho e vira o laço da face (o contorno inteiro), levando comprimento, ângulo, raio, lado e
+/// alívio. No laço age como `face_clicada_no_laco`. Devolve se o comando era uma aba desses modos.
+pub fn face_clicada_na_aba(k: &mut FeatureKind, mid: [f64; 3], key: Option<EdgeKey>) -> bool {
+    if matches!(k, FeatureKind::SmFlange(_) | FeatureKind::SmCurveFlange(_)) {
+        if let Some(novo) = fenkra_core::aba_unif::converter_aba(k, fenkra_core::aba_unif::ModoAba::Laco) {
+            *k = novo;
+        }
+    }
+    face_clicada_no_laco(k, mid, key)
+}
+
+/// A aba curva com os parâmetros da aba de aresta `f`, na cadeia `pts`. A aba reta inteira fica
+/// guardada em `reta` (B531): recuos, alívio e mitra voltam se a pessoa clicar numa reta de novo.
 pub fn aba_curva_de(f: &fenkra_core::SmFlange, pts: Vec<[f64; 3]>, key: Option<EdgeKey>) -> fenkra_core::SmCurveFlange {
-    fenkra_core::SmCurveFlange { edge: pts, length: f.length.clone(), flip: f.flip, angle: f.angle.clone(), radius: f.radius.clone(), side: f.side, edge_key: key, so_aresta: true }
+    fenkra_core::SmCurveFlange { edge: pts, length: f.length.clone(), flip: f.flip, angle: f.angle.clone(), radius: f.radius.clone(), side: f.side, edge_key: key, so_aresta: true, reta: Some(Box::new(f.clone())) }
 }
 
 /// A polilinha de uma aresta é reta? (todos os pontos sobre a corda, a menos de 1 µm por mm)

@@ -28,6 +28,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("usar o laço da face inteira", "use the whole face loop"),
     ("Liga: a partir da primeira aresta escolhida, cria uma aba em cada aresta do contorno da face, retas e curvas; os trechos curvos viram aba curva emendada às retas. Desliga: só as arestas escolhidas.", "On: starting from the first picked edge, creates a flange on every edge of the face outline, straight and curved; curved stretches become a curved flange joined to the straight ones. Off: only the picked edges."),
     ("escolher no 3D", "pick in 3D"),
+    ("Clique outra aresta no 3D para trocar: reta, curva ou uma face (o contorno todo) escolhem o modo sozinhos.", "Click another edge in 3D to swap it: a straight edge, a curve or a face (the whole outline) pick the mode on their own."),
     ("Clique outra aresta no 3D para somar; clique de novo numa escolhida para tirar.", "Click another edge in 3D to add it; click a picked one again to remove it."),
     ("Clique numa face da chapa para pegar o contorno inteiro dela.", "Click a sheet face to take its whole outline."),
     ("Extensão lateral", "Side extent"),

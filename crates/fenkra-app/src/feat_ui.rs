@@ -235,8 +235,18 @@ fn suporte_aba_modos(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind
     match kind {
         FeatureKind::SmCurveFlange(cf) => {
             section(ui, "Suporte");
-            // B514: a aresta vem do clique no 3D com o comando aberto (sem botão de usar a seleção)
-            ui.label(RichText::new(if cf.edge.len() >= 2 { format!("{} {} — {}", cf.edge.len(), tr("pontos na aresta"), tr("clique outra aresta para trocar")) } else { tr("⚠ clique numa aresta da chapa, reta ou curva").to_string() }).small());
+            // B531: o mesmo campo de seleção da aba de aresta; a aresta vem do clique no 3D (o nome
+            // sai da identidade dela) e o clique numa reta sozinha volta ao modo reta
+            let atual = (cf.edge.len() >= 2).then(|| (cf.edge[cf.edge.len() / 2], cf.edge_key));
+            if let Some(novo) = crate::chapa_unif_ui::campo_aresta(ui, doc, "smcurva_aresta", atual) {
+                match novo {
+                    Some((_, k)) => cf.edge_key = k,
+                    None => {
+                        cf.edge.clear();
+                        cf.edge_key = None;
+                    }
+                }
+            }
             let mut segue = !cf.so_aresta;
             if crate::editor::check(ui, &mut segue, "seguir as arestas tangentes").on_hover_text(tr("Liga: a aba continua pelas arestas tangentes à escolhida (reta, arco, reta). Desliga: só a aresta clicada.")).changed() {
                 cf.so_aresta = !segue;

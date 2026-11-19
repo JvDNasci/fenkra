@@ -45,18 +45,22 @@ struct Comum {
     inverter: bool,
     /// aresta que o suporte já tinha (um ponto), quando o modo antigo usava aresta
     aresta: Option<[f64; 3]>,
+    /// lado do material, igual nos modos de aresta, laço e curva (B531)
+    lado: u8,
+    /// alívio de canto (largura e forma), nos modos que têm
+    alivio: Option<(String, u8)>,
 }
 
 fn comum_de(k: &FeatureKind) -> Option<Comum> {
     let angulo = |a: &str| if a.trim().is_empty() { "90".to_string() } else { a.to_string() };
     let ponto = |p: [f64; 3]| (p != [0.; 3]).then_some(p);
     Some(match k {
-        FeatureKind::SmFlange(f) => Comum { comprimento: f.length.clone(), angulo: angulo(&f.angle), raio: f.radius.clone(), inverter: f.flip, aresta: ponto(f.edge) },
-        FeatureKind::SmFlangeLoop(l) => Comum { comprimento: l.length.clone(), angulo: angulo(&l.angle), raio: l.radius.clone(), inverter: l.flip, aresta: l.edges.first().copied().and_then(ponto) },
-        FeatureKind::SmCurveFlange(c) => Comum { comprimento: c.length.clone(), angulo: angulo(&c.angle), raio: c.radius.clone(), inverter: c.flip, aresta: c.edge.get(c.edge.len() / 2).copied().and_then(ponto) },
+        FeatureKind::SmFlange(f) => Comum { comprimento: f.length.clone(), angulo: angulo(&f.angle), raio: f.radius.clone(), inverter: f.flip, aresta: ponto(f.edge), lado: f.side, alivio: f.relief.clone().map(|w| (w, f.relief_kind)) },
+        FeatureKind::SmFlangeLoop(l) => Comum { comprimento: l.length.clone(), angulo: angulo(&l.angle), raio: l.radius.clone(), inverter: l.flip, aresta: l.edges.first().copied().and_then(ponto), lado: l.side, alivio: l.relief.clone().map(|w| (w, l.relief_kind)) },
+        FeatureKind::SmCurveFlange(c) => Comum { comprimento: c.length.clone(), angulo: angulo(&c.angle), raio: c.radius.clone(), inverter: c.flip, aresta: c.edge.get(c.edge.len() / 2).copied().and_then(ponto), lado: c.side, alivio: c.reta.as_ref().and_then(|r| r.relief.clone().map(|w| (w, r.relief_kind))) },
         // o perfil puxa para os dois lados do plano: o comprimento do lado 2 é o que o usuário vê como "o da aba"
-        FeatureKind::SmProfileFlange(p) => Comum { comprimento: p.l2.clone(), angulo: "90".into(), raio: p.radius.clone(), inverter: p.flip, aresta: None },
-        FeatureKind::SmSurfFlange(s) => Comum { comprimento: s.length.clone(), angulo: angulo(&s.angle), raio: s.radius.clone(), inverter: s.flip, aresta: ponto(s.face) },
+        FeatureKind::SmProfileFlange(p) => Comum { comprimento: p.l2.clone(), angulo: "90".into(), raio: p.radius.clone(), inverter: p.flip, aresta: None, lado: 0, alivio: None },
+        FeatureKind::SmSurfFlange(s) => Comum { comprimento: s.length.clone(), angulo: angulo(&s.angle), raio: s.radius.clone(), inverter: s.flip, aresta: ponto(s.face), lado: 0, alivio: None },
         _ => return None,
     })
 }
@@ -71,21 +75,33 @@ pub fn converter_aba(k: &FeatureKind, novo: ModoAba) -> Option<FeatureKind> {
     let c = comum_de(k)?;
     let aresta = c.aresta.unwrap_or([0.; 3]);
     Some(match novo {
-        ModoAba::Aresta => FeatureKind::SmFlange(SmFlange {
-            edge: aresta,
-            length: c.comprimento,
-            angle: c.angulo,
-            radius: c.raio,
-            off1: "0".into(),
-            off2: "0".into(),
-            flip: c.inverter,
-            relief: None,
-            relief_kind: 0,
-            side: 0,
-            miter: false,
-            min_gap: true,
-            edge_key: None,
-        }),
+        ModoAba::Aresta => {
+            // B531: a curva que já foi aba reta devolve os recuos, o alívio e a mitra que tinha
+            let base = match k {
+                FeatureKind::SmCurveFlange(cv) => cv.reta.as_deref().cloned(),
+                _ => None,
+            };
+            let chave = match k {
+                FeatureKind::SmCurveFlange(cv) => cv.edge_key,
+                _ => None,
+            };
+            let (alivio, tipo) = c.alivio.map_or((None, 0), |(w, t)| (Some(w), t));
+            FeatureKind::SmFlange(SmFlange {
+                edge: aresta,
+                length: c.comprimento,
+                angle: c.angulo,
+                radius: c.raio,
+                off1: base.as_ref().map_or("0".into(), |b| b.off1.clone()),
+                off2: base.as_ref().map_or("0".into(), |b| b.off2.clone()),
+                flip: c.inverter,
+                relief: alivio,
+                relief_kind: tipo,
+                side: c.lado,
+                miter: base.as_ref().is_some_and(|b| b.miter),
+                min_gap: base.as_ref().is_none_or(|b| b.min_gap),
+                edge_key: chave,
+            })
+        }
         ModoAba::Laco => FeatureKind::SmFlangeLoop(SmFlangeLoop {
             // com uma aresta só, o laço da face inteira é o padrão do modo
             loop_all: true,
@@ -97,12 +113,19 @@ pub fn converter_aba(k: &FeatureKind, novo: ModoAba) -> Option<FeatureKind> {
             angle: c.angulo,
             radius: c.raio,
             flip: c.inverter,
-            side: 0,
+            side: c.lado,
             miter: true,
-            relief: None,
-            relief_kind: 0,
+            relief: c.alivio.clone().map(|a| a.0),
+            relief_kind: c.alivio.map_or(0, |a| a.1),
         }),
-        ModoAba::Curva => FeatureKind::SmCurveFlange(SmCurveFlange { edge: if aresta == [0.; 3] { vec![] } else { vec![aresta] }, length: c.comprimento, flip: c.inverter, angle: c.angulo, radius: c.raio, side: 0, edge_key: None, so_aresta: true }),
+        ModoAba::Curva => {
+            // a aba reta de origem fica guardada: a volta ao modo reta não perde recuos nem alívio
+            let (reta, chave) = match k {
+                FeatureKind::SmFlange(f) => (Some(Box::new(f.clone())), f.edge_key),
+                _ => (None, None),
+            };
+            FeatureKind::SmCurveFlange(SmCurveFlange { edge: if aresta == [0.; 3] { vec![] } else { vec![aresta] }, length: c.comprimento, flip: c.inverter, angle: c.angulo, radius: c.raio, side: c.lado, edge_key: chave, so_aresta: true, reta })
+        }
         ModoAba::Perfil => FeatureKind::SmProfileFlange(SmProfileFlange { sketch: Id(0), l1: "0".into(), l2: c.comprimento, radius: c.raio, flip: c.inverter }),
         ModoAba::Superficie => FeatureKind::SmSurfFlange(SmSurfFlange {
             support: SurfRef::Plane(PlaneRef::Origin(OriginPlane::YZ)),
@@ -176,5 +199,22 @@ mod tests {
         let FeatureKind::SmFlange(f) = &de_volta else { panic!() };
         assert_eq!(f.edge, [0.; 3], "o perfil não tem aresta: o suporte fica por escolher");
         assert_eq!(f.angle, "90");
+    }
+
+    #[test]
+    fn reta_curva_reta_nao_perde_recuos_alivio_nem_lado() {
+        let FeatureKind::SmFlange(mut f) = aba() else { panic!() };
+        f.relief = Some("2".into());
+        f.relief_kind = 1;
+        f.side = 2;
+        f.miter = true;
+        let ida = converter_aba(&FeatureKind::SmFlange(f.clone()), ModoAba::Curva).unwrap();
+        let FeatureKind::SmCurveFlange(c) = &ida else { panic!() };
+        assert_eq!(c.side, 2);
+        assert_eq!(c.reta.as_deref(), Some(&f));
+        let volta = converter_aba(&ida, ModoAba::Aresta).unwrap();
+        let FeatureKind::SmFlange(g) = &volta else { panic!() };
+        assert_eq!((g.off1.as_str(), g.off2.as_str(), g.relief.as_deref(), g.relief_kind, g.side, g.miter, g.min_gap), ("5", "6", Some("2"), 1, 2, true, true));
+        assert_eq!(g.edge, f.edge);
     }
 }

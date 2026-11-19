@@ -258,7 +258,7 @@ fn aba_com_valor_fora_da_faixa_vira_erro_com_o_limite() {
 #[test]
 fn aba_curva_com_valor_fora_da_faixa_vira_erro_com_o_limite() {
     let curva = |len: &str, ang: &str, raio: Option<&str>| {
-        FeatureKind::SmCurveFlange(fenkra_core::SmCurveFlange { edge: vec![[100., 0., 2.], [100., 25., 2.], [100., 50., 2.]], length: s(len), flip: false, angle: s(ang), radius: raio.map(s), side: 0, edge_key: None, so_aresta: false })
+        FeatureKind::SmCurveFlange(fenkra_core::SmCurveFlange { edge: vec![[100., 0., 2.], [100., 25., 2.], [100., 50., 2.]], length: s(len), flip: false, angle: s(ang), radius: raio.map(s), side: 0, edge_key: None, so_aresta: false, reta: None })
     };
     for (k, trecho) in [(curva("10", "200", None), "ângulo"), (curva("10", "0", None), "ângulo"), (curva("-3", "90", None), "comprimento"), (curva("10", "90", Some("0")), "raio")] {
         let mut d = placa();

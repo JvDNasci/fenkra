@@ -109,6 +109,8 @@ pub mod chapa_cone;
 mod chapa_cega_tests;
 #[cfg(test)]
 mod chapa_cone_tests;
+#[cfg(test)]
+mod chapa_previa_curva_tests;
 mod chapa_flat;
 mod arestas;
 mod chapa_laco;
@@ -11110,7 +11112,7 @@ mod tests_aba_curva {
             let t = i as f64 / 24. * std::f64::consts::FRAC_PI_2;
             [50. * t.cos(), 50. * t.sin(), 2.]
         }).collect();
-        d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false }));
+        d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false, reta: None }));
         let r = recompute(&d);
         for f in &d.features {
             assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);
