@@ -196,6 +196,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("arestas", "edges"),
     ("vértices", "vertices"),
     ("faces, arestas e vértices", "faces, edges and vertices"),
+    ("faces e arestas", "faces and edges"),
     ("Mostrar origem", "Show origin"),
     ("Ocultar origem", "Hide origin"),
     ("a origem está oculta: os planos voltam com ela", "the origin is hidden: the planes come back with it"),

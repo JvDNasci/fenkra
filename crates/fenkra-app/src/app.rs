@@ -7780,6 +7780,15 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                                 }
                             }
                         }
+                        // B555: clicar numa face soma as arestas do contorno dela ao filete/chanfro (de novo, tira)
+                        (Some(fid), Some(crate::picking::Pick::Face { body, face, .. })) => {
+                            if let Some(b) = r.bodies.get(body) {
+                                let novas = crate::arestas_face::arestas_da_face(b, face);
+                                if let Some(FeatureKind::Fillet(o) | FeatureKind::Chamfer(o)) = self.open.doc.feature_mut(fid).map(|f| &mut f.kind) {
+                                    crate::arestas_face::alternar_face(o, &novas);
+                                }
+                            }
+                        }
                         (_, Some(p)) => {
                             // mesmas regras da árvore (B95): Ctrl soma/tira, Shift soma, simples troca
                             let ctrl = ctx.input(|i| i.modifiers.command);
@@ -7876,13 +7885,14 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     if let EdgeSel::Edges(list) = &o.edges {
                         let n = list.len();
                         ui.painter().text(rect.center_top() + egui::vec2(0., 30.), egui::Align2::CENTER_TOP,
-                            format!("Clique nas arestas para pôr/tirar do comando · {n} escolhida(s) · Enter conclui"), egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), crate::theme::st_warn());
+                            format!("{} · {n} {} · {}", tr("Clique nas arestas ou numa face (todas as arestas dela) para pôr/tirar do comando"), tr("escolhida(s)"), tr("Enter conclui")), egui::FontId::proportional(crate::acessibilidade::fonte_3d(13.)), crate::theme::st_warn());
                     }
                 }
                 let painter = ui.painter_at(rect);
                 for p in &self.picks {
                     crate::picking::draw(&painter, r, &cam, rect, p, true);
                 }
+                crate::caixa_selecao::desenhar_realce(&ctx, &painter, r, &cam, rect);
                 if let Some(h) = self.hover_pick {
                     if !self.picks.contains(&h) {
                         crate::picking::draw(&painter, r, &cam, rect, &h, false);
@@ -8754,7 +8764,8 @@ impl eframe::App for App {
         self.roda_passo(ctx, typing);
         crate::desempenho::marca("pre_roda");
         let (save, undo, redo) = (km.pressed(ctx, K::Save), !typing && km.pressed(ctx, K::Undo), !typing && km.pressed(ctx, K::Redo));
-        let del = km.pressed(ctx, K::Delete);
+        // B555: com itens marcados numa caixa de seleção, o Del é da caixa e não apaga o comando
+        let del = km.pressed(ctx, K::Delete) && !crate::caixa_selecao::ha_marcados(ctx);
         // Ctrl+S salva o documento ativo (com a checagem de mudança externa); Ctrl+Shift+S abre o plano
         if save {
             self.salvar_ativo();

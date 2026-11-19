@@ -173,6 +173,7 @@ impl TiposTemporarios {
         match (self.faces, self.arestas, self.vertices) {
             (true, false, false) => "faces",
             (false, true, false) => "arestas",
+            (true, true, false) => "faces e arestas",
             (false, false, true) => "vértices",
             _ => "faces, arestas e vértices",
         }
@@ -187,7 +188,7 @@ pub fn tipos_do_comando(kind: &fenkra_core::FeatureKind) -> Option<TiposTemporar
         return Some(TiposTemporarios { faces: true, arestas: false, vertices: false });
     }
     match kind {
-        FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) if matches!(o.edges, EdgeSel::Edges(_)) => Some(TiposTemporarios { faces: false, arestas: true, vertices: false }),
+        FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) if matches!(o.edges, EdgeSel::Edges(_)) => Some(TiposTemporarios { faces: true, arestas: true, vertices: false }),
         _ => None,
     }
 }
@@ -314,7 +315,7 @@ mod testes {
     fn comando_de_arestas_filtra_so_arestas_e_o_resto_usa_a_barra() {
         use fenkra_core::{EdgeMode, EdgeOp, EdgeProp, EdgeSel, FeatureKind};
         let fil = |edges| FeatureKind::Fillet(EdgeOp { value: "1".into(), edges, mode: EdgeMode::Constant, prop: EdgeProp::Tangente, keys: vec![], extra: Default::default() });
-        assert_eq!(tipos_do_comando(&fil(EdgeSel::Edges(vec![]))).map(|t| t.nome()), Some("arestas"));
+        assert_eq!(tipos_do_comando(&fil(EdgeSel::Edges(vec![]))).map(|t| t.nome()), Some("faces e arestas"));
         assert_eq!(tipos_do_comando(&fil(EdgeSel::AllOfBody)), None, "todas as arestas não pede clique");
     }
 
