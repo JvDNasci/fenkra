@@ -198,6 +198,10 @@ pub struct SketchEdit {
     /// canto em que começou o arrasto da seleção por janela
     janela: Option<Pos2>,
     pub dim_edit: Option<(Id, String, bool)>,
+    /// B552: ferramenta presa por duplo clique no ícone (cadeia de linhas, repetição das outras)
+    pub preso: crate::preso::Preso,
+    /// B552: a ferramenta de um elemento só fez o elemento e espera a cota ou o passo fechar
+    fim_pendente: bool,
     pub report: SolveReport,
     pub construction: bool,
     pub polygon_sides: usize,
@@ -423,6 +427,8 @@ impl SketchEdit {
             sel: vec![],
             drag: None,
             dim_edit: None,
+            preso: Default::default(),
+            fim_pendente: false,
             report: SolveReport::default(),
             construction: false,
             polygon_sides: 6,
@@ -495,6 +501,10 @@ impl SketchEdit {
     /// Troca o modo do comando sem recomeçar: os cliques dados continuam valendo, salvo se o modo novo
     /// já estaria completo com eles. Os campos recomeçam porque medem outra coisa.
     pub fn trocar_modo(&mut self, t: Tool) {
+        // outro modo do mesmo comando mantém o preso
+        if self.preso.esta(crate::preso::Alvo::Sk(self.tool)) {
+            self.preso.prender(crate::preso::Alvo::Sk(t));
+        }
         self.tool = t;
         if t.clicks_needed() > 0 && self.clicks.len() >= t.clicks_needed() {
             self.clicks.clear();
@@ -568,11 +578,36 @@ impl SketchEdit {
             self.round_dim = Some((c.cota, chanfro));
         }
     }
+    /// B552/B554: chamada a cada quadro pelas ferramentas que criam um elemento. `criou`: o quadro
+    /// acrescentou curva ou restrição. Sem estar presa, a ferramenta volta à seleção quando o
+    /// elemento (e a cota que ele abriu) termina; presa, segue como um comando novo.
+    pub(crate) fn fim_do_elemento(&mut self, tool: Tool, criou: bool) {
+        if !crate::preso::de_um_so(tool) || self.tool != tool {
+            return;
+        }
+        let presa = self.preso.esta(crate::preso::Alvo::Sk(tool));
+        if criou {
+            self.fim_pendente = true;
+            // a linha solta não encadeia: o 1º segmento já termina a cadeia
+            if tool == Tool::Line && !presa {
+                self.chain_last = None;
+                self.chain_first = None;
+            }
+        }
+        if self.fim_pendente && !self.em_passo() {
+            self.fim_pendente = false;
+            if let crate::preso::Depois::Selecao = self.preso.ao_concluir(crate::preso::Alvo::Sk(tool)) {
+                self.set_tool(Tool::Select);
+            }
+        }
+    }
     /// Há um passo de desenho em andamento, com campos de valor à espera.
     pub fn in_step(&self) -> bool {
         !self.clicks.is_empty() || self.chain_last.is_some()
     }
     pub fn set_tool(&mut self, t: Tool) {
+        self.preso.escolher(crate::preso::Alvo::Sk(t));
+        self.fim_pendente = false;
         self.tool = t;
         self.clicks.clear();
         self.chain_last = None;
@@ -618,6 +653,9 @@ impl SketchEdit {
     }
     /// Cancela a operação em andamento; devolve false se não havia nada a cancelar.
     pub fn cancel(&mut self) -> bool {
+        // B552: Esc solta a ferramenta presa
+        self.preso.soltar();
+        self.fim_pendente = false;
         // a escolha da origem no 3D sai antes de tudo
         if self.posicao.pedido.take().is_some() {
             self.posicao.primeira = None;
@@ -2779,6 +2817,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     }
     let steps_before = (edit.clicks.len(), edit.chain_last);
     let curves_before: std::collections::HashSet<Id> = sk.curves.iter().map(|c| c.id).collect();
+    let restricoes_antes = sk.constraints.len();
 
     match tool {
         Tool::Select => {
@@ -3475,6 +3514,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     } else if edit.clicks.is_empty() && edit.chain_last.is_none() {
         edit.typed.clear();
     }
+
+    // ---------- B552: clique único no ícone faz um elemento e volta à seleção; preso, repete
+    edit.fim_do_elemento(tool, !made.is_empty() || sk.constraints.len() > restricoes_antes);
 
     // ---------- barra de restrições: abre ao selecionar e continua aberta depois de aplicar
     if tool == Tool::Select && edit.menu.is_none() && edit.drag.is_none() && edit.janela.is_none() && edit.dim_edit.is_none() {

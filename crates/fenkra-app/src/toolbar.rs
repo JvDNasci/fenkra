@@ -53,6 +53,8 @@ pub enum Act {
     RegraPlastica,
     /// B506: muda uma propriedade gráfica da seleção
     Grafico(crate::propriedades_graficas::Mudanca),
+    /// B554: duplo clique no ícone prende o comando (repete ao concluir, até Esc)
+    Preso(crate::preso::Alvo),
     /// B520: pincel de aparência; `true` = duplo clique (fica ligado para vários destinos)
     Pincel(bool),
     /// B506: enquadra só o que está selecionado
@@ -689,6 +691,8 @@ pub struct ToolState {
     pub grafico: crate::propriedades_graficas::Estado,
     /// B520: o pincel de aparência está ligado
     pub pincel: crate::pincel_aparencia::Modo,
+    /// B554: o comando ou a ferramenta de sketch preso por duplo clique
+    pub preso: Option<crate::preso::Alvo>,
 }
 
 fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
@@ -883,6 +887,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, barra: Option<Barra>, title: 
                 }
                 Entry::One(i) => {
                     let r = tool_button(ui, i.icon, i.name, size, labels, is_selected(i.act, s, st), i.brief, i.advanced);
+                    let r = crate::preso::marcar(ui, r, crate::preso::alvo_de(i.act).is_some_and(|a| st.preso == Some(a)));
                     // B441: sem o passo anterior, o botão esmaece e o clique explica o que falta
                     crate::proximo::clique(ui, &r, i.act, &st.ctx, &mut acts);
                     // na coluna, o comando sem variações guarda o lugar da seta: os ícones ficam alinhados
@@ -900,6 +905,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, barra: Option<Barra>, title: 
 {} {atual}.", tr(el.passos), tr("Tipo da próxima vez:"));
                     let r = tool_button(ui, el.icone, el.nome, size, labels, items.iter().any(|x| is_selected(x.act, s, st)), el.frase, &passos);
                     let icones: Vec<&str> = items.iter().map(|x| x.icon).collect();
+                    let r = crate::preso::marcar(ui, r, crate::preso::alvo_de(items[cur].act).is_some_and(|a| st.preso == Some(a)));
                     crate::curso_ui::destaque_em_familia(ui, r.rect, &icones, el.icone);
                     crate::proximo::clique(ui, &r, items[cur].act, &st.ctx, &mut acts);
                     if forma == Forma::Coluna {
@@ -913,6 +919,7 @@ fn show_block(ui: &mut egui::Ui, g: Option<Group>, barra: Option<Barra>, title: 
                     let sel = is_selected(i.act, s, st) || any_sel;
                     let r = tool_button(ui, i.icon, i.name, size, labels, sel, i.brief, i.advanced);
                     let icones: Vec<&str> = items.iter().map(|x| x.icon).collect();
+                    let r = crate::preso::marcar(ui, r, crate::preso::alvo_de(i.act).is_some_and(|a| st.preso == Some(a)));
                     crate::curso_ui::destaque_em_familia(ui, r.rect, &icones, i.icon);
                     crate::proximo::clique(ui, &r, i.act, &st.ctx, &mut acts);
                     // setinha: abre as variações da família

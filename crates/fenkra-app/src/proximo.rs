@@ -217,7 +217,14 @@ pub fn item_de(a: Act) -> Option<crate::toolbar::Item> {
 /// e abre o quadro com o motivo, o passo que falta e "usar mesmo assim".
 pub fn clique(ui: &egui::Ui, r: &egui::Response, act: Act, ctx: &Contexto, acts: &mut Vec<Act>) {
     let Some(x) = falta(act, ctx) else {
-        if r.clicked() {
+        // B554: o 1º clique do duplo já abriu o comando; o duplo só o prende, sem abrir de novo
+        if r.double_clicked() {
+            match crate::preso::alvo_de(act) {
+                Some(a) => acts.push(Act::Preso(a)),
+                None if r.clicked() => acts.push(act),
+                None => {}
+            }
+        } else if r.clicked() {
             acts.push(act);
         }
         return;
