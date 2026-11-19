@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 123790,
+ "tokens_total_k": 124740,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -12,25 +12,25 @@
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 9.4
+   "pct": 9.3
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 26.1
+   "pct": 25.9
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 24700,
-   "pct": 20.0
+   "pct": 19.8
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 47950,
-   "pct": 38.7
+   "tokens_k": 48900,
+   "pct": 39.2
   }
  },
  "itens": [
@@ -8785,16 +8785,16 @@
    "onda": 4,
    "prio": "P1",
    "titulo": "Aba de aresta reta e curva num modo só, com campo de seleção padrão",
-   "oque": "Teste da alpha.38: a aba reta e a curva deveriam ser um só modo de aresta, com a lista de arestas editável igual às outras bancadas (clicar troca, clicar de novo tira, nome pela identidade). Já feito em 18/11: clicar numa curva com a aba aberta troca pela aba curva, e a curva vale só para a aresta clicada, com a opção de seguir as tangentes. Falta unificar o recurso e o painel.",
+   "oque": "Teste da alpha.38: a aba reta e a curva deveriam ser um só modo de aresta, com a lista de arestas editável igual às outras bancadas (clicar troca, clicar de novo tira, nome pela identidade). Já feito em 18/11: clicar numa curva com a aba aberta troca pela aba curva, e a curva vale só para a aresta clicada, com a opção de seguir as tangentes. Falta unificar o recurso e o painel. Reforço do usuário em 19/11: um comando Aba só, com seletor inteligente (reconhece reta, curva ou face e escolhe o modo sozinho) e a filosofia de árvore de recursos e conjunto de seleção dos softwares de modelagem CAD avançados: cada entrada da lista é nomeada pela identidade, pode ser trocada ou tirada depois, e a seleção pode ser guardada como conjunto nomeado e reaproveitada em outro recurso.",
    "origem": [
     "USR-CHECK"
    ],
    "catalogo": [],
-   "tokens_k": 150,
+   "tokens_k": 200,
    "teste": "Auto + Visual",
    "area": "Chapa",
    "status": "a fazer",
-   "pct": 0.1
+   "pct": 0.2
   },
   {
    "id": "B532",
@@ -9147,6 +9147,72 @@
    "area": "Chapa",
    "status": "feito",
    "pct": 0.2
+  },
+  {
+   "id": "B554",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Duplo clique encadeia qualquer comando",
+   "oque": "Pedido do usuário em 19/11, generalizando o B552: em todas as bancadas, clique único no ícone executa o comando uma vez e volta à seleção; duplo clique deixa o comando preso para repetir (linha, círculo, aba, furo, restrição, cota...) até Esc ou outro comando. O ícone mostra que está preso. Aceite: teste por comando de sketch, chapa e sólido nos dois modos, e a regra documentada no padrão de interface (B319).",
+   "origem": [
+    "USR-CHECK",
+    "B552"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B555",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Caixa de seleção padrão e filete/chanfro por face",
+   "oque": "Pedido do usuário em 19/11: todo comando que recebe vários elementos usa a mesma caixa de seleção, como uma árvore: cada clique no 3D soma um item; clicar num item da caixa o marca, Ctrl soma ou tira da marcação, Shift marca um intervalo, e Del tira os marcados. O item marcado na caixa realça o elemento no 3D. No filete e no chanfro, clicar numa face soma as arestas do contorno dela (em cadeia), e as arestas aparecem na caixa. Aceite: teste da caixa (marcar, Ctrl, Shift, Del) e do filete por face num cubo, com volume conferido.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B556",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Aba por superfície completa: limites dos lados, borda final e canto",
+   "oque": "Pedido do usuário em 19/11: na aba por superfície, escolher os elementos que limitam o lado 1 e o lado 2 da aba (curva, plano, linha do 3D, sketch ou elemento de construção), e a borda final da aba limitada do mesmo jeito. Em cada lado, escolher se o canto já sai com filete ou chanfro. O comando sempre tenta estender, recortar e projetar o suporte até o limite escolhido. Aceite: aba por superfície num suporte curvo limitada por dois planos e por uma curva na borda final, com chanfro num lado e filete no outro; status, volume e caixa conferidos.",
+   "origem": [
+    "USR-CHECK",
+    "B529"
+   ],
+   "catalogo": [],
+   "tokens_k": 350,
+   "teste": "Auto + Visual",
+   "area": "Chapa",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B557",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Recurso gerado nasce um nível abaixo de quem o gerou",
+   "oque": "Pedido do usuário em 19/11: quando um sketch ou recurso gera outro recurso, o novo nasce na árvore um nível abaixo do que o gerou; a pessoa pode arrastá-lo para o mesmo nível ou deixá-lo ali. A ordem de recálculo não muda. Aceite: extrusão de um sketch nasce dentro dele; arrastar para fora a coloca no mesmo nível, e o arquivo guarda a escolha.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
   }
  ]
 }
