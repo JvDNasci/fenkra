@@ -9,6 +9,7 @@
 //! editar altera o objeto no lugar e as referências apontam para o `Id`, nunca para posições.
 
 pub mod aba_unif;
+pub mod arvore_nivel;
 pub mod arvore_soltura;
 pub mod cena;
 pub mod config;

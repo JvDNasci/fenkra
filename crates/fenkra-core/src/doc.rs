@@ -4432,6 +4432,10 @@ pub struct Document {
     /// medidas mantidas na árvore (B509): associativas, refeitas a cada cálculo
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub medidas: Vec<crate::medida::Medida>,
+    /// B557: recursos que a pessoa tirou de dentro do gerador na árvore (só apresentação; a ordem de
+    /// recálculo não muda). Vazio = todo recurso gerado aparece dentro de quem o gerou.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub soltos_do_gerador: Vec<Id>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -4497,6 +4501,7 @@ impl Document {
             pasta: Default::default(),
             idioma: crate::nomes::idioma(),
             medidas: vec![],
+            soltos_do_gerador: vec![],
         };
         let n = crate::nomes::base("Corpo principal");
         let c = d.add_collector(&n);

@@ -48,6 +48,8 @@ mod desselecionar_testes;
 #[cfg(test)]
 mod arvore_arraste_testes;
 #[cfg(test)]
+mod arvore_nivel_testes;
+#[cfg(test)]
 mod paineis_flutuam_testes;
 #[cfg(test)]
 mod abas_r3_testes;
@@ -5137,6 +5139,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         if k == marker_at {
                             marker(ui, c.id, k, n, &mut actions);
                         }
+                        // B557: o recurso gerado aparece dentro do gerador (desenhado por ele)
+                        if doc.pai_na_arvore(f.id).is_some() {
+                            continue;
+                        }
                         match f.folder.filter(|fo| doc.folder(*fo).is_some_and(|x| x.kind == FolderKind::Comandos)) {
                             Some(fid) if drawn_folders.contains(&fid) => continue,
                             Some(fid) => {
@@ -5156,7 +5162,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                                 // B446: a pasta de comandos recebe comandos do mesmo corpo
                                 crate::arvore_soltura_ui::ligar(ui, &h.cabeca, &doc, crate::arvore_soltura_ui::Alvo::Pasta(fid), &mut actions);
                                 let h = h.corpo(ui, |ui| {
-                                    for (j, g) in feats.iter().filter(|(_, g)| g.folder == Some(fid)) {
+                                    for (j, g) in feats.iter().filter(|(_, g)| g.folder == Some(fid) && doc.pai_na_arvore(g.id).is_none()) {
                                         self.feature_row(ui, &doc, *j, g, &mut new_sel, &mut actions);
                                     }
                                 });
@@ -5777,6 +5783,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let st = self.status_of(f.id);
         let filtro = diag::filtro_atual(ui.ctx());
         if !filtro.vazio() && !filtro.passa(f, st) {
+            // B557: o filtro não esconde os filhos que passam por ele
+            for c in doc.filhos_na_arvore(f.id) {
+                if let Some(j) = doc.feature_index(c) {
+                    self.feature_row(ui, doc, j, &doc.features[j], new_sel, actions);
+                }
+            }
             return;
         }
         let now = ui.input(|x| x.time);
@@ -5798,15 +5810,19 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             text = text.italics().weak();
         }
         // entradas do comando (sketch, pontos, curvas, superfícies) como subitens
-        let inputs: Vec<Id> = if is_sketch { vec![] } else { Document::refs_of(&f.kind).into_iter().filter(|x| doc.reference(*x).is_some() || doc.feature(*x).is_some_and(|g| matches!(g.kind, FeatureKind::Sketch(_)))).collect() };
+        // B557: o gerador, quando o recurso está dentro dele, já é o pai na árvore: não repete aqui
+        let pai = doc.pai_na_arvore(f.id);
+        let inputs: Vec<Id> = if is_sketch { vec![] } else { Document::refs_of(&f.kind).into_iter().filter(|x| Some(*x) != pai && (doc.reference(*x).is_some() || doc.feature(*x).is_some_and(|g| matches!(g.kind, FeatureKind::Sketch(_))))).collect() };
+        let filhos = doc.filhos_na_arvore(f.id);
         let open_key = ui.make_persistent_id(("entradas", f.id.0));
-        let mut open: bool = ui.ctx().data(|m| m.get_temp(open_key)).unwrap_or(false);
+        let mut open: bool = ui.ctx().data(|m| m.get_temp(open_key)).unwrap_or(!filhos.is_empty());
         crate::tree_ui::marca(ui);
         let mut tronco = 0.;
         let resp = ui
             .horizontal(|ui| {
-                if !inputs.is_empty() {
-                    let c = crate::tree_ui::caixa(ui, open).on_hover_text(tr("entradas do comando"));
+                if !inputs.is_empty() || !filhos.is_empty() {
+                    let dica = if filhos.is_empty() { tr("entradas do comando") } else { tr("recursos gerados e entradas (arraste um recurso para o nó do corpo para tirá-lo daqui, ou para esta linha para pô-lo de volta)") };
+                    let c = crate::tree_ui::caixa(ui, open).on_hover_text(dica);
                     tronco = c.rect.center().x;
                     if c.clicked() {
                         open = !open;
@@ -5962,6 +5978,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     }
                     if r.double_clicked() {
                         actions.push(TreeAction::EditSketch(*x));
+                    }
+                }
+                // B557: recursos gerados por este, um nível abaixo
+                for c in &filhos {
+                    if let Some(j) = doc.feature_index(*c) {
+                        self.feature_row(ui, doc, j, &doc.features[j], new_sel, actions);
                     }
                 }
             });

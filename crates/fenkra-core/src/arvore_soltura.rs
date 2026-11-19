@@ -95,6 +95,11 @@ impl Document {
     fn soltar_em_pasta_de_comandos(&mut self, item: Id, pasta: Id) -> Result<(), RecusaSoltura> {
         let Some(f) = self.feature(item) else { return Err(RecusaSoltura::NaoEComando) };
         let alvo = f.target;
+        // B557: já é da pasta e aparece dentro do gerador: soltar na pasta o põe no nível do gerador
+        if f.folder == Some(pasta) && self.pai_na_arvore(item).is_some() {
+            self.definir_fora_do_gerador(item, true);
+            return Ok(());
+        }
         if let Some(corpo) = self.corpo_da_pasta(pasta) {
             if corpo != alvo {
                 return Err(RecusaSoltura::PastaDeOutroCorpo(self.name_of(corpo)));
@@ -149,6 +154,13 @@ impl Document {
         }
         let Some(f) = self.feature(item) else { return Err(RecusaSoltura::NaoEComando) };
         let livre = self.is_free(f);
+        // B557: um recurso que aparece dentro do gerador, solto no nó do próprio corpo, sai para o
+        // nível do gerador. Só apresentação: nada muda na ordem de recálculo.
+        if f.target == corpo && !livre && self.pai_na_arvore(item).is_some() {
+            self.definir_fora_do_gerador(item, true);
+            return Ok(());
+        }
+        let f = self.feature(item).ok_or(RecusaSoltura::NaoEComando)?;
         if f.target == corpo && !livre {
             return Err(RecusaSoltura::JaNoCorpo(nome_corpo));
         }
@@ -293,6 +305,11 @@ mod testes {
         let a = sketch(&mut d);
         let ea = extrusao(&mut d, a, BoolOp::Add);
         let corpo2 = d.add_collector("Corpo2");
+        // B557: a extrusão aparece dentro do sketch; soltar no nó do corpo a põe no nível dele (só
+        // apresentação). Já fora, soltar no próprio corpo de novo é recusado.
+        assert_eq!(d.pai_na_arvore(ea), Some(a));
+        assert_eq!(d.soltar_no_corpo(ea, corpo1), Ok(()));
+        assert_eq!(d.pai_na_arvore(ea), None);
         assert!(matches!(d.soltar_no_corpo(ea, corpo1), Err(RecusaSoltura::JaNoCorpo(_))));
         let pl = d.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "3");
         assert_eq!(d.soltar_no_corpo(pl, corpo2), Err(RecusaSoltura::Referencia));

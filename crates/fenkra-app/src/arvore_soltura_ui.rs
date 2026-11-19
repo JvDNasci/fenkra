@@ -105,7 +105,16 @@ fn soltar_depois(d: &mut Document, item: Id, alvo: Id) -> Result<(), RecusaSoltu
         if d.reference(item).is_some() {
             return Err(RecusaSoltura::Referencia);
         }
-        let Some(f) = d.feature(item) else { return Err(RecusaSoltura::NaoEComando) };
+        if d.feature(item).is_none() {
+            return Err(RecusaSoltura::NaoEComando);
+        }
+        // B557: o recurso que estava fora, solto sobre o próprio gerador, volta para dentro dele sem
+        // mexer na ordem de recálculo
+        if d.esta_fora_do_gerador(item) && d.gerador_de(item) == Some(alvo) {
+            d.definir_fora_do_gerador(item, false);
+            return Ok(());
+        }
+        let f = d.feature(item).ok_or(RecusaSoltura::NaoEComando)?;
         if f.target != corpo || d.is_free(f) {
             d.soltar_no_corpo(item, corpo)?;
         }
@@ -134,6 +143,12 @@ fn soltar_depois(d: &mut Document, item: Id, alvo: Id) -> Result<(), RecusaSoltu
                     _ => RecusaSoltura::NaoEComando,
                 })?;
             }
+        }
+        // B557: o nível de exibição segue o vizinho. Sobre o próprio gerador, ou sobre um irmão que já
+        // está dentro dele, o recurso fica (ou volta) para dentro; em qualquer outro lugar, fica fora.
+        if let Some(g) = d.gerador_de(item) {
+            let dentro = alvo == g || d.pai_na_arvore(alvo) == Some(g);
+            d.definir_fora_do_gerador(item, !dentro);
         }
         return Ok(());
     }
