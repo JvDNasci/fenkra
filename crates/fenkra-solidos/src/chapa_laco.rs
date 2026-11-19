@@ -132,6 +132,77 @@ pub fn laco_de_malha(mesh: &Mesh, semente: usize) -> Vec<V3> {
         .collect()
 }
 
+/// Todas as arestas, retas ou curvas, que contornam junto com `semente` a face maior que ela toca,
+/// encadeadas pelas pontas (B530). Devolve os índices das arestas da malha, começando pela semente.
+/// Contorno de furo ou de outra volta não entra: só o que se liga à semente por pontas coincidentes.
+pub fn laco_de_arestas(mesh: &Mesh, curvas: &[Option<geo3d::Curve3>], semente: usize) -> Vec<usize> {
+    let faces = |e: usize| mesh.edge_faces.get(e).copied().unwrap_or([fenkra_kernel::NO_FACE; 2]);
+    let area = |f: u32| mesh.face_info.get(f as usize).map(|i| i.area).unwrap_or(0.);
+    let [f0, f1] = faces(semente);
+    let face = match (f0 == fenkra_kernel::NO_FACE, f1 == fenkra_kernel::NO_FACE) {
+        (true, true) => return vec![],
+        (false, true) => f0,
+        (true, false) => f1,
+        (false, false) => if area(f0) >= area(f1) { f0 } else { f1 },
+    };
+    let da_face: Vec<usize> = (0..mesh.edge_faces.len())
+        .filter(|e| {
+            let [a, b] = faces(*e);
+            (a == face || b == face) && curvas.get(*e).is_some_and(|c| c.is_some())
+        })
+        .collect();
+    if !da_face.contains(&semente) {
+        return vec![];
+    }
+    let pontas = |e: usize| {
+        let c = curvas[e].as_ref().unwrap();
+        [c.start(), c.end()]
+    };
+    let perto = |p: V3, q: V3| geo3d::dist(p, q) < 1e-3;
+    let mut fila = vec![semente];
+    let mut i = 0;
+    while i < fila.len() {
+        let [a, b] = pontas(fila[i]);
+        for &e in &da_face {
+            let [c, d] = pontas(e);
+            if !fila.contains(&e) && (perto(c, a) || perto(c, b) || perto(d, a) || perto(d, b)) {
+                fila.push(e);
+            }
+        }
+        i += 1;
+    }
+    fila
+}
+
+/// Junta polilinhas já em sequência (cada uma começa onde a anterior termina) numa só.
+fn juntas(partes: &[Vec<V3>]) -> Vec<V3> {
+    let mut out: Vec<V3> = vec![];
+    for p in partes {
+        out.extend(p.iter().skip(if out.is_empty() { 0 } else { 1 }).copied());
+    }
+    out
+}
+
+/// Põe as polilinhas de uma cadeia em sequência, cada uma orientada para começar onde a anterior
+/// termina. Uma cadeia fechada começa pela primeira e volta a ela. `None` se alguma não encaixa.
+fn ordena_cadeia(mut partes: Vec<Vec<V3>>) -> Option<Vec<Vec<V3>>> {
+    let perto = |a: V3, b: V3| geo3d::dist(a, b) < 1e-3;
+    if partes.is_empty() {
+        return None;
+    }
+    let mut out = vec![partes.remove(0)];
+    while !partes.is_empty() {
+        let fim = *out.last()?.last()?;
+        let i = partes.iter().position(|p| perto(p[0], fim) || perto(*p.last().unwrap(), fim))?;
+        let mut p = partes.remove(i);
+        if !perto(p[0], fim) {
+            p.reverse();
+        }
+        out.push(p);
+    }
+    Some(out)
+}
+
 /// Avalia um campo e exige a faixa válida do comando. É a mesma faixa que o painel pinta de vermelho
 /// (B31): fora dela o recálculo falha com o limite escrito, em vez de o selo mostrar OK com a chapa
 /// errada ou sumida.
@@ -277,42 +348,108 @@ impl Ctx<'_> {
             }
         }
         let promovido = self.promoted.borrow().clone();
-        if lp.loop_all {
-            let b = self.body(f.target).ok_or("a aba precisa de uma parede de chapa antes")?.clone();
-            let m = tesselar(&b, &self.qualidade).map_err(k)?;
-            let semente = (0..m.edge_faces.len())
-                .filter(|e| m.edge_formula(*e).is_some())
-                .min_by(|a, c| {
-                    let d = |e: usize| geo3d::dist([m.edge_mids[e * 3] as f64, m.edge_mids[e * 3 + 1] as f64, m.edge_mids[e * 3 + 2] as f64], pontos[0]);
-                    d(*a).total_cmp(&d(*c))
-                })
-                .ok_or("a chapa não tem arestas")?;
-            let laco = laco_de_malha(&m, semente);
-            if laco.is_empty() {
-                return Err("a aresta escolhida não tem laço reto de arestas para criar abas".into());
+        let b = self.body(f.target).ok_or("a aba precisa de uma parede de chapa antes")?.clone();
+        let m = tesselar(&b, &self.qualidade).map_err(k)?;
+        let curvas = geo3d::mesh_edge_curves(&m);
+        let mid_de = |e: usize| [m.edge_mids[e * 3] as f64, m.edge_mids[e * 3 + 1] as f64, m.edge_mids[e * 3 + 2] as f64];
+        let mais_perto = |p: V3| {
+            (0..m.edge_faces.len()).filter(|e| m.edge_formula(*e).is_some() && curvas.get(*e).is_some_and(|c| c.is_some())).min_by(|a, c| {
+                let d = |e: usize| geo3d::dist(mid_de(e), p);
+                d(*a).total_cmp(&d(*c))
+            })
+        };
+        // arestas do comando como índices da malha: o laço da face inteiro ou as escolhidas
+        let conj: Vec<usize> = if lp.loop_all {
+            let semente = mais_perto(pontos[0]).ok_or("a chapa não tem arestas")?;
+            let c = laco_de_arestas(&m, &curvas, semente);
+            if c.is_empty() {
+                return Err("a aresta escolhida não tem laço de arestas para criar abas".into());
             }
-            pontos = laco;
-        }
-        for (i, p) in pontos.iter().enumerate() {
-            let fl = SmFlange {
-                edge: *p,
-                length: lp.length.clone(),
-                angle: lp.angle.clone(),
-                radius: lp.radius.clone(),
-                off1: "0".into(),
-                off2: "0".into(),
-                flip: lp.flip,
-                relief: lp.relief.clone(),
-                relief_kind: lp.relief_kind,
-                side: lp.side,
-                miter: lp.miter,
-                min_gap: true,
-                edge_key: None,
+            c
+        } else {
+            let mut c: Vec<usize> = vec![];
+            for p in &pontos {
+                if let Some(e) = mais_perto(*p) {
+                    if !c.contains(&e) {
+                        c.push(e);
+                    }
+                }
+            }
+            c
+        };
+        let reta_do = |e: usize| match m.edge_formula(e) {
+            Some(EdgeFormula::Line { a, b }) => Some(geo3d::lerp(a, b, 0.5)),
+            _ => None,
+        };
+        let tudo_reto = !conj.is_empty() && conj.iter().all(|e| reta_do(*e).is_some());
+        if tudo_reto || conj.is_empty() {
+            // só arestas retas: uma aba por aresta, com mitra e extensão lateral
+            if lp.loop_all {
+                pontos = conj.iter().filter_map(|e| reta_do(*e)).collect();
+            }
+            for (i, p) in pontos.iter().enumerate() {
+                let fl = self.aba_reta_do_laco(lp, *p);
+                self.run_flange(f, &fl, &lp.extent, lp.invert).map_err(|e| if pontos.len() > 1 { format!("aba {} de {}: {e}", i + 1, pontos.len()) } else { e })?;
+            }
+        } else {
+            // há curva no conjunto: trechos que seguem a tangente viram uma aba contínua (reta +
+            // arco emendados), o resto fica como aba reta
+            let cs: Vec<geo3d::Curve3> = conj.iter().map(|e| curvas[*e].clone().unwrap()).collect();
+            let mut visto = vec![false; cs.len()];
+            let mut cadeias: Vec<Vec<usize>> = vec![];
+            for i in 0..cs.len() {
+                if visto[i] {
+                    continue;
+                }
+                let ids = geo3d::tangent_chain(&cs, i, 1e-3);
+                for j in &ids {
+                    visto[*j] = true;
+                }
+                cadeias.push(ids);
+            }
+            let n = cadeias.len();
+            let r = match &lp.radius {
+                Some(e) => ev_faixa(e, &self.vars, "raio interno", 0.01, f64::INFINITY, "mm")?,
+                None => sp.r,
             };
-            self.run_flange(f, &fl, &lp.extent, lp.invert).map_err(|e| if pontos.len() > 1 { format!("aba {} de {}: {e}", i + 1, pontos.len()) } else { e })?;
+            let len = ev_faixa(&lp.length, &self.vars, "comprimento reto", 0., f64::INFINITY, "mm")?;
+            let ang = ev_faixa(&lp.angle, &self.vars, "ângulo", 0.01, 180., "°")?;
+            for (i, ids) in cadeias.iter().enumerate() {
+                let rotulo = |e: String| if n > 1 { format!("aba {} de {n}: {e}", i + 1) } else { e };
+                if let [j] = ids.as_slice() {
+                    if let Some(p) = reta_do(conj[*j]) {
+                        let fl = self.aba_reta_do_laco(lp, p);
+                        self.run_flange(f, &fl, &lp.extent, lp.invert).map_err(rotulo)?;
+                        continue;
+                    }
+                }
+                let ordem = ordena_cadeia(ids.iter().map(|j| cs[*j].pts.clone()).collect()).ok_or_else(|| rotulo("as arestas do laço não se emendam".into()))?;
+                // a cadeia fechada (laço de retângulo arredondado) vai numa varredura só, com o fio
+                // tangente fechado; a tolerância do kernel (sm_chain_sweep) cuida das paredes retas
+                self.curve_flange(f, juntas(&ordem), ang, r, len, lp.flip, None, lp.side).map_err(rotulo)?;
+            }
         }
         // cada aba resolve a própria aresta e sobrescreve a promoção; vale a do conjunto
         *self.promoted.borrow_mut() = promovido;
         Ok(None)
+    }
+
+    /// Aba reta de uma aresta do laço, com os parâmetros do comando.
+    fn aba_reta_do_laco(&self, lp: &SmFlangeLoop, p: V3) -> SmFlange {
+        SmFlange {
+            edge: p,
+            length: lp.length.clone(),
+            angle: lp.angle.clone(),
+            radius: lp.radius.clone(),
+            off1: "0".into(),
+            off2: "0".into(),
+            flip: lp.flip,
+            relief: lp.relief.clone(),
+            relief_kind: lp.relief_kind,
+            side: lp.side,
+            miter: lp.miter,
+            min_gap: true,
+            edge_key: None,
+        }
     }
 }

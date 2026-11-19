@@ -158,7 +158,7 @@ fn trecho_na_chapa(linha: &[V3], dentro: &dyn Fn(V3) -> bool) -> Option<Vec<V3>>
 }
 
 /// Emenda polilinhas que se tocam pelas pontas numa só; `None` se alguma não encaixa.
-fn encadeia(mut partes: Vec<Vec<V3>>) -> Option<Vec<V3>> {
+pub(crate) fn encadeia(mut partes: Vec<Vec<V3>>) -> Option<Vec<V3>> {
     let mut out = partes.pop()?;
     while !partes.is_empty() {
         let (a, z) = (out[0], out[out.len() - 1]);

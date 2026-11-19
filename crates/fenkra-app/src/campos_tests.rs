@@ -211,6 +211,67 @@ fn laco_de_abas_recebe_as_arestas_pelo_clique() {
     assert!(zmax > 15., "as abas sobem: z máx {zmax}");
 }
 
+fn laco_vazio() -> FeatureKind {
+    FeatureKind::SmFlangeLoop(SmFlangeLoop { edges: vec![[0.; 3]], edge_keys: vec![], loop_all: true, extent: ExtensaoAba::Inteira, invert: false, length: s("20"), angle: s("90"), radius: None, flip: false, side: 0, miter: true, relief: None, relief_kind: 0 })
+}
+
+/// B530: duas arestas escolhidas no 3D (uma chave por aresta, pelo nome) viram duas abas; Shift não
+/// é preciso, e clicar de novo numa delas a tira.
+#[test]
+fn laco_de_abas_duas_arestas_escolhidas_viram_duas_abas() {
+    let mut d = placa();
+    let mut k = laco_vazio();
+    let sem_cadeia = |_: bool| -> Vec<[f64; 3]> { panic!("o laço não usa a cadeia tangente") };
+    let (e1, e2) = ([100., 25., 2.], [50., 0., 2.]);
+    assert!(crate::slots::aresta_clicada(&mut k, e1, None, true, sem_cadeia));
+    assert!(crate::slots::aresta_clicada(&mut k, e2, None, true, sem_cadeia));
+    let FeatureKind::SmFlangeLoop(l) = &k else { unreachable!() };
+    assert_eq!(l.edges.len(), 2);
+    assert!(!l.loop_all, "duas arestas valem como estão");
+    let id = d.add_feature(k);
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let r = fenkra_solidos::recompute(&d);
+    assert!(matches!(r.status[&id], fenkra_solidos::Status::Ok | fenkra_solidos::Status::Warning(_)), "{:?}", r.status[&id]);
+    // duas abas de 20 mm: 100 mm + 50 mm de comprimento, cerca de 2 mm de espessura
+    let acresc = r.bodies[0].mass.volume - 100. * 50. * 2.;
+    assert!(acresc > 150. * 2. * 15. && acresc < 150. * 2. * 28., "volume das duas abas {acresc}");
+}
+
+/// B530: clicar numa FACE com o laço aberto pega o contorno inteiro (as quatro arestas da placa).
+#[test]
+fn laco_de_abas_face_clicada_pega_o_contorno() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let mut d = placa();
+    let r0 = fenkra_solidos::recompute(&d);
+    let b = &r0.bodies[0];
+    // a face de cima (normal +Z, de maior área)
+    let face = (0..b.mesh.face_info.len()).filter(|f| b.mesh.face_info[*f].dir[2] > 0.9).max_by(|a, c| b.mesh.face_info[*a].area.total_cmp(&b.mesh.face_info[*c].area)).unwrap();
+    let e = crate::slots::aresta_externa_da_face(&b.mesh, face).expect("a face tem arestas");
+    let mid = [b.mesh.edge_mids[e * 3] as f64, b.mesh.edge_mids[e * 3 + 1] as f64, b.mesh.edge_mids[e * 3 + 2] as f64];
+    let mut k = laco_vazio();
+    // havia duas arestas escolhidas: a face substitui tudo
+    if let FeatureKind::SmFlangeLoop(l) = &mut k {
+        l.edges = vec![[100., 25., 2.], [50., 0., 2.]];
+        l.loop_all = false;
+    }
+    assert!(crate::slots::face_clicada_no_laco(&mut k, mid, b.edge_key(e)));
+    let FeatureKind::SmFlangeLoop(l) = &k else { unreachable!() };
+    assert!(l.loop_all && l.edges == vec![mid], "a face vale pelo contorno inteiro");
+    let id = d.add_feature(k);
+    let r = fenkra_solidos::recompute(&d);
+    assert!(matches!(r.status[&id], fenkra_solidos::Status::Ok | fenkra_solidos::Status::Warning(_)), "{:?}", r.status[&id]);
+    // quatro abas: perímetro 300 mm
+    let acresc = r.bodies[0].mass.volume - 100. * 50. * 2.;
+    assert!(acresc > 300. * 2. * 15., "o contorno inteiro ganhou aba: {acresc}");
+    // não é laço: face de um comando que não é laço não muda nada
+    let mut outro = FeatureKind::SmFlange(fenkra_core::SmFlange { edge: [0.; 3], length: s("5"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None });
+    assert!(!crate::slots::face_clicada_no_laco(&mut outro, mid, None));
+}
+
 /// Aba curva aberta: o clique numa aresta põe a cadeia tangente e a chave da aresta.
 #[test]
 fn aba_curva_recebe_a_cadeia_pelo_clique() {
