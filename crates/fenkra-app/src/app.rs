@@ -7667,6 +7667,21 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     }
                 } else if let (Some((rid, i)), true) = (regiao, resp.clicked_by(egui::PointerButton::Primary)) {
                     crate::sup3d::alternar_regiao(&mut self.open.doc, r, rid, i);
+                } else if let (Some(Some(sid)), true, Some(crate::picking::Pick::Face { body, face, .. })) = (
+                    self.session.as_ref().map(|x| x.id).map(|id| self.open.doc.feature(id).filter(|f| matches!(f.kind, FeatureKind::SmFlangeLoop(_))).map(|f| f.id)),
+                    resp.clicked_by(egui::PointerButton::Primary),
+                    self.hover_pick,
+                ) {
+                    // B530: laço de abas aberto: clicar numa face pega o contorno inteiro dela
+                    if let Some(b) = r.bodies.get(body) {
+                        if let Some(e) = crate::slots::aresta_externa_da_face(&b.mesh, face) {
+                            let m = [b.mesh.edge_mids[e * 3] as f64, b.mesh.edge_mids[e * 3 + 1] as f64, b.mesh.edge_mids[e * 3 + 2] as f64];
+                            let key = b.edge_key(e);
+                            if let Some(f) = self.open.doc.feature_mut(sid) {
+                                crate::slots::face_clicada_no_laco(&mut f.kind, m, key);
+                            }
+                        }
+                    }
                 } else if let (Some(fid), true, Some(crate::picking::Pick::Face { point, body, face, .. })) = (face_cmd, resp.clicked_by(egui::PointerButton::Primary), self.hover_pick) {
                     // a mesma face do corpo (pela malha atual) é tirada em vez de repetida
                     let same = |a: [f64; 3], b: [f64; 3]| crate::picking::same_face(r, body, a, b);

@@ -420,6 +420,38 @@ pub fn aresta_clicada(k: &mut FeatureKind, mid: [f64; 3], key: Option<EdgeKey>, 
     }
 }
 
+/// B530: aresta do contorno externo da face `face` da malha, para o laço de abas começar por ela.
+/// O contorno externo é o que fica mais longe do centro das arestas da face (um furo fica dentro).
+/// Devolve o índice da aresta na malha.
+pub fn aresta_externa_da_face(mesh: &fenkra_kernel::Mesh, face: usize) -> Option<usize> {
+    let da_face: Vec<usize> = (0..mesh.edge_faces.len()).filter(|e| mesh.edge_faces[*e].contains(&(face as u32)) && mesh.edge_formula(*e).is_some()).collect();
+    if da_face.is_empty() {
+        return None;
+    }
+    let mid = |e: usize| [mesh.edge_mids[e * 3] as f64, mesh.edge_mids[e * 3 + 1] as f64, mesh.edge_mids[e * 3 + 2] as f64];
+    let n = da_face.len() as f64;
+    let c = da_face.iter().fold([0.; 3], |a, e| {
+        let m = mid(*e);
+        [a[0] + m[0] / n, a[1] + m[1] / n, a[2] + m[2] / n]
+    });
+    let dist = |e: usize| {
+        let m = mid(e);
+        (0..3).map(|i| (m[i] - c[i]).powi(2)).sum::<f64>()
+    };
+    da_face.into_iter().max_by(|a, b| dist(*a).total_cmp(&dist(*b)))
+}
+
+/// B530: clique numa FACE com o laço de abas aberto. A face vale pelo contorno inteiro: grava uma
+/// aresta do contorno dela (`mid`, `key`) e liga o laço da face, o mesmo estado de uma aresta só.
+/// Substitui a escolha anterior. Devolve se o comando era um laço.
+pub fn face_clicada_no_laco(k: &mut FeatureKind, mid: [f64; 3], key: Option<EdgeKey>) -> bool {
+    let FeatureKind::SmFlangeLoop(l) = k else { return false };
+    l.edges = vec![mid];
+    l.edge_keys = key.into_iter().map(Some).collect();
+    l.loop_all = true;
+    true
+}
+
 /// A aba curva com os parâmetros da aba de aresta `f`, na cadeia `pts`.
 pub fn aba_curva_de(f: &fenkra_core::SmFlange, pts: Vec<[f64; 3]>, key: Option<EdgeKey>) -> fenkra_core::SmCurveFlange {
     fenkra_core::SmCurveFlange { edge: pts, length: f.length.clone(), flip: f.flip, angle: f.angle.clone(), radius: f.radius.clone(), side: f.side, edge_key: key, so_aresta: true }

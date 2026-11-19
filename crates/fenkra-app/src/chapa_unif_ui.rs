@@ -51,14 +51,36 @@ pub fn suporte(ui: &mut egui::Ui, doc: &fenkra_core::Document, kind: &mut Featur
         }
         FeatureKind::SmFlangeLoop(lp) => {
             section(ui, "Suporte");
-            let n = lp.edges.iter().filter(|e| **e != [0.; 3]).count();
-            ui.label(RichText::new(format!("{n} {}", tr("aresta(s) escolhida(s)"))).small());
-            ui.label(RichText::new(tr("Clique nas arestas no 3D: cada clique soma uma; clique de novo numa escolhida para tirar.")).weak().small());
-            crate::editor::check(ui, &mut lp.loop_all, "usar o laço da face inteira").on_hover_text(tr("Liga: a partir da primeira aresta escolhida, cria uma aba em cada aresta reta do contorno da face. Desliga: só as arestas escolhidas."));
-            if ui.add_enabled(n > 0, egui::Button::new(tr("Limpar"))).on_hover_text(tr("Tira as arestas escolhidas para escolher de novo.")).clicked() {
-                lp.edges = vec![[0.; 3]];
-                lp.edge_keys.clear();
+            // B530: campo de lista padrão (o mesmo das outras bancadas): cada clique numa aresta soma,
+            // clicar de novo tira, o nome vem da identidade da aresta; clicar numa face pega o contorno
+            let z = [0.; 3];
+            let mut itens: Vec<([f64; 3], Option<fenkra_core::EdgeKey>)> = lp.edges.iter().enumerate().filter(|(_, e)| **e != z).map(|(i, e)| (*e, lp.edge_keys.get(i).copied().flatten())).collect();
+            let antes = itens.clone();
+            crate::geo_ui::bag(
+                ui,
+                "smloop_arestas",
+                "Arestas",
+                &mut itens,
+                &[],
+                1,
+                |(p, k)| if *p == z { tr("escolher no 3D").to_string() } else { crate::ref_nome::campo_aresta(doc, k.as_ref(), *p) },
+                |ui, _, _| {
+                    ui.label(RichText::new(tr("Clique outra aresta no 3D para somar; clique de novo numa escolhida para tirar.")).weak().small());
+                },
+                || (z, None),
+                Some((z, None)),
+                |a, b| (a.1.is_some() && a.1 == b.1) || (0..3).all(|i| (a.0[i] - b.0[i]).abs() < 0.01),
+            );
+            if itens != antes {
+                let reais: Vec<_> = itens.iter().filter(|(p, _)| *p != z).copied().collect();
+                lp.edges = if reais.is_empty() { vec![z] } else { reais.iter().map(|x| x.0).collect() };
+                lp.edge_keys = if reais.iter().all(|x| x.1.is_none()) { vec![] } else { reais.iter().map(|x| x.1).collect() };
+                if reais.len() <= 1 {
+                    lp.loop_all = true;
+                }
             }
+            ui.label(RichText::new(tr("Clique numa face da chapa para pegar o contorno inteiro dela.")).weak().small());
+            crate::editor::check(ui, &mut lp.loop_all, "usar o laço da face inteira").on_hover_text(tr("Liga: a partir da primeira aresta escolhida, cria uma aba em cada aresta do contorno da face, retas e curvas; os trechos curvos viram aba curva emendada às retas. Desliga: só as arestas escolhidas."));
         }
         _ => {}
     }
