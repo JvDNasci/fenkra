@@ -8649,7 +8649,7 @@
    "tokens_k": 200,
    "teste": "Auto + Visual",
    "area": "Chapa",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -8761,7 +8761,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Chapa",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -8777,7 +8777,7 @@
    "tokens_k": 300,
    "teste": "Auto + Visual",
    "area": "Chapa",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -8841,7 +8841,7 @@
    "tokens_k": 250,
    "teste": "Auto",
    "area": "Superfícies",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   },
   {
@@ -8889,7 +8889,7 @@
    "tokens_k": 100,
    "teste": "Auto",
    "area": "Superfícies",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.1
   },
   {
@@ -9145,7 +9145,7 @@
    "tokens_k": 200,
    "teste": "Auto",
    "area": "Chapa",
-   "status": "a fazer",
+   "status": "feito",
    "pct": 0.2
   }
  ]
