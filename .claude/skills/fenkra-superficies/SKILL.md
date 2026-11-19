@@ -43,6 +43,10 @@ Preencha com o que for aprendido. Cada regra leva o motivo.
   corpo) e `forma_superficie`/`surface`/`surface_owner` resolvem `SurfRef::Ref(forma)` e as chaves com a forma
   como dona. Quem pergunta "é superfície?" pelo `doc.reference(id)` deixa a forma de fora: use
   `Document::superficie_mostrada`, `aparencia_da_superficie` e `Forma::e_superficie` (B511).
+- Abrir uma forma convertida para editar volta direto à gaiola (`forma_ui::ao_abrir`, em `start_session`):
+  consumida por Espessar/Deslocar ela fica oculta e colada no resultado, e o modo relatório não deixava
+  nada para editar (B537). O recálculo já pausava certo; o defeito era a entrada na edição. Teste de
+  interface com o worker de verdade: `app/forma_espessada_testes.rs`.
 - Término "até a superfície" com superfície de várias faces corta primeiro sem estender: estender cada face
   sozinha solta as emendas e a ferramenta não se divide em dois pedaços (B511, `Shape::clip_until`).
 - Comando que consome superfícies inteiras (filete, junção, aparar) esconde as entradas ao sair o resultado

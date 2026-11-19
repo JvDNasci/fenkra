@@ -199,6 +199,21 @@ fn voltar_a_gaiola(app: &mut App, id: Id, no: Option<u32>) {
     app.scene_dirty = true;
 }
 
+/// B537: abrir para editar uma forma já convertida (duplo clique ou Editar na árvore, duplo clique no 3D)
+/// volta direto à gaiola. Desde o B511 toda forma concluída sai convertida, e abri-la caía no relatório
+/// da conversão, que só mostra o B-rep e espera o botão "Voltar à gaiola". Consumida por Espessar ou
+/// Deslocar, a forma fica oculta e colada na face do resultado: a pessoa via só o sólido de antes, sem
+/// gaiola nem superfície para pegar (o 3D também não a escolhe oculta), e só apagando o espessar a forma
+/// voltava à vista. Com a gaiola aberta a conversão pausa, quem usa a forma
+/// espera, a superfície lisa aparece mesmo consumida e Concluir converte e refaz os filhos. O relatório
+/// continua no botão Converter. Congelada (ou revisão congelada) não abre a gaiola: é só leitura.
+pub fn ao_abrir(app: &mut App, id: Id) {
+    let editavel = app.open.frozen.is_none() && forma(app, id).is_some_and(|f| !f.congelada && f.conversao.as_ref().is_some_and(|c| !c.pausada));
+    if editavel {
+        voltar_a_gaiola(app, id, None);
+    }
+}
+
 /// Concluir com a gaiola aberta refaz a conversão: é assim que a edição chega aos filhos.
 /// B511: forma nunca convertida também converte ao concluir (G1), para sair como superfície ou sólido
 /// comum que as outras bancadas escolhem. Só a forma cara (alerta de tempo) espera o botão Converter.
