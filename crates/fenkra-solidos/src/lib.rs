@@ -1193,8 +1193,33 @@ fn ref_sig(doc: &Document, id: Id, vars: &Vars, depth: u32) -> String {
     if depth < 24 {
         let mut ids = vec![];
         r.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
+        // B534: o dono de uma chave de face ou aresta (ADR 0010) também é entrada: a extração de uma
+        // superfície de referência tem de refazer quando a superfície muda, e a linha do tempo dos
+        // corpos não diz isso
+        for x in donos_citados(&js) {
+            if !ids.contains(&x) {
+                ids.push(x);
+            }
+        }
         for x in ids.into_iter().filter(|x| *x != id) {
             out.push_str(&ref_sig(doc, x, vars, depth + 1));
+        }
+    }
+    out
+}
+
+/// Ids citados como `"owner":N` no texto da referência: os donos das chaves de face e de aresta e o
+/// dono gravado da face extraída (B534).
+fn donos_citados(js: &str) -> Vec<Id> {
+    const MARCA: &str = "\"owner\":";
+    let mut out = vec![];
+    for (i, _) in js.match_indices(MARCA) {
+        let resto = &js[i + MARCA.len()..];
+        let n = resto.bytes().take_while(u8::is_ascii_digit).count();
+        if let Ok(v) = resto[..n].parse::<u64>() {
+            if !out.contains(&Id(v)) {
+                out.push(Id(v));
+            }
         }
     }
     out
@@ -1863,20 +1888,76 @@ impl Ctx<'_> {
         }
     }
 
-    /// Extração refeita a partir do ponto clicado, com a propagação gravada.
-    fn extract_faces(&self, p: V3, prop: Propagation, complement: bool) -> Result<(Shape, u32, u32), String> {
+    /// Extração refeita com a propagação gravada, a partir da face achada por [`Ctx::extract_source`].
+    fn extract_faces(&self, me: Id, p: V3, owner: Option<Id>, key: Option<&FaceKey>, prop: Propagation, complement: bool) -> Result<(Shape, u32, u32), String> {
         let code = match prop {
             Propagation::Nenhuma => 0,
             Propagation::Ponto => 1,
             Propagation::Tangente => 2,
             Propagation::Completo => 3,
         };
-        for (b, _, _) in self.bodies.values() {
-            if b.surface_near(p).is_ok_and(|(q, _)| geo3d::dist(q, p) < 1e-3) {
-                return b.face_propagate(p, code, complement).map_err(|e| e.0);
+        let (sh, q) = self.extract_source(me, p, owner, key)?;
+        sh.face_propagate(q, code, complement).map_err(|e| e.0)
+    }
+
+    /// B534: a forma em que está a face da extração `me` e um ponto dentro dela. Com a chave (ADR 0010),
+    /// a face é a do dono e papel: na superfície de referência ou na forma livre dona, pelo índice; nos
+    /// corpos, pela face de mesmo papel. Sem a chave (arquivo antigo, face sem papel), vale o ponto,
+    /// procurado nos corpos e depois nas superfícies.
+    fn extract_source(&self, me: Id, p: V3, owner: Option<Id>, key: Option<&FaceKey>) -> Result<(Shape, V3), String> {
+        if let Some(found) = key.and_then(|k| self.surface_face(k, Some(p))) {
+            let (sh, topo, j) = found?;
+            return Ok((sh, topo.faces[j].point));
+        }
+        let on = |sh: &Shape, q: V3| sh.surface_near(q).is_ok_and(|(s, _)| geo3d::dist(s, q) < 1e-3);
+        let perdida = || "a face não existe mais no modelo — reedite".to_string();
+        if key.is_some() {
+            let q = self.live_face(p, key)?;
+            return self.bodies.values().find(|(b, _, _)| on(b, q)).map(|(b, _, _)| (b.clone(), q)).ok_or_else(perdida);
+        }
+        if let Some((b, _, _)) = self.bodies.values().find(|(b, _, _)| on(b, p)) {
+            return Ok((b.clone(), p));
+        }
+        for id in self.superficies_candidatas(me, owner) {
+            if let Some(Ok(sh)) = self.surface_owner(id) {
+                if on(&sh, p) {
+                    return Ok((sh, p));
+                }
             }
         }
-        Err("a face não existe mais no modelo — reedite".into())
+        Err(perdida())
+    }
+
+    /// Superfícies onde um ponto sem chave pode estar (B534): a dona gravada primeiro, depois as formas
+    /// livres e as superfícies de referência anteriores a `me` (as de depois podem depender dela).
+    fn superficies_candidatas(&self, me: Id, owner: Option<Id>) -> Vec<Id> {
+        let formas = self.doc.features.iter().filter(|f| matches!(f.kind, FeatureKind::Forma(_))).map(|f| f.id);
+        let antes = self.doc.references.iter().take_while(|r| r.id != me).filter(|r| r.kind.class() == RefClass::Surface).map(|r| r.id);
+        let mut v: Vec<Id> = owner.into_iter().collect();
+        for id in formas.chain(antes) {
+            if !v.contains(&id) {
+                v.push(id);
+            }
+        }
+        v
+    }
+
+    /// B534: chave da face de superfície (de referência ou forma livre) em que o ponto da extração `me`
+    /// cai, se o índice e o tipo a acharem de novo sozinhos (promoção de extração antiga, só com o ponto).
+    pub(crate) fn chave_na_superficie(&self, me: Id, p: V3, owner: Option<Id>) -> Option<FaceKey> {
+        if self.bodies.values().any(|(b, _, _)| matches!(b.face_index(p, 1e-3), Ok(Some(_)))) {
+            return None;
+        }
+        for id in self.superficies_candidatas(me, owner) {
+            let Some(Ok(sh)) = self.surface_owner(id) else { continue };
+            let Ok(Some(j)) = sh.face_index(p, 1e-3) else { continue };
+            let topo = sh.topology().ok()?;
+            let (owners, roles) = (vec![id; topo.faces.len()], refs::surface_roles(topo.faces.len()));
+            let v = refs::View { topo: &topo, owners: &owners, roles: &roles };
+            let k = v.face_key(j)?;
+            return (refs::find_surface_face(&v, &k, None) == Ok(j)).then_some(k);
+        }
+        None
     }
 
     /// Contorno a partir da aresta mais perto do ponto: nenhuma = só ela; ponto = o laço dela;
@@ -2403,8 +2484,8 @@ impl Ctx<'_> {
                 let cs: Vec<Curve3> = curves.iter().map(|c| self.curve(c, d)).collect::<Result<_, _>>()?;
                 Geo::Curve(join_curves(cs)?)
             }
-            SurfExtract { face, prop, complement, expected, key, .. } => {
-                let (sh, nf, ne) = self.extract_faces(self.live_face(*face, key.as_ref())?, *prop, *complement)?;
+            SurfExtract { face, owner, prop, complement, expected, key } => {
+                let (sh, nf, ne) = self.extract_faces(id, *face, *owner, key.as_ref(), *prop, *complement)?;
                 self.count_note(id, nf, ne, *expected, "faces");
                 Geo::Surface(sh)
             }
@@ -2725,7 +2806,15 @@ impl Ctx<'_> {
             SurfMulti { faces, keys } => {
                 let mut acc = Shape::empty();
                 for (i, p) in faces.iter().enumerate() {
-                    let x = self.face_of_bodies(self.live_face(*p, keys.get(i).and_then(|k| k.as_ref()))?)?;
+                    let k = keys.get(i).and_then(|k| k.as_ref());
+                    // B534: face de superfície de referência ou de forma livre, pelo índice da chave
+                    let x = match k.and_then(|k| self.surface_face(k, Some(*p))) {
+                        Some(found) => {
+                            let (sh, _, j) = found?;
+                            sh.nth_face(j as u32).map_err(|e| e.0)?
+                        }
+                        None => self.face_of_bodies(self.live_face(*p, k)?)?,
+                    };
                     acc = if acc.is_null() { x } else { acc.compound(&x) };
                 }
                 if acc.is_null() {
@@ -7093,7 +7182,13 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                     RefKind::AxisLine { axis: AxisRef::Edge { mid, key: None }, .. } => Some((*mid, true)),
                     _ => None,
                 };
-                if let Some(ch) = sem_chave.and_then(|(p, aresta)| cx.chave_no_ponto(p, aresta)) {
+                let mut chave = sem_chave.and_then(|(p, aresta)| cx.chave_no_ponto(p, aresta));
+                // B534: extração antiga de uma face de superfície (de referência ou forma livre) ganha a
+                // chave da superfície e passa a seguir a face quando ela muda
+                if let (None, RefKind::SurfExtract { face, owner, key: None, .. }) = (&chave, &r.kind) {
+                    chave = cx.chave_na_superficie(r.id, *face, *owner).map(ChaveAncora::Face);
+                }
+                if let Some(ch) = chave {
                     promoted.insert(r.id, Promoted::Referencia(ch));
                 }
                 match g {
