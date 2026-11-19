@@ -41,12 +41,11 @@ pub fn suporte(ui: &mut egui::Ui, doc: &fenkra_core::Document, kind: &mut Featur
     match kind {
         FeatureKind::SmFlange(fl) => {
             section(ui, "Suporte");
-            let vazio = fl.edge == [0.; 3];
-            // B516: a aresta pelo nome (as duas faces vizinhas), não pela coordenada
-            ui.label(RichText::new(if vazio { tr("⚠ clique numa aresta da chapa na viewport, reta ou curva").to_string() } else { format!("{} — {}", crate::ref_nome::campo_aresta(doc, fl.edge_key.as_ref(), fl.edge), tr("clique outra aresta para trocar")) }).small()).on_hover_text(crate::ref_nome::dica_aresta());
-            if ui.add_enabled(!vazio, egui::Button::new(tr("Limpar"))).on_hover_text(tr("Tira a aresta escolhida para escolher outra.")).clicked() {
-                fl.edge = [0.; 3];
-                fl.edge_key = None;
+            // B531: o mesmo campo de seleção do laço e da aba curva; o clique numa aresta reta, numa
+            // curva ou numa face troca o modo sozinho (`slots::aresta_clicada`)
+            let atual = (fl.edge != [0.; 3]).then_some((fl.edge, fl.edge_key));
+            if let Some(novo) = campo_aresta(ui, doc, "smaba_aresta", atual) {
+                (fl.edge, fl.edge_key) = novo.unwrap_or(([0.; 3], None));
             }
         }
         FeatureKind::SmFlangeLoop(lp) => {
@@ -84,6 +83,32 @@ pub fn suporte(ui: &mut egui::Ui, doc: &fenkra_core::Document, kind: &mut Featur
         }
         _ => {}
     }
+}
+
+/// B531: campo de seleção da aresta única das abas de aresta e de aresta curva: o mesmo widget de
+/// lista das outras bancadas, com o nome pela identidade da aresta e o "✖" para tirar. `atual` é a
+/// aresta escolhida (um ponto dela e a chave). Devolve `Some(nova)` quando a pessoa mudou o campo
+/// (`None` dentro = tirou a aresta).
+pub fn campo_aresta(ui: &mut egui::Ui, doc: &Document, salt: &str, atual: Option<([f64; 3], Option<fenkra_core::EdgeKey>)>) -> Option<Option<([f64; 3], Option<fenkra_core::EdgeKey>)>> {
+    let z = [0.; 3];
+    let mut itens: Vec<([f64; 3], Option<fenkra_core::EdgeKey>)> = atual.into_iter().collect();
+    let antes = itens.clone();
+    crate::geo_ui::bag(
+        ui,
+        salt,
+        "Aresta",
+        &mut itens,
+        &[],
+        1,
+        |(p, k)| if *p == z { tr("escolher no 3D").to_string() } else { crate::ref_nome::campo_aresta(doc, k.as_ref(), *p) },
+        |ui, _, _| {
+            ui.label(RichText::new(tr("Clique outra aresta no 3D para trocar: reta, curva ou uma face (o contorno todo) escolhem o modo sozinhos.")).weak().small());
+        },
+        || (z, None),
+        Some((z, None)),
+        |a, b| (a.1.is_some() && a.1 == b.1) || (0..3).all(|i| (a.0[i] - b.0[i]).abs() < 0.01),
+    );
+    (itens != antes).then(|| itens.into_iter().find(|(p, _)| *p != z))
 }
 
 /// A barra de modos (miniaturas). Troca a feature para o modo clicado, levando o que é comum.

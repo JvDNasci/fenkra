@@ -2649,6 +2649,10 @@ pub struct SmCurveFlange {
     /// seguem a cadeia tangente
     #[serde(default)]
     pub so_aresta: bool,
+    /// B531: a aba de aresta reta que este recurso era antes de virar curva (recuos, alívio, mitra),
+    /// guardada para a volta ao modo reta não perder nada; vazio em documentos antigos
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reta: Option<Box<SmFlange>>,
 }
 
 /// Rasgo circular (arco) atravessando a chapa: centro na face, raio do arco, largura,

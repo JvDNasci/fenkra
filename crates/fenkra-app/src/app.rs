@@ -2772,7 +2772,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 });
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(match c {
-                    Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: true }),
+                    Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: true, reta: None }),
                     Cmd::SmArcSlot => FeatureKind::SmArcSlot(SmArcSlot { center: at.unwrap_or([0.; 3]), radius: s("20"), width: s("6"), start: s("0"), sweep: s("90") }),
                     Cmd::SmCornerClose => FeatureKind::SmCornerClose(SmCornerClose { at: at.unwrap_or([0.; 3]), kind: 1, gap: s("0.5"), ratio: s("1"), narrow: false, propagate: false, invert: false }),
                     // o tamanho padrão do canto vem do estilo da chapa, quando ele define um
@@ -2813,7 +2813,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 curva = curva.filter(|p| p.len() >= 2);
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(match c {
-                    Cmd::SmFlange if curva.is_some() => FeatureKind::SmCurveFlange(SmCurveFlange { edge: curva.take().unwrap_or_default(), length: s("20"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: true }),
+                    Cmd::SmFlange if curva.is_some() => FeatureKind::SmCurveFlange(SmCurveFlange { edge: curva.take().unwrap_or_default(), length: s("20"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: true, reta: None }),
                     Cmd::SmFlange => FeatureKind::SmFlange(SmFlange {
                         edge: edge.unwrap_or([0.; 3]),
                         length: s("20"),
@@ -7672,17 +7672,17 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 } else if let (Some((rid, i)), true) = (regiao, resp.clicked_by(egui::PointerButton::Primary)) {
                     crate::sup3d::alternar_regiao(&mut self.open.doc, r, rid, i);
                 } else if let (Some(Some(sid)), true, Some(crate::picking::Pick::Face { body, face, .. })) = (
-                    self.session.as_ref().map(|x| x.id).map(|id| self.open.doc.feature(id).filter(|f| matches!(f.kind, FeatureKind::SmFlangeLoop(_))).map(|f| f.id)),
+                    self.session.as_ref().map(|x| x.id).map(|id| self.open.doc.feature(id).filter(|f| matches!(f.kind, FeatureKind::SmFlangeLoop(_) | FeatureKind::SmFlange(_) | FeatureKind::SmCurveFlange(_))).map(|f| f.id)),
                     resp.clicked_by(egui::PointerButton::Primary),
                     self.hover_pick,
                 ) {
-                    // B530: laço de abas aberto: clicar numa face pega o contorno inteiro dela
+                    // B530: laço de abas aberto: clicar numa face pega o contorno inteiro dela (B531: na aba de aresta ou curva também, que vira laço)
                     if let Some(b) = r.bodies.get(body) {
                         if let Some(e) = crate::slots::aresta_externa_da_face(&b.mesh, face) {
                             let m = [b.mesh.edge_mids[e * 3] as f64, b.mesh.edge_mids[e * 3 + 1] as f64, b.mesh.edge_mids[e * 3 + 2] as f64];
                             let key = b.edge_key(e);
                             if let Some(f) = self.open.doc.feature_mut(sid) {
-                                crate::slots::face_clicada_no_laco(&mut f.kind, m, key);
+                                crate::slots::face_clicada_na_aba(&mut f.kind, m, key);
                             }
                         }
                     }

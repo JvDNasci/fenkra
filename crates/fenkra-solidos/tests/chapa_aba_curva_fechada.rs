@@ -17,7 +17,7 @@ fn chapa(d: &mut Document) {
 }
 
 fn aba(edge: Vec<[f64; 3]>, len: &str, ang: &str) -> FeatureKind {
-    FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s(len), flip: false, angle: s(ang), radius: None, side: 0, edge_key: None, so_aresta: false })
+    FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s(len), flip: false, angle: s(ang), radius: None, side: 0, edge_key: None, so_aresta: false, reta: None })
 }
 
 fn circulo(r: f64, z: f64, n: usize) -> Vec<[f64; 3]> {

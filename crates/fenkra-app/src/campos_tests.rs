@@ -275,12 +275,51 @@ fn laco_de_abas_face_clicada_pega_o_contorno() {
 /// Aba curva aberta: o clique numa aresta põe a cadeia tangente e a chave da aresta.
 #[test]
 fn aba_curva_recebe_a_cadeia_pelo_clique() {
-    let mut k = FeatureKind::SmCurveFlange(SmCurveFlange { edge: vec![], length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false });
+    let mut k = FeatureKind::SmCurveFlange(SmCurveFlange { edge: vec![], length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false, reta: None });
     assert!(crate::slots::feature_incomplete(&k));
-    assert!(crate::slots::aresta_clicada(&mut k, [5., 0., 2.], None, true, |_| vec![[0., 0., 2.], [5., 0., 2.], [10., 0., 2.]]));
+    // reta emendada a uma curva (a cadeia não é reta): continua aba curva
+    assert!(crate::slots::aresta_clicada(&mut k, [5., 0., 2.], None, true, |_| vec![[0., 0., 2.], [5., 0., 2.], [10., 5., 2.]]));
     let FeatureKind::SmCurveFlange(c) = &k else { unreachable!() };
     assert_eq!(c.edge.len(), 3);
     assert!(!crate::slots::feature_incomplete(&k));
+}
+
+/// B531: um comando Aba só. Reta, curva e face escolhem o modo sozinhos e os parâmetros (comprimento,
+/// ângulo, raio, lado, recuos e alívio) sobrevivem à ida e à volta.
+#[test]
+fn aba_unica_troca_de_modo_pelo_clique_sem_perder_parametros() {
+    let s = |x: &str| x.to_string();
+    let original = fenkra_core::SmFlange { edge: [100., 25., 2.], length: s("25"), angle: s("60"), radius: Some(s("3")), off1: s("5"), off2: s("6"), flip: true, relief: Some(s("2.5")), relief_kind: 1, side: 2, miter: true, min_gap: false, edge_key: None };
+    let mut k = FeatureKind::SmFlange(original.clone());
+    // clique numa curva: vira aba curva, levando lado e alívio (guardados)
+    let arco = vec![[10., 0., 2.], [7.07, 7.07, 2.], [0., 10., 2.]];
+    assert!(crate::slots::aresta_clicada(&mut k, arco[1], None, false, |_| arco.clone()));
+    let FeatureKind::SmCurveFlange(c) = &k else { panic!("virou aba curva") };
+    assert_eq!((c.side, c.length.as_str(), c.radius.as_deref()), (2, "25", Some("3")));
+    // muda um valor no modo curva: ele vale na volta
+    let FeatureKind::SmCurveFlange(c) = &mut k else { unreachable!() };
+    c.angle = s("45");
+    // clique numa reta: volta ao modo aresta com tudo de antes e o ângulo novo
+    assert!(crate::slots::aresta_clicada(&mut k, [50., 0., 2.], None, true, |_| vec![[0., 0., 2.], [50., 0., 2.], [100., 0., 2.]]));
+    let FeatureKind::SmFlange(f) = &k else { panic!("voltou à aba de aresta") };
+    assert_eq!(f.edge, [50., 0., 2.]);
+    assert_eq!((f.length.as_str(), f.angle.as_str(), f.radius.as_deref(), f.flip, f.side), ("25", "45", Some("3"), true, 2));
+    assert_eq!((f.off1.as_str(), f.off2.as_str(), f.relief.as_deref(), f.relief_kind, f.miter, f.min_gap), ("5", "6", Some("2.5"), 1, true, false));
+    // clique numa face: vira laço com o contorno, levando lado, alívio e valores
+    assert!(crate::slots::face_clicada_na_aba(&mut k, [100., 25., 2.], None));
+    let FeatureKind::SmFlangeLoop(l) = &k else { panic!("virou laço") };
+    assert!(l.loop_all && l.edges == vec![[100., 25., 2.]]);
+    assert_eq!((l.length.as_str(), l.angle.as_str(), l.side, l.relief.as_deref(), l.flip), ("25", "45", 2, Some("2.5"), true));
+}
+
+/// B531: aba reta sem curva continua abrindo documento antigo: sem `reta` no arquivo, o campo vem vazio.
+#[test]
+fn aba_curva_antiga_abre_sem_o_campo_da_aba_reta() {
+    let k = FeatureKind::SmCurveFlange(SmCurveFlange { edge: vec![[0.; 3], [1., 0., 0.]], length: s("5"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false, reta: None });
+    let txt = serde_json::to_string(&k).unwrap();
+    assert!(!txt.contains("reta"), "sem a aba reta guardada nada vai para o arquivo: {txt}");
+    let lido: FeatureKind = serde_json::from_str(&txt).unwrap();
+    assert_eq!(lido, k);
 }
 
 /// Teste da alpha.38: com a aba de aresta aberta, clicar numa aresta curva troca pela aba curva só

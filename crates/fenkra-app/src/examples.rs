@@ -114,7 +114,7 @@ fn bandeja() -> Document {
             [80. * t.cos(), 80. * t.sin(), 1.5]
         })
         .collect();
-    d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("18"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false }));
+    d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("18"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false, reta: None }));
     d.hide_consumed(d.features[1].id);
     d
 }

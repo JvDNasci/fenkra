@@ -58,7 +58,11 @@ pub fn cobre(k: &FeatureKind) -> bool {
 /// também fica de fora (B470): o tronco é só um perfil de quatro retas girado, barato o bastante
 /// para sair inteiro na prévia; leve, ela mostrava só a caixa envolvente em vez do cone. A parede
 /// base idem: é uma extrusão só, e leve a peça nova não aparecia enquanto o painel estava aberto
-/// (só a caixa em linhas), o que parecia "não fez nada".
+/// (só a caixa em linhas), o que parecia "não fez nada". A aba curva e a aba por superfície também
+/// saíram (B540): a zona era a caixa dos pontos de referência inflada igual para os três lados, que
+/// numa curva (poucos pontos) ou numa face (um ponto só) dava um cubo sem relação com o arco ou o
+/// suporte. A aba curva é uma varredura e uma booleana, e a por superfície uma interseção e um corte:
+/// peças pequenas, e a prévia agora segue a aresta e o suporte de verdade.
 pub fn so_no_fim(k: &FeatureKind) -> bool {
     use FeatureKind as K;
     matches!(
@@ -71,14 +75,12 @@ pub fn so_no_fim(k: &FeatureKind) -> bool {
             | K::SmStamp(_)
             | K::SmFlangedHole(_)
             | K::SmProfileFlange(_)
-            | K::SmCurveFlange(_)
             | K::SmFlangeLoop(_)
             | K::SmCornerRelief(_)
             | K::SmCornerClose(_)
             | K::SmLoftFlange(_)
             | K::SmConvert(_)
             | K::SmArcSlot(_)
-            | K::SmSurfFlange(_)
             | K::StructMember(_)
             | K::StructPlate(_)
             | K::StructGusset(_)
@@ -392,13 +394,11 @@ impl Ctx<'_> {
                 (p, (self.num(&x.diameter) / 2.).max(self.num(&x.height)).max(t))
             }
             K::SmProfileFlange(x) => (esboco(self, x.sketch), aba(self.num(&x.l1).max(self.num(&x.l2)), &x.radius)),
-            K::SmCurveFlange(x) => (x.edge.clone(), aba(self.num(&x.length), &x.radius)),
             K::SmFlangeLoop(x) => (self.arestas_inteiras(f.target, &x.edges), aba(self.num(&x.length), &x.radius)),
             K::SmCornerRelief(x) => (vec![x.at], self.num(&x.size).max(t)),
             K::SmCornerClose(x) => (vec![x.at], self.num(&x.gap).max(3. * t)),
             K::SmLoftFlange(x) => ([esboco(self, x.a), esboco(self, x.b)].concat(), t),
             K::SmArcSlot(x) => (vec![x.center], self.num(&x.radius) + self.num(&x.width) / 2.),
-            K::SmSurfFlange(x) => (vec![x.face], aba(self.num(&x.length), &x.radius)),
             // converter em chapa refaz o corpo todo: a zona é o próprio corpo
             K::SmConvert(_) => {
                 let b = self.body(f.target).ok_or("não há corpo para converter")?;
