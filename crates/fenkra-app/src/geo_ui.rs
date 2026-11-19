@@ -1060,7 +1060,11 @@ pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
     if est.novo && !picked.is_empty() {
         alternar_na_lista(items, picked, min, vazio.as_ref(), &mesmo);
         crate::campos::consumido(&ctx);
+        // os índices mudaram: a marcação da caixa recomeça (B555)
+        crate::caixa_selecao::guardar_marcas(&ctx, salt, Default::default());
     }
+    let mut marcas = crate::caixa_selecao::marcas(&ctx, salt);
+    marcas.ajustar(items.len());
     let reais = items.iter().filter(|x| !e_vazio(x)).count();
     let cor = if est.ativo { crate::entradas::Espera::Superficie.cor() } else { ui.visuals().widgets.noninteractive.bg_stroke.color };
     ui.horizontal(|ui| {
@@ -1085,18 +1089,27 @@ pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
                 ui.label(RichText::new(tr("nenhum elemento: clique no 3D")).weak().small());
             }
             for (i, it) in items.iter_mut().enumerate() {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new(format!("{}.", i + 1)).weak());
-                    let n = name(it);
-                    let w = (ui.available_width() - 52.).max(40.);
-                    let txt = if vazio.as_ref() == Some(&*it) { RichText::new(n).weak() } else { RichText::new(n) };
-                    ui.add_sized([w, 18.], egui::Label::new(txt).truncate());
-                    if ui.small_button("✎").on_hover_text(tr("Trocar este item pela lista ▾")).clicked() {
-                        aberto = if aberto == Some(i) { None } else { Some(i) };
-                    }
-                    if ui.small_button("✖").on_hover_text(tr("remover")).clicked() {
-                        del = Some(i);
-                    }
+                // B555: o item marcado ganha o fundo de seleção do tema
+                let fundo = if marcas.esta(i) { ui.visuals().selection.bg_fill } else { egui::Color32::TRANSPARENT };
+                egui::Frame::NONE.fill(fundo).corner_radius(3.).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(RichText::new(format!("{}.", i + 1)).weak());
+                        let n = name(it);
+                        let w = (ui.available_width() - 52.).max(40.);
+                        let txt = if vazio.as_ref() == Some(&*it) { RichText::new(n).weak() } else { RichText::new(n) };
+                        let r = ui.add_sized([w, 18.], egui::Label::new(txt).truncate().sense(egui::Sense::click())).on_hover_text(tr("Clique marca; Ctrl soma ou tira da marcação; Shift marca o intervalo; Del tira os marcados."));
+                        if r.clicked() {
+                            let (ctrl, shift) = ui.input(|k| (k.modifiers.command, k.modifiers.shift));
+                            marcas.clicar(i, ctrl, shift);
+                            crate::campos::focar(&ctx, id);
+                        }
+                        if ui.small_button("✎").on_hover_text(tr("Trocar este item pela lista ▾")).clicked() {
+                            aberto = if aberto == Some(i) { None } else { Some(i) };
+                        }
+                        if ui.small_button("✖").on_hover_text(tr("remover")).clicked() {
+                            del = Some(i);
+                        }
+                    });
                 });
                 if aberto == Some(i) {
                     // o editor do item não é um campo do painel: não entra na ordem do Tab
@@ -1120,6 +1133,7 @@ pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
                         }
                     }
                     aberto = None;
+                    marcas.limpar();
                 }
             });
         })
@@ -1130,7 +1144,21 @@ pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
     if let Some(i) = del {
         tirar_da_lista(items, i, min, vazio.as_ref());
         aberto = None;
+        // o índice tirado desloca os seguintes: a marcação recomeça
+        marcas.limpar();
     }
+    // B555: Del/Backspace tira os marcados, só com a caixa ativa ou sob o mouse e sem texto em edição
+    let sobre = ctx.input(|i| i.pointer.hover_pos()).is_some_and(|p| resp.rect.contains(p));
+    if !marcas.vazia() && (est.ativo || sobre) && crate::caixa_selecao::tecla_de_remover(&ctx) {
+        crate::caixa_selecao::remover_marcados(items, &mut marcas, min, vazio.as_ref());
+        aberto = None;
+        ctx.input_mut(|i| {
+            i.consume_key(egui::Modifiers::NONE, egui::Key::Delete);
+            i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace);
+        });
+    }
+    marcas.ajustar(items.len());
+    crate::caixa_selecao::guardar_marcas(&ctx, salt, marcas);
     if novo {
         items.push(blank());
         aberto = Some(items.len() - 1);
@@ -1139,7 +1167,7 @@ pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
 }
 
 /// Tira o item `i`; abaixo do mínimo ele volta a ser o marcador de vazio (se houver).
-fn tirar_da_lista<T: Clone>(items: &mut Vec<T>, i: usize, min: usize, vazio: Option<&T>) {
+pub(crate) fn tirar_da_lista<T: Clone>(items: &mut Vec<T>, i: usize, min: usize, vazio: Option<&T>) {
     if i >= items.len() {
         return;
     }

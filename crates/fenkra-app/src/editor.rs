@@ -1681,6 +1681,7 @@ fn feature_ui(
             if let EdgeSel::Edges(m) = &mut o.edges {
                 // B516: cada aresta pelo nome (as duas faces vizinhas), não pela coordenada
                 let chaves = o.keys.clone();
+                let antes = m.clone();
                 // sacola: a lista das arestas (cada clique na aresta soma/tira)
                 crate::geo_ui::bag(
                     ui,
@@ -1689,7 +1690,8 @@ fn feature_ui(
                     m,
                     picked,
                     0,
-                    |p| format!("{}", crate::app::p3(p, 0)),
+                    // B555: nome legível pela chave ("Aresta 3 (Extrusão 1)"), senão pela posição
+                    |p| nome_da_aresta(doc, &antes, &chaves, p),
                     |ui, i, p| {
                         ui.label(crate::ref_nome::campo_aresta(doc, chaves.get(i).and_then(|k| k.as_ref()), *p)).on_hover_text(crate::ref_nome::dica_aresta());
                     },
@@ -1697,6 +1699,9 @@ fn feature_ui(
                     None,
                     |a, b| (0..3).all(|k| (a[k] - b[k]).abs() < 0.01),
                 );
+                // B555: as arestas marcadas na caixa acendem no 3D
+                let marc = crate::caixa_selecao::marcas(ui.ctx(), &format!("arestas{}", id.0));
+                crate::caixa_selecao::publicar_realce(ui.ctx(), marc.marcados.iter().filter_map(|i| m.get(*i).copied()).collect());
                 ui.label(RichText::new(tr("Propagação")).weak());
                 let opts = [
                     ("prop_tangente", "Tangente", "Segue todas as arestas tangentes às escolhidas", o.prop == EdgeProp::Tangente),
@@ -1743,6 +1748,17 @@ fn feature_ui(
     }
 }
 
+
+/// Nome da aresta na caixa do filete e do chanfro: "Aresta n (comando)" pela chave quando houver, senão
+/// "Aresta n" com o número da posição na lista (B555).
+fn nome_da_aresta(doc: &Document, lista: &[[f64; 3]], chaves: &[Option<EdgeKey>], p: &[f64; 3]) -> String {
+    let i = lista.iter().position(|q| (0..3).all(|k| (q[k] - p[k]).abs() < 1e-6));
+    let chave = i.and_then(|i| chaves.get(i)).and_then(|k| k.as_ref());
+    match chave {
+        Some(k) => crate::ref_nome::aresta(doc, k),
+        None => format!("{} {}", tr("Aresta"), i.map_or(0, |i| i + 1)),
+    }
+}
 
 /// true = filete, false = chanfro
 fn kind_tag(id: Id, doc: &Document) -> Option<bool> {

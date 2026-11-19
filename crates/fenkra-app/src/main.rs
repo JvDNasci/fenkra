@@ -59,6 +59,8 @@ mod sketch_ui;
 mod sketch_vinculos;
 mod sketch_posicao_ui;
 mod geo_ui;
+mod caixa_selecao;
+mod arestas_face;
 mod keymap;
 mod feat_ui;
 mod varredura_ui;
