@@ -59,6 +59,8 @@ Consulte solidos, kernel quando a mudança atravessar a fronteira da área.
 
 ## Armadilhas
 
+- **Dono da chave na assinatura do cache.** Referência com chave de face cujo dono é outra referência (superfície, forma livre) precisa desse dono em `ref_sig`, porque a linha do tempo dos corpos não muda quando a superfície muda. Motivo: o Extrair ficava preso no valor antigo (B534, 18/11/2026).
+
 Registre aqui erros que se repetiram.
 
 - Ordem dos campos vazios: `serde_json::Value` guarda objetos em ordem alfabética (sem `preserve_order`). Percorrer o `Value` para achar o próximo campo inverte campos do mesmo tipo (`apex` antes de `guide1`, B466). Use `slots::fill` / `slots::vazios_em_ordem`, que seguem a ordem da declaração.
