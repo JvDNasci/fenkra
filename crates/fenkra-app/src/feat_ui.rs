@@ -55,6 +55,8 @@ pub fn add_face(k: &mut FeatureKind, p: [f64; 3]) {
         }
         FeatureKind::SmCornerRelief(c) => c.at = p,
         FeatureKind::SmCornerClose(c) => c.at = p,
+        // B522: no modo sólido maciço, o clique escolhe a face a abrir; fora dele, a face fixa
+        FeatureKind::SmConvert(c) if c.solido => c.open_faces.push(p),
         FeatureKind::SmConvert(c) => c.face = p,
         FeatureKind::SmArcSlot(c) => c.center = p,
         FeatureKind::SmSurfFlange(c) => c.face = p,

@@ -5117,6 +5117,12 @@ impl Ctx<'_> {
                 if sk.loops.is_empty() {
                     return Err("a parede base precisa de um perfil fechado".into());
                 }
+                // B553: uma peça de chapa tem um só corpo. Cada contorno externo disjunto daria uma
+                // chapa à parte; só os contornos dentro de outro (furos) ficam na mesma parede
+                let externos = chapa_converte::contornos_externos(&sk.loops);
+                if externos > 1 {
+                    return Err(format!("a parede base precisa de um só contorno externo, e este sketch tem {externos}: deixe um e use os outros como furos (dentro do contorno externo) ou faça uma peça de chapa por contorno"));
+                }
                 let mut face = Shape::face(frame, &sk.loops).map_err(k)?;
                 let dir = if w.reverse { frame.normal.map(|x| -x) } else { frame.normal };
                 let off = if w.offset.trim().is_empty() { 0. } else { ev(&w.offset, &self.vars, "afastamento")? };
@@ -5125,6 +5131,14 @@ impl Ctx<'_> {
                 }
                 // com papel em cada face (tampas e laterais), as arestas da parede ganham chave v2
                 let (tool, roles) = if w.mid { face.extrude_roles(dir, sp.t / 2., sp.t / 2.) } else { face.extrude_roles(dir, sp.t, 0.) }.map_err(k)?;
+                // B553: a segunda parede base precisa encostar na peça; longe dela viraria um segundo corpo
+                if let Some(atual) = self.body(f.target) {
+                    let junto = atual.boolean(&tool, Bool::Fuse).map_err(k)?;
+                    let malha = tesselar(&junto, &self.qualidade).map_err(k)?;
+                    if chapa_converte::pecas_da_malha(&malha) > 1 {
+                        return Err("esta segunda parede base não encosta na chapa que já existe e viraria um segundo corpo: uma peça de chapa tem um só corpo. Faça a parede encostar na primeira ou crie outra peça".into());
+                    }
+                }
                 self.apply_roles(f.target, tool, BoolOp::Add, f.id, Some(roles))?;
                 Ok(None)
             }

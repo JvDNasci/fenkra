@@ -235,7 +235,39 @@ impl Ctx<'_> {
         };
         let mut corpo = self.body(f.target).ok_or("o corpo a converter precisa existir antes deste comando")?.clone();
         let mut malha = tesselar(&corpo, &self.qualidade).map_err(k)?;
-        let mut a = analisar_malha(&malha, corpo.mass().volume)?;
+        let mut gerada = false;
+        let mut face_padrao: Option<[f64; 3]> = None;
+        let mut a = match analisar_malha(&malha, corpo.mass().volume) {
+            Ok(a) => a,
+            // B522: um sólido maciço não tem espessura constante. Com a espessura e as faces a abrir,
+            // o comando esvazia o sólido e a caixa resultante é analisada como qualquer chapa; sem
+            // elas, o motivo diz o que escolher, em vez de falhar sem explicação
+            Err(e) => {
+                let t = c.thickness.trim();
+                if t.is_empty() {
+                    return Err(format!("{e}. Para converter um sólido maciço, informe a espessura da chapa e escolha ao menos uma face a abrir"));
+                }
+                if c.open_faces.is_empty() {
+                    return Err("escolha ao menos uma face a abrir: o corpo é maciço e, sem face aberta, não há como esvaziá-lo em paredes de chapa".into());
+                }
+                let esp = super::chapa_laco::ev_faixa(t, &self.vars, "espessura da chapa", 0.01, f64::INFINITY, "mm")?;
+                let (lo, hi) = corpo.bbox().ok_or("corpo sem dimensões")?;
+                let centro = geo3d::mul(geo3d::add(lo, hi), 0.5);
+                let aberta = c.open_faces[0];
+                self.esvaziar_para_chapa(f, c, esp)?;
+                gerada = true;
+                corpo = self.body(f.target).ok_or("o corpo sumiu depois de esvaziar")?.clone();
+                malha = tesselar(&corpo, &self.qualidade).map_err(k)?;
+                if c.face == [0.; 3] {
+                    face_padrao = fundo_oposto(&malha, centro, aberta);
+                }
+                analisar_malha(&malha, corpo.mass().volume).map_err(|e| format!("depois de esvaziar o sólido: {e}"))?
+            }
+        };
+        // B522: o sólido esvaziado nasce com a face fixa no fundo, oposto à primeira face aberta: é a
+        // raiz da árvore de dobras, e as paredes laterais saem dela. Com a maior face como raiz (um
+        // cubo tem seis iguais) o rasgo dos cantos caía numa parede e o sólido planificado saía inválido
+        let c = &if let Some(fp) = face_padrao { fenkra_core::SmConvert { face: fp, ..c.clone() } } else { c.clone() };
         if !c.thickness.trim().is_empty() {
             let pedida = super::chapa_laco::ev_faixa(&c.thickness, &self.vars, "espessura esperada", 0.01, f64::INFINITY, "mm")?;
             if (pedida - a.espessura).abs() > 0.02 * pedida.max(1e-6) {
@@ -295,14 +327,35 @@ impl Ctx<'_> {
                 Err(e) => aviso = format!("{aviso}; sem mapa de dobras ({e})"),
             }
         }
-        // o parâmetro de espessura da chapa deve combinar com o corpo
+        // sólido maciço convertido por aqui: a espessura veio do próprio comando, então o parâmetro
+        // da chapa é que precisa combinar com ela (o aviso diz qual ajustar)
         if let Some(sp) = self.doc.sheet_efetivo() {
             let t = ev(&sp.thickness, &self.vars, "espessura da chapa")?;
             if (t - a.espessura).abs() > 0.02 * a.espessura {
                 return Ok(Some(format!("{aviso}; a chapa dos parâmetros tem {t:.2} mm: use a espessura medida em Chapa › Parâmetros")));
             }
         }
-        Ok(Some(aviso))
+        Ok(if gerada { None } else { Some(aviso) })
+    }
+
+    /// B522 (ver `fundo_oposto`): esvazia o sólido maciço pelas faces abertas, deixando paredes de espessura `esp`. É a
+    /// mesma casca do comando Casca, mas a falta de face aberta ou a espessura que não cabe vêm com
+    /// a mensagem da conversão.
+    fn esvaziar_para_chapa(&mut self, f: &Feature, c: &fenkra_core::SmConvert, esp: f64) -> Result<(), String> {
+        let (b, owners, roles) = self.body_owned(f.target).ok_or("não há corpo para converter")?;
+        if let Some((lo, hi)) = b.bbox() {
+            let menor = (0..3).map(|i| hi[i] - lo[i]).fold(f64::INFINITY, f64::min);
+            if esp >= menor / 2. - 1e-9 {
+                return Err(format!("espessura {esp} mm grande demais: a menor dimensão do corpo é {menor:.2} mm e as duas paredes opostas precisam caber nela"));
+            }
+        }
+        let pts = self.resolve_faces("conversão em chapa", f, b, owners, roles, &c.open_faces, &[])?;
+        let (s, out) = b.shell_tagged(&pts, esp, false, &tags_for(owners)).map_err(|e| format!("não consegui esvaziar o sólido com {esp} mm de parede: {}", e.0))?;
+        if s.mass().volume >= b.mass().volume - 1e-9 * b.mass().volume.abs().max(1.) {
+            return Err("as faces escolhidas não abriram o corpo: escolha faces do próprio sólido".into());
+        }
+        self.bodies.insert(f.target, remap_body(s, owners, roles, &out, f.id));
+        Ok(())
     }
 }
 
@@ -315,4 +368,123 @@ pub fn analisar_corpo(doc: &Document, ate: Id) -> Result<AnaliseChapa, String> {
     let r = recompute(&d);
     let b = r.bodies.first().ok_or("não há corpo para converter antes deste comando")?;
     analisar_malha(&b.mesh, b.mass.volume)
+}
+
+// ---------- B553: um corpo de chapa por peça ----------
+
+/// Pontos que descrevem o laço (para testar quem está dentro de quem). Os arcos entram pelos três
+/// pontos; o círculo, por oito pontos; a elipse, pelos extremos dos semieixos.
+fn pontos_do_laco(l: &fenkra_kernel::Loop2) -> Vec<[f64; 2]> {
+    use fenkra_kernel::Seg2;
+    let mut v = vec![];
+    for sg in l {
+        match sg {
+            Seg2::Line(a, _) => v.push(*a),
+            Seg2::Arc(a, m, _) => v.extend([*a, *m]),
+            Seg2::Circle(c, r) => v.extend((0..8).map(|i| {
+                let t = i as f64 * std::f64::consts::TAU / 8.;
+                [c[0] + r * t.cos(), c[1] + r * t.sin()]
+            })),
+            Seg2::Spline(p) => v.extend(p.iter().copied()),
+            Seg2::Ellipse(c, ax, b, _, _) => {
+                let n = [-ax[1], ax[0]];
+                let ln = (n[0] * n[0] + n[1] * n[1]).sqrt().max(1e-12);
+                let u = [n[0] / ln * b, n[1] / ln * b];
+                v.extend([[c[0] + ax[0], c[1] + ax[1]], [c[0] + u[0], c[1] + u[1]], [c[0] - ax[0], c[1] - ax[1]], [c[0] - u[0], c[1] - u[1]]]);
+            }
+        }
+    }
+    v
+}
+
+fn ponto_em_poligono(p: [f64; 2], poly: &[[f64; 2]]) -> bool {
+    let mut dentro = false;
+    let mut j = poly.len().wrapping_sub(1);
+    for i in 0..poly.len() {
+        let (a, b) = (poly[i], poly[j]);
+        if (a[1] > p[1]) != (b[1] > p[1]) && p[0] < (b[0] - a[0]) * (p[1] - a[1]) / (b[1] - a[1]) + a[0] {
+            dentro = !dentro;
+        }
+        j = i;
+    }
+    dentro
+}
+
+/// Quantos laços do perfil são contornos externos: laço dentro de um número par de outros (zero,
+/// dois...) é contorno externo; dentro de um número ímpar é furo. Cada contorno externo daria um
+/// corpo separado.
+pub(super) fn contornos_externos(loops: &[fenkra_kernel::Loop2]) -> usize {
+    let polis: Vec<Vec<[f64; 2]>> = loops.iter().map(pontos_do_laco).collect();
+    (0..polis.len())
+        .filter(|&i| {
+            let Some(p) = polis[i].first().copied() else { return true };
+            let profundidade = (0..polis.len()).filter(|&j| j != i && polis[j].len() > 2 && ponto_em_poligono(p, &polis[j])).count();
+            profundidade % 2 == 0
+        })
+        .count()
+}
+
+/// Quantas peças separadas a malha tem: vértices na mesma posição e os três vértices de cada
+/// triângulo são da mesma peça. Duas paredes que só se tocam continuam sendo uma peça.
+pub(super) fn pecas_da_malha(m: &Mesh) -> usize {
+    use std::collections::HashMap;
+    let n = m.positions.len() / 3;
+    if n == 0 {
+        return 0;
+    }
+    fn raiz(pai: &mut [usize], mut x: usize) -> usize {
+        while pai[x] != x {
+            pai[x] = pai[pai[x]];
+            x = pai[x];
+        }
+        x
+    }
+    fn une(pai: &mut [usize], a: usize, b: usize) {
+        let (a, b) = (raiz(pai, a), raiz(pai, b));
+        pai[a] = b;
+    }
+    let mut pai: Vec<usize> = (0..n).collect();
+    let q = |v: f32| (v as f64 * 1000.).round() as i64;
+    let mut vistos: HashMap<(i64, i64, i64), usize> = HashMap::new();
+    for i in 0..n {
+        let chave = (q(m.positions[3 * i]), q(m.positions[3 * i + 1]), q(m.positions[3 * i + 2]));
+        match vistos.get(&chave) {
+            Some(&j) => une(&mut pai, i, j),
+            None => {
+                vistos.insert(chave, i);
+            }
+        }
+    }
+    for t in m.indices.chunks_exact(3) {
+        une(&mut pai, t[0] as usize, t[1] as usize);
+        une(&mut pai, t[1] as usize, t[2] as usize);
+    }
+    let mut raizes: Vec<usize> = (0..n).map(|i| raiz(&mut pai, i)).collect();
+    raizes.sort_unstable();
+    raizes.dedup();
+    raizes.len()
+}
+
+/// B522: ponto da face plana mais afastada da face aberta, entre as paralelas a ela: o fundo da
+/// caixa. `aberta` é um ponto da face aberta no corpo maciço; `centro`, o centro da caixa do corpo.
+/// A normal da face aberta é a direção do centro para o ponto, no eixo mais próximo do plano dela.
+fn fundo_oposto(m: &Mesh, centro: V3, aberta: V3) -> Option<V3> {
+    // normal da face aberta: a face plana do corpo cheio não existe mais, então deduz-se pelo eixo
+    // em que o ponto mais se afasta do centro (caixa alinhada aos eixos) e depois pela face plana
+    // vizinha de maior afastamento
+    let d = geo3d::sub(aberta, centro);
+    let eixo = (0..3).max_by(|&i, &j| d[i].abs().total_cmp(&d[j].abs()))?;
+    let mut n = [0.; 3];
+    n[eixo] = if d[eixo] >= 0. { 1. } else { -1. };
+    let mut melhor: Option<(f64, V3)> = None;
+    for fi in m.face_info.iter() {
+        if fi.kind != 0 || geo3d::dot(fi.dir, n).abs() < 0.9999 {
+            continue;
+        }
+        let h = geo3d::dot(fi.point, n);
+        if melhor.is_none_or(|(x, _)| h < x) {
+            melhor = Some((h, fi.point));
+        }
+    }
+    melhor.map(|(_, p)| p)
 }

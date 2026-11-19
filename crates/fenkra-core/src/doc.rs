@@ -2742,6 +2742,16 @@ pub struct SmConvert {
     pub face: [f64; 3],
     #[serde(default)]
     pub thickness: String,
+    /// B522: faces a abrir quando o corpo é um sólido maciço. Com a espessura preenchida, o comando
+    /// esvazia o sólido por essas faces (uma parede de espessura `thickness` por face restante) e
+    /// converte a caixa em chapa: arestas viram dobras e os cantos ganham rasgo e alívio. Vazio num
+    /// corpo que já é chapa não muda nada.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub open_faces: Vec<[f64; 3]>,
+    /// B522: o painel está no modo "sólido maciço": o clique numa face abre ou fecha essa face em
+    /// vez de trocar a face fixa. Só orienta a interface; o cálculo olha `open_faces`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub solido: bool,
 }
 
 /// Alívio de canto: corte no encontro de abas.

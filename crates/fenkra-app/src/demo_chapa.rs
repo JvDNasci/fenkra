@@ -30,7 +30,7 @@ pub fn canal_convertido(plana: bool) -> Document {
     }
     let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
     d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(s("50")), reverse: false, taper: s("0"), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
-    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: String::new() }));
+    let id = d.add_feature(FeatureKind::SmConvert(SmConvert { face: [0.; 3], thickness: String::new(), open_faces: vec![], solido: false }));
     d.feature_mut(id).map(|f| f.name = "ConverterEmChapa".into());
     if plana {
         if let Some(sp) = d.sheet.as_mut() {
