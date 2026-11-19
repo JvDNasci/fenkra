@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 120120,
+ "tokens_total_k": 123790,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 7180,
-   "pct": 6.0
+   "pct": 5.8
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 9.7
+   "pct": 9.4
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 26.9
+   "pct": 26.1
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 24700,
-   "pct": 20.6
+   "pct": 20.0
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 44280,
-   "pct": 36.9
+   "tokens_k": 47950,
+   "pct": 38.7
   }
  },
  "itens": [
@@ -8747,6 +8747,406 @@
    "area": "Interface",
    "status": "a fazer",
    "pct": 0.0
+  },
+  {
+   "id": "B529",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Aba por superfície: relimitar a base e fazer a dobra",
+   "oque": "Teste da alpha.38 com captura (18/11): numa parede plana com suporte curvo, a aba por superfície deixa a base inteira e a parede só encosta no suporte, sem relimitar a base e sem dobra no canto; com suporte complexo, falha. Esperado: a base é cortada pela linha de dobra (interseção do suporte com a base), a dobra tem o raio da chapa e a aba segue o suporte; funciona com suporte de curvatura variável. Aceite: suporte em arco e em spline geram base relimitada, dobra com raio e planificação.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Chapa",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B530",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Laço de abas: escolher várias arestas e aceitar curvas",
+   "oque": "Teste da alpha.38: no laço de abas não dá para escolher as arestas no 3D como nas outras bancadas (campo de lista, Shift, escolher a face para pegar o contorno), e \"todas as arestas\" não funciona quando o contorno tem curva. Esperado: lista de arestas com o campo padrão (B514), face escolhida vira o contorno, e trechos curvos do laço ganham aba curva emendada às retas. Aceite: retângulo de cantos arredondados com laço inteiro gera abas contínuas e planifica.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto + Visual",
+   "area": "Chapa",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B531",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Aba de aresta reta e curva num modo só, com campo de seleção padrão",
+   "oque": "Teste da alpha.38: a aba reta e a curva deveriam ser um só modo de aresta, com a lista de arestas editável igual às outras bancadas (clicar troca, clicar de novo tira, nome pela identidade). Já feito em 18/11: clicar numa curva com a aba aberta troca pela aba curva, e a curva vale só para a aresta clicada, com a opção de seguir as tangentes. Falta unificar o recurso e o painel.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto + Visual",
+   "area": "Chapa",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B532",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Assistente de reparo recolhido",
+   "oque": "Teste da alpha.38: o assistente de reparo abre grande demais quando surge um erro. Esperado: aparece recolhido, como um aviso pequeno (\"Reparar sketch\" com um ponto), e só expande quando a pessoa pede, com o diagnóstico completo no painel de diagnóstico. Aceite: erro novo mostra só o aviso, e um clique abre o assistente.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B533",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Fechamento de canto entre abas completo",
+   "oque": "Teste da alpha.38: ao fazer abas vizinhas sobra um vão no canto. Esperado: escolher qual aba se estende até quase encostar na outra (folga ajustável, ex.: 0,01 mm), com sobreposição, por baixo ou meia-esquadria detalhados, e a caixa fechada planifica certo. Rever o fechamento de canto existente contra a documentação pública de chapa.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Chapa",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B534",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Extrair por elemento, também da forma livre, com propagação tangente",
+   "oque": "Teste da alpha.38: o Extrair guarda a face pela coordenada; precisa guardar pela identidade (referências v2, ADR 0010). Extrair falha numa face da forma livre e não extrai a superfície tangente (propagação). Aceite: extrair uma face da forma livre e uma cadeia tangente de faces de um sólido com filete; as extrações sobrevivem a mudança de parâmetro.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto",
+   "area": "Superfícies",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B535",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Suavizar superfícies e faces",
+   "oque": "Teste da alpha.38: espessar a forma livre deixa todos os quadradinhos dos remendos. Esperado: opção de suavizar que refaz a superfície como uma face lisa única (como a de multisseções) e um comando de suavizar faces. Liga com o B521 (fundir remendos). Aceite: forma livre 4x4 espessada sai com faces lisas, sem arestas internas.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 250,
+   "teste": "Auto + Visual",
+   "area": "Superfícies",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B536",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Espessar com direção",
+   "oque": "Teste da alpha.38: espessar superfície ou face só vai na normal. Esperado: escolher uma direção (eixo, aresta, plano) além da normal. Aceite: espessar uma superfície curva na direção Z gera paredes verticais.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto",
+   "area": "Superfícies",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B537",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Forma livre editável depois de espessar",
+   "oque": "Bug da alpha.38: depois de espessar a forma livre, não dá para voltar na árvore e editar a forma; é preciso apagar o espessar. Aceite: editar a forma com o espessar depois dela recalcula os dois.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto",
+   "area": "Superfícies",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B538",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Integração completa forma livre, superfície e sólido",
+   "oque": "Teste da alpha.38: toda função de superfície e de sólido precisa aceitar a forma livre e vice-versa (extrair, deslocar, espessar, junção, corte, filete, aba de chapa), com teste para cada par. Aceite: matriz de testes cobrindo os pares, todos passando.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 300,
+   "teste": "Auto",
+   "area": "Superfícies",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B539",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Renomear a barra \"Referência/Datum\"",
+   "oque": "Teste da alpha.38: o nome \"Datum\" na barra estranhou. Trocar por \"Elementos de construção\" (inglês \"Construction elements\"), conferindo os dois idiomas.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 20,
+   "teste": "Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B540",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Prévia da aba curva e por superfície",
+   "oque": "Teste da alpha.38: a prévia da aba em aresta curva e da aba por superfície mostra um cubo. Esperado: a prévia desenha a superfície da aba seguindo a aresta ou o suporte, nem que seja só a face interna e sem o raio de dobra. Aceite: prévia de aba curva num arco segue o arco.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Visual",
+   "area": "Chapa",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B541",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Enter confirma o menu que abre ao apagar",
+   "oque": "Teste da alpha.38: ao apagar um elemento, abre o menu com as peças afetadas, mas o Enter vai para a peça em vez de confirmar o menu. Aceite: Enter confirma o menu aberto.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 40,
+   "teste": "Auto",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B542",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Câmera livre e centro da órbita por atalho",
+   "oque": "Teste da alpha.38: em algumas direções a câmera não gira para baixo do chão. Esperado: modo de órbita livre (sem travar o eixo vertical), escolhido nas opções, e definir o centro da órbita por atalho e botão, sem precisar do menu do botão direito. Aceite: girar 360° em qualquer direção no modo livre; atalho define o centro no ponto sob o cursor.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B543",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Selecionar arestas irmãs pelo menu",
+   "oque": "Teste da alpha.38: no menu do botão direito sobre uma aresta, a seleção em cadeia não pega as arestas irmãs do mesmo plano na sequência. Aceite: escolher \"arestas do mesmo plano\" e \"cadeia tangente\" selecionam o conjunto certo.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B544",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Alinhar à vista (N) em face plana e curva",
+   "oque": "Teste da alpha.38: alinhar à vista não funciona na face; em face curva deve olhar pela normal no ponto clicado. Aceite: N numa face plana olha de frente para ela, e numa face cilíndrica pela normal no ponto.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 60,
+   "teste": "Auto",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B545",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Kit de texturas padrão",
+   "oque": "Pedido de 18/11: biblioteca de aparências com texturas de madeira, placa, pintura automotiva e alumínio, entre outras. As imagens podem ser geradas com a Tripo (ver skill de design) ou vir de acervos livres com licença conferida e registrada em procedencia.md.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B546",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Camadas",
+   "oque": "Pedido de 18/11: camadas para organizar elementos da peça e do sketch (mostrar, esconder, cor por camada). Não é urgente.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Interface",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B547",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Propriedades gráficas dentro do sketch",
+   "oque": "Teste da alpha.38: dentro do sketch a barra de propriedades gráficas some e não dá para mudar a cor do sketch. Esperado: fora do sketch pinta ele inteiro; dentro, item a item. Aceite: cor do sketch e de uma linha gravadas no documento.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto + Visual",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B548",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Sketch: travar horizontal e vertical perto de 0° e 90°",
+   "oque": "Teste da alpha.38: perto de 0° ou 90° em relação ao ponto de partida, a linha não trava em H ou V e é preciso caçar o ângulo. Esperado: realce de H ou V quando perto, clique trava a restrição, e as teclas H e V forçam durante o desenho. Vale em planos fora da origem. Aceite: linha desenhada a 1° do eixo ganha a restrição H.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 100,
+   "teste": "Auto",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B549",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Spline com ponto de controle visível",
+   "oque": "Teste da alpha.38: além das tangentes, mostrar e arrastar os pontos de controle da curva (polígono de controle de Bézier), como nos softwares de modelagem CAD avançados. Pesquisar o comportamento na documentação pública.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B550",
+   "onda": 4,
+   "prio": "P2",
+   "titulo": "Mais tipos de retângulo e círculo no sketch",
+   "oque": "Teste da alpha.38: faltam retângulo por 3 pontos, pelo centro e paralelogramo, e círculo por 3 pontos e tangente a 3 elementos. Aceite: cada tipo cria a geometria com as restrições certas.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B551",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Corte rápido no sketch",
+   "oque": "Teste da alpha.38: o corte exige clicar em cada trecho. Esperado: corte rápido arrastando o cursor sobre os trechos, como um pincel. Aceite: arrastar sobre três trechos corta os três num passo de desfazer.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 80,
+   "teste": "Auto",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B552",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Linha: clique único faz uma linha, duplo clique faz cadeia",
+   "oque": "Teste da alpha.38: clique no comando de linha cria uma linha só; duplo clique rápido deixa o comando ativo para criar linhas em cadeia. Aceite: os dois modos testados.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 60,
+   "teste": "Auto",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.0
+  },
+  {
+   "id": "B553",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Chapa é um corpo só e separada dos recursos de sólido",
+   "oque": "Bug da alpha.38: parede base com dois contornos fechados gera duas chapas. Regra: uma peça de chapa tem um único corpo de chapa; vários contornos viram uma parede só (ou recusam com motivo). Recursos de sólidos que quebram a chapa ficam indisponíveis nela; o caminho é só converter sólido em chapa, não o inverso. Aceite: sketch com dois contornos gera uma parede (ou erro claro) e os comandos de sólido aparecem desativados com motivo na peça de chapa.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto",
+   "area": "Chapa",
+   "status": "a fazer",
+   "pct": 0.2
   }
  ]
 }

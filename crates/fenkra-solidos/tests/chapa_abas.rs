@@ -107,7 +107,7 @@ fn aba_em_cadeia_reta_curva_reta_e_uma_feature_so() {
         edge.push([80. + 20. * t.cos(), 30. + 20. * t.sin(), 2.]);
     }
     edge.push([0., 50., 2.]);
-    d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None }));
+    d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false }));
     let dobrada = recalcula(&d, false);
     tudo_ok(&d, &dobrada, "dobrada");
     let (vd, vp) = (volume_total(&dobrada), volume_total(&recalcula(&d, true)));

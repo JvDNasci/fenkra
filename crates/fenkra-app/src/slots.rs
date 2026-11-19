@@ -363,10 +363,22 @@ pub fn recebe_aresta_clicada(k: &FeatureKind) -> bool {
 /// abas soma a aresta clicada (clicar de novo numa escolhida a tira, como nas outras listas); a aba
 /// curva troca a cadeia tangente (`cadeia` só é calculada para ela). A chave (dono e papel das
 /// faces) acompanha o ponto. Devolve se mudou algo.
-pub fn aresta_clicada(k: &mut FeatureKind, mid: [f64; 3], key: Option<EdgeKey>, cadeia: impl FnOnce() -> Vec<[f64; 3]>) -> bool {
+///
+/// Teste da alpha.38: a aba aceita aresta que não é reta. Com a aba de aresta aberta, clicar numa
+/// aresta curva (`reta` falso) troca o recurso pela aba curva, com os mesmos comprimento, ângulo,
+/// raio, lado e sentido, e a aresta clicada só (sem as tangentes).
+pub fn aresta_clicada(k: &mut FeatureKind, mid: [f64; 3], key: Option<EdgeKey>, reta: bool, cadeia: impl FnOnce(bool) -> Vec<[f64; 3]>) -> bool {
     let z = [0.; 3];
     let perto = |a: &[f64; 3]| (0..3).map(|i| (a[i] - mid[i]).powi(2)).sum::<f64>().sqrt() < 0.01;
     match k {
+        FeatureKind::SmFlange(f) if !reta => {
+            let pts = cadeia(true);
+            if pts.len() < 2 {
+                return false;
+            }
+            *k = FeatureKind::SmCurveFlange(aba_curva_de(f, pts, key));
+            true
+        }
         FeatureKind::SmFlange(f) => {
             f.edge = mid;
             f.edge_key = key;
@@ -396,7 +408,7 @@ pub fn aresta_clicada(k: &mut FeatureKind, mid: [f64; 3], key: Option<EdgeKey>, 
             true
         }
         FeatureKind::SmCurveFlange(c) => {
-            let pts = cadeia();
+            let pts = cadeia(c.so_aresta);
             if pts.len() < 2 {
                 return false;
             }
@@ -406,6 +418,29 @@ pub fn aresta_clicada(k: &mut FeatureKind, mid: [f64; 3], key: Option<EdgeKey>, 
         }
         _ => false,
     }
+}
+
+/// A aba curva com os parâmetros da aba de aresta `f`, na cadeia `pts`.
+pub fn aba_curva_de(f: &fenkra_core::SmFlange, pts: Vec<[f64; 3]>, key: Option<EdgeKey>) -> fenkra_core::SmCurveFlange {
+    fenkra_core::SmCurveFlange { edge: pts, length: f.length.clone(), flip: f.flip, angle: f.angle.clone(), radius: f.radius.clone(), side: f.side, edge_key: key, so_aresta: true }
+}
+
+/// A polilinha de uma aresta é reta? (todos os pontos sobre a corda, a menos de 1 µm por mm)
+pub fn polilinha_reta(p: &[[f64; 3]]) -> bool {
+    let (Some(a), Some(b)) = (p.first(), p.last()) else { return true };
+    let d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    let l = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
+    if l < 1e-9 {
+        // aresta fechada (círculo): não é reta se tiver pontos fora da ponta
+        return p.iter().all(|q| (0..3).map(|i| (q[i] - a[i]).powi(2)).sum::<f64>().sqrt() < 1e-6);
+    }
+    let u = [d[0] / l, d[1] / l, d[2] / l];
+    p.iter().all(|q| {
+        let v = [q[0] - a[0], q[1] - a[1], q[2] - a[2]];
+        let t = v[0] * u[0] + v[1] * u[1] + v[2] * u[2];
+        let w = [v[0] - u[0] * t, v[1] - u[1] * t, v[2] - u[2] * t];
+        (w[0] * w[0] + w[1] * w[1] + w[2] * w[2]).sqrt() < 1e-3 * l.max(1.)
+    })
 }
 
 /// Algum campo ainda vazio (também os especiais)?

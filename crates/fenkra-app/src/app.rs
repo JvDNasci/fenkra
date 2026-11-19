@@ -2757,7 +2757,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     .picks
                     .iter()
                     .find_map(|p| match (p, self.result.as_ref()) {
-                        (Pick::Edge { body, edge, .. }, Some(r)) => Some(if c == Cmd::SmCurveFlange { crate::picking::tangent_chain(r, *body, *edge) } else { crate::picking::edge_polyline(r, *body, *edge) }),
+                        (Pick::Edge { body, edge, .. }, Some(r)) => Some(crate::picking::edge_polyline(r, *body, *edge)),
                         _ => None,
                     })
                     .unwrap_or_default();
@@ -2768,7 +2768,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 });
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(match c {
-                    Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None }),
+                    Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: true }),
                     Cmd::SmArcSlot => FeatureKind::SmArcSlot(SmArcSlot { center: at.unwrap_or([0.; 3]), radius: s("20"), width: s("6"), start: s("0"), sweep: s("90") }),
                     Cmd::SmCornerClose => FeatureKind::SmCornerClose(SmCornerClose { at: at.unwrap_or([0.; 3]), kind: 1, gap: s("0.5"), ratio: s("1"), narrow: false, propagate: false, invert: false }),
                     // o tamanho padrão do canto vem do estilo da chapa, quando ele define um
@@ -2797,8 +2797,19 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 }).collect();
                 // comando de aba unificado (B31): várias arestas escolhidas já abrem no modo laço
                 let c = if c == Cmd::SmFlange && edges.len() >= 2 { Cmd::SmFlangeLoop } else { c };
+                // aresta curva escolhida antes: a aba já abre seguindo a curva (teste da alpha.38)
+                let mut curva: Option<Vec<[f64; 3]>> = if c == Cmd::SmFlange && edges.len() == 1 {
+                    self.picks.iter().find_map(|p| match (p, self.result.as_ref()) {
+                        (Pick::Edge { body, edge, .. }, Some(r)) if !crate::slots::polilinha_reta(&crate::picking::edge_polyline(r, *body, *edge)) => Some(crate::picking::edge_polyline(r, *body, *edge)),
+                        _ => None,
+                    })
+                } else {
+                    None
+                };
+                curva = curva.filter(|p| p.len() >= 2);
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(match c {
+                    Cmd::SmFlange if curva.is_some() => FeatureKind::SmCurveFlange(SmCurveFlange { edge: curva.take().unwrap_or_default(), length: s("20"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: true }),
                     Cmd::SmFlange => FeatureKind::SmFlange(SmFlange {
                         edge: edge.unwrap_or([0.; 3]),
                         length: s("20"),
@@ -7669,9 +7680,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     // soma a aresta (clicar de novo tira) e a aba curva troca a cadeia tangente
                     let m = mid.map(|v| v as f64);
                     let key = r.bodies.get(body).and_then(|b| b.edge_key(edge));
-                    let cadeia = || crate::picking::tangent_chain(r, body, edge);
+                    let cadeia = |so: bool| if so { crate::picking::edge_polyline(r, body, edge) } else { crate::picking::tangent_chain(r, body, edge) };
+                    let reta = crate::slots::polilinha_reta(&crate::picking::edge_polyline(r, body, edge));
                     if let Some(f) = self.open.doc.feature_mut(sid) {
-                        crate::slots::aresta_clicada(&mut f.kind, m, key, cadeia);
+                        crate::slots::aresta_clicada(&mut f.kind, m, key, reta, cadeia);
                     }
                 } else if let (Some(sid), true) = (
                     self.session.as_ref().map(|x| x.id).filter(|id| crate::sup_spline::editavel(&self.open.doc, *id)),

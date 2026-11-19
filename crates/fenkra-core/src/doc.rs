@@ -2645,6 +2645,10 @@ pub struct SmCurveFlange {
     /// uma aresta da cadeia por dono + papel; a polilinha `edge` é só cache da cadeia tangente
     #[serde(default)]
     pub edge_key: Option<EdgeKey>,
+    /// só a aresta escolhida, sem seguir as tangentes a ela (teste da alpha.38); documentos antigos
+    /// seguem a cadeia tangente
+    #[serde(default)]
+    pub so_aresta: bool,
 }
 
 /// Rasgo circular (arco) atravessando a chapa: centro na face, raio do arco, largura,

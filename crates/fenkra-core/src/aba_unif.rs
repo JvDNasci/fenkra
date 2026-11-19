@@ -102,7 +102,7 @@ pub fn converter_aba(k: &FeatureKind, novo: ModoAba) -> Option<FeatureKind> {
             relief: None,
             relief_kind: 0,
         }),
-        ModoAba::Curva => FeatureKind::SmCurveFlange(SmCurveFlange { edge: if aresta == [0.; 3] { vec![] } else { vec![aresta] }, length: c.comprimento, flip: c.inverter, angle: c.angulo, radius: c.raio, side: 0, edge_key: None }),
+        ModoAba::Curva => FeatureKind::SmCurveFlange(SmCurveFlange { edge: if aresta == [0.; 3] { vec![] } else { vec![aresta] }, length: c.comprimento, flip: c.inverter, angle: c.angulo, radius: c.raio, side: 0, edge_key: None, so_aresta: true }),
         ModoAba::Perfil => FeatureKind::SmProfileFlange(SmProfileFlange { sketch: Id(0), l1: "0".into(), l2: c.comprimento, radius: c.raio, flip: c.inverter }),
         ModoAba::Superficie => FeatureKind::SmSurfFlange(SmSurfFlange {
             support: SurfRef::Plane(PlaneRef::Origin(OriginPlane::YZ)),

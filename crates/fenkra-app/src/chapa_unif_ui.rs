@@ -12,7 +12,7 @@ use fenkra_core::{Document, FeatureKind};
 
 /// (ícone, nome, dica) de cada modo, na ordem de `MODOS_ABA`.
 const MODOS: [(&str, &str, &str); 5] = [
-    ("sm_aba", "Aresta", "Uma aba numa aresta reta da chapa, com recuos laterais e alívio."),
+    ("sm_aba", "Aresta", "Uma aba numa aresta da chapa, com recuos laterais e alívio. Numa aresta curva, a aba segue a curva."),
     ("sm_aba_laco", "Laço", "Várias abas de uma vez: as arestas escolhidas ou o laço da face inteira, com mitra nos cantos e extensão lateral."),
     ("sm_aba_curva", "Curva", "Aba numa aresta curva, seguindo as arestas tangentes."),
     ("sm_aba_perfil", "Perfil", "Aba complexa: cadeia aberta de um sketch, com os cantos no raio da chapa."),
@@ -43,7 +43,7 @@ pub fn suporte(ui: &mut egui::Ui, doc: &fenkra_core::Document, kind: &mut Featur
             section(ui, "Suporte");
             let vazio = fl.edge == [0.; 3];
             // B516: a aresta pelo nome (as duas faces vizinhas), não pela coordenada
-            ui.label(RichText::new(if vazio { tr("⚠ clique numa aresta reta da chapa na viewport").to_string() } else { format!("{} — {}", crate::ref_nome::campo_aresta(doc, fl.edge_key.as_ref(), fl.edge), tr("clique outra aresta para trocar")) }).small()).on_hover_text(crate::ref_nome::dica_aresta());
+            ui.label(RichText::new(if vazio { tr("⚠ clique numa aresta da chapa na viewport, reta ou curva").to_string() } else { format!("{} — {}", crate::ref_nome::campo_aresta(doc, fl.edge_key.as_ref(), fl.edge), tr("clique outra aresta para trocar")) }).small()).on_hover_text(crate::ref_nome::dica_aresta());
             if ui.add_enabled(!vazio, egui::Button::new(tr("Limpar"))).on_hover_text(tr("Tira a aresta escolhida para escolher outra.")).clicked() {
                 fl.edge = [0.; 3];
                 fl.edge_key = None;

@@ -217,7 +217,7 @@ impl BodyResult {
 type Body = (Shape, Vec<Id>, Vec<i32>);
 
 /// Motivo interno da aba ou bainha sem aresta escolhida (vira `Status::Inactive`).
-const ARESTA_A_ESCOLHER: &str = "clique numa aresta reta da chapa para pôr a aba";
+const ARESTA_A_ESCOLHER: &str = "clique numa aresta da chapa, reta ou curva, para pôr a aba";
 
 /// Aba, bainha, aba por laço ou aba curva ainda sem aresta: a aresta é (0,0,0) e sem chave, que é o
 /// valor com que o comando nasce quando nada estava selecionado.
@@ -5703,7 +5703,7 @@ impl Ctx<'_> {
                 let (now, from) = self.chapa_aresta("aba curva", f, anchor, cf.edge_key.as_ref(), sp.flat)?;
                 let shift = geo3d::sub(now, anchor);
                 // no estado em que foi escolhida, a cadeia nasce de novo do B-rep pela tangência
-                let viva = if cf.edge_key.is_some() && f.flat_space == sp.flat { self.cadeia_tangente(f.target, now, &cf.edge) } else { None };
+                let viva = if cf.edge_key.is_some() && f.flat_space == sp.flat { self.cadeia_tangente(f.target, now, &cf.edge, cf.so_aresta) } else { None };
                 let pts: Vec<V3> = match viva {
                     Some(c) => c,
                     None => cf.edge.iter().map(|q| self.map_point(geo3d::add(*q, if from == f.flat_space && geo3d::norm(shift) > 1e-9 { shift } else { [0.; 3] }), from, sp.flat)).collect(),
@@ -10917,7 +10917,7 @@ mod tests_aba_curva {
             let t = i as f64 / 24. * std::f64::consts::FRAC_PI_2;
             [50. * t.cos(), 50. * t.sin(), 2.]
         }).collect();
-        d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None }));
+        d.add_feature(FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false }));
         let r = recompute(&d);
         for f in &d.features {
             assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);

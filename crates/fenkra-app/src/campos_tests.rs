@@ -186,18 +186,18 @@ fn laco_de_abas_recebe_as_arestas_pelo_clique() {
     assert_eq!(crate::entradas::campo_ativo(&k), Some(crate::entradas::Espera::Aresta));
     assert!(crate::slots::recebe_aresta_clicada(&k));
     let (e1, e2) = ([100., 25., 2.], [50., 50., 2.]);
-    let sem_cadeia = || -> Vec<[f64; 3]> { panic!("o laço não usa a cadeia tangente") };
-    assert!(crate::slots::aresta_clicada(&mut k, e1, None, sem_cadeia));
+    let sem_cadeia = |_: bool| -> Vec<[f64; 3]> { panic!("o laço não usa a cadeia tangente") };
+    assert!(crate::slots::aresta_clicada(&mut k, e1, None, true, sem_cadeia));
     assert!(!crate::slots::feature_incomplete(&k), "a primeira aresta ocupa o lugar vazio");
-    assert!(crate::slots::aresta_clicada(&mut k, e2, None, sem_cadeia));
+    assert!(crate::slots::aresta_clicada(&mut k, e2, None, true, sem_cadeia));
     let FeatureKind::SmFlangeLoop(l) = &k else { unreachable!() };
     assert_eq!(l.edges, vec![e1, e2], "o segundo clique soma (sem botão)");
     assert!(!l.loop_all, "várias arestas valem como estão, como na criação");
-    assert!(crate::slots::aresta_clicada(&mut k, e2, None, sem_cadeia));
+    assert!(crate::slots::aresta_clicada(&mut k, e2, None, true, sem_cadeia));
     let FeatureKind::SmFlangeLoop(l) = &k else { unreachable!() };
     assert_eq!(l.edges, vec![e1], "clicar de novo tira");
     assert!(l.loop_all, "uma aresta só volta a valer pelo laço da face");
-    assert!(crate::slots::aresta_clicada(&mut k, e2, None, sem_cadeia));
+    assert!(crate::slots::aresta_clicada(&mut k, e2, None, true, sem_cadeia));
     let id = d.add_feature(k);
     if !fenkra_kernel::AVAILABLE {
         return;
@@ -214,10 +214,28 @@ fn laco_de_abas_recebe_as_arestas_pelo_clique() {
 /// Aba curva aberta: o clique numa aresta põe a cadeia tangente e a chave da aresta.
 #[test]
 fn aba_curva_recebe_a_cadeia_pelo_clique() {
-    let mut k = FeatureKind::SmCurveFlange(SmCurveFlange { edge: vec![], length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None });
+    let mut k = FeatureKind::SmCurveFlange(SmCurveFlange { edge: vec![], length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false });
     assert!(crate::slots::feature_incomplete(&k));
-    assert!(crate::slots::aresta_clicada(&mut k, [5., 0., 2.], None, || vec![[0., 0., 2.], [5., 0., 2.], [10., 0., 2.]]));
+    assert!(crate::slots::aresta_clicada(&mut k, [5., 0., 2.], None, true, |_| vec![[0., 0., 2.], [5., 0., 2.], [10., 0., 2.]]));
     let FeatureKind::SmCurveFlange(c) = &k else { unreachable!() };
     assert_eq!(c.edge.len(), 3);
     assert!(!crate::slots::feature_incomplete(&k));
+}
+
+/// Teste da alpha.38: com a aba de aresta aberta, clicar numa aresta curva troca pela aba curva só
+/// naquela aresta, com os mesmos parâmetros; numa aresta reta continua a aba de aresta.
+#[test]
+fn aba_de_aresta_vira_curva_no_clique_em_curva() {
+    let s = |x: &str| x.to_string();
+    let mut k = FeatureKind::SmFlange(fenkra_core::SmFlange { edge: [0.; 3], length: s("25"), angle: s("60"), radius: None, off1: s("0"), off2: s("0"), flip: true, relief: None, relief_kind: 0, side: 1, miter: false, min_gap: true, edge_key: None });
+    assert!(crate::slots::aresta_clicada(&mut k, [5., 0., 2.], None, true, |_| panic!("aresta reta não usa a cadeia")));
+    assert!(matches!(k, FeatureKind::SmFlange(_)));
+    let arco = vec![[10., 0., 2.], [7.07, 7.07, 2.], [0., 10., 2.]];
+    assert!(!crate::slots::polilinha_reta(&arco));
+    assert!(crate::slots::aresta_clicada(&mut k, arco[1], None, false, |so| {
+        assert!(so, "só a aresta clicada");
+        arco.clone()
+    }));
+    let FeatureKind::SmCurveFlange(c) = &k else { panic!("virou aba curva") };
+    assert_eq!((c.length.as_str(), c.angle.as_str(), c.flip, c.side, c.so_aresta, c.edge.len()), ("25", "60", true, 1, true, 3));
 }

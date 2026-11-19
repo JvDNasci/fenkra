@@ -48,7 +48,7 @@ impl Ctx<'_> {
 
     /// Cadeia tangente viva que passa por `ponto`, na ordem da cadeia guardada `cache`. A polilinha
     /// gravada é só cache: o contorno pode ter mudado de forma. `None` quando a cadeia se ramifica.
-    pub(crate) fn cadeia_tangente(&self, target: Id, ponto: V3, cache: &[V3]) -> Option<Vec<V3>> {
+    pub(crate) fn cadeia_tangente(&self, target: Id, ponto: V3, cache: &[V3], so_aresta: bool) -> Option<Vec<V3>> {
         let (b, _, _) = self.body_owned(target)?;
         let topo = b.topology().ok()?;
         let cs: Vec<Curve3> = topo.edge_mids.iter().filter_map(|m| b.edge_at(*m).ok()).filter_map(|p| Curve3::poly(p, false).ok()).collect();
@@ -57,7 +57,7 @@ impl Ctx<'_> {
         if perto(&cs[start]) > SOBRE {
             return None;
         }
-        let indices = geo3d::tangent_chain(&cs, start, SOBRE);
+        let indices = if so_aresta { vec![start] } else { geo3d::tangent_chain(&cs, start, SOBRE) };
         let mut cadeia = encadeia(indices.iter().map(|i| cs[*i].pts.clone()).collect())?;
         // mesmo sentido do cache: a aba sai para o mesmo lado
         if let (Some(a), Some(z)) = (cache.first(), cache.last()) {

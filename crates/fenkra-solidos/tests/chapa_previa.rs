@@ -73,7 +73,7 @@ fn todo_comando_de_chapa_devolve_malha_de_previa() {
         ("furo flangeado", FeatureKind::SmFlangedHole(SmFlangedHole { sketch: pontos, diameter: s("8"), height: s("4"), flip: false, points: vec![], standard: String::new() })),
         ("recorte", FeatureKind::SmCut(SmCut { sketch: quadrado, mode: 0, offset: String::new(), draft: s("5"), height: s("4"), flip: false, normal_face: false })),
         ("aba por perfil", FeatureKind::SmProfileFlange(SmProfileFlange { sketch: perfil, l1: s("0"), l2: s("40"), radius: None, flip: false })),
-        ("aba curva", FeatureKind::SmCurveFlange(SmCurveFlange { edge: vec![[100., 0., 2.], [100., 25., 2.], [100., 50., 2.]], length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None })),
+        ("aba curva", FeatureKind::SmCurveFlange(SmCurveFlange { edge: vec![[100., 0., 2.], [100., 25., 2.], [100., 50., 2.]], length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: false })),
         ("alívio de canto", FeatureKind::SmCornerRelief(SmCornerRelief { at: [100., 50., 2.], size: s("4"), kind: 0 })),
         ("rasgo circular", FeatureKind::SmArcSlot(SmArcSlot { center: [50., 25., 2.], radius: s("15"), width: s("4"), start: s("0"), sweep: s("90") })),
     ];
