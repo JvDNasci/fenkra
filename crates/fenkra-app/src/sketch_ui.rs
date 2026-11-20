@@ -84,7 +84,7 @@ impl Tool {
     pub fn info(self) -> (&'static str, &'static str, &'static str, &'static str) {
         match self {
             Tool::Select => ("sk_selecionar", "Selecionar", "Selecionar e arrastar", "Clique para selecionar (Shift soma). Clique na sombra de um perfil fechado para pegar todas as curvas da região, com os laços internos; Shift soma, Ctrl tira. Arraste pontos, linhas, arcos, splines ou a borda de círculos: o solver mantém as restrições. Passe o mouse para ver as setas do que ainda pode se mover. Delete apaga a seleção."),
-            Tool::Line => ("sk_polilinha", "Linha", "Linha / polilinha  (L)", "Cada clique cria um segmento ligado ao anterior. Clique no primeiro ponto para fechar o perfil; Esc ou botão direito termina. Linhas quase horizontais/verticais recebem a restrição automaticamente."),
+            Tool::Line => ("sk_polilinha", "Linha", "Linha / polilinha  (L)", "Cada clique cria um segmento ligado ao anterior. Clique no primeiro ponto para fechar o perfil; Esc ou botão direito termina. Perto de 0° ou 90° a linha encaixa na horizontal ou vertical e recebe a restrição; as teclas H e V forçam o eixo e Ctrl segurado desliga o encaixe."),
             Tool::Rect => ("sk_retangulo", "Retângulo", "Retângulo por 2 cantos  (R)", "Clique em dois cantos opostos. Cria 4 linhas com restrições horizontal/vertical; com cotas automáticas, recebe largura e altura."),
             Tool::RectCenter => ("sk_retangulo_centro", "Ret. centro", "Retângulo pelo centro", "Clique no centro e depois num canto. O centro fica preso à diagonal (ponto médio), ótimo para peças simétricas na origem."),
             Tool::Circle => ("sk_circulo", "Círculo", "Círculo por centro e raio  (C)", "Clique no centro e depois em um ponto da borda. Com cotas automáticas recebe o diâmetro."),
@@ -106,7 +106,7 @@ impl Tool {
             Tool::Fillet => ("sk_filete", "Filete", "Filete de canto", "Passe sobre um canto entre duas linhas, ou numa linha perto dele, e veja o arco em prévia. O clique insere o arco tangente e abre a cota do raio; os filetes seguintes de mesmo raio ficam iguais ao primeiro, sem cota nova. Manter canto, em Avançado, deixa um ponto com as cotas do canto antigo."),
             Tool::Chamfer => ("sk_chanfro", "Chanfro", "Chanfro de canto", "Passe sobre um canto entre duas linhas, ou numa linha perto dele, e veja o corte em prévia. O clique corta o canto com uma linha reta e abre a cota da distância. No painel: distâncias iguais, duas distâncias ou distância e ângulo; a primeira medida vai na linha sob o cursor."),
             Tool::Spline => ("sk_spline", "Spline", "Spline por pontos", "Cada clique adiciona um ponto por onde a curva passa. Enter, duplo clique ou botão direito termina. Os pontos continuam editáveis e podem receber cotas e restrições."),
-            Tool::Trim => ("sk_aparar", "Aparar", "Aparar", "Pare o cursor no trecho: ele fica vermelho tracejado e os cortes aparecem. Clique para remover. Vale para linha, arco, círculo e spline. Shift estende; clique no vazio, botão direito ou Esc encerra."),
+            Tool::Trim => ("sk_aparar", "Aparar", "Aparar", "Pare o cursor no trecho: ele fica vermelho tracejado e os cortes aparecem. Clique para remover. Corte rápido: arraste o cursor sobre vários trechos e todos saem ao soltar, num só desfazer. Vale para linha, arco, círculo e spline. Shift estende; clique no vazio, botão direito ou Esc encerra."),
             Tool::Extend => ("sk_estender", "Estender", "Estender", "Pare o cursor perto da ponta de uma linha, arco ou spline: a prévia vai até a próxima curva no caminho. Clique para estender. Shift apara; clique no vazio, botão direito ou Esc encerra."),
             Tool::Convert => ("sk_projetar", "Converter", "Converter / projetar 3D", "Clique em arestas, vértices, linhas ou curvas do modelo: viram geometria fixa do sketch, projetada no plano e ligada à origem — se o 3D mudar, o sketch acompanha."),
             Tool::Intersect => ("sk_intersecao", "Interseção", "Interseção com o plano", "Clique numa face do corpo, superfície ou aresta: a curva (ou ponto) onde ela corta o plano do sketch entra como geometria fixa e associativa."),
@@ -193,6 +193,12 @@ pub struct SketchEdit {
     clicks: Vec<Snap>,
     chain_last: Option<Id>,
     chain_first: Option<Id>,
+    /// B548: eixo forçado pelas teclas H e V para o próximo segmento da linha
+    pub(crate) forca_hv: Option<fenkra_core::sketch::EixoHv>,
+    /// B551: trechos marcados pelo arraste do corte rápido (aparados juntos ao soltar)
+    pub(crate) pincel: Vec<crate::sketch_relimita::Marcado>,
+    /// B551: onde o cursor estava no quadro anterior do arraste (o rastro entre os dois é varrido)
+    pincel_ultimo: Option<Pos2>,
     pub sel: Vec<Ent>,
     drag: Option<Drag>,
     /// canto em que começou o arrasto da seleção por janela
@@ -424,6 +430,9 @@ impl SketchEdit {
             clicks: vec![],
             chain_last: None,
             chain_first: None,
+            forca_hv: None,
+            pincel: vec![],
+            pincel_ultimo: None,
             sel: vec![],
             drag: None,
             dim_edit: None,
@@ -612,6 +621,8 @@ impl SketchEdit {
         self.clicks.clear();
         self.chain_last = None;
         self.chain_first = None;
+        self.forca_hv = None;
+        self.pincel.clear();
         self.pending = None;
         self.menu = None;
         self.entry = ValueEntry::default();
@@ -673,10 +684,16 @@ impl SketchEdit {
             self.sel.clear();
             return true;
         }
+        if !self.pincel.is_empty() {
+            // B551: Esc no meio do arraste desiste dos trechos marcados
+            self.pincel.clear();
+            return true;
+        }
         if !self.clicks.is_empty() || self.chain_last.is_some() || self.dim_edit.is_some() {
             self.clicks.clear();
             self.chain_last = None;
             self.chain_first = None;
+            self.forca_hv = None;
             self.dim_edit = None;
             true
         } else if self.tool != Tool::Select {
@@ -1818,15 +1835,25 @@ fn offset_lock(sk: &SketchData, curve: Id, m: [f64; 2], dist: f64) -> [f64; 2] {
 }
 
 /// Linha nova ligando dois pontos, com as restrições e a cota automáticas.
+/// B548: a tecla do eixo liga o forçar; a mesma tecla de novo solta; a outra troca.
+fn alterna_eixo(atual: Option<fenkra_core::sketch::EixoHv>, tecla: fenkra_core::sketch::EixoHv) -> Option<fenkra_core::sketch::EixoHv> {
+    if atual == Some(tecla) { None } else { Some(tecla) }
+}
+
 fn add_segment(sk: &mut SketchData, al: &mut impl FnMut() -> Id, last: Id, p: Id, construction: bool, auto_constraints: bool, auto_dims: bool) -> Id {
     let l = sk.add_curve(al, Curve::Line { a: last, b: p }, construction);
     let (a, b) = (sk.pos(last), sk.pos(p));
-    let ang = (b[1] - a[1]).atan2(b[0] - a[0]).to_degrees().abs();
+    // B548: a mesma folga angular do encaixe do cursor, para a linha encaixada sair com a restrição
     if auto_constraints {
-        if ang < 2.5 || (180. - ang) < 2.5 {
-            sk.add_constraint(al, Kind::Horizontal(l));
-        } else if (ang - 90.).abs() < 2.5 {
-            sk.add_constraint(al, Kind::Vertical(l));
+        use fenkra_core::sketch::{eixo_proximo, EixoHv, TOL_HV_GRAUS};
+        match eixo_proximo(a, b, TOL_HV_GRAUS) {
+            Some(EixoHv::H) => {
+                sk.add_constraint(al, Kind::Horizontal(l));
+            }
+            Some(EixoHv::V) => {
+                sk.add_constraint(al, Kind::Vertical(l));
+            }
+            None => {}
         }
     }
     if auto_dims {
@@ -2325,6 +2352,11 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         let bad = failing.iter().any(|f| sk.constraints.iter().any(|k| k.id == *f && k.kind.refs().contains(&c.id)));
         let all_fixed = SketchData::curve_points(&c.geom).iter().all(|p| report.fixed_points.contains(p));
         let mut col = if c.construction { CONSTR } else if all_fixed { defined } else { FREE };
+        // B547: a cor própria do item (escolhida na barra, dentro do sketch) troca a do estado; erro e
+        // seleção continuam por cima, para não sumirem
+        if let Some(k) = app.open.doc.cor_sketch(c.id) {
+            col = Color32::from_rgb(k[0], k[1], k[2]);
+        }
         if bad {
             col = BAD;
         }
@@ -2347,6 +2379,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     for p in sk.points.iter().filter(|p| !pontos_ocultos.contains(&p.id) && !sk.e_ponta_de_eixo(p.id)) {
         let s = v.to_screen([p.x, p.y]);
         let mut col = pt_color(p.id);
+        if let Some(k) = app.open.doc.cor_sketch(p.id) {
+            col = Color32::from_rgb(k[0], k[1], k[2]);
+        }
         if selected(Ent::Pt(p.id), edit) {
             col = SEL;
         }
@@ -2602,7 +2637,22 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     // ---------- inferência: enquanto se desenha, sem apoio mais forte, o cursor procura alinhamentos
     let desenha = matches!(tool, Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point | Tool::Spline);
     let mut direcao_inferida = None;
-    if let (true, false, true, Some(uv)) = (desenha, ctrl, settings.snaps, hover.and_then(|p| v.to_uv(p))) {
+    // B548: H ou V apertado no meio da linha: o cursor vai para o eixo que passa pela última ponta,
+    // mesmo sobre outro elemento ou com Ctrl (o pedido explícito vence o encaixe)
+    let forcado = match (tool, edit.forca_hv, edit.chain_last, hover.and_then(|p| v.to_uv(p))) {
+        (Tool::Line, Some(e), Some(last), Some(uv)) => {
+            let a = sk.pos(last);
+            let q = fenkra_core::sketch::no_eixo(a, uv, e);
+            cur_snap = Some(Snap::livre(q));
+            cursor_uv = Some(q);
+            let motivo = if e == fenkra_core::sketch::EixoHv::H { crate::sketch_snap::Motivo::Horizontal } else { crate::sketch_snap::Motivo::Vertical };
+            let inf = crate::sketch_snap::Inferencia { uv: q, linhas: vec![crate::sketch_snap::Linha { de: a, ate: q, motivo }], direcao: None };
+            crate::sketch_snap::desenha_inferencia(&painter, &|x| v.to_screen(x), &inf, SEL);
+            true
+        }
+        _ => false,
+    };
+    if let (true, false, true, false, Some(uv)) = (desenha, ctrl, settings.snaps, forcado, hover.and_then(|p| v.to_uv(p))) {
         if cur_snap.is_some_and(|s| matches!(s.tipo, TipoSnap::Livre | TipoSnap::Grade)) {
             let ancora = if tool == Tool::Line { edit.chain_last.map(|p| sk.pos(p)) } else { edit.clicks.last().map(|c| c.uv) };
             let anterior = edit.chain_last.filter(|_| tool == Tool::Line).and_then(|p| if let [l] = lines_at(&sk, p)[..] { Some(l.0) } else { None });
@@ -2969,7 +3019,15 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                             edit.chain_last = Some(p);
                         }
                         Some(last) if last != p => {
-                            let nova = add_segment(&mut sk, &mut al, last, p, edit.construction, settings.auto_constraints, settings.auto_dims);
+                            // B548: Ctrl segurado desliga o encaixe e também a restrição H/V automática
+                            let nova = add_segment(&mut sk, &mut al, last, p, edit.construction, settings.auto_constraints && !ctrl, settings.auto_dims);
+                            // o eixo forçado vira restrição mesmo com as restrições automáticas desligadas
+                            if let Some(e) = edit.forca_hv.take() {
+                                let k = if e == fenkra_core::sketch::EixoHv::H { Kind::Horizontal(nova) } else { Kind::Vertical(nova) };
+                                if !sk.constraints.iter().any(|c| c.kind == k) {
+                                    sk.add_constraint(&mut al, k);
+                                }
+                            }
                             // a inferência escolhida vira restrição, se a linha não ficou horizontal ou vertical
                             let reta = sk.constraints.iter().any(|k| matches!(k.kind, Kind::Horizontal(l) | Kind::Vertical(l) if l == nova));
                             if let (true, false, Some((base, m))) = (settings.auto_constraints, reta, direcao_inferida) {
@@ -3147,6 +3205,41 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                         Err(m) => recusa = Some(m),
                     }
                 }
+            }
+            // B551: corte rápido. Arrastar com o botão esquerdo marca cada trecho por onde o cursor
+            // passa (o rastro entre dois quadros é varrido, para um arraste rápido não pular trecho);
+            // ao soltar, todos saem juntos, numa mudança só (um passo de desfazer)
+            if modo == Tool::Trim {
+                let tol = 6. / ppm as f64;
+                if resp.dragged_by(egui::PointerButton::Primary) {
+                    let agora = hover;
+                    let de = edit.pincel_ultimo.or_else(|| ui.input(|i| i.pointer.press_origin())).or(agora);
+                    if let (Some(a), Some(b)) = (de, agora) {
+                        let n = ((b - a).length() / 3.).ceil().clamp(1., 200.) as usize;
+                        for k in 0..=n {
+                            let q = a + (b - a) * (k as f32 / n as f32);
+                            let alvo = pick_curve(q, &sk).filter(|(d, c)| *d < 8. && !sk.e_eixo(*c) && (previa.is_empty() || previa.contains(c)));
+                            if let (Some((_, c)), Some(uv)) = (alvo, v.to_uv(q)) {
+                                rl::marcar(&mut edit.pincel, &sk, c, uv, tol);
+                            }
+                        }
+                    }
+                    edit.pincel_ultimo = agora;
+                }
+                for m in &edit.pincel {
+                    let linha: Vec<Pos2> = m.sai.iter().map(|q| v.to_screen(*q)).collect();
+                    painter.extend(egui::Shape::dashed_line(&linha, Stroke::new(3., BAD), 6., 4.));
+                }
+                if resp.drag_stopped() {
+                    edit.pincel_ultimo = None;
+                    let marcados = std::mem::take(&mut edit.pincel);
+                    if !marcados.is_empty() && rl::aparar_marcados(&mut sk, &mut al, &marcados, tol) > 0 {
+                        edit.report = sk.solve(&vars, &[]);
+                    }
+                }
+            } else {
+                edit.pincel.clear();
+                edit.pincel_ultimo = None;
             }
             if fora || recusa.is_some() {
                 ui.ctx().set_cursor_icon(egui::CursorIcon::NotAllowed);
@@ -3811,6 +3904,16 @@ pub fn keys(app: &mut App, ctx: &egui::Context) -> bool {
     // com o campo de valor aberto, as letras são da expressão
     if edit.entry.typing() {
         return false;
+    }
+    // B548: no meio de uma linha, H e V forçam o eixo do próximo segmento (de novo solta). A tecla é
+    // consumida aqui, antes dos atalhos de vista que usam H ou V em alguns perfis
+    if edit.tool == Tool::Line && edit.chain_last.is_some() {
+        use fenkra_core::sketch::EixoHv;
+        for (k, e) in [(egui::Key::H, EixoHv::H), (egui::Key::V, EixoHv::V)] {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, k)) {
+                edit.forca_hv = alterna_eixo(edit.forca_hv, e);
+            }
+        }
     }
     for (a, t) in [(K::SkLine, Tool::Line), (K::SkRect, Tool::Rect), (K::SkCircle, Tool::Circle), (K::SkArc, Tool::Arc3), (K::SkPoint, Tool::Point), (K::SkDim, Tool::Dimension), (K::SkSelect, Tool::Select), (K::SkTrim, Tool::Trim), (K::SkOffset, Tool::Offset), (K::SkFillet, Tool::Fillet), (K::SkMirror, Tool::Mirror), (K::SkSpline, Tool::Spline)] {
         if km.pressed(ctx, a) {
@@ -4624,6 +4727,50 @@ mod tests {
     /// Fecha o passo como o overlay faz: guarda os valores com os rótulos dos campos.
     fn guarda(e: &ValueEntry, f: &[Measure]) -> Vec<(&'static str, String, f64)> {
         e.locks.iter().map(|(i, t, v)| (f[*i].label, t.clone(), *v)).collect()
+    }
+
+    /// B548 (aceite): linha desenhada a 1° do eixo ganha a restrição H (e a 1° da vertical, V), mesmo
+    /// longa e num plano fora da origem (coordenadas do sketch); a 10°, nenhuma. O encaixe do cursor
+    /// usa a mesma folga, então o que encaixou sai restrito e fica no eixo depois do solver.
+    #[test]
+    fn linha_a_um_grau_do_eixo_ganha_h_ou_v() {
+        let vars = HashMap::new();
+        for (graus, esperado) in [(1., Some(true)), (179.2, Some(true)), (89., Some(false)), (-91., Some(false)), (10., None)] {
+            let mut al = ids();
+            let mut sk = SketchData::default();
+            let a = sk.add_point(&mut al, 120., -35.);
+            sk.point_mut(a).unwrap().fixed = true;
+            let g: f64 = graus;
+            let b = sk.add_point(&mut al, 120. + 800. * g.to_radians().cos(), -35. + 800. * g.to_radians().sin());
+            let l = add_segment(&mut sk, &mut al, a, b, false, true, false);
+            let h = sk.constraints.iter().any(|k| k.kind == Kind::Horizontal(l));
+            let v = sk.constraints.iter().any(|k| k.kind == Kind::Vertical(l));
+            assert_eq!(if h { Some(true) } else if v { Some(false) } else { None }, esperado, "{graus}°");
+            assert!(sk.solve(&vars, &[]).converged);
+            if esperado == Some(true) {
+                assert!((sk.pos(b)[1] + 35.).abs() < 1e-6, "{graus}°: ficou na horizontal da partida");
+            }
+        }
+        // restrições automáticas desligadas (ou Ctrl segurado): a linha sai sem H/V
+        let mut al = ids();
+        let mut sk = SketchData::default();
+        let (a, b) = (sk.add_point(&mut al, 0., 0.), sk.add_point(&mut al, 500., 8.));
+        let l = add_segment(&mut sk, &mut al, a, b, false, false, false);
+        assert!(!sk.constraints.iter().any(|k| matches!(k.kind, Kind::Horizontal(x) | Kind::Vertical(x) if x == l)));
+    }
+
+    /// B548: H liga o forçar horizontal, H de novo solta, V troca para vertical.
+    #[test]
+    fn teclas_h_e_v_alternam_o_eixo_forcado() {
+        use fenkra_core::sketch::EixoHv;
+        assert_eq!(alterna_eixo(None, EixoHv::H), Some(EixoHv::H));
+        assert_eq!(alterna_eixo(Some(EixoHv::H), EixoHv::H), None);
+        assert_eq!(alterna_eixo(Some(EixoHv::H), EixoHv::V), Some(EixoHv::V));
+        let mut e = SketchEdit::new(Id(1), false);
+        e.set_tool(Tool::Line);
+        e.forca_hv = Some(EixoHv::V);
+        e.set_tool(Tool::Line);
+        assert_eq!(e.forca_hv, None, "trocar de ferramenta solta o eixo");
     }
 
     #[test]

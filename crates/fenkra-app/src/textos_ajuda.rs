@@ -37,7 +37,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     // fluxo comum das ferramentas de sketch (B239)
     ("clique ou arraste para selecionar; Shift soma", "click or drag to select; Shift adds"),
     ("clique no ponto inicial", "click the start point"),
-    ("clique no próximo ponto; no 1º ponto fecha o perfil", "click the next point; the 1st point closes the profile"),
+    ("clique no próximo ponto; no 1º ponto fecha o perfil; H ou V trava o eixo", "click the next point; the 1st point closes the profile; H or V locks the axis"),
     ("clique nos pontos da spline", "click the spline points"),
     ("Enter / duplo clique / botão direito termina", "Enter / double-click / right-click finishes"),
     ("clique no trecho da linha a remover", "click the line segment to remove"),

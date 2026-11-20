@@ -192,6 +192,11 @@ impl crate::app::App {
 
     /// Clique (`false`) ou duplo clique (`true`) no botão da barra.
     pub(crate) fn pedir_pincel(&mut self, duplo: bool) {
+        // B547: no sketch a barra pinta a seleção dele; o pincel copia entre elementos do modelo
+        if self.sketch.is_some() {
+            self.toast(crate::i18n::tr("No sketch, pinte a seleção pela cor da barra; o pincel vale fora do sketch.").to_string(), true);
+            return;
+        }
         if duplo {
             self.pincel.continuo();
         } else {
@@ -341,7 +346,7 @@ mod tests {
         pg::aplicar(&mut d, &[ponto], Mudanca::Simbolo(3));
         let ap = Amostra::de(&d, ponto);
         assert_eq!((ap.simbolo, ap.espessura, ap.tipo_linha), (Some(3), None, None));
-        // elemento de sketch não tem cor: amostra só de cor não vale ali
+        // id que não é de nenhum sketch não tem cor (B547: o de um sketch tem): amostra só de cor não vale ali
         let so_cor = Amostra { cor: Some([9, 9, 9]), ..Default::default() };
         let sk = Alvo::CurvaSketch(d.alloc());
         assert!(!so_cor.aplicar(&mut d, sk));

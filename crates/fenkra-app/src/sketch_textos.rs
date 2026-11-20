@@ -58,7 +58,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("esse ângulo não fecha o corte neste canto", "this angle does not close the cut at this corner"),
     ("este canto não comporta esse valor", "this corner cannot take this value"),
     // relimitação (B18)
-    ("clique no trecho a remover; Shift estende; clique no vazio encerra", "click the segment to remove; Shift extends; click empty space to finish"),
+    ("clique no trecho a remover, ou arraste sobre vários; Shift estende; clique no vazio encerra", "click the segment to remove, or drag over several; Shift extends; click empty space to finish"),
     ("clique perto da ponta a estender; Shift apara; clique no vazio encerra", "click near the end to extend; Shift trims; click empty space to finish"),
     ("estender funciona em linha e arco", "extend works on lines and arcs"),
     ("estender funciona em linha, arco e spline", "extend works on lines, arcs and splines"),
@@ -66,7 +66,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Pare o cursor perto da ponta de uma linha, arco ou spline: a prévia vai até a próxima curva no caminho. Clique para estender. Shift apara; clique no vazio, botão direito ou Esc encerra.", "Rest the cursor near the end of a line, arc or spline: the preview runs to the next curve in its path. Click to extend. Shift trims; click empty space, right-click or Esc finishes."),
     ("não há curva no caminho da ponta para estender até ela", "there is no curve in the end's path to extend to"),
     ("esse elemento não tem trecho para aparar", "this element has no segment to trim"),
-    ("Pare o cursor no trecho: ele fica vermelho tracejado e os cortes aparecem. Clique para remover. Vale para linha, arco, círculo e spline. Shift estende; clique no vazio, botão direito ou Esc encerra.", "Rest the cursor on a segment: it turns dashed red and the cut points appear. Click to remove it. Works on lines, arcs, circles and splines. Shift extends; click empty space, right-click or Esc finishes."),
+    ("Pare o cursor no trecho: ele fica vermelho tracejado e os cortes aparecem. Clique para remover. Corte rápido: arraste o cursor sobre vários trechos e todos saem ao soltar, num só desfazer. Vale para linha, arco, círculo e spline. Shift estende; clique no vazio, botão direito ou Esc encerra.", "Rest the cursor on a segment: it turns dashed red and the cut points appear. Click to remove it. Quick trim: drag the cursor over several segments and they all go when you release, in a single undo. Works on lines, arcs, circles and splines. Shift extends; click empty space, right-click or Esc finishes."),
     ("Pare o cursor perto da ponta de uma linha ou arco: a prévia vai até a próxima curva no caminho. Clique para estender. Shift apara; clique no vazio, botão direito ou Esc encerra.", "Rest the cursor near the end of a line or arc: the preview runs to the next curve in its path. Click to extend. Shift trims; click empty space, right-click or Esc finishes."),
     // seleção e cadeia (B19)
     ("clique ou arraste para selecionar; clique na sombra pega o perfil; duplo clique pega a cadeia; Shift soma, Ctrl tira", "click or drag to select; click the shading to take the profile; double-click takes the chain; Shift adds, Ctrl removes"),

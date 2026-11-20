@@ -304,7 +304,12 @@ impl Settings {
     /// Todas as barras da bancada (abertas e fechadas): o que o menu Janela lista.
     pub fn barras_da_bancada(&self, sketching: bool) -> Vec<Barra> {
         let comandos = if sketching { crate::organizacao::DO_SKETCH.to_vec() } else { crate::organizacao::ordem(self.bench) };
-        let navegacao = [Group::Vista, Group::Selecao, Group::Propriedades].into_iter().filter(|g| if sketching { *g == Group::Vista } else { g.in_bench(self.bench) });
+        // B547: a barra de propriedades gráficas fica também no sketch (lá ela pinta item a item)
+        let navegacao = [Group::Vista, Group::Selecao, Group::Propriedades].into_iter().filter(|g| match g {
+            Group::Vista => sketching || g.in_bench(self.bench),
+            Group::Propriedades => g.in_bench(self.bench),
+            _ => !sketching && g.in_bench(self.bench),
+        });
         let mut v: Vec<Barra> = comandos.into_iter().filter(|g| !g.de_navegacao()).chain(navegacao).map(Barra::Grupo).collect();
         v.extend(self.custom.groups.iter().enumerate().filter(|(_, c)| c.sketch == sketching).map(|(i, _)| Barra::Minha(i)));
         v

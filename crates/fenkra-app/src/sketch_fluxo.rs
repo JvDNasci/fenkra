@@ -56,7 +56,7 @@ pub fn cota(t: Tool) -> bool {
 pub fn passos(t: Tool) -> Vec<&'static str> {
     match t {
         Tool::Select => vec!["clique ou arraste para selecionar; clique na sombra pega o perfil; duplo clique pega a cadeia; Shift soma, Ctrl tira"],
-        Tool::Line => vec!["clique no ponto inicial", "clique no próximo ponto; no 1º ponto fecha o perfil"],
+        Tool::Line => vec!["clique no ponto inicial", "clique no próximo ponto; no 1º ponto fecha o perfil; H ou V trava o eixo"],
         Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point => {
             (0..t.clicks_needed().max(1)).map(|n| shape_hint(t, n)).collect()
         }
@@ -65,7 +65,7 @@ pub fn passos(t: Tool) -> Vec<&'static str> {
         Tool::Mirror => vec![edit_hint(t, true, true, 0), edit_hint(t, false, false, 0)],
         Tool::Offset => vec![edit_hint(t, false, true, 0), edit_hint(t, false, false, 0)],
         Tool::Fillet | Tool::Chamfer => vec![edit_hint(t, false, true, 0)],
-        Tool::Trim => vec!["clique no trecho a remover; Shift estende; clique no vazio encerra"],
+        Tool::Trim => vec!["clique no trecho a remover, ou arraste sobre vários; Shift estende; clique no vazio encerra"],
         Tool::Extend => vec!["clique perto da ponta a estender; Shift apara; clique no vazio encerra"],
         Tool::Convert => vec!["clique numa aresta, vértice ou curva do modelo"],
         Tool::Intersect => vec!["clique numa face, superfície ou aresta que corta o plano"],

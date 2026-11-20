@@ -28,7 +28,7 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Cada pedaço vira um elemento próprio.", "Each piece becomes its own element."),
     ("pedaços viraram elementos", "pieces became elements"),
     // B506: propriedades gráficas
-    ("Cor da seleção (faces, corpos, curvas e pontos de referência)", "Color of the selection (faces, bodies, reference curves and points)"),
+    ("Cor da seleção (faces, corpos, curvas e pontos; no sketch, item a item)", "Color of the selection (faces, bodies, curves and points; in the sketch, item by item)"),
     ("vários", "multiple"),
     ("Transparência", "Transparency"),
     ("Até 85 %: a peça não some no fundo e as arestas continuam à vista.", "Up to 85%: the part never disappears into the background and its edges stay visible."),
@@ -44,8 +44,10 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Camadas ainda não existem nesta versão: tudo fica sem camada.", "Layers do not exist yet in this version: everything has no layer."),
     ("personalizado", "custom"),
     ("Carregue imagens nas propriedades da peça.", "Load images in the part properties."),
-    ("Selecione uma face, um corpo, um comando ou um elemento de geometria.", "Select a face, a body, a feature or a geometry element."),
-    ("A cor vale para faces, corpos e elementos de geometria; curva e ponto de sketch usam espessura, tipo de linha e símbolo.", "Color applies to faces, bodies and geometry elements; sketch curves and points use thickness, line type and symbol."),
+    ("Selecione uma face, um corpo, um comando, um sketch ou um elemento de geometria.", "Select a face, a body, a feature, a sketch or a geometry element."),
+    ("A cor vale para faces, corpos, sketches e elementos de geometria.", "Color applies to faces, bodies, sketches and geometry elements."),
+    // B547: o pincel fora do sketch
+    ("No sketch, pinte a seleção pela cor da barra; o pincel vale fora do sketch.", "In the sketch, paint the selection with the bar color; the brush works outside the sketch."),
     ("Espessura e tipo de linha valem só para linhas e curvas.", "Thickness and line type apply only to lines and curves."),
     ("O símbolo vale só para pontos.", "The symbol applies only to points."),
     ("Material, textura e transparência valem só para faces, corpos e superfícies.", "Material, texture and transparency apply only to faces, bodies and surfaces."),

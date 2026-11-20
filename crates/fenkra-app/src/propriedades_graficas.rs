@@ -24,6 +24,8 @@ pub enum Alvo {
     /// faces geradas por um comando de sólido
     Recurso(Id),
     Ref(Id, RefClass),
+    /// B547: o sketch inteiro (fora da edição): a cor pinta todas as curvas e pontos dele
+    Sketch(Id),
     /// curva de sketch
     CurvaSketch(Id),
     /// ponto de sketch
@@ -90,6 +92,8 @@ pub const TIPOS_DE_LINHA: [&str; 4] = ["Contínua", "Tracejada", "Traço-ponto",
 pub const SIMBOLOS: [&str; 6] = ["Cruz 3D", "Asterisco", "X", "Círculo", "Quadrado", "Ponto"];
 pub(crate) const ESTILO_PADRAO: LineStyle = LineStyle { width: 2., dash: 0, point: 1, size: 8. };
 const COR_REF: [u8; 3] = [222, 170, 110];
+/// cor que a barra mostra para um sketch sem cor própria (a do traço de sketch na cena)
+const COR_SKETCH: [u8; 3] = [89, 191, 255];
 
 /// Alvos da seleção: faces e elementos clicados no 3D, mais o item (ou os itens) da árvore.
 pub fn alvos(d: &Document, sel: Sel, multi: &[Id], picks: &[Pick]) -> Vec<Alvo> {
@@ -106,7 +110,8 @@ pub fn alvos(d: &Document, sel: Sel, multi: &[Id], picks: &[Pick]) -> Vec<Alvo> 
         if d.collectors.iter().any(|c| c.id == id) {
             return Some(Alvo::Corpo(id));
         }
-        d.feature(id).filter(|f| !matches!(f.kind, FeatureKind::Sketch(_))).map(|_| Alvo::Recurso(id))
+        // B547: o sketch escolhido na árvore é pintado inteiro
+        d.feature(id).map(|f| if matches!(f.kind, FeatureKind::Sketch(_)) { Alvo::Sketch(id) } else { Alvo::Recurso(id) })
     };
     for p in picks {
         por(match p {
@@ -130,6 +135,19 @@ pub fn alvos(d: &Document, sel: Sel, multi: &[Id], picks: &[Pick]) -> Vec<Alvo> 
     v
 }
 
+/// B547: alvos da barra dentro do sketch: as curvas e os pontos selecionados nele (cota e restrição
+/// não têm cor). Sem seleção, nada: o sketch inteiro se pinta de fora, pela árvore.
+pub fn alvos_no_sketch(sel: &[crate::sketch_ui::Ent]) -> Vec<Alvo> {
+    use crate::sketch_ui::Ent;
+    sel.iter()
+        .filter_map(|e| match e {
+            Ent::Cv(c) => Some(Alvo::CurvaSketch(*c)),
+            Ent::Pt(p) => Some(Alvo::PontoSketch(*p)),
+            Ent::Cs(_) => None,
+        })
+        .collect()
+}
+
 /// Aparência em vigor do alvo (a própria ou a herdada), se o alvo tiver cor.
 pub(crate) fn aparencia(d: &Document, a: Alvo) -> Option<Appearance> {
     let do_corpo = |id: Id| d.collectors.iter().find(|c| c.id == id).map(|c| Appearance { color: c.color, finish: c.finish, texture: c.texture });
@@ -137,8 +155,14 @@ pub(crate) fn aparencia(d: &Document, a: Alvo) -> Option<Appearance> {
         Alvo::Corpo(id) => do_corpo(id),
         Alvo::Recurso(id) => d.feature(id).and_then(|f| f.appearance.or_else(|| do_corpo(f.target))),
         Alvo::Ref(id, _) => d.reference(id).map(|r| r.appearance.unwrap_or(Appearance { color: COR_REF, finish: Finish::Acetinado, texture: None })),
-        Alvo::CurvaSketch(_) | Alvo::PontoSketch(_) => None,
+        // B547: a cor própria do item, senão a do sketch inteiro; id fora de qualquer sketch não tem cor
+        Alvo::Sketch(id) => d.feature(id).filter(|f| matches!(f.kind, FeatureKind::Sketch(_))).map(|_| cor_de_sketch(d.cor_do_sketch(id))),
+        Alvo::CurvaSketch(id) | Alvo::PontoSketch(id) => d.sketch_do_elemento(id).map(|sk| cor_de_sketch(d.cor_no_sketch(sk, id))),
     }
+}
+
+fn cor_de_sketch(c: Option<[u8; 3]>) -> Appearance {
+    Appearance { color: c.unwrap_or(COR_SKETCH), finish: Finish::Fosco, texture: None }
 }
 
 pub(crate) fn tem_face(a: Alvo) -> bool {
@@ -152,7 +176,7 @@ pub(crate) fn tem_ponto(a: Alvo) -> bool {
 }
 pub(crate) fn id_de(a: Alvo) -> Id {
     match a {
-        Alvo::Corpo(id) | Alvo::Recurso(id) | Alvo::Ref(id, _) | Alvo::CurvaSketch(id) | Alvo::PontoSketch(id) => id,
+        Alvo::Corpo(id) | Alvo::Recurso(id) | Alvo::Ref(id, _) | Alvo::Sketch(id) | Alvo::CurvaSketch(id) | Alvo::PontoSketch(id) => id,
     }
 }
 
@@ -203,7 +227,13 @@ fn mudar_aparencia(d: &mut Document, a: Alvo, f: impl Fn(&mut Appearance)) -> bo
                 r.appearance = Some(ap);
             }
         }
-        _ => return false,
+        // B547: fora do sketch, na aparência do comando; dentro, item a item (só exibição: nada recalcula)
+        Alvo::Sketch(id) => {
+            if let Some(x) = d.feature_mut(id) {
+                x.appearance = Some(ap);
+            }
+        }
+        Alvo::CurvaSketch(id) | Alvo::PontoSketch(id) => d.set_cor_sketch(id, Some(ap.color)),
     }
     true
 }
@@ -253,10 +283,10 @@ pub fn aplicar(d: &mut Document, alvos: &[Alvo], m: Mudanca) -> usize {
 /// Motivo de um campo desabilitado.
 fn motivo(e: &Estado, campo: &str) -> &'static str {
     if e.alvos.is_empty() {
-        return "Selecione uma face, um corpo, um comando ou um elemento de geometria.";
+        return "Selecione uma face, um corpo, um comando, um sketch ou um elemento de geometria.";
     }
     match campo {
-        "cor" => "A cor vale para faces, corpos e elementos de geometria; curva e ponto de sketch usam espessura, tipo de linha e símbolo.",
+        "cor" => "A cor vale para faces, corpos, sketches e elementos de geometria.",
         "linha" => "Espessura e tipo de linha valem só para linhas e curvas.",
         "ponto" => "O símbolo vale só para pontos.",
         _ => "Material, textura e transparência valem só para faces, corpos e superfícies.",
@@ -290,7 +320,7 @@ pub fn barra(ui: &mut egui::Ui, e: &Estado) -> Option<Mudanca> {
     campo(ui, e.cor.aplica(), motivo(e, "cor"), |ui| {
         fraco(ui, "Cor");
         let mut c = e.cor.um().copied().unwrap_or([200, 200, 200]);
-        let r = ui.color_edit_button_srgb(&mut c).on_hover_text(tr("Cor da seleção (faces, corpos, curvas e pontos de referência)"));
+        let r = ui.color_edit_button_srgb(&mut c).on_hover_text(tr("Cor da seleção (faces, corpos, curvas e pontos; no sketch, item a item)"));
         if r.changed() {
             m = Some(Mudanca::Cor(c));
         }
@@ -380,6 +410,10 @@ pub fn barra(ui: &mut egui::Ui, e: &Estado) -> Option<Mudanca> {
 impl App {
     /// Alvos da seleção atual.
     pub(crate) fn alvos_graficos(&self) -> Vec<Alvo> {
+        // B547: dentro do sketch, item a item: o que está selecionado nele
+        if let Some(e) = &self.sketch {
+            return alvos_no_sketch(&e.sel);
+        }
         let multi = self.multi.borrow().clone();
         alvos(&self.open.doc, self.sel, &multi, &self.picks)
     }
@@ -468,6 +502,65 @@ mod tests {
         }
     }
 
+    /// B547 (aceite): fora do sketch, a barra pinta o sketch inteiro; dentro, item a item (linha de
+    /// construção e ponto inclusive). A cor do sketch e a de uma linha ficam gravadas no documento, e
+    /// a peça feita do sketch não muda (mesmo volume e mesma caixa).
+    #[test]
+    fn cor_do_sketch_inteiro_e_de_uma_linha() {
+        use crate::sketch_ui::Ent;
+        use fenkra_core::sketch::Curve;
+        use fenkra_core::{Extent, Extrude, Sketch};
+        let mut d = Document::new("sketch_cor");
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data: Default::default() }));
+        let mut n = 9000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let (linha, construcao, ponto, cota) = {
+            let Some(FeatureKind::Sketch(s)) = d.feature_mut(sk).map(|f| &mut f.kind) else { panic!() };
+            let (_, l) = s.data.add_rect(&mut al, [0., 0.], [30., 20.], false);
+            let (a, b) = (s.data.add_point(&mut al, 0., 0.), s.data.add_point(&mut al, 30., 20.));
+            let c = s.data.add_curve(&mut al, Curve::Line { a, b }, true);
+            let k = s.data.add_constraint(&mut al, fenkra_core::sketch::Kind::Length(l[0], "30".into()));
+            (l[0], c, a, k)
+        };
+        d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("10".into()), reverse: false, taper: "0".into(), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
+        let antes = fenkra_kernel::AVAILABLE.then(|| medida(&d));
+        // fora do sketch: o sketch escolhido na árvore é o alvo, com a cor do traço de sketch
+        let fora = alvos(&d, Sel::Feature(sk), &[], &[]);
+        assert_eq!(fora, [Alvo::Sketch(sk)]);
+        let e = ler(&d, &fora);
+        assert_eq!(e.cor, Valor::Um(COR_SKETCH));
+        assert!(!e.material.aplica() && !e.transparencia.aplica(), "sketch não tem face");
+        assert_eq!(aplicar(&mut d, &fora, Mudanca::Cor([20, 160, 60])), 1);
+        assert_eq!(d.cor_do_sketch(sk), Some([20, 160, 60]));
+        // dentro: a seleção do sketch (a cota não tem cor); a linha herda a do sketch até ganhar a sua
+        let dentro = alvos_no_sketch(&[Ent::Cv(linha), Ent::Cs(cota)]);
+        assert_eq!(dentro, [Alvo::CurvaSketch(linha)]);
+        assert_eq!(ler(&d, &dentro).cor, Valor::Um([20, 160, 60]));
+        assert_eq!(aplicar(&mut d, &dentro, Mudanca::Cor([230, 40, 30])), 1);
+        assert_eq!(aplicar(&mut d, &dentro, Mudanca::TipoLinha(2)), 1);
+        let constr = alvos_no_sketch(&[Ent::Cv(construcao), Ent::Pt(ponto)]);
+        assert_eq!(aplicar(&mut d, &constr, Mudanca::Cor([200, 200, 0])), 2, "construção e ponto também");
+        assert_eq!(aplicar(&mut d, &constr, Mudanca::Espessura(3.)), 1, "espessura só na linha");
+        assert_eq!(d.cor_no_sketch(sk, linha), Some([230, 40, 30]));
+        assert_eq!(d.cor_no_sketch(sk, construcao), Some([200, 200, 0]));
+        assert_eq!(d.line_style(linha).map(|s| s.dash), Some(2));
+        // gravar e ler de novo mantém as duas cores
+        let de_novo: Document = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+        assert_eq!(de_novo.cor_do_sketch(sk), Some([20, 160, 60]));
+        assert_eq!(de_novo.cor_no_sketch(sk, linha), Some([230, 40, 30]));
+        assert!(alvos_no_sketch(&[]).is_empty(), "sem seleção no sketch, nada a pintar");
+        // só exibição: a peça do sketch continua a mesma
+        if let Some((va, ca)) = antes {
+            let (vd, cd) = medida(&d);
+            assert!((va - 6000.).abs() < 1. && (vd - va).abs() < 1e-6, "{va} {vd}");
+            assert_eq!(ca, cd);
+            assert!((ca[1][0] - ca[0][0] - 30.).abs() < 1e-3 && (ca[1][1] - ca[0][1] - 20.).abs() < 1e-3, "{ca:?}");
+        }
+    }
+
     /// B506: sem seleção, tudo desabilitado; ponto aceita só o símbolo e a cor.
     #[test]
     fn campos_inaplicaveis_ficam_desabilitados() {
@@ -493,7 +586,8 @@ mod tests {
         for bancada in [Bench::Solidos, Bench::Superficies, Bench::Chapa] {
             s.bench = bancada;
             assert!(crate::toolbar::groups_at(&s, Dock::Topo, false).contains(&Group::Propriedades), "{bancada:?}");
-            assert!(!crate::toolbar::groups_at(&s, Dock::Topo, true).contains(&Group::Propriedades), "no sketch não");
+            // B547: no sketch também, para pintar item a item
+            assert!(crate::toolbar::groups_at(&s, Dock::Topo, true).contains(&Group::Propriedades), "no sketch também");
         }
         s.bench = Bench::Montagem;
         assert!(!s.barras_da_bancada(false).contains(&b));
