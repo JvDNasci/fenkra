@@ -263,6 +263,7 @@ def desenhos():
     ic("mostrar", B=OLHO, R=C(24, 24, 6))
     ic("ocultar", B=OLHO, R=L((8, 40), (40, 8)))
     ic("ocultos", b=CUBO(), R="M12 24c6-8 18-8 24 0c-6 8-18 8-24 0z" + C(24, 24, 2.5))
+    ic("origem", B=Z((6, 36), (24, 28), (42, 36), (24, 44)), R=S(24, 32, 24, 6) + S(24, 32, 42, 40) + S(24, 32, 6, 40), pr=[(24, 32)])
     ic("an_zebra", B=C(24, 24, 18), R="M10 13c8 4 20 4 28 0M6.5 23c10 6 25 6 35 0M9 34c9 4 21 4 30 0")
     ic("an_curvatura", B="M6 38c10-16 26-22 36-22",
        R=L((12, 30), (7, 20)) + L((20, 24), (15, 11)) + L((28, 19), (24, 7)) + L((36, 17), (35, 9))
@@ -771,6 +772,7 @@ SO_INTERFACE |= {"pl_boss", "pl_snap", "pl_grelha", "pl_lip", "pl_ranhura"}
 SO_INTERFACE |= {"asm_chaveta", "asm_calculo", "pmi_captura", "pmi_captura_modelo"}
 SO_INTERFACE |= {"asm_conjunto", "asm_regras_cor"}
 SO_INTERFACE |= {"verificar"}
+SO_INTERFACE |= {"origem"}  # B526
 
 # medir (B509): paquímetro; medida mantida na árvore e medida órfã (referência perdida)
 PAQ = Q(6, 8, 36, 7) + L((13, 15), (13, 30), (8, 36), (8, 15)) + Q(26, 6, 10, 11) + L((26, 17), (26, 36), (31, 30), (31, 17))

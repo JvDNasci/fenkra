@@ -131,9 +131,9 @@ mod tests {
     #[test]
     fn ordem_dos_grupos_por_bancada() {
         let rotulos = |b: Bench| no_contexto(b).iter().map(|g| g.label()).collect::<Vec<_>>();
-        assert_eq!(rotulos(Bench::Solidos), ["Sketch", "Recursos de sketch", "Acabamento", "Superfície e volume", "Transformações", "Booleanas", "Referências"]);
+        assert_eq!(rotulos(Bench::Solidos), ["Sketch", "Recursos de sketch", "Acabamento", "Superfície e volume", "Transformações", "Booleanas", "Elementos de construção"]);
         assert_eq!(rotulos(Bench::Chapa), ["Sketch", "Paredes", "Dobras", "Corte e estampagem", "Transformações da chapa"]);
-        assert_eq!(rotulos(Bench::Estrutural), ["Sketch", "Referências", "Membros", "Ligações", "Solda", "Saídas"]);
+        assert_eq!(rotulos(Bench::Estrutural), ["Sketch", "Elementos de construção", "Membros", "Ligações", "Solda", "Saídas"]);
         assert_eq!(rotulos(Bench::Montagem), ["Estrutura do produto", "Recursos de montagem", "Restrições e movimento", "Biblioteca"]);
         assert_eq!(rotulos(Bench::Desenho), ["Vistas", "Gerar cotas", "Cotas", "Anotações e símbolos", "Folha", "Tabelas"]);
         // parâmetros da chapa é o primeiro botão da chapa

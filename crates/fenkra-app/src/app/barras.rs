@@ -354,9 +354,14 @@ impl App {
                     }
                 }
                 crate::pmi_ui::status(self, ui);
+                // B527: o medidor de quadros mora aqui, fora do menu lateral
+                if let Some(t) = crate::desempenho::texto_do_contador(self.settings.contador_fps) {
+                    ui.label(RichText::new(t).small().monospace()).on_hover_text(tr("Quadros por segundo que o Fenkra está desenhando. Parado, mostra \"em repouso\". Desligue em Configurações, Desempenho."));
+                }
                 let errs = self.errors_prev;
                 if errs > 0 && ui.small_button(RichText::new(format!("✖ {errs} com erro — reparar")).color(crate::theme::st_err())).clicked() {
                     self.wizard_open = true;
+                    self.wizard_recolhido = false;
                 }
                 if let Some(e) = self.result.as_ref().and_then(|r| r.param_error.clone()) {
                     ui.label(RichText::new(format!("Parâmetros: {e}")).small().color(crate::theme::st_err()));

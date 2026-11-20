@@ -157,7 +157,7 @@ impl Group {
             Group::Sketch => tr("Sketch"),
             Group::Solidos => tr("Recursos de sketch"),
             Group::Acabamento => tr("Acabamento"),
-            Group::Referencias => tr("Referências"),
+            Group::Referencias => tr("Elementos de construção"),
             Group::Organizacao => tr("Organização"),
             Group::Selecao => tr("Seleção"),
             Group::Vista => tr("Vista"),

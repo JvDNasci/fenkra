@@ -23,7 +23,8 @@ fn chave_destaque() -> egui::Id {
 
 /// Lacunas de todos os comandos com erro (só com o assistente aberto).
 pub fn lacunas(app: &App) -> Vec<(Id, Vec<Lacuna>)> {
-    if !app.wizard_open {
+    // recolhido (B532) é só o aviso: as candidatas só aparecem com o assistente aberto de verdade
+    if !app.wizard_open || app.wizard_recolhido {
         return vec![];
     }
     let Some(r) = &app.result else { return vec![] };
@@ -121,4 +122,117 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera) {
 /// inclusive quando a pessoa o abriu pela barra de estado e corrigiu o último erro.
 pub fn assistente_aberto(itens_com_erro: usize) -> bool {
     itens_com_erro > 0
+}
+
+/// B532: o rótulo do aviso recolhido, como "Reparar Sketch base" ou "Reparar Sketch base +2".
+pub fn rotulo_do_aviso(nomes: &[&str]) -> String {
+    match nomes {
+        [] => tr("Reparar").to_string(),
+        [a] => format!("{} {a}", tr("Reparar")),
+        [a, resto @ ..] => format!("{} {a} +{}", tr("Reparar"), resto.len()),
+    }
+}
+
+/// B532: o aviso pequeno no lugar do assistente grande. Devolve `Some(true)` se a pessoa pediu para
+/// expandir e `Some(false)` se dispensou o aviso.
+pub fn aviso_recolhido(ctx: &egui::Context, nomes: &[&str]) -> Option<bool> {
+    let mut resposta = None;
+    egui::Area::new(egui::Id::new("reparo_aviso")).order(egui::Order::Foreground).anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0., -48.)).show(ctx, |ui| {
+        egui::Frame::popup(ui.style()).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                // o ponto de erro, na cor do tema
+                let (ponto, _) = ui.allocate_exact_size(egui::vec2(10., 10.), Sense::hover());
+                ui.painter().circle_filled(ponto.center(), 4.5, crate::theme::st_err());
+                let r = ui.add(egui::Button::new(RichText::new(rotulo_do_aviso(nomes)).strong()).frame(false));
+                if r.on_hover_text(tr("Clique para abrir o assistente de reparo, com o diagnóstico completo.")).clicked() {
+                    resposta = Some(true);
+                }
+                if ui.small_button("✕").on_hover_text(tr("Dispensar o aviso. Ele volta quando surgir outro erro; o erro continua pela barra de baixo.")).clicked() {
+                    resposta = Some(false);
+                }
+            });
+        });
+    });
+    resposta
+}
+
+/// B528: apaga de uma vez os itens com erro (sem os dependentes: quem depende deles também está na
+/// lista, porque também ficou com erro). Itens já levados por outro apagar são ignorados. Devolve
+/// quantos saíram do documento.
+pub fn apagar_todos(doc: &mut fenkra_core::Document, ids: &[Id]) -> usize {
+    let existe = |d: &fenkra_core::Document, id: Id| d.feature(id).is_some() || d.reference(id).is_some();
+    let mut n = 0;
+    for id in ids {
+        if existe(doc, *id) {
+            doc.delete(*id, false);
+            n += 1;
+        }
+    }
+    n
+}
+
+/// B528: nomes para a janela de confirmação, na ordem em que aparecem.
+pub fn nomes_para_apagar(doc: &fenkra_core::Document, ids: &[Id]) -> Vec<String> {
+    ids.iter().map(|i| doc.name_of(*i).to_string()).collect()
+}
+
+/// B541: o Enter confirma o menu de apagar; Shift, Ctrl ou Alt com Enter não são do menu.
+pub fn enter_confirma(menu_aberto: bool, enter: bool, com_modificador: bool) -> bool {
+    menu_aberto && enter && !com_modificador
+}
+
+#[cfg(test)]
+mod testes_lote {
+    use super::*;
+    use fenkra_core::*;
+
+    /// Um sketch sobre um plano que não existe e três recursos que dependem dele: apagar o sketch e
+    /// escolher apagar todos leva os quatro, e o documento volta com um desfazer só.
+    fn doc_com_tres_dependentes() -> (Document, Id, Vec<Id>) {
+        let mut d = Document::new("t");
+        let mut data = SketchData::default();
+        let mut n = 9_800_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        data.add_rect(&mut al, [-10., -10.], [10., 10.], false);
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+        let mk = |d: &mut Document| d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind("5".into()), reverse: false, taper: "0".into(), thin: None, thin_side: 0, dir: None, ends: Default::default() }));
+        let dep = vec![mk(&mut d), mk(&mut d), mk(&mut d)];
+        (d, sk, dep)
+    }
+
+    #[test]
+    fn apagar_todos_leva_os_tres_com_erro_e_o_desfazer_devolve() {
+        let (mut d, sk, dep) = doc_com_tres_dependentes();
+        let antes = d.clone();
+        assert_eq!(d.dependents(sk).len(), 3);
+        // o sketch foi apagado e os três ficaram com erro: a lista do assistente
+        d.delete(sk, false);
+        assert_eq!(d.features.len(), 3);
+        assert_eq!(nomes_para_apagar(&d, &dep).len(), 3);
+        let n = apagar_todos(&mut d, &dep);
+        assert_eq!(n, 3);
+        assert!(d.features.is_empty());
+        // repetir não apaga de novo
+        assert_eq!(apagar_todos(&mut d, &dep), 0);
+        // o desfazer guarda o documento de antes inteiro
+        assert_eq!(antes.features.len(), 4);
+    }
+
+    #[test]
+    fn rotulo_do_aviso_cita_o_primeiro_e_conta_o_resto() {
+        assert_eq!(rotulo_do_aviso(&["Sketch base"]), format!("{} Sketch base", tr("Reparar")));
+        assert_eq!(rotulo_do_aviso(&["A", "B", "C"]), format!("{} A +2", tr("Reparar")));
+        assert_eq!(rotulo_do_aviso(&[]), tr("Reparar"));
+    }
+
+    #[test]
+    fn enter_so_confirma_com_o_menu_aberto_e_sem_modificador() {
+        assert!(enter_confirma(true, true, false));
+        assert!(!enter_confirma(false, true, false), "sem menu, o Enter é da árvore");
+        assert!(!enter_confirma(true, false, false));
+        assert!(!enter_confirma(true, true, true));
+    }
 }

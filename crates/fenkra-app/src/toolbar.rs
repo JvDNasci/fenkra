@@ -30,6 +30,8 @@ pub enum Act {
     Normal,
     Ortho,
     HiddenEnv,
+    /// B526: mostra ou esconde a origem (planos e eixos), gravado no documento
+    Origem,
     Settings,
     /// B502: leva qualquer barra (grupo do sistema ou caixa própria) para uma borda, flutuando ou oculta
     Barra(Barra, Dock),
@@ -626,6 +628,7 @@ pub fn entries(g: Group) -> Vec<Entry> {
             One(it("ocultar", "Ocultar/mostrar", "Ocultar ou mostrar a seleção  (H)", "Esconde o que está selecionado; com o oculto selecionado, mostra de novo. O modelo não muda.", OcultarMostrar)),
             One(it("ocultos", "Trocar espaço", "Trocar o espaço visível  (Shift+H)", "Mostra só os itens ocultos, para trazer de volta o que precisar. Clique de novo para voltar. Nada é apagado.", HiddenEnv)),
             One(it("aparencia", "Material", "Aplicar material", "Aplica um material pronto (cor e acabamento) à seleção: faces, comandos, corpos e superfícies.", MaterialMenu)),
+            One(it("origem", "Origem", "Mostrar ou esconder a origem  (Alt+O)", "Liga ou desliga os três planos e os eixos da origem de uma vez. A escolha fica gravada no arquivo; esconder não apaga nada.", Origem)),
             One(it("ortho", "Ortogonal", "Projeção ortogonal  (O)", "Perspectiva ou projeção ortogonal (ideal para sketches).", Ortho)),
         ],
         // B520: o pincel de aparência abre a barra; os campos vêm de `propriedades_graficas::barra`
@@ -680,6 +683,8 @@ pub fn entries(g: Group) -> Vec<Entry> {
 /// Estado necessário para marcar botões selecionados.
 pub struct ToolState {
     pub hidden_env: bool,
+    /// B526: a origem está escondida (o botão fica apertado)
+    pub origem_oculta: bool,
     pub sketch_tool: Option<Tool>,
     pub construction: bool,
     pub check: bool,
@@ -706,6 +711,7 @@ fn is_selected(a: Act, s: &Settings, st: &ToolState) -> bool {
         Act::SkAutoConstraints => s.auto_constraints,
         Act::SkAutoDims => s.auto_dims,
         Act::HiddenEnv => st.hidden_env,
+        Act::Origem => st.origem_oculta,
         Act::Display(m) => s.display == m,
         Act::Verificar => crate::verificar_ui::aberto(),
         Act::RegraPlastica => crate::plastico_ui::aberto(),

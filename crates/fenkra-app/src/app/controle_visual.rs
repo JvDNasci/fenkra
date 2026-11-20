@@ -9,6 +9,13 @@
 
 use super::*;
 
+/// B526: alterna a origem (planos e eixos); o estado mora no documento (`origin_visible`) e volta
+/// igual ao reabrir o arquivo. Devolve o novo estado (`true` = visível).
+pub(crate) fn alternar_origem(d: &mut Document) -> bool {
+    d.origin_visible = !d.origin_visible;
+    d.origin_visible
+}
+
 /// Corpos ocultos agora.
 pub(crate) fn corpos_ocultos(d: &Document) -> usize {
     d.collectors.iter().filter(|c| !c.visible).count()
@@ -92,6 +99,11 @@ impl App {
         if ui.add_enabled(ocultos > 0, egui::Button::new(format!("{} ({ocultos})", tr("Mostrar todos os corpos")))).clicked() {
             mostrar_todos_os_corpos(&mut self.open.doc);
             self.scene_dirty = true;
+            ui.close();
+        }
+        let rotulo_origem = if self.open.doc.origin_visible { "Esconder a origem   Alt+O" } else { "Mostrar a origem   Alt+O" };
+        if ui.button(tr(rotulo_origem)).on_hover_text(tr("Liga ou desliga os três planos e os eixos da origem de uma vez. A escolha fica gravada no arquivo; esconder não apaga nada.")).clicked() {
+            acts.push(Act::Origem);
             ui.close();
         }
         ui.separator();
@@ -212,8 +224,29 @@ mod tests {
             "Ambiente de ocultos   Shift+H",
             "Mostra só o que está oculto, para achar e trazer de volta o que foi escondido. Clique de novo para voltar ao normal.",
             "Controle visual",
+            "Esconder a origem   Alt+O",
+            "Mostrar a origem   Alt+O",
+            "Mostrar ou esconder a origem  (Alt+O)",
+            "Mostrar ou esconder a origem",
+            "Origem visível",
+            "Origem escondida",
+            "Origem",
+            "Elementos de construção",
         ] {
             assert!(crate::i18n::tem_traducao(t), "{t}");
         }
+    }
+
+    /// B526: o botão alterna a origem e o estado volta igual ao reabrir o arquivo.
+    #[test]
+    fn origem_alterna_e_volta_igual_ao_reabrir() {
+        let mut d = Document::new("t");
+        assert!(d.origin_visible, "a origem nasce visível");
+        assert!(!alternar_origem(&mut d), "primeiro clique esconde");
+        let reaberto = Document::from_json(&d.to_json()).unwrap();
+        assert!(!reaberto.origin_visible, "escondida continua escondida ao reabrir");
+        assert!(alternar_origem(&mut d), "segundo clique mostra");
+        let reaberto = Document::from_json(&d.to_json()).unwrap();
+        assert!(reaberto.origin_visible);
     }
 }
