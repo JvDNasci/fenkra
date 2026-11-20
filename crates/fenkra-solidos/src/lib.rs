@@ -6135,37 +6135,7 @@ impl Ctx<'_> {
                 let size = ev(&cr.size, &self.vars, "tamanho")?;
                 let b = self.body(f.target).ok_or("o alívio precisa de uma chapa")?.clone();
                 let at = self.map_point(cr.at, f.flat_space, sp.flat);
-                // o canto fica numa aresta: um ponto um pouco para dentro (rumo ao centro da peça)
-                // cai logo abaixo da face da chapa, que é a mais perto dele
-                let (lo, hi) = b.bbox().ok_or("chapa sem dimensões")?;
-                let inward = geo3d::unit(geo3d::sub(geo3d::lerp(lo, hi, 0.5), at)).unwrap_or([0., 0., -1.]);
-                let (_, n) = b.surface_near(geo3d::add(at, geo3d::mul(inward, sp.t * 0.25))).map_err(k)?;
-                let on = at;
-                let top = geo3d::add(on, geo3d::mul(n, 1.));
-                let z = geo3d::mul(n, -1.);
-                let tool = match cr.kind {
-                    1 => {
-                        let x = geo3d::any_perp(z);
-                        let y = fenkra_kernel::cross(z, x);
-                        let o = geo3d::sub(geo3d::sub(top, geo3d::mul(x, size / 2.)), geo3d::mul(y, size / 2.));
-                        Shape::box_tool(o, x, z, [size, size, sp.t * 2. + 2.]).map_err(k)?
-                    }
-                    2 => {
-                        // gota: círculo no canto e um rasgo para dentro da chapa
-                        let (lo, hi) = b.bbox().ok_or("chapa sem dimensões")?;
-                        let v = geo3d::sub(geo3d::lerp(lo, hi, 0.5), on);
-                        let v = geo3d::unit(geo3d::sub(v, geo3d::mul(n, geo3d::dot(v, n)))).unwrap_or(geo3d::any_perp(z));
-                        let round = Shape::hole_tool(top, z, size, sp.t * 2. + 2., HoleShape::Simple).map_err(k)?;
-                        let w = fenkra_kernel::cross(z, v);
-                        let o = geo3d::sub(top, geo3d::mul(w, size * 0.25));
-                        let slot = Shape::box_tool(o, w, z, [size * 0.5, size, sp.t * 2. + 2.]).map_err(k)?;
-                        let slot = if geo3d::dot(fenkra_kernel::cross(z, w), v) < 0. { slot.transformed(Xform::Mirror(top, v)).map_err(k)? } else { slot };
-                        round.compound(&slot)
-                    }
-                    // B40: furo de alívio aeronáutico na interseção de dobras: nunca abaixo do mínimo
-                    3 => Shape::hole_tool(top, z, chapa_cega::diametro_alivio(sp.t, sp.r, Some(size)).0, sp.t * 2. + 2., HoleShape::Simple).map_err(k)?,
-                    _ => Shape::hole_tool(top, z, size, sp.t * 2. + 2., HoleShape::Simple).map_err(k)?,
-                };
+                let tool = self.ferramenta_alivio(&b, at, cr.kind, size)?;
                 self.apply(f.target, tool, BoolOp::Cut, f.id)?;
                 Ok(None)
             }

@@ -999,7 +999,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             section(ui, "Alívio de canto");
             ui.label(RichText::new(format!("{} {} — {}", tr("canto em"), crate::app::p3(cr.at, 1), tr("clique outro vértice/face para trocar"))).small());
             ui.horizontal_wrapped(|ui| {
-                for (k, n) in [(0u8, "redondo"), (1, "quadrado"), (2, "gota"), (3, "aeronáutico")] {
+                for (k, n) in [(0u8, "redondo"), (1, "quadrado"), (2, "gota"), (3, "aeronáutico"), (4, "rasgo")] {
                     ui.selectable_value(&mut cr.kind, k, tr(n));
                 }
             });

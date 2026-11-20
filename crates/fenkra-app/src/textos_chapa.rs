@@ -63,6 +63,11 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Limita a cobertura à metade da espessura: para quando a peça vizinha não deixa espaço para cobrir tudo.", "Limits the cover to half the thickness: for when the neighboring part leaves no room to cover everything."),
     ("propagar a todos os cantos da chapa", "propagate to every corner of the sheet"),
     ("Fecha do mesmo jeito todos os cantos entre abas de 90° da chapa, cada aba cobrindo a seguinte.", "Closes every corner between 90° flanges of the sheet the same way, each flange covering the next."),
+    // B533: canto aberto e alívio no vértice
+    ("Nenhuma aba avança: o canto fica aberto e recebe só o alívio escolhido no vértice da chapa.", "No flange advances: the corner stays open and only gets the relief chosen at the sheet vertex."),
+    ("Alívio no vértice da chapa", "Relief at the sheet vertex"),
+    ("sem alívio", "no relief"),
+    ("Tamanho do alívio", "Relief size"),
     // B35: aba entre perfis, desdobrar/redobrar parcial, converter em chapa
     ("Desdobrar parcial", "Partial unfold"),
     ("Desdobrar só algumas abas", "Unfold only some flanges"),

@@ -2761,6 +2761,10 @@ impl LimitesAba {
     }
 }
 
+fn is_zero_u8(v: &u8) -> bool {
+    *v == 0
+}
+
 /// Fechamento de canto (B293): fecha o vão que fica no canto entre duas abas de 90° da mesma
 /// chapa. `at` é o vértice do canto da chapa. A "primeira" aba é a que chega ao canto andando
 /// com o interior da chapa à esquerda (sentido anti-horário visto de cima); `invert` troca.
@@ -2768,7 +2772,8 @@ impl LimitesAba {
 pub struct SmCornerClose {
     pub at: [f64; 3],
     /// 0 topo (as duas pontas se encontram numa diagonal), 1 sobreposto (a primeira cobre a
-    /// ponta da segunda), 2 sob (a segunda cobre a ponta da primeira)
+    /// ponta da segunda), 2 sob (a segunda cobre a ponta da primeira), 3 aberto (nenhuma aba
+    /// avança: o canto fica aberto e só recebe o alívio)
     pub kind: u8,
     /// folga entre as faces que se encontram (mm)
     pub gap: String,
@@ -2783,6 +2788,13 @@ pub struct SmCornerClose {
     /// troca qual aba é a primeira
     #[serde(default)]
     pub invert: bool,
+    /// B533: alívio no vértice da chapa, feito antes do fechamento: 0 nenhum, 1 redondo,
+    /// 2 quadrado, 3 rasgo. No tipo aberto é tudo o que o comando faz.
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub relief_kind: u8,
+    /// B533: tamanho do alívio (mm); vazio com alívio ligado usa duas vezes a espessura
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub relief_size: String,
 }
 
 /// Aba entre dois perfis (lofted): a chapa passa de um perfil fechado ao outro, como num funil ou
@@ -2835,7 +2847,8 @@ pub struct SmConvert {
 pub struct SmCornerRelief {
     pub at: [f64; 3],
     pub size: String,
-    /// 0 redondo, 1 quadrado, 2 gota, 3 aeronáutico (redondo, com diâmetro mínimo da chapa)
+    /// 0 redondo, 1 quadrado, 2 gota, 3 aeronáutico (redondo, com diâmetro mínimo da chapa),
+    /// 4 rasgo (fenda estreita para dentro da chapa, na diagonal do canto)
     pub kind: u8,
 }
 
@@ -3553,7 +3566,8 @@ impl FeatureKind {
             SmCornerRelief(p) => exprs(&mut p.size),
             SmCornerClose(p) => {
                 exprs(&mut p.gap);
-                exprs(&mut p.ratio)
+                exprs(&mut p.ratio);
+                exprs(&mut p.relief_size)
             }
             SmLoftFlange(p) => {
                 ids(&mut p.a);
