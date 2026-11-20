@@ -62,8 +62,11 @@ pub fn de_um_so(t: Tool) -> bool {
         Tool::Line
             | Tool::Rect
             | Tool::RectCenter
+            | Tool::Rect3
+            | Tool::Parallelogram
             | Tool::Circle
             | Tool::Circle3
+            | Tool::CircleTan3
             | Tool::Arc3
             | Tool::ArcCenter
             | Tool::Slot

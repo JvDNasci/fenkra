@@ -636,8 +636,8 @@ pub fn entries(g: Group) -> Vec<Entry> {
         Group::SkCriacao => vec![
             One(tool(Tool::Line)),
             One(tool(Tool::Spline)),
-            Family("sk_ret", vec![tool(Tool::Rect), tool(Tool::RectCenter)]),
-            Family("sk_circ", vec![tool(Tool::Circle), tool(Tool::Circle3)]),
+            Family("sk_ret", vec![tool(Tool::Rect), tool(Tool::RectCenter), tool(Tool::Rect3), tool(Tool::Parallelogram)]),
+            Family("sk_circ", vec![tool(Tool::Circle), tool(Tool::Circle3), tool(Tool::CircleTan3)]),
             Family("sk_arco", vec![tool(Tool::Arc3), tool(Tool::ArcCenter)]),
             Family("sk_formas", vec![tool(Tool::Slot), tool(Tool::Polygon)]),
             One(tool(Tool::Point)),

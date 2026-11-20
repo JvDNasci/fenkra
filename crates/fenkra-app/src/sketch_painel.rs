@@ -15,8 +15,8 @@ use eframe::egui::{self, RichText};
 /// Modos do comando a que a ferramenta pertence; ferramenta sem variantes não tem modos.
 pub fn modos(t: Tool) -> &'static [Tool] {
     const FAMILIAS: [&[Tool]; 6] = [
-        &[Tool::Rect, Tool::RectCenter],
-        &[Tool::Circle, Tool::Circle3],
+        &[Tool::Rect, Tool::RectCenter, Tool::Rect3, Tool::Parallelogram],
+        &[Tool::Circle, Tool::Circle3, Tool::CircleTan3],
         &[Tool::Arc3, Tool::ArcCenter],
         &[Tool::Fillet, Tool::Chamfer],
         &[Tool::Move, Tool::Copy],
@@ -34,8 +34,8 @@ pub fn proximo_modo(t: Tool) -> Tool {
 /// Nome do comando, igual em todos os modos.
 pub fn comando_de(t: Tool) -> &'static str {
     match t {
-        Tool::Rect | Tool::RectCenter => "Retângulo",
-        Tool::Circle | Tool::Circle3 => "Círculo",
+        Tool::Rect | Tool::RectCenter | Tool::Rect3 | Tool::Parallelogram => "Retângulo",
+        Tool::Circle | Tool::Circle3 | Tool::CircleTan3 => "Círculo",
         Tool::Arc3 | Tool::ArcCenter => "Arco",
         Tool::Fillet | Tool::Chamfer => "Canto",
         Tool::Move | Tool::Copy => "Mover ou copiar",
@@ -50,7 +50,9 @@ pub fn nome_modo(t: Tool) -> &'static str {
         Tool::Rect => "2 cantos",
         Tool::RectCenter | Tool::ArcCenter => "Pelo centro",
         Tool::Circle => "Centro e raio",
-        Tool::Circle3 | Tool::Arc3 => "3 pontos",
+        Tool::Circle3 | Tool::Arc3 | Tool::Rect3 => "3 pontos",
+        Tool::Parallelogram => "Paralelogramo",
+        Tool::CircleTan3 => "Tangente a 3",
         _ => t.info().1,
     }
 }
@@ -62,6 +64,8 @@ pub fn campos_do_comando(t: Tool) -> &'static [&'static str] {
         Tool::Arc3 => &["comprimento", "ângulo", "raio"],
         Tool::Slot => &["comprimento", "ângulo", "largura"],
         Tool::Rect | Tool::RectCenter => &["largura", "altura"],
+        Tool::Rect3 => &["comprimento", "ângulo", "altura"],
+        Tool::Parallelogram => &["comprimento", "ângulo", "lado", "ângulo interno"],
         Tool::Circle | Tool::Circle3 => &["raio"],
         Tool::ArcCenter | Tool::Polygon => &["raio", "ângulo"],
         Tool::Move | Tool::Copy => &["distância", "ângulo"],
@@ -77,6 +81,8 @@ pub fn dica_campo(rotulo: &str) -> &'static str {
         "ângulo" => "Ângulo em graus a partir da horizontal do sketch; no arco pelo centro, o ângulo varrido. Digite para travar.",
         "largura" => "Largura total. Digite para travar; o outro valor continua seguindo o mouse.",
         "altura" => "Altura total. Digite para travar; o outro valor continua seguindo o mouse.",
+        "lado" => "Comprimento do segundo lado do paralelogramo. Digite para travar; aceita expressão.",
+        "ângulo interno" => "Ângulo interno entre o primeiro e o segundo lado, em graus. Digite para travar.",
         "raio" => "Raio da curva. Digite para travar; aceita expressão.",
         "distância" => "Distância até o ponto ou curva de origem. Digite para travar; o lado segue o mouse.",
         _ => "Valor do comando. Digite para travar; aceita expressão.",
@@ -128,7 +134,7 @@ fn campo_canto(ui: &mut egui::Ui, id: &str, nome: &str, dica: &str, texto: &mut 
 
 /// A ferramenta desenha geometria nova.
 fn desenha(t: Tool) -> bool {
-    matches!(t, Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point | Tool::Spline)
+    matches!(t, Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Rect3 | Tool::Parallelogram | Tool::Circle | Tool::Circle3 | Tool::CircleTan3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point | Tool::Spline)
 }
 
 /// Seções do comando, na ordem: estado do passo, modo, parâmetros e avançado.
@@ -272,11 +278,14 @@ mod tests {
 
     #[test]
     fn os_quatro_comandos_do_pedido_tem_modos_e_a_volta_fecha() {
-        for par in [[Tool::Rect, Tool::RectCenter], [Tool::Circle, Tool::Circle3], [Tool::Arc3, Tool::ArcCenter], [Tool::Fillet, Tool::Chamfer]] {
-            assert_eq!(modos(par[0]), modos(par[1]));
-            assert_eq!(proximo_modo(par[0]), par[1]);
-            assert_eq!(proximo_modo(par[1]), par[0]);
-            assert_eq!(comando_de(par[0]), comando_de(par[1]));
+        // B550: o retângulo ganhou 3 pontos e paralelogramo; o círculo, tangente a 3
+        let familias: [&[Tool]; 4] = [&[Tool::Rect, Tool::RectCenter, Tool::Rect3, Tool::Parallelogram], &[Tool::Circle, Tool::Circle3, Tool::CircleTan3], &[Tool::Arc3, Tool::ArcCenter], &[Tool::Fillet, Tool::Chamfer]];
+        for f in familias {
+            for (i, t) in f.iter().enumerate() {
+                assert_eq!(modos(*t), f);
+                assert_eq!(proximo_modo(*t), f[(i + 1) % f.len()], "{t:?}");
+                assert_eq!(comando_de(*t), comando_de(f[0]));
+            }
         }
         assert_eq!(proximo_modo(Tool::Line), Tool::Line);
     }
@@ -289,11 +298,15 @@ mod tests {
         e.percorrer_modo();
         assert_eq!(e.tool, Tool::Circle3);
         assert_eq!(e.indice_passo(), 1, "o primeiro ponto do círculo vale no modo de 3 pontos");
-        // o modo seguinte ficaria completo com os cliques dados: recomeça
+        // B550: no tangente a 3 os cliques escolhem elementos, não pontos: recomeça
+        e.clique_de_teste([3., 2.]);
+        e.percorrer_modo();
+        assert_eq!(e.tool, Tool::CircleTan3);
+        assert_eq!(e.indice_passo(), 0);
         e.clique_de_teste([3., 2.]);
         e.percorrer_modo();
         assert_eq!(e.tool, Tool::Circle);
-        assert_eq!(e.indice_passo(), 0);
+        assert_eq!(e.indice_passo(), 0, "e recomeça ao sair dele");
     }
 
     /// Os botões antigos da barra levam ao modo certo, estando em qualquer modo do comando.
@@ -343,7 +356,7 @@ mod tests {
         for d in [DICA_ESPERA, DICA_LADOS, DICA_RAIO_CANTO, DICA_DIST_CANTO, DICA_CONSTRUCAO, DICA_COTA_DIGITAR, DICA_AUTO_REST, DICA_AUTO_COTA, DICA_SNAPS, crate::sketch_snap::DICA_RESTRINGE, crate::sketch_snap::DICA_JUNTAR] {
             assert!(tem_traducao(d), "{d}");
         }
-        for m in [Tool::Rect, Tool::RectCenter, Tool::Circle, Tool::Circle3, Tool::Arc3, Tool::ArcCenter, Tool::Fillet, Tool::Chamfer] {
+        for m in [Tool::Rect, Tool::RectCenter, Tool::Rect3, Tool::Parallelogram, Tool::Circle, Tool::Circle3, Tool::CircleTan3, Tool::Arc3, Tool::ArcCenter, Tool::Fillet, Tool::Chamfer] {
             assert!(tem_traducao(nome_modo(m)) && tem_traducao(comando_de(m)), "{m:?}");
         }
     }

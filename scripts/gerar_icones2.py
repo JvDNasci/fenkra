@@ -295,6 +295,10 @@ def desenhos():
     ic("sk_ponto", B="M24 8v9M24 31v9M8 24h9M31 24h9", pr=[(24, 24)])
     ic("sk_retangulo", R=Q(8, 12, 32, 24), b=L((8, 36), (40, 12)), pb=[(8, 36), (40, 12)])
     ic("sk_retangulo_centro", R=Q(8, 12, 32, 24), b=L((24, 24), (40, 12)), pb=[(24, 24), (40, 12)])
+    # B550: retângulo inclinado por 3 pontos, paralelogramo e círculo tangente a 3 elementos
+    ic("sk_retangulo3", R=Z((8, 30), (28, 10), (40, 22), (20, 42)), pb=[(8, 30), (28, 10), (40, 22)])
+    ic("sk_paralelogramo", R=Z((6, 36), (30, 36), (42, 12), (18, 12)), pb=[(6, 36), (30, 36), (42, 12)])
+    ic("sk_circulo_tangente", B=Z((6, 40), (42, 40), (24, 8)), R=C(24, 29.5, 10.5))
     ic("sk_circulo", R=C(24, 24, 17), B=L((24, 24), pol(24, 24, 17, -40)), pb=[(24, 24)])
     ic("sk_circulo3", R=C(24, 24, 17), pb=[pol(24, 24, 17, -120), pol(24, 24, 17, 0), pol(24, 24, 17, 120)])
     ic("sk_arco3", R=arc(24, 32, 18, 180, 360), pb=[(6, 32), (24, 14), (42, 32)])

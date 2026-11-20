@@ -18,8 +18,11 @@ pub fn todas() -> Vec<Tool> {
         Tool::Line,
         Tool::Rect,
         Tool::RectCenter,
+        Tool::Rect3,
+        Tool::Parallelogram,
         Tool::Circle,
         Tool::Circle3,
+        Tool::CircleTan3,
         Tool::Arc3,
         Tool::ArcCenter,
         Tool::Slot,
@@ -57,7 +60,7 @@ pub fn passos(t: Tool) -> Vec<&'static str> {
     match t {
         Tool::Select => vec!["clique ou arraste para selecionar; clique na sombra pega o perfil; duplo clique pega a cadeia; Shift soma, Ctrl tira"],
         Tool::Line => vec!["clique no ponto inicial", "clique no próximo ponto; no 1º ponto fecha o perfil; H ou V trava o eixo"],
-        Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point => {
+        Tool::Rect | Tool::RectCenter | Tool::Rect3 | Tool::Parallelogram | Tool::Circle | Tool::Circle3 | Tool::CircleTan3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point => {
             (0..t.clicks_needed().max(1)).map(|n| shape_hint(t, n)).collect()
         }
         Tool::Spline => vec!["clique nos pontos da spline", "Enter / duplo clique / botão direito termina"],
@@ -89,7 +92,7 @@ pub fn passos(t: Tool) -> Vec<&'static str> {
 pub fn usa_selecao(t: Tool) -> bool {
     !matches!(
         t,
-        Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point | Tool::Spline | Tool::Convert | Tool::Intersect
+        Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Rect3 | Tool::Parallelogram | Tool::Circle | Tool::Circle3 | Tool::CircleTan3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point | Tool::Spline | Tool::Convert | Tool::Intersect
     )
 }
 
@@ -174,14 +177,14 @@ mod testes {
         ordenados.sort();
         ordenados.dedup();
         assert_eq!(nomes.len(), ordenados.len());
-        assert_eq!(nomes.len(), 28 + 11);
+        assert_eq!(nomes.len(), 31 + 11);
     }
 
     #[test]
     fn selecao_previa_esta_decidida_para_cada_ferramenta() {
         for t in todas() {
             let usa = usa_selecao(t);
-            let desenha = matches!(t, Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point | Tool::Spline | Tool::Convert | Tool::Intersect);
+            let desenha = matches!(t, Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Rect3 | Tool::Parallelogram | Tool::Circle | Tool::Circle3 | Tool::CircleTan3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point | Tool::Spline | Tool::Convert | Tool::Intersect);
             assert_eq!(usa, !desenha, "{t:?}");
         }
         // as que o pedido nomeia

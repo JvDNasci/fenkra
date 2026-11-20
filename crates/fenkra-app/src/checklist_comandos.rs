@@ -242,7 +242,8 @@ mod tests {
     /// entraram sem GIF, porque a mídia pede a captura da janela. Volta a 297 com os 11 GIFs (B519).
     /// B520 (Pincel de aparência) entra sem GIF pelo mesmo motivo: +1, e volta a 297 com os GIFs do B519.
     /// B526 (botão Origem) entra sem GIF pelo mesmo motivo: +1, e volta a 297 com os GIFs do B519.
-    const TETO_FORA_SEM_GIF: usize = 310;
+    /// B550 (retângulo por 3 pontos, paralelogramo e círculo tangente a 3) também: +3.
+    const TETO_FORA_SEM_GIF: usize = 313;
     const TETO_FORA_SEM_ICONE: usize = 0;
     const TETO_FORA_SEM_TOOLTIP: usize = 10;
 
