@@ -584,6 +584,67 @@ fn estender_spline(sk: &mut SketchData, curva: Id, pts: &[Id], ponta: Id, novo: 
     troca_geom(sk, curva, Curve::Spline { pts: ids });
 }
 
+/// B551: trecho marcado pelo corte rápido (arrastar o cursor sobre os trechos, como um pincel).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Marcado {
+    /// ponto da curva por onde o cursor passou: acha o trecho de novo na hora de aparar
+    pub em: P,
+    /// polilinha do trecho que sai (a prévia em vermelho)
+    pub sai: Vec<P>,
+}
+
+/// Distância de `p` a uma polilinha.
+fn dist_poli(poli: &[P], p: P) -> f64 {
+    match poli {
+        [] => f64::MAX,
+        [q] => dist(*q, p),
+        _ => poli.windows(2).map(|w| {
+            let t = Traco::Reta { a: w[0], b: w[1] };
+            dist(t.em(t.param(p).clamp(0., 1.)), p)
+        }).fold(f64::MAX, f64::min),
+    }
+}
+
+/// B551: marca o trecho de `curva` sob `cursor`, se ele ainda não foi marcado. `tol` (no plano): um
+/// ponto a menos disso de um trecho já marcado é o mesmo trecho, então passar de novo, ou parar
+/// perto do cruzamento, não marca duas vezes. Devolve se marcou.
+pub fn marcar(marcados: &mut Vec<Marcado>, sk: &SketchData, curva: Id, cursor: P, tol: f64) -> bool {
+    if sk.e_eixo(curva) || marcados.iter().any(|m| dist_poli(&m.sai, cursor) < tol) {
+        return false;
+    }
+    let (Some(t), Some(plano)) = (traco(sk, curva), plano_aparar(sk, curva, cursor)) else { return false };
+    let em = t.em(t.param(cursor).clamp(0., 1.));
+    marcados.push(Marcado { em, sai: plano.sai });
+    true
+}
+
+/// Curva (sem eixos nem pontos) que passa a menos de `tol` de `p`; a mais perto.
+fn curva_em(sk: &SketchData, p: P, tol: f64) -> Option<Id> {
+    sk.curves
+        .iter()
+        .filter(|c| !sk.e_eixo(c.id))
+        .filter_map(|c| {
+            let t = traco(sk, c.id)?;
+            let d = dist(t.em(t.param(p).clamp(0., 1.)), p);
+            (d < tol).then_some((d, c.id))
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|x| x.1)
+}
+
+/// B551: apara todos os trechos marcados, na ordem em que o cursor passou, numa mudança só do
+/// sketch (um passo de desfazer). Cada trecho é achado de novo pelo ponto marcado, porque aparar um
+/// trecho no meio cria uma curva nova para o pedaço que sobra. Devolve quantos saíram.
+pub fn aparar_marcados(sk: &mut SketchData, al: &mut impl FnMut() -> Id, marcados: &[Marcado], tol: f64) -> usize {
+    let mut n = 0;
+    for m in marcados {
+        if let Some(c) = curva_em(sk, m.em, tol) {
+            n += usize::from(aparar(sk, al, c, m.em).is_ok());
+        }
+    }
+    n
+}
+
 /// Com Shift segurado, Aparar age como Estender e Estender como Aparar.
 pub fn efetiva(t: Tool, shift: bool) -> Tool {
     match (t, shift) {
@@ -665,6 +726,47 @@ mod testes {
         assert_eq!(sk.constraints.iter().filter(|k| matches!(k.kind, Kind::Horizontal(_))).count(), 2);
         let rel = sk.solve(&HashMap::new(), &[]);
         assert!(rel.failing.is_empty());
+    }
+
+    /// B551 (aceite): arrastar sobre três trechos corta os três numa mudança só. O cursor passa várias
+    /// vezes pelo mesmo trecho e para perto de um cruzamento, e nada é marcado duas vezes.
+    #[test]
+    fn corte_rapido_apara_os_tres_trechos_do_arraste() {
+        let (mut sk, mut al) = (SketchData::default(), ids());
+        let h = linha(&mut sk, &mut al, [-20., 0.], [20., 0.]);
+        for x in [-10., 0., 10.] {
+            linha(&mut sk, &mut al, [x, -9.], [x, 9.]);
+        }
+        let v3 = sk.curves[3].id;
+        let tol = 0.5;
+        let mut m = vec![];
+        // o rastro do cursor: dois pontos no 1º trecho, um junto ao cruzamento, o 2º trecho, e a vertical da direita
+        let rastro = [(h, [-15., 0.]), (h, [-14., 0.1]), (h, [-10.2, 0.]), (h, [-5., 0.]), (h, [-4., 0.]), (v3, [10., 5.])];
+        let marcou: Vec<bool> = rastro.iter().map(|(c, q)| marcar(&mut m, &sk, *c, *q, tol)).collect();
+        assert_eq!(marcou, [true, false, false, true, false, true]);
+        assert_eq!(m.len(), 3);
+        // o que vai sair, antes de aparar: de -20 a -10, de -10 a 0 e a metade de cima da vertical em x = 10
+        assert!(perto(m[0].sai[0], [-20., 0.]) && perto(*m[0].sai.last().unwrap(), [-10., 0.]));
+        assert!(perto(m[1].sai[0], [-10., 0.]) && perto(*m[1].sai.last().unwrap(), [0., 0.]));
+        assert!(perto(m[2].sai[0], [10., 0.]) && perto(*m[2].sai.last().unwrap(), [10., 9.]));
+        assert_eq!(aparar_marcados(&mut sk, &mut al, &m, tol), 3);
+        // a horizontal ficou de 0 a 20 e a vertical da direita de -9 a 0
+        let horizontais: Vec<Traco> = sk.curves.iter().filter_map(|c| traco(&sk, c.id)).filter(|t| matches!(t, Traco::Reta { a, b } if a[1].abs() < 1e-9 && b[1].abs() < 1e-9)).collect();
+        assert_eq!(horizontais.len(), 1);
+        let (lo, hi) = match &horizontais[0] {
+            Traco::Reta { a, b } => (a[0].min(b[0]), a[0].max(b[0])),
+            _ => unreachable!(),
+        };
+        assert!((lo - 0.).abs() < 1e-6 && (hi - 20.).abs() < 1e-6, "{lo} {hi}");
+        let t = traco(&sk, v3).unwrap();
+        assert!((t.comprimento() - 9.).abs() < 1e-6);
+        assert!(sk.solve(&HashMap::new(), &[]).failing.is_empty());
+        // o eixo do sketch não é marcado
+        let mut e = SketchData::default();
+        let mut al2 = ids();
+        e.garantir_eixos(&mut al2);
+        let eixo = e.eixos.unwrap().h;
+        assert!(!marcar(&mut vec![], &e, eixo, [3., 0.], tol));
     }
 
     #[test]

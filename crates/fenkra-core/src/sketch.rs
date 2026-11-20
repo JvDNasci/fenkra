@@ -478,6 +478,45 @@ pub fn inflections(s: &[[f64; 2]]) -> Vec<[f64; 2]> {
     out
 }
 
+/// B548: direção de eixo que uma linha nova pode ganhar (horizontal ou vertical do sketch).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum EixoHv {
+    H,
+    V,
+}
+
+/// B548: folga angular do encaixe em H e V, em graus. A mesma vale para o cursor (o encaixe) e para
+/// a restrição que a linha ganha ao ser criada, senão a linha encaixada podia sair sem restrição.
+pub const TOL_HV_GRAUS: f64 = 3.0;
+
+/// B548: a linha de `a` a `b` está a menos de `tol_graus` da horizontal ou da vertical do sketch?
+/// A folga é angular: vale igual para uma linha curta e para uma longa (uma folga em distância, como
+/// a de alinhar com outros pontos, fica pequena demais numa linha longa: a 1° e 500 mm o desvio já é
+/// de quase 9 mm). Coordenadas do próprio sketch, então vale em qualquer plano. Pontas coincidentes
+/// não têm direção.
+pub fn eixo_proximo(a: [f64; 2], b: [f64; 2], tol_graus: f64) -> Option<EixoHv> {
+    let (dx, dy) = ((b[0] - a[0]).abs(), (b[1] - a[1]).abs());
+    if dx.hypot(dy) < 1e-12 {
+        return None;
+    }
+    let t = tol_graus.to_radians().tan();
+    if dy <= dx * t {
+        Some(EixoHv::H)
+    } else if dx <= dy * t {
+        Some(EixoHv::V)
+    } else {
+        None
+    }
+}
+
+/// B548: leva `b` para a horizontal (ou vertical) que passa por `a`, mantendo a outra coordenada.
+pub fn no_eixo(a: [f64; 2], b: [f64; 2], e: EixoHv) -> [f64; 2] {
+    match e {
+        EixoHv::H => [b[0], a[1]],
+        EixoHv::V => [a[0], b[1]],
+    }
+}
+
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize)]
 pub struct SketchData {
     pub points: Vec<SkPoint>,
@@ -2088,6 +2127,24 @@ mod tests {
             n += 1;
             Id(n)
         }
+    }
+
+    /// B548: a folga é angular, então uma linha longa a 1° do eixo encaixa como uma curta.
+    #[test]
+    fn eixo_proximo_usa_folga_angular() {
+        let a = [10., -5.];
+        let um_grau = |l: f64, base: f64| [a[0] + l * base.to_radians().cos(), a[1] + l * base.to_radians().sin()];
+        for l in [5., 500., 5000.] {
+            assert_eq!(eixo_proximo(a, um_grau(l, 1.), TOL_HV_GRAUS), Some(EixoHv::H), "{l}");
+            assert_eq!(eixo_proximo(a, um_grau(l, 181.), TOL_HV_GRAUS), Some(EixoHv::H), "para a esquerda, {l}");
+            assert_eq!(eixo_proximo(a, um_grau(l, 89.), TOL_HV_GRAUS), Some(EixoHv::V), "{l}");
+            assert_eq!(eixo_proximo(a, um_grau(l, -91.), TOL_HV_GRAUS), Some(EixoHv::V), "para baixo, {l}");
+            assert_eq!(eixo_proximo(a, um_grau(l, 10.), TOL_HV_GRAUS), None, "{l}");
+            assert_eq!(eixo_proximo(a, um_grau(l, 45.), TOL_HV_GRAUS), None, "{l}");
+        }
+        assert_eq!(eixo_proximo(a, a, TOL_HV_GRAUS), None, "sem direção");
+        assert_eq!(no_eixo(a, [30., -4.], EixoHv::H), [30., -5.]);
+        assert_eq!(no_eixo(a, [11., 40.], EixoHv::V), [10., 40.]);
     }
 
     #[test]

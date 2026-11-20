@@ -531,6 +531,33 @@ impl Document {
             self.line_styles.push((id, st));
         }
     }
+    /// B547: cor própria de uma curva ou ponto de sketch, se tiver.
+    pub fn cor_sketch(&self, elem: Id) -> Option<[u8; 3]> {
+        self.cores_sketch.iter().find(|(x, _)| *x == elem).map(|(_, c)| *c)
+    }
+    /// B547: grava (ou tira, com `None`) a cor própria de uma curva ou ponto de sketch.
+    pub fn set_cor_sketch(&mut self, elem: Id, cor: Option<[u8; 3]>) {
+        self.cores_sketch.retain(|(x, _)| *x != elem);
+        if let Some(c) = cor {
+            self.cores_sketch.push((elem, c));
+        }
+    }
+    /// B547: sketch (comando) que tem esta curva ou este ponto.
+    pub fn sketch_do_elemento(&self, elem: Id) -> Option<Id> {
+        self.features.iter().find_map(|f| match &f.kind {
+            FeatureKind::Sketch(s) if s.data.curves.iter().any(|c| c.id == elem) || s.data.points.iter().any(|p| p.id == elem) => Some(f.id),
+            _ => None,
+        })
+    }
+    /// B547: cor do sketch inteiro (a aparência do comando), se tiver.
+    pub fn cor_do_sketch(&self, sketch: Id) -> Option<[u8; 3]> {
+        self.feature(sketch).filter(|f| matches!(f.kind, FeatureKind::Sketch(_))).and_then(|f| f.appearance).map(|a| a.color)
+    }
+    /// B547: cor em vigor de um elemento do sketch: a própria vence a do sketch inteiro; `None` é a
+    /// cor do tema (a de sempre).
+    pub fn cor_no_sketch(&self, sketch: Id, elem: Id) -> Option<[u8; 3]> {
+        self.cor_sketch(elem).or_else(|| self.cor_do_sketch(sketch))
+    }
 }
 
 /// Vista salva (câmera) — base para vistas 2D e detalhamento 3D.
@@ -4441,6 +4468,11 @@ pub struct Document {
     /// B506: transparência própria (0 a 100 %) de corpo, comando ou superfície; só exibição
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub transparencias: Vec<(Id, u8)>,
+    /// B547: cor própria de curva ou ponto de sketch (item a item); a do sketch inteiro fica na
+    /// aparência do comando. Só exibição, como o estilo de linha: fora do `SketchData`, para mudar a
+    /// cor não recalcular a peça
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cores_sketch: Vec<(Id, [u8; 3])>,
     /// regras de dobra de tubo cadastradas pelo usuário (B330)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tube_rules: Vec<TubeRule>,
@@ -4530,6 +4562,7 @@ impl Document {
             pmi_captures: vec![],
             line_styles: vec![],
             transparencias: vec![],
+            cores_sketch: vec![],
             tube_rules: vec![],
             plastico: None,
             features: vec![],
@@ -5789,6 +5822,38 @@ mod tests {
         assert!(d.ref_shown(d.reference(p).unwrap()));
         assert!(!d.ref_shown(d.reference(q).unwrap()));
         assert!(!d.sketch_hidden(d.feature(sk).unwrap()));
+    }
+
+    /// B547 (aceite): cor do sketch inteiro e de uma linha gravadas no documento; a da linha vence a
+    /// do sketch, e gravar e ler de novo mantém as duas.
+    #[test]
+    fn cor_do_sketch_e_da_linha_ficam_no_documento() {
+        use super::*;
+        let mut d = Document::new("t");
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::default(), data: Default::default() }));
+        let mut n = 1000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let (l1, l2) = {
+            let Some(FeatureKind::Sketch(s)) = d.feature_mut(sk).map(|f| &mut f.kind) else { panic!() };
+            let (a, b, c) = (s.data.add_point(&mut al, 0., 0.), s.data.add_point(&mut al, 10., 0.), s.data.add_point(&mut al, 10., 5.));
+            let l1 = s.data.add_curve(&mut al, crate::sketch::Curve::Line { a, b }, false);
+            let l2 = s.data.add_curve(&mut al, crate::sketch::Curve::Line { a: b, b: c }, true);
+            (l1, l2)
+        };
+        assert_eq!(d.sketch_do_elemento(l2), Some(sk));
+        assert_eq!(d.cor_no_sketch(sk, l1), None, "sem cor própria: a do tema");
+        d.feature_mut(sk).unwrap().appearance = Some(Appearance { color: [10, 200, 30], finish: Finish::Fosco, texture: None });
+        d.set_cor_sketch(l2, Some([250, 0, 0]));
+        assert_eq!(d.cor_no_sketch(sk, l1), Some([10, 200, 30]), "o sketch inteiro pinta a linha");
+        assert_eq!(d.cor_no_sketch(sk, l2), Some([250, 0, 0]), "a da linha (construção) vence a do sketch");
+        let de_novo: Document = serde_json::from_str(&serde_json::to_string(&d).unwrap()).unwrap();
+        assert_eq!(de_novo.cor_no_sketch(sk, l2), Some([250, 0, 0]));
+        assert_eq!(de_novo.cor_do_sketch(sk), Some([10, 200, 30]));
+        d.set_cor_sketch(l2, None);
+        assert_eq!(d.cor_no_sketch(sk, l2), Some([10, 200, 30]), "tirar a própria volta à do sketch");
     }
 
     #[test]

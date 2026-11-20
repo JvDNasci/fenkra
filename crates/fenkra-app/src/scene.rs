@@ -119,6 +119,14 @@ fn rgb(c: [u8; 3]) -> [f32; 3] {
     c.map(|x| x as f32 / 255.)
 }
 
+/// B547: cor escolhida pelo usuário (opaca), senão a de sempre.
+fn cor_rgba(c: Option<[u8; 3]>, padrao: [f32; 4]) -> [f32; 4] {
+    c.map_or(padrao, |c| {
+        let k = rgb(c);
+        [k[0], k[1], k[2], 1.0]
+    })
+}
+
 pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     let mut s = Scene::default();
     let mut bounds = None;
@@ -268,12 +276,14 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             if editing {
                 continue;
             }
-            // curvas com estilo próprio (espessura/tipo de linha) vão pelo traço grosso
-            let styled: Vec<&(Id, bool, Vec<[f32; 3]>)> = sk.ents.iter().filter(|(cid, ..)| doc.line_style(*cid).is_some()).collect();
+            // curvas com estilo ou cor própria vão uma a uma; as com estilo, pelo traço grosso
+            let styled: Vec<&(Id, bool, Vec<[f32; 3]>)> = sk.ents.iter().filter(|(cid, ..)| doc.line_style(*cid).is_some() || doc.cor_sketch(*cid).is_some()).collect();
+            // B547: a cor do sketch inteiro troca a do traço normal; a construção segue com a dela
+            let cor_sk = cor_rgba(doc.cor_do_sketch(sk.feature), SKETCH);
             if styled.is_empty() {
                 let dst = if h { &mut s.overlay } else { &mut s.lines };
                 for p in &sk.lines {
-                    dst.push(lv(*p, if h { HILITE } else { SKETCH }));
+                    dst.push(lv(*p, if h { HILITE } else { cor_sk }));
                     grow(&mut bounds, Vec3::from(*p));
                 }
                 for p in &sk.construction {
@@ -284,7 +294,8 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                     for p in pts {
                         grow(&mut bounds, Vec3::from(*p));
                     }
-                    let col = if h { HILITE } else if *cons { CONSTR } else { SKETCH };
+                    // B547: a cor própria do item vence a do sketch, também na construção
+                    let col = if h { HILITE } else { cor_rgba(doc.cor_sketch(*cid), if *cons { CONSTR } else { cor_sk }) };
                     match doc.line_style(*cid) {
                         Some(st) => crate::render::push_wide(&mut s.wide, pts, col, st.width, st.dash),
                         None => {
@@ -313,11 +324,16 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
             if o.point_style != 0 {
                 continue;
             }
+            // B547: cada ponto com a cor dele, senão a do sketch
+            let cor_sk = cor_rgba(doc.cor_do_sketch(sk.feature), SKETCH);
+            let com_cor: Vec<([f32; 3], [u8; 3])> = sk.pt_ids.iter().filter_map(|(id, q)| Some((*q, doc.cor_sketch(*id)?))).collect();
             for p in &sk.points {
                 let c = Vec3::from(*p);
+                let propria = com_cor.iter().find(|(q, _)| q == p).map(|x| x.1);
+                let col = if h { HILITE } else { cor_rgba(propria, cor_sk) };
                 for ax in [Vec3::X, Vec3::Y, Vec3::Z] {
-                    s.overlay.push(lv((c - ax * d).into(), if h { HILITE } else { SKETCH }));
-                    s.overlay.push(lv((c + ax * d).into(), if h { HILITE } else { SKETCH }));
+                    s.overlay.push(lv((c - ax * d).into(), col));
+                    s.overlay.push(lv((c + ax * d).into(), col));
                 }
             }
         }

@@ -292,11 +292,14 @@ pub fn inferir(sk: &SketchData, uv: P, ancora: Option<P>, anterior: Option<Id>, 
     let mut motivo_ancora = None;
     if let Some(a) = ancora {
         let (dx, dy) = ((uv[0] - a[0]).abs(), (uv[1] - a[1]).abs());
-        if dy < tol && dx > tol {
+        // B548: H e V encaixam pela folga em distância (linha curta) ou pela angular (linha longa: a
+        // 1° e 500 mm o desvio passa de 8 mm, e só a folga em distância obrigava a caçar o ângulo)
+        let eixo = fenkra_core::sketch::eixo_proximo(a, uv, fenkra_core::sketch::TOL_HV_GRAUS);
+        if dx > tol && (dy < tol || eixo == Some(fenkra_core::sketch::EixoHv::H)) {
             q[1] = a[1];
             trava_y = true;
             motivo_ancora = Some(Motivo::Horizontal);
-        } else if dx < tol && dy > tol {
+        } else if dy > tol && (dx < tol || eixo == Some(fenkra_core::sketch::EixoHv::V)) {
             q[0] = a[0];
             trava_x = true;
             motivo_ancora = Some(Motivo::Vertical);
@@ -479,6 +482,23 @@ mod testes {
         let i = inferir(&sk, [30., 40.], Some([0., 0.]), None, 2., &[]);
         assert_eq!(i.uv, [30., 40.]);
         assert!(i.linhas.is_empty());
+    }
+
+    /// B548: a 1° do eixo a linha longa encaixa em H (antes só a folga de 6 px valia e ela escapava);
+    /// a 1° da vertical, em V; a 10°, nada.
+    #[test]
+    fn inferencia_encaixa_h_e_v_pelo_angulo_em_linha_longa() {
+        let sk = SketchData::default();
+        let a = [100., 50.];
+        let em = |l: f64, g: f64| [a[0] + l * g.to_radians().cos(), a[1] + l * g.to_radians().sin()];
+        let i = inferir(&sk, em(500., 1.), Some(a), None, 2., &[]);
+        assert_eq!(i.uv, [em(500., 1.)[0], a[1]]);
+        assert_eq!(i.linhas[0].motivo, Motivo::Horizontal);
+        let i = inferir(&sk, em(500., 91.), Some(a), None, 2., &[]);
+        assert_eq!(i.uv, [a[0], em(500., 91.)[1]]);
+        assert_eq!(i.linhas[0].motivo, Motivo::Vertical);
+        let i = inferir(&sk, em(500., 10.), Some(a), None, 2., &[]);
+        assert!(i.linhas.is_empty() && i.uv == em(500., 10.));
     }
 
     #[test]

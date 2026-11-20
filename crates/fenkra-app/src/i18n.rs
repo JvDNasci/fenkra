@@ -1299,7 +1299,7 @@ static TABLE: &[(&str, &str)] = &[
     ("As próximas curvas serão de construção.", "The next curves will be construction."),
     ("Atrai o cursor para pontos, origem e grade.", "Snaps the cursor to points, origin and grid."),
     ("Broca de rosca + rosca cosmética da norma escolhida.", "Tap drill + cosmetic thread of the chosen standard."),
-    ("Cada clique cria um segmento ligado ao anterior. Clique no primeiro ponto para fechar o perfil; Esc ou botão direito termina. Linhas quase horizontais/verticais recebem a restrição automaticamente.", "Each click adds a segment joined to the previous one. Click the first point to close the profile; Esc or right-click ends. Nearly horizontal/vertical lines get the constraint automatically."),
+    ("Cada clique cria um segmento ligado ao anterior. Clique no primeiro ponto para fechar o perfil; Esc ou botão direito termina. Perto de 0° ou 90° a linha encaixa na horizontal ou vertical e recebe a restrição; as teclas H e V forçam o eixo e Ctrl segurado desliga o encaixe.", "Each click adds a segment joined to the previous one. Click the first point to close the profile; Esc or right-click ends. Near 0° or 90° the line snaps horizontal or vertical and gets the constraint; the H and V keys force the axis and holding Ctrl turns the snap off."),
     ("Cada forma criada recebe suas cotas.", "Each new shape gets its dimensions."),
     ("Cada linha do sketch vira uma parede fina com espessura e profundidade.", "Each sketch line becomes a thin wall with thickness and depth."),
     ("Caixa centrada no plano escolhido; altura ao longo da normal.", "Box centered on the chosen plane; height along the normal."),
