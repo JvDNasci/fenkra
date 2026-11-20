@@ -119,6 +119,8 @@ mod ancoras;
 #[cfg(test)]
 mod referencias_b516_tests;
 #[cfg(test)]
+mod st_cantos_b491_tests;
+#[cfg(test)]
 mod tangencia_b513_tests;
 pub mod chapa_canto;
 pub mod chapa_desdobra;
@@ -3295,10 +3297,22 @@ impl Ctx<'_> {
                 pieces.push(if seg.len() == 2 { Curve3::line(seg[0], seg[1])? } else { Curve3::poly(seg, false)? });
             }
         }
+        // B491: quadro num plano inclinado: todos os trechos orientam a seção pela normal do plano, para
+        // as pontas das seções serem imagens espelhadas uma da outra no plano da meia-esquadria
+        let normal_plano = plano_inclinado(&pieces);
         for c in pieces {
             let (start, end) = (c.start(), c.end());
             let z = if c.is_straight() { geo3d::unit(geo3d::sub(end, start)).ok_or("linha guia sem comprimento")? } else { c.end_tangent(false) };
-            let up = if z[2].abs() > 0.99 { [1., 0., 0.] } else { [0., 0., 1.] };
+            let up = match normal_plano {
+                Some(n) if geo3d::dot(n, z).abs() < 0.999 => n,
+                _ => {
+                    if z[2].abs() > 0.99 {
+                        [1., 0., 0.]
+                    } else {
+                        [0., 0., 1.]
+                    }
+                }
+            };
             let v = geo3d::unit(geo3d::sub(up, geo3d::mul(z, geo3d::dot(up, z)))).unwrap();
             let x0 = fenkra_kernel::cross(v, z);
             let x = geo3d::rotate(x0, z, ang);
@@ -6288,8 +6302,10 @@ impl Ctx<'_> {
                                 sh = sh.boolean(&half_space(geo3d::add(*p, geo3d::mul(n, gap / 2.)), n, self.size_hint())?, fenkra_kernel::Bool::Common).map_err(k)?;
                             }
                             CornerMode::Aparar | CornerMode::Encaixe if *first => {
-                                // o membro 1 vai até a face de fora do membro 2
-                                let hj = og.w.max(og.h) / 2.;
+                                // o membro 1 vai até a face de fora do membro 2: o alcance real da seção do
+                                // membro 2 no sentido de saída (B492; antes valia a maior meia-cota e o
+                                // tubo retangular de pé passava da face)
+                                let hj = alcance_da_secao(og, geo3d::mul(*di, -1.));
                                 sh = sh.boolean(&half_space(geo3d::sub(*p, geo3d::mul(*di, hj)), *di, self.size_hint())?, fenkra_kernel::Bool::Common).map_err(k)?;
                             }
                             CornerMode::Aparar | CornerMode::Encaixe => {
@@ -6488,7 +6504,11 @@ impl Ctx<'_> {
                         let g = &geo[i];
                         let (len, frame) = match fundidos.get(&i) {
                             Some((len, frame)) => (*len, *frame),
-                            None => (member_length(g, explicit), Frame { origin: g.start, x: g.x, normal: g.z }),
+                            None => {
+                                let frame = Frame { origin: g.start, x: g.x, normal: g.z };
+                                let len = member_length(g, explicit);
+                                (if g.straight { comprimento_de_corte(sh, &frame, len, explicit) } else { len }, frame)
+                            }
                         };
                         log_struct(f, i, StructItem::Member, &name, profile.clone(), len, frame, sh, &m.material);
                     }
@@ -7774,6 +7794,51 @@ fn loops_points(loops: &[fenkra_kernel::Loop2]) -> Vec<Vec<[f64; 2]>> {
         .collect()
 }
 
+/// Normal do plano que contém todos os trechos, quando o conjunto é plano e o plano é inclinado (nem
+/// horizontal nem paralelo a um plano de coordenadas). Nos planos alinhados aos eixos a convenção de
+/// sempre já deixa as seções espelhadas; nos inclinados a seção "horizontal" de cada trecho não é, e a
+/// meia-esquadria deixava vão. O sinal é fixo (Z, senão X, senão Y positivo) para não girar o perfil
+/// assimétrico entre recálculos.
+fn plano_inclinado(pieces: &[Curve3]) -> Option<V3> {
+    let pts: Vec<V3> = pieces.iter().flat_map(|c| c.pts.iter().copied()).collect();
+    let p0 = *pts.first()?;
+    let p1 = *pts.iter().max_by(|a, b| geo3d::dist(**a, p0).total_cmp(&geo3d::dist(**b, p0)))?;
+    let u = geo3d::unit(geo3d::sub(p1, p0))?;
+    let p2 = *pts.iter().max_by(|a, b| {
+        let d = |q: &V3| {
+            let r = geo3d::sub(*q, p0);
+            geo3d::norm(geo3d::sub(r, geo3d::mul(u, geo3d::dot(r, u))))
+        };
+        d(a).total_cmp(&d(b))
+    })?;
+    let mut n = geo3d::unit(fenkra_kernel::cross(u, geo3d::sub(p2, p0)))?;
+    if pts.iter().any(|q| geo3d::dot(geo3d::sub(*q, p0), n).abs() > 1e-3) {
+        return None;
+    }
+    if n.iter().any(|c| c.abs() > 0.9999) {
+        return None;
+    }
+    // sem eixo dominante alinhado: ainda vale quando a normal é perpendicular a um eixo (plano vertical
+    // inclinado); só os planos de coordenadas ficam de fora
+    for k in [2, 0, 1] {
+        if n[k].abs() > 1e-6 {
+            if n[k] < 0. {
+                n = geo3d::mul(n, -1.);
+            }
+            break;
+        }
+    }
+    Some(n)
+}
+
+/// Quanto a seção do membro `g` (com ancoragem, deslocamento e rotação) se estende a partir da linha
+/// guia no sentido `dir`: é a distância da linha guia até a face de fora naquele lado.
+fn alcance_da_secao(g: &MemberGeom, dir: V3) -> f64 {
+    let loops = structural::shifted(&g.loops, g.shift);
+    let (dx, dy) = (geo3d::dot(dir, g.x), geo3d::dot(dir, g.y));
+    loops_points(&loops).iter().flatten().map(|p| dx * p[0] + dy * p[1]).fold(0., f64::max)
+}
+
 fn half_space(p: V3, n: V3, big: f64) -> Result<Shape, String> {
     let x = geo3d::any_perp(n);
     let y = fenkra_kernel::cross(n, x);
@@ -8043,6 +8108,24 @@ fn member_length(g: &MemberGeom, explicit: (f64, f64)) -> f64 {
     } else {
         g.pts.windows(2).map(|w| geo3d::dist(w[0], w[1])).sum()
     }
+}
+
+/// Comprimento da barra a cortar (B492): a linha guia mais os prolongamentos pedidos, corrigido nas
+/// pontas de corte reto (topo) pelo que o canto aparou ou estendeu: o membro que encosta é mais curto
+/// que a linha guia (para na face do outro) e o que passa direto é mais longo (vai até a face de fora).
+/// Nas pontas em meia-esquadria a medida continua sendo a da linha guia (o corte inclinado passa por
+/// ela) e nas de encaixe curvo também.
+fn comprimento_de_corte(sh: &Shape, frame: &Frame, len: f64, explicit: (f64, f64)) -> f64 {
+    let Ok(local) = to_local(sh, frame) else { return len };
+    let Some((lo, hi)) = local.bbox() else { return len };
+    let (ini, fim) = (-explicit.0, len - explicit.0);
+    if (lo[2] - ini).abs() < 1e-4 && (hi[2] - fim).abs() < 1e-4 {
+        return len;
+    }
+    let (a1, a2) = end_angles(&local);
+    let z0 = if a1.is_some_and(|a| a.abs() < 0.05) { lo[2] } else { ini };
+    let z1 = if a2.is_some_and(|a| a.abs() < 0.05) { hi[2] } else { fim };
+    z1 - z0
 }
 
 /// Ângulo de corte das duas pontas de um membro, lido do próprio sólido (referencial local, Z ao
