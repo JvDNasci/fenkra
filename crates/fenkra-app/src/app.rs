@@ -3465,14 +3465,71 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     /// B95: cresce a seleção a partir de uma face ou aresta pela regra escolhida no menu.
     fn selecionar_por_regra(&mut self, p: crate::picking::Pick, regra: crate::selecao_regras::Regra) {
         let Some(r) = self.result.as_ref() else { return };
-        let novos = crate::selecao_regras::por_regra(r, &p, regra);
+        let olho = self.viewport.as_ref().map(|v| v.camera.eye().to_array().map(|x| x as f64));
+        let novos = crate::selecao_regras::por_regra(r, &p, regra, olho);
         let n = novos.len();
         crate::selecao_regras::lembrar(&novos, regra);
         self.picks = novos;
         self.toasts.push((format!("{n} {}", tr("elemento(s) na seleção")), 0., false));
     }
 
+    /// B542: a câmera passa a orbitar em volta do ponto, que vai para o centro da vista.
+    fn centrar_orbita_em(&mut self, p: [f32; 3]) {
+        if let Some(vp) = self.viewport.as_mut() {
+            let before = vp.camera;
+            vp.camera.centrar_orbita(Vec3::from(p));
+            vp.animate_from(before);
+        }
+        self.toast(tr("Órbita centrada no ponto escolhido"), false);
+    }
+
+    /// B542: atalho do centro da órbita: usa o ponto sob o cursor (o que está em destaque no 3D).
+    fn centro_da_orbita_no_cursor(&mut self) {
+        match self.hover_pick.and_then(|p| p.ponto_3d(self.result.as_ref())) {
+            Some(q) => self.centrar_orbita_em(q),
+            None => self.toast(tr("Aponte o cursor para uma face, aresta ou vértice para definir o centro da órbita"), true),
+        }
+    }
+
+    /// B542: liga ou desliga a órbita livre. Ao voltar para a presa, uma vista que passou do polo é
+    /// reposta em pé para a câmera não ficar fora do limite.
+    fn alternar_orbita_livre(&mut self) {
+        self.settings.orbita_livre = !self.settings.orbita_livre;
+        if !self.settings.orbita_livre {
+            if let Some(vp) = self.viewport.as_mut() {
+                vp.camera.pitch = crate::camera_nav::limitar_inclinacao(vp.camera.pitch, false);
+            }
+        }
+        self.toast(tr(if self.settings.orbita_livre { "Órbita livre ligada: gira 360° em qualquer direção" } else { "Órbita livre desligada: a inclinação para em 90°" }), false);
+    }
+
+    /// B544: olha de frente para uma face (plano: pela normal; curva: pela normal no ponto clicado ou
+    /// pelo eixo). Devolve falso quando o pick não é uma face que dê direção.
+    fn alinhar_a_face(&mut self, p: crate::picking::Pick, modo: crate::alinhar_vista::ModoCurva) -> bool {
+        use crate::alinhar_vista::{alinhar, FaceAlvo};
+        let crate::picking::Pick::Face { body, face, point, normal, .. } = p else { return false };
+        let Some(info) = self.result.as_ref().and_then(|r| crate::picking::mesh_of(r, body)).and_then(|m| m.face_info.get(face)).copied() else { return false };
+        let Some(v) = self.viewport.as_mut() else { return false };
+        let alvo = FaceAlvo { tipo: info.kind, vetor: Vec3::from(info.dir.map(|x| x as f32)), ponto_face: Vec3::from(info.point.map(|x| x as f32)), clique: Vec3::from(point), normal_clique: Vec3::from(normal) };
+        let Some((dir, centro)) = alinhar(&alvo, modo, v.camera.eye() - v.camera.target) else { return false };
+        let before = v.camera;
+        v.camera.look_along(dir, centro);
+        v.animate_from(before);
+        true
+    }
+
     fn align_to_selection(&mut self) {
+        // B544: com uma face escolhida (ou sob o cursor, sem nada escolhido) olha de frente para ela
+        let face = self.picks.iter().rev().find(|p| matches!(p, crate::picking::Pick::Face { .. })).copied();
+        let face = face.or_else(|| {
+            let sem_escolha = self.picks.is_empty() && matches!(self.sel, Sel::None | Sel::Part);
+            self.hover_pick.filter(|p| sem_escolha && matches!(p, crate::picking::Pick::Face { .. }))
+        });
+        if let Some(p) = face {
+            if self.alinhar_a_face(p, crate::alinhar_vista::ModoCurva::NormalNoPonto) {
+                return;
+            }
+        }
         let Some(r) = &self.result else { return };
         let frame = match self.sel {
             Sel::Feature(id) => r.sketches.iter().find(|s| s.feature == id).map(|s| s.frame),
@@ -3495,7 +3552,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 v.camera.look_along(Vec3::from(f.normal.map(|x| x as f32)), c);
                 v.animate_from(before);
             }
-            _ => self.toast("Selecione um sketch ou plano para alinhar a vista", true),
+            _ => self.toast(tr("Selecione uma face, um sketch ou um plano para alinhar a vista"), true),
         }
     }
 
@@ -6308,15 +6365,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 self.command(c);
             }
             TreeAction::Act(x) => self.act(x),
-            TreeAction::OrbitCenter(p) => {
-                if let Some(vp) = self.viewport.as_mut() {
-                    let before = vp.camera;
-                    let eye = vp.camera.eye();
-                    vp.camera.target = Vec3::from(p);
-                    vp.camera.dist = (eye - vp.camera.target).length().max(1.);
-                    vp.animate_from(before);
+            TreeAction::OrbitCenter(p) => self.centrar_orbita_em(p),
+            TreeAction::AlinharFace(p, modo) => {
+                if !self.alinhar_a_face(p, modo) {
+                    self.toast(tr("Esta face não dá uma direção para alinhar a vista"), true);
                 }
-                self.toast("Órbita centrada no ponto escolhido", false);
             }
             TreeAction::ToggleSection(k) => {
                 if let Some(i) = self.settings.tree_hidden.iter().position(|x| *x == k) {
@@ -6348,13 +6401,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
         };
         // ponto 3D do clique (para o centro de órbita)
-        let at: Option<[f32; 3]> = match target {
-            Some(Pick::Face { point, .. }) => Some(point),
-            Some(Pick::Vertex { pos, .. }) => Some(pos),
-            Some(Pick::Edge { mid, .. }) => Some(mid),
-            Some(Pick::Geo(id)) => r.points.iter().find(|p| p.id == id).map(|p| p.p.map(|v| v as f32)),
-            _ => None,
-        };
+        let at: Option<[f32; 3]> = target.and_then(|p| match p {
+            Pick::SkCurve { .. } | Pick::SkPoint { .. } | Pick::CurveVtx { .. } => None,
+            _ => p.ponto_3d(Some(r)),
+        });
         // subelemento de superfície: menu da superfície (mais as opções de face/aresta)
         if let Some(sid) = match target {
             Some(Pick::Face { body, .. } | Pick::Edge { body, .. } | Pick::Vertex { body, .. }) => crate::picking::surface_of(r, body),
@@ -6392,7 +6442,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 // B95: seleção por intenção a partir do que está sob o ponteiro
                 item(ui, "Selecionar outro   Alt + roda", TreeAction::SelOutro, acts);
                 for regra in crate::selecao_regras::Regra::TODAS {
-                    if matches!(p, Pick::Face { .. }) && regra == crate::selecao_regras::Regra::Cadeia || matches!(p, Pick::Vertex { .. }) {
+                    if matches!(p, Pick::Face { .. }) && !regra.vale_para_face() || matches!(p, Pick::Vertex { .. }) {
                         continue;
                     }
                     item(ui, regra.rotulo(), TreeAction::SelRegra(p, regra), acts);
@@ -6405,7 +6455,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     item(ui, "Selecionar na árvore", TreeAction::SelectSel(Sel::Feature(o)), acts);
                 }
                 ui.separator();
-                if matches!(p, Pick::Face { .. }) {
+                if let Pick::Face { body, face, .. } = p {
+                    // B544: alinhar à vista também pelo menu; na face de eixo, a segunda opção olha de ponta
+                    item(ui, "⟂ Alinhar à vista   N", TreeAction::AlinharFace(p, crate::alinhar_vista::ModoCurva::NormalNoPonto), acts);
+                    if crate::picking::mesh_of(r, body).and_then(|m| m.face_info.get(face)).is_some_and(|i| crate::alinhar_vista::tem_eixo(i.kind)) {
+                        item(ui, "⟂ Olhar pelo eixo desta face", TreeAction::AlinharFace(p, crate::alinhar_vista::ModoCurva::Eixo), acts);
+                    }
                     item(ui, "✏ Novo sketch nesta face", TreeAction::WithPicks(vec![p], Cmd::Sketch), acts);
                     item(ui, "▱ Plano nesta face", TreeAction::WithPicks(vec![p], Cmd::Geo(crate::geo_ui::GeoKind::PlaneOffset)), acts);
                     item(ui, "◫ Extrair face", TreeAction::WithPicks(vec![p], Cmd::Extract), acts);
@@ -7415,8 +7470,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             } else if zoom_drag {
                 vp.camera.dist = (vp.camera.dist * (delta.y * 0.01).exp()).clamp(0.5, 1e6);
             } else if orbit {
-                vp.camera.yaw -= delta.x * 0.008;
-                vp.camera.pitch = (vp.camera.pitch + delta.y * 0.008).clamp(-1.5706, 1.5706);
+                vp.camera.girar(delta.x, delta.y, self.settings.orbita_livre);
             }
             // B321: sem nada em foco, setas giram, Shift+setas movem e Page Up/Down aproximam a vista
             // B449: com a árvore em foco, ↑ e ↓ são dela (← e → continuam girando a vista)
@@ -7429,7 +7483,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if let Some(m) = crate::teclado::movimento(t) {
                     vp.stop_anim();
                     vp.navegou();
-                    crate::teclado::aplicar(&mut vp.camera, m);
+                    crate::teclado::aplicar(&mut vp.camera, m, self.settings.orbita_livre);
                 }
             }
             // B17: a roda também vale enquanto uma alça 3D é arrastada (o passo do arrasto segue o zoom)
@@ -7510,6 +7564,15 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     demo_camera(&mut vp.camera);
                     vp.animate_from(before);
                     self.fit_pending = false;
+                }
+            }
+            // B542: duplo clique no botão do meio define o centro da órbita no ponto sob o cursor
+            if resp.double_clicked_by(egui::PointerButton::Middle) && self.sketch.is_none() {
+                if let Some(q) = self.hover_pick.and_then(|p| p.ponto_3d(self.result.as_ref())) {
+                    let before = vp.camera;
+                    vp.camera.centrar_orbita(Vec3::from(q));
+                    vp.animate_from(before);
+                    self.toasts.push((tr("Órbita centrada no ponto escolhido").into(), 0., false));
                 }
             }
             // reenquadra ao abrir um comando, se o modelo não couber na tela
@@ -8449,6 +8512,8 @@ pub(crate) enum TreeAction {
     Act(Act),
     /// a câmera passa a orbitar em volta deste ponto
     OrbitCenter([f32; 3]),
+    /// B544: olha para a face pelo modo escolhido (normal no ponto ou eixo)
+    AlinharFace(crate::picking::Pick, crate::alinhar_vista::ModoCurva),
     /// seleciona na árvore
     SelectSel(Sel),
 }
@@ -8985,6 +9050,12 @@ impl eframe::App for App {
                 if km.pressed(ctx, k) && !(tab_do_painel && k == K::HiddenEnv) {
                     self.act(a);
                 }
+            }
+            if km.pressed(ctx, K::CentroOrbita) {
+                self.centro_da_orbita_no_cursor();
+            }
+            if km.pressed(ctx, K::OrbitaLivre) {
+                self.alternar_orbita_livre();
             }
             if km.pressed(ctx, K::Hide) && !tab_do_painel {
                 self.toggle_hide_selected();
@@ -9848,6 +9919,7 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 // B440: o que cada botão faz no perfil, tirado da mesma função que move a câmera
                 crate::nav_perfil::tabela_ui(ui, s.nav, s.invert_zoom);
                 ui.checkbox(&mut s.invert_zoom, tr("inverter o sentido do zoom"));
+                ui.checkbox(&mut s.orbita_livre, tr("órbita livre (360° em qualquer direção)")).on_hover_text(tr("Desligada, a inclinação para em 90° como numa mesa giratória. Ligada, a câmera passa do polo e gira por baixo do chão, com a vista de cabeça para baixo. Atalho: Alt+L. Para definir o centro da órbita: Alt+C ou duplo clique no botão do meio sobre o modelo."));
                 ui.checkbox(&mut s.zoom_no_cursor, tr("zoom em direção ao cursor")).on_hover_text(tr("A roda aproxima o ponto sob o cursor, também enquanto uma alça 3D é arrastada. Desligado, o zoom fecha sobre o centro da vista."));
                 ui.separator();
                 crate::ui_ext::modo_roda_ui(ui, &mut s.wheel_mode);

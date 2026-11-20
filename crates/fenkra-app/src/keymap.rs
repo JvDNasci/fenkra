@@ -23,6 +23,10 @@ pub enum KeyAction {
     ViewIso,
     Hide,
     HiddenEnv,
+    /// B542: centro da órbita no ponto sob o cursor
+    CentroOrbita,
+    /// B542: liga e desliga a órbita livre (sem prender a inclinação em 90 graus)
+    OrbitaLivre,
     // edição
     Undo,
     Redo,
@@ -68,8 +72,8 @@ use KeyAction::*;
 use crate::i18n::tr;
 
 impl KeyAction {
-    pub const ALL: [KeyAction; 47] = [
-        Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Undo, Redo, Delete, Save, SaveAll, ClipCopy, ClipCut,
+    pub const ALL: [KeyAction; 49] = [
+        Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, CentroOrbita, OrbitaLivre, Undo, Redo, Delete, Save, SaveAll, ClipCopy, ClipCut,
         ClipPaste, ClipDup, Sketch,
         Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, RodaComandos, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid, SkTrim, SkOffset, SkFillet, SkMirror, SkSpline, SkModo, CompassoCanto,
     ];
@@ -89,6 +93,8 @@ impl KeyAction {
             ViewIso => tr("Vista isométrica"),
             Hide => tr("Ocultar/mostrar seleção"),
             HiddenEnv => tr("Ambiente de ocultos"),
+            CentroOrbita => tr("Centro da órbita no cursor"),
+            OrbitaLivre => tr("Órbita livre (liga/desliga)"),
             CompassoCanto => tr("Devolver o compasso ao canto"),
             Undo => tr("Desfazer"),
             Redo => tr("Refazer"),
@@ -128,7 +134,7 @@ impl KeyAction {
 
     pub fn group(self) -> &'static str {
         match self {
-            Fit | ViewMenu | Normal | Ortho | ViewFront | ViewBack | ViewTop | ViewBottom | ViewLeft | ViewRight | ViewIso | Hide | HiddenEnv | CompassoCanto => "Vista",
+            Fit | ViewMenu | Normal | Ortho | ViewFront | ViewBack | ViewTop | ViewBottom | ViewLeft | ViewRight | ViewIso | Hide | HiddenEnv | CompassoCanto | CentroOrbita | OrbitaLivre => "Vista",
             Undo | Redo | Delete | Save | SaveAll | ClipCopy | ClipCut | ClipPaste | ClipDup => "Edição",
             Sketch | Extrude | Cut | Revolve | Hole | Fillet | Chamfer | Plane | RodaComandos => "Modelagem",
             _ => "Sketch",
@@ -299,6 +305,9 @@ impl Preset {
         v.push((RodaComandos, "Shift+W"));
         // compasso (B438): Alt+Home não é usada em nenhuma predefinição
         v.push((CompassoCanto, "Alt+Home"));
+        // câmera (B542): Alt+C e Alt+L não são usadas em nenhuma predefinição
+        v.push((CentroOrbita, "Alt+C"));
+        v.push((OrbitaLivre, "Alt+L"));
         v
     }
 }

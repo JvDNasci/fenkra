@@ -83,9 +83,11 @@ pub fn movimento(t: Teclas) -> Option<Movimento> {
 }
 
 /// Aplica o movimento à câmera, com os mesmos limites do arrasto do mouse.
-pub fn aplicar(cam: &mut crate::render::Camera, m: Movimento) {
-    cam.yaw += m.giro[0];
-    cam.pitch = (cam.pitch + m.giro[1]).clamp(-1.5706, 1.5706);
+pub fn aplicar(cam: &mut crate::render::Camera, m: Movimento, livre: bool) {
+    // de cabeça para baixo (órbita livre, B542) a seta para o lado gira ao contrário, como o mouse
+    let sinal = if livre && cam.pitch.cos() < 0. { -1. } else { 1. };
+    cam.yaw += m.giro[0] * sinal;
+    cam.pitch = crate::camera_nav::limitar_inclinacao(cam.pitch + m.giro[1], livre);
     if m.mover != [0., 0.] {
         let (r, u) = cam.basis();
         cam.target += (r * m.mover[0] + u * m.mover[1]) * cam.dist;
@@ -276,14 +278,20 @@ mod tests {
     fn aplicar_respeita_os_limites_do_mouse() {
         let mut c = crate::render::Camera::default();
         for _ in 0..20 {
-            aplicar(&mut c, movimento(Teclas { cima: true, ..Default::default() }).unwrap());
+            aplicar(&mut c, movimento(Teclas { cima: true, ..Default::default() }).unwrap(), false);
         }
         assert!(c.pitch <= 1.5706);
+        // órbita livre: as mesmas 20 setas (300 graus) passam do polo e continuam
+        let mut l = crate::render::Camera::default();
+        for _ in 0..20 {
+            aplicar(&mut l, movimento(Teclas { cima: true, ..Default::default() }).unwrap(), true);
+        }
+        assert!(l.pitch < 0. && l.pitch > -std::f32::consts::PI, "deu a volta: {}", l.pitch);
         let d = c.dist;
-        aplicar(&mut c, movimento(Teclas { pg_cima: true, ..Default::default() }).unwrap());
+        aplicar(&mut c, movimento(Teclas { pg_cima: true, ..Default::default() }).unwrap(), false);
         assert!((c.dist - d * ZOOM).abs() < 1e-3);
         let alvo = c.target;
-        aplicar(&mut c, movimento(Teclas { direita: true, shift: true, ..Default::default() }).unwrap());
+        aplicar(&mut c, movimento(Teclas { direita: true, shift: true, ..Default::default() }).unwrap(), false);
         assert!((c.target - alvo).length() > 0.01 * c.dist, "Shift+seta move o alvo");
     }
 

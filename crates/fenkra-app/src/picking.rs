@@ -25,6 +25,20 @@ pub enum Pick {
 }
 
 impl Pick {
+    /// Ponto 3D do que foi escolhido (para o centro da órbita, B542): o ponto do clique na face, o
+    /// vértice, o meio da aresta, o ponto do sketch ou de referência. Plano e curva de referência
+    /// inteira não têm um ponto só.
+    pub fn ponto_3d(&self, r: Option<&RecomputeResult>) -> Option<[f32; 3]> {
+        match *self {
+            Pick::Face { point, .. } => Some(point),
+            Pick::Vertex { pos, .. } | Pick::SkPoint { pos, .. } | Pick::CurveVtx { pos, .. } => Some(pos),
+            Pick::Edge { mid, .. } => Some(mid),
+            Pick::SkCurve { at, .. } => Some(at),
+            Pick::Geo(id) => r?.points.iter().find(|p| p.id == id).map(|p| p.p.map(|v| v as f32)),
+            Pick::Plane(_) => None,
+        }
+    }
+
     pub fn label(&self, doc: &Document) -> String {
         match self {
             Pick::Face { owner, .. } => format!("{} {}", crate::i18n::tr("Face de"), doc.name_of(*owner)),
