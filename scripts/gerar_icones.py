@@ -185,6 +185,11 @@ I["sk_retangulo_centro"] = f'<rect x="8" y="12" width="32" height="24" {G}/>' + 
 I["sk_circulo"] = f'<circle cx="24" cy="24" r="16" {G}/>' + PT(24, 24, ACTION) + \
     f'<line x1="24" y1="24" x2="40" y2="24" stroke="{INK}" stroke-width="1.2" stroke-dasharray="2.5 2"/>'
 I["sk_circulo3"] = f'<circle cx="24" cy="24" r="16" {G}/>' + PT(8, 24) + PT(24, 8) + PT(36, 35)
+# B550: retângulo inclinado por 3 pontos, paralelogramo e círculo tangente a 3 elementos
+I["sk_retangulo3"] = f'<polygon points="8,30 28,10 40,22 20,42" {G}/>' + PT(8, 30) + PT(28, 10) + PT(40, 22)
+I["sk_paralelogramo"] = f'<polygon points="6,36 30,36 42,12 18,12" {G}/>' + PT(6, 36) + PT(30, 36) + PT(42, 12)
+I["sk_circulo_tangente"] = f'<polygon points="6,40 42,40 24,8" fill="none" stroke="{INK}" stroke-width="1.5" stroke-linejoin="round"/>' + \
+    f'<circle cx="24" cy="29.5" r="10.5" {G}/>'
 I["sk_arco3"] = f'<path d="M8 36 A18 18 0 0 1 40 36" {G}/>' + PT(8, 36) + PT(24, 18) + PT(40, 36)
 I["sk_arco_centro"] = f'<path d="M40 30 A16 16 0 0 0 12 14" {G}/>' + PT(24, 30, ACTION) + PT(40, 30) + PT(12, 14) + \
     f'<path d="M24 30 L40 30 M24 30 L12 14" stroke="{INK}" stroke-width="1.2" stroke-dasharray="2.5 2"/>'

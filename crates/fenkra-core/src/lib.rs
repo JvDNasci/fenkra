@@ -44,6 +44,8 @@ pub mod regra_plastica;
 pub mod recurso_plastico;
 pub mod requisitos;
 pub mod sketch;
+pub mod sketch_controle;
+pub mod sketch_formas;
 pub mod sketch_origem;
 pub mod subd;
 pub mod subd_ops;

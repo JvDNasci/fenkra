@@ -148,6 +148,7 @@ modelos!(
     "sk_circulo3", "sk_concluir", "sk_construcao", "sk_converter", "sk_copiar", "sk_cota", "sk_espelhar",
     "sk_estender", "sk_filete", "sk_girar", "sk_grade", "sk_intersecao", "sk_linha", "sk_mover", "sk_offset",
     "sk_poligono", "sk_polilinha", "sk_ponto", "sk_projetar", "sk_rasgo", "sk_retangulo", "sk_retangulo_centro",
+    "sk_retangulo3", "sk_paralelogramo", "sk_circulo_tangente",
     "sk_selecionar", "sk_snap", "sk_spline", "sketch", "sm_aba", "sm_aba_curva", "sm_aba_perfil",
     "sm_aba_superficie", "sm_alivio_canto", "sm_bainha", "sm_desdobrar", "sm_dobra_conica", "sm_dobra_linha", "sm_estampo",
     "sm_furo_flangeado", "sm_joggle", "sm_parametros", "sm_parede", "sm_rasgo_circular", "sm_recorte",
@@ -470,6 +471,9 @@ fn antigo(name: &str) -> ImageSource<'static> {
         "sk_rasgo" => egui::include_image!("../../../assets/icons/sk_rasgo.svg"),
         "sk_retangulo" => egui::include_image!("../../../assets/icons/sk_retangulo.svg"),
         "sk_retangulo_centro" => egui::include_image!("../../../assets/icons/sk_retangulo_centro.svg"),
+        "sk_retangulo3" => egui::include_image!("../../../assets/icons/sk_retangulo3.svg"),
+        "sk_paralelogramo" => egui::include_image!("../../../assets/icons/sk_paralelogramo.svg"),
+        "sk_circulo_tangente" => egui::include_image!("../../../assets/icons/sk_circulo_tangente.svg"),
         "sk_selecionar" => egui::include_image!("../../../assets/icons/sk_selecionar.svg"),
         "sk_snap" => egui::include_image!("../../../assets/icons/sk_snap.svg"),
         "sk_spline" => egui::include_image!("../../../assets/icons/sk_spline.svg"),
@@ -663,7 +667,7 @@ mod tests {
         egui_extras::install_image_loaders(&ctx);
         let (base, res) = ([10, 200, 30], [200, 20, 220]);
         let lista = nomes();
-        assert_eq!(lista.len(), 359);
+        assert_eq!(lista.len(), 362);
         for nome in lista {
             let svg = modelo(nome).unwrap_or_else(|| panic!("{nome} sem desenho novo"));
             assert!(svg.contains(r#"stroke="BASE""#) && svg.contains(r#"stroke="RES""#), "{nome} sem marcador");

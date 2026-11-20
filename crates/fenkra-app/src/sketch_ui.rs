@@ -23,8 +23,14 @@ pub enum Tool {
     Line,
     Rect,
     RectCenter,
+    /// B550: retângulo inclinado por 3 pontos (lado e altura)
+    Rect3,
+    /// B550: paralelogramo por 3 cantos
+    Parallelogram,
     Circle,
     Circle3,
+    /// B550: círculo tangente a 3 linhas, círculos ou arcos
+    CircleTan3,
     Arc3,
     ArcCenter,
     Slot,
@@ -88,7 +94,10 @@ impl Tool {
             Tool::Rect => ("sk_retangulo", "Retângulo", "Retângulo por 2 cantos  (R)", "Clique em dois cantos opostos. Cria 4 linhas com restrições horizontal/vertical; com cotas automáticas, recebe largura e altura."),
             Tool::RectCenter => ("sk_retangulo_centro", "Ret. centro", "Retângulo pelo centro", "Clique no centro e depois num canto. O centro fica preso à diagonal (ponto médio), ótimo para peças simétricas na origem."),
             Tool::Circle => ("sk_circulo", "Círculo", "Círculo por centro e raio  (C)", "Clique no centro e depois em um ponto da borda. Com cotas automáticas recebe o diâmetro."),
-            Tool::Circle3 => ("sk_circulo3", "Círculo 3P", "Círculo por 3 pontos", "Clique em três pontos da circunferência."),
+            Tool::Rect3 => ("sk_retangulo3", "Ret. 3 pontos", "Retângulo por 3 pontos", "Clique nas duas pontas de um lado, em qualquer direção, e depois na altura. Lados vizinhos ficam perpendiculares e os opostos paralelos: o retângulo pode girar."),
+            Tool::Parallelogram => ("sk_paralelogramo", "Paralelogramo", "Paralelogramo por 3 cantos", "Clique em três cantos seguidos; o quarto fecha a figura. Os lados opostos ficam paralelos."),
+            Tool::Circle3 => ("sk_circulo3", "Círculo 3P", "Círculo por 3 pontos", "Clique em três pontos da circunferência. Ponto existente clicado fica preso ao círculo."),
+            Tool::CircleTan3 => ("sk_circulo_tangente", "Círculo tangente", "Círculo tangente a 3 elementos", "Clique em três linhas, círculos ou arcos, do lado em que o círculo deve ficar. Ele nasce com as três tangências e fica definido por elas."),
             Tool::Arc3 => ("sk_arco3", "Arco 3P", "Arco por 3 pontos  (A)", "Clique no início, no fim e em um ponto intermediário do arco."),
             Tool::ArcCenter => ("sk_arco_centro", "Arco centro", "Arco por centro", "Clique no centro, no início e no fim (sentido anti-horário)."),
             Tool::Slot => ("sk_rasgo", "Rasgo", "Rasgo centro a centro", "Clique nos dois centros e depois na borda do rasgo: a largura total é medida na perpendicular ao eixo. Cria dois arcos tangentes às linhas, com raios iguais."),
@@ -130,6 +139,7 @@ impl Tool {
         match self {
             Tool::Rect | Tool::RectCenter | Tool::Circle => 2,
             Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot => 3,
+            Tool::Rect3 | Tool::Parallelogram | Tool::CircleTan3 => 3,
             Tool::Polygon => 2,
             Tool::Point => 1,
             Tool::Move | Tool::Copy => 2,
@@ -221,6 +231,8 @@ pub struct SketchEdit {
     pub inflex: bool,
     /// spline com as alças de tangência (Bézier) à mostra
     pub handles: Option<Id>,
+    /// B549: spline editada pelo polígono de controle (B-spline cúbica C2)
+    pub controle: Option<Id>,
     /// último raio de filete e última distância de chanfro: o próximo canto repete
     last_fillet: Option<f64>,
     last_chamfer: Option<f64>,
@@ -404,6 +416,7 @@ struct QuickMenu {
 enum MenuAct {
     SplInflex,
     SplHandles(Id),
+    SplControle(Id),
     SplAdd(Id, [f64; 2]),
     SplAuto(Id),
     SplTan(Id, Id, u8),
@@ -441,6 +454,7 @@ impl SketchEdit {
             drag_label: None,
             inflex: false,
             handles: None,
+            controle: None,
             last_fillet: None,
             last_chamfer: None,
             chanfro_segundo: None,
@@ -505,8 +519,10 @@ impl SketchEdit {
         if self.preso.esta(crate::preso::Alvo::Sk(self.tool)) {
             self.preso.prender(crate::preso::Alvo::Sk(t));
         }
+        // B550: no tangente a 3 os cliques escolhem elementos; os pontos de outro modo não valem lá
+        let outro_sentido = (t == Tool::CircleTan3) != (self.tool == Tool::CircleTan3);
         self.tool = t;
-        if t.clicks_needed() > 0 && self.clicks.len() >= t.clicks_needed() {
+        if (t.clicks_needed() > 0 && self.clicks.len() >= t.clicks_needed()) || outro_sentido {
             self.clicks.clear();
         }
         self.menu = None;
@@ -1476,8 +1492,43 @@ fn build_shape(sk: &mut SketchData, al: &mut impl FnMut() -> Id, tool: Tool, cl:
         Tool::Circle3 => {
             if let Some((ctr, r)) = circum(c[0], c[1], c[2]) {
                 let pc = sk.add_point(al, ctr[0], ctr[1]);
-                sk.add_curve(al, Curve::Circle { c: pc, r }, cons);
+                let cv = sk.add_curve(al, Curve::Circle { c: pc, r }, cons);
+                // B550: o ponto existente clicado continua sobre o círculo
+                for s in cl.iter().filter(|s| s.point.is_some() || s.origin) {
+                    let q = point_for(sk, al, *s);
+                    sk.add_constraint(al, Kind::PointOnCurve(q, cv));
+                }
             }
+        }
+        Tool::Rect3 | Tool::Parallelogram => {
+            let feito = if tool == Tool::Rect3 { sk.add_rect3(al, c[0], c[1], c[2], cons) } else { sk.add_paralelogramo(al, c[0], c[1], c[2], cons) };
+            if let Some((p, l)) = feito {
+                if o.auto_dims {
+                    for k in [0, 1] {
+                        let (a, b) = (sk.pos(p[k]), sk.pos(p[k + 1]));
+                        sk.add_constraint(al, Kind::Length(l[k], fmt(d2(a, b))));
+                    }
+                }
+                junta_canto(sk, al, p[0], cl[0]);
+                junta_canto(sk, al, p[1], cl[1]);
+                if tool == Tool::Parallelogram {
+                    junta_canto(sk, al, p[2], cl[2]);
+                } else if cl[2].point.is_some() || cl[2].origin {
+                    // o ponto clicado para a altura fica sobre o lado oposto
+                    let q = point_for(sk, al, cl[2]);
+                    sk.add_constraint(al, Kind::PointOnCurve(q, l[2]));
+                }
+            }
+        }
+        Tool::CircleTan3 => {
+            let mut curvas: Vec<Id> = vec![];
+            for q in &c {
+                match sk.apoio_perto(*q, &curvas) {
+                    Some(k) => curvas.push(k),
+                    None => return,
+                }
+            }
+            sk.add_circulo_tangente(al, [curvas[0], curvas[1], curvas[2]], [c[0], c[1], c[2]], cons);
         }
         Tool::Arc3 | Tool::ArcCenter => {
             let geom = if tool == Tool::Arc3 {
@@ -1537,6 +1588,16 @@ fn build_shape(sk: &mut SketchData, al: &mut impl FnMut() -> Id, tool: Tool, cl:
             }
         }
         _ => {}
+    }
+}
+
+/// Canto novo juntado ao ponto existente (ou à origem) em que o clique caiu.
+fn junta_canto(sk: &mut SketchData, al: &mut impl FnMut() -> Id, canto: Id, s: Snap) {
+    if let Some(q) = s.point {
+        sk.merge_points(canto, q);
+    } else if s.origin {
+        let o = point_for(sk, al, s);
+        sk.merge_points(canto, o);
     }
 }
 
@@ -1721,6 +1782,15 @@ fn measures(tool: Tool, c: &[[f64; 2]], m: [f64; 2]) -> Vec<Measure> {
             Measure { label: "altura", angle: false, value: 2. * (m[1] - c[0][1]).abs(), at: [m[0], c[0][1]] },
         ],
         (Tool::Circle | Tool::ArcCenter, 1) => vec![len("raio")],
+        (Tool::Rect3 | Tool::Parallelogram, 1) => vec![len("comprimento"), dir()],
+        (Tool::Rect3, 2) => {
+            let h = fenkra_core::sketch_formas::cantos_rect3(c[0], c[1], m).map_or(0., |k| d2(k[1], k[2]));
+            vec![Measure { label: "altura", angle: false, value: h, at: mid(c[1], m) }]
+        }
+        (Tool::Parallelogram, 2) => vec![
+            Measure { label: "lado", angle: false, value: d2(c[1], m), at: mid(c[1], m) },
+            Measure { label: "ângulo interno", angle: true, value: abertura(c[0], c[1], m), at: c[1] },
+        ],
         (Tool::Polygon, 1) => vec![len("raio"), dir()],
         (Tool::ArcCenter, 2) => {
             let a = |p: [f64; 2]| (p[1] - c[0][1]).atan2(p[0] - c[0][0]);
@@ -1731,6 +1801,12 @@ fn measures(tool: Tool, c: &[[f64; 2]], m: [f64; 2]) -> Vec<Measure> {
         (Tool::Slot, 2) => vec![Measure { label: "largura", angle: false, value: 2. * slot_radius(c[0], c[1], m), at: m }],
         _ => vec![],
     }
+}
+
+/// Ângulo interno no canto `b` entre os lados que vão para `a` e para `m`, em graus (0 a 180).
+fn abertura(a: [f64; 2], b: [f64; 2], m: [f64; 2]) -> f64 {
+    let (u, w) = ([a[0] - b[0], a[1] - b[1]], [m[0] - b[0], m[1] - b[1]]);
+    (u[0] * w[1] - u[1] * w[0]).abs().atan2(u[0] * w[0] + u[1] * w[1]).to_degrees()
 }
 
 /// Aonde o cursor vai com os campos travados: o inverso de `measures`. O que não está travado segue o
@@ -1747,7 +1823,20 @@ fn lock_cursor(tool: Tool, c: &[[f64; 2]], m: [f64; 2], locks: &[Option<f64>]) -
     };
     let side = |d: f64| if d < 0. { -1. } else { 1. };
     match (tool, c.len()) {
-        (Tool::Line | Tool::Slot | Tool::Arc3 | Tool::Move | Tool::Copy | Tool::Polygon, 1) => polar(c[0], lock(0), lock(1)),
+        (Tool::Line | Tool::Slot | Tool::Arc3 | Tool::Move | Tool::Copy | Tool::Polygon | Tool::Rect3 | Tool::Parallelogram, 1) => polar(c[0], lock(0), lock(1)),
+        (Tool::Rect3, 2) => {
+            let Some(h) = lock(0).map(f64::abs) else { return m };
+            let (u, l) = ([c[1][0] - c[0][0], c[1][1] - c[0][1]], d2(c[0], c[1]).max(1e-9));
+            let n = [-u[1] / l, u[0] / l];
+            let h = side((m[0] - c[1][0]) * n[0] + (m[1] - c[1][1]) * n[1]) * h;
+            [c[1][0] + n[0] * h, c[1][1] + n[1] * h]
+        }
+        (Tool::Parallelogram, 2) => {
+            // a abertura gira a partir do lado já feito, para o lado do mouse
+            let (u, w) = ([c[0][0] - c[1][0], c[0][1] - c[1][1]], [m[0] - c[1][0], m[1] - c[1][1]]);
+            let ang = lock(1).map(|a| (u[1].atan2(u[0]) + side(u[0] * w[1] - u[1] * w[0]) * a.to_radians()).to_degrees());
+            polar(c[1], lock(0), ang)
+        }
         (Tool::Circle | Tool::ArcCenter, 1) => polar(c[0], lock(0).map(f64::abs), None),
         (Tool::Rect | Tool::RectCenter, 1) => {
             let k = if tool == Tool::Rect { 1. } else { 0.5 };
@@ -1858,6 +1947,14 @@ fn dims_from_fields(sk: &mut SketchData, al: &mut impl FnMut() -> Id, tool: Tool
                 wanted.extend(text("altura").map(|t| Kind::Length(h, t)));
             }
         }
+        // o primeiro lado guarda comprimento e ângulo; o segundo, altura ou lado
+        Tool::Rect3 | Tool::Parallelogram => {
+            if let [a, b, ..] = lines[..] {
+                wanted.extend(text("comprimento").map(|t| Kind::Length(a, t)));
+                wanted.extend(find("ângulo").map(|t| Kind::LineAngle(a, t.1.clone())));
+                wanted.extend(text(if tool == Tool::Rect3 { "altura" } else { "lado" }).map(|t| Kind::Length(b, t)));
+            }
+        }
         Tool::Circle | Tool::ArcCenter | Tool::Arc3 => {
             if let Some(r) = round {
                 wanted.extend(text("raio").map(|t| Kind::Radius(r, t)));
@@ -1959,6 +2056,9 @@ pub(crate) fn shape_hint(tool: Tool, clicks: usize) -> &'static str {
         (Tool::ArcCenter, 1) => "início do arco",
         (Tool::ArcCenter, _) => "fim do arco",
         (Tool::Circle3, n) => ["1º ponto", "2º ponto", "3º ponto"][n.min(2)],
+        (Tool::Rect3, n) => ["1ª ponta do lado", "2ª ponta do lado", "altura"][n.min(2)],
+        (Tool::Parallelogram, n) => ["1º canto", "2º canto", "3º canto"][n.min(2)],
+        (Tool::CircleTan3, n) => ["1º elemento", "2º elemento", "3º elemento"][n.min(2)],
         (Tool::Arc3, n) => ["início", "fim", "ponto do arco"][n.min(2)],
         (Tool::Slot, n) => ["1º centro", "2º centro", "borda: define a largura"][n.min(2)],
         (Tool::Point, _) => "clique para criar o ponto",
@@ -2600,7 +2700,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     }
 
     // ---------- inferência: enquanto se desenha, sem apoio mais forte, o cursor procura alinhamentos
-    let desenha = matches!(tool, Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point | Tool::Spline);
+    let desenha = matches!(tool, Tool::Line | Tool::Rect | Tool::RectCenter | Tool::Rect3 | Tool::Parallelogram | Tool::Circle | Tool::Circle3 | Tool::CircleTan3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point | Tool::Spline);
     let mut direcao_inferida = None;
     if let (true, false, true, Some(uv)) = (desenha, ctrl, settings.snaps, hover.and_then(|p| v.to_uv(p))) {
         if cur_snap.is_some_and(|s| matches!(s.tipo, TipoSnap::Livre | TipoSnap::Grade)) {
@@ -2659,6 +2759,15 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     }
                 }
             }
+        }
+    }
+
+    // ---------- B549: polígono de controle da spline, com os vértices arrastáveis
+    if let Some(cid) = edit.controle {
+        let quadro = crate::sketch_controle_ui::poligono(ui, &painter, &mut sk, cid, &|q| v.to_screen(q), &|p| v.to_uv(p), &vars);
+        handle_busy |= quadro.ocupado;
+        if let Some(rep) = quadro.relatorio {
+            edit.report = rep;
         }
     }
 
@@ -2882,6 +2991,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 }
                 edit.report = sk.solve(&vars, &pins);
             }
+            // B549: no modo de pontos de controle a spline continua C2 enquanto as passagens andam
+            if let (Some(c), true, true) = (edit.controle, edit.drag.is_some(), resp.dragged_by(egui::PointerButton::Primary)) {
+                sk.spline_c2(c);
+            }
             if let (Some(cid), true, Some(uv)) = (edit.drag_label, resp.dragged_by(egui::PointerButton::Primary), cursor_uv) {
                 let anchor = sk.constraints.iter().find(|x| x.id == cid).and_then(|x| dim_anchor(&sk, &x.kind));
                 // arrastar para outro lado troca o que a cota mede: raio e diâmetro, ângulo e suplemento
@@ -3034,7 +3147,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
         }
 
-        Tool::Rect | Tool::RectCenter | Tool::Circle | Tool::Circle3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point => {
+        Tool::Rect | Tool::RectCenter | Tool::Rect3 | Tool::Parallelogram | Tool::Circle | Tool::Circle3 | Tool::CircleTan3 | Tool::Arc3 | Tool::ArcCenter | Tool::Slot | Tool::Polygon | Tool::Point => {
             if primary_click {
                 if let Some(s) = cur_snap {
                     edit.clicks.push(s);
@@ -3549,7 +3662,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
         let cons = applicable(&sk, &m.sel);
         let has_cv = m.sel.iter().any(|e| matches!(e, Ent::Cv(_)));
         let msel = m.sel.clone();
-        let (inflex_on, handles_on) = (edit.inflex, edit.handles);
+        let (inflex_on, handles_on, controle_on) = (edit.inflex, edit.handles, edit.controle);
         let menu_uv = v.to_uv(m.pos);
         egui::Area::new(egui::Id::unique("sk_menu_rapido")).fixed_pos(m.pos + egui::vec2(4., 4.)).order(egui::Order::Foreground).show(ui.ctx(), |ui| {
             egui::Frame::menu(ui.style()).show(ui, |ui| {
@@ -3604,6 +3717,10 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                     let cid = spl.or(spt.map(|x| x.0)).unwrap();
                     if ui.add(egui::Button::new(txt(handles_on == Some(cid), "Alças de tangência (Bézier)")).frame(false)).clicked() {
                         act = Some(MenuAct::SplHandles(cid));
+                    }
+                    let r = ui.add(egui::Button::new(txt(controle_on == Some(cid), "Pontos de controle (polígono)")).frame(false));
+                    if r.on_hover_text(tr("Edita a curva pelos vértices do polígono de controle, que ela não atravessa. Ao ligar, a spline fica contínua em curvatura; desligue para voltar aos pontos de passagem.")).clicked() {
+                        act = Some(MenuAct::SplControle(cid));
                     }
                     if let (Some(c), Some(uv)) = (spl, menu_uv) {
                         if ui.add(egui::Button::new(tr("＋ Adicionar ponto aqui")).frame(false)).clicked() {
@@ -3689,13 +3806,35 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
             }
             MenuAct::Tool(t) => edit.set_tool(t),
             MenuAct::SplInflex => edit.inflex = !edit.inflex,
-            MenuAct::SplHandles(c) => edit.handles = if edit.handles == Some(c) { None } else { Some(c) },
+            MenuAct::SplHandles(c) => {
+                edit.handles = if edit.handles == Some(c) { None } else { Some(c) };
+                edit.controle = None;
+            }
+            // B549: ligar o polígono deixa a curva C2, a forma que ele descreve sem perda
+            MenuAct::SplControle(c) => {
+                if edit.controle == Some(c) {
+                    edit.controle = None;
+                } else {
+                    sk.spline_c2(c);
+                    edit.controle = Some(c);
+                    edit.handles = None;
+                }
+            }
             MenuAct::SplAdd(c, uv) => {
                 sk.spline_insert(&mut al, c, uv);
-                edit.handles = Some(c);
+                if edit.controle == Some(c) {
+                    sk.spline_c2(c);
+                } else {
+                    edit.handles = Some(c);
+                }
                 edit.report = sk.solve(&vars, &[]);
             }
-            MenuAct::SplAuto(c) => sk.spline_tan.retain(|t| t.curve != c),
+            MenuAct::SplAuto(c) => {
+                sk.spline_tan.retain(|t| t.curve != c);
+                if edit.controle == Some(c) {
+                    edit.controle = None;
+                }
+            }
             MenuAct::SplTan(c, p, k) => {
                 // tamanho da alça: a distância média aos vizinhos
                 let pts = match sk.curve(c).map(|x| x.geom.clone()) {
@@ -3713,10 +3852,13 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 };
                 sk.set_spline_tangent(c, p, dir);
                 edit.handles = Some(c);
+                edit.controle = None;
             }
             MenuAct::SplRemove(c, p) => {
                 if !sk.spline_remove(c, p) {
                     toast = Some((tr("a spline precisa de pelo menos dois pontos").to_string(), true));
+                } else if edit.controle == Some(c) {
+                    sk.spline_c2(c);
                 }
                 edit.sel.clear();
                 edit.report = sk.solve(&vars, &[]);
@@ -4740,10 +4882,92 @@ mod tests {
         assert!(sk.constraints.iter().any(|c| matches!(&c.kind, Kind::Length(_, v) if v == "40")));
     }
 
+    /// B550: cada forma nova nasce com as restrições que a definem.
+    #[test]
+    fn formas_b550_nascem_com_as_restricoes_certas() {
+        let vars = HashMap::new();
+        let conta = |sk: &SketchData, f: fn(&Kind) -> bool| sk.constraints.iter().filter(|c| f(&c.kind)).count();
+        // retângulo por 3 pontos, inclinado: perpendicular, duas paralelas e as duas cotas automáticas
+        let mut sk = shape(Tool::Rect3, &[[0., 0.], [30., 40.], [-20., 30.]]);
+        assert_eq!(sk.curves.len(), 4);
+        assert_eq!(conta(&sk, |k| matches!(k, Kind::Perpendicular(..))), 1);
+        assert_eq!(conta(&sk, |k| matches!(k, Kind::Parallel(..))), 2);
+        assert_eq!(conta(&sk, |k| matches!(k, Kind::Horizontal(..) | Kind::Vertical(..))), 0, "inclinado: sem H/V");
+        assert!(sk.constraints.iter().any(|c| matches!(&c.kind, Kind::Length(_, v) if v == "50")), "lado de 50");
+        let r = sk.solve(&vars, &[]);
+        assert!(r.converged && r.redundant == 0 && r.dof == 3, "{r:?}");
+        // paralelogramo: só as paralelas, e o quarto canto fecha a figura
+        let sk = shape(Tool::Parallelogram, &[[0., 0.], [40., 0.], [50., 20.]]);
+        assert_eq!(conta(&sk, |k| matches!(k, Kind::Parallel(..))), 2);
+        assert!(sk.points.iter().any(|p| (p.x, p.y) == (10., 20.)));
+        // canto clicado num ponto existente é o próprio ponto
+        let mut sk = SketchData::default();
+        let mut al = ids();
+        let p0 = sk.add_point(&mut al, 0., 0.);
+        let cl = [Snap { point: Some(p0), ..snap([0., 0.]) }, snap([40., 0.]), snap([40., 20.])];
+        build_shape(&mut sk, &mut al, Tool::Rect3, &cl, &opts());
+        assert!(sk.curves.iter().any(|c| matches!(c.geom, Curve::Line { a, .. } if a == p0)), "o canto virou o ponto clicado");
+        assert_eq!(sk.points.len(), 4);
+        // círculo por 3 pontos: o ponto existente clicado fica preso a ele
+        let mut sk = SketchData::default();
+        let mut al = ids();
+        let p0 = sk.add_point(&mut al, 10., 0.);
+        let cl = [Snap { point: Some(p0), ..snap([10., 0.]) }, snap([0., 10.]), snap([-10., 0.])];
+        build_shape(&mut sk, &mut al, Tool::Circle3, &cl, &opts());
+        assert_eq!(conta(&sk, |k| matches!(k, Kind::PointOnCurve(..))), 1);
+        assert!(sk.solve(&vars, &[]).converged);
+        // tangente a 3: triângulo 30-40-50 fixo, cliques nos lados, círculo inscrito de raio 10
+        let mut sk = SketchData::default();
+        let mut al = ids();
+        let p = [[0., 0.], [40., 0.], [0., 30.]].map(|q| sk.add_point(&mut al, q[0], q[1]));
+        for i in 0..3 {
+            sk.add_curve(&mut al, Curve::Line { a: p[i], b: p[(i + 1) % 3] }, false);
+            sk.add_constraint(&mut al, Kind::Fixed(p[i]));
+        }
+        let cl = [[20., 1.], [21., 14.], [1., 15.]].map(snap);
+        build_shape(&mut sk, &mut al, Tool::CircleTan3, &cl, &opts());
+        assert_eq!(conta(&sk, |k| matches!(k, Kind::Tangent(..))), 3);
+        let circ = sk.curves.iter().find(|c| matches!(c.geom, Curve::Circle { .. })).map(|c| c.id).unwrap();
+        let r = sk.solve(&vars, &[]);
+        assert!(r.converged && r.dof == 0, "{r:?}");
+        assert!((sk.radius_of(circ).unwrap() - 10.).abs() < 1e-6);
+        // só duas linhas no sketch: sem o terceiro elemento, nada nasce
+        let mut sk = SketchData::default();
+        let mut al = ids();
+        let p = [[0., 0.], [40., 0.], [0., 30.]].map(|q| sk.add_point(&mut al, q[0], q[1]));
+        sk.add_curve(&mut al, Curve::Line { a: p[0], b: p[1] }, false);
+        sk.add_curve(&mut al, Curve::Line { a: p[0], b: p[2] }, false);
+        build_shape(&mut sk, &mut al, Tool::CircleTan3, &[[20., 1.], [1., 15.], [10., 10.]].map(snap), &opts());
+        assert_eq!(sk.curves.len(), 2);
+    }
+
+    #[test]
+    fn formas_b550_digitadas_viram_cota_e_o_cursor_obedece() {
+        let vars = HashMap::new();
+        let t = |l: &'static str, v: f64| (l, v.to_string(), v);
+        // altura digitada: o cursor vai à perpendicular do lado, do lado do mouse
+        let q = lock_cursor(Tool::Rect3, &[[0., 0.], [40., 0.]], [30., -5.], &[Some(20.)]);
+        assert!((q[0] - 40.).abs() < 1e-9 && (q[1] + 20.).abs() < 1e-9, "{q:?}");
+        // ângulo interno do paralelogramo: 60° a partir do lado feito
+        let q = lock_cursor(Tool::Parallelogram, &[[0., 0.], [40., 0.]], [45., 10.], &[Some(20.), Some(60.)]);
+        assert!((abertura([0., 0.], [40., 0.], q) - 60.).abs() < 1e-9 && (d2([40., 0.], q) - 20.).abs() < 1e-9, "{q:?}");
+        // valores digitados viram as cotas do 1º e do 2º lado, no lugar das automáticas
+        let mut sk = SketchData::default();
+        let mut al = ids();
+        let cl = [[0., 0.], [50., 0.], [50., 20.]].map(snap);
+        build_shape(&mut sk, &mut al, Tool::Rect3, &cl, &opts());
+        let made: Vec<Id> = sk.curves.iter().map(|c| c.id).collect();
+        dims_from_fields(&mut sk, &mut al, Tool::Rect3, &made, &[t("comprimento", 50.), t("altura", 20.)], &vars);
+        assert_eq!(sk.constraints.iter().filter(|c| matches!(c.kind, Kind::Length(..))).count(), 2);
+        let r = sk.solve(&vars, &[]);
+        assert!(r.converged && r.redundant == 0, "{r:?}");
+        assert!(sk.constraints.iter().any(|c| matches!(&c.kind, Kind::Length(_, v) if v == "20")));
+    }
+
     #[test]
     fn dicas_tem_traducao() {
         use crate::i18n::tem_traducao;
-        let shapes = [Tool::Rect, Tool::RectCenter, Tool::Circle, Tool::Circle3, Tool::Arc3, Tool::ArcCenter, Tool::Slot, Tool::Polygon, Tool::Point];
+        let shapes = [Tool::Rect, Tool::RectCenter, Tool::Rect3, Tool::Parallelogram, Tool::Circle, Tool::Circle3, Tool::CircleTan3, Tool::Arc3, Tool::ArcCenter, Tool::Slot, Tool::Polygon, Tool::Point];
         let mut t: Vec<&str> = shapes.iter().flat_map(|k| (0..3).map(|n| shape_hint(*k, n))).collect();
         for k in [Tool::Move, Tool::Copy, Tool::Mirror, Tool::Offset, Tool::Fillet, Tool::Chamfer] {
             for (a, b, n) in [(true, true, 0), (false, false, 0), (false, false, 1)] {
