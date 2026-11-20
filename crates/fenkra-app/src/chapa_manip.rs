@@ -402,7 +402,7 @@ mod tests {
             for e in [[100., 25., 2.], [50., 50., 2.]] {
                 d.add_feature(FeatureKind::SmFlange(SmFlange { edge: e, length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
             }
-            let id = d.add_feature(FeatureKind::SmCornerClose(SmCornerClose { at: [100., 50., 2.], kind: tipo, gap: s("folga_c"), ratio: s("1"), narrow: false, propagate: false, invert: false }));
+            let id = d.add_feature(FeatureKind::SmCornerClose(SmCornerClose { at: [100., 50., 2.], kind: tipo, gap: s("folga_c"), ratio: s("1"), narrow: false, propagate: false, invert: false, relief_kind: 0, relief_size: String::new() }));
             let r = recompute_ok(&d);
             let vars = r.params.clone();
             let m = manipuladores(&d, &r, id, &vars);

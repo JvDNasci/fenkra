@@ -5,7 +5,7 @@
 
 use super::chapa_canto::*;
 use super::*;
-use fenkra_core::SmCornerClose;
+use fenkra_core::{SmCornerClose, SmCornerRelief};
 
 fn s(x: &str) -> String {
     x.to_string()
@@ -36,7 +36,7 @@ fn canto_de_duas_abas(plana: bool) -> Document {
 }
 
 fn fecha(tipo: u8, folga: &str, razao: &str) -> SmCornerClose {
-    SmCornerClose { at: [100., 50., 2.], kind: tipo, gap: s(folga), ratio: s(razao), narrow: false, propagate: false, invert: false }
+    SmCornerClose { at: [100., 50., 2.], kind: tipo, gap: s(folga), ratio: s(razao), narrow: false, propagate: false, invert: false, relief_kind: 0, relief_size: String::new() }
 }
 
 struct Medida {
@@ -304,4 +304,134 @@ fn fechamento_de_canto_sobrevive_a_salvar_e_abrir() {
     let json = serde_json::to_string(&d).unwrap();
     let volta: Document = serde_json::from_str(&json).unwrap();
     assert_eq!(volta.features.last().unwrap().kind, d.features.last().unwrap().kind);
+}
+
+// ---- B533: folga mínima, canto aberto com alívio e caixa fechada planificada ----
+
+#[test]
+fn folga_de_um_centesimo_vale_nos_tres_tipos_sem_interferencia() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let base = canto_de_duas_abas(false);
+    let m0 = mede(&base);
+    let c = canto_ordenado(&base);
+    for tipo in [0u8, 1, 2] {
+        let g = 0.01;
+        let ps = pecas(&c, &ParamsCanto { kind: tipo, gap: g, ratio: 1., narrow: false }, false, 0.).unwrap();
+        // a distância mínima entre as peças é a folga pedida
+        let d = distancia_pecas(&ps[0], &ps[1]);
+        assert!((d - g).abs() < 1e-4, "tipo {tipo}: folga pedida {g}, medida {d}");
+        // e a booleana comum entre as duas peças sólidas não acha material em comum
+        let (s0, s1) = (solido(&c, &ps[0]).unwrap(), solido(&c, &ps[1]).unwrap());
+        let comum = s0.boolean(&s1, Bool::Common).unwrap();
+        assert!(comum.is_null() || comum.mass().volume < 1e-3, "tipo {tipo}: as peças se interferem ({})", comum.mass().volume);
+        // o comando fecha com status ok, soma o volume das peças e não cresce a caixa envolvente
+        let mut d2 = base.clone();
+        d2.add_feature(FeatureKind::SmCornerClose(fecha(tipo, "0.01", "1")));
+        let m = mede(&d2);
+        let esperado: f64 = ps.iter().map(|p| p.volume()).sum();
+        assert!((m.volume - m0.volume - esperado).abs() < 0.01 * esperado + 0.2, "tipo {tipo}: somou {} e esperava {esperado}", m.volume - m0.volume);
+        for i in 0..3 {
+            assert!((m.lo[i] - m0.lo[i]).abs() < 1e-3 && (m.hi[i] - m0.hi[i]).abs() < 1e-3, "tipo {tipo} eixo {i}");
+        }
+    }
+}
+
+/// Volume da chapa de duas abas com o comando dado no fim.
+fn volume_com(f: FeatureKind) -> f64 {
+    let mut d = canto_de_duas_abas(false);
+    d.add_feature(f);
+    mede(&d).volume
+}
+
+fn alivio_solto(tam: &str, kind: u8) -> FeatureKind {
+    FeatureKind::SmCornerRelief(SmCornerRelief { at: [100., 50., 2.], size: s(tam), kind })
+}
+
+#[test]
+fn canto_aberto_so_aplica_o_alivio_e_exige_um() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let base = canto_de_duas_abas(false);
+    let m0 = mede(&base);
+    // sem alívio o canto aberto não faz nada: erro com a razão
+    let mut d = base.clone();
+    let id = d.add_feature(FeatureKind::SmCornerClose(fecha(3, "0.5", "1")));
+    match &recompute(&d).status[&id] {
+        Status::Error(m) => assert!(m.contains("alívio"), "{m}"),
+        o => panic!("esperava erro, veio {o:?}"),
+    }
+    // com alívio redondo, quadrado ou rasgo: tira material e é igual ao alívio de canto solto
+    for (rk, tipo_solto) in [(1u8, 0u8), (2, 1), (3, 4)] {
+        let mut cc = fecha(3, "0.5", "1");
+        cc.relief_kind = rk;
+        cc.relief_size = s("4");
+        let v = volume_com(FeatureKind::SmCornerClose(cc));
+        assert!(v < m0.volume - 0.5, "alívio {rk} não tirou material: {v} contra {}", m0.volume);
+        let solto = volume_com(alivio_solto("4", tipo_solto));
+        assert!((v - solto).abs() < 0.05, "alívio {rk}: {v} contra o alívio solto {solto}");
+    }
+    // o rasgo entra mais fundo na chapa que o furo redondo do mesmo tamanho
+    let (vr, vo) = (volume_com(alivio_solto("4", 4)), volume_com(alivio_solto("4", 0)));
+    assert!(vr < vo - 1., "rasgo {vr} contra redondo {vo}");
+}
+
+#[test]
+fn alivio_junto_do_fechamento_corta_antes_e_as_pecas_entram_depois() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let base = canto_de_duas_abas(false);
+    let c = canto_ordenado(&base);
+    let ps = pecas(&c, &ParamsCanto { kind: 1, gap: 0.5, ratio: 1., narrow: false }, false, 0.).unwrap();
+    let esperado: f64 = ps.iter().map(|p| p.volume()).sum();
+    let mut cc = fecha(1, "0.5", "1");
+    cc.relief_kind = 1;
+    cc.relief_size = s("3");
+    let com = volume_com(FeatureKind::SmCornerClose(cc));
+    let so_alivio = volume_com(alivio_solto("3", 0));
+    assert!((com - so_alivio - esperado).abs() < 0.01 * esperado + 0.3, "{com} contra {so_alivio} + {esperado}");
+}
+
+#[test]
+fn caixa_fechada_planificada_soma_as_pecas_dos_quatro_cantos() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let mut d = canto_de_duas_abas(true);
+    for e in [[0., 25., 2.], [50., 0., 2.]] {
+        d.add_feature(FeatureKind::SmFlange(SmFlange { edge: e, length: s("20"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
+    }
+    let m0 = mede(&d);
+    let c = canto_ordenado(&canto_de_duas_abas(true));
+    for (tipo, g) in [(0u8, 0.01), (1, 0.01), (2, 0.2)] {
+        let mut q = d.clone();
+        let mut p = fecha(tipo, &g.to_string(), "1");
+        p.propagate = true;
+        q.add_feature(FeatureKind::SmCornerClose(p));
+        let m = mede(&q);
+        let ps = pecas(&c, &ParamsCanto { kind: tipo, gap: g, ratio: 1., narrow: false }, true, 0.).unwrap();
+        let um: f64 = ps.iter().map(|p| p.volume()).sum();
+        // planificada: quatro cantos, nenhum material sobreposto ao que já existia
+        assert!((m.volume - m0.volume - 4. * um).abs() < 0.01 * um * 4. + 0.5, "tipo {tipo}: somou {} e esperava {}", m.volume - m0.volume, 4. * um);
+        assert!(distancia_pecas(&ps[0], &ps[1]) >= g - 1e-4);
+    }
+}
+
+#[test]
+fn alivio_do_fechamento_sobrevive_a_salvar_e_abrir() {
+    let mut d = canto_de_duas_abas(false);
+    let mut p = fecha(3, "0.4", "1");
+    p.relief_kind = 3;
+    p.relief_size = s("2.5");
+    d.add_feature(FeatureKind::SmCornerClose(p));
+    let json = serde_json::to_string(&d).unwrap();
+    let volta: Document = serde_json::from_str(&json).unwrap();
+    assert_eq!(volta.features.last().unwrap().kind, d.features.last().unwrap().kind);
+    // documento antigo, sem os campos novos, abre com alívio desligado
+    let antigo = r#"{"at":[100.0,50.0,2.0],"kind":1,"gap":"0.5","ratio":"1"}"#;
+    let c: SmCornerClose = serde_json::from_str(antigo).unwrap();
+    assert_eq!((c.relief_kind, c.relief_size.as_str()), (0, ""));
 }

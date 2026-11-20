@@ -795,7 +795,7 @@ impl App {
                         d.add_feature(FeatureKind::SmFlange(SmFlange { edge: e, length: s("22"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }));
                     }
                     let tipo = std::env::var("FENKRA_DEMO_CANTO").ok().and_then(|v| v.parse().ok()).unwrap_or(1u8);
-                    let id = d.add_feature(FeatureKind::SmCornerClose(SmCornerClose { at: [100., 60., 2.], kind: tipo, gap: s("0.6"), ratio: s("1"), narrow: false, propagate: false, invert: false }));
+                    let id = d.add_feature(FeatureKind::SmCornerClose(SmCornerClose { at: [100., 60., 2.], kind: tipo, gap: s("0.6"), ratio: s("1"), narrow: false, propagate: false, invert: false, relief_kind: 0, relief_size: String::new() }));
                     d.feature_mut(id).map(|f| f.name = "FechaCanto".into());
                 }
                 // comando de aba unificado (B31): a aba de aresta com o painel em quatro seções
@@ -2789,7 +2789,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SmCurveFlange => FeatureKind::SmCurveFlange(SmCurveFlange { edge, length: s("15"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: true, reta: None }),
                     Cmd::SmArcSlot => FeatureKind::SmArcSlot(SmArcSlot { center: at.unwrap_or([0.; 3]), radius: s("20"), width: s("6"), start: s("0"), sweep: s("90") }),
-                    Cmd::SmCornerClose => FeatureKind::SmCornerClose(SmCornerClose { at: at.unwrap_or([0.; 3]), kind: 1, gap: s("0.5"), ratio: s("1"), narrow: false, propagate: false, invert: false }),
+                    Cmd::SmCornerClose => FeatureKind::SmCornerClose(SmCornerClose { at: at.unwrap_or([0.; 3]), kind: 1, gap: s("0.5"), ratio: s("1"), narrow: false, propagate: false, invert: false, relief_kind: 0, relief_size: String::new() }),
                     // o tamanho padrão do canto vem do estilo da chapa, quando ele define um
                     _ => {
                         let tam = d.sheet_efetivo().map(|e| e.corner).filter(|c| !c.trim().is_empty()).unwrap_or_else(|| s("4"));
