@@ -205,6 +205,124 @@ pub fn faces_concentricas(m: &Mesh, face: usize) -> Vec<usize> {
     out
 }
 
+/// Arestas da borda da face plana `face` (o contorno inteiro, laço externo e furos).
+fn bordas_da_face(m: &Mesh, face: usize) -> Vec<usize> {
+    (0..m.edge_faces.len()).filter(|e| m.edge_faces[*e].contains(&(face as u32))).collect()
+}
+
+/// B543: arestas "do mesmo plano" que `edge`: todo o contorno de uma face plana que ela limita.
+/// Uma aresta limita até duas faces; escolhe-se a plana que mais olha para o `olho` (a que a pessoa
+/// está vendo), ou a primeira plana sem `olho`. Aresta que não toca face plana: só ela. O resultado
+/// traz `edge` na frente.
+pub fn arestas_do_mesmo_plano(m: &Mesh, edge: usize, olho: Option<[f64; 3]>) -> Vec<usize> {
+    let Some(fs) = m.edge_faces.get(edge) else { return vec![edge] };
+    let nf = m.face_ranges.len();
+    let planas: Vec<usize> = fs
+        .iter()
+        .map(|f| *f as usize)
+        .filter(|f| *f < nf && m.face_info.get(*f).is_some_and(|i| i.kind == 0))
+        .collect();
+    let voltada = |f: usize| {
+        let Some(i) = m.face_info.get(f) else { return f64::MIN };
+        // quanto o plano olha para o olho: normal externa contra a direção até o olho
+        olho.map(|o| dot(unit(i.dir), unit(sub(o, i.point)))).unwrap_or(0.)
+    };
+    let Some(face) = planas.iter().copied().max_by(|a, b| voltada(*a).partial_cmp(&voltada(*b)).unwrap_or(std::cmp::Ordering::Equal).then(b.cmp(a))) else { return vec![edge] };
+    let mut out = vec![edge];
+    out.extend(bordas_da_face(m, face).into_iter().filter(|e| *e != edge));
+    out
+}
+
+/// Pontos de uma face (vértices dos triângulos dela), para sentir de que lado do plano ela fica.
+fn vertices_da_face(m: &Mesh, face: usize) -> Vec<[f64; 3]> {
+    let Some(&ini) = m.face_ranges.get(face) else { return vec![] };
+    let fim = m.face_ranges.get(face + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
+    m.indices[ini as usize..fim.min(m.indices.len())]
+        .iter()
+        .filter_map(|i| m.positions.get(*i as usize * 3..*i as usize * 3 + 3))
+        .map(|p| [p[0] as f64, p[1] as f64, p[2] as f64])
+        .collect()
+}
+
+/// Convexidade de uma aresta viva entre duas faces: `Some(true)` convexa (o material fica "atrás" do
+/// canto, como a quina de fora de um bloco), `Some(false)` côncava (quina de dentro), `None` se a
+/// aresta é suave, de borda livre ou se nenhuma das faces é plana.
+///
+/// Como: com a face plana `P` (normal externa `n`, aresta sobre o plano dela) e a outra face `Q`, os
+/// pontos de `Q` perto da aresta ficam abaixo do plano de `P` num canto convexo e acima num côncavo.
+/// Olha-se o ponto de `Q` mais próximo do meio da aresta que saia do plano.
+pub fn convexidade(m: &Mesh, edge: usize) -> Option<bool> {
+    let fs = m.edge_faces.get(edge)?;
+    if fs[0] == NO_FACE || fs[1] == NO_FACE || m.edge_smooth.get(edge).copied().unwrap_or(0) != 0 {
+        return None;
+    }
+    let (a, b) = (fs[0] as usize, fs[1] as usize);
+    let (plana, outra) = match (m.face_info.get(a)?, m.face_info.get(b)?) {
+        (ia, _) if ia.kind == 0 => (a, b),
+        (_, ib) if ib.kind == 0 => (b, a),
+        _ => return None,
+    };
+    let info = m.face_info.get(plana)?;
+    let n = unit(info.dir);
+    // o meio da aresta; nas costuras o kernel deixa zeros e vale o ponto do meio da polilinha
+    let mid = m.edge_mids.get(edge * 3..edge * 3 + 3).map(|x| [x[0] as f64, x[1] as f64, x[2] as f64]).filter(|p| norma(*p) > 0.);
+    let linha = polilinha(m, edge);
+    let meio = mid.or_else(|| linha.get(linha.len() / 2).copied())?;
+    // aresta e plano: a aresta tem de estar sobre o plano da face plana, senão a conta não vale
+    if dot(n, sub(meio, info.point)).abs() > 1e-3 {
+        return None;
+    }
+    // as duas faces planas: a direção para dentro de Q (perpendicular à aresta, no plano de Q) dá a
+    // resposta exata, mesmo que Q dê a volta por trás do plano de P (como o topo em L de um bloco)
+    if let (Some(iq), [p0, .., pn]) = (m.face_info.get(outra).filter(|i| i.kind == 0), linha.as_slice()) {
+        let t = unit(sub(*pn, *p0));
+        let w = unit(cross(unit(iq.dir), t));
+        for sinal in [1., -1.] {
+            let ponto = [meio[0] + sinal * w[0] * 1e-2, meio[1] + sinal * w[1] * 1e-2, meio[2] + sinal * w[2] * 1e-2];
+            if ponto_na_face(m, outra, ponto) {
+                return Some(dot(n, w) * sinal < 0.);
+            }
+        }
+    }
+    // Q curva: o ponto de Q mais perto do meio da aresta que saia do plano decide
+    let mut candidatos: Vec<(f64, f64)> = vertices_da_face(m, outra)
+        .into_iter()
+        .map(|v| (norma(sub(v, meio)), dot(n, sub(v, meio))))
+        .filter(|(_, h)| h.abs() > 1e-4)
+        .collect();
+    candidatos.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap_or(std::cmp::Ordering::Equal));
+    candidatos.first().map(|(_, h)| *h < 0.)
+}
+
+/// O ponto (já no plano da face) cai dentro de algum triângulo da face?
+fn ponto_na_face(m: &Mesh, face: usize, p: [f64; 3]) -> bool {
+    let Some(&ini) = m.face_ranges.get(face) else { return false };
+    let fim = m.face_ranges.get(face + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
+    let v = |i: u32| m.positions.get(i as usize * 3..i as usize * 3 + 3).map(|x| [x[0] as f64, x[1] as f64, x[2] as f64]);
+    m.indices[ini as usize..fim.min(m.indices.len())].chunks_exact(3).any(|t| {
+        let (Some(a), Some(b), Some(c)) = (v(t[0]), v(t[1]), v(t[2])) else { return false };
+        // coordenadas baricêntricas no plano do triângulo
+        let (e0, e1, e2) = (sub(b, a), sub(c, a), sub(p, a));
+        let (d00, d01, d11, d20, d21) = (dot(e0, e0), dot(e0, e1), dot(e1, e1), dot(e2, e0), dot(e2, e1));
+        let den = d00 * d11 - d01 * d01;
+        if den.abs() < 1e-18 {
+            return false;
+        }
+        let (u, w) = ((d11 * d20 - d01 * d21) / den, (d00 * d21 - d01 * d20) / den);
+        let eps = -1e-6;
+        u >= eps && w >= eps && u + w <= 1. - eps
+    })
+}
+
+/// B543: arestas do corpo com a mesma característica de `edge`: todas as convexas ou todas as
+/// côncavas (quinas vivas). Aresta suave ou sem convexidade definida: só ela. `edge` vai na frente.
+pub fn arestas_mesma_convexidade(m: &Mesh, edge: usize) -> Vec<usize> {
+    let Some(alvo) = convexidade(m, edge) else { return vec![edge] };
+    let mut out = vec![edge];
+    out.extend((0..m.edge_faces.len()).filter(|e| *e != edge && convexidade(m, *e) == Some(alvo)));
+    out
+}
+
 /// Refaz as regras gravadas (B95): cada semente em `escolhidas` cresce pela regra sobre a malha atual
 /// de `corpo`, e as arestas novas entram depois das escolhidas, sem repetir. Semente fora da lista é
 /// ignorada.

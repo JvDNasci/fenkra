@@ -828,12 +828,12 @@ impl Camera {
         let (cp, sp) = (self.pitch.cos(), self.pitch.sin());
         self.target + self.dist * Vec3::new(cp * self.yaw.cos(), cp * self.yaw.sin(), sp)
     }
+    /// "Para cima" da tela: a derivada do olho em relação à inclinação. Dentro de ±90° aponta para o
+    /// mesmo lado do eixo Z de sempre; no polo vira o vetor horizontal que o código antigo usava; e
+    /// além do polo (órbita livre, B542) continua sem salto, com a vista de cabeça para baixo.
     fn up(&self) -> Vec3 {
-        if self.pitch.abs() > 1.55 {
-            Vec3::new(-self.yaw.cos(), -self.yaw.sin(), 0.) * self.pitch.signum()
-        } else {
-            Vec3::Z
-        }
+        let (cp, sp) = (self.pitch.cos(), self.pitch.sin());
+        Vec3::new(-sp * self.yaw.cos(), -sp * self.yaw.sin(), cp)
     }
     pub fn view_proj(&self, aspect: f32) -> Mat4 {
         let view = glam::camera::rh::view::look_at_mat4(self.eye(), self.target, self.up());

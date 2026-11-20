@@ -524,6 +524,8 @@ pub struct Settings {
     pub families: Vec<(String, usize)>,
     pub nav: NavStyle,
     pub invert_zoom: bool,
+    /// B542: órbita livre; a inclinação passa do polo e dá a volta inteira (por baixo do chão)
+    pub orbita_livre: bool,
     /// a roda dá zoom em direção ao ponto sob o cursor (desligado: o alvo da câmera fica parado)
     pub zoom_no_cursor: bool,
     /// filtro de seleção na viewport
@@ -697,6 +699,7 @@ impl Default for Settings {
             families: vec![],
             nav: NavStyle::Fenkra,
             invert_zoom: false,
+            orbita_livre: false,
             zoom_no_cursor: true,
             sel_faces: true,
             sel_edges: true,

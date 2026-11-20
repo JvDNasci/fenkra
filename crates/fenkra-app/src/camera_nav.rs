@@ -6,6 +6,11 @@
 //! redondo em mm (0,2; 5; 20) e, ao mesmo tempo, ter um tamanho na tela que não dependa da peça.
 //! Escolhe-se o maior valor da série que ocupa no máximo 8 px; como a razão entre vizinhos da série é
 //! 2 ou 2,5, o salto na tela fica entre 3,2 e 8 px, seja a peça de 5 mm ou de 5 m.
+//!
+//! Órbita livre e centro da órbita (B542): a câmera guarda guinada (yaw) e inclinação (pitch). No modo
+//! preso a inclinação para em ±90°, como uma mesa giratória; no modo livre ela passa do polo e dá a
+//! volta inteira (inclusive por baixo do chão). Depois do polo a vista fica de cabeça para baixo, e o
+//! arrasto horizontal tem de inverter o sentido da guinada, senão o modelo gira ao contrário do mouse.
 
 use crate::render::Camera;
 use eframe::egui::{Pos2, Rect};
@@ -35,7 +40,35 @@ fn ponto_no_plano_do_alvo(cam: &Camera, rect: Rect, pos: Pos2) -> Option<Vec3> {
     Some(o + d * ((cam.target - o).dot(normal) / denom))
 }
 
+/// Inclinação que cabe na câmera: presa em ±90° ou, no modo livre, reduzida ao intervalo (-180°, 180°].
+pub fn limitar_inclinacao(pitch: f32, livre: bool) -> f32 {
+    use std::f32::consts::{PI, TAU};
+    if !livre {
+        return pitch.clamp(-1.5706, 1.5706);
+    }
+    let r = (pitch + PI).rem_euclid(TAU) - PI;
+    // rem_euclid devolve [-PI, PI): o limite inferior é o mesmo ângulo que +PI
+    if r <= -PI + 1e-6 { PI } else { r }
+}
+
 impl Camera {
+    /// Gira pelo arrasto (`dx`, `dy` em pixels). Com a vista de cabeça para baixo (livre, além do polo)
+    /// a guinada troca de sentido para o modelo acompanhar o mouse.
+    pub fn girar(&mut self, dx: f32, dy: f32, livre: bool) {
+        let de_cabeca = livre && self.pitch.cos() < 0.;
+        let sinal = if de_cabeca { -1. } else { 1. };
+        self.yaw -= dx * 0.008 * sinal;
+        self.pitch = limitar_inclinacao(self.pitch + dy * 0.008, livre);
+    }
+
+    /// Passa a orbitar em volta de `p`: o ponto vai para o centro da vista, com o mesmo olhar e a
+    /// distância que o olho tinha até ele (no mínimo 1 mm).
+    pub fn centrar_orbita(&mut self, p: Vec3) {
+        let olho = self.eye();
+        self.target = p;
+        self.dist = (olho - p).length().max(1.);
+    }
+
     /// Muda a distância e desloca o alvo para o ponto que estava sob o cursor continuar sob ele.
     /// Vale para perspectiva e ortogonal; sem cursor útil, só muda a distância.
     pub fn zoom_em_ponto(&mut self, rect: Rect, pos: Pos2, nova_dist: f32) {
@@ -143,6 +176,74 @@ mod tests {
             // e o alvo andou, porque o cursor não estava no centro
             assert!((cam.target - Vec3::new(10., -20., 5.)).length() > 1.);
         }
+    }
+
+    #[test]
+    fn inclinacao_presa_para_no_polo_e_a_livre_da_a_volta() {
+        assert_eq!(limitar_inclinacao(3., false), 1.5706);
+        assert_eq!(limitar_inclinacao(-3., false), -1.5706);
+        // livre: 200 graus equivale a -160 graus; 360 graus volta a zero
+        assert!((limitar_inclinacao(200f32.to_radians(), true) - (-160f32).to_radians()).abs() < 1e-5);
+        assert!(limitar_inclinacao(std::f32::consts::TAU, true).abs() < 1e-5);
+        assert!((limitar_inclinacao(-std::f32::consts::PI, true) - std::f32::consts::PI).abs() < 1e-5);
+    }
+
+    #[test]
+    fn girar_360_para_baixo_volta_ao_ponto_de_partida_so_no_modo_livre() {
+        let inicio = Camera::default();
+        // 72 passos de 5 graus para baixo (dy em pixels = 5 graus / 0,008 rad por pixel)
+        let px = 5f32.to_radians() / 0.008;
+        let mut livre = inicio;
+        let mut presa = inicio;
+        let mut alcancou_baixo = false;
+        for _ in 0..72 {
+            livre.girar(0., px, true);
+            presa.girar(0., px, false);
+            // por baixo do chão: o olho fica abaixo do alvo
+            alcancou_baixo |= livre.eye().z < livre.target.z - 1.;
+        }
+        assert!(alcancou_baixo, "o modo livre passa por baixo do chão");
+        assert!((livre.eye() - inicio.eye()).length() < 0.05, "uma volta inteira devolve o olho: {:?}", livre.eye());
+        assert!(presa.pitch <= 1.5706 + 1e-6, "o modo preso fica em 90 graus");
+    }
+
+    #[test]
+    fn de_cabeca_para_baixo_a_guinada_inverte_e_a_vista_continua_sem_salto() {
+        let mut cam = Camera { pitch: 2.0, ..Default::default() };
+        let antes = cam.yaw;
+        cam.girar(10., 0., true);
+        assert!(cam.yaw > antes, "de cabeça para baixo o arrasto para a direita aumenta a guinada");
+        let mut normal = Camera { pitch: 0.5, ..Default::default() };
+        let a = normal.yaw;
+        normal.girar(10., 0., true);
+        assert!(normal.yaw < a);
+        // atravessando o polo o "para cima" da tela muda aos poucos (sem virar de uma vez)
+        let mut cam = Camera { pitch: 1.5, ..Default::default() };
+        let mut ant = cam.view_proj(1.) * Vec3::new(0., 0., 50.).extend(1.);
+        for _ in 0..20 {
+            cam.pitch += 0.01;
+            let atual = cam.view_proj(1.) * Vec3::new(0., 0., 50.).extend(1.);
+            let (a, b) = (ant.truncate() / ant.w, atual.truncate() / atual.w);
+            assert!((a - b).length() < 0.2, "salto na vista perto do polo: {a:?} -> {b:?}");
+            ant = atual;
+        }
+    }
+
+    #[test]
+    fn centro_da_orbita_leva_o_ponto_para_o_meio_da_tela() {
+        for ortho in [false, true] {
+            let mut cam = Camera { ortho, ..Default::default() };
+            let p = Vec3::new(30., -12., 40.);
+            cam.centrar_orbita(p);
+            assert_eq!(cam.target, p);
+            let c = cam.project(tela(), p).unwrap();
+            assert!((c - tela().center()).length() < 0.05, "ortho={ortho}: {c:?}");
+            assert!(cam.dist >= 1.);
+        }
+        // ponto colado no olho: a distância não zera
+        let mut cam = Camera::default();
+        cam.centrar_orbita(cam.eye());
+        assert_eq!(cam.dist, 1.);
     }
 
     #[test]

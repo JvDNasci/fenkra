@@ -22,10 +22,19 @@ pub enum Regra {
     Tangentes,
     Cadeia,
     Concentricas,
+    /// B543: o contorno inteiro da face plana que a aresta limita
+    MesmoPlano,
+    /// B543: todas as arestas vivas do corpo com a mesma convexidade (convexas ou côncavas)
+    MesmaConvexidade,
 }
 
 impl Regra {
-    pub const TODAS: [Regra; 3] = [Regra::Tangentes, Regra::Cadeia, Regra::Concentricas];
+    pub const TODAS: [Regra; 5] = [Regra::Tangentes, Regra::Cadeia, Regra::Concentricas, Regra::MesmoPlano, Regra::MesmaConvexidade];
+
+    /// A regra vale para faces? (as de aresta só para aresta)
+    pub fn vale_para_face(self) -> bool {
+        matches!(self, Regra::Tangentes | Regra::Concentricas)
+    }
 
     /// Texto do menu (traduzido em `i18n.rs`).
     pub fn rotulo(self) -> &'static str {
@@ -34,13 +43,15 @@ impl Regra {
             Regra::Tangentes => "Selecionar tangentes",
             Regra::Cadeia => "Selecionar cadeia",
             Regra::Concentricas => "Selecionar concêntricas",
+            Regra::MesmoPlano => "Selecionar arestas do mesmo plano",
+            Regra::MesmaConvexidade => "Selecionar convexas ou côncavas iguais",
         }
     }
 }
 
 // as funções sobre a malha moraram aqui; foram para o `fenkra-solidos` para o recompute refazer a
 // regra gravada no filete e no chanfro (B95)
-pub use fenkra_solidos::selecao_regras::{arestas_concentricas, arestas_em_cadeia, eixo_do_circulo, faces_concentricas, faces_tangentes};
+pub use fenkra_solidos::selecao_regras::{arestas_concentricas, arestas_do_mesmo_plano, convexidade, arestas_mesma_convexidade, arestas_em_cadeia, eixo_do_circulo, faces_concentricas, faces_tangentes};
 
 impl Regra {
     /// A regra como fica gravada no filete ou chanfro (B95).
@@ -49,7 +60,7 @@ impl Regra {
             Regra::Tangentes => Some(fenkra_core::RegraSelecao::Tangentes),
             Regra::Cadeia => Some(fenkra_core::RegraSelecao::Cadeia),
             Regra::Concentricas => Some(fenkra_core::RegraSelecao::Concentricas),
-            Regra::Nenhuma => None,
+            Regra::Nenhuma | Regra::MesmoPlano | Regra::MesmaConvexidade => None,
         }
     }
 }
@@ -124,8 +135,9 @@ pub fn regra_da_selecao(picks: &[crate::picking::Pick]) -> Option<Regra> {
 
 /// Aplica a regra à face ou aresta clicada e devolve tudo que entra na seleção (o clicado vem
 /// primeiro). Outros tipos de escolha, ou regra sem sentido para o tipo (cadeia numa face), devolvem
-/// só o que foi clicado.
-pub fn por_regra(r: &fenkra_solidos::RecomputeResult, p: &crate::picking::Pick, regra: Regra) -> Vec<crate::picking::Pick> {
+/// só o que foi clicado. `olho` é a posição da câmera: decide qual das duas faces de uma aresta é "o
+/// plano" (a que está à vista).
+pub fn por_regra(r: &fenkra_solidos::RecomputeResult, p: &crate::picking::Pick, regra: Regra, olho: Option<[f64; 3]>) -> Vec<crate::picking::Pick> {
     use crate::picking::{mesh_of, Pick};
     let so_ele = || vec![*p];
     let primeiro = |p: &Pick, mut v: Vec<Pick>| {
@@ -166,6 +178,8 @@ pub fn por_regra(r: &fenkra_solidos::RecomputeResult, p: &crate::picking::Pick, 
                 Regra::Tangentes => arestas_em_cadeia(m, edge, true),
                 Regra::Cadeia => arestas_em_cadeia(m, edge, false),
                 Regra::Concentricas => arestas_concentricas(m, edge),
+                Regra::MesmoPlano => arestas_do_mesmo_plano(m, edge, olho),
+                Regra::MesmaConvexidade => arestas_mesma_convexidade(m, edge),
                 Regra::Nenhuma => return so_ele(),
             };
             let v = arestas
@@ -204,6 +218,8 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("tangentes", "tangent"),
     ("cadeia", "chain"),
     ("concêntricas", "concentric"),
+    ("Selecionar arestas do mesmo plano", "Select edges of the same plane"),
+    ("Selecionar convexas ou côncavas iguais", "Select same-convexity edges"),
     ("Regra gravada", "Saved rule"),
     ("a partir da aresta", "from edge"),
     ("A cada recálculo a regra é refeita a partir da aresta semente: arestas que a mudança do modelo criar ou mover entram sozinhas.", "On every recompute the rule is redone from the seed edge: edges created or moved by a model change come in by themselves."),
@@ -371,12 +387,116 @@ mod testes {
             .find(|f| m.face_info[*f].kind != 0 && (m.face_info[*f].point[0] - 40.).abs() < 6. && (m.face_info[*f].point[1] - 40.).abs() < 6.)
             .unwrap();
         let clicada = crate::picking::Pick::Face { body: 0, face: curva, owner: r.bodies[0].face_owner[curva], point: [0.; 3], normal: [0.; 3] };
-        let v = por_regra(&r, &clicada, Regra::Tangentes);
+        let v = por_regra(&r, &clicada, Regra::Tangentes, None);
         assert_eq!(v.len(), 3);
         assert!(matches!(v[0], crate::picking::Pick::Face { face, .. } if face == curva), "o clicado fica na frente");
-        assert_eq!(por_regra(&r, &clicada, Regra::Cadeia), vec![clicada], "cadeia não tem sentido para face");
+        assert_eq!(por_regra(&r, &clicada, Regra::Cadeia, None), vec![clicada], "cadeia não tem sentido para face");
         let aresta = crate::picking::Pick::Edge { body: 0, edge: 0, mid: [0.; 3] };
-        assert_eq!(por_regra(&r, &aresta, Regra::Nenhuma), vec![aresta]);
-        assert_eq!(por_regra(&r, &crate::picking::Pick::Geo(fenkra_core::Id(5)), Regra::Tangentes).len(), 1);
+        assert_eq!(por_regra(&r, &aresta, Regra::Nenhuma, None), vec![aresta]);
+        assert_eq!(por_regra(&r, &crate::picking::Pick::Geo(fenkra_core::Id(5)), Regra::Tangentes, None).len(), 1);
+    }
+
+    /// Bloco 40 x 40 x 20 com uma torre 10 x 10 x 30 no canto (0, 0): o topo do bloco vira um L, e a
+    /// torre dá duas arestas côncavas (onde as paredes dela encontram o topo do bloco).
+    fn bloco_com_torre() -> Option<fenkra_solidos::RecomputeResult> {
+        if !fenkra_kernel::AVAILABLE {
+            return None;
+        }
+        let mut d = Document::new("torre");
+        let mut n = 93_000_000u64;
+        let mut al = move || {
+            n += 1;
+            fenkra_core::Id(n)
+        };
+        fn caixa(d: &mut Document, lado: f64, altura: &str, al: &mut impl FnMut() -> fenkra_core::Id) {
+            let mut data = SketchData::default();
+            data.add_rect(al, [0., 0.], [lado, lado], false);
+            let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+            d.add_feature(FeatureKind::Extrude(Extrude { sketch: sk, op: BoolOp::Add, extent: Extent::Blind(altura.into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
+        }
+        caixa(&mut d, 40., "20", &mut al);
+        caixa(&mut d, 10., "30", &mut al);
+        Some(fenkra_solidos::recompute(&d))
+    }
+
+    /// Aresta reta do corpo entre os dois pontos (em qualquer ordem).
+    fn reta(m: &Mesh, a: [f64; 3], b: [f64; 3]) -> usize {
+        let perto = |p: [f64; 3], q: [f64; 3]| (0..3).all(|i| (p[i] - q[i]).abs() < 1e-6);
+        (0..m.edge_ranges.len())
+            .find(|e| matches!(m.edge_formula(*e), Some(EdgeFormula::Line { a: p, b: q }) if (perto(p, a) && perto(q, b)) || (perto(p, b) && perto(q, a))))
+            .unwrap_or_else(|| panic!("aresta {a:?} - {b:?}"))
+    }
+
+    #[test]
+    fn mesmo_plano_pega_o_contorno_da_face_que_esta_a_vista() {
+        let Some(r) = bloco_com_torre() else { return };
+        let m = malha(&r);
+        // aresta de cima da parede x = 40 (compartilhada pelo topo do bloco e pela parede)
+        let e = reta(m, [40., 0., 20.], [40., 40., 20.]);
+        // olho acima: o plano é o topo do bloco (o L): 6 arestas (a torre rouba um canto)
+        let topo = arestas_do_mesmo_plano(m, e, Some([20., 20., 200.]));
+        assert_eq!(topo[0], e, "a clicada vem na frente");
+        assert_eq!(topo.len(), 6, "{topo:?}");
+        assert!(topo.contains(&reta(m, [10., 0., 20.], [10., 10., 20.])), "a aresta côncava da torre faz parte do contorno do topo");
+        // olho do lado +X: o plano é a parede x = 40, um retângulo de 4 arestas
+        let parede = arestas_do_mesmo_plano(m, e, Some([300., 20., 10.]));
+        assert_eq!(parede.len(), 4, "{parede:?}");
+        assert!(parede.contains(&reta(m, [40., 0., 0.], [40., 40., 0.])) && !parede.contains(&reta(m, [10., 0., 20.], [10., 10., 20.])));
+        // sem olho: escolhe a primeira face plana, mas sempre devolve um contorno fechado
+        assert!(arestas_do_mesmo_plano(m, e, None).len() >= 4);
+        // aresta inexistente: só ela
+        assert_eq!(arestas_do_mesmo_plano(m, 9999, None), vec![9999]);
+    }
+
+    #[test]
+    fn convexas_e_concavas_se_separam_pela_quina() {
+        let Some(r) = bloco_com_torre() else { return };
+        let m = malha(&r);
+        let concava = reta(m, [10., 0., 20.], [10., 10., 20.]);
+        let outra_concava = reta(m, [0., 10., 20.], [10., 10., 20.]);
+        assert_eq!(convexidade(m, concava), Some(false));
+        let mut c = arestas_mesma_convexidade(m, concava);
+        assert_eq!(c[0], concava);
+        c.sort();
+        let mut esperado = vec![concava, outra_concava];
+        esperado.sort();
+        assert_eq!(c, esperado, "só as duas quinas de dentro");
+        // quina de fora do bloco: convexa, e a lista traz todas as arestas convexas e nenhuma côncava
+        let fora = reta(m, [40., 0., 20.], [40., 40., 20.]);
+        assert_eq!(convexidade(m, fora), Some(true));
+        let convexas = arestas_mesma_convexidade(m, fora);
+        assert!(convexas.len() >= 10 && convexas.contains(&fora));
+        assert!(!convexas.contains(&concava) && !convexas.contains(&outra_concava));
+    }
+
+    #[test]
+    fn regras_novas_pelo_menu_so_valem_para_aresta() {
+        let Some(r) = bloco_com_torre() else { return };
+        let m = malha(&r);
+        let e = reta(m, [40., 0., 20.], [40., 40., 20.]);
+        let aresta = crate::picking::Pick::Edge { body: 0, edge: e, mid: [40., 20., 20.] };
+        let v = por_regra(&r, &aresta, Regra::MesmoPlano, Some([20., 20., 200.]));
+        assert_eq!(v.len(), 6);
+        assert!(matches!(v[0], crate::picking::Pick::Edge { edge, .. } if edge == e));
+        // numa face as regras de aresta devolvem só o clicado
+        let face = crate::picking::Pick::Face { body: 0, face: 0, owner: r.bodies[0].face_owner[0], point: [0.; 3], normal: [0.; 3] };
+        for regra in [Regra::MesmoPlano, Regra::MesmaConvexidade, Regra::Cadeia] {
+            assert_eq!(por_regra(&r, &face, regra, None), vec![face]);
+            assert!(!regra.vale_para_face());
+        }
+        assert!(Regra::Tangentes.vale_para_face() && Regra::Concentricas.vale_para_face());
+        assert_eq!(Regra::MesmoPlano.gravada(), None);
+    }
+
+    #[test]
+    fn convexidade_de_aresta_suave_ou_entre_curvas_e_indefinida() {
+        let Some((_, r)) = bloco_com_furo() else { return };
+        let m = malha(&r);
+        let suaves: Vec<usize> = (0..m.edge_smooth.len()).filter(|e| m.edge_smooth[*e] != 0).collect();
+        assert!(!suaves.is_empty(), "o canto arredondado tem arestas suaves");
+        for e in suaves {
+            assert_eq!(convexidade(m, e), None);
+            assert_eq!(arestas_mesma_convexidade(m, e), vec![e]);
+        }
     }
 }
