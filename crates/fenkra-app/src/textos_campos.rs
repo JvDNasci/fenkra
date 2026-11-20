@@ -116,6 +116,7 @@ pub static CAMPOS: &[(&str, &str, &str)] = &[
     ("Espessura", "Espessura da parede ou da chapa. Maior que zero; cresce para o lado indicado pela prévia.", "Wall or sheet thickness. Above zero; grows toward the side shown by the preview."),
     ("Espessura 1", "Espessura da parede do lado 1. Maior que zero; zero deixa esse lado sem parede.", "Wall thickness on side 1. Above zero; zero leaves that side without a wall."),
     ("Espessura 2", "Espessura da parede do lado 2. Maior que zero; zero deixa esse lado sem parede.", "Wall thickness on side 2. Above zero; zero leaves that side without a wall."),
+    ("Espessura total", "Espessura somada dos dois lados, dividida ao meio pela superfície. Maior que zero.", "Thickness of both sides together, split in half by the surface. Above zero."),
     // raios e diâmetros
     ("Raio", "Raio do arredondamento ou da forma. Maior que zero; raios grandes suavizam e consomem o canto.", "Radius of the rounding or shape. Above zero; large radii soften and consume the corner."),
     ("Raio de dobra", "Raio interno da dobra da chapa. Em geral 1 a 3 vezes a espessura; menor trinca o material.", "Inner bend radius of the sheet. Usually 1 to 3 times the thickness; smaller may crack the material."),

@@ -895,6 +895,56 @@ std::unique_ptr<Shape> thicken(const Shape& s, double t1, double t2) {
     });
 }
 
+// B536: engrossar numa direção. O casco costurado anda paralelo a `d` (t1 no sentido de d, t2 no
+// oposto) e o volume varrido é o sólido (prisma): as paredes das bordas saem paralelas à direção, e
+// não pela normal como no deslocamento. Por isso não há raio de curvatura a respeitar: o volume é a
+// área da superfície projetada no plano perpendicular a d vezes a espessura total, e a parte da
+// superfície paralela à direção não varre nada. Casco de várias faces sai do prisma como sólidos
+// colados, um por face; a fusão geral junta tudo num sólido e a unificação tira as paredes internas.
+std::unique_ptr<Shape> thicken_dir(const Shape& s, double dx, double dy, double dz, double t1, double t2) {
+    return guard("engrossar na direção", [&] {
+        if (t1 + t2 <= 1e-9) throw std::runtime_error("a espessura total precisa ser positiva");
+        gp_Vec d(dx, dy, dz);
+        if (d.Magnitude() < 1e-12) throw std::runtime_error("a direção do engrossar tem comprimento zero");
+        d.Normalize();
+        double tol = 1e-4;
+        int n = 0;
+        TopoDS_Shape base = casco_costurado(s.s, tol, n);
+        GProp_GProps ga;
+        BRepGProp::SurfaceProperties(base, ga);
+        const double area = std::abs(ga.Mass());
+        gp_Trsf tr;
+        tr.SetTranslation(-t2 * d);
+        TopoDS_Shape inicio = BRepBuilderAPI_Transform(base, tr, Standard_True).Shape();
+        BRepPrimAPI_MakePrism mk(inicio, (t1 + t2) * d, Standard_True);
+        if (!mk.IsDone()) throw std::runtime_error("não foi possível varrer a superfície na direção");
+        std::vector<TopoDS_Shape> sols;
+        for (TopExp_Explorer e(mk.Shape(), TopAbs_SOLID); e.More(); e.Next()) sols.push_back(e.Current());
+        if (sols.empty()) throw std::runtime_error("a superfície não varreu volume na direção escolhida");
+        TopoDS_Shape r;
+        if (sols.size() == 1) {
+            r = sols[0];
+        } else {
+            TopTools_ListOfShape args, tools;
+            args.Append(sols[0]);
+            for (size_t i = 1; i < sols.size(); ++i) tools.Append(sols[i]);
+            BRepAlgoAPI_Fuse f;
+            f.SetArguments(args);
+            f.SetTools(tools);
+            f.SetFuzzyValue(tol);
+            f.Build();
+            if (!f.IsDone() || f.HasErrors()) throw std::runtime_error("não foi possível juntar as faces varridas num sólido");
+            r = unify(f.Shape());
+        }
+        GProp_GProps gv;
+        BRepGProp::VolumeProperties(r, gv);
+        if (std::abs(gv.Mass()) <= 1e-6 * area * (t1 + t2))
+            throw std::runtime_error("a direção é paralela à superfície: escolha uma direção que atravesse a superfície");
+        if (!forma_valida(r)) throw std::runtime_error("o engrossar na direção não deu um sólido válido");
+        return wrap(r);
+    });
+}
+
 namespace {
 
 // Ponto de dentro da face (o centro de massa de uma face curva pode cair fora dela).

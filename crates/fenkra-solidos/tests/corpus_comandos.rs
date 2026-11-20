@@ -739,7 +739,7 @@ fn engrossar_superficie_gera_solido_valido() {
     param(&mut d, "t", "2");
     let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([20., 0., 0.]), start: s("0"), end: s("0") });
     let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None });
-    d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(sup), t1: s("t"), t2: s("0"), op: BoolOp::Add }));
+    d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(sup), t1: s("t"), t2: s("0"), op: BoolOp::Add, simetrico: false, dir: None }));
     let e = |t: f64| Esperado { vol: 20. * 30. * t, tol_vol: 1e-3, tam: [20., t, 30.], tol_tam: 0.01, minimo: None, via_malha: false };
     ciclo("engrossar superfície", &mut d, "t", "4", &e(2.), &e(4.));
 }
@@ -969,7 +969,7 @@ fn invalido_dividir_corpo_por_plano_que_nao_o_corta() {
 fn invalido_engrossar_superficie_que_nao_existe() {
     precisa_kernel!();
     let mut d = Document::new("engrossar nada");
-    let id = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(Id(99999)), t1: s("2"), t2: s("0"), op: BoolOp::Add }));
+    let id = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(Id(99999)), t1: s("2"), t2: s("0"), op: BoolOp::Add, simetrico: false, dir: None }));
     erro(&recompute(&d), id);
 }
 

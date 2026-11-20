@@ -664,7 +664,15 @@ pub enum RefKind {
     /// Sobre um plano, nas coordenadas (u, v) do plano.
     PointOnPlane { plane: PlaneRef, u: String, v: String },
     /// Sobre uma superfície: deslocado (u, v) no plano tangente a partir do ponto da superfície.
-    PointOnSurface { surface: SurfRef, u: String, v: String },
+    /// B524: com `centro`, a partida é o centroide da face (centro de área, projetado na face quando
+    /// cai fora dela) e segue a face quando ela muda; sem, é o ponto clicado (documentos antigos).
+    PointOnSurface {
+        surface: SurfRef,
+        u: String,
+        v: String,
+        #[serde(default)]
+        centro: bool,
+    },
     /// Centro de círculo ou arco.
     PointCenter { curve: CurveRef },
     /// Ponto de uma curva planar onde a tangente é paralela a uma direção (extremo 0 ou 1).
@@ -1158,7 +1166,7 @@ impl RefKind {
                 exprs(u);
                 exprs(v)
             }
-            PointOnSurface { surface, u, v } => {
+            PointOnSurface { surface, u, v, .. } => {
                 surface.walk(ids);
                 exprs(u);
                 exprs(v)
@@ -3083,11 +3091,43 @@ pub struct SplitBody {
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
 pub struct ThickSurface {
     pub surface: SurfRef,
-    /// espessura para o lado da normal
+    /// espessura para o lado da normal (ou no sentido da direção); no simétrico, a espessura total
     pub t1: String,
-    /// espessura para o outro lado
+    /// espessura para o outro lado (ignorada no simétrico)
     pub t2: String,
     pub op: BoolOp,
+    /// B536: a espessura total `t1` se divide igualmente pelos dois lados da superfície
+    #[serde(default)]
+    pub simetrico: bool,
+    /// B536: direção do engrosso; `None` = normal da superfície (deslocamento). Com direção, a
+    /// superfície anda paralela a ela (prisma) e as paredes das bordas saem paralelas à direção
+    #[serde(default)]
+    pub dir: Option<DirecaoEspessura>,
+}
+
+impl ThickSurface {
+    /// Espessura para um lado só, pela normal (o padrão do comando).
+    pub fn normal(surface: SurfRef, t1: &str, t2: &str) -> Self {
+        ThickSurface { surface, t1: t1.into(), t2: t2.into(), op: BoolOp::Add, simetrico: false, dir: None }
+    }
+}
+
+/// B536: para onde o engrossar anda quando não é a normal da superfície.
+#[derive(Clone, Copy, PartialEq, Debug, Serialize, Deserialize)]
+pub enum DirecaoEspessura {
+    /// eixo, linha ou aresta: sentido do início para o fim
+    Eixo(AxisRef),
+    /// normal de um plano
+    Plano(PlaneRef),
+}
+
+impl DirecaoEspessura {
+    fn walk(&mut self, ids: &mut dyn FnMut(&mut Id)) {
+        match self {
+            DirecaoEspessura::Eixo(a) => a.walk(ids),
+            DirecaoEspessura::Plano(p) => p.walk(ids),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug, Serialize, Deserialize)]
@@ -3462,6 +3502,9 @@ impl FeatureKind {
             SplitBody(s) => s.surface.walk(ids),
             ThickSurface(t) => {
                 t.surface.walk(ids);
+                if let Some(d) = &mut t.dir {
+                    d.walk(ids)
+                }
                 exprs(&mut t.t1);
                 exprs(&mut t.t2)
             }

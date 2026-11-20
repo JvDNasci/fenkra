@@ -315,6 +315,8 @@ pub mod bridge {
         fn boundary_pts(s: &Shape, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
         fn section_pts(a: &Shape, b: &Shape, ends: &mut Vec<u32>) -> Result<Vec<f64>>;
         fn thicken(s: &Shape, t1: f64, t2: f64) -> Result<UniquePtr<Shape>>;
+        /// Engrossar numa direção: prisma da superfície costurada, t1 no sentido e t2 no oposto (B536).
+        fn thicken_dir(s: &Shape, dx: f64, dy: f64, dz: f64, t1: f64, t2: f64) -> Result<UniquePtr<Shape>>;
         /// Filete entre duas superfícies: corte mútuo, lados escolhidos, filete na junta (B517).
         fn surf_fillet(a: &Shape, b: &Shape, keep_a_pos: bool, keep_b_pos: bool, r: f64, r2: f64) -> Result<UniquePtr<Shape>>;
         fn close_surface(s: &Shape, tol: f64) -> Result<UniquePtr<Shape>>;

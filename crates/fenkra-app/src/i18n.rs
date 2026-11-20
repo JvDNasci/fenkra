@@ -3606,6 +3606,27 @@ static TABLE: &[(&str, &str)] = &[
     ("Acrescenta uma propriedade do desenho para usar como campo", "Adds a drawing property to use as a field"),
     ("volume (cm³)", "volume (cm³)"),
     ("material", "material"),
+    // B524: ponto no centro da face
+    ("Nasce no centro da face e acompanha a face; (u, v) desloca no plano tangente.", "Starts at the face center and follows the face; (u, v) offsets in the tangent plane."),
+    ("Parte do centro de área da face e acompanha a face quando ela muda", "Starts from the face's area center and follows the face when it changes"),
+    ("Ponto clicado", "Clicked point"),
+    ("Parte do ponto onde a face foi clicada", "Starts from the point where the face was clicked"),
+    // B536: engrossar com lados e direção
+    ("Um lado", "One side"),
+    ("A espessura cresce para um lado só; a seta do 3D troca o lado", "The thickness grows to one side only; the 3D arrow switches the side"),
+    ("Uma espessura para cada lado da superfície", "One thickness for each side of the surface"),
+    ("Simétrico", "Symmetric"),
+    ("A espessura total se divide ao meio, metade para cada lado", "The total thickness is split in half, half to each side"),
+    ("1 = lado da seta (normal ou direção); 2 = lado oposto. A seta troca os dois.", "1 = arrow side (normal or direction); 2 = opposite side. The arrow swaps them."),
+    ("Espessura total", "Total thickness"),
+    ("Metade para cada lado da superfície.", "Half to each side of the surface."),
+    ("Metade", "Half"),
+    ("A espessura segue a normal da superfície em cada ponto", "The thickness follows the surface normal at each point"),
+    ("Eixo ou aresta", "Axis or edge"),
+    ("A superfície anda paralela a um eixo, linha ou aresta", "The surface moves parallel to an axis, line or edge"),
+    ("Normal do plano", "Plane normal"),
+    ("A superfície anda na direção normal de um plano", "The surface moves along a plane's normal"),
+    ("As paredes das bordas saem paralelas à direção: com o eixo Z, paredes verticais.", "The edge walls come out parallel to the direction: with the Z axis, vertical walls."),
 ];
 
 #[cfg(test)]

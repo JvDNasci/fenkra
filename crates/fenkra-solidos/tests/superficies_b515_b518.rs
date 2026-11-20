@@ -127,7 +127,7 @@ fn b515_subelementos_da_superficie_e_da_curva_nos_comandos() {
     let ext_c = extrude(&mut d, curva.clone(), OriginAxis::Z, "8");
     let lin = d.add_geometry(RefKind::LinePoints { a: PointRef::CurveVertex { curve: curva_id, index: 0 }, b: vert, start: s("0"), end: s("0") });
     // 5) engrossar a face da superfície (bancada de sólidos)
-    let grosso = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: face, t1: s("2"), t2: s("0"), op: BoolOp::Add }));
+    let grosso = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: face, t1: s("2"), t2: s("0"), op: BoolOp::Add, simetrico: false, dir: None }));
 
     let confere = |d: &Document, comp: f64| {
         let r = recompute(d);
@@ -298,7 +298,7 @@ fn b518_engrossar_o_l_fecha_num_solido_valido() {
     // espessura pequena, para cada lado: um sólido válido com o volume da seção vezes a largura
     for (t1, t2) in [("1", "0"), ("0", "1")] {
         let mut d = d0.clone();
-        let g = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(j), t1: s(t1), t2: s(t2), op: BoolOp::Add }));
+        let g = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(j), t1: s(t1), t2: s(t2), op: BoolOp::Add, simetrico: false, dir: None }));
         let r = recompute(&d);
         ok(&r, &d, g);
         let sh = final_shape(&d).expect("sólido");
@@ -322,7 +322,7 @@ fn b518_engrossar_o_l_fecha_num_solido_valido() {
     let mut validos = 0;
     for (t1, t2) in [("8", "0"), ("0", "8")] {
         let mut d = d0.clone();
-        let g = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(j), t1: s(t1), t2: s(t2), op: BoolOp::Add }));
+        let g = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(j), t1: s(t1), t2: s(t2), op: BoolOp::Add, simetrico: false, dir: None }));
         let r = recompute(&d);
         match &r.status[&g] {
             Status::Ok => {

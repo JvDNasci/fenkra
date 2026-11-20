@@ -105,9 +105,18 @@ fn handle_for(app: &App, id: Id) -> Option<Linear> {
                 let dir = (mesh_center(&b.mesh) - p).try_normalize()?;
                 Some(Linear { base: p, dir: if sh.outward { -dir } else { dir }, k: 1., expr: sh.thickness.clone(), label: "Espessura" })
             }
+            // B536: a seta segue a direção escolhida (ou a normal); no simétrico ela mostra a metade
+            // da total, e só com o lado 2 preenchido ela puxa o lado 2
             FeatureKind::ThickSurface(t) => {
                 let (base, n) = surface_anchor(r, &t.surface)?;
-                Some(Linear { base, dir: n, k: 1., expr: t.t1.clone(), label: "Espessura" })
+                let n = t.dir.as_ref().and_then(|d| crate::sup3d::direcao_espessura(r, &app.open.doc, d)).unwrap_or(n);
+                if t.simetrico {
+                    Some(Linear { base, dir: n, k: 2., expr: t.t1.clone(), label: "Espessura total" })
+                } else if so_lado_2(t) {
+                    Some(Linear { base, dir: -n, k: 1., expr: t.t2.clone(), label: "Espessura" })
+                } else {
+                    Some(Linear { base, dir: n, k: 1., expr: t.t1.clone(), label: "Espessura" })
+                }
             }
             // B07: a seta sai da face escolhida, pela normal dela na peça de antes do comando
             FeatureKind::Thickness(t) => {
@@ -344,6 +353,7 @@ fn write_value(app: &mut App, id: Id, value: String) {
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => o.value = value,
             FeatureKind::Shell(sh) => sh.thickness = value,
             FeatureKind::Thread(t) => t.length = value,
+            FeatureKind::ThickSurface(t) if so_lado_2(t) => t.t2 = value,
             FeatureKind::ThickSurface(t) => t.t1 = value,
             FeatureKind::Revolve(r) => r.angle = value,
             FeatureKind::SmFlange(x) => x.length = value,
@@ -404,6 +414,11 @@ fn write_slot(app: &mut App, id: Id, slot: u8, value: String) {
     }
 }
 
+/// Engrossar com espessura só no lado 2 (o lado 1 zerado, fora do simétrico).
+fn so_lado_2(t: &ThickSurface) -> bool {
+    !t.simetrico && crate::sup3d::zerado(&t.t1) && !crate::sup3d::zerado(&t.t2)
+}
+
 pub(crate) fn mesh_center(m: &fenkra_kernel::Mesh) -> Vec3 {
     let n = (m.positions.len() / 3).max(1) as f32;
     m.positions.chunks_exact(3).fold(Vec3::ZERO, |a, p| a + Vec3::new(p[0], p[1], p[2])) / n
@@ -414,7 +429,7 @@ fn revolve_axis(app: &App, a: &AxisRef) -> Option<(Vec3, Vec3)> {
     axis_pos(app.result.as_ref()?, &app.open.doc, a)
 }
 
-fn axis_pos(r: &fenkra_solidos::RecomputeResult, doc: &Document, a: &AxisRef) -> Option<(Vec3, Vec3)> {
+pub(crate) fn axis_pos(r: &fenkra_solidos::RecomputeResult, doc: &Document, a: &AxisRef) -> Option<(Vec3, Vec3)> {
     match a {
         AxisRef::Origin(x) => Some((Vec3::ZERO, v3(fenkra_solidos::origin_axis(*x)))),
         AxisRef::Fixed { origin, dir } => Some((v3(*origin), v3(*dir).try_normalize()?)),

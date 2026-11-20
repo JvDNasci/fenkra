@@ -1059,10 +1059,8 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::ThickSurface(t) => {
             section(ui, "Engrossar superfície");
             geo_ui::surf_slot(ui, "hb_s", "Superfície", doc, me, &mut t.surface, seed);
-            expr(ui, "Espessura 1", &mut t.t1, vars, "mm");
-            expr(ui, "Espessura 2", &mut t.t2, vars, "mm");
-            ui.label(RichText::new(tr("1 = lado da normal; 2 = lado oposto (0 = só um lado).")).weak().small());
-            crate::sup3d::dica_de_lado(ui);
+            engrossar_lados(ui, t, vars);
+            engrossar_direcao(ui, doc, me, t, seed);
             hyb_op(ui, &mut t.op);
         }
         FeatureKind::CloseSurface(c) => {
@@ -1133,6 +1131,122 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         _ => return false,
     }
     true
+}
+
+/// B536: modo dos lados do engrossar, tirado das espessuras: 0 um lado, 1 dois lados, 2 simétrico.
+pub(crate) fn modo_dos_lados(t: &ThickSurface) -> usize {
+    let z = crate::sup3d::zerado;
+    if t.simetrico {
+        2
+    } else if z(&t.t1) || z(&t.t2) {
+        0
+    } else {
+        1
+    }
+}
+
+/// Metade ou soma de expressões: número vira número, expressão vira fórmula.
+fn combina(a: &str, b: Option<&str>) -> String {
+    let n = |x: &str| x.trim().replace(',', ".").parse::<f64>().ok();
+    match b {
+        None => n(a).map(|v| crate::app::fmt(v / 2.)).unwrap_or_else(|| format!("({a})/2")),
+        Some(b) => match (n(a), n(b)) {
+            (Some(x), Some(y)) => crate::app::fmt(x + y),
+            _ => format!("{a} + {b}"),
+        },
+    }
+}
+
+/// B536: troca o modo dos lados mantendo a espessura que a pessoa já tinha: um lado fica com o lado
+/// preenchido (ou a total do simétrico), dois lados repete a espessura no lado vazio (ou divide a total)
+/// e o simétrico soma os dois lados na total.
+pub(crate) fn mudar_lados(t: &mut ThickSurface, modo: usize) {
+    let z = crate::sup3d::zerado;
+    match modo {
+        0 => {
+            if t.simetrico || !z(&t.t1) {
+                t.t2 = "0".into();
+            }
+            t.simetrico = false;
+        }
+        1 => {
+            if t.simetrico {
+                t.t1 = combina(&t.t1, None);
+                t.t2 = t.t1.clone();
+            } else if z(&t.t1) {
+                t.t1 = t.t2.clone();
+            } else if z(&t.t2) {
+                t.t2 = t.t1.clone();
+            }
+            t.simetrico = false;
+        }
+        _ => {
+            if !t.simetrico {
+                t.t1 = if z(&t.t1) { t.t2.clone() } else if z(&t.t2) { t.t1.clone() } else { combina(&t.t1, Some(&t.t2)) };
+                t.t2 = "0".into();
+            }
+            t.simetrico = true;
+        }
+    }
+}
+
+/// B536: um lado, dois lados ou simétrico, e as espessuras de cada modo.
+fn engrossar_lados(ui: &mut egui::Ui, t: &mut ThickSurface, vars: &Vars) {
+    let modo = modo_dos_lados(t);
+    let opts = [
+        ("ext_cego", "Um lado", "A espessura cresce para um lado só; a seta do 3D troca o lado", modo == 0),
+        ("ext_dois_sentidos", "Dois lados", "Uma espessura para cada lado da superfície", modo == 1),
+        ("ext_simetrico", "Simétrico", "A espessura total se divide ao meio, metade para cada lado", modo == 2),
+    ];
+    if let Some(i) = icon_choice(ui, &opts).filter(|i| *i != modo) {
+        mudar_lados(t, i);
+    }
+    match modo_dos_lados(t) {
+        0 => {
+            let lado2 = crate::sup3d::zerado(&t.t1) && !crate::sup3d::zerado(&t.t2);
+            expr(ui, "Espessura", if lado2 { &mut t.t2 } else { &mut t.t1 }, vars, "mm");
+            crate::sup3d::dica_de_lado(ui);
+        }
+        1 => {
+            expr(ui, "Espessura 1", &mut t.t1, vars, "mm");
+            expr(ui, "Espessura 2", &mut t.t2, vars, "mm");
+            ui.label(RichText::new(tr("1 = lado da seta (normal ou direção); 2 = lado oposto. A seta troca os dois.")).weak().small());
+        }
+        _ => {
+            expr(ui, "Espessura total", &mut t.t1, vars, "mm");
+            ui.label(RichText::new(tr("Metade para cada lado da superfície.")).weak().small());
+        }
+    }
+}
+
+/// B536: direção do engrossar: a normal da superfície, um eixo/linha/aresta ou a normal de um plano.
+fn engrossar_direcao(ui: &mut egui::Ui, doc: &Document, me: Id, t: &mut ThickSurface, seed: &Seed) {
+    section(ui, "Direção");
+    let atual = match t.dir {
+        None => 0,
+        Some(DirecaoEspessura::Eixo(_)) => 1,
+        Some(DirecaoEspessura::Plano(_)) => 2,
+    };
+    let opts = [
+        ("linha_normal", "Normal", "A espessura segue a normal da superfície em cada ponto", atual == 0),
+        ("linha_eixo", "Eixo ou aresta", "A superfície anda paralela a um eixo, linha ou aresta", atual == 1),
+        ("plano_ponto_normal", "Normal do plano", "A superfície anda na direção normal de um plano", atual == 2),
+    ];
+    if let Some(i) = icon_choice(ui, &opts).filter(|i| *i != atual) {
+        t.dir = match i {
+            0 => None,
+            1 => Some(DirecaoEspessura::Eixo(seed.curves.last().map(geo_ui::axis_of).unwrap_or(AxisRef::Origin(OriginAxis::Z)))),
+            _ => Some(DirecaoEspessura::Plano(seed.planes.last().copied().unwrap_or(PlaneRef::Origin(OriginPlane::XY)))),
+        };
+    }
+    match &mut t.dir {
+        Some(DirecaoEspessura::Eixo(a)) => geo_ui::axis_slot(ui, "hb_d", "Direção", doc, me, a, seed),
+        Some(DirecaoEspessura::Plano(p)) => geo_ui::plane_slot(ui, "hb_p", "Plano", doc, me, p, seed),
+        None => {}
+    }
+    if t.dir.is_some() {
+        ui.label(RichText::new(tr("As paredes das bordas saem paralelas à direção: com o eixo Z, paredes verticais.")).weak().small());
+    }
 }
 
 /// Operação do sólido gerado pela superfície.

@@ -132,6 +132,7 @@ std::unique_ptr<Shape> extrapolate_face(const Shape& s, double px, double py, do
 rust::Vec<double> boundary_pts(const Shape& s, rust::Vec<uint32_t>& ends);
 rust::Vec<double> section_pts(const Shape& a, const Shape& b, rust::Vec<uint32_t>& ends);
 std::unique_ptr<Shape> thicken(const Shape& s, double t1, double t2);
+std::unique_ptr<Shape> thicken_dir(const Shape& s, double dx, double dy, double dz, double t1, double t2);
 std::unique_ptr<Shape> surf_fillet(const Shape& a, const Shape& b, bool keep_a_pos, bool keep_b_pos, double r, double r2);
 std::unique_ptr<Shape> close_surface(const Shape& s, double tol);
 std::unique_ptr<Shape> volume_cells(const Shape& s, rust::Slice<const double> exclude);

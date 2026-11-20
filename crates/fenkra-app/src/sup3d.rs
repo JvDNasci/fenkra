@@ -260,8 +260,19 @@ pub struct SetaDeLado {
     pub rotulo: &'static str,
 }
 
+/// Seta que só mostra o lado (o clique não inverte nada).
+pub const SO_MOSTRA: u8 = u8::MAX;
+
+/// B536: direção do engrossar no mundo (eixo do início ao fim, ou normal do plano).
+pub(crate) fn direcao_espessura(r: &RecomputeResult, doc: &Document, d: &DirecaoEspessura) -> Option<Vec3> {
+    match d {
+        DirecaoEspessura::Eixo(a) => crate::handles::axis_pos(r, doc, a).map(|x| x.1),
+        DirecaoEspessura::Plano(p) => crate::handles::plane_of(r, p).map(|x| x.1),
+    }
+}
+
 /// O texto da expressão diz que o valor é zero?
-fn zerado(e: &str) -> bool {
+pub(crate) fn zerado(e: &str) -> bool {
     e.trim().replace(',', ".").parse::<f64>().is_ok_and(|v| v == 0.)
 }
 
@@ -309,6 +320,14 @@ pub fn setas_de_lado(doc: &Document, r: &RecomputeResult, id: Id) -> Vec<SetaDeL
         Some(FeatureKind::SewSurface(x)) if x.remove => out.extend(seta_de_corte(r, 0, &x.surface, x.flip, corpo, "Fica deste lado")),
         Some(FeatureKind::ThickSurface(t)) => {
             if let Some((base, n)) = centro(r, &t.surface).and_then(|c| ancora(r, &t.surface, c)) {
+                // B536: com direção, as setas seguem a direção (lado 1 no sentido dela); sem, a normal
+                let n = t.dir.as_ref().and_then(|d| direcao_espessura(r, doc, d)).unwrap_or(n);
+                if t.simetrico {
+                    // metade para cada lado: inverter não muda nada, as setas só mostram os dois lados
+                    out.push(SetaDeLado { campo: SO_MOSTRA, base, dir: n, rotulo: "Metade" });
+                    out.push(SetaDeLado { campo: SO_MOSTRA, base, dir: -n, rotulo: "Metade" });
+                    return out;
+                }
                 if !zerado(&t.t1) {
                     out.push(SetaDeLado { campo: 0, base, dir: n, rotulo: "Espessura 1" });
                 }
@@ -373,7 +392,7 @@ pub fn inverter_lado(doc: &mut Document, id: Id, campo: u8) {
     match doc.feature_mut(id).map(|f| &mut f.kind) {
         Some(FeatureKind::SplitBody(x)) => x.flip = !x.flip,
         Some(FeatureKind::SewSurface(x)) => x.flip = !x.flip,
-        Some(FeatureKind::ThickSurface(t)) => std::mem::swap(&mut t.t1, &mut t.t2),
+        Some(FeatureKind::ThickSurface(t)) if !t.simetrico => std::mem::swap(&mut t.t1, &mut t.t2),
         _ => {}
     }
 }
@@ -627,6 +646,12 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, cam: &Camera, id: I
     let mut inverter = None;
     for (i, a) in setas.iter().enumerate() {
         let Some((s, d)) = na_tela(rect, cam, a.base, a.dir) else { continue };
+        if a.campo == SO_MOSTRA {
+            pintor.circle_filled(s, 3.5, destaque);
+            pintar_seta(&pintor, s, d, SETA, destaque);
+            etiqueta(&pintor, ui, s + d * SETA, d, tr(a.rotulo), destaque);
+            continue;
+        }
         let centro_da_pega = s + d * (SETA * 0.7);
         let hr = ui.interact(Rect::from_center_size(centro_da_pega, egui::vec2(crate::handles::PEGA, crate::handles::PEGA)), egui::Id::unique(("lado_3d", id.0, i)), egui::Sense::click());
         let cor = if hr.hovered() { ui.visuals().strong_text_color() } else { destaque };
@@ -826,7 +851,7 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<crate::previa::DemoPrevia>
         "sup_guias" | "sup_regrada" | "sup_conexao" | "sup_desvio" | "sup_pente" => return Some(demo_b34(nome, doc)),
         "sup_engrossar" => {
             let f = folha(doc, [-40., 0., 0.], [40., 0., 0.]);
-            Comando(FeatureKind::ThickSurface(ThickSurface { surface: f, t1: t("6"), t2: t("0"), op: BoolOp::Add }))
+            Comando(FeatureKind::ThickSurface(ThickSurface { surface: f, t1: t("6"), t2: t("0"), op: BoolOp::Add, simetrico: false, dir: None }))
         }
         "sup_corpo" => {
             doc.add_feature(FeatureKind::Primitive(Primitive { kind: PrimKind::Caixa, plane: PlaneRef::Origin(OriginPlane::XY), a: t("60"), b: t("40"), c: t("30"), d: t("0"), op: BoolOp::Add }));
@@ -986,7 +1011,7 @@ mod tests {
     fn engrossar_inverte_pela_seta() {
         let mut d = Document::new("t");
         let f = folha(&mut d, [-40., 0., 0.], [40., 0., 0.]);
-        let id = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(f), t1: t("6"), t2: t("0"), op: BoolOp::Add }));
+        let id = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(f), t1: t("6"), t2: t("0"), op: BoolOp::Add, simetrico: false, dir: None }));
         let y = |d: &Document| {
             let r = recompute(d);
             assert!(matches!(r.status.get(&id), Some(Status::Ok)), "{:?}", r.status.get(&id));
@@ -1002,6 +1027,40 @@ mod tests {
         inverter_lado(&mut d, id, 0);
         let (lo2, hi2, dir2) = y(&d);
         assert!(dir2 * dir < 0. && (lo2 + hi).abs() < 0.01 && (hi2 + lo).abs() < 0.01, "{lo2} {hi2} {dir2}");
+    }
+
+    /// B536: com direção, a seta segue a direção e o clique troca o lado; no simétrico as duas setas
+    /// só mostram os lados e o clique não muda nada.
+    #[test]
+    fn engrossar_com_direcao_e_simetrico_pelas_setas() {
+        let mut d = Document::new("t");
+        let f = folha(&mut d, [-40., 0., 0.], [40., 0., 0.]);
+        let mut tk = ThickSurface::normal(SurfRef::Ref(f), "6", "0");
+        tk.dir = Some(DirecaoEspessura::Eixo(AxisRef::Origin(OriginAxis::Y)));
+        let id = d.add_feature(FeatureKind::ThickSurface(tk));
+        let faixa = |d: &Document| {
+            let r = recompute(d);
+            assert!(matches!(r.status.get(&id), Some(Status::Ok)), "{:?}", r.status.get(&id));
+            let m = &r.bodies[0].mesh;
+            let (lo, hi) = m.positions.chunks_exact(3).fold((f32::MAX, f32::MIN), |a, p| (a.0.min(p[1]), a.1.max(p[1])));
+            (lo, hi, setas_de_lado(d, &r, id))
+        };
+        let (lo, hi, s) = faixa(&d);
+        assert!(lo.abs() < 0.01 && (hi - 6.).abs() < 0.01, "lado 1 no sentido +Y: {lo} {hi}");
+        assert!(s.len() == 1 && s[0].dir.y > 0.99, "a seta segue a direção");
+        inverter_lado(&mut d, id, s[0].campo);
+        let (lo, hi, s) = faixa(&d);
+        assert!((lo + 6.).abs() < 0.01 && hi.abs() < 0.01, "invertido para -Y: {lo} {hi}");
+        assert!(s.len() == 1 && s[0].dir.y < -0.99);
+        if let Some(FeatureKind::ThickSurface(t)) = d.feature_mut(id).map(|f| &mut f.kind) {
+            t.simetrico = true;
+            t.t1 = "6".into();
+        }
+        let (lo, hi, s) = faixa(&d);
+        assert!((lo + 3.).abs() < 0.01 && (hi - 3.).abs() < 0.01, "metade para cada lado: {lo} {hi}");
+        assert!(s.len() == 2 && s.iter().all(|x| x.campo == SO_MOSTRA));
+        inverter_lado(&mut d, id, 0);
+        assert!(matches!(d.feature(id).map(|f| &f.kind), Some(FeatureKind::ThickSurface(t)) if t.t1 == "6" && t.simetrico), "o simétrico não inverte");
     }
 
     /// Dividir corpo: a seta aponta para a metade que fica.
