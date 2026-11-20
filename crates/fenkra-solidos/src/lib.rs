@@ -2125,6 +2125,40 @@ impl Ctx<'_> {
         }
     }
 
+    /// B524: referencial no centroide da face (centro de área das propriedades de superfície). Numa
+    /// face não convexa (anel, L) ou curva o centroide cai fora dela; o ponto mais próximo na face
+    /// aparada o devolve à face. A face é a viva (pela chave, ou pelo ponto clicado sem chave), então
+    /// o ponto acompanha a face quando ela muda de tamanho.
+    fn surf_frame_centro(&self, sf: &SurfRef, depth: u32) -> Result<Frame, String> {
+        if let SurfRef::Plane(pr) = sf {
+            return self.plane(pr, depth);
+        }
+        let sh = self.surface_shape(sf, depth)?;
+        let (q, n) = sh.surface_near(sh.mass().center).map_err(|e| e.0)?;
+        geo3d::frame_from(q, n, None)
+    }
+
+    /// B536: espessuras dos dois lados; no simétrico, metade da total para cada lado.
+    fn espessuras(&self, t: &ThickSurface) -> Result<(f64, f64), String> {
+        let t1 = ev(&t.t1, &self.vars, "espessura 1")?;
+        if t.simetrico {
+            if t1 <= 0. {
+                return Err("a espessura total precisa ser positiva".into());
+            }
+            return Ok((t1 / 2., t1 / 2.));
+        }
+        Ok((t1, ev(&t.t2, &self.vars, "espessura 2")?))
+    }
+
+    /// B536: vetor da direção do engrossar (eixo do início ao fim, ou normal do plano).
+    fn direcao_espessura(&self, d: &DirecaoEspessura) -> Result<[f64; 3], String> {
+        let v = match d {
+            DirecaoEspessura::Eixo(a) => self.axis(a)?.1,
+            DirecaoEspessura::Plano(p) => self.plane(p, 0)?.normal,
+        };
+        geo3d::unit(v).ok_or_else(|| "a direção do engrossar tem comprimento zero".into())
+    }
+
     /// Ponto e tangente numa posição da curva.
     fn on_curve(&self, c: &Curve3, at: &OnCurve, reverse: bool, name: &str) -> Result<(V3, V3), String> {
         let len = c.length();
@@ -2265,7 +2299,10 @@ impl Ctx<'_> {
             }
             PointOnCurve { curve, at, reverse } => Geo::Point(self.on_curve(&self.curve(curve, d)?, at, *reverse, &r.name)?.0),
             PointOnPlane { plane, u, v } => Geo::Point(self.plane(plane, d)?.point(e(u, "u")?, e(v, "v")?)),
-            PointOnSurface { surface, u, v } => Geo::Point(self.surf_frame(surface, d)?.point(e(u, "u")?, e(v, "v")?)),
+            PointOnSurface { surface, u, v, centro } => {
+                let fr = if *centro { self.surf_frame_centro(surface, d)? } else { self.surf_frame(surface, d)? };
+                Geo::Point(fr.point(e(u, "u")?, e(v, "v")?))
+            }
             PointCenter { curve } => Geo::Point(fit_circle(&self.curve(curve, d)?)?.0),
             PointTangent { curve, dir, which } => {
                 let (_, dv) = self.axis_d(dir, d)?;
@@ -6664,7 +6701,12 @@ impl Ctx<'_> {
             }
             FeatureKind::ThickSurface(t) => {
                 let sh = self.cut_shape(&t.surface, 0)?;
-                let tool = sh.thicken(ev(&t.t1, &self.vars, "espessura 1")?, ev(&t.t2, &self.vars, "espessura 2")?).map_err(k)?;
+                let (t1, t2) = self.espessuras(t)?;
+                let tool = match &t.dir {
+                    None => sh.thicken(t1, t2),
+                    Some(d) => sh.thicken_dir(self.direcao_espessura(d)?, t1, t2),
+                }
+                .map_err(k)?;
                 self.apply(f.target, tool, t.op, f.id)?;
                 Ok(None)
             }
@@ -10320,7 +10362,7 @@ mod tests {
 
         // híbridos: engrossar, fechar, preencher fronteiras, dividir corpo
         let mut h = d.clone();
-        h.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(cyl), t1: s("2"), t2: s("0"), op: BoolOp::Add }));
+        h.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(cyl), t1: s("2"), t2: s("0"), op: BoolOp::Add, simetrico: false, dir: None }));
         let v = vol(&h);
         assert!(near(v, PI * (144. - 100.) * 20., 0.02) || near(v, PI * (100. - 64.) * 20., 0.02), "engrossar {v}");
         let mut h = d.clone();

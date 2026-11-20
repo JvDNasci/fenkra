@@ -51,7 +51,7 @@ fn pneu() -> Document {
     let pts: Vec<PointRef> = [(66., 0.92), ((66. + r) / 2., 1.0), (r - 8., 0.96), (r, 0.7), (r, 0.), (r, -0.7), (r - 8., -0.96), ((66. + r) / 2., -1.0), (66., -0.92)].iter().map(|(x, y)| PointRef::Fixed([*x, y * h, 0.])).collect();
     let c = d.add_geometry(RefKind::Spline { points: pts, closed: false, tangents: vec![] });
     let sup = d.add_geometry(RefKind::SurfRevolve { curve: CurveRef::Ref(c), axis: AxisRef::Origin(OriginAxis::Y), angle: "360".into(), angle2: "0".into() });
-    d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(sup), t1: "9".into(), t2: "0".into(), op: BoolOp::Add }));
+    d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(sup), t1: "9".into(), t2: "0".into(), op: BoolOp::Add, simetrico: false, dir: None }));
     d
 }
 

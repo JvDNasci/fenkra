@@ -35,6 +35,13 @@ Preencha com o que for aprendido. Cada regra leva o motivo.
   perto de área × espessura (`solido_coerente`).
 - Engrossar casco aberto: `BRepOffset_MakeOffset::Initialize(..., Thickening = true)` + `MakeOffsetShape`
   (o que o comando `thickshell` faz); o `MakeThickSolidBySimple` fica como reserva para casco liso.
+- Engrossar numa direção (B536) não é deslocamento: é o prisma do casco costurado (`thicken_dir`). O prisma
+  de um casco de várias faces sai como sólidos colados, um por face: junte com a fusão geral e `unify`, senão
+  o corpo fica com paredes internas. A espessura conta ao longo da direção e a direção paralela não varre
+  volume (erro explícito, nunca sólido vazio).
+- Ponto "na superfície" parte do centroide da face viva (`surf_frame_centro`, B524), projetado na face aparada
+  por `surface_near`: o centroide de anel, L ou face curva cai fora dela. O campo `centro` tem `serde(default)`
+  falso para arquivos antigos não mudarem de lugar.
 - Filete entre superfícies: o corte de cada uma pela outra estendida é separado, então a junta precisa da
   costura adaptativa; superfície que só encosta (não atravessa) fica inteira (B517).
 - Subelemento de superfície de referência: dono = a superfície, papel = índice da face

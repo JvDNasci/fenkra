@@ -14,7 +14,7 @@ fn linha_de_freio(mode: SweepMode) -> (Document, Id, Id, Id) {
     let pts = [[600., -120., 60.], [420., -300., 60.], [260., -330., 90.], [120., -280., 120.], [60., -160., 110.]];
     let c = d.add_geometry(RefKind::Spline { points: pts.iter().map(|p| PointRef::Fixed(*p)).collect(), closed: false, tangents: vec![] });
     let sup = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle("2.5".into()), spine: CurveRef::Ref(c), mode });
-    let f = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(sup), t1: "1".into(), t2: "0".into(), op: BoolOp::Add }));
+    let f = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(sup), t1: "1".into(), t2: "0".into(), op: BoolOp::Add, simetrico: false, dir: None }));
     (d, c, sup, f)
 }
 

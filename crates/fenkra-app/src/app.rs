@@ -2953,7 +2953,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 let surface = seed.surface.or_else(|| seed.planes.first().map(|p| SurfRef::Plane(*p))).unwrap_or_else(crate::slots::surf);
                 Sel::Feature(d.add_feature(match c {
                     Cmd::SplitBody => FeatureKind::SplitBody(SplitBody { surface, flip: false }),
-                    Cmd::ThickSurface => FeatureKind::ThickSurface(ThickSurface { surface, t1: s("2"), t2: s("0"), op: BoolOp::Add }),
+                    Cmd::ThickSurface => FeatureKind::ThickSurface(ThickSurface { surface, t1: s("2"), t2: s("0"), op: BoolOp::Add, simetrico: false, dir: None }),
                     Cmd::CloseSurface => FeatureKind::CloseSurface(CloseSurface { surface, tol: s("0.01"), op: BoolOp::Add }),
                     Cmd::SewSurface => FeatureKind::SewSurface(SewSurface { surface, remove: false, flip: false }),
                     _ => {

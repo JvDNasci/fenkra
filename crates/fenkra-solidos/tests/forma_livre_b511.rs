@@ -99,7 +99,7 @@ fn forma_aberta_desloca_espessa_e_fura_e_a_edicao_segue() {
     let mut d = Document::new("b511");
     let fm = d.add_feature(forma(folha()));
     let off = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(fm), dist: s("5"), both: false, join: OffsetJoin::Automatico });
-    let gr = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(fm), t1: s("3"), t2: s("0"), op: BoolOp::Add }));
+    let gr = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(fm), t1: s("3"), t2: s("0"), op: BoolOp::Add, simetrico: false, dir: None }));
     let r = recompute(&d);
     ok(&r, &d, fm);
     ok(&r, &d, off);

@@ -48,7 +48,7 @@ fn editar_a_gaiola_com_espessar_e_deslocar_depois_recalcula_os_dois() {
     let meio = g.nos.iter().find(|n| n.p[0].abs() < 1e-9 && n.p[1].abs() < 1e-9).expect("nó do meio").id;
     g.no_mut(meio).unwrap().p[2] = 4.;
     let fm = d.add_feature(FeatureKind::Forma(Forma { gaiola: g, niveis: 3, congelada: false, conversao: Some(ConversaoForma { continuidade: 1, tol: s("0.01"), pausada: false }), vinculos: Default::default() }));
-    let esp = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(fm), t1: s("2"), t2: s("0"), op: BoolOp::Add }));
+    let esp = d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(fm), t1: s("2"), t2: s("0"), op: BoolOp::Add, simetrico: false, dir: None }));
     let off = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(fm), dist: s("5"), both: false, join: OffsetJoin::Automatico });
     // como o app ao concluir: o espessar e o deslocamento consomem (ocultam) a forma
     d.hide_consumed(esp);

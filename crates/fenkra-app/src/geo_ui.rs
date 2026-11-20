@@ -204,7 +204,7 @@ impl GeoKind {
             PtCoords => ("ponto_coord", "Coordenadas", "Ponto por coordenadas", "X, Y, Z na Origem, ou u, v e altura num plano de referência."),
             PtOnCurve => ("ponto_curva", "Na curva", "Ponto sobre a curva", "Por distância ou proporção a partir do início (ou do fim): início, meio e fim com um clique."),
             PtOnPlane => ("ponto_plano", "No plano", "Ponto sobre o plano", "Nas coordenadas (u, v) do plano."),
-            PtOnSurface => ("ponto_superficie", "Na superfície", "Ponto sobre a superfície", "Deslocado (u, v) no plano tangente a partir do ponto clicado na face."),
+            PtOnSurface => ("ponto_superficie", "Na superfície", "Ponto sobre a superfície", "Nasce no centro da face e acompanha a face; (u, v) desloca no plano tangente."),
             PtCenter => ("ponto_centro", "Centro", "Centro de círculo/arco", "Centro de um círculo, arco ou aresta circular."),
             PtTangent => ("ponto_tangente", "Tangente", "Ponto tangente na curva", "Ponto de uma curva planar onde a tangente é paralela à direção escolhida (dois extremos)."),
             PtBetween => ("ponto_entre", "Entre", "Ponto entre dois pontos", "Por proporção: 0.5 é o ponto médio."),
@@ -420,7 +420,7 @@ impl GeoKind {
             PtCoords => R::PointCoords { x: t("0"), y: t("0"), z: t("0"), frame: s.planes.first().copied() },
             PtOnCurve => R::PointOnCurve { curve: c(0), at: OnCurve::Ratio(t("0.5")), reverse: false },
             PtOnPlane => R::PointOnPlane { plane: pl, u: t("0"), v: t("0") },
-            PtOnSurface => R::PointOnSurface { surface: sf, u: t("0"), v: t("0") },
+            PtOnSurface => R::PointOnSurface { surface: sf, u: t("0"), v: t("0"), centro: true },
             PtCenter => R::PointCenter { curve: c(0) },
             PtTangent => R::PointTangent { curve: c(0), dir: AxisRef::Origin(OriginAxis::X), which: 0 },
             PtBetween => R::PointBetween { a: p(0), b: p(1), ratio: t("0.5") },
@@ -905,7 +905,7 @@ pub(crate) fn axis_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docume
     });
 }
 
-fn plane_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, p: &mut PlaneRef, seed: &Seed) {
+pub(crate) fn plane_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, p: &mut PlaneRef, seed: &Seed) {
     let est = campo_ativo(ui, salt, matches!(p, PlaneRef::Datum(id) if crate::slots::is_unset(*id)));
     if let (true, Some(x)) = (est.novo, seed.planes.last()) {
         *p = *x;
@@ -1572,8 +1572,16 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             expr(ui, "u", u, vars, "mm");
             expr(ui, "v", v, vars, "mm");
         }
-        R::PointOnSurface { surface, u, v } => {
+        R::PointOnSurface { surface, u, v, centro } => {
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
+            // B524: partida no centroide da face (padrão) ou no ponto clicado
+            let opts = [
+                ("ponto_centro", "Centro da face", "Parte do centro de área da face e acompanha a face quando ela muda", *centro),
+                ("ponto_superficie", "Ponto clicado", "Parte do ponto onde a face foi clicada", !*centro),
+            ];
+            if let Some(i) = icon_choice(ui, &opts) {
+                *centro = i == 0;
+            }
             expr(ui, "u", u, vars, "mm");
             expr(ui, "v", v, vars, "mm");
         }

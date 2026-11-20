@@ -998,6 +998,11 @@ mod imp {
         pub fn thicken(&self, t1: f64, t2: f64) -> KResult<Shape> {
             b::thicken(&self.0, t1, t2).map(Shape).map_err(err)
         }
+        /// B536: engrossa varrendo a superfície na direção `dir` (paredes paralelas a ela), `t1` no
+        /// sentido de `dir` e `t2` no oposto.
+        pub fn thicken_dir(&self, dir: [f64; 3], t1: f64, t2: f64) -> KResult<Shape> {
+            b::thicken_dir(&self.0, dir[0], dir[1], dir[2], t1, t2).map(Shape).map_err(err)
+        }
         /// Filete entre esta superfície e `other` (B517): de cada uma fica o lado da normal da outra
         /// (`keep_*_pos`) ou o oposto; raio `r`, variando até `r2` quando há.
         pub fn surf_fillet(&self, other: &Shape, keep_a_pos: bool, keep_b_pos: bool, r: f64, r2: Option<f64>) -> KResult<Shape> {
@@ -1550,6 +1555,9 @@ mod imp {
             no()
         }
         pub fn thicken(&self, _: f64, _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn thicken_dir(&self, _: [f64; 3], _: f64, _: f64) -> KResult<Shape> {
             no()
         }
         pub fn surf_fillet(&self, _: &Shape, _: bool, _: bool, _: f64, _: Option<f64>) -> KResult<Shape> {
