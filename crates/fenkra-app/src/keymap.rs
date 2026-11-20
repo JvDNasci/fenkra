@@ -23,6 +23,8 @@ pub enum KeyAction {
     ViewIso,
     Hide,
     HiddenEnv,
+    /// B526: mostrar ou esconder a origem
+    Origem,
     // edição
     Undo,
     Redo,
@@ -68,8 +70,8 @@ use KeyAction::*;
 use crate::i18n::tr;
 
 impl KeyAction {
-    pub const ALL: [KeyAction; 47] = [
-        Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Undo, Redo, Delete, Save, SaveAll, ClipCopy, ClipCut,
+    pub const ALL: [KeyAction; 48] = [
+        Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Origem, Undo, Redo, Delete, Save, SaveAll, ClipCopy, ClipCut,
         ClipPaste, ClipDup, Sketch,
         Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, RodaComandos, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid, SkTrim, SkOffset, SkFillet, SkMirror, SkSpline, SkModo, CompassoCanto,
     ];
@@ -89,6 +91,7 @@ impl KeyAction {
             ViewIso => tr("Vista isométrica"),
             Hide => tr("Ocultar/mostrar seleção"),
             HiddenEnv => tr("Ambiente de ocultos"),
+            Origem => tr("Mostrar ou esconder a origem"),
             CompassoCanto => tr("Devolver o compasso ao canto"),
             Undo => tr("Desfazer"),
             Redo => tr("Refazer"),
@@ -128,7 +131,7 @@ impl KeyAction {
 
     pub fn group(self) -> &'static str {
         match self {
-            Fit | ViewMenu | Normal | Ortho | ViewFront | ViewBack | ViewTop | ViewBottom | ViewLeft | ViewRight | ViewIso | Hide | HiddenEnv | CompassoCanto => "Vista",
+            Fit | ViewMenu | Normal | Ortho | ViewFront | ViewBack | ViewTop | ViewBottom | ViewLeft | ViewRight | ViewIso | Hide | HiddenEnv | Origem | CompassoCanto => "Vista",
             Undo | Redo | Delete | Save | SaveAll | ClipCopy | ClipCut | ClipPaste | ClipDup => "Edição",
             Sketch | Extrude | Cut | Revolve | Hole | Fillet | Chamfer | Plane | RodaComandos => "Modelagem",
             _ => "Sketch",
@@ -243,6 +246,7 @@ impl Preset {
             (Save, "Ctrl+S"),
             (SaveAll, "Ctrl+Shift+S"),
             (ViewMenu, "Space"),
+            (Origem, "Alt+O"),
             (ClipCopy, "Ctrl+C"),
             (ClipCut, "Ctrl+X"),
             (ClipPaste, "Ctrl+V"),

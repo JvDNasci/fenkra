@@ -362,6 +362,10 @@ pub struct App {
     sweep_t0: f64,
     /// assistente de referências quebradas
     pub(crate) wizard_open: bool,
+    /// B532: o assistente de reparo abre recolhido (só o aviso); um clique expande
+    pub(crate) wizard_recolhido: bool,
+    /// B528: janela de confirmação de apagar todos os itens com erro (os ids que serão apagados)
+    pub(crate) apagar_erros: Option<Vec<Id>>,
     errors_prev: usize,
     /// B517: entradas que o filete entre superfícies ou a junção já esconderam, por comando
     entradas_ocultas: std::collections::HashMap<Id, Vec<Id>>,
@@ -537,6 +541,8 @@ impl App {
             result_doc: None,
             sweep_t0: -10.,
             wizard_open: false,
+            wizard_recolhido: false,
+            apagar_erros: None,
             errors_prev: 0,
             entradas_ocultas: std::collections::HashMap::new(),
             relink_ext: None,
@@ -3169,6 +3175,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 let msg = if self.hidden_env { "Ambiente de ocultos: mostrando só os itens ocultos" } else { "Ambiente normal" };
                 self.toast(msg, false);
             }
+            Act::Origem => {
+                let visivel = controle_visual::alternar_origem(&mut self.open.doc);
+                self.scene_dirty = true;
+                self.toast(tr(if visivel { "Origem visível" } else { "Origem escondida" }), false);
+            }
             Act::Settings => self.settings_open = !self.settings_open,
             Act::Barra(b, d) => self.settings.mover_barra(b, d),
             Act::DockDrag(b, r) => self.comecar_arraste_de_barra(b, r),
@@ -3394,6 +3405,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     fn tool_state(&self) -> toolbar::ToolState {
         toolbar::ToolState {
             hidden_env: self.hidden_env,
+            origem_oculta: !self.open.doc.origin_visible,
             sketch_tool: self.sketch.as_ref().map(|e| e.tool),
             construction: self.sketch.as_ref().is_some_and(|e| e.construction),
             check: self.sketch.as_ref().is_some_and(|e| e.check),
@@ -4595,15 +4607,32 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             self.wizard_open = false;
             return;
         }
+        // B532: erro novo mostra só um aviso pequeno; o clique abre o assistente
+        if self.wizard_recolhido {
+            let nomes: Vec<&str> = errs.iter().map(|(_, n, _, _)| n.as_str()).collect();
+            match crate::reparo_ui::aviso_recolhido(ctx, &nomes) {
+                Some(true) => self.wizard_recolhido = false,
+                Some(false) => self.wizard_open = false,
+                None => {}
+            }
+            return;
+        }
+        let ids_com_erro: Vec<Id> = errs.iter().map(|(id, ..)| *id).collect();
         let tipos = r.tipos_de_erro(doc);
         let diag: Vec<crate::erro_acao::Acionavel> = errs.iter().map(|(id, name, msg, _)| crate::erro_acao::diagnosticar(tipos.get(id).copied(), name, msg)).collect();
         let mut open = true;
         let mut act: Option<(Id, u8)> = None;
+        let mut apagar_todos: Option<Vec<Id>> = None;
         // B507: flutua sobre a vista ou encaixa, à escolha, e lembra a posição
         let op = crate::paineis::Opcoes { flutua: true, ..Default::default() };
         crate::paineis::encaixado_com(ctx, "reparo", tr("🩹 Assistente de reparo"), &mut open, 460., op, |ui| {
                 ui.label(RichText::new(tr("Estes itens não puderam ser calculados (referência apagada, face que mudou, entrada inválida). Escolha refazer a referência ou apagar.")).weak());
                 ui.add_space(6.);
+                // B528: apagar de uma vez tudo que ficou com erro, com confirmação
+                if ui.button(format!("🗑 {} ({})", tr("Apagar todos os itens com erro"), ids_com_erro.len())).on_hover_text(tr("Mostra a lista do que será apagado e pede confirmação. Desfazer devolve tudo num passo só.")).clicked() {
+                    apagar_todos = Some(ids_com_erro.clone());
+                }
+                ui.add_space(4.);
                 egui::ScrollArea::vertical().max_height(380.).show(ui, |ui| {
                     for ((id, name, _msg, is_feat), d) in errs.iter().zip(&diag) {
                         egui::Frame::group(ui.style()).show(ui, |ui| {
@@ -4643,6 +4672,9 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     }
                 });
             });
+        if apagar_todos.is_some() {
+            self.apagar_erros = apagar_todos;
+        }
         match act {
             Some((id, 0)) => self.start_session(id, false, None),
             Some((id, 1)) => {
@@ -4966,12 +4998,18 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         });
         let _ = aberto_origem.corpo(ui, |ui| {
             for o in [OriginPlane::XY, OriginPlane::XZ, OriginPlane::YZ] {
-                let r = crate::tree_ui::linha(ui, "plano", sel == Sel::Origin(o), {
+                let no_conjunto = sel == Sel::Origin(o) || self.picks.contains(&crate::picking::Pick::Plane(PlaneRef::Origin(o)));
+                let r = crate::tree_ui::linha(ui, "plano", no_conjunto, {
                     let nome = RichText::new(format!("{} {}", tr("Plano"), scene::plane_name(o)));
                     if origem_oculta { nome.weak() } else { nome }
                 });
                 if r.clicked() {
-                    new_sel = Some(Sel::Origin(o));
+                    // B525: Shift soma e Ctrl alterna, como nos outros elementos (B501)
+                    let (ctrl, shift) = ui.input(|i| (i.modifiers.command, i.modifiers.shift));
+                    match crate::selecao::Modo::das_teclas(ctrl, shift) {
+                        crate::selecao::Modo::Trocar => new_sel = Some(Sel::Origin(o)),
+                        m => actions.push(TreeAction::PlanoOrigem(o, m)),
+                    }
                 }
                 // B16: os três planos seguem o estado da origem (o pai); o menu deles também alterna
                 let r = if origem_oculta { r.on_hover_text(tr("a origem está oculta: os planos voltam com ela")) } else { r };
@@ -5994,6 +6032,15 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let d = &mut self.open.doc;
         match a {
             TreeAction::OriginVisible(v) => d.origin_visible = v,
+            TreeAction::PlanoOrigem(o, m) => {
+                let atual = if let Sel::Origin(a) = self.sel { Some(a) } else { None };
+                let resto = crate::selecao::clique_plano_origem(atual, &mut self.picks, o, m);
+                // sem comando nem sketch aberto, o plano único sai de `sel` e o conjunto mora nos picks
+                if self.session.is_none() && self.sketch.is_none() {
+                    self.sel = resto.map_or(Sel::None, Sel::Origin);
+                }
+                self.multi.borrow_mut().clear();
+            }
             TreeAction::CollectorVisible(id, v) => {
                 if let Some(c) = d.collectors.iter_mut().find(|c| c.id == id) {
                     c.visible = v
@@ -8055,6 +8102,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             let doc = &self.open.doc;
             let mut close = false;
             let mut action = None;
+            // B541: o Enter confirma o menu aberto (a ação em destaque), em vez de ir para a peça
+            let enter = ctx.input(|i| crate::reparo_ui::enter_confirma(true, i.key_pressed(egui::Key::Enter), i.modifiers.any()));
             egui::Modal::new(egui::Id::unique("apagar")).show(ctx, |ui| {
                 ui.set_max_width(420.);
                 ui.heading(format!("Apagar {}?", doc.name_of(dd.target)));
@@ -8091,7 +8140,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     if ui.button(tr("Apagar junto com dependentes")).clicked() {
                         action = Some(DelAction::All(dd.target));
                     }
-                    if ui.button(tr("Apagar só este")).on_hover_text(tr("Os dependentes ficam com aviso de referência perdida e podem ser reapontados")).clicked() {
+                    let padrao = ui.add(egui::Button::new(RichText::new(tr("Apagar só este")).strong()).fill(crate::theme::accent(ui.visuals()).gamma_multiply(0.35))).on_hover_text(format!("{}  ({})", tr("Os dependentes ficam com aviso de referência perdida e podem ser reapontados"), tr("Enter confirma")));
+                    if padrao.clicked() {
                         action = Some(DelAction::Only(dd.target));
                     }
                     if ui.button(tr("Cancelar")).clicked() {
@@ -8099,6 +8149,12 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     }
                 });
             });
+            if enter && action.is_none() {
+                action = Some(acao_do_enter(dd.target, dd.replacement));
+            }
+            if enter {
+                ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Enter));
+            }
             if let Some(a) = action {
                 let d = &mut self.open.doc;
                 match a {
@@ -8116,7 +8172,51 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 self.delete_dialog = None;
             }
         }
+        self.apagar_erros_dialog(ctx);
+    }
 
+    /// B528: confirmação de "apagar todos os itens com erro": mostra quais são e apaga num passo só,
+    /// que o desfazer devolve inteiro. O Enter confirma e o Esc cancela (B541).
+    fn apagar_erros_dialog(&mut self, ctx: &egui::Context) {
+        let Some(ids) = self.apagar_erros.clone() else { return };
+        let nomes = crate::reparo_ui::nomes_para_apagar(&self.open.doc, &ids);
+        let enter = ctx.input(|i| crate::reparo_ui::enter_confirma(true, i.key_pressed(egui::Key::Enter), i.modifiers.any()));
+        let esc = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+        let (mut confirma, mut cancela) = (enter, esc);
+        egui::Modal::new(egui::Id::new("apagar_erros")).show(ctx, |ui| {
+            ui.set_max_width(420.);
+            ui.heading(format!("{} ({})", tr("Apagar todos os itens com erro"), nomes.len()));
+            ui.label(tr("Estes itens serão apagados. Desfazer (Ctrl+Z) devolve todos de uma vez:"));
+            egui::ScrollArea::vertical().max_height(240.).show(ui, |ui| {
+                for n in &nomes {
+                    ui.label(RichText::new(format!("  ✖ {n}")).color(crate::theme::st_err()));
+                }
+            });
+            ui.add_space(6.);
+            ui.horizontal(|ui| {
+                if ui.add(egui::Button::new(RichText::new(tr("Apagar todos")).strong()).fill(crate::theme::accent(ui.visuals()).gamma_multiply(0.35))).on_hover_text(tr("Enter confirma")).clicked() {
+                    confirma = true;
+                }
+                if ui.button(tr("Cancelar")).on_hover_text(tr("Esc cancela")).clicked() {
+                    cancela = true;
+                }
+            });
+        });
+        if enter || esc {
+            ctx.input_mut(|i| {
+                i.consume_key(egui::Modifiers::NONE, egui::Key::Enter);
+                i.consume_key(egui::Modifiers::NONE, egui::Key::Escape);
+            });
+        }
+        if confirma {
+            let n = crate::reparo_ui::apagar_todos(&mut self.open.doc, &ids);
+            self.sel = Sel::None;
+            self.multi.borrow_mut().clear();
+            self.toast(format!("{n} {}", tr("itens apagados (Ctrl+Z desfaz)")), false);
+            self.apagar_erros = None;
+        } else if cancela {
+            self.apagar_erros = None;
+        }
     }
 
     fn toasts(&mut self, ctx: &egui::Context) {
@@ -8401,6 +8501,8 @@ pub(crate) enum TreeAction {
     Align(Id),
     EditSketch(Id),
     OriginVisible(bool),
+    /// B525: Shift ou Ctrl num plano da origem
+    PlanoOrigem(OriginPlane, crate::selecao::Modo),
     CollectorVisible(Id, bool),
     Activate(Id),
     Suppress(Id),
@@ -8591,6 +8693,16 @@ enum DelAction {
     Replace(Id, Id),
     All(Id),
     Only(Id),
+}
+
+/// B541: o que o Enter faz no menu de apagar. Com um substituto escolhido, substitui e apaga; sem ele,
+/// apaga só este (a ação em destaque): os dependentes ficam com o aviso de referência perdida, que o
+/// assistente de reparo trata, e o desfazer devolve tudo. Apagar junto com os dependentes é um clique.
+fn acao_do_enter(alvo: Id, substituto: Option<Id>) -> DelAction {
+    match substituto {
+        Some(novo) => DelAction::Replace(alvo, novo),
+        None => DelAction::Only(alvo),
+    }
 }
 
 /// Marcador da linha do tempo de um coletor: os comandos abaixo dele ficam desativados.
@@ -8806,8 +8918,9 @@ impl eframe::App for App {
                 let editing = self.session.as_ref().map(|s| s.id);
                 let errs = r.status.iter().filter(|(id, s)| Some(**id) != editing && matches!(s, Status::Error(_))).count();
                 if errs > self.errors_prev && self.started {
-                    // algo quebrou (referência apagada, entrada inválida): abre o assistente
+                    // algo quebrou (referência apagada, entrada inválida): avisa; o assistente abre recolhido (B532)
                     self.wizard_open = true;
+                    self.wizard_recolhido = true;
                 }
                 self.errors_prev = errs;
                 self.st_falhas = match &self.sent_doc {
@@ -8923,7 +9036,8 @@ impl eframe::App for App {
                 if let Some(id) = crate::teclado::vizinho_na_arvore(&self.open.doc, atual, passo) {
                     self.sel = Sel::Feature(id);
                 }
-            } else if let Some(id) = atual.filter(|_| ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.is_none())) {
+            } else if let Some(id) = atual.filter(|_| self.delete_dialog.is_none() && self.apagar_erros.is_none() && ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.is_none())) {
+                // B541: com o menu de apagar aberto o Enter é dele, não da peça
                 self.open_pending = Some(id);
             }
         }
@@ -8981,7 +9095,7 @@ impl eframe::App for App {
             }
             // B514: no painel de um comando aberto o Tab anda entre os campos (perfil com Tab = ocultar)
             let tab_do_painel = self.session.is_some() && crate::campos::tab_do_painel(ctx) && ctx.input(|i| i.key_pressed(egui::Key::Tab));
-            for (k, a) in [(K::Fit, Act::Fit), (K::Normal, Act::Normal), (K::Ortho, Act::Ortho), (K::HiddenEnv, Act::HiddenEnv)] {
+            for (k, a) in [(K::Fit, Act::Fit), (K::Normal, Act::Normal), (K::Ortho, Act::Ortho), (K::HiddenEnv, Act::HiddenEnv), (K::Origem, Act::Origem)] {
                 if km.pressed(ctx, k) && !(tab_do_painel && k == K::HiddenEnv) {
                     self.act(a);
                 }
@@ -9227,7 +9341,6 @@ impl eframe::App for App {
             ctx.request_repaint();
         }
         self.toasts(ctx);
-        crate::desempenho::contador_ui(ctx, self.settings.contador_fps);
         self.sugestao_leve_ui(ctx);
         self.relatorio_ui(ctx);
 
@@ -9670,7 +9783,7 @@ fn desempenho_ui(ui: &mut egui::Ui, s: &mut Settings) {
     let dica_vsync = tr("Liga: cada quadro espera a tela atualizar, sem rasgos na imagem e com a placa descansando entre os quadros. Desliga: desenha o mais rápido que o limite deixar, o que pode rasgar a imagem e esquentar a placa. Vale na hora.");
     ui.checkbox(&mut s.vsync, tr("Sincronismo vertical (vsync)")).on_hover_text(dica_vsync);
     ui.label(RichText::new(dica_vsync).weak().small());
-    let dica_contador = tr("Mostra no canto da vista quantos quadros por segundo o Fenkra está desenhando. Parado, mostra \"em repouso\".");
+    let dica_contador = tr("Mostra na barra de baixo quantos quadros por segundo o Fenkra está desenhando. Parado, mostra \"em repouso\".");
     ui.checkbox(&mut s.contador_fps, tr("Mostrar contador de quadros")).on_hover_text(dica_contador);
     ui.label(RichText::new(dica_contador).weak().small());
 }

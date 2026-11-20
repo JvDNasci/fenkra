@@ -310,18 +310,14 @@ pub fn contar_quadro(ctx: &eframe::egui::Context, ligado: bool) {
     }
 }
 
-/// Desenha o contador no canto de baixo à direita, por cima de tudo e sem pegar o mouse.
-pub fn contador_ui(ctx: &eframe::egui::Context, ligado: bool) {
+/// B527: o texto do contador para a barra de baixo, ou `None` com o contador desligado. Antes ele era
+/// um quadro solto no canto da vista, por cima de tudo, e cobria painéis encaixados à direita; na
+/// barra de baixo ele nunca fica sobre painel nenhum.
+pub fn texto_do_contador(ligado: bool) -> Option<String> {
     if !ligado {
-        return;
+        return None;
     }
-    let Some(texto) = CONTADOR.lock().unwrap().as_ref().map(Contador::texto) else { return };
-    use eframe::egui;
-    egui::Area::new(egui::Id::new("contador_de_quadros")).order(egui::Order::Foreground).anchor(egui::Align2::RIGHT_BOTTOM, egui::vec2(-12., -36.)).interactable(false).show(ctx, |ui| {
-        egui::Frame::popup(ui.style()).show(ui, |ui| {
-            ui.label(egui::RichText::new(texto).monospace());
-        });
-    });
+    CONTADOR.lock().unwrap().as_ref().map(Contador::texto)
 }
 
 #[cfg(test)]
@@ -435,5 +431,17 @@ mod testes {
         use eframe::egui_wgpu::wgpu::PresentMode;
         assert_eq!(superficie(true).present_mode, PresentMode::AutoVsync);
         assert_eq!(superficie(false).present_mode, PresentMode::AutoNoVsync);
+    }
+
+    /// B527: o contador vai para a barra de baixo: texto só com ele ligado, e nada flutuando sobre painéis.
+    #[test]
+    fn contador_vira_texto_da_barra_de_baixo() {
+        let ctx = eframe::egui::Context::default();
+        assert!(texto_do_contador(false).is_none(), "desligado não mostra nada");
+        let _ = atrasos(&ctx, 0., 6, true);
+        let t = texto_do_contador(true).expect("ligado mostra o texto");
+        assert!(t.contains("quadros/s") || t.contains("repouso") || t.contains("frames/s") || t.contains("idle"), "{t}");
+        let _ = atrasos(&ctx, 5., 2, false);
+        assert!(texto_do_contador(true).is_none(), "ao desligar, o contador some");
     }
 }

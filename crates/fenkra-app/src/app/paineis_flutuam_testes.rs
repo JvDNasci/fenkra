@@ -32,10 +32,15 @@ fn reparo_abre_com_o_erro_e_fecha_sozinho_quando_corrigido() {
     c.esperar_calculo();
     assert!(erros(&c) > 0, "o documento quebrou");
     assert!(c.app.wizard_open, "com erro, o assistente abre sozinho");
-    // ele é desenhado e fica de pé enquanto o erro existe
+    // B532: abre recolhido, só o aviso; o painel grande só vem com o clique
+    assert!(c.app.wizard_recolhido, "erro novo mostra só o aviso");
     c.passo(vec![]);
     c.passo(vec![]);
     assert!(c.app.wizard_open);
+    assert!(!crate::paineis::abertos_ou_fechados(&c.ctx).iter().any(|(n, _, _)| n == "reparo"), "recolhido não desenha o painel");
+    c.app.wizard_recolhido = false;
+    c.passo(vec![]);
+    c.passo(vec![]);
     assert!(crate::paineis::abertos_ou_fechados(&c.ctx).iter().any(|(n, _, _)| n == "reparo"), "assistente na tela");
     // corrige o erro: o assistente fecha sozinho, sem clique
     if let Some(FeatureKind::Sketch(s)) = c.app.open.doc.feature_mut(base).map(|f| &mut f.kind) {
@@ -93,4 +98,47 @@ fn painel_do_comando_flutua_e_volta_para_a_coluna() {
     assert!(c.app.session.is_some());
     assert_eq!(c.app.settings.painel("comando", Encaixe::Esquerda).encaixe, Encaixe::Esquerda);
     assert!(c.app.settings.painel("comando", Encaixe::Esquerda).pos.is_some(), "a posição continua guardada para a próxima vez");
+}
+
+/// B528 e B541: sketch usado por vários recursos; apagar o sketch abre o menu, o Enter o confirma, o
+/// assistente apaga todos os itens com erro de uma vez e o desfazer devolve tudo.
+#[test]
+fn apagar_todos_os_itens_com_erro_e_desfazer_devolve() {
+    if !fenkra_kernel::AVAILABLE {
+        return;
+    }
+    let mut c = Cena::nova();
+    let total = c.app.open.doc.features.len();
+    let base = c.app.open.doc.features.iter().find(|f| f.name == "Sketch base").map(|f| f.id).unwrap();
+    let dependentes = c.app.open.doc.dependents(base).len();
+    assert!(dependentes > 0, "o sketch base tem dependentes");
+    // Delete no sketch selecionado abre o menu das peças afetadas
+    c.app.sel = Sel::Feature(base);
+    c.app.delete_selected();
+    assert!(c.app.delete_dialog.is_some(), "o menu abriu");
+    let enter = egui::Event::Key { key: egui::Key::Enter, physical_key: Some(egui::Key::Enter), pressed: true, repeat: false, modifiers: Default::default() };
+    // B541: Enter confirma o menu (apaga só o sketch) e não abre a peça
+    c.passo(vec![enter.clone()]);
+    c.passo(vec![]);
+    assert!(c.app.delete_dialog.is_none(), "o Enter confirmou o menu");
+    assert!(c.app.open_pending.is_none(), "o Enter não foi para a peça");
+    assert_eq!(c.app.open.doc.features.len(), total - 1, "só o sketch saiu");
+    // os dependentes ficaram com erro
+    c.esperar_calculo();
+    assert!(erros(&c) > 0, "os dependentes ficaram com erro");
+    let com_erro: Vec<Id> = c.app.result.as_ref().unwrap().status.iter().filter(|(_, s)| matches!(s, Status::Error(_))).map(|(i, _)| *i).collect();
+    // B528: apagar todos, com confirmação (Enter) e um desfazer só
+    c.app.apagar_erros = Some(com_erro.clone());
+    c.passo(vec![]);
+    assert!(c.app.apagar_erros.is_some(), "a confirmação espera");
+    c.passo(vec![enter]);
+    c.passo(vec![]);
+    assert!(c.app.apagar_erros.is_none(), "confirmado");
+    for i in &com_erro {
+        assert!(c.app.open.doc.feature(*i).is_none() && c.app.open.doc.reference(*i).is_none(), "o item com erro saiu");
+    }
+    let sobraram = c.app.open.doc.features.len();
+    assert!(sobraram < total - 1);
+    c.app.undo();
+    assert_eq!(c.app.open.doc.features.len(), total - 1, "um desfazer devolve todos os itens com erro");
 }

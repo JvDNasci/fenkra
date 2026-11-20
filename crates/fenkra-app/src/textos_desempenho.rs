@@ -21,9 +21,14 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ),
     ("Mostrar contador de quadros", "Show frame counter"),
     (
-        "Mostra no canto da vista quantos quadros por segundo o Fenkra está desenhando. Parado, mostra \"em repouso\".",
-        "Shows in the corner of the view how many frames per second Fenkra is drawing. When nothing moves, it shows \"idle\".",
+        "Mostra na barra de baixo quantos quadros por segundo o Fenkra está desenhando. Parado, mostra \"em repouso\".",
+        "Shows in the bottom bar how many frames per second Fenkra is drawing. When nothing moves, it shows \"idle\".",
     ),
     ("quadros/s", "frames/s"),
     ("em repouso", "idle"),
+    // B527: o contador mora na barra de baixo
+    (
+        "Quadros por segundo que o Fenkra está desenhando. Parado, mostra \"em repouso\". Desligue em Configurações, Desempenho.",
+        "Frames per second Fenkra is drawing. When nothing moves, it shows \"idle\". Turn it off in Settings, Performance.",
+    ),
 ];

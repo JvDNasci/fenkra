@@ -229,6 +229,26 @@ pub fn ponto_no_poligono(p: Pos2, poli: &[Pos2]) -> bool {
     dentro
 }
 
+/// B525: clique num plano da origem na árvore. Os planos da origem não têm Id: um só vive em
+/// `Sel::Origin` e vários vivem em `picks` (como no 3D). Clique simples troca; Shift soma e Ctrl
+/// alterna, juntando antes o plano que já estava escolhido. Devolve o plano que fica em `Sel::Origin`
+/// (só o clique simples; com Shift ou Ctrl o conjunto inteiro mora em `picks`).
+pub fn clique_plano_origem(atual: Option<fenkra_core::OriginPlane>, picks: &mut Vec<Pick>, o: fenkra_core::OriginPlane, modo: Modo) -> Option<fenkra_core::OriginPlane> {
+    let este = Pick::Plane(fenkra_core::PlaneRef::Origin(o));
+    if modo == Modo::Trocar {
+        picks.clear();
+        return Some(o);
+    }
+    if let Some(a) = atual {
+        let anterior = Pick::Plane(fenkra_core::PlaneRef::Origin(a));
+        if !picks.contains(&anterior) {
+            picks.push(anterior);
+        }
+    }
+    aplicar(picks, Some(este), modo);
+    None
+}
+
 #[cfg(test)]
 mod testes {
     use super::*;
@@ -398,5 +418,28 @@ mod testes {
         // e com a pick normal a primeira da pilha é a mesma face
         let normal = crate::picking::pick(&r, &d, &cam, rect, pos, &f);
         assert_eq!(normal.map(|p| z(&p).round()), Some(20.));
+    }
+
+    /// B525: Shift acumula os três planos da origem; Ctrl tira um; clique simples volta a um só.
+    #[test]
+    fn shift_acumula_os_planos_da_origem() {
+        use fenkra_core::{OriginPlane as O, PlaneRef};
+        let p = |o| Pick::Plane(PlaneRef::Origin(o));
+        let mut picks: Vec<Pick> = vec![];
+        let mut sel = clique_plano_origem(None, &mut picks, O::XY, Modo::Trocar);
+        assert_eq!((sel, picks.len()), (Some(O::XY), 0));
+        sel = clique_plano_origem(sel, &mut picks, O::YZ, Modo::Somar);
+        assert_eq!(sel, None, "o conjunto passou para os picks");
+        sel = clique_plano_origem(sel, &mut picks, O::XZ, Modo::Somar);
+        assert_eq!(picks, vec![p(O::XY), p(O::YZ), p(O::XZ)], "os três planos ficam juntos");
+        // Shift repetido não duplica
+        clique_plano_origem(sel, &mut picks, O::XZ, Modo::Somar);
+        assert_eq!(picks.len(), 3);
+        // Ctrl tira um
+        clique_plano_origem(sel, &mut picks, O::YZ, Modo::Alternar);
+        assert_eq!(picks, vec![p(O::XY), p(O::XZ)]);
+        // clique simples: só um
+        let sel = clique_plano_origem(sel, &mut picks, O::XZ, Modo::Trocar);
+        assert_eq!((sel, picks.len()), (Some(O::XZ), 0));
     }
 }
