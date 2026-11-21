@@ -60,7 +60,8 @@ fn bruto(n: NavStyle, g: Gesto) -> (bool, bool, bool) {
     let Gesto { esq: left, meio: mid, dir: right, esq_preso: left_down, dir_preso: right_down, shift, ctrl, sketch } = g;
     use NavStyle as N;
     match n {
-        N::Fenkra => ((left && !shift && !sketch) || mid, right || (shift && left), false),
+        // 21/11: o direito fica só com o menu; deslocar é Shift + arrastar (esquerdo ou meio)
+        N::Fenkra => ((left && !shift && !sketch) || (mid && !shift), shift && (left || mid), false),
         // Shift+meio dá zoom, como no perfil de botão do meio mais comum entre os CADs paramétricos
         N::MeioGira => (mid && !ctrl, mid && ctrl, mid && shift && !ctrl),
         N::ShiftMeioGira => (mid && shift, mid && !shift, false),
@@ -150,7 +151,7 @@ mod tests {
     /// Tabela escrita à mão, uma letra por combinação de `combinacoes()`:
     /// G girar, M deslocar, Z zoom, C caixa, - nada.
     const TABELA: &[(NavStyle, &str)] = &[
-        (N::Fenkra, "GMCGGGMMMGM"),
+        (N::Fenkra, "GMCGMG---GG"),
         (N::MeioGira, "--CGZM---GG"),
         (N::ShiftMeioGira, "--CMGM---MM"),
         (N::MeioMove, "--CMMM---MG"),
@@ -189,7 +190,7 @@ mod tests {
     }
 
     /// O padrão continua o perfil Fenkra, e nele o esquerdo não gira a vista dentro do sketch (fica
-    /// com a ferramenta), o meio gira e o direito desloca, como antes do B440.
+    /// com a ferramenta), o meio gira, Shift + arrastar desloca e o direito não move a vista (é o menu).
     #[test]
     fn padrao_nao_muda() {
         assert_eq!(crate::settings::Settings::default().nav, N::Fenkra);
@@ -197,7 +198,9 @@ mod tests {
         assert_eq!(acao(N::Fenkra, e), Acao::Nada);
         assert_eq!(acao(N::Fenkra, Gesto { shift: true, ..e }), Acao::Mover);
         assert_eq!(acao(N::Fenkra, Gesto { meio: true, sketch: true, ..Default::default() }), Acao::Girar);
-        assert_eq!(acao(N::Fenkra, Gesto { dir: true, dir_preso: true, sketch: true, ..Default::default() }), Acao::Mover);
+        assert_eq!(acao(N::Fenkra, Gesto { dir: true, dir_preso: true, sketch: true, ..Default::default() }), Acao::Nada);
+        assert_eq!(acao(N::Fenkra, Gesto { dir: true, dir_preso: true, ..Default::default() }), Acao::Nada);
+        assert_eq!(acao(N::Fenkra, Gesto { meio: true, shift: true, ..Default::default() }), Acao::Mover);
         assert!(!roda_invertida(N::Fenkra, false));
         assert!(roda_invertida(N::Fenkra, true));
         assert!(roda_invertida(N::MeioGira, false));

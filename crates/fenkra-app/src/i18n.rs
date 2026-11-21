@@ -1372,7 +1372,7 @@ static TABLE: &[(&str, &str)] = &[
     ("Girar: botão direito · Mover: Shift+direito · Zoom: roda ou Ctrl+direito", "Orbit: right button · Pan: Shift+right · Zoom: wheel or Ctrl+right"),
     ("Girar: botão do meio · Mover: Ctrl+meio · Zoom: roda (invertida)", "Orbit: middle button · Pan: Ctrl+middle · Zoom: wheel (inverted)"),
     ("Girar: botão do meio · Mover: Shift+meio · Zoom: roda ou Ctrl+meio", "Orbit: middle button · Pan: Shift+middle · Zoom: wheel or Ctrl+middle"),
-    ("Girar: botão esquerdo ou do meio · Mover: direito ou Shift+arrastar · Zoom: roda", "Orbit: left or middle button · Pan: right or Shift+drag · Zoom: wheel"),
+    ("Girar: botão do meio ou esquerdo · Mover: Shift+arrastar · Zoom: roda · Direito: menu", "Orbit: middle or left button · Pan: Shift+drag · Zoom: wheel · Right: menu"),
     ("Grupo de corpos independente; vira o ativo para os próximos comandos.", "Independent body group; becomes active for the next commands."),
     ("H/V em linhas quase alinhadas e coincidência ao clicar em pontos existentes.", "H/V on nearly aligned lines and coincidence when clicking existing points."),
     ("Inclina as faces escolhidas a partir de um plano neutro, para desmoldar.", "Tilts the chosen faces from a neutral plane, for mold release."),

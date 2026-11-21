@@ -274,7 +274,7 @@ impl NavStyle {
     }
     pub fn help(self) -> &'static str {
         match self {
-            NavStyle::Fenkra => tr("Girar: botão esquerdo ou do meio · Mover: direito ou Shift+arrastar · Zoom: roda"),
+            NavStyle::Fenkra => tr("Girar: botão do meio ou esquerdo · Mover: Shift+arrastar · Zoom: roda · Direito: menu"),
             NavStyle::MeioGira => tr("Girar: botão do meio · Mover: Ctrl+meio · Zoom: roda (invertida) ou Shift+meio"),
             NavStyle::ShiftMeioGira => tr("Girar: Shift+meio · Mover: botão do meio · Zoom: roda"),
             NavStyle::MeioMove => tr("Mover: botão do meio · Girar: meio+direito · Zoom: roda"),
