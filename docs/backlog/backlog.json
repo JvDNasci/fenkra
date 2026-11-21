@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 124940,
+ "tokens_total_k": 125060,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -29,8 +29,8 @@
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 49100,
-   "pct": 39.3
+   "tokens_k": 49220,
+   "pct": 39.4
   }
  },
  "itens": [
@@ -9229,6 +9229,22 @@
    "area": "Chapa metálica",
    "status": "a fazer",
    "pct": 0.2
+  },
+  {
+   "id": "B559",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Superfície gerada por spline aparece segmentada em vez de lisa",
+   "oque": "Reporte do usuário em 21/11 (alpha.41): ao gerar superfície a partir de uma spline, ela aparece em trechos retos (facetada). A ideia é ser lisa. Aceite: a spline chega ao kernel como BSpline (uma aresta, não N segmentos) em todos os caminhos (superfície, chapa, perfil), e a malha de exibição das faces curvas tem desvio angular pequeno.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 120,
+   "teste": "Auto + Visual",
+   "area": "Superfícies e wireframe",
+   "status": "a fazer",
+   "pct": 0.1
   }
  ]
 }

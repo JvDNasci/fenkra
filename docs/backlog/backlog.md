@@ -4,7 +4,7 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 124.9 M tokens (≈ 416 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 125.1 M tokens (≈ 417 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
@@ -12,7 +12,7 @@ Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado a
 | Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 9.3% |
 | Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 156 | ≈ 32350 k | 25.9% |
 | Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 125 | ≈ 24700 k | 19.8% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 181 | ≈ 49100 k | 39.3% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 182 | ≈ 49220 k | 39.4% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
@@ -533,6 +533,7 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 | B554 | P1 | **Duplo clique encadeia qualquer comando** — Pedido do usuário em 19/11, generalizando o B552: em todas as bancadas, clique único no ícone executa o comando uma vez e volta à seleção; duplo clique deixa o comando preso para repetir (linha, círculo, aba, furo, restrição, cota...) até Esc ou outro comando. O ícone mostra que está preso. Aceite: teste por comando de sketch, chapa e sólido nos dois modos, e a regra documentada no padrão de interface (B319). | USR-CHECK, B552 |  | 150 k | 0.1% | Auto + Visual | feito |
 | B555 | P1 | **Caixa de seleção padrão e filete/chanfro por face** — Pedido do usuário em 19/11: todo comando que recebe vários elementos usa a mesma caixa de seleção, como uma árvore: cada clique no 3D soma um item; clicar num item da caixa o marca, Ctrl soma ou tira da marcação, Shift marca um intervalo, e Del tira os marcados. O item marcado na caixa realça o elemento no 3D. No filete e no chanfro, clicar numa face soma as arestas do contorno dela (em cadeia), e as arestas aparecem na caixa. Aceite: teste da caixa (marcar, Ctrl, Shift, Del) e do filete por face num cubo, com volume conferido. | USR-CHECK |  | 250 k | 0.2% | Auto + Visual | feito |
 | B556 | P1 | **Aba por superfície completa: limites dos lados, borda final e canto** — Pedido do usuário em 19/11: na aba por superfície, escolher os elementos que limitam o lado 1 e o lado 2 da aba (curva, plano, linha do 3D, sketch ou elemento de construção), e a borda final da aba limitada do mesmo jeito. Em cada lado, escolher se o canto já sai com filete ou chanfro. O comando sempre tenta estender, recortar e projetar o suporte até o limite escolhido. Aceite: aba por superfície num suporte curvo limitada por dois planos e por uma curva na borda final, com chanfro num lado e filete no outro; status, volume e caixa conferidos. | USR-CHECK, B529 |  | 350 k | 0.3% | Auto + Visual | feito |
+| B559 | P1 | **Superfície gerada por spline aparece segmentada em vez de lisa** — Reporte do usuário em 21/11 (alpha.41): ao gerar superfície a partir de uma spline, ela aparece em trechos retos (facetada). A ideia é ser lisa. Aceite: a spline chega ao kernel como BSpline (uma aresta, não N segmentos) em todos os caminhos (superfície, chapa, perfil), e a malha de exibição das faces curvas tem desvio angular pequeno. | USR-CHECK |  | 120 k | 0.1% | Auto + Visual | a fazer |
 | B111 | P2 | **Calculadora de rolamento, engrenagem e estriado** — Vida L10 e verificação de engrenagem. Dados do fabricante como camada. (BN01b; módulo Cálculo mecânico; depende de BN01, B44). | PESQ-MOD |  | 250 k | 0.2% | Auto | em andamento |
 | B115 | P2 | **Verificação por norma de barras (aço)** — Utilização por NBR 8800 / EN 1993 / AISC. Relatório. (BN03b; módulo Estrutural; depende de BN03). | PESQ-MOD |  | 300 k | 0.2% | Auto | em andamento |
 | B120 | P2 | **Lattice e preenchimento implícito** — Lattice e preenchimento implícito sobre corpo de malha: TPMS uniforme (giroide, Schwarz-P, diamante) intersectado com o corpo e casca externa, fração de volume como alvo, parede mínima por processo, superfície por marching cubes ou dual contouring sobre grade esparsa (OpenVDB Apache-2.0 ou grade própria em Rust). Vigas, 3MF Beam Lattice e gradiente por campo ficam em item separado. | PESQ-MOD |  | 450 k | 0.4% | Auto | a fazer |

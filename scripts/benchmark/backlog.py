@@ -1133,6 +1133,8 @@ c('B557', 4, 'P2', 'Recurso gerado nasce um nível abaixo de quem o gerou', 'Ped
   ['USR-CHECK'], [], 150, 'Auto + Visual', 'Interface', 'feito'),
 c('B558', 4, 'P0', 'Chapa: parede base em perfil de asa (spline fechada) sai como fita deformada', 'Reporte do usuário em 21/11 (alpha.41): parede base num sketch com perfil de asa (spline fechada) gerou uma fita fina seguindo uma curva maior e torta, longe do perfil, em vez de uma placa plana preenchida pelo perfil. Aceite: perfil de asa em spline fechada (e aberta, que vira parede de contorno) gera parede base com status ok, volume = área do perfil x espessura, caixa envolvente igual à do perfil mais a espessura; a mesma coisa com spline de bordo de fuga agudo e com o sketch fora dos planos da origem.',
   ['USR-CHECK'], [], 200, 'Auto + Visual', 'Chapa metálica'),
+c('B559', 4, 'P1', 'Superfície gerada por spline aparece segmentada em vez de lisa', 'Reporte do usuário em 21/11 (alpha.41): ao gerar superfície a partir de uma spline, ela aparece em trechos retos (facetada). A ideia é ser lisa. Aceite: a spline chega ao kernel como BSpline (uma aresta, não N segmentos) em todos os caminhos (superfície, chapa, perfil), e a malha de exibição das faces curvas tem desvio angular pequeno.',
+  ['USR-CHECK'], [], 120, 'Auto + Visual', 'Superfícies e wireframe'),
 ]
 def main():
     for x in B:
