@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 129960,
+ "tokens_total_k": 130160,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -29,8 +29,8 @@
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 54120,
-   "pct": 41.6
+   "tokens_k": 54320,
+   "pct": 41.7
   }
  },
  "itens": [
@@ -9419,6 +9419,22 @@
    "tokens_k": 300,
    "teste": "Auto",
    "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.2
+  },
+  {
+   "id": "B571",
+   "onda": 4,
+   "prio": "P1",
+   "titulo": "Planos e eixos da origem: tamanho pela vista, cor única e rótulos só no passar do mouse",
+   "oque": "Reporte do usuário em 21/11: (1) os planos da origem não acompanham o tamanho da vista; para selecionar um plano no 3D é preciso dar zoom até ele. Os planos se ajustam ao tamanho da peça e da vista (com tamanho mínimo na tela) e são fáceis de pegar em qualquer zoom; (2) planos em uma cor só, lisa, do tema, no lugar de verde, azul e vermelho; (3) eixos com X, Y e Z e planos com nome; (4) rótulos dos elementos no 3D (planos, sketches, perfis) aparecem só ao passar o mouse, não o tempo todo; (5) ao passar o mouse sobre qualquer elemento, um indicativo claro do que está sob o cursor (pré-seleção com realce e nome). Aceite: teste de escala dos planos por distância da câmera; captura com cor única; rótulo só no hover.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 200,
+   "teste": "Auto + Visual",
+   "area": "Interface",
    "status": "a fazer",
    "pct": 0.2
   }
