@@ -3722,7 +3722,9 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
     }
 
     // ---------- B552: clique único no ícone faz um elemento e volta à seleção; preso, repete
-    edit.fim_do_elemento(tool, !made.is_empty() || sk.constraints.len() > restricoes_antes);
+    // B572: o ponto do 1º clique (e o vínculo dele à curva clicada) não é o elemento
+    let novas: Vec<&Curve> = sk.curves.iter().filter(|c| made.contains(&c.id)).map(|c| &c.geom).collect();
+    edit.fim_do_elemento(tool, crate::preso::criou_elemento(tool, &novas, sk.constraints.len() > restricoes_antes));
 
     // ---------- barra de restrições: abre ao selecionar e continua aberta depois de aplicar
     if tool == Tool::Select && edit.menu.is_none() && edit.drag.is_none() && edit.janela.is_none() && edit.dim_edit.is_none() {
@@ -4324,6 +4326,10 @@ impl ValueEntry {
         self.values(n, vars)
     }
 }
+
+#[cfg(test)]
+#[path = "sketch_primeiro_clique_testes.rs"]
+mod primeiro_clique_testes;
 
 #[cfg(test)]
 mod tests {

@@ -48,6 +48,11 @@ Registre aqui erros que se repetiram.
 
 - Pontas a 10 m (eixos) levadas à tela por `cam.project` somem na perspectiva (caem atrás da câmera). Projete
   pontos perto do meio (`perto_do_meio`) e estenda na tela.
+- "O quadro criou algo" não é "o elemento terminou" (B572). O 1º clique da Linha já cria o ponto e, sobre
+  uma curva, o vínculo dele; contar restrição nova como elemento fazia a linha solta voltar à seleção
+  antes do 2º clique. Ferramenta de forma decide por `preso::criou_elemento` (só curva que não é ponto
+  solto). Interação nova se testa pelo `overlay` de verdade com eventos crus, como em
+  `sketch_primeiro_clique_testes.rs`, e não só pela função pura.
 
 ## Ao terminar
 
