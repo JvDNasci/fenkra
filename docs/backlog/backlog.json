@@ -1,36 +1,36 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 127060,
+ "tokens_total_k": 128610,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
    "versao": "0.1.0-alpha.28 a .30",
    "tokens_k": 7180,
-   "pct": 5.7
+   "pct": 5.6
   },
   "1": {
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 9.1
+   "pct": 9.0
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 25.5
+   "pct": 25.2
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 24700,
-   "pct": 19.4
+   "pct": 19.2
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 51220,
-   "pct": 40.3
+   "tokens_k": 52770,
+   "pct": 41.0
   }
  },
  "itens": [
@@ -633,7 +633,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B42",
@@ -1113,7 +1113,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B55",
@@ -1194,7 +1194,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B62",
@@ -1517,7 +1517,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B77",
@@ -2017,7 +2017,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B107",
@@ -2050,7 +2050,7 @@
    "teste": "Auto + Visual",
    "area": "PMI 3D",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B109",
@@ -2244,7 +2244,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B121",
@@ -2405,7 +2405,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B131",
@@ -2421,7 +2421,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B132",
@@ -2437,7 +2437,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B133",
@@ -2453,7 +2453,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B134",
@@ -2517,7 +2517,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B138",
@@ -2757,7 +2757,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B153",
@@ -2773,7 +2773,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B154",
@@ -2821,7 +2821,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B157",
@@ -2837,7 +2837,7 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B158",
@@ -2853,7 +2853,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B159",
@@ -2869,7 +2869,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B160",
@@ -2901,7 +2901,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B162",
@@ -2917,7 +2917,7 @@
    "teste": "Visual",
    "area": "Navegação",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B163",
@@ -2949,7 +2949,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B165",
@@ -2997,7 +2997,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B168",
@@ -3769,7 +3769,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B216",
@@ -4249,7 +4249,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B246",
@@ -4265,7 +4265,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B247",
@@ -4329,7 +4329,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "feito",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B251",
@@ -4377,7 +4377,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B254",
@@ -4889,7 +4889,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B286",
@@ -4953,7 +4953,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "feito",
-   "pct": 0.3
+   "pct": 0.2
   },
   {
    "id": "B290",
@@ -5257,7 +5257,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B309",
@@ -5769,7 +5769,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B341",
@@ -5866,7 +5866,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B347",
@@ -6090,7 +6090,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B361",
@@ -8090,7 +8090,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "a fazer",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B488",
@@ -8330,7 +8330,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.4
+   "pct": 0.3
   },
   {
    "id": "B503",
@@ -9325,6 +9325,54 @@
    "area": "Chapa metálica",
    "status": "a fazer",
    "pct": 0.2
+  },
+  {
+   "id": "B565",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Arquitetura dos comandos: padrão único de entrada de feature e grafo do Fenkra",
+   "oque": "Pedido do usuário em 21/11: cada bancada tem uma entrada diferente e não parece o mesmo software. Criar a arquitetura de como um comando funciona, no espírito dos softwares de modelagem CAD avançados (filosofia de suporte, modo, parâmetros e avançado, com facilidades de seleção): (1) ADR do contrato de feature: entradas tipadas (campo de seleção com tipos e cardinalidade, validação, junção na hora, cadeia), parâmetros, direção e inverter, limites (lado 1, lado 2, borda final com elementos de construção), prévia leve e cálculo completo, cache e invalidação pela árvore; (2) grafo de conhecimento do Fenkra (código + documentos): feature → entradas → motor (função do kernel, matemática) → saídas → dependentes, por bancada, com graphify; (3) skill `fenkra-comando` que todo especialista consulta antes de criar ou mudar um comando, e checagem automática de paridade entre modos irmãos. Aceite: ADR, grafo navegável publicado, skill ligada aos especialistas, auditoria do B561 apontando os desvios.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto",
+   "area": "Geral",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B566",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Chapa: dobrado e planificado calculados juntos, com cache e prévia de validação",
+   "oque": "Pedido do usuário em 21/11: as abas sobre superfície não planificam, e dobrar/desdobrar recalcula demais. Ao criar a dobra, calcular o estado dobrado e o planificado juntos e guardar os dois em cache; alternar dobrado/planificado só troca a exibição, sem recalcular, a menos que algo na árvore mude (invalidação por dependência). Antes do cálculo completo, prévia leve com validação (vai planificar? dobra cabe? abas se cruzam?) e aviso claro. Estudar desenvolvimento de superfícies (superfícies desenvolvíveis, regradas, aproximação de planificação de superfície dupla curvatura, enrugamento) e registrar as fontes. Aceite: nervura de asa com aba 20 mm planifica; alternar dobrado/planificado em menos de 50 ms sem recálculo (medido em teste); validação aponta o trecho que não planifica.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B567",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Missão aeronáutica: caverna e nervura de asa NACA feitas no Fenkra até ficarem certas",
+   "oque": "Missão do usuário em 21/11, para validar chapa e superfícies: (1) asa de avião de pequeno porte, 2 a 3 m de envergadura, perfil NACA importado (ex.: 2412), bordo de fuga cortado com folga para as abas não se encontrarem; superfície da asa, revestimento com offset da espessura; (2) nervura de asa: aba 20 mm feita da superfície offset (aba por superfície), com borda final personalizada por curvas 3D (interseção, filete na superfície), lados 1 e 2 limitados por planos ou curvas, recortes de alívio para passar a longarina/reforçador (cutout), joggle e recorte no bordo de ataque onde enruga; (3) caverna de fuselagem simples com perfil dobrado encostado no revestimento. Iterar trocando a configuração das features até ficar certo; cada falha vira correção ou item. Aceite: as três peças com status ok, planificadas, desenho com a planificada, relatório com capturas e lista do que precisou mudar no software.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 700,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.5
   }
  ]
 }
