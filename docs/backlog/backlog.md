@@ -4,15 +4,15 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 125.1 M tokens (≈ 417 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 125.3 M tokens (≈ 418 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
 | Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 5.7% |
 | Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 9.3% |
-| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 156 | ≈ 32350 k | 25.9% |
-| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 125 | ≈ 24700 k | 19.8% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 182 | ≈ 49220 k | 39.4% |
+| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 156 | ≈ 32350 k | 25.8% |
+| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 125 | ≈ 24700 k | 19.7% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 183 | ≈ 49470 k | 39.5% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
@@ -448,6 +448,7 @@ Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = 
 | B537 | P0 | **Forma livre editável depois de espessar** — Bug da alpha.38: depois de espessar a forma livre, não dá para voltar na árvore e editar a forma; é preciso apagar o espessar. Aceite: editar a forma com o espessar depois dela recalcula os dois. | USR-CHECK |  | 100 k | 0.1% | Auto | feito |
 | B553 | P0 | **Chapa é um corpo só e separada dos recursos de sólido** — Bug da alpha.38: parede base com dois contornos fechados gera duas chapas. Regra: uma peça de chapa tem um único corpo de chapa; vários contornos viram uma parede só (ou recusam com motivo). Recursos de sólidos que quebram a chapa ficam indisponíveis nela; o caminho é só converter sólido em chapa, não o inverso. Aceite: sketch com dois contornos gera uma parede (ou erro claro) e os comandos de sólido aparecem desativados com motivo na peça de chapa. | USR-CHECK |  | 200 k | 0.2% | Auto | feito |
 | B558 | P0 | **Chapa: parede base em perfil de asa (spline fechada) sai como fita deformada** — Reporte do usuário em 21/11 (alpha.41): parede base num sketch com perfil de asa (spline fechada) gerou uma fita fina seguindo uma curva maior e torta, longe do perfil, em vez de uma placa plana preenchida pelo perfil. Aceite: perfil de asa em spline fechada (e aberta, que vira parede de contorno) gera parede base com status ok, volume = área do perfil x espessura, caixa envolvente igual à do perfil mais a espessura; a mesma coisa com spline de bordo de fuga agudo e com o sketch fora dos planos da origem. | USR-CHECK |  | 200 k | 0.2% | Auto + Visual | a fazer |
+| B560 | P0 | **Aba: aresta reta e aresta curva viram um modo só** — Reporte do usuário em 21/11 (alpha.41), após fazer a aba na chapa de perfil de asa feita por superfície: a seleção da aba ficou ruim com os modos Aresta e Curva separados; devem ser uma coisa só. Juntar Aresta, Curva e Laço num único modo Arestas: o campo de lista aceita arestas retas e curvas misturadas (cada clique soma, clicar de novo tira), opção de seguir tangentes, clique numa face pega o contorno inteiro; trechos curvos viram aba curva emendada às retas. Perfil e Superfície continuam modos à parte. Documentos antigos (SmFlange, SmCurveFlange, SmFlangeLoop) abrem iguais. Aceite: aba numa aresta reta, numa curva e numa cadeia reta+curva pelo mesmo modo, com status ok, volume e caixa conferidos. | USR-CHECK |  | 250 k | 0.2% | Auto + Visual | a fazer |
 | B110 | P1 | **Calculadoras de projeto: parafuso, ajuste forçado, mola, viga** — Painel de cálculo com fatores de segurança. Insere ou ajusta o componente. (BN01; módulo Cálculo mecânico; depende de B28, B52, B42, B90). | PESQ-MOD |  | 300 k | 0.2% | Auto | em andamento |
 | B112 | P1 | **Perfil de regras DFM (furo, bolso, chapa)** — Motor de regras DFM com perfis JSON por processo (furo, bolso, chapa, injeção, aditivo), cada regra com identificador, tipo de entidade, limites, severidade e texto; varredura devolve violações com referência estável à face e realce 3D; limites editáveis sem recompilar. É a base de B113, B166 e B167. Referências: CAD avançado A DFMXpress, Protolabs, DFMPro. | PESQ-MOD |  | 300 k | 0.2% | Auto | feito |
 | B113 | P1 | **Análise de espessura, saliência e canto vivo** — Mapa de espessura por raio-bola máxima ou ray casting sobre pontos das faces, saliência pela normal contra a direção de construção (B164) e canto vivo por raio mínimo da ferramenta, com legenda, filtro por violação e limites vindos do perfil do processo (B112). Aceite: degrau de 1 mm e 3 mm gera duas faixas com erro até 5%. | PESQ-MOD |  | 200 k | 0.2% | Auto | feito |

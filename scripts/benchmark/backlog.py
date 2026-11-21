@@ -1135,6 +1135,8 @@ c('B558', 4, 'P0', 'Chapa: parede base em perfil de asa (spline fechada) sai com
   ['USR-CHECK'], [], 200, 'Auto + Visual', 'Chapa metálica'),
 c('B559', 4, 'P1', 'Superfície gerada por spline aparece segmentada em vez de lisa', 'Reporte do usuário em 21/11 (alpha.41): ao gerar superfície a partir de uma spline, ela aparece em trechos retos (facetada). A ideia é ser lisa. Aceite: a spline chega ao kernel como BSpline (uma aresta, não N segmentos) em todos os caminhos (superfície, chapa, perfil), e a malha de exibição das faces curvas tem desvio angular pequeno.',
   ['USR-CHECK'], [], 120, 'Auto + Visual', 'Superfícies e wireframe'),
+c('B560', 4, 'P0', 'Aba: aresta reta e aresta curva viram um modo só', 'Reporte do usuário em 21/11 (alpha.41), após fazer a aba na chapa de perfil de asa feita por superfície: a seleção da aba ficou ruim com os modos Aresta e Curva separados; devem ser uma coisa só. Juntar Aresta, Curva e Laço num único modo Arestas: o campo de lista aceita arestas retas e curvas misturadas (cada clique soma, clicar de novo tira), opção de seguir tangentes, clique numa face pega o contorno inteiro; trechos curvos viram aba curva emendada às retas. Perfil e Superfície continuam modos à parte. Documentos antigos (SmFlange, SmCurveFlange, SmFlangeLoop) abrem iguais. Aceite: aba numa aresta reta, numa curva e numa cadeia reta+curva pelo mesmo modo, com status ok, volume e caixa conferidos.',
+  ['USR-CHECK'], [], 250, 'Auto + Visual', 'Chapa metálica'),
 ]
 def main():
     for x in B:
