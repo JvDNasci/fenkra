@@ -83,6 +83,28 @@ pub fn de_um_so(t: Tool) -> bool {
     )
 }
 
+/// Ferramentas que desenham uma forma (curvas). As outras de [`de_um_so`] criam restrição ou cota.
+fn desenha_forma(t: Tool) -> bool {
+    de_um_so(t) && !matches!(t, Tool::Dimension | Tool::DimH | Tool::DimV | Tool::DimAngle | Tool::DimRadius | Tool::DimDiameter | Tool::Constr(_))
+}
+
+/// B572: o quadro terminou o elemento da ferramenta? `curvas_novas` são as curvas que nasceram no
+/// quadro e `restricoes_novas` diz se alguma restrição nasceu.
+///
+/// Nas ferramentas de forma, só a forma conta. O primeiro clique da linha já cria o ponto de partida,
+/// e sobre uma curva ele nasce com o vínculo (ponto na curva, ponto médio, interseção); na origem de
+/// um sketch antigo nasce o ponto fixo da origem, que é uma curva de ponto. Isso é andaime do passo:
+/// contado como elemento, a linha solta encerrava ali e o segundo clique já caía na seleção.
+/// Restrição e cota são o próprio elemento só nas ferramentas de restrição e de cota.
+pub fn criou_elemento(t: Tool, curvas_novas: &[&fenkra_core::sketch::Curve], restricoes_novas: bool) -> bool {
+    use fenkra_core::sketch::Curve;
+    if !desenha_forma(t) {
+        return !curvas_novas.is_empty() || restricoes_novas;
+    }
+    // a ferramenta Ponto cria justamente uma curva de ponto; as outras, linhas, arcos, círculos, splines
+    t == Tool::Point && !curvas_novas.is_empty() || curvas_novas.iter().any(|c| !matches!(c, Curve::Point { .. }))
+}
+
 /// O que um botão da barra prenderia.
 pub fn alvo_de(act: crate::toolbar::Act) -> Option<Alvo> {
     match act {
@@ -171,6 +193,27 @@ mod testes {
             assert!(e.cancel());
             assert_eq!(e.tool, Tool::Select, "{t:?}: Esc solta e volta à seleção");
             assert_eq!(e.preso.0, None);
+        }
+    }
+
+    /// B572: o ponto do 1º clique, com vínculo à curva ou o ponto fixo da origem, não encerra a forma;
+    /// nas ferramentas de restrição e de cota a restrição é o elemento.
+    #[test]
+    fn sketch_ponto_de_partida_nao_conta_como_elemento() {
+        use fenkra_core::sketch::Curve;
+        use fenkra_core::Id;
+        let ponto = Curve::Point { p: Id(1) };
+        let linha = Curve::Line { a: Id(1), b: Id(2) };
+        for t in [Tool::Line, Tool::Rect, Tool::Circle, Tool::Arc3, Tool::Slot, Tool::Polygon, Tool::Spline, Tool::CircleTan3] {
+            assert!(!criou_elemento(t, &[], true), "{t:?}: só o vínculo do ponto de partida");
+            assert!(!criou_elemento(t, &[&ponto], true), "{t:?}: ponto fixo da origem");
+            assert!(criou_elemento(t, &[&linha], false), "{t:?}: a forma nasceu");
+        }
+        assert!(criou_elemento(Tool::Point, &[&ponto], true), "a ferramenta Ponto cria a curva de ponto");
+        assert!(!criou_elemento(Tool::Point, &[], true));
+        for t in [Tool::Dimension, Tool::DimRadius, Tool::Constr(crate::sketch_ui::CKind::Parallel)] {
+            assert!(criou_elemento(t, &[], true), "{t:?}: a restrição é o elemento");
+            assert!(!criou_elemento(t, &[], false));
         }
     }
 
