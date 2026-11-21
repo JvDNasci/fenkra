@@ -71,7 +71,7 @@ pub const CLASSIFICACAO: &[(&str, Classe)] = &[
     ("families", Interface),
     ("nav", Interface),
     ("invert_zoom", Interface),
-    ("orbita_livre", Interface),
+    ("orbita_limitada", Interface),
     ("zoom_no_cursor", Interface),
     ("sel_faces", Interface),
     ("sel_edges", Interface),

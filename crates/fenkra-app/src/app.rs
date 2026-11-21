@@ -3506,13 +3506,13 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     /// B542: liga ou desliga a órbita livre. Ao voltar para a presa, uma vista que passou do polo é
     /// reposta em pé para a câmera não ficar fora do limite.
     fn alternar_orbita_livre(&mut self) {
-        self.settings.orbita_livre = !self.settings.orbita_livre;
-        if !self.settings.orbita_livre {
+        self.settings.orbita_limitada = !self.settings.orbita_limitada;
+        if self.settings.orbita_limitada {
             if let Some(vp) = self.viewport.as_mut() {
                 vp.camera.pitch = crate::camera_nav::limitar_inclinacao(vp.camera.pitch, false);
             }
         }
-        self.toast(tr(if self.settings.orbita_livre { "Órbita livre ligada: gira 360° em qualquer direção" } else { "Órbita livre desligada: a inclinação para em 90°" }), false);
+        self.toast(tr(if !self.settings.orbita_limitada { "Órbita livre ligada: gira 360° em qualquer direção" } else { "Órbita livre desligada: a inclinação para em 90°" }), false);
     }
 
     /// B544: olha de frente para uma face (plano: pela normal; curva: pela normal no ponto clicado ou
@@ -7517,7 +7517,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             } else if zoom_drag {
                 vp.camera.dist = (vp.camera.dist * (delta.y * 0.01).exp()).clamp(0.5, 1e6);
             } else if orbit {
-                vp.camera.girar(delta.x, delta.y, self.settings.orbita_livre);
+                vp.camera.girar(delta.x, delta.y, !self.settings.orbita_limitada);
             }
             // B321: sem nada em foco, setas giram, Shift+setas movem e Page Up/Down aproximam a vista
             // B449: com a árvore em foco, ↑ e ↓ são dela (← e → continuam girando a vista)
@@ -7530,7 +7530,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if let Some(m) = crate::teclado::movimento(t) {
                     vp.stop_anim();
                     vp.navegou();
-                    crate::teclado::aplicar(&mut vp.camera, m, self.settings.orbita_livre);
+                    crate::teclado::aplicar(&mut vp.camera, m, !self.settings.orbita_limitada);
                 }
             }
             // B17: a roda também vale enquanto uma alça 3D é arrastada (o passo do arrasto segue o zoom)
@@ -10032,7 +10032,9 @@ fn settings_page(ui: &mut egui::Ui, page: usize, s: &mut Settings) {
                 // B440: o que cada botão faz no perfil, tirado da mesma função que move a câmera
                 crate::nav_perfil::tabela_ui(ui, s.nav, s.invert_zoom);
                 ui.checkbox(&mut s.invert_zoom, tr("inverter o sentido do zoom"));
-                ui.checkbox(&mut s.orbita_livre, tr("órbita livre (360° em qualquer direção)")).on_hover_text(tr("Desligada, a inclinação para em 90° como numa mesa giratória. Ligada, a câmera passa do polo e gira por baixo do chão, com a vista de cabeça para baixo. Atalho: Alt+L. Para definir o centro da órbita: Alt+C ou duplo clique no botão do meio sobre o modelo."));
+                let mut livre = !s.orbita_limitada;
+                ui.checkbox(&mut livre, tr("órbita livre (360° em qualquer direção)")).on_hover_text(tr("Ligada (padrão), a câmera passa do polo e gira por cima e por baixo sem limite, com a vista de cabeça para baixo. Desligada, a inclinação para em 90° como numa mesa giratória. Atalho: Alt+L. Para definir o centro da órbita: Alt+C ou duplo clique no botão do meio sobre o modelo."));
+                s.orbita_limitada = !livre;
                 ui.checkbox(&mut s.zoom_no_cursor, tr("zoom em direção ao cursor")).on_hover_text(tr("A roda aproxima o ponto sob o cursor, também enquanto uma alça 3D é arrastada. Desligado, o zoom fecha sobre o centro da vista."));
                 ui.separator();
                 crate::ui_ext::modo_roda_ui(ui, &mut s.wheel_mode);

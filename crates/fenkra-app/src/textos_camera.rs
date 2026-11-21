@@ -11,8 +11,8 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Órbita livre desligada: a inclinação para em 90°", "Free orbit off: the tilt stops at 90°"),
     ("órbita livre (360° em qualquer direção)", "free orbit (360° in any direction)"),
     (
-        "Desligada, a inclinação para em 90° como numa mesa giratória. Ligada, a câmera passa do polo e gira por baixo do chão, com a vista de cabeça para baixo. Atalho: Alt+L. Para definir o centro da órbita: Alt+C ou duplo clique no botão do meio sobre o modelo.",
-        "Off, the tilt stops at 90° like a turntable. On, the camera goes past the pole and turns under the floor, upside down. Shortcut: Alt+L. To set the orbit center: Alt+C or double-click the middle button on the model.",
+        "Ligada (padrão), a câmera passa do polo e gira por cima e por baixo sem limite, com a vista de cabeça para baixo. Desligada, a inclinação para em 90° como numa mesa giratória. Atalho: Alt+L. Para definir o centro da órbita: Alt+C ou duplo clique no botão do meio sobre o modelo.",
+        "On (default), the camera goes past the pole and turns over and under without limit, upside down. Off, the tilt stops at 90° like a turntable. Shortcut: Alt+L. To set the orbit center: Alt+C or double-click the middle button on the model.",
     ),
     ("Selecione uma face, um sketch ou um plano para alinhar a vista", "Select a face, a sketch or a plane to align the view"),
     ("Esta face não dá uma direção para alinhar a vista", "This face gives no direction to align the view"),
