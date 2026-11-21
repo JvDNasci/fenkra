@@ -1131,6 +1131,8 @@ c('B556', 4, 'P1', 'Aba por superfície completa: limites dos lados, borda final
   ['USR-CHECK', 'B529'], [], 350, 'Auto + Visual', 'Chapa', 'feito'),
 c('B557', 4, 'P2', 'Recurso gerado nasce um nível abaixo de quem o gerou', 'Pedido do usuário em 19/11: quando um sketch ou recurso gera outro recurso, o novo nasce na árvore um nível abaixo do que o gerou; a pessoa pode arrastá-lo para o mesmo nível ou deixá-lo ali. A ordem de recálculo não muda. Aceite: extrusão de um sketch nasce dentro dele; arrastar para fora a coloca no mesmo nível, e o arquivo guarda a escolha.',
   ['USR-CHECK'], [], 150, 'Auto + Visual', 'Interface', 'feito'),
+c('B558', 4, 'P0', 'Chapa: parede base em perfil de asa (spline fechada) sai como fita deformada', 'Reporte do usuário em 21/11 (alpha.41): parede base num sketch com perfil de asa (spline fechada) gerou uma fita fina seguindo uma curva maior e torta, longe do perfil, em vez de uma placa plana preenchida pelo perfil. Aceite: perfil de asa em spline fechada (e aberta, que vira parede de contorno) gera parede base com status ok, volume = área do perfil x espessura, caixa envolvente igual à do perfil mais a espessura; a mesma coisa com spline de bordo de fuga agudo e com o sketch fora dos planos da origem.',
+  ['USR-CHECK'], [], 200, 'Auto + Visual', 'Chapa metálica'),
 ]
 def main():
     for x in B:
