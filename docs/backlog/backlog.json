@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 130760,
+ "tokens_total_k": 131710,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -12,25 +12,25 @@
    "titulo": "Onda 1 — bugs do design review",
    "versao": "0.1.0-alpha.31",
    "tokens_k": 11610,
-   "pct": 8.9
+   "pct": 8.8
   },
   "2": {
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 24.7
+   "pct": 24.6
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 24700,
-   "pct": 18.9
+   "pct": 18.8
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 54920,
-   "pct": 42.0
+   "tokens_k": 55870,
+   "pct": 42.4
   }
  },
  "itens": [
@@ -9467,6 +9467,38 @@
    "tokens_k": 400,
    "teste": "Auto + Visual",
    "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B574",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Estrutural: encaixe de tubo com corte normal à parede (boca de lobo)",
+   "oque": "Pedido do usuário em 21/11: no encontro de tubos em ângulo diferente de 90°, o membro hoje é cortado por booleana e fica com uma quina fina (ponta em faca) que derrete na solda. O corte deve imitar o corte real (plasma ou marcado à mão): em cada ponto da curva de encontro, a linha de corte é normal à superfície do tubo cortado, então a parede mantém a espessura e a borda fica suave. Referência escolhida pela pessoa: encosto na face externa ou na interna do tubo que recebe (ou meio). Cálculo interno: superfícies externa e interna do tubo cortado intersectam a face do tubo que recebe, gerando uma ou mais curvas; a superfície de corte é varrida pelas normais ao longo dessas curvas (sweep), sem a pessoa criar superfície. Validação automática de vão e interferência entre os tubos (com tolerância) e aviso de espessura mínima na borda. Vale para tubo redondo, quadrado e retangular e para o T, o Y e o canto. Aceite: teste em T a 45° e 60°, tubo redondo: espessura da parede na borda de corte igual à do tubo (sem ponta fina), vão e interferência abaixo da tolerância nas duas referências; lista de corte com a curva de corte (gabarito planificado da boca de lobo).",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 500,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B575",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Estrutural: membros curvos (tubo dobrado e por spline) como um membro só",
+   "oque": "Reporte do usuário em 21/11: membro em caminho com dobra falhou (não criou o terceiro membro, gerou três membros separados e o canto bugou). Precisa: (1) caminho com cantos virar tubo dobrado com raio de dobra mínimo por norma (pelo diâmetro e espessura) ou raio escolhido; (2) spline ou curva qualquer como guia de um membro único; (3) várias guias selecionadas juntas como uma cadeia (um membro só) ou separadas, pela caixa de seleção universal do B561, com opção de unir na hora; (4) num trecho dobrado não há encaixe de canto (sempre nenhum); (5) lista de corte com comprimento desenvolvido e tabela de dobras do tubo (posição, ângulo, rotação). Aceite: tubo em L e em U com raio, spline 3D como membro, status ok, volume e comprimento desenvolvido conferidos.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 450,
+   "teste": "Auto + Visual",
+   "area": "Estrutural e soldas",
    "status": "a fazer",
    "pct": 0.3
   }
