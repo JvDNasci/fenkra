@@ -133,6 +133,8 @@ pub mod chapa_perfis_plana;
 mod chapa_canto_tests;
 #[cfg(test)]
 mod chapa_fluxo_tests;
+#[cfg(test)]
+mod chapa_b558_tests;
 pub use chapa_laco::{laco_de_malha, recuos_extensao};
 pub mod planificada;
 pub mod nesting;
