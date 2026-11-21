@@ -1159,6 +1159,10 @@ c('B570', 4, 'P1', 'Biblioteca de materiais de chapa ampla: ligas aeronáuticas,
   ['USR-CHECK'], [], 300, 'Auto', 'Chapa metálica'),
 c('B571', 4, 'P1', 'Planos e eixos da origem: tamanho pela vista, cor única e rótulos só no passar do mouse', 'Reporte do usuário em 21/11: (1) os planos da origem não acompanham o tamanho da vista; para selecionar um plano no 3D é preciso dar zoom até ele. Os planos se ajustam ao tamanho da peça e da vista (com tamanho mínimo na tela) e são fáceis de pegar em qualquer zoom; (2) planos e sistema de coordenadas (eixos) em uma cor padrão que vem do tema, lisa, no lugar de verde, azul e vermelho; (3) eixos com X, Y e Z e planos com nome; (4) rótulos dos elementos no 3D (planos, sketches, perfis) aparecem só ao passar o mouse, não o tempo todo; (5) ao passar o mouse sobre qualquer elemento, um indicativo claro do que está sob o cursor (pré-seleção com realce e nome). Aceite: teste de escala dos planos por distância da câmera; captura com cor única; rótulo só no hover.',
   ['USR-CHECK'], [], 200, 'Auto + Visual', 'Interface'),
+c('B572', 4, 'P0', 'Sketch: linha começada sobre outra linha trava no primeiro ponto', 'Reporte do usuário em 21/11 (alpha.41): ao começar uma linha com o primeiro clique sobre outra linha, o segundo clique não é aceito. Aceite: teste da sequência de mouse com o primeiro clique sobre linha, ponto, círculo e arco, para todas as ferramentas de desenho, com e sem modo preso.',
+  ['USR-CHECK'], [], 150, 'Auto', 'Sketch'),
+c('B573', 4, 'P0', 'Sketch: revisão completa com mouse e teclado', 'Pedido do usuário em 21/11: reavaliar todo o sketch como uso real de mouse e teclado, comparando com o comportamento esperado nos softwares de modelagem CAD avançados: cada ferramenta de desenho, edição (aparar, estender, offset, filete, espelhar, mover, copiar), restrições, cotas, inferências, encaixes, seleção, desfazer e sair. Roteiro por ferramenta com eventos simulados e, quando der, captura FENKRA_DEMO; cada desvio vira correção ou item. Aceite: roteiro completo passando, relatório com o que mudou.',
+  ['USR-CHECK'], [], 400, 'Auto + Visual', 'Sketch'),
 ]
 def main():
     for x in B:

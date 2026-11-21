@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 130210,
+ "tokens_total_k": 130760,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -18,19 +18,19 @@
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 24.8
+   "pct": 24.7
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 24700,
-   "pct": 19.0
+   "pct": 18.9
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 54370,
-   "pct": 41.8
+   "tokens_k": 54920,
+   "pct": 42.0
   }
  },
  "itens": [
@@ -9437,6 +9437,38 @@
    "area": "Interface",
    "status": "a fazer",
    "pct": 0.2
+  },
+  {
+   "id": "B572",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Sketch: linha começada sobre outra linha trava no primeiro ponto",
+   "oque": "Reporte do usuário em 21/11 (alpha.41): ao começar uma linha com o primeiro clique sobre outra linha, o segundo clique não é aceito. Aceite: teste da sequência de mouse com o primeiro clique sobre linha, ponto, círculo e arco, para todas as ferramentas de desenho, com e sem modo preso.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 150,
+   "teste": "Auto",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.1
+  },
+  {
+   "id": "B573",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Sketch: revisão completa com mouse e teclado",
+   "oque": "Pedido do usuário em 21/11: reavaliar todo o sketch como uso real de mouse e teclado, comparando com o comportamento esperado nos softwares de modelagem CAD avançados: cada ferramenta de desenho, edição (aparar, estender, offset, filete, espelhar, mover, copiar), restrições, cotas, inferências, encaixes, seleção, desfazer e sair. Roteiro por ferramenta com eventos simulados e, quando der, captura FENKRA_DEMO; cada desvio vira correção ou item. Aceite: roteiro completo passando, relatório com o que mudou.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.3
   }
  ]
 }
