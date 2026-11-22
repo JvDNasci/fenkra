@@ -365,35 +365,16 @@ fn seta_da_paralela(r: &RecomputeResult, curve: &CurveRef, support: &SurfRef, fl
     Some(SetaDeLado { campo: 0, base: m, dir: if flip { -lado } else { lado }, rotulo: "Lado da paralela" })
 }
 
-/// Clique na seta: troca o lado. No engrossar, as duas espessuras trocam de lado.
+/// Clique na seta: troca o lado. É a mesma função do botão "⇄ Inverter direção" do painel
+/// (`inverter::alternar_ref` e `inverter::alternar_feature`): os dois ligam ao mesmo campo. No engrossar,
+/// as duas espessuras trocam de lado.
 pub fn inverter_lado(doc: &mut Document, id: Id, campo: u8) {
     if let Some(rf) = doc.references.iter_mut().find(|r| r.id == id) {
-        match &mut rf.kind {
-            RefKind::SurfSplit { flip, more, more_flip, .. } => {
-                more_flip.resize(more.len(), *flip);
-                match campo {
-                    0 => *flip = !*flip,
-                    c => {
-                        if let Some(f) = more_flip.get_mut(c as usize - 2) {
-                            *f = !*f;
-                        }
-                    }
-                }
-            }
-            RefKind::SurfTrim { flip_a, flip_b, .. } | RefKind::SurfFillet { flip_a, flip_b, .. } => {
-                let f = if campo == 0 { flip_a } else { flip_b };
-                *f = !*f;
-            }
-            RefKind::CurveParallel { flip, .. } | RefKind::SurfRuled { flip, .. } => *flip = !*flip,
-            _ => {}
-        }
+        crate::inverter::alternar_ref(&mut rf.kind, campo);
         return;
     }
-    match doc.feature_mut(id).map(|f| &mut f.kind) {
-        Some(FeatureKind::SplitBody(x)) => x.flip = !x.flip,
-        Some(FeatureKind::SewSurface(x)) => x.flip = !x.flip,
-        Some(FeatureKind::ThickSurface(t)) if !t.simetrico => std::mem::swap(&mut t.t1, &mut t.t2),
-        _ => {}
+    if let Some(f) = doc.feature_mut(id) {
+        crate::inverter::alternar_feature(&mut f.kind, campo);
     }
 }
 
@@ -1195,6 +1176,56 @@ mod tests {
             for proibido in ["checkbox(flip", "checkbox(&mut more_flip", "&mut sp.flip", "&mut sw.flip", "manter o outro lado", "outro lado da 1", "outro lado da 2", "row(ui, \"Solução\"", "Label::new(tr(\"Solução\"))"] {
                 assert!(!fonte.contains(proibido), "{nome} ainda tem {proibido}");
             }
+        }
+    }
+
+    /// B562 (ADR 0107): o botão "⇄ Inverter direção" do painel e a seta clicável do 3D ligam ao mesmo
+    /// campo do comando: as duas chamadas dão o mesmo documento.
+    #[test]
+    fn botao_e_seta_invertem_o_mesmo_campo_do_comando() {
+        use crate::contrato::Alvo;
+        let mut d = Document::new("t");
+        let a = folha(&mut d, [-40., 0., 0.], [40., 0., 0.]);
+        let b = folha(&mut d, [0., -40., 0.], [0., 40., 0.]);
+        let ids = [
+            d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(a), tool: SurfRef::Plane(PlaneRef::Origin(OriginPlane::YZ)), flip: false, more: vec![], curve: None, more_flip: vec![] }),
+            d.add_geometry(RefKind::SurfTrim { a: SurfRef::Ref(a), b: SurfRef::Ref(b), flip_a: false, flip_b: false }),
+            d.add_geometry(RefKind::SurfFillet { a: SurfRef::Ref(a), b: SurfRef::Ref(b), flip_a: false, flip_b: false, radius: t("5"), radius2: None }),
+        ];
+        for id in ids {
+            let campos: Vec<u8> = crate::inverter::controles(Alvo::Ref(&d.reference(id).unwrap().kind)).iter().map(|c| c.campo).collect();
+            assert!(!campos.is_empty());
+            for campo in campos {
+                let (mut pelo_botao, mut pela_seta) = (d.clone(), d.clone());
+                crate::inverter::alternar_ref(&mut pelo_botao.references.iter_mut().find(|r| r.id == id).unwrap().kind, campo);
+                inverter_lado(&mut pela_seta, id, campo);
+                assert_eq!(pelo_botao.references, pela_seta.references, "botão e seta divergem no campo {campo} de {id:?}");
+                assert_ne!(pelo_botao.references, d.references, "o campo {campo} de {id:?} não mudou");
+            }
+        }
+    }
+
+    /// Paridade: toda seta de lado do 3D tem o botão correspondente no painel (e nenhum botão fica sem seta).
+    #[test]
+    fn toda_seta_de_lado_tem_o_botao_no_painel() {
+        use crate::contrato::Alvo;
+        let mut d = Document::new("t");
+        let a = folha(&mut d, [-40., 0., 0.], [40., 0., 0.]);
+        let b = folha(&mut d, [0., -40., 0.], [0., 40., 0.]);
+        let c = reta(&mut d, [-40., 0., 0.], [40., 0., 0.]);
+        let p = d.add_offset_plane(PlaneRef::Origin(OriginPlane::YZ), "20");
+        let ids = [
+            d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(a), tool: SurfRef::Plane(PlaneRef::Origin(OriginPlane::YZ)), flip: false, more: vec![SurfRef::Plane(PlaneRef::Datum(p))], curve: None, more_flip: vec![true] }),
+            d.add_geometry(RefKind::SurfTrim { a: SurfRef::Ref(a), b: SurfRef::Ref(b), flip_a: false, flip_b: false }),
+            d.add_geometry(RefKind::SurfFillet { a: SurfRef::Ref(a), b: SurfRef::Ref(b), flip_a: false, flip_b: false, radius: t("5"), radius2: None }),
+            d.add_geometry(RefKind::CurveParallel { curve: c, support: SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY)), d1: t("12"), d2: t("12"), flip: false, more: vec![], both: false, d_other: String::new() }),
+        ];
+        let r = recompute(&d);
+        for id in ids {
+            let botoes: Vec<u8> = crate::inverter::controles(Alvo::Ref(&d.reference(id).unwrap().kind)).iter().map(|c| c.campo).collect();
+            let setas: Vec<u8> = setas_de_lado(&d, &r, id).iter().map(|s| s.campo).filter(|c| *c != SO_MOSTRA).collect();
+            assert!(!setas.is_empty(), "{id:?} sem seta: o teste não confere nada");
+            assert_eq!(botoes, setas, "painel e 3D têm de oferecer os mesmos inversores em {id:?}");
         }
     }
 }

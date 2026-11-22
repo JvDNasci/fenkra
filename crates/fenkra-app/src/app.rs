@@ -2309,7 +2309,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
 
     /// Seleção em cadeia: uma curva só escolhida puxa as vizinhas que a tocam nas pontas, entre as do
     /// mesmo sketch, as curvas de referência ou as arestas da mesma superfície.
-    fn chained(&self, picked: Vec<CurveRef>) -> Vec<CurveRef> {
+    pub(crate) fn chained(&self, picked: Vec<CurveRef>) -> Vec<CurveRef> {
         use crate::picking::{edge_polyline, Pick, SURF_BASE};
         use fenkra_solidos::geo3d::{chain_indices, Curve3};
         let (Some(r), [one]) = (self.result.as_ref(), picked.as_slice()) else { return picked };
@@ -6692,12 +6692,50 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
 
     /// Preenche os campos vazios do comando/elemento em edição com a seleção da viewport (`tree`
     /// = None) ou com o item clicado na árvore. Devolve se algo foi preenchido.
+    /// ADR 0107: aplica o que a caixa de seleção pediu no quadro (a caixa só enxerga o documento de
+    /// leitura): grava as junções e a opção de tangentes do campo, e expande a cadeia tangente de um
+    /// item (duplo clique) com o código de sempre, entrando unida como subitens de uma junção.
+    pub fn aplicar_pedidos_da_caixa(&mut self, ctx: &egui::Context) {
+        use crate::caixa_selecao::Pedido;
+        for p in crate::caixa_selecao::drenar(ctx) {
+            match p {
+                Pedido::Dados(d) => self.open.doc.set_dados_campo(d),
+                Pedido::Cadeia { dono, campo, indice } => self.expandir_cadeia(dono, &campo, indice),
+            }
+        }
+    }
+
+    /// Duplo clique num item do campo de curvas: ele puxa a cadeia tangente dele. As curvas que ainda
+    /// não estavam no campo entram, e a cadeia toda vira uma junção (subitens do próprio campo).
+    fn expandir_cadeia(&mut self, dono: Id, campo: &str, indice: usize) {
+        let Some(curva) = crate::contrato::curvas_mut(&mut self.open.doc, dono, campo).and_then(|l| l.get(indice).cloned()) else { return };
+        let cadeia = self.chained(vec![curva]);
+        if cadeia.len() < 2 {
+            self.toast(tr("Esta curva não tem vizinhas tangentes para juntar.").to_string(), false);
+            return;
+        }
+        let Some(lista) = crate::contrato::curvas_mut(&mut self.open.doc, dono, campo) else { return };
+        let mut indices = vec![];
+        for c in cadeia {
+            match lista.iter().position(|y| crate::geo_ui::mesma_curva(y, &c)) {
+                Some(k) => indices.push(k),
+                None => {
+                    lista.push(c);
+                    indices.push(lista.len() - 1);
+                }
+            }
+        }
+        let mut d = self.open.doc.dados_campo(dono, campo).cloned().unwrap_or_else(|| fenkra_core::DadosCampo::novo(dono, campo));
+        d.unir(&indices);
+        self.open.doc.set_dados_campo(d);
+    }
+
     fn fill_from_selection(&mut self, id: Id, tree: Option<Sel>) -> bool {
         use crate::picking::Pick;
         use crate::slots::*;
         let incomplete = match (self.open.doc.feature(id), self.open.doc.reference(id)) {
             (Some(f), _) => feature_incomplete(&f.kind),
-            (_, Some(r)) => count_unset(&r.kind) > 0,
+            (_, Some(r)) => crate::contrato::incompleto(crate::contrato::Alvo::Ref(&r.kind)),
             _ => false,
         };
         if !incomplete {
@@ -8006,10 +8044,10 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         2 => true,
                         _ => now.x < a0.x,
                     };
-                    let (fill, stroke) = if crossing {
-                        (Color32::from_rgba_unmultiplied(80, 200, 120, 40), egui::Stroke::new(1.2, Color32::from_rgb(80, 200, 120)))
-                    } else {
-                        (Color32::from_rgba_unmultiplied(80, 150, 255, 40), egui::Stroke::new(1.2, Color32::from_rgb(80, 150, 255)))
+                    // só cores do tema: a janela usa o acento e a cruzada a cor de "ok" (B319)
+                    let (fill, stroke) = {
+                        let cor = if crossing { crate::theme::st_ok() } else { crate::theme::accent(ui.visuals()) };
+                        (crate::theme::com_alfa(cor, 40), egui::Stroke::new(1.2, cor))
                     };
                     let laco = self.selecao_extra.laco_ligado;
                     if laco {
@@ -9535,7 +9573,13 @@ impl eframe::App for App {
             let still = matches!(self.sel, Sel::Feature(x) | Sel::Ref(x) if x == sid);
             if !still && self.sel != sel_before {
                 let tree_sel = self.sel;
-                if self.fill_from_selection(sid, Some(tree_sel)) {
+                // ADR 0107: com uma caixa de seleção (lista) ativa, o item clicado na árvore entra nela pelo
+                // mesmo caminho do clique no 3D (vira seleção do 3D e o painel o consome), e o comando continua aberto
+                let da_arvore = if crate::campos::painel_consome(ctx) { crate::contrato::picks_da_arvore(self.doc(), self.result.as_ref(), &tree_sel) } else { vec![] };
+                if !da_arvore.is_empty() {
+                    self.picks = da_arvore;
+                    self.sel = if self.open.doc.reference(sid).is_some() { Sel::Ref(sid) } else { Sel::Feature(sid) };
+                } else if self.fill_from_selection(sid, Some(tree_sel)) {
                     self.sel = if self.open.doc.reference(sid).is_some() { Sel::Ref(sid) } else { Sel::Feature(sid) };
                 } else if coluna::arvore_pela_seta(ctx) {
                     // B433: a árvore aberta pela seta serve para escolher entradas. Item que não preenche

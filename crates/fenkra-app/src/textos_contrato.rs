@@ -1,0 +1,32 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
+//! Traduções do contrato de feature, da caixa de seleção universal e do inverter único (ADR 0107,
+//! onda 0), à parte de `i18n.rs`.
+
+pub static TEXTOS: &[(&str, &str)] = &[
+    ("eixo", "axis"),
+    ("recurso", "feature"),
+    ("ou", "or"),
+    ("Esta caixa aceita {}; o item clicado é {}.", "This box accepts {}; the clicked item is {}."),
+    ("Este campo já tem o máximo de {} itens.", "This field already has the maximum of {} items."),
+    ("Este item é de outra origem ({}).", "This item comes from another origin ({})."),
+    ("Clique marca; Ctrl soma ou tira da marcação; Shift marca o intervalo; Del ou X tira os marcados.", "Click marks; Ctrl adds or removes from the marks; Shift marks the range; Del or X removes the marked ones."),
+    ("Unir (junção)", "Join (junction)"),
+    ("Une os itens marcados numa junção, como subitens dentro deste campo.", "Joins the marked items into a junction, as subitems inside this field."),
+    ("Separar", "Separate"),
+    ("Desfaz a junção dos itens marcados.", "Undoes the junction of the marked items."),
+    ("Sobe este item na ordem", "Moves this item up in the order"),
+    ("Desce este item na ordem", "Moves this item down in the order"),
+    ("Campo ativo: cada clique no 3D ou na árvore soma um elemento; clicar de novo num escolhido o tira.", "Active field: each click in the 3D view or in the tree adds an element; clicking a chosen one again removes it."),
+    ("a ordem importa", "order matters"),
+    ("seguir tangentes", "follow tangents"),
+    ("Um clique numa curva leva junto as vizinhas tangentes, que entram unidas como subitens de uma junção. O duplo clique no item faz o mesmo uma vez.", "A click on a curve brings the tangent neighbors along, joined as subitems of a junction. Double-clicking the item does the same once."),
+    ("nenhum elemento: clique no 3D ou na árvore", "no element: click in the 3D view or in the tree"),
+    ("Clique no 3D ou na árvore para somar; clique de novo num escolhido para tirar.", "Click in the 3D view or in the tree to add; click a chosen one again to remove it."),
+    ("Unir marcados", "Join marked"),
+    ("Une os itens marcados numa junção (botão direito no item também).", "Joins the marked items into a junction (right-click on the item works too)."),
+    ("Arestas do modelo", "Model edges"),
+    ("Faces do modelo", "Model faces"),
+    ("Fica deste lado (corte seguinte)", "Stays on this side (next cut)"),
+    ("Esta curva não tem vizinhas tangentes para juntar.", "This curve has no tangent neighbors to join."),
+    ("O recorte entra no material (contra a normal do plano). Use 'Inverter direção' se necessário.", "The cut goes into the material (against the plane normal). Use 'Flip direction' if needed."),
+];

@@ -71,7 +71,7 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, idx: usize, p: &mut RecursoPlas
             section(ui, "Suporte");
             crate::feat_ui::sketch_pick(ui, "pl_boss_sk", "Centros", doc, idx, &mut b.sketch);
             nota(ui, "Cada ponto do sketch vira um boss que cresce pela normal do plano.");
-            check(ui, &mut b.reverse, "para o outro lado do plano");
+            crate::inverter::botao(ui, &mut b.reverse);
             section(ui, "Parâmetros");
             expr(ui, "Diâmetro do boss", &mut b.diametro, vars, "mm");
             expr(ui, "Altura do boss", &mut b.altura, vars, "mm");
@@ -118,7 +118,7 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, idx: usize, p: &mut RecursoPlas
             section(ui, "Suporte");
             crate::feat_ui::sketch_pick(ui, "pl_snap_sk", "Raízes", doc, idx, &mut sn.sketch);
             nota(ui, "Cada linha do sketch é a raiz de uma viga; a largura é o comprimento da linha.");
-            check(ui, &mut sn.reverse, "para o outro lado do plano");
+            crate::inverter::botao(ui, &mut sn.reverse);
             check(ui, &mut sn.lado, "gancho para o outro lado da linha");
             section(ui, "Parâmetros");
             expr(ui, "Comprimento do snap", &mut sn.comprimento, vars, "mm");
@@ -144,7 +144,7 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, idx: usize, p: &mut RecursoPlas
             section(ui, "Suporte");
             crate::feat_ui::sketch_pick(ui, "pl_grelha_sk", "Região", doc, idx, &mut g.sketch);
             nota(ui, "O perfil fechado do sketch, menos a borda, é vazado através da parede; ficam as barras.");
-            check(ui, &mut g.reverse, "para o lado da normal do plano");
+            crate::inverter::botao(ui, &mut g.reverse);
             section(ui, "Parâmetros");
             expr(ui, "Borda da grelha", &mut g.borda, vars, "mm");
             expr(ui, "Passo das barras", &mut g.passo, vars, "mm");
@@ -163,7 +163,7 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, idx: usize, p: &mut RecursoPlas
                 ui.radio_value(&mut l.ranhura, false, tr("lip (acrescenta)"));
                 ui.radio_value(&mut l.ranhura, true, tr("ranhura (tira)"));
             });
-            check(ui, &mut l.reverse, "para o outro lado do plano");
+            crate::inverter::botao(ui, &mut l.reverse);
             section(ui, "Parâmetros");
             expr(ui, "Recuo do lip", &mut l.recuo, vars, "mm");
             expr(ui, "Largura do lip", &mut l.largura, vars, "mm");

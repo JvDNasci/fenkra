@@ -690,7 +690,10 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
         return;
     };
     crate::campos::inicio(ui.ctx(), id.0, crate::campos::assinatura(&app.picks));
+    // ADR 0107: o descritor do comando diz qual campo é o ativo (o widget com esse nome recebe o clique)
+    crate::campos::definir_contrato(ui.ctx(), crate::contrato::id_do_ativo_no_doc(&app.open.doc, id));
     show_painel(app, ui);
+    app.aplicar_pedidos_da_caixa(ui.ctx());
     if crate::campos::fim(ui.ctx()) {
         // o campo usou o clique: a seleção sai, e o clique seguinte (até no mesmo elemento) chega
         // como novo; as entradas consumidas ficam ocultas, como no preenchimento pelos campos vazios
@@ -722,6 +725,12 @@ fn show_painel(app: &mut App, ui: &mut egui::Ui) {
     let picked_faces = app.picked_faces();
     let session = app.session.as_ref().map(|s| (s.id, s.is_new));
     let mut seed = app.seed(false);
+    // ADR 0107: campo com "seguir tangentes" ligado: o clique numa curva leva as vizinhas tangentes
+    if let Sel::Ref(cid) | Sel::Feature(cid) = sel {
+        if app.open.doc.campos.iter().any(|d| d.dono == cid && d.tangentes) {
+            seed.curves = app.chained(std::mem::take(&mut seed.curves));
+        }
+    }
     // B466: a lista dos campos de curva oferece as curvas e arestas do modelo
     if matches!(sel, Sel::Ref(_)) {
         seed.modelo = std::sync::Arc::new(crate::curvas_modelo::lista(app));
@@ -1550,6 +1559,11 @@ fn feature_ui(
     seed: &crate::geo_ui::Seed,
 ) {
     if crate::feat_ui::panel(ui, doc, idx, id, kind, vars, picked_faces, seed) {
+        // B562/ADR 0107: o "⇄ Inverter direção" padrão dos comandos de superfície com lado
+        if !crate::inverter::controles(crate::contrato::Alvo::Feature(kind)).is_empty() {
+            section(ui, "Direção");
+            crate::inverter::botoes_feature(ui, kind);
+        }
         target_combo(ui, doc, target);
         return;
     }
@@ -1583,7 +1597,7 @@ fn feature_ui(
             op_combo(ui, "op_ex", &mut e.op);
             section(ui, "Extensão");
             extent_ui(ui, "ext_ex", &mut e.extent, vars, &["Cego", "Plano médio", "Dois sentidos", "Passante", "Até o próximo", "Até o último", "Até plano", "Até a superfície"], doc, seed);
-            crate::editor::check(ui, &mut e.reverse, "inverter sentido");
+            crate::inverter::botao(ui, &mut e.reverse);
             let mut custom = e.dir.is_some();
             if crate::editor::check(ui, &mut custom, "direção por linha, aresta ou eixo").changed() {
                 e.dir = custom.then(|| seed.curves.first().map(crate::geo_ui::axis_of).unwrap_or(AxisRef::Origin(OriginAxis::Z)));
@@ -1593,7 +1607,7 @@ fn feature_ui(
             }
             crate::feat_ui::extrude_extras(ui, e, vars, doc, seed);
             if e.op == BoolOp::Cut {
-                ui.label(RichText::new(tr("O recorte entra no material (contra a normal do plano). Use 'inverter' se necessário.")).weak().small());
+                ui.label(RichText::new(tr("O recorte entra no material (contra a normal do plano). Use 'Inverter direção' se necessário.")).weak().small());
             }
             target_combo(ui, doc, target);
         }
@@ -1683,8 +1697,11 @@ fn feature_ui(
                 let chaves = o.keys.clone();
                 let antes = m.clone();
                 // sacola: a lista das arestas (cada clique na aresta soma/tira)
-                crate::geo_ui::bag(
+                crate::geo_ui::bag_contrato(
                     ui,
+                    doc,
+                    id,
+                    seed,
                     &format!("arestas{}", id.0),
                     "Arestas",
                     m,
@@ -1692,6 +1709,8 @@ fn feature_ui(
                     0,
                     // B555: nome legível pela chave ("Aresta 3 (Extrusão 1)"), senão pela posição
                     |p| nome_da_aresta(doc, &antes, &chaves, p),
+                    None,
+                    None,
                     |ui, i, p| {
                         ui.label(crate::ref_nome::campo_aresta(doc, chaves.get(i).and_then(|k| k.as_ref()), *p)).on_hover_text(crate::ref_nome::dica_aresta());
                     },
@@ -1999,7 +2018,7 @@ fn hole_ui(ui: &mut egui::Ui, doc: &Document, idx: usize, h: &mut Hole, vars: &V
         let txt = if h.points.is_empty() { "normal ao plano do sketch" } else { "normal à superfície em cada ponto" };
         ui.label(RichText::new(tr(txt)).weak().small());
     }
-    crate::editor::check(ui, &mut h.reverse, "inverter sentido");
+    crate::inverter::botao(ui, &mut h.reverse);
 
     target_combo(ui, doc, target);
 }
