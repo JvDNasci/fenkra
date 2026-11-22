@@ -28,7 +28,7 @@ fn nervura(spline: bool) -> (Document, Id, Id) {
         .collect();
     let curva = d.add_geometry(if spline { RefKind::Spline { points: pts, closed: false, tangents: vec![] } } else { RefKind::Polyline { points: pts, closed: false } });
     let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(curva), dir: AxisRef::Origin(OriginAxis::Z), length: s("60"), length2: s("0"), until: None, until2: None });
-    let aba = d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Ref(sup), face: [40., 25., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90"), limites: Default::default() }));
+    let aba = d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Ref(sup), face: [40., 25., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90"), limites: Default::default(), side: 0, inv_lado: false }));
     (d, sup, aba)
 }
 
@@ -100,7 +100,7 @@ fn placa_com_arco(raio: f64, cx: f64, ang0: f64, ang1: f64) -> (Document, Id) {
     let pt = |a: f64| PointRef::Fixed([cx + raio * a.to_radians().cos(), 40. + raio * a.to_radians().sin(), 0.]);
     let curva = d.add_geometry(RefKind::Circle3 { a: pt(ang0), b: pt((ang0 + ang1) / 2.), c: pt(ang1), full: false });
     let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(curva), dir: AxisRef::Origin(OriginAxis::Z), length: s("60"), length2: s("0"), until: None, until2: None });
-    let aba = d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Ref(sup), face: [40., 40., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90"), limites: Default::default() }));
+    let aba = d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Ref(sup), face: [40., 40., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90"), limites: Default::default(), side: 0, inv_lado: false }));
     (d, aba)
 }
 
@@ -118,7 +118,7 @@ fn placa_com_spline(y0: f64, y1: f64, amp: f64) -> (Document, Id) {
         .collect();
     let curva = d.add_geometry(RefKind::Spline { points: pts, closed: false, tangents: vec![] });
     let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(curva), dir: AxisRef::Origin(OriginAxis::Z), length: s("60"), length2: s("0"), until: None, until2: None });
-    let aba = d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Ref(sup), face: [40., 40., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90"), limites: Default::default() }));
+    let aba = d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Ref(sup), face: [40., 40., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90"), limites: Default::default(), side: 0, inv_lado: false }));
     (d, aba)
 }
 

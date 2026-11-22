@@ -193,12 +193,23 @@ fn ordena_cadeia(mut partes: Vec<Vec<V3>>) -> Option<Vec<Vec<V3>>> {
     let mut out = vec![partes.remove(0)];
     while !partes.is_empty() {
         let fim = *out.last()?.last()?;
-        let i = partes.iter().position(|p| perto(p[0], fim) || perto(*p.last().unwrap(), fim))?;
+        if let Some(i) = partes.iter().position(|p| perto(p[0], fim) || perto(*p.last().unwrap(), fim)) {
+            let mut p = partes.remove(i);
+            if !perto(p[0], fim) {
+                p.reverse();
+            }
+            out.push(p);
+            continue;
+        }
+        // B560: a lista escolhida pode começar no meio da cadeia (o primeiro clique foi a borda e o
+        // seguinte o canto que a antecede): sem vizinha na ponta final, a cadeia cresce pelo começo
+        let ini = out[0][0];
+        let i = partes.iter().position(|p| perto(*p.last().unwrap(), ini) || perto(p[0], ini))?;
         let mut p = partes.remove(i);
-        if !perto(p[0], fim) {
+        if !perto(*p.last().unwrap(), ini) {
             p.reverse();
         }
-        out.push(p);
+        out.insert(0, p);
     }
     Some(out)
 }

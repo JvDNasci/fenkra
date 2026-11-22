@@ -327,3 +327,26 @@ a coerência antes de integrar.
   lista como uma curva; falta ler `Document::dados_campo` para juntar os itens de um grupo antes do kernel.
 - **Inverter único** em `inverter.rs`: o botão do painel e a seta do 3D chamam a mesma função
   (`alternar_ref`, `alternar_feature`); `chapa_unif_ui::inverter` é o widget padrão.
+
+### Onda 1, chapa (22/11/2026; B560 e B563, mais as pendências da revisão da onda 0)
+
+- **B560, aba de arestas num modo só.** A barra de modos da aba tem Arestas, Perfil e Superfície. O
+  suporte do modo Arestas é uma lista que mistura retas e curvas, com "seguir tangentes" e contorno da
+  face; os três recursos antigos continuam gravados e abrem iguais. Correção de kernel achada pelo teste
+  da lista mista: `ordena_cadeia` crescia a cadeia só pelo fim, e a lista "borda, canto, borda" falhava.
+- **B563, aba por superfície no padrão das irmãs.** `SmSurfFlange::side` (posição do material) e
+  `inv_lado` (lado da superfície); nervura de asa plana e curva nas três posições e quatro inversões.
+- **Descritor.** Declaradas as entradas de face dos comandos de chapa e estrutural que ainda estavam no
+  adaptador. `feat_ui::wants_faces` é agora uma consulta ao descritor (`contrato::quer_face`), e o filtro
+  do 3D (`selecao::tipos_do_comando`) sai só dele. `contrato::preencher` substitui os braços de chapa de
+  `slots::fill_special`. A busca de `UNSET_*` no JSON em `fill_from_selection` foi trocada por uma
+  consulta aos campos vazios do descritor.
+- **Inverter.** `inverter::bool_de_feature` é o campo único do botão e da seta; `controles`, `estado` e
+  `alternar_feature` ganharam os comandos com `bool` de inverter; teste `botao_e_seta_ligam_ao_mesmo_campo`.
+- **Tab.** `campos.rs` usa `ordem_tab` do descritor no lugar do "primeiro vazio" quando o campo ativo não
+  é um dos declarados.
+- **Pendente.** (1) Rótulo e dica do descritor ainda não são lidos pelo painel (cada widget traz os
+  seus). (2) A seta clicável de inverter do 3D das features (extrusão, furo, abas) depende de
+  `sup3d::setas_de_lado`, que está na onda das superfícies; o campo já é o mesmo, falta desenhar a seta.
+  (3) `slots::aresta_clicada` (antigo) segue como retorno para a bainha. (4) A prévia leve e o cache do
+  dobrado e planificado (B564, B566) ficam para a próxima onda.

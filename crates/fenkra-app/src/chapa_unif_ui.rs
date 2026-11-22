@@ -7,14 +7,13 @@
 use crate::editor::section;
 use crate::i18n::tr;
 use eframe::egui::{self, RichText};
-use fenkra_core::aba_unif::{converter_aba, modo_de, ModoAba, MODOS_ABA};
+use fenkra_core::aba_unif::{converter_aba_ui, ModoAbaUi, MODOS_ABA_UI};
 use fenkra_core::{Document, FeatureKind};
 
-/// (ícone, nome, dica) de cada modo, na ordem de `MODOS_ABA`.
-const MODOS: [(&str, &str, &str); 5] = [
-    ("sm_aba", "Aresta", "Uma aba numa aresta da chapa, com recuos laterais e alívio. Numa aresta curva, a aba segue a curva."),
-    ("sm_aba_laco", "Laço", "Várias abas de uma vez: as arestas escolhidas ou o laço da face inteira, com mitra nos cantos e extensão lateral."),
-    ("sm_aba_curva", "Curva", "Aba numa aresta curva, seguindo as arestas tangentes."),
+/// (ícone, nome, dica) de cada modo da interface, na ordem de `MODOS_ABA_UI` (B560): Aresta, Laço e
+/// Curva são um modo só, "Arestas".
+const MODOS: [(&str, &str, &str); 3] = [
+    ("sm_aba", "Arestas", "Abas em arestas retas, curvas ou as duas misturadas: cada clique soma, clicar de novo tira, e uma face pega o contorno inteiro. Os trechos curvos viram uma aba curva emendada às retas."),
     ("sm_aba_perfil", "Perfil", "Aba complexa: cadeia aberta de um sketch, com os cantos no raio da chapa."),
     ("sm_aba_superficie", "Superfície", "Aba apoiada numa superfície de suporte."),
 ];
@@ -35,89 +34,88 @@ pub fn inverter(ui: &mut egui::Ui, flip: &mut bool) -> egui::Response {
     r
 }
 
-/// Suporte do comando de aba: o que foi escolhido no 3D, com contador e botão de limpar. Só as
-/// abas de aresta e de laço têm suporte de aresta; os outros modos mostram o suporte no próprio painel.
+/// Suporte do comando de aba no modo "Arestas" (B560): uma lista só, para arestas retas e curvas
+/// misturadas, qualquer que seja o recurso por trás (aba reta, aba curva ou laço). Cada clique no 3D
+/// soma, clicar de novo tira (`slots::aresta_clicada_lista`), o "✖" tira a escolhida e a face pega o
+/// contorno. Os outros modos mostram o suporte no próprio painel.
 pub fn suporte(ui: &mut egui::Ui, doc: &fenkra_core::Document, kind: &mut FeatureKind) {
-    match kind {
-        FeatureKind::SmFlange(fl) => {
-            section(ui, "Suporte");
-            // B531: o mesmo campo de seleção do laço e da aba curva; o clique numa aresta reta, numa
-            // curva ou numa face troca o modo sozinho (`slots::aresta_clicada`)
-            let atual = (fl.edge != [0.; 3]).then_some((fl.edge, fl.edge_key));
-            if let Some(novo) = campo_aresta(ui, doc, "smaba_aresta", atual) {
-                (fl.edge, fl.edge_key) = novo.unwrap_or(([0.; 3], None));
+    let z = [0.; 3];
+    // os itens da lista, qualquer que seja o recurso
+    let mut itens: Vec<([f64; 3], Option<fenkra_core::EdgeKey>)> = match kind {
+        FeatureKind::SmFlange(f) => (f.edge != z).then_some((f.edge, f.edge_key)).into_iter().collect(),
+        FeatureKind::SmCurveFlange(c) => (!c.edge.is_empty()).then(|| (c.edge[c.edge.len() / 2], c.edge_key)).into_iter().collect(),
+        FeatureKind::SmFlangeLoop(lp) => lp.edges.iter().enumerate().filter(|(_, e)| **e != z).map(|(i, e)| (*e, lp.edge_keys.get(i).copied().flatten())).collect(),
+        _ => return,
+    };
+    section(ui, "Suporte");
+    let antes = itens.clone();
+    // o nome do widget é o `id` que o descritor declara para o recurso (campo ativo e ordem do Tab)
+    let salt = match kind {
+        FeatureKind::SmFlange(_) => "smaba_aresta",
+        FeatureKind::SmCurveFlange(_) => "aresta",
+        _ => "smloop_arestas",
+    };
+    crate::geo_ui::bag(
+        ui,
+        salt,
+        "Arestas",
+        &mut itens,
+        &[],
+        1,
+        |(p, k)| if *p == z { tr("escolher no 3D").to_string() } else { crate::ref_nome::campo_aresta(doc, k.as_ref(), *p) },
+        |ui, _, _| {
+            ui.label(RichText::new(tr("Clique outra aresta no 3D para somar (reta ou curva); clique de novo numa escolhida para tirar.")).weak().small());
+        },
+        || (z, None),
+        Some((z, None)),
+        |a, b| (a.1.is_some() && a.1 == b.1) || (0..3).all(|i| (a.0[i] - b.0[i]).abs() < 0.01),
+    );
+    if itens != antes {
+        let reais: Vec<_> = itens.iter().filter(|(p, _)| *p != z).copied().collect();
+        match kind {
+            FeatureKind::SmFlange(f) => (f.edge, f.edge_key) = reais.first().copied().unwrap_or((z, None)),
+            FeatureKind::SmCurveFlange(c) => {
+                if reais.is_empty() {
+                    c.edge.clear();
+                    c.edge_key = None;
+                }
             }
-        }
-        FeatureKind::SmFlangeLoop(lp) => {
-            section(ui, "Suporte");
-            // B530: campo de lista padrão (o mesmo das outras bancadas): cada clique numa aresta soma,
-            // clicar de novo tira, o nome vem da identidade da aresta; clicar numa face pega o contorno
-            let z = [0.; 3];
-            let mut itens: Vec<([f64; 3], Option<fenkra_core::EdgeKey>)> = lp.edges.iter().enumerate().filter(|(_, e)| **e != z).map(|(i, e)| (*e, lp.edge_keys.get(i).copied().flatten())).collect();
-            let antes = itens.clone();
-            crate::geo_ui::bag(
-                ui,
-                "smloop_arestas",
-                "Arestas",
-                &mut itens,
-                &[],
-                1,
-                |(p, k)| if *p == z { tr("escolher no 3D").to_string() } else { crate::ref_nome::campo_aresta(doc, k.as_ref(), *p) },
-                |ui, _, _| {
-                    ui.label(RichText::new(tr("Clique outra aresta no 3D para somar; clique de novo numa escolhida para tirar.")).weak().small());
-                },
-                || (z, None),
-                Some((z, None)),
-                |a, b| (a.1.is_some() && a.1 == b.1) || (0..3).all(|i| (a.0[i] - b.0[i]).abs() < 0.01),
-            );
-            if itens != antes {
-                let reais: Vec<_> = itens.iter().filter(|(p, _)| *p != z).copied().collect();
+            FeatureKind::SmFlangeLoop(lp) => {
                 lp.edges = if reais.is_empty() { vec![z] } else { reais.iter().map(|x| x.0).collect() };
                 lp.edge_keys = if reais.iter().all(|x| x.1.is_none()) { vec![] } else { reais.iter().map(|x| x.1).collect() };
                 if reais.len() <= 1 {
                     lp.loop_all = true;
                 }
             }
-            ui.label(RichText::new(tr("Clique numa face da chapa para pegar o contorno inteiro dela.")).weak().small());
+            _ => {}
+        }
+    }
+    ui.label(RichText::new(tr("Clique numa face da chapa para pegar o contorno inteiro dela.")).weak().small());
+    // seguir as tangentes: a curva clicada leva junto as arestas tangentes a ela
+    let dica = tr("Ligado: ao clicar numa aresta curva, a lista soma também as arestas tangentes a ela, e a cadeia vira uma aba curva contínua. Desligado: só a aresta clicada.");
+    match kind {
+        FeatureKind::SmCurveFlange(c) => {
+            let mut seguir = !c.so_aresta;
+            if crate::editor::check(ui, &mut seguir, "seguir tangentes").on_hover_text(dica).changed() {
+                c.so_aresta = !seguir;
+            }
+        }
+        FeatureKind::SmFlangeLoop(lp) => {
+            crate::editor::check(ui, &mut lp.seguir, "seguir tangentes").on_hover_text(dica);
             crate::editor::check(ui, &mut lp.loop_all, "usar o laço da face inteira").on_hover_text(tr("Liga: a partir da primeira aresta escolhida, cria uma aba em cada aresta do contorno da face, retas e curvas; os trechos curvos viram aba curva emendada às retas. Desliga: só as arestas escolhidas."));
         }
         _ => {}
     }
 }
 
-/// B531: campo de seleção da aresta única das abas de aresta e de aresta curva: o mesmo widget de
-/// lista das outras bancadas, com o nome pela identidade da aresta e o "✖" para tirar. `atual` é a
-/// aresta escolhida (um ponto dela e a chave). Devolve `Some(nova)` quando a pessoa mudou o campo
-/// (`None` dentro = tirou a aresta).
-pub fn campo_aresta(ui: &mut egui::Ui, doc: &Document, salt: &str, atual: Option<([f64; 3], Option<fenkra_core::EdgeKey>)>) -> Option<Option<([f64; 3], Option<fenkra_core::EdgeKey>)>> {
-    let z = [0.; 3];
-    let mut itens: Vec<([f64; 3], Option<fenkra_core::EdgeKey>)> = atual.into_iter().collect();
-    let antes = itens.clone();
-    crate::geo_ui::bag(
-        ui,
-        salt,
-        "Aresta",
-        &mut itens,
-        &[],
-        1,
-        |(p, k)| if *p == z { tr("escolher no 3D").to_string() } else { crate::ref_nome::campo_aresta(doc, k.as_ref(), *p) },
-        |ui, _, _| {
-            ui.label(RichText::new(tr("Clique outra aresta no 3D para trocar: reta, curva ou uma face (o contorno todo) escolhem o modo sozinhos.")).weak().small());
-        },
-        || (z, None),
-        Some((z, None)),
-        |a, b| (a.1.is_some() && a.1 == b.1) || (0..3).all(|i| (a.0[i] - b.0[i]).abs() < 0.01),
-    );
-    (itens != antes).then(|| itens.into_iter().find(|(p, _)| *p != z))
-}
-
-/// A barra de modos (miniaturas). Troca a feature para o modo clicado, levando o que é comum.
+/// A barra de modos (miniaturas): Arestas, Perfil e Superfície (B560). Troca a feature para o modo
+/// clicado, levando o que é comum; dentro de "Arestas" o recurso não muda.
 pub fn modos(ui: &mut egui::Ui, kind: &mut FeatureKind) {
-    let Some(atual) = modo_de(kind) else { return };
+    let Some(atual) = fenkra_core::aba_unif::modo_ui_de(kind) else { return };
     section(ui, "Modo da aba");
-    let opts: Vec<(&str, &str, &str, bool)> = MODOS.iter().zip(MODOS_ABA).map(|((ic, n, d), m)| (*ic, tr(n), tr(d), m == atual)).collect();
+    let opts: Vec<(&str, &str, &str, bool)> = MODOS.iter().zip(MODOS_ABA_UI).map(|((ic, n, d), m)| (*ic, tr(n), tr(d), m == atual)).collect();
     if let Some(i) = crate::editor::icon_choice(ui, &opts) {
-        if let Some(mut novo) = converter_aba(kind, MODOS_ABA[i]) {
+        if let Some(mut novo) = converter_aba_ui(kind, MODOS_ABA_UI[i]) {
             // o perfil ainda não escolhido fica com o marcador de entrada pendente, para o painel
             // pedir o perfil em vez de acusar referência perdida
             if let FeatureKind::SmProfileFlange(p) = &mut novo {
@@ -129,10 +127,8 @@ pub fn modos(ui: &mut egui::Ui, kind: &mut FeatureKind) {
         }
     }
     ui.label(RichText::new(tr(match atual {
-        ModoAba::Aresta => "Aresta: uma aba, com recuos laterais.",
-        ModoAba::Laco => "Laço: uma aba por aresta, com extensão lateral e mitra.",
-        ModoAba::Curva => "Curva: a aba segue a aresta curva e as tangentes a ela.",
-        ModoAba::Perfil => "Perfil: a aba segue uma cadeia aberta de um sketch.",
-        ModoAba::Superficie => "Superfície: a aba se apoia numa superfície de suporte.",
+        ModoAbaUi::Arestas => "Arestas: uma aba por aresta, reta ou curva, com recuos, extensão lateral e mitra onde couber.",
+        ModoAbaUi::Perfil => "Perfil: a aba segue uma cadeia aberta de um sketch.",
+        ModoAbaUi::Superficie => "Superfície: a aba se apoia numa superfície de suporte.",
     })).weak().small());
 }

@@ -2680,6 +2680,12 @@ pub struct SmFlangeLoop {
     pub relief: Option<String>,
     #[serde(default)]
     pub relief_kind: u8,
+    /// B560: ao clicar numa aresta curva, a lista soma também as arestas tangentes a ela (a cadeia
+    /// inteira vira uma aba curva contínua); desligado (o padrão, como na aba curva), só a aresta
+    /// clicada. Não muda o cálculo: é a regra do clique, gravada para o painel mostrar o mesmo
+    /// estado ao reabrir.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub seguir: bool,
 }
 
 /// Aba numa aresta curva (aba por superfície): parede normal à chapa ao longo da aresta.
@@ -2751,6 +2757,16 @@ pub struct SmSurfFlange {
     /// B556: limites dos lados, da borda final e tratamento dos cantos (tudo opcional)
     #[serde(default, skip_serializing_if = "LimitesAba::vazio")]
     pub limites: LimitesAba,
+    /// B563: posição do material em relação à superfície de suporte, com os mesmos nomes e a mesma
+    /// lógica das abas de aresta (`SmFlange::side`): 0 começo do raio (a dobra começa na superfície),
+    /// 1 face interna (a face interna da aba fica sobre a superfície), 2 face externa (a face externa
+    /// fica sobre a superfície). Documentos antigos leem 0 e abrem iguais.
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    pub side: u8,
+    /// B563: inverter o lado da superfície em que a chapa fica (a base é relimitada do outro lado e
+    /// a aba sobe do outro lado do suporte). Junto de `flip` dá as quatro combinações de inversão.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub inv_lado: bool,
 }
 
 /// B556: elemento que limita a aba por superfície. O comando sempre tenta estender, recortar e

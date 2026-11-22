@@ -95,7 +95,7 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, lp: &mut SmFlangeLoop, vars: &V
             ui.selectable_value(&mut lp.side, k, tr(n));
         }
     });
-    crate::chapa_unif_ui::inverter(ui, &mut lp.flip);
+    crate::inverter::botao(ui, &mut lp.flip);
     section(ui, "Avançado");
     check(ui, &mut lp.miter, "pontas em meia-esquadria (45°) para a aba vizinha");
     let mut rel = lp.relief.is_some();

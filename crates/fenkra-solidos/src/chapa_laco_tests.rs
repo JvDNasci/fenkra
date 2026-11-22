@@ -31,7 +31,7 @@ fn placa() -> Document {
 }
 
 fn laco(edges: Vec<[f64; 3]>, extent: ExtensaoAba, loop_all: bool, miter: bool) -> FeatureKind {
-    FeatureKind::SmFlangeLoop(SmFlangeLoop { edges, edge_keys: vec![], loop_all, extent, invert: false, length: s("20"), angle: s("90"), radius: None, flip: false, side: 0, miter, relief: None, relief_kind: 0 })
+    FeatureKind::SmFlangeLoop(SmFlangeLoop { edges, edge_keys: vec![], loop_all, extent, invert: false, length: s("20"), angle: s("90"), radius: None, flip: false, side: 0, miter, relief: None, relief_kind: 0, seguir: false })
 }
 
 fn aba(e: [f64; 3], off1: &str, off2: &str, miter: bool) -> FeatureKind {

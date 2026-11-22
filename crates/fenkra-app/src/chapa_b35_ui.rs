@@ -19,7 +19,7 @@ pub fn painel_perfis(ui: &mut egui::Ui, doc: &Document, idx: usize, lf: &mut SmL
     ui.label(RichText::new(tr("Dois contornos fechados em planos diferentes. O perfil é a face de fora da chapa; a espessura vem dos parâmetros da chapa.")).weak().small());
     section(ui, "Transição");
     check(ui, &mut lf.ruled, "transição facetada (dobradeira)").on_hover_text(tr("Ligado: lados retos entre os vértices correspondentes dos dois perfis, como numa dobradeira. Desligado: transição lisa, como numa estampa."));
-    crate::chapa_unif_ui::inverter(ui, &mut lf.flip);
+    crate::inverter::botao(ui, &mut lf.flip);
     ui.label(RichText::new(tr("Sem planificação exata: no estado planificado a aba aparece dobrada, com aviso.")).weak().small());
 }
 

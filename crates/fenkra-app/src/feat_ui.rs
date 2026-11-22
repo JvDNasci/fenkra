@@ -20,13 +20,10 @@ pub fn is_shape(k: &FeatureKind) -> bool {
     )
 }
 
-/// Comandos em que clicar numa face na viewport (com o comando aberto) acrescenta a face.
+/// Comandos em que clicar numa face na viewport (com o comando aberto) acrescenta a face. A resposta
+/// sai do descritor do comando (`contrato::quer_face`): quem declara um campo de face entra sozinho.
 pub fn wants_faces(k: &FeatureKind) -> bool {
-    matches!(k, FeatureKind::Shell(_) | FeatureKind::Draft(_) | FeatureKind::Thickness(_) | FeatureKind::DirectEdit(_) | FeatureKind::Thread(_) | FeatureKind::StructPlate(_) | FeatureKind::StructWeld(_) | FeatureKind::SmCornerRelief(_) | FeatureKind::SmCornerClose(_) | FeatureKind::SmConvert(_) | FeatureKind::SmArcSlot(_) | FeatureKind::SmSurfFlange(_))
-        || matches!(k, FeatureKind::SmFlangedHole(h) if crate::slots::is_unset(h.sketch) || !h.points.is_empty())
-        // B90: furo sem centros do sketch posiciona-se clicando na face
-        || matches!(k, FeatureKind::Hole(h) if crate::handles::furo_espera_clique(h))
-        || matches!(k, FeatureKind::Fillet(o) if matches!(o.mode, EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }))
+    crate::contrato::quer_face(crate::contrato::Alvo::Feature(k))
 }
 
 /// Acrescenta (ou, na rosca, troca) a face clicada no comando.
@@ -229,29 +226,10 @@ pub(crate) fn sketch_pick(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docu
     });
 }
 
-/// Suporte dos modos curva, perfil e superfície do comando de aba unificado (B31), antes da barra
-/// de modos, como o da aresta e do laço em `chapa_unif_ui::suporte`.
+/// Suporte dos modos perfil e superfície do comando de aba unificado (B31), antes da barra de
+/// modos; o do modo "Arestas" (reta, curva e laço) é a lista de `chapa_unif_ui::suporte` (B560).
 fn suporte_aba_modos(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut FeatureKind, seed: &Seed) {
     match kind {
-        FeatureKind::SmCurveFlange(cf) => {
-            section(ui, "Suporte");
-            // B531: o mesmo campo de seleção da aba de aresta; a aresta vem do clique no 3D (o nome
-            // sai da identidade dela) e o clique numa reta sozinha volta ao modo reta
-            let atual = (cf.edge.len() >= 2).then(|| (cf.edge[cf.edge.len() / 2], cf.edge_key));
-            if let Some(novo) = crate::chapa_unif_ui::campo_aresta(ui, doc, "smcurva_aresta", atual) {
-                match novo {
-                    Some((_, k)) => cf.edge_key = k,
-                    None => {
-                        cf.edge.clear();
-                        cf.edge_key = None;
-                    }
-                }
-            }
-            let mut segue = !cf.so_aresta;
-            if crate::editor::check(ui, &mut segue, "seguir as arestas tangentes").on_hover_text(tr("Liga: a aba continua pelas arestas tangentes à escolhida (reta, arco, reta). Desliga: só a aresta clicada.")).changed() {
-                cf.so_aresta = !segue;
-            }
-        }
         FeatureKind::SmProfileFlange(p) => {
             section(ui, "Suporte");
             sketch_pick(ui, "smp_sk", "Perfil (aberto)", doc, idx, &mut p.sketch);
@@ -614,7 +592,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     expr(ui, "Afastamento do plano", &mut w.offset, vars, "mm");
                 }
             }
-            crate::chapa_unif_ui::inverter(ui, &mut w.reverse);
+            crate::inverter::botao(ui, &mut w.reverse);
             crate::editor::check(ui, &mut w.mid, "espessura dividida pelos dois lados");
             ui.label(RichText::new(tr("A espessura vem dos parâmetros da chapa (▭ Parâmetros).")).weak().small());
         }
@@ -641,7 +619,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     ui.selectable_value(&mut fl.side, k, tr(n));
                 }
             });
-            crate::chapa_unif_ui::inverter(ui, &mut fl.flip);
+            crate::inverter::botao(ui, &mut fl.flip);
             section(ui, "Avançado");
             // os recuos só valem na aba de aresta: no laço a extensão lateral faz esse papel
             expr(ui, "Recuo início", &mut fl.off1, vars, "mm");
@@ -685,7 +663,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 2 => "Enrolada: três quartos de volta (raio = folga ÷ 2).",
                 _ => "Folga 0 = bainha esmagada; maior que 0 = aberta/circular.",
             })).weak().small());
-            crate::chapa_unif_ui::inverter(ui, &mut h.flip);
+            crate::inverter::botao(ui, &mut h.flip);
         }
         FeatureKind::SmJoggle(j) => {
             section(ui, "Desvio em Z");
@@ -717,7 +695,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 None => expr(ui, "Rampa", &mut j.run, vars, "mm"),
             }
             crate::editor::check(ui, &mut j.keep_length, "compensação: manter o comprimento desenvolvido");
-            crate::chapa_unif_ui::inverter(ui, &mut j.flip);
+            crate::inverter::botao(ui, &mut j.flip);
         }
         FeatureKind::SmBend(b) => {
             section(ui, "Dobra por linha");
@@ -751,7 +729,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             if let Some(r) = &mut b.radius {
                 expr(ui, "Raio interno", r, vars, "mm");
             }
-            crate::chapa_unif_ui::inverter(ui, &mut b.flip);
+            crate::inverter::botao(ui, &mut b.flip);
             crate::editor::check(ui, &mut b.down, "dobrar para o outro lado");
             let mut cega = b.cega.is_some();
             if crate::editor::check(ui, &mut cega, "dobra cega (só a faixa entre as pontas da linha gira)").changed() {
@@ -790,7 +768,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             ui.label(RichText::new(tr("Clique na face fixa e desenhe a linha na face, direto no 3D: a rampa sai do lado oposto ao da face fixa.")).weak().small());
             expr(ui, "Largura da rampa", &mut l.width, vars, "mm");
             expr(ui, "Altura da abertura", &mut l.height, vars, "mm");
-            crate::chapa_unif_ui::inverter(ui, &mut l.flip);
+            crate::inverter::botao(ui, &mut l.flip);
             crate::editor::check(ui, &mut l.down, "levantar para o outro lado da chapa");
         }
         FeatureKind::SmStamp(s) => {
@@ -827,7 +805,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 ui.label(RichText::new(tr("0 = proporcional à espessura")).weak().small());
             }
             if s.kind != 3 {
-                crate::chapa_unif_ui::inverter(ui, &mut s.flip);
+                crate::inverter::botao(ui, &mut s.flip);
             }
             ui.label(RichText::new(tr(match s.kind {
                 1 => "Nervura: seção trapezoidal varrida ao longo das linhas/curvas do sketch na face.",
@@ -880,7 +858,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     ui.ctx().data_mut(|m| m.insert_temp(key, name));
                 });
             }
-            crate::chapa_unif_ui::inverter(ui, &mut h.flip);
+            crate::inverter::botao(ui, &mut h.flip);
         }
         FeatureKind::SmCut(c) => {
             section(ui, "Recorte na chapa");
@@ -896,7 +874,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 2 => expr(ui, "Altura do colar", &mut c.height, vars, "mm"),
                 _ => {}
             }
-            crate::chapa_unif_ui::inverter(ui, &mut c.flip);
+            crate::inverter::botao(ui, &mut c.flip);
             ui.horizontal_wrapped(|ui| {
                 for (normal, n, tip) in [
                     (false, "através da dobra", "O contorno desenhado num estado (dobrado ou planificado) é levado ao outro, inclusive pelo raio da dobra."),
@@ -918,7 +896,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             if let Some(r) = &mut p.radius {
                 crate::editor::expr_lim(ui, "Raio interno", r, vars, "mm", Some((0.01, f64::INFINITY)));
             }
-            crate::chapa_unif_ui::inverter(ui, &mut p.flip);
+            crate::inverter::botao(ui, &mut p.flip);
             ui.label(RichText::new(tr("Desenhe a cadeia aberta (linhas e arcos) num plano que corta a aresta; os cantos ganham o raio de dobra.")).weak().small());
         }
         FeatureKind::SmCurveFlange(cf) => {
@@ -945,7 +923,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                     ui.selectable_value(&mut cf.side, k, tr(n)).on_hover_text(tr(tip));
                 }
             });
-            crate::chapa_unif_ui::inverter(ui, &mut cf.flip);
+            crate::inverter::botao(ui, &mut cf.flip);
             ui.label(RichText::new(tr("A aba segue a aresta e as que continuam tangentes (reta e curva juntas), com o raio de dobra; planifica pelo comprimento desenvolvido.")).weak().small());
         }
         FeatureKind::SmSurfFlange(sf) => {
@@ -967,15 +945,34 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 }
                 crate::editor::expr_lim(ui, "Ângulo", &mut sf.angle, vars, "°", Some((0.01, 180.)));
             }
-            crate::editor::expr_lim(ui, "Comprimento (EOP)", &mut sf.length, vars, "mm", Some((0., f64::INFINITY)));
+            crate::editor::expr_lim(ui, "Comprimento reto", &mut sf.length, vars, "mm", Some((0., f64::INFINITY)));
             let mut own = sf.radius.is_some();
-            if crate::editor::check(ui, &mut own, "raio de dobra próprio (senão o da chapa)").changed() {
+            if crate::editor::check(ui, &mut own, "raio próprio (senão o da chapa)").changed() {
                 sf.radius = own.then(|| crate::chapa_unif_ui::raio_da_regra(doc));
             }
             if let Some(r) = &mut sf.radius {
-                crate::editor::expr_lim(ui, "Raio de dobra", r, vars, "mm", Some((0.01, f64::INFINITY)));
+                crate::editor::expr_lim(ui, "Raio interno", r, vars, "mm", Some((0.01, f64::INFINITY)));
             }
-            crate::chapa_unif_ui::inverter(ui, &mut sf.flip);
+            // B563: a mesma posição do material das abas de aresta, com os mesmos nomes; aqui a
+            // "aresta" é a linha de dobra (OML) do suporte
+            ui.horizontal_wrapped(|ui| {
+                ui.label(tr("Lado do material"));
+                for (k, n, tip) in [
+                    (0u8, "dobra por fora", "a dobra começa na superfície (começo do raio)"),
+                    (1, "material por fora", "a face interna da aba fica sobre a superfície"),
+                    (2, "material por dentro", "a face externa da aba fica sobre a superfície"),
+                ] {
+                    ui.selectable_value(&mut sf.side, k, tr(n)).on_hover_text(tr(tip));
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(tr("Direção da aba")).weak().small());
+                crate::inverter::botao(ui, &mut sf.flip);
+            });
+            ui.horizontal(|ui| {
+                ui.label(RichText::new(tr("Lado da superfície")).weak().small()).on_hover_text(tr("Troca o lado da superfície em que a chapa fica: a web é relimitada do outro lado e a aba sobe do outro lado do suporte."));
+                crate::inverter::botao(ui, &mut sf.inv_lado);
+            });
             crate::chapa_aba_limites_ui::painel(ui, doc, me, &mut sf.limites, vars, seed);
             let help = match sf.mode {
                 1 => "Aproximação: suporte trocado pelo plano tangente no meio da OML (dobra reta).",

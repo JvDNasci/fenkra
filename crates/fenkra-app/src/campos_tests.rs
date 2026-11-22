@@ -205,7 +205,7 @@ fn laco_de_abas_recebe_as_arestas_pelo_clique() {
         side: 0,
         miter: true,
         relief: None,
-        relief_kind: 0,
+        relief_kind: 0, seguir: false,
     });
     assert!(crate::slots::feature_incomplete(&k));
     assert_eq!(crate::entradas::campo_ativo(&k), Some(crate::entradas::Espera::Aresta));
@@ -237,7 +237,7 @@ fn laco_de_abas_recebe_as_arestas_pelo_clique() {
 }
 
 fn laco_vazio() -> FeatureKind {
-    FeatureKind::SmFlangeLoop(SmFlangeLoop { edges: vec![[0.; 3]], edge_keys: vec![], loop_all: true, extent: ExtensaoAba::Inteira, invert: false, length: s("20"), angle: s("90"), radius: None, flip: false, side: 0, miter: true, relief: None, relief_kind: 0 })
+    FeatureKind::SmFlangeLoop(SmFlangeLoop { edges: vec![[0.; 3]], edge_keys: vec![], loop_all: true, extent: ExtensaoAba::Inteira, invert: false, length: s("20"), angle: s("90"), radius: None, flip: false, side: 0, miter: true, relief: None, relief_kind: 0, seguir: false })
 }
 
 /// B530: duas arestas escolhidas no 3D (uma chave por aresta, pelo nome) viram duas abas; Shift não
@@ -363,4 +363,90 @@ fn aba_de_aresta_vira_curva_no_clique_em_curva() {
     }));
     let FeatureKind::SmCurveFlange(c) = &k else { panic!("virou aba curva") };
     assert_eq!((c.length.as_str(), c.angle.as_str(), c.flip, c.side, c.so_aresta, c.edge.len()), ("25", "60", true, 1, true, 3));
+}
+
+
+// ---- B560: o modo único "Arestas": retas e curvas misturadas na mesma lista ------------------------
+
+fn aba_com(edge: [f64; 3]) -> FeatureKind {
+    let s = |x: &str| x.to_string();
+    FeatureKind::SmFlange(fenkra_core::SmFlange { edge, length: s("25"), angle: s("60"), radius: Some(s("3")), off1: s("0"), off2: s("0"), flip: true, relief: None, relief_kind: 0, side: 2, miter: false, min_gap: true, edge_key: None })
+}
+
+fn clique(mid: [f64; 3], reta: bool) -> crate::slots::CliqueAresta {
+    crate::slots::CliqueAresta { mid, reta, so_pts: vec![mid], cadeia_pts: vec![mid], cadeia: vec![(mid, None)], ..Default::default() }
+}
+
+/// Reta, depois outra reta: a segunda soma e promove a aba a aba de arestas, levando os parâmetros; o
+/// clique de novo na segunda tira.
+#[test]
+fn b560_reta_mais_reta_soma_e_reclique_tira() {
+    let (e1, e2) = ([100., 25., 2.], [50., 0., 2.]);
+    let mut k = aba_com(e1);
+    assert!(crate::slots::aresta_clicada_lista(&mut k, &clique(e2, true)));
+    let FeatureKind::SmFlangeLoop(l) = &k else { panic!("virou o conjunto de abas") };
+    assert_eq!(l.edges, vec![e1, e2]);
+    assert!(!l.loop_all, "duas arestas valem como estão");
+    assert_eq!((l.length.as_str(), l.angle.as_str(), l.radius.as_deref(), l.flip, l.side), ("25", "60", Some("3"), true, 2));
+    assert!(crate::slots::aresta_clicada_lista(&mut k, &clique(e2, true)));
+    let FeatureKind::SmFlangeLoop(l) = &k else { panic!() };
+    assert_eq!(l.edges, vec![e1], "clicar de novo tira");
+}
+
+/// Reta, depois uma curva: a lista mistura reta e curva; com "seguir tangentes" a curva leva a cadeia.
+#[test]
+fn b560_reta_mais_curva_mistura_e_seguir_tangentes_soma_a_cadeia() {
+    let (e1, c1, c2, c3) = ([100., 25., 2.], [10., 0., 2.], [12., 3., 2.], [14., 6., 2.]);
+    let mut cl = clique(c1, false);
+    cl.cadeia = vec![(c1, None), (c2, None), (c3, None)];
+    // sem seguir (padrão): só a curva clicada entra
+    let mut k = aba_com(e1);
+    assert!(crate::slots::aresta_clicada_lista(&mut k, &cl));
+    let FeatureKind::SmFlangeLoop(l) = &k else { panic!() };
+    assert_eq!(l.edges, vec![e1, c1]);
+    // com "seguir tangentes" ligado: a curva soma a cadeia inteira, e clicar de novo tira a cadeia toda
+    let FeatureKind::SmFlangeLoop(mut l) = k else { panic!() };
+    l.seguir = true;
+    l.edges = vec![e1];
+    let mut k = FeatureKind::SmFlangeLoop(l);
+    assert!(crate::slots::aresta_clicada_lista(&mut k, &cl));
+    let FeatureKind::SmFlangeLoop(l) = &k else { panic!() };
+    assert_eq!(l.edges, vec![e1, c1, c2, c3]);
+    assert!(crate::slots::aresta_clicada_lista(&mut k, &cl));
+    let FeatureKind::SmFlangeLoop(l) = &k else { panic!() };
+    assert_eq!(l.edges, vec![e1], "a cadeia sai inteira");
+}
+
+/// Sem nada escolhido, uma curva sozinha continua sendo a aba curva; uma reta sozinha, a aba de aresta.
+#[test]
+fn b560_uma_aresta_so_continua_sendo_o_recurso_de_sempre() {
+    let c1 = [10., 0., 2.];
+    let mut cl = clique(c1, false);
+    cl.so_pts = vec![[10., 0., 2.], [7.07, 7.07, 2.], [0., 10., 2.]];
+    cl.cadeia_pts = cl.so_pts.clone();
+    let mut k = aba_com([0.; 3]);
+    assert!(crate::slots::aresta_clicada_lista(&mut k, &cl));
+    assert!(matches!(k, FeatureKind::SmCurveFlange(_)), "curva sozinha: aba curva");
+    let mut k = aba_com([0.; 3]);
+    assert!(crate::slots::aresta_clicada_lista(&mut k, &clique([5., 0., 2.], true)));
+    let FeatureKind::SmFlange(f) = &k else { panic!() };
+    assert_eq!(f.edge, [5., 0., 2.]);
+    // clicar de novo na única escolhida a tira (o campo volta a esperar)
+    assert!(crate::slots::aresta_clicada_lista(&mut k, &clique([5., 0., 2.], true)));
+    let FeatureKind::SmFlange(f) = &k else { panic!() };
+    assert_eq!(f.edge, [0.; 3]);
+}
+
+/// Curva já escolhida e uma reta clicada: vira o conjunto, com a cadeia da curva e a reta.
+#[test]
+fn b560_curva_mais_reta_vira_o_conjunto_com_a_cadeia_da_curva() {
+    let (c1, c2, r) = ([10., 0., 2.], [12., 3., 2.], [50., 0., 2.]);
+    let s = |x: &str| x.to_string();
+    let mut k = FeatureKind::SmCurveFlange(SmCurveFlange { edge: vec![c1, c2], length: s("15"), flip: false, angle: s("90"), radius: None, side: 1, edge_key: None, so_aresta: false, reta: None });
+    let mut cl = clique(r, true);
+    cl.existente = vec![(c1, None), (c2, None)];
+    assert!(crate::slots::aresta_clicada_lista(&mut k, &cl));
+    let FeatureKind::SmFlangeLoop(l) = &k else { panic!() };
+    assert_eq!(l.edges, vec![c1, c2, r]);
+    assert_eq!((l.length.as_str(), l.side, l.seguir), ("15", 1, true), "o 'seguir tangentes' da aba curva vira o do conjunto");
 }

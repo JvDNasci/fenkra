@@ -510,3 +510,29 @@ Estrutural, membro × placa × esquadro × solda:
     `st_encaixe.rs` (corte normal), com referência externa, interna ou meio e conferência de vão e interferência.
     Em seguida, alças 3D e a mesma estrutura de painel (Suporte, Modo, Parâmetros, Avançado) em placa, esquadro e
     solda.
+
+## Atualização da onda 1 do ADR 0107 (22/11/2026; B560 e B563)
+
+O levantamento acima é de 21/11. O que mudou na aba e nos comandos irmãos:
+
+- **Aba de arestas, um modo só (B560).** Aresta, Curva e Laço são o modo "Arestas" na barra de modos (que
+  agora tem Arestas, Perfil e Superfície). O suporte é uma lista única (`chapa_unif_ui::suporte`) que
+  aceita retas e curvas misturadas: clique soma, reclique tira (`slots::aresta_clicada_lista`), "seguir
+  tangentes" soma a cadeia tangente da curva clicada (`SmFlangeLoop::seguir`, `SmCurveFlange::so_aresta`),
+  e a face pega o contorno. Os recursos gravados continuam três (`SmFlange`, `SmCurveFlange`,
+  `SmFlangeLoop`) e recalculam como antes; a segunda aresta promove o recurso ao conjunto. No kernel a
+  cadeia de arestas escolhidas é ordenada pelas duas pontas (`chapa_laco::ordena_cadeia`).
+- **Aba por superfície (B563).** Ganhou `side` (posição do material, os mesmos três nomes das outras abas),
+  `inv_lado` (lado da superfície em que a chapa fica) e o raio com o mesmo texto das irmãs. A "Faltam: Lado
+  do material" da seção 1.6 deixa de valer. As quatro combinações de `flip` e `inv_lado` dão chapa válida.
+- **Inverter.** Os campos `bool` de inverter dos comandos de feature (extrusão, furo, parede, abas, bainha,
+  dobra, joggle, veneziana, aba entre perfis) passam pelo botão padrão `inverter::botao`, e
+  `inverter::bool_de_feature` é o único lugar que diz qual campo a seta do 3D troca (`alternar_feature`).
+- **Descritor.** `contrato::declaradas` tem as entradas de face de `StructPlate`, `StructWeld`,
+  `SmCornerRelief`, `SmCornerClose`, `SmConvert`, `SmArcSlot`, `SmSurfFlange`, `SmFlangedHole` e `Hole`;
+  `feat_ui::wants_faces` virou uma consulta ao descritor (`contrato::quer_face`) e
+  `contrato::preencher` escreve no campo ativo (aresta da aba e da bainha, face da rosca, linha das dobras).
+  Continuam fora do descritor, por ora: os marcadores `UNSET_*` das referências, os centros do furo, os
+  caminhos do membro, as seções do loft e as fontes de padrão e espelho em `slots::fill_special`.
+- **Paridade.** `chapa_paridade_tests.rs` confere que aba (modos), bainha, dobra, joggle e veneziana têm
+  inverter, e que posição, raio e direção viajam entre os modos da aba.

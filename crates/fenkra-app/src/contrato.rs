@@ -357,7 +357,7 @@ impl FeatureSpec {
 
     /// Com o comando completo o filtro continua no campo de lista (a pessoa segue somando itens).
     fn do_filtro(&self) -> Option<&Entrada> {
-        self.ativa().or_else(|| self.entradas.iter().find(|e| e.e_lista()))
+        self.ativa().or_else(|| self.entradas.iter().find(|e| e.e_lista())).or_else(|| self.entradas.iter().find(|e| e.filtra))
     }
 
     pub fn entrada(&self, id: &str) -> Option<&Entrada> {
@@ -370,6 +370,13 @@ impl FeatureSpec {
 /// O campo que o próximo clique no 3D preenche (`None` = o comando tem tudo o que precisa).
 pub fn campo_ativo(alvo: Alvo) -> Option<Espera> {
     FeatureSpec::de(alvo).ativa().map(|e| e.tipo.espera())
+}
+
+/// Com o comando aberto, o clique numa face do 3D entra nele? É quando o comando declara um campo
+/// de face (ou de superfície) que filtra a seleção. Substitui a lista de comandos que era mantida à
+/// parte (`feat_ui::wants_faces`): o comando que declara a entrada passa a valer sozinho.
+pub fn quer_face(alvo: Alvo) -> bool {
+    declaradas(alvo).iter().any(|e| e.filtra && (e.aceita(TipoEntrada::Face) || e.aceita(TipoEntrada::Superficie)))
 }
 
 /// O comando ainda espera a seleção?
@@ -438,6 +445,11 @@ pub fn spec_no_doc(doc: &Document, id: Id) -> Option<FeatureSpec> {
     }
 }
 
+/// Alias curto de `spec_no_doc`: o descritor do comando `id`, para quem só quer perguntar o que ele espera.
+pub fn spec_do(doc: &Document, id: Id) -> Option<FeatureSpec> {
+    spec_no_doc(doc, id)
+}
+
 /// A entrada do comando `id` a que o widget `salt` pertence, se o comando a declara.
 pub fn entrada_do_doc(doc: &Document, id: Id, salt: &str) -> Option<Entrada> {
     let s = spec_no_doc(doc, id)?;
@@ -490,6 +502,20 @@ fn varios(min: usize) -> Cardinalidade {
     Cardinalidade::Varios { min, max: None }
 }
 
+/// Face (ou o ponto dela) que o comando recebe pelo clique no 3D e que já tem valor padrão.
+fn face_opcional(id: &'static str, n: usize) -> Entrada {
+    Entrada::nova(id, "Face", TipoEntrada::Face, Cardinalidade::Um, n).opcional().filtrando()
+}
+
+/// Faces clicadas que se acumulam no comando (cada clique é um furo, uma face a abrir, um cordão).
+fn lista_de_faces(id: &'static str, n: usize) -> Entrada {
+    Entrada::nova(id, "Faces", TipoEntrada::Face, Cardinalidade::Varios { min: 0, max: None }, n).opcional().filtrando()
+}
+
+fn is_unset(id: Id) -> bool {
+    crate::slots::is_unset(id)
+}
+
 /// Entradas que o comando declara (as migradas). Cada `id` é o `salt` do widget que a desenha.
 fn declaradas(alvo: Alvo) -> Vec<Entrada> {
     use TipoEntrada as T;
@@ -510,6 +536,21 @@ fn declaradas(alvo: Alvo) -> Vec<Entrada> {
             FeatureKind::SmFlangeLoop(x) => vec![Entrada::nova("smloop_arestas", "Arestas", T::Aresta, varios(1), n_pontos(x.edges.iter())).tambem(T::Face)],
             FeatureKind::SmFlange(f) => vec![Entrada::nova("smaba_aresta", "Aresta", T::Aresta, Cardinalidade::Um, n_ponto(&f.edge)).tambem(T::Face)],
             FeatureKind::SmHem(h) => vec![Entrada::nova("smaba_aresta", "Aresta", T::Aresta, Cardinalidade::Um, n_ponto(&h.edge))],
+            // onda 1: os demais comandos de chapa e estrutural que pegam uma face (ou um ponto nela) pelo
+            // clique no 3D. Opcionais: o comando tem valor padrão e a pessoa só troca a face; o filtro
+            // do 3D (só faces) e o "clique em face entra aqui" saem destas entradas, não de uma lista
+            // de comandos à parte
+            FeatureKind::StructPlate(p) => vec![face_opcional("face", n_ponto(&p.at))],
+            FeatureKind::StructWeld(w) => vec![lista_de_faces("faces", w.faces.len())],
+            FeatureKind::SmCornerRelief(c) => vec![face_opcional("face", n_ponto(&c.at))],
+            FeatureKind::SmCornerClose(c) => vec![face_opcional("face", n_ponto(&c.at))],
+            FeatureKind::SmConvert(c) if c.solido => vec![lista_de_faces("faces", c.open_faces.len())],
+            FeatureKind::SmConvert(c) => vec![face_opcional("face", n_ponto(&c.face))],
+            FeatureKind::SmArcSlot(c) => vec![face_opcional("face", n_ponto(&c.center))],
+            FeatureKind::SmSurfFlange(c) => vec![face_opcional("face", n_ponto(&c.face))],
+            FeatureKind::SmFlangedHole(h) if is_unset(h.sketch) || !h.points.is_empty() => vec![lista_de_faces("faces", h.points.len())],
+            // B90: furo sem centros do sketch posiciona-se clicando na face
+            FeatureKind::Hole(h) if crate::handles::furo_espera_clique(h) => vec![lista_de_faces("faces", h.points.len())],
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => match (&o.mode, &o.edges) {
                 (EdgeMode::FaceFace(a, b), _) => vec![Entrada::nova("faces", "Faces", T::Face, Cardinalidade::Varios { min: 2, max: Some(2) }, n_pontos([a, b])).contando().filtrando()],
                 (EdgeMode::FullRound { mid, a, b }, _) => vec![Entrada::nova("faces", "Faces", T::Face, Cardinalidade::Varios { min: 3, max: Some(3) }, n_pontos([mid, a, b])).contando().filtrando()],
@@ -543,6 +584,46 @@ fn declaradas(alvo: Alvo) -> Vec<Entrada> {
             RefKind::CurveJoin { curves } => vec![Entrada::nova("g_cj", "Curvas", T::Curva, varios(1), curves.iter().map(n_curva).sum()).com_juncao()],
             _ => vec![],
         },
+    }
+}
+
+// ---------------------------------------------------------------- preencher pelo descritor
+
+/// O que a seleção do 3D ofereceu, na forma que os campos de coordenada guardam: o meio da aresta
+/// clicada, o ponto da face clicada e os vértices clicados.
+#[derive(Clone, Copy, Default)]
+pub struct Dado<'a> {
+    pub aresta: Option<[f64; 3]>,
+    pub face: Option<[f64; 3]>,
+    pub vertices: &'a [[f64; 3]],
+}
+
+/// Preenche o campo ativo do comando (o primeiro obrigatório ainda vazio, na ordem declarada) com o
+/// que a seleção ofereceu. É o que antes era `slots::fill_special` para a aba, a bainha, o laço, a
+/// rosca e as dobras por linha: quem manda é o `id` da entrada declarada, não um teste de `[0; 3]`.
+/// Devolve se escreveu algo.
+pub fn preencher(k: &mut FeatureKind, d: &Dado) -> bool {
+    let Some(id) = FeatureSpec::de(Alvo::Feature(k)).ativa().filter(|e| e.declarada).map(|e| e.id) else { return false };
+    match (id, k) {
+        ("smaba_aresta", FeatureKind::SmFlange(f)) => d.aresta.map(|e| f.edge = e).is_some(),
+        ("smaba_aresta", FeatureKind::SmHem(h)) => d.aresta.map(|e| h.edge = e).is_some(),
+        // B514: o laço de abas aberto sem aresta recebe a primeira pela seleção
+        ("smloop_arestas", FeatureKind::SmFlangeLoop(l)) => d.aresta.map(|e| l.edges = vec![e]).is_some(),
+        ("face", FeatureKind::Thread(t)) => d.face.map(|p| t.face = p).is_some(),
+        // dobra por linha, joggle e veneziana: os dois vértices clicados dão a linha
+        ("face", FeatureKind::SmBend(b)) if d.vertices.len() >= 2 => {
+            (b.a, b.b) = (d.vertices[0], d.vertices[1]);
+            true
+        }
+        ("face", FeatureKind::SmLouver(b)) if d.vertices.len() >= 2 => {
+            (b.a, b.b) = (d.vertices[0], d.vertices[1]);
+            true
+        }
+        ("face", FeatureKind::SmJoggle(b)) if d.vertices.len() >= 2 => {
+            (b.a, b.b) = (d.vertices[0], d.vertices[1]);
+            true
+        }
+        _ => false,
     }
 }
 
@@ -771,5 +852,50 @@ mod tests {
 
     fn base_thread() -> Thread {
         Thread { face: PONTO_VAZIO, spec: "M10x1.5".into(), length: "20".into(), modeled: false, end: None, start: "0".into(), face_key: None }
+    }
+
+    // ------------------------------------------------ onda 1: comandos de chapa no descritor
+
+    #[test]
+    fn o_clique_em_face_sai_do_descritor_e_nao_de_uma_lista_de_comandos() {
+        let alivio = FeatureKind::SmCornerRelief(SmCornerRelief { at: PONTO_VAZIO, size: "4".into(), kind: 0 });
+        let aba_sup = FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Ref(Id(1)), face: PONTO_VAZIO, length: "10".into(), radius: None, flip: false, keep_base: false, mode: 0, angle: "90".into(), limites: Default::default(), side: 0, inv_lado: false });
+        for (nome, k) in [("alívio de canto", &alivio), ("aba por superfície", &aba_sup)] {
+            assert!(quer_face(Alvo::Feature(k)), "{nome}: declara a face");
+            assert!(crate::feat_ui::wants_faces(k), "{nome}: wants_faces é uma consulta ao descritor");
+            let f = filtro(Alvo::Feature(k)).unwrap_or_else(|| panic!("{nome}: o 3D só deixa clicar em face"));
+            assert!(f.faces && !f.arestas && !f.vertices, "{nome}");
+            // opcional: o comando tem valor padrão, então a face vazia não deixa o comando incompleto
+            assert!(!incompleto(Alvo::Feature(k)), "{nome}");
+        }
+        // comando sem campo de face não entra
+        let aba = FeatureKind::SmFlange(SmFlange { edge: PONTO_VAZIO, length: "5".into(), angle: "90".into(), radius: None, off1: "0".into(), off2: "0".into(), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None });
+        assert!(!quer_face(Alvo::Feature(&aba)));
+    }
+
+    #[test]
+    fn preencher_escreve_no_campo_ativo_pelo_id_declarado() {
+        let aresta = [10., 20., 2.];
+        let dado = Dado { aresta: Some(aresta), face: Some([1., 1., 1.]), vertices: &[[0., 0., 2.], [0., 50., 2.]] };
+        let mut aba = FeatureKind::SmFlange(SmFlange { edge: PONTO_VAZIO, length: "5".into(), angle: "90".into(), radius: None, off1: "0".into(), off2: "0".into(), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None });
+        assert!(preencher(&mut aba, &dado));
+        assert!(matches!(&aba, FeatureKind::SmFlange(f) if f.edge == aresta));
+        // já preenchida: o clique não sobrescreve (o campo não é mais o ativo)
+        let outro = Dado { aresta: Some([9., 9., 9.]), ..dado };
+        assert!(!preencher(&mut aba, &outro));
+        assert!(matches!(&aba, FeatureKind::SmFlange(f) if f.edge == aresta));
+        // rosca: a face; dobra por linha: os dois vértices
+        let mut rosca = FeatureKind::Thread(base_thread());
+        assert!(preencher(&mut rosca, &dado));
+        assert!(matches!(&rosca, FeatureKind::Thread(t) if t.face == [1., 1., 1.]));
+        let mut dobra = FeatureKind::SmBend(SmBend { a: PONTO_VAZIO, b: PONTO_VAZIO, angle: "45".into(), radius: None, flip: false, down: false, sketch: None, position: 0, cega: None });
+        assert!(preencher(&mut dobra, &dado));
+        assert!(matches!(&dobra, FeatureKind::SmBend(b) if b.a == [0., 0., 2.] && b.b == [0., 50., 2.]));
+    }
+
+    #[test]
+    fn a_ordem_do_tab_e_a_declarada() {
+        let k = RefKind::SurfSplit { surface: slots::surf(), tool: slots::surf(), flip: false, more: vec![], curve: None, more_flip: vec![] };
+        assert_eq!(FeatureSpec::de(Alvo::Ref(&k)).ordem_tab(), vec!["g_s", "g_t"]);
     }
 }
