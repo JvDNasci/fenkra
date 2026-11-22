@@ -30,7 +30,7 @@ fn membro(paths: Vec<CurveRef>, kind: SectionKind, dims: &[&str]) -> StructMembe
         joints: vec![],
         material: String::new(),
         mirror: false,
-        tube_bend: None,
+        tube_bend: None, fit: Default::default(),
     }
 }
 
@@ -49,7 +49,7 @@ fn l_dobrado(kind: SectionKind, dims: &[&str], b: TubeBend) -> (Document, Id) {
     let l2 = linha(&mut d, [300., 0., 0.], [300., 300., 0.]);
     let f = d.add_feature(FeatureKind::StructMember(membro(vec![l1, l2], kind, dims)));
     if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|f| &mut f.kind) {
-        m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b) });
+        m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b) , fit: None });
     }
     (d, f)
 }
@@ -217,7 +217,7 @@ fn canto_com_gabarito_em_angulo_diferente_de_noventa_graus() {
     let l2 = linha(&mut d, [300., 0., 0.], [450., 300. * 0.866025403784, 0.]);
     let f = d.add_feature(FeatureKind::StructMember(membro(vec![l1, l2], SectionKind::TuboQuadrado, &["30", "1.2"])));
     if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|f| &mut f.kind) {
-        m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend(BendMode::VComRaio, "30")) });
+        m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend(BendMode::VComRaio, "30")) , fit: None });
     }
     let r = recompute(&d);
     sem_erro(&r, f);

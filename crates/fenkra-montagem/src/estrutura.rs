@@ -198,7 +198,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
-            tube_bend: None,
+            tube_bend: None, fit: Default::default(),
         }));
         d
     }

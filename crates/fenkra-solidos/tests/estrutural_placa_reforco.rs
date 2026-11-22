@@ -27,7 +27,7 @@ fn membro(paths: Vec<CurveRef>, kind: SectionKind, dims: &[&str], anchor: u8) ->
         joints: vec![],
         material: String::new(),
         mirror: false,
-        tube_bend: None,
+        tube_bend: None, fit: Default::default(),
     }
 }
 

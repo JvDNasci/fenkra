@@ -2098,6 +2098,59 @@ pub struct StructMember {
     /// reto continua um membro).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tube_bend: Option<TubeBend>,
+    /// B574: opções do encaixe (corte normal à parede) de todos os cantos deste membro; cada canto
+    /// pode ter as suas em `StructJoint::fit`. Arquivo antigo não traz o campo (corte por booleana).
+    #[serde(default, skip_serializing_if = "FitOptions::e_padrao")]
+    pub fit: FitOptions,
+}
+
+/// Como o encaixe corta o membro que chega (B574).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum FitCut {
+    /// o tubo que recebe é subtraído como sólido: a borda da parede segue a superfície dele e, em
+    /// ângulo, termina em ponta fina (o comportamento de sempre)
+    #[default]
+    Boolean,
+    /// corte normal à parede, como o plasma ou o traçado à mão: em cada ponto da curva de encontro a
+    /// face de corte é varrida pela normal da parede, e a borda mantém a espessura inteira
+    Normal,
+}
+
+/// Qual parede do tubo cortado a curva de corte acompanha (B574).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum FitWall {
+    /// ponto a ponto, a parede que toca primeiro: nunca invade o outro tubo e dá o menor vão
+    #[default]
+    Auto,
+    Outer,
+    Inner,
+    Middle,
+}
+
+/// Qual superfície do tubo que recebe vale como referência do encosto (B574).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub enum FitFace {
+    /// face externa (a solda de sempre)
+    #[default]
+    Outer,
+    /// meio da parede
+    Middle,
+    /// face interna (o tubo que chega entra até o furo do que recebe)
+    Inner,
+}
+
+/// Opções do encaixe de um canto (B574). Os números aceitam o padrão do kernel: tudo em mm.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default, Serialize, Deserialize)]
+pub struct FitOptions {
+    pub cut: FitCut,
+    pub wall: FitWall,
+    pub face: FitFace,
+}
+
+impl FitOptions {
+    pub fn e_padrao(&self) -> bool {
+        *self == FitOptions::default()
+    }
 }
 
 /// Regra de um canto entre a linha `mine` deste membro e a linha `other_path` de outro membro
@@ -2115,6 +2168,9 @@ pub struct StructJoint {
     /// dobra do tubo neste nó (B326); vale quando `mode` é `Dobra`
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bend: Option<TubeBend>,
+    /// B574: opções do encaixe deste canto (vazio = as do membro)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fit: Option<FitOptions>,
 }
 
 /// Modo de fazer a dobra de um tubo no nó (B326). Cada um tem a sua fórmula de comprimento
@@ -5314,7 +5370,7 @@ impl Document {
                     continue;
                 }
                 let (late, early, first) = if a > b { (a, b, j.first) } else { (b, a, !j.first) };
-                per[late].push(StructJoint { mine: 0, other: ids[early], other_path: 0, mode: j.mode, first, gap: j.gap.clone(), bend: j.bend.clone() });
+                per[late].push(StructJoint { mine: 0, other: ids[early], other_path: 0, mode: j.mode, first, gap: j.gap.clone(), bend: j.bend.clone(), fit: j.fit });
             } else if j.mine < n {
                 per[j.mine].push(StructJoint { mine: 0, ..j.clone() });
             }

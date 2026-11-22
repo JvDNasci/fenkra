@@ -424,3 +424,10 @@ a coerência antes de integrar.
 - **Pendente.** Os widgets de ponto, eixo e plano ainda recebem o rótulo do chamador (o descritor ainda
   não declara esses campos em todos os comandos); a dica da `Entrada` só está preenchida no perfil em
   lista. A seta de feature por resultado só aparece depois de um cálculo com sucesso.
+### Onda 5, estrutural: boca de lobo (22/11/2026; B574, parcial)
+
+- **Corte normal à parede** no encaixe de tubo, com a parede que a curva segue e a face do tubo que recebe
+  como opções no documento (`StructMember::fit`, `StructJoint::fit`). Decisão e conferência no
+  [ADR 0109](0109-encaixe-de-tubo-corte-normal-a-parede.md).
+- **Pendente**: tubo de passagem com rasgo, tubo contra superfície qualquer com ponte, escolha dos tubos
+  que cortam um nó pela caixa universal (hoje a ordem é a da árvore) e o descritor dessas entradas.

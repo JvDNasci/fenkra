@@ -35,11 +35,11 @@ fn tubo(pontos: &[[f64; 3]], raios: &[&str], modo: BendMode) -> (Document, Id) {
         joints: vec![],
         material: String::new(),
         mirror: false,
-        tube_bend: None,
+        tube_bend: None, fit: Default::default(),
     }));
     if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|x| &mut x.kind) {
         for (k, r) in raios.iter().enumerate() {
-            m.joints.push(StructJoint { mine: k + 1, other: f, other_path: k, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: modo, radius: s(r), ..Default::default() }) });
+            m.joints.push(StructJoint { mine: k + 1, other: f, other_path: k, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: modo, radius: s(r), ..Default::default() }) , fit: None });
         }
     }
     (d, f)

@@ -36,7 +36,7 @@ fn comando(d: &mut Document, linhas: &[(V3, V3)], kind: SectionKind, dims: &[&st
         joints: vec![],
         material: String::new(),
         mirror: false,
-        tube_bend: None,
+        tube_bend: None, fit: Default::default(),
     }))
 }
 

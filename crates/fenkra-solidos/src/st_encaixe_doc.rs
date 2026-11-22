@@ -12,7 +12,7 @@
 use crate::st_dobra_corte::Desenho;
 use crate::st_encaixe::{calcular, tubo_aberto, CorteEncaixe, Membro, Opcoes, Secao};
 use crate::{geo3d, shared_end, t_junction, Ctx, MemberGeom};
-use fenkra_core::{CornerMode, Document, FeatureKind, Id, SectionKind};
+use fenkra_core::{CornerMode, Document, FeatureKind, FitOptions, Id, SectionKind};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
@@ -26,6 +26,10 @@ pub struct PontaEncaixe {
     pub dir: [f64; 3],
     /// de onde cada hospedeiro vem: (comando, linha)
     pub hospedeiros: Vec<(Id, usize)>,
+    /// B574: opções de encaixe do canto (corte normal à parede, referências)
+    pub fit: FitOptions,
+    /// B574: vão, interferência e espessura da borda desta ponta
+    pub validacao: crate::st_boca_lobo::Validacao,
 }
 
 /// Um membro reto com encaixe numa ou nas duas pontas.
@@ -43,7 +47,8 @@ pub struct MembroComEncaixe {
 impl MembroComEncaixe {
     /// O contorno plano do tubo aberto com os encaixes (para DXF e SVG).
     pub fn desenho(&self) -> Desenho {
-        let titulo = format!("Encaixe · {} · linha {}", self.designacao, self.linha + 1);
+        let normal = self.pontas().any(|p| p.fit.cut == fenkra_core::FitCut::Normal);
+        let titulo = format!("{} · {} · linha {}", if normal { "Boca de lobo normal à parede" } else { "Encaixe" }, self.designacao, self.linha + 1);
         tubo_aberto(&titulo, self.comprimento, self.ponta1.as_ref().map(|p| &p.corte), self.ponta2.as_ref().map(|p| &p.corte))
     }
     /// Comprimento de corte dos encaixes (somando as pontas), em mm.
@@ -55,7 +60,7 @@ impl MembroComEncaixe {
     }
 }
 
-fn secao_do_membro(kind: SectionKind, g: &MemberGeom) -> Option<Secao> {
+pub(crate) fn secao_do_membro(kind: SectionKind, g: &MemberGeom) -> Option<Secao> {
     Some(match kind {
         SectionKind::TuboRedondo => Secao::Redonda { d: g.w, t: g.wall },
         SectionKind::BarraRedonda => Secao::Redonda { d: g.w, t: 0. },
@@ -113,7 +118,7 @@ pub fn encaixes_da_estrutura(doc: &Document, opc: &Opcoes) -> Vec<MembroComEncai
     // (linha cortada, índice da ponta) -> hospedeiros e a folga do canto
     type Chave = (usize, bool);
     // o hospedeiro leva junto se a ponta cai no meio dele (junta em T, B387)
-    let mut grupos: Vec<(Chave, [f64; 3], [f64; 3], Vec<(usize, bool)>, f64)> = vec![];
+    let mut grupos: Vec<(Chave, [f64; 3], [f64; 3], Vec<(usize, bool)>, f64, FitOptions)> = vec![];
     for a in 0..lines.len() {
         for b in a + 1..lines.len() {
             let (la, lb) = (&lines[a], &lines[b]);
@@ -131,6 +136,7 @@ pub fn encaixes_da_estrutura(doc: &Document, opc: &Opcoes) -> Vec<MembroComEncai
             if modo != CornerMode::Encaixe {
                 continue;
             }
+            let fit = cx.joint_fit((la.0, la.1, la.2), (lb.0, lb.1, lb.2));
             let a_continua = match em_t {
                 Some(c) => c == b,
                 None => a_continua,
@@ -147,12 +153,12 @@ pub fn encaixes_da_estrutura(doc: &Document, opc: &Opcoes) -> Vec<MembroComEncai
                     x.3.push(h);
                     x.4 = x.4.max(folga);
                 }
-                None => grupos.push(((corte, fim), p, dir_corte, vec![h], folga)),
+                None => grupos.push(((corte, fim), p, dir_corte, vec![h], folga, fit)),
             }
         }
     }
     let mut out: Vec<MembroComEncaixe> = vec![];
-    for ((corte, fim), p, dir, hosts, folga) in grupos {
+    for ((corte, fim), p, dir, hosts, folga, fit) in grupos {
         let lc = &lines[corte];
         let Some(m) = membro(doc, lc.0, &lc.3, p, dir) else { continue };
         let mut hs = vec![];
@@ -174,8 +180,12 @@ pub fn encaixes_da_estrutura(doc: &Document, opc: &Opcoes) -> Vec<MembroComEncai
         if hs.is_empty() {
             continue;
         }
-        let Ok(c) = calcular(&m, &hs, Opcoes { folga, ..*opc }) else { continue };
-        let ponta = PontaEncaixe { corte: c, no: p, dir, hospedeiros: origem };
+        // B574: o corte normal à parede do canto manda nas opções da curva (a mesma do sólido)
+        let base = Opcoes { folga, ..*opc };
+        let opc_ponta = if fit.e_padrao() { base } else { crate::st_boca_lobo::opcoes_do_fit(&fit, base) };
+        let Ok(c) = calcular(&m, &hs, opc_ponta) else { continue };
+        let validacao = crate::st_boca_lobo::validar(&c, crate::st_boca_lobo::tolerancia_de_vao(m.secao, opc_ponta.orcamento));
+        let ponta = PontaEncaixe { corte: c, no: p, dir, hospedeiros: origem, fit, validacao };
         let desig = match doc.feature(lc.0).map(|f| &f.kind) {
             Some(FeatureKind::StructMember(sm)) => format!("{} {}", sm.family, sm.designation),
             _ => String::new(),

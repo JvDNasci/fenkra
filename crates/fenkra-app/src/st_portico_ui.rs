@@ -129,7 +129,7 @@ pub fn demo_se_pedido(app: &mut App) {
         joints: vec![],
         material: String::new(),
         mirror: false,
-        tube_bend: None,
+        tube_bend: None, fit: Default::default(),
     }));
     for r in &mut d.references {
         r.visible = false;

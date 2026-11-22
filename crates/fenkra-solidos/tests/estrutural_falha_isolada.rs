@@ -23,7 +23,7 @@ fn membro(paths: Vec<CurveRef>) -> StructMember {
         joints: vec![],
         material: String::new(),
         mirror: false,
-        tube_bend: None,
+        tube_bend: None, fit: Default::default(),
     }
 }
 

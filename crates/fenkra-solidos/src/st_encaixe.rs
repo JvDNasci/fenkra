@@ -34,6 +34,7 @@
 //! planificado.
 
 use crate::geo3d;
+use fenkra_core::FitFace;
 use crate::st_dobra_corte::{Camada, Desenho};
 
 type V3 = [f64; 3];
@@ -118,11 +119,32 @@ pub struct Opcoes {
     pub perpendicular: bool,
     /// folga de solda: o hospedeiro engorda por ela
     pub folga: f64,
+    /// B574: superfície do hospedeiro que vale como encosto (face externa, meio ou face interna da
+    /// parede dele)
+    pub face: FitFace,
+    /// B574: corte normal à parede de verdade. Os pares de pontos das duas peles seguem a normal da
+    /// parede (no tubo retangular, com a diagonal nos cantos), e o modo automático vale o maior
+    /// alcance ao longo da espessura inteira, não só nas duas peles
+    pub normal: bool,
 }
 
 impl Default for Opcoes {
     fn default() -> Self {
-        Opcoes { modo: ModoParede::Automatico, orcamento: 1.5, perpendicular: true, folga: 0. }
+        Opcoes { modo: ModoParede::Automatico, orcamento: 1.5, perpendicular: true, folga: 0., face: FitFace::Outer, normal: false }
+    }
+}
+
+impl Opcoes {
+    /// Deslocamento do hospedeiro `h` pela folga de solda e pela face de referência escolhida: a
+    /// face interna e o meio da parede dele ficam para dentro do contorno externo.
+    fn engorda(&self, h: &Membro) -> f64 {
+        let t = h.secao.parede();
+        let recuo = match self.face {
+            FitFace::Outer => 0.,
+            FitFace::Middle => t / 2.,
+            FitFace::Inner => t,
+        };
+        self.folga - recuo
     }
 }
 
@@ -270,9 +292,40 @@ fn amostras(sec: Secao) -> Vec<(f64, [f64; 2], [f64; 2])> {
     }
 }
 
+/// Pares de pontos para o corte normal à parede (B574). No tubo redondo é o par radial de sempre. No
+/// retangular, cada ponto da pele externa vai à pele interna pela normal da face dele; nos cantos,
+/// onde essa normal sairia da parede, o par encurta até a diagonal (a mesma meia-esquadria que o
+/// tubo tem nos cantos), então na quina o ponto externo e o interno coincidem.
+fn amostras_normais(sec: Secao) -> Vec<(f64, [f64; 2], [f64; 2])> {
+    let Secao::Retangular { b, h, t } = sec else { return amostras(sec) };
+    let (hb, hh) = (b / 2., h / 2.);
+    let t = t.min(hb.min(hh) - 1e-9).max(0.);
+    let vo = [[hb, 0.], [hb, hh], [-hb, hh], [-hb, -hh], [hb, -hh], [hb, 0.]];
+    // normal para dentro de cada trecho e meio comprimento da face a que ele pertence
+    let lados: [([f64; 2], f64); 5] = [([-1., 0.], hh), ([0., -1.], hb), ([1., 0.], hh), ([0., 1.], hb), ([-1., 0.], hh)];
+    let mut out = vec![];
+    let mut s = 0.;
+    for k in 0..5 {
+        let (a, c) = (vo[k], vo[k + 1]);
+        let comp = (c[0] - a[0]).hypot(c[1] - a[1]);
+        let n = ((comp / 2.).ceil() as usize).clamp(8, 60);
+        let (nin, meio) = lados[k];
+        for i in 0..n {
+            let f = i as f64 / n as f64;
+            let po = [a[0] + (c[0] - a[0]) * f, a[1] + (c[1] - a[1]) * f];
+            // coordenada ao longo da face (a outra, sobre a normal, é constante)
+            let c_face = if nin[0] != 0. { po[1] } else { po[0] };
+            let fundo = t.min(meio - c_face.abs()).max(0.);
+            out.push((s + comp * f, po, [po[0] + nin[0] * fundo, po[1] + nin[1] * fundo]));
+        }
+        s += comp;
+    }
+    out
+}
+
 /// Saída do raio `q + λ·u` do sólido convexo do hospedeiro (engordado por `g`): o maior `λ` dentro
 /// dele e a normal externa nesse ponto. `None` se o raio não passa pelo sólido.
-fn saida(h: &Membro, recuo: f64, g: f64, q: V3, u: V3) -> Option<(f64, V3)> {
+pub(crate) fn saida(h: &Membro, recuo: f64, g: f64, q: V3, u: V3) -> Option<(f64, V3)> {
     let r = geo3d::sub(q, h.ponto);
     let o = [geo3d::dot(r, h.x) - h.centro[0], geo3d::dot(r, h.y) - h.centro[1], geo3d::dot(r, h.para_dentro)];
     let d = [geo3d::dot(u, h.x), geo3d::dot(u, h.y), geo3d::dot(u, h.para_dentro)];
@@ -350,11 +403,19 @@ pub fn calcular(m: &Membro, hospedeiros: &[Membro], opc: Opcoes) -> Result<Corte
     let recuo = m.secao.meia() + 1.;
     let at = |pt: [f64; 2], hs: &[Membro]| -> Option<(f64, V3)> {
         let q = geo3d::add(m.ponto, geo3d::add(geo3d::mul(m.x, m.centro[0] + pt[0]), geo3d::mul(m.y, m.centro[1] + pt[1])));
-        hs.iter().filter_map(|h| saida(h, recuo.max(h.secao.meia()), opc.folga, q, u)).max_by(|a, b| a.0.total_cmp(&b.0))
+        hs.iter().filter_map(|h| saida(h, recuo.max(h.secao.meia()), opc.engorda(h), q, u)).max_by(|a, b| a.0.total_cmp(&b.0))
     };
+    let am = if opc.normal { amostras_normais(m.secao) } else { amostras(m.secao) };
     let mut pontos = vec![];
-    for (s, po, pi) in amostras(m.secao) {
+    for (s, po, pi) in am {
         let (e, i) = (at(po, hospedeiros), at(pi, hospedeiros));
+        // B574: o alcance máximo ao longo da espessura (a saída do hospedeiro, convexo, é côncava na
+        // posição: o máximo pode estar no meio do segmento, não só nas peles)
+        let alto = if opc.normal {
+            (0..=8).filter_map(|k| at([po[0] + (pi[0] - po[0]) * k as f64 / 8., po[1] + (pi[1] - po[1]) * k as f64 / 8.], hospedeiros)).max_by(|a, b| a.0.total_cmp(&b.0))
+        } else {
+            None
+        };
         let q_ext = geo3d::add(m.ponto, geo3d::add(geo3d::mul(m.x, m.centro[0] + po[0]), geo3d::mul(m.y, m.centro[1] + po[1])));
         let (le, li, ne, ni, livre) = match (e, i) {
             (Some(a), Some(b)) => (a.0, b.0, a.1, b.1, false),
@@ -372,18 +433,21 @@ pub fn calcular(m: &Membro, hospedeiros: &[Membro], opc: Opcoes) -> Result<Corte
             (le, Parede::Externa, 0., 0., bisel_ideal)
         } else {
             let (lam, par) = match opc.modo {
-                ModoParede::Automatico => {
-                    if le >= li {
-                        (le, Parede::Externa)
-                    } else {
-                        (li, Parede::Interna)
-                    }
-                }
+                ModoParede::Automatico => match alto {
+                    // corte normal: o maior alcance da espessura inteira, na pele que o tem
+                    Some((la, _)) => (la.max(le).max(li), if le >= li { Parede::Externa } else { Parede::Interna }),
+                    None if le >= li => (le, Parede::Externa),
+                    None => (li, Parede::Interna),
+                },
                 ModoParede::Externa => (le, Parede::Externa),
                 ModoParede::Interna => (li, Parede::Interna),
                 ModoParede::Media => ((le + li) / 2., Parede::Media),
             };
             let (hi_l, hi_n, lo_l, lo_n) = if le >= li { (le, ne, li, ni) } else { (li, ni, le, ne) };
+            let (hi_l, hi_n) = match alto {
+                Some((la, na)) if la > hi_l => (la, na),
+                _ => (hi_l, hi_n),
+            };
             let invasao = (hi_l - lam).max(0.) * cos(hi_n);
             let folga = (lam - lo_l).max(0.) * cos(lo_n);
             (lam, par, folga, invasao, 0.)

@@ -45,11 +45,11 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             }));
             if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|x| &mut x.kind) {
                 let b = TubeBend { mode: BendMode::CorteSimples, radius: s("120"), segments: s("4"), ..Default::default() };
-                m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b) });
+                m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b) , fit: None });
             }
             for r in &mut d.references {
                 r.visible = false;
@@ -84,7 +84,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             }));
             if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|x| &mut x.kind) {
                 let b = match modo.as_str() {
@@ -92,7 +92,7 @@ impl App {
                     "dobradeira" => TubeBend { mode: BendMode::Dobradeira, radius: s("100"), ..Default::default() },
                     _ => TubeBend { mode: BendMode::VComum, radius: s("40"), cuts: s("3"), ..Default::default() },
                 };
-                m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b) });
+                m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b) , fit: None });
             }
             let dir = std::env::temp_dir().join("fenkra_demo_desenho_tubo");
             let _ = std::fs::create_dir_all(&dir);
@@ -134,7 +134,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             }));
             d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 80.], "8", "15")));
             // B174: com FENKRA_DEMO_TOCHA, um tubo vizinho fecha o acesso da tocha ao lado +X do cordão
@@ -216,7 +216,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             };
             let linha = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
             for (y, yd) in [(350., 280.), (-350., -280.)] {
@@ -225,7 +225,7 @@ impl App {
                 let f = d.add_feature(FeatureKind::StructMember(tubo(c, CornerMode::Nenhum)));
                 if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|x| &mut x.kind) {
                     for i in 1..4 {
-                        m.joints.push(StructJoint { mine: i, other: f, other_path: i - 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: BendMode::Dobradeira, radius: s("90"), ..Default::default() }) });
+                        m.joints.push(StructJoint { mine: i, other: f, other_path: i - 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: BendMode::Dobradeira, radius: s("90"), ..Default::default() }) , fit: None });
                     }
                 }
             }
@@ -266,7 +266,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             };
             for (a, b) in [([0., 0., 0.], [0., 0., 500.]), ([0., 0., 0.], [400., 0., 0.])] {
                 let l = CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));

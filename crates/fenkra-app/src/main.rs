@@ -207,6 +207,7 @@ mod textos_estrutural;
 mod textos_solda;
 mod textos_dobra_tubo;
 mod textos_tubo_dobrado;
+mod textos_boca_de_lobo;
 mod st_dobra_ui;
 mod st_dobra_corte_ui;
 mod st_cantos_ui;

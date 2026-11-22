@@ -455,7 +455,7 @@ mod tests {
     #[test]
     fn renomear_regra_leva_as_dobras() {
         let mut d = Document::new("x");
-        let mk = |rule: &str| StructJoint { mine: 1, other: Id(1), other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { rule: rule.into(), ..Default::default() }) };
+        let mk = |rule: &str| StructJoint { mine: 1, other: Id(1), other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { rule: rule.into(), ..Default::default() }) , fit: None };
         let m = StructMember {
             paths: vec![],
             family: String::new(),
@@ -473,7 +473,7 @@ mod tests {
             joints: vec![mk("a"), mk("b")],
             material: String::new(),
             mirror: false,
-            tube_bend: None,
+            tube_bend: None, fit: Default::default(),
         };
         let f = d.add_feature(FeatureKind::StructMember(m));
         renomear_em_dobras(&mut d, "a", "novo");
@@ -501,7 +501,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
-            tube_bend: None,
+            tube_bend: None, fit: Default::default(),
         };
         let v = HashMap::new();
         // 2,5 vezes a maior das duas medidas da seção
