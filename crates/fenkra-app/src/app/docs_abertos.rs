@@ -422,6 +422,9 @@ impl App {
         let DocAberto { open, hist, result, result_doc, sent_doc, sel, multi, picks, session, sketch, asm, dwg, forma, bench, camera, errors_prev, a_recalcular, vistos: _ } = d;
         self.open = open;
         self.hist = hist;
+        if let Some(r) = result.as_ref() {
+            crate::ref_nome::atualizar(r);
+        }
         self.result = result;
         self.result_doc = result_doc;
         self.sent_doc = sent_doc;

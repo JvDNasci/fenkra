@@ -45,6 +45,8 @@ pub struct Caixa<'a, T> {
     pub blank: &'a dyn Fn() -> T,
     pub vazio: Option<T>,
     pub mesmo: &'a dyn Fn(&T, &T) -> bool,
+    /// B577: o documento, para a árvore de subelementos (face, aresta, vértice) do modelo calculado
+    pub navegar: Option<&'a fenkra_core::Document>,
 }
 
 #[derive(Clone, Copy)]
@@ -296,6 +298,12 @@ pub fn caixa<T: Clone + PartialEq + Send + Sync + 'static>(ui: &mut egui::Ui, c:
             if let Some(m) = cs::recusa(&ctx, c.salt) {
                 ui.label(RichText::new(format!("✖ {m}")).small().color(crate::theme::st_err()));
             }
+            // B577: cada nível do modelo (elemento, face, aresta, vértice) clicável e expansível
+            if let (Some(doc), Some(e)) = (c.navegar, c.entrada) {
+                if crate::caixa_sub::vale_para(e.tipo) {
+                    crate::caixa_sub::navegador(ui, &ctx, doc, c.salt);
+                }
+            }
             if est.ativo {
                 ui.label(RichText::new(tr("Clique no 3D ou na árvore para somar; clique de novo num escolhido para tirar.")).weak().small());
             }
@@ -415,7 +423,7 @@ mod tests {
             let origem = |x: &i32| Some(format!("Sketch {}", x / 2));
             let blank = || 0;
             let mesmo = |a: &i32, b: &i32| a == b;
-            let c = Caixa { salt: "g_rc", label: "Curvas", min: 1, entrada: Some(&e), dono: Some(Id(9)), dados: Some(&d), clicados: vec![], nome: &nome, origem: Some(&origem), cand: None, blank: &blank, vazio: None, mesmo: &mesmo };
+            let c = Caixa { salt: "g_rc", label: "Curvas", min: 1, entrada: Some(&e), dono: Some(Id(9)), dados: Some(&d), clicados: vec![], nome: &nome, origem: Some(&origem), cand: None, blank: &blank, vazio: None, mesmo: &mesmo, navegar: None };
             caixa(ui, c, &mut items, &[], &mut |_, _, _| {});
             assert_eq!(items, vec![1, 2, 3, 4]);
         });
@@ -435,7 +443,7 @@ mod tests {
             let nome = |x: &i32| format!("item {x}");
             let blank = || 0;
             let mesmo = |a: &i32, b: &i32| a == b;
-            let c = Caixa { salt: "g_x", label: "Arestas", min: 0, entrada: Some(&e), dono: Some(Id(1)), dados: None, clicados: clicados.clone(), nome: &nome, origem: None, cand: None, blank: &blank, vazio: None, mesmo: &mesmo };
+            let c = Caixa { salt: "g_x", label: "Arestas", min: 0, entrada: Some(&e), dono: Some(Id(1)), dados: None, clicados: clicados.clone(), nome: &nome, origem: None, cand: None, blank: &blank, vazio: None, mesmo: &mesmo, navegar: None };
             caixa(&mut ui, c, items, &[], &mut |_, _, _| {});
             crate::campos::fim(ui.ctx());
         });

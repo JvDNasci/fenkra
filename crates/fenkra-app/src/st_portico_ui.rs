@@ -191,7 +191,7 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
             egui::ScrollArea::vertical().id_salt("portico_apoios_rol").max_height(130.).show(ui, |ui| {
                 egui::Grid::new("portico_apoios_grade").num_columns(2).striped(true).show(ui, |ui| {
                     for (k, n) in p.nos.iter().enumerate() {
-                        ui.label(format!("{} {} ({:.0}, {:.0}, {:.0})", tr("Nó"), k + 1, n.p[0], n.p[1], n.p[2]));
+                        ui.label(format!("{} {}", tr("Nó"), k + 1)).on_hover_text(format!("{}: {}", tr("Ponto de referência"), crate::app::p3(n.p, 0)));
                         let atual = tipo_de(novo.apoio_em(n.p));
                         let mut t = atual;
                         egui::ComboBox::from_id_salt(("portico_apoio", k)).selected_text(tr(TIPOS[t])).show_ui(ui, |ui| {

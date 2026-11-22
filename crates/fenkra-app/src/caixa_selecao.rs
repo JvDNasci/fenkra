@@ -185,6 +185,9 @@ pub enum Pedido {
     Dados(fenkra_core::DadosCampo),
     /// duplo clique: o item do campo puxa a cadeia tangente dele
     Cadeia { dono: fenkra_core::Id, campo: String, indice: usize },
+    /// B577: um nível da árvore de subelementos foi escolhido; vira a seleção do app (acende no 3D e
+    /// entra no campo ativo), somando à atual quando `somar`
+    Selecionar { picks: Vec<crate::picking::Pick>, somar: bool },
 }
 
 fn chave_pedidos() -> egui::Id {

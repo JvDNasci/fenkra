@@ -37,7 +37,7 @@ pub fn meio_da_aresta(seed: &Seed) -> Option<[f64; 3]> {
 fn nome_ponta(doc: &fenkra_core::Document, me: fenkra_core::Id, at: [f64; 3]) -> String {
     match doc.feature(me) {
         Some(f) => crate::ref_nome::campo_ancora(doc, f, "at", at),
-        None => crate::app::p3(at, 1),
+        None => tr("Ponto sem nome (espera o cálculo)").to_string(),
     }
 }
 

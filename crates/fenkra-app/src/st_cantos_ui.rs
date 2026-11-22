@@ -51,6 +51,12 @@ fn nome_da_linha(app: &App, l: st_cantos::Linha) -> String {
     format!("{} · {} {}", app.doc().name_of(l.0), tr("linha"), l.1 + 1)
 }
 
+/// Nome do canto pelas linhas que chegam nele (B577): "Membro 1 · linha 1 × Membro 2 · linha 3". O
+/// ponto fica só na dica.
+fn nome_do_canto(app: &App, c: &Canto) -> String {
+    c.linhas.iter().map(|l| nome_da_linha(app, *l)).collect::<Vec<_>>().join(" × ")
+}
+
 /// Janela dos cantos. Mantém `app.st_cantos` atualizado enquanto aberta (o 3D desenha a partir dele).
 pub fn window(app: &mut App, ctx: &egui::Context) {
     // a prévia do encaixe só vale no quadro em que o cartão a pediu
@@ -156,8 +162,9 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
                     }
                     ui.painter().circle_filled(r.left_center() + egui::vec2(9., 0.), 5., cor_da_classe(c.classe, ui.visuals()));
                     let ang = c.angulo.map(|a| format!(" · {a:.1}°")).unwrap_or_default();
-                    let txt = format!("({:.0}, {:.0}, {:.0}) · {} · {}{}", c.ponto[0], c.ponto[1], c.ponto[2], tr(nome_do_modo(c.modo)), c.linhas.len(), ang);
+                    let txt = format!("{} · {}{}", nome_do_canto(app, c), tr(nome_do_modo(c.modo)), ang);
                     ui.painter().text(r.left_center() + egui::vec2(22., 0.), egui::Align2::LEFT_CENTER, txt, egui::FontId::proportional(12.), ui.visuals().text_color());
+                    let resp = resp.on_hover_text(format!("{}: {}", tr("Ponto de referência"), crate::app::p3(c.ponto, 0)));
                     if resp.clicked() {
                         escolher = Some(c.ponto);
                     }
