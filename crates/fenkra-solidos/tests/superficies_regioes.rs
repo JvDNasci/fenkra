@@ -38,7 +38,7 @@ fn reta(d: &mut Document, a: [f64; 3], b: [f64; 3]) -> CurveRef {
 /// Folha vertical pela reta, com altura `h` para cima e 30 mm para baixo.
 fn folha(d: &mut Document, a: [f64; 3], b: [f64; 3], h: &str) -> SurfRef {
     let c = reta(d, a, b);
-    SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: s(h), length2: s("30"), until: None, until2: None }))
+    SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: s(h), length2: s("30"), until: None, until2: None, mais: vec![] }))
 }
 
 fn corte(surface: SurfRef, tools: Vec<SurfRef>, mutual: bool, remove: bool) -> RefKind {
@@ -263,7 +263,7 @@ fn superficies_regioes_prolongar_a_ferramenta() {
     let mut d = Document::new("t");
     let a = folha(&mut d, [-40., 0., 0.], [40., 0., 0.], "30");
     let c = reta(&mut d, [0., -10., 0.], [0., 10., 0.]);
-    let curta = SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: s("5"), length2: s("0"), until: None, until2: None }));
+    let curta = SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: s("5"), length2: s("0"), until: None, until2: None, mais: vec![] }));
     let id = d.add_geometry(RefKind::SurfRegions { surface: a, tools: vec![curta], curve: None, mutual: false, remove: true, extend: true, marks: vec![] });
     let r = recompute(&d);
     ok(&r, id);

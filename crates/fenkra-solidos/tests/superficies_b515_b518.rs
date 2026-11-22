@@ -42,7 +42,7 @@ fn reta(d: &mut Document, a: [f64; 3], b: [f64; 3]) -> CurveRef {
 }
 
 fn extrude(d: &mut Document, c: CurveRef, eixo: OriginAxis, l: &str) -> Id {
-    d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(eixo), length: s(l), length2: s("0"), until: None, until2: None })
+    d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(eixo), length: s(l), length2: s("0"), until: None, until2: None, mais: vec![] })
 }
 
 fn sup<'a>(r: &'a RecomputeResult, id: Id) -> &'a fenkra_solidos::SurfaceViz {
@@ -118,7 +118,7 @@ fn b515_subelementos_da_superficie_e_da_curva_nos_comandos() {
     // 2) extrusão da aresta de cima na direção da aresta do canto
     let borda = CurveRef::BodyEdge { pts: vec![[0., 0., 20.], [40., 0., 20.]], key: ek_topo };
     let dir = AxisRef::Edge { mid: [40., 0., 10.], key: Some(ek_canto) };
-    let ext = d.add_geometry(RefKind::SurfExtrude { curve: borda, dir, length: s("10"), length2: s("0"), until: None, until2: None });
+    let ext = d.add_geometry(RefKind::SurfExtrude { curve: borda, dir, length: s("10"), length2: s("0"), until: None, until2: None, mais: vec![] });
     // 3) plano pela aresta do canto e pelo vértice da ponta da borda
     let vert = PointRef::Vertex { point: [0., 0., 20.], edge: ek_topo };
     let canto = CurveRef::BodyEdge { pts: vec![[40., 0., 0.], [40., 0., 20.]], key: ek_canto };

@@ -675,7 +675,7 @@ fn superficie_extrudada_muda_comprimento_e_volta() {
     let mut d = Document::new("sup extrusão");
     param(&mut d, "h", "30");
     let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([20., 0., 0.]), start: s("0"), end: s("0") });
-    let id = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("h"), length2: s("0"), until: None, until2: None });
+    let id = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("h"), length2: s("0"), until: None, until2: None, mais: vec![] });
     let areas = [("30", 600.), ("50", 1000.), ("30", 600.)];
     for (h, esperado) in areas {
         definir_param(&mut d, "h", h);
@@ -738,7 +738,7 @@ fn engrossar_superficie_gera_solido_valido() {
     let mut d = Document::new("engrossar");
     param(&mut d, "t", "2");
     let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([20., 0., 0.]), start: s("0"), end: s("0") });
-    let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None });
+    let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None, mais: vec![] });
     d.add_feature(FeatureKind::ThickSurface(ThickSurface { surface: SurfRef::Ref(sup), t1: s("t"), t2: s("0"), op: BoolOp::Add, simetrico: false, dir: None }));
     let e = |t: f64| Esperado { vol: 20. * 30. * t, tol_vol: 1e-3, tam: [20., t, 30.], tol_tam: 0.01, minimo: None, via_malha: false };
     ciclo("engrossar superfície", &mut d, "t", "4", &e(2.), &e(4.));
@@ -985,7 +985,7 @@ fn invalido_superficie_de_esfera_com_raio_negativo() {
 fn invalido_superficie_extrudada_de_curva_que_nao_existe() {
     precisa_kernel!();
     let mut d = Document::new("curva fantasma");
-    let id = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(Id(99999)), dir: AxisRef::Origin(OriginAxis::Z), length: s("10"), length2: s("0"), until: None, until2: None });
+    let id = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(Id(99999)), dir: AxisRef::Origin(OriginAxis::Z), length: s("10"), length2: s("0"), until: None, until2: None, mais: vec![] });
     erro(&recompute(&d), id);
 }
 
@@ -1142,8 +1142,8 @@ fn invalido_superficie_e_loft_com_spline_longa_nao_derrubam() {
     let g = spline_fixa(&mut d, &GUIA_LONGA);
     let linha = |d: &mut Document, q: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([q[0], q[1] - 2., q[2]]), b: PointRef::Fixed([q[0], q[1] + 2., q[2]]), start: s("0"), end: s("0") }));
     let (a, b) = (linha(&mut d, GUIA_LONGA[0]), linha(&mut d, GUIA_LONGA[13]));
-    let tubo = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(s("1")), spine: g.clone(), mode: SweepMode::Corrigido });
-    let perfil = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Curve(a.clone()), spine: g.clone(), mode: SweepMode::Corrigido });
+    let tubo = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(s("1")), spine: g.clone(), mode: SweepMode::Corrigido, mais: vec![] });
+    let perfil = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Curve(a.clone()), spine: g.clone(), mode: SweepMode::Corrigido, mais: vec![] });
     let loft = d.add_geometry(RefKind::SurfLoft { sections: vec![a, b], guide: Some(g), ruled: false, closed: false, opts: Default::default() });
     let r = recompute(&d);
     // estes caminhos conferem a falha sozinhos: o resultado pode ser superfície ou erro, nunca queda

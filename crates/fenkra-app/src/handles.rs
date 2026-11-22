@@ -51,7 +51,7 @@ pub(crate) fn plane_of(r: &fenkra_solidos::RecomputeResult, p: &PlaneRef) -> Opt
 }
 
 /// Centro do perfil de um sketch e a normal do plano dele.
-fn sketch_center(r: &fenkra_solidos::RecomputeResult, id: Id) -> Option<(Vec3, Vec3)> {
+pub(crate) fn sketch_center(r: &fenkra_solidos::RecomputeResult, id: Id) -> Option<(Vec3, Vec3)> {
     let s = r.sketches.iter().find(|s| s.feature == id)?;
     let n = v3(s.frame.normal);
     let c = if s.lines.is_empty() {
@@ -231,7 +231,7 @@ fn surface_handles(r: &fenkra_solidos::RecomputeResult, doc: &Document, id: Id) 
                 return offset_arrows(v3(q), v3(n), dist, *both);
             }
         }
-        RefKind::SurfExtrude { curve, dir, length, length2, until, until2 } => {
+        RefKind::SurfExtrude { curve, dir, length, length2, until, until2, .. } => {
             if let (Some(base), Some(d)) = (curve_mid(r, curve), axis(dir)) {
                 if until.is_none() {
                     out.push((0, lin(base, d, length, "Limite 1")));
@@ -313,7 +313,7 @@ fn curve_mid(r: &fenkra_solidos::RecomputeResult, c: &CurveRef) -> Option<Vec3> 
 }
 
 /// Centro das faces que o comando criou no corpo (direção das abas/bainhas).
-fn owned_center(r: &fenkra_solidos::RecomputeResult, target: Id, me: Id) -> Option<Vec3> {
+pub(crate) fn owned_center(r: &fenkra_solidos::RecomputeResult, target: Id, me: Id) -> Option<Vec3> {
     let b = r.bodies.iter().find(|b| b.collector == target)?;
     let m = &b.mesh;
     let mut acc = Vec3::ZERO;
@@ -926,7 +926,7 @@ mod tests {
     fn confere(curva: RefKind, dist: &str, both: bool) {
         let mut d = Document::new("t");
         let c = d.add_geometry(curva);
-        let f = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(c), dir: AxisRef::Origin(OriginAxis::Z), length: t("20"), length2: t("0"), until: None, until2: None });
+        let f = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(c), dir: AxisRef::Origin(OriginAxis::Z), length: t("20"), length2: t("0"), until: None, until2: None, mais: vec![] });
         let o = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(f), dist: t(dist), both, join: OffsetJoin::Automatico });
         let r = recompute(&d);
         assert!(matches!(r.status[&o], fenkra_solidos::Status::Ok), "{:?}", r.status[&o]);
@@ -1027,9 +1027,9 @@ mod tests {
         let mut d = Document::new("t");
         let l = d.add_geometry(plana());
         let z = AxisRef::Origin(OriginAxis::Z);
-        let ext = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: z, length: t("20"), length2: t("5"), until: None, until2: None });
+        let ext = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: z, length: t("20"), length2: t("5"), until: None, until2: None, mais: vec![] });
         let cil = d.add_geometry(RefKind::SurfCylinder { point: PointRef::Origin, dir: z, radius: t("9"), start: t("0"), end: t("20") });
-        let tubo = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(t("2")), spine: CurveRef::Ref(l), mode: SweepMode::Corrigido });
+        let tubo = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(t("2")), spine: CurveRef::Ref(l), mode: SweepMode::Corrigido, mais: vec![] });
         let pc = d.add_geometry(RefKind::PointOnCurve { curve: CurveRef::Ref(l), at: OnCurve::Ratio(t("0.5")), reverse: false });
         let ep = d.add_geometry(RefKind::SurfExtrapolate { surface: SurfRef::Ref(ext), near: PointRef::Origin, length: t("7"), curvature: false, more: vec![], edges: vec![CurveRef::Edge(vec![[0., 0., 20.], [40., 0., 20.]])], until: None, normal_edge: false, tangent_prop: false });
         let r = recompute(&d);

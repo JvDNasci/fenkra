@@ -168,7 +168,7 @@ fn superficie_muda_de_pasta_e_fica_depois_do_vizinho() {
     let s = |v: &str| v.to_string();
     let mut d = fenkra_solidos::example_document();
     let la = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([0., 30., 0.]), start: s("0"), end: s("0") });
-    let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("10"), length2: s("0"), until: None, until2: None });
+    let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("10"), length2: s("0"), until: None, until2: None, mais: vec![] });
     let geo = pasta_geo(&d);
     let sub = d.add_subfolder("Superfícies", geo);
     aplicar(&mut d, sup, Alvo::Pasta(sub)).expect("superfície na subpasta");

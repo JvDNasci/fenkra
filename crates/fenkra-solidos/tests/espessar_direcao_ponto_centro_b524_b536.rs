@@ -121,7 +121,7 @@ fn b524_centroide_fora_da_face_nao_convexa_vai_para_a_face() {
 /// Folha plana de 100 × 40 no plano XY.
 fn retangulo(d: &mut Document) -> Id {
     let c = reta(d, [0., 0., 0.], [100., 0., 0.]);
-    d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: s("40"), length2: s("0"), until: None, until2: None })
+    d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: s("40"), length2: s("0"), until: None, until2: None, mais: vec![] })
 }
 
 /// Faixa de cilindro de raio 20 e comprimento 50 em volta do eixo X, de -60° a 60° a partir do topo.

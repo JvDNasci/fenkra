@@ -468,13 +468,13 @@ impl GeoKind {
             SurfFilletSS => R::SurfFillet { a: sf, b: crate::slots::surf(), flip_a: false, flip_b: false, radius: t("5"), radius2: None },
             SurfEdgeFillet => R::SurfEdgeFillet { surface: sf, edges: edge_mids(s), radius: t("3"), radius2: None },
             SurfFill => R::SurfFill { curves: if s.curves.is_empty() { vec![c(0)] } else { s.curves.clone() }, conds: vec![], points: s.points.clone(), tol: t("0.01") },
-            SurfExtrude => R::SurfExtrude { curve: c(0), dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0"), until: None, until2: None },
-            // ADR 0107 (onda 2): as curvas escolhidas formam o perfil (lista de origens mistas)
+            // ADR 0107 (onda 2 e pendências): as curvas escolhidas formam o perfil (lista de origens mistas)
+            SurfExtrude => R::SurfExtrude { curve: c(0), dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0"), until: None, until2: None, mais: s.curves.iter().skip(1).cloned().collect() },
             SurfRevolve => R::SurfRevolve { curve: c(0), axis: AxisRef::Origin(OriginAxis::Z), angle: t("360"), angle2: t("0"), mais: s.curves.iter().skip(1).cloned().collect() },
             SurfSphere => R::SurfSphere { center: p(0), radius: t("20") },
             SurfCylinder => R::SurfCylinder { point: p(0), dir: ax(OriginAxis::Z), radius: t("10"), start: t("0"), end: t("40") },
-            SurfSweep => R::SurfSweep { profile: SweepProfile::Curve(c(0)), spine: c(1), mode: SweepMode::Corrigido },
-            SurfTube => R::SurfSweep { profile: SweepProfile::Circle(t("5")), spine: c(0), mode: SweepMode::Corrigido },
+            SurfSweep => R::SurfSweep { profile: SweepProfile::Curve(c(0)), spine: c(1), mode: SweepMode::Corrigido, mais: vec![] },
+            SurfTube => R::SurfSweep { profile: SweepProfile::Circle(t("5")), spine: c(0), mode: SweepMode::Corrigido, mais: vec![] },
             SurfLoft => R::SurfLoft { sections: if s.curves.len() >= 2 { s.curves.clone() } else { vec![c(0), c(1)] }, guide: None, ruled: false, closed: false, opts: Default::default() },
             SurfBlend => {
                 let mut k = R::SurfBlend { a: c(0), sa: None, b: c(1), sb: None, cont: Continuity::G1, tension: t("1"), tension2: None };
@@ -640,17 +640,19 @@ pub fn inputs_of(k: &RefKind) -> Seed {
         }
         R::PointOffset { point, .. } => s.points.push(*point),
         R::SplineControl { points, .. } => s.points.extend(points.iter().copied()),
-        R::CurveExtract { edge: curve, .. } | R::SurfExtrude { curve, .. } => s.curves.push(curve.clone()),
-        R::CurveCopy { curve, mais } | R::SurfRevolve { curve, mais, .. } => s.curves.extend(std::iter::once(&*curve).chain(mais.iter()).cloned()),
+        R::CurveExtract { edge: curve, .. } => s.curves.push(curve.clone()),
+        R::CurveCopy { curve, mais } | R::SurfRevolve { curve, mais, .. } | R::SurfExtrude { curve, mais, .. } => s.curves.extend(std::iter::once(&*curve).chain(mais.iter()).cloned()),
         R::SurfFill { curves, .. } | R::CurveJoin { curves } => s.curves.extend(curves.iter().cloned()),
         R::SurfOffset { surface, .. } => s.surface = Some(*surface),
         R::SurfSphere { center, .. } => s.points.push(*center),
         R::SurfCylinder { point, .. } => s.points.push(*point),
-        R::SurfSweep { profile, spine, .. } => {
+        R::SurfSweep { profile, spine, mais, .. } => {
             if let SweepProfile::Curve(c) = profile {
                 s.curves.push(c.clone());
             }
-            s.curves.push(spine.clone())
+            // a guia fica na posição de sempre (segunda), para a troca de tipo não confundir perfil e guia
+            s.curves.push(spine.clone());
+            s.curves.extend(mais.iter().cloned())
         }
         R::SurfLoft { sections, .. } => s.curves.extend(sections.iter().cloned()),
         R::SurfRuled { curves, support, .. } => {
@@ -921,6 +923,8 @@ pub(crate) fn plane_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docum
 }
 
 pub(crate) fn surf_slot(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, s: &mut SurfRef, seed: &Seed) {
+    // campo declarado: o rótulo é o do descritor (pendências das ondas 1 e 2)
+    let label = crate::contrato::rotulo_no_doc(doc, me, salt, label);
     let est = campo_ativo(ui, salt, matches!(s, SurfRef::Ref(id) if crate::slots::is_unset(*id)));
     if let (true, Some(x)) = (est.novo, seed.surface.or_else(|| seed.planes.last().map(|p| SurfRef::Plane(*p)))) {
         *s = x;
@@ -1248,7 +1252,10 @@ fn caixa_de_curvas(ui: &mut egui::Ui, salt: &str, label: &str, item: &str, doc: 
 
 /// ADR 0107 (onda 2): campo de **uma** curva pela caixa universal (clique no 3D e na árvore, validação,
 /// nó por origem). O clique numa curva nova troca a escolhida, como o slot antigo fazia.
-pub(crate) fn curva_contrato(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, c: &mut CurveRef, seed: &Seed) {
+///
+/// Pendências das ondas 1 e 2: o rótulo sai do descritor do comando (`Entrada.rotulo`), não do widget.
+pub(crate) fn curva_contrato(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id, c: &mut CurveRef, seed: &Seed) {
+    let label = crate::contrato::rotulo_no_doc(doc, me, salt, "Curva");
     let mut v = vec![c.clone()];
     caixa_de_curvas(ui, salt, label, label, doc, me, &mut v, seed, 1);
     *c = trocar_pela_ultima(v);
@@ -1265,7 +1272,9 @@ fn trocar_pela_ultima(mut v: Vec<CurveRef>) -> CurveRef {
 /// ADR 0107 (onda 2): o perfil como lista de curvas de origens mistas (sketches, arame, arestas,
 /// extrações): `curve` é o primeiro item, as outras ficam em `mais`. A caixa universal mostra todas, com
 /// junção na hora e "seguir tangentes"; o cálculo une cada grupo numa curva só antes do kernel.
-pub(crate) fn perfil_lista(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, curve: &mut CurveRef, mais: &mut Vec<CurveRef>, seed: &Seed) {
+/// O rótulo e a dica saem do descritor (pendências das ondas 1 e 2).
+pub(crate) fn perfil_lista(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id, curve: &mut CurveRef, mais: &mut Vec<CurveRef>, seed: &Seed) {
+    let label = crate::contrato::rotulo_no_doc(doc, me, salt, "Perfil");
     let mut v: Vec<CurveRef> = std::iter::once(curve.clone()).chain(mais.iter().cloned()).collect();
     caixa_de_curvas(ui, salt, label, "Curva", doc, me, &mut v, seed, 1);
     juntar_perfil(v, curve, mais);
@@ -1874,7 +1883,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::CurveCopy { curve, mais } => {
             // B576/ADR 0107 (onda 2): o Extrair de várias curvas mostra todas no campo; o resultado é a
             // cadeia delas, ainda como Extrair
-            perfil_lista(ui, "g_c", "Arestas/curvas", doc, me, curve, mais, seed);
+            perfil_lista(ui, "g_c", doc, me, curve, mais, seed);
             if !mais.is_empty() {
                 ui.label(RichText::new(tr("As curvas extraídas formam uma cadeia: precisam se tocar nas pontas.")).weak().small());
             }
@@ -2085,11 +2094,12 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             });
             ui.label(RichText::new(tr("As curvas precisam fechar um contorno.")).weak().small());
         }
-        R::SurfExtrude { curve, dir, length, length2, until, until2 } => {
+        R::SurfExtrude { curve, dir, length, length2, until, until2, mais } => {
             // B562/ADR 0107 (onda 2): irmã da extrusão sólida, com as mesmas seções (Perfil, Extensão) e o
-            // mesmo "⇄ Inverter direção" logo abaixo da extensão, ligado à seta do 3D
+            // mesmo "⇄ Inverter direção" logo abaixo da extensão, ligado à seta do 3D. O perfil é a lista
+            // de curvas de origens mistas, com junção na hora (pendências das ondas 1 e 2)
             section(ui, "Perfil");
-            curva_contrato(ui, "g_pf", "Perfil", doc, me, curve, seed);
+            perfil_lista(ui, "g_pf", doc, me, curve, mais, seed);
             section(ui, "Extensão");
             limit_ui(ui, "g_l1", "Limite 1", length, until, doc, me, vars, seed);
             limit_ui(ui, "g_l2", "Limite 2", length2, until2, doc, me, vars, seed);
@@ -2102,7 +2112,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         }
         R::SurfRevolve { curve, axis, angle, angle2, mais } => {
             section(ui, "Perfil");
-            perfil_lista(ui, "g_pf", "Perfil", doc, me, curve, mais, seed);
+            perfil_lista(ui, "g_pf", doc, me, curve, mais, seed);
             axis_slot(ui, "g_ax", "Eixo", doc, me, axis, seed);
             expr(ui, "Ângulo 1", angle, vars, "°");
             expr(ui, "Ângulo 2", angle2, vars, "°");
@@ -2119,12 +2129,13 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             expr(ui, "Comprimento 2", start, vars, "mm");
             ui.label(RichText::new(tr("Comprimento 1 no sentido da direção; 2 no sentido oposto.")).weak().small());
         }
-        R::SurfSweep { profile, spine, mode } => {
+        R::SurfSweep { profile, spine, mode, mais } => {
             match profile {
-                SweepProfile::Curve(c) => curva_contrato(ui, "g_pf", "Perfil", doc, me, c, seed),
+                // pendências das ondas 1 e 2: o perfil é a lista de curvas, como na revolução e na extrusão
+                SweepProfile::Curve(c) => perfil_lista(ui, "g_pf", doc, me, c, mais, seed),
                 SweepProfile::Circle(r) => expr(ui, "Raio do tubo", r, vars, "mm"),
             }
-            curva_contrato(ui, "g_sp", "Guia", doc, me, spine, seed);
+            curva_contrato(ui, "g_sp", doc, me, spine, seed);
             let opts = [
                 ("sweep_corrigido", "Corrigido", "Frenet corrigido: acompanha a guia sem torcer", *mode == SweepMode::Corrigido),
                 ("sweep_fixo", "Fixo", "O perfil mantém a orientação", *mode == SweepMode::Fixo),
@@ -2145,7 +2156,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 *guide = has.then(|| seed.curves.last().cloned().unwrap_or(CurveRef::Axis(OriginAxis::Z)));
             }
             if let Some(g) = guide {
-                curva_contrato(ui, "g_gd", "Caminho", doc, me, g, seed);
+                curva_contrato(ui, "g_gd", doc, me, g, seed);
                 ui.label(RichText::new(tr("As seções devem cruzar o caminho, na ordem.")).weak().small());
             } else {
                 ui.checkbox(ruled, tr("regrada (faces retas entre seções)"));
@@ -2193,9 +2204,9 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         }
         R::SurfBlend { a, sa, b, sb, cont, tension, tension2 } => {
             let antes = (a.clone(), b.clone());
-            curva_contrato(ui, "g_borda1", "Borda 1", doc, me, a, seed);
+            curva_contrato(ui, "g_borda1", doc, me, a, seed);
             opt_surf(ui, "g_apoio1", "Apoio 1", doc, me, sa, seed);
-            curva_contrato(ui, "g_borda2", "Borda 2", doc, me, b, seed);
+            curva_contrato(ui, "g_borda2", doc, me, b, seed);
             opt_surf(ui, "g_apoio2", "Apoio 2", doc, me, sb, seed);
             // borda nova traz o apoio dela
             let apoio = |c: &CurveRef| seed.apoios.iter().find(|(x, _)| x == c).map(|x| x.1);
@@ -2256,7 +2267,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 *curve = by_curve.then(|| seed.curves.first().cloned().unwrap_or_else(crate::slots::curve));
             }
             if let Some(c) = curve {
-                curva_contrato(ui, "g_tc", "Curva de corte", doc, me, c, seed);
+                curva_contrato(ui, "g_tc", doc, me, c, seed);
             }
             crate::sup3d::dica_de_lado(ui);
         }
@@ -2438,7 +2449,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             }
         }
         R::CurveParallel { curve, support, d1, d2, flip, more, both, d_other } => {
-            curva_contrato(ui, "g_c", "Curva", doc, me, curve, seed);
+            curva_contrato(ui, "g_c", doc, me, curve, seed);
             if !more.is_empty() || ui.small_button(tr("+ mais curvas (conjunto)")).clicked() {
                 if more.is_empty() {
                     more.push(crate::slots::curve());

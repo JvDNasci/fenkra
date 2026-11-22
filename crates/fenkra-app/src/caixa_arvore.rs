@@ -204,12 +204,17 @@ pub fn caixa<T: Clone + PartialEq + Send + Sync + 'static>(ui: &mut egui::Ui, c:
     let reais = items.iter().filter(|x| !e_vazio(x)).count();
     let tipo_cor = c.entrada.map(|e| e.tipo.espera()).unwrap_or(crate::entradas::Espera::Superficie);
     let cor = if est.ativo { tipo_cor.cor() } else { ui.visuals().widgets.noninteractive.bg_stroke.color };
+    // pendências das ondas 1 e 2 (ADR 0107): o rótulo e a dica do campo declarado saem do descritor
+    let rotulo = c.entrada.map_or(c.label, |e| e.rotulo);
+    let dica = c.entrada.map(|e| e.dica).filter(|d| !d.is_empty()).map(|d| format!("{}
+
+", tr(d))).unwrap_or_default();
     ui.horizontal(|ui| {
-        let txt = format!("{} ({reais})", tr(c.label));
+        let txt = format!("{} ({reais})", tr(rotulo));
         let r = if est.ativo {
-            ui.add(egui::Label::new(RichText::new(format!("▶ {txt}")).strong().color(cor)).sense(egui::Sense::click())).on_hover_text(tr("Campo ativo: cada clique no 3D ou na árvore soma um elemento; clicar de novo num escolhido o tira."))
+            ui.add(egui::Label::new(RichText::new(format!("▶ {txt}")).strong().color(cor)).sense(egui::Sense::click())).on_hover_text(format!("{dica}{}", tr("Campo ativo: cada clique no 3D ou na árvore soma um elemento; clicar de novo num escolhido o tira.")))
         } else {
-            ui.add(egui::Label::new(txt).sense(egui::Sense::click())).on_hover_text(tr("Clique para escolher este campo: o próximo clique no 3D vem para cá (Tab passa ao seguinte)."))
+            ui.add(egui::Label::new(txt).sense(egui::Sense::click())).on_hover_text(format!("{dica}{}", tr("Clique para escolher este campo: o próximo clique no 3D vem para cá (Tab passa ao seguinte).")))
         };
         if r.clicked() {
             crate::campos::focar(&ctx, id);

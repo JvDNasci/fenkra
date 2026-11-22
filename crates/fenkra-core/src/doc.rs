@@ -834,6 +834,11 @@ pub enum RefKind {
         /// limite 2 até um elemento, no lugar do comprimento
         #[serde(default)]
         until2: Option<SurfRef>,
+        /// ADR 0107 (pendências das ondas 1 e 2): o perfil é uma lista de curvas de origens mistas;
+        /// `curve` é a primeira e as outras ficam aqui. Curvas unidas na hora (`Document::campos`,
+        /// campo `g_pf`) são extrudadas como uma curva só. Arquivo antigo não tem o campo: lista vazia.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        mais: Vec<CurveRef>,
     },
     /// Curva girada em torno de um eixo.
     SurfRevolve {
@@ -856,7 +861,15 @@ pub enum RefKind {
     /// Cilindro (só a face lateral) por ponto e direção; comprimento para cada lado.
     SurfCylinder { point: PointRef, dir: AxisRef, radius: String, start: String, end: String },
     /// Varredura: perfil explícito ou circular ao longo da guia.
-    SurfSweep { profile: SweepProfile, spine: CurveRef, mode: SweepMode },
+    SurfSweep {
+        profile: SweepProfile,
+        spine: CurveRef,
+        mode: SweepMode,
+        /// ADR 0107 (pendências das ondas 1 e 2): com perfil de curva, as outras curvas do perfil (lista
+        /// de origens mistas, junção na hora no campo `g_pf`). Vazio no tubo e nos arquivos antigos.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        mais: Vec<CurveRef>,
+    },
     /// Multi-seções por curvas, com guia opcional.
     SurfLoft {
         sections: Vec<CurveRef>,
@@ -1385,11 +1398,14 @@ impl RefKind {
                 }
                 exprs(tol)
             }
-            SurfExtrude { curve, dir, length, length2, until, until2 } => {
+            SurfExtrude { curve, dir, length, length2, until, until2, mais } => {
                 for s in [until, until2].into_iter().flatten() {
                     s.walk(ids)
                 }
                 curve.walk(ids);
+                for c in mais {
+                    c.walk(ids)
+                }
                 dir.walk(ids);
                 exprs(length);
                 exprs(length2)
@@ -1414,10 +1430,13 @@ impl RefKind {
                 exprs(start);
                 exprs(end)
             }
-            SurfSweep { profile, spine, .. } => {
+            SurfSweep { profile, spine, mais, .. } => {
                 match profile {
                     SweepProfile::Curve(c) => c.walk(ids),
                     SweepProfile::Circle(r) => exprs(r),
+                }
+                for c in mais {
+                    c.walk(ids)
                 }
                 spine.walk(ids)
             }
@@ -5409,13 +5428,14 @@ impl Document {
                 SurfJoin { items, curves, .. } => items.iter().filter_map(sref).chain(curves.iter().filter_map(cref)).collect(),
                 SurfOffset { surface, .. } => sref(surface).into_iter().collect(),
                 SurfFill { curves, conds, .. } => curves.iter().filter_map(cref).chain(conds.iter().filter_map(|c| c.support.as_ref().and_then(sref))).collect(),
-                SurfExtrude { curve, .. } => cref(curve).into_iter().collect(),
+                SurfExtrude { curve, mais, .. } => std::iter::once(curve).chain(mais).filter_map(cref).collect(),
                 SurfRevolve { curve, mais, .. } => std::iter::once(curve).chain(mais).filter_map(cref).collect(),
-                SurfSweep { profile, spine, .. } => {
+                SurfSweep { profile, spine, mais, .. } => {
                     let mut v: Vec<Id> = cref(spine).into_iter().collect();
                     if let SweepProfile::Curve(c) = profile {
                         v.extend(cref(c));
                     }
+                    v.extend(mais.iter().filter_map(cref));
                     v
                 }
                 SurfSweepX { kind, spine, .. } => kind.guides().into_iter().chain(spine.as_ref()).filter_map(cref).collect(),

@@ -122,7 +122,7 @@ fn guia_que_nao_toca_a_secao_vira_erro_com_motivo() {
 fn folha(d: &mut Document, y0: f64, y1: f64, z: f64) -> Id {
     let c = reta(d, [0., y0, z], [0., y1, z]);
     let eixo = d.add_geometry(RefKind::LinePoints { a: fx([0.; 3]), b: fx([40., 0., 0.]), start: t("0"), end: t("0") });
-    d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Ref(eixo), length: t("40"), length2: t("0"), until: None, until2: None })
+    d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Ref(eixo), length: t("40"), length2: t("0"), until: None, until2: None, mais: vec![] })
 }
 
 #[test]
@@ -183,7 +183,7 @@ fn conexao_em_angulo_conhecido() {
     let (c, s) = (30f64.to_radians().cos(), 30f64.to_radians().sin());
     let perfil = reta(&mut d, [0., 0., 0.], [0., 40. * c, 40. * s]);
     let eixo = d.add_geometry(RefKind::LinePoints { a: fx([0.; 3]), b: fx([40., 0., 0.]), start: t("0"), end: t("0") });
-    let b = d.add_geometry(RefKind::SurfExtrude { curve: perfil, dir: AxisRef::Ref(eixo), length: t("40"), length2: t("0"), until: None, until2: None });
+    let b = d.add_geometry(RefKind::SurfExtrude { curve: perfil, dir: AxisRef::Ref(eixo), length: t("40"), length2: t("0"), until: None, until2: None, mais: vec![] });
     let id = check(&mut d, CheckMode::Conexao, SurfRef::Ref(a), SurfRef::Ref(b), CurveRef::default(), "6", "0.1");
     let r = recompute(&d);
     ok(&r, id);
@@ -418,7 +418,7 @@ fn isocurvas_saem_na_nota_e_seguem_a_densidade() {
 fn duas_folhas(d: &mut Document) -> (Id, Id) {
     let extr = |d: &mut Document, a: [f64; 3], b: [f64; 3]| {
         let c = reta(d, a, b);
-        d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("40"), length2: t("0"), until: None, until2: None })
+        d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("40"), length2: t("0"), until: None, until2: None, mais: vec![] })
     };
     (extr(d, [-40., 0., 0.], [0., 0., 0.]), extr(d, [30., 0., 20.], [70., 0., 20.]))
 }

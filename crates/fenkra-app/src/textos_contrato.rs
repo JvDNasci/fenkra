@@ -29,4 +29,6 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Fica deste lado (corte seguinte)", "Stays on this side (next cut)"),
     ("Esta curva não tem vizinhas tangentes para juntar.", "This curve has no tangent neighbors to join."),
     ("O recorte entra no material (contra a normal do plano). Use 'Inverter direção' se necessário.", "The cut goes into the material (against the plane normal). Use 'Flip direction' if needed."),
+    ("A seta do 3D mostra para onde a camada cresce; inverter leva a camada para dentro da peça (remove). Valor negativo também remove.", "The 3D arrow shows where the layer grows; flipping takes the layer into the part (removes). A negative value also removes."),
+    ("Curvas do perfil, de qualquer origem (sketch, arame, arestas). Unir junta as marcadas numa curva só: a superfície sai contínua.", "Profile curves, from any origin (sketch, wireframe, edges). Join merges the marked ones into a single curve: the surface comes out continuous."),
 ];

@@ -58,7 +58,7 @@ fn sketch_com(d: &mut Document, monta: impl FnOnce(&mut SketchData, &mut Box<dyn
 }
 
 fn extrusao(curve: CurveRef, len: &str) -> RefKind {
-    RefKind::SurfExtrude { curve, dir: AxisRef::Origin(OriginAxis::Z), length: s(len), length2: s("0"), until: None, until2: None }
+    RefKind::SurfExtrude { curve, dir: AxisRef::Origin(OriginAxis::Z), length: s(len), length2: s("0"), until: None, until2: None, mais: vec![] }
 }
 
 // ------------------------------------------------------------------ definição única da spline
@@ -187,7 +187,7 @@ fn guia_com_canto_vira_arestas_exatas() {
     // canto vivo de 90° no fim do arco
     let l2 = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([40., 20., 0.]), b: PointRef::Fixed([60., 20., 0.]), start: s("0"), end: s("0") });
     let j = d.add_geometry(RefKind::CurveJoin { curves: vec![CurveRef::Ref(l1), CurveRef::Ref(arco), CurveRef::Ref(l2)] });
-    let tubo = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(s("2")), spine: CurveRef::Ref(j), mode: SweepMode::Corrigido });
+    let tubo = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(s("2")), spine: CurveRef::Ref(j), mode: SweepMode::Corrigido, mais: vec![] });
     let poli = d.add_geometry(RefKind::Polyline { points: vec![PointRef::Fixed([0., 0., 10.]), PointRef::Fixed([30., 0., 10.]), PointRef::Fixed([33., 4., 10.]), PointRef::Fixed([60., 6., 10.])], closed: false });
     let r = recompute(&d);
     for id in [j, tubo, poli] {

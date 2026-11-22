@@ -1560,11 +1560,8 @@ fn feature_ui(
     seed: &crate::geo_ui::Seed,
 ) {
     if crate::feat_ui::panel(ui, doc, idx, id, kind, vars, picked_faces, seed) {
-        // B562/ADR 0107: o "⇄ Inverter direção" padrão dos comandos de superfície com lado
-        if !crate::inverter::controles(crate::contrato::Alvo::Feature(kind)).is_empty() {
-            section(ui, "Direção");
-            crate::inverter::botoes_feature(ui, kind);
-        }
+        // ADR 0107: cada painel desenha o seu "⇄ Inverter direção" (o widget padrão) no lugar certo da
+        // seção; aqui não entra um segundo botão (pendências das ondas 1 e 2)
         target_combo(ui, doc, target);
         return;
     }
