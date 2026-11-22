@@ -452,11 +452,42 @@ a coerência antes de integrar.
   a web fica inteira (o corte pelo suporte só no resultado final) e a parede aparece como contorno em linhas
   (`PreviaViz::linhas`); sem varredura da dobra nem união. A superfície de suporte (varredura/deslocamento)
   fica no `Cache::suportes`, com chave pela definição (`ref_sig`). O resultado final é o do cálculo completo.
+- **Dobrada de peça grande (pendência 1, resolvida em 22/11/2026)**. Asa de corda `c` (web de `c` × 0,6 `c`,
+  dorso de perfil de quatro dígitos extrudado em 2 `c`), aba de 20 mm, t = r = 2, k = 0,44.
+  - *Diagnóstico* (função de kernel `Shape::diag_fusao`: `BRepCheck` por subforma, tolerâncias, tipos de face,
+    `BOPAlgo_ArgumentAnalyzer` e a fusão com tolerância difusa de 0 a 0,01). As duas partes eram válidas e com
+    tolerância pequena (web 5e-6, aba 1,5e-7). A fusão não dava erro: avisava "não foi possível orientar a
+    forma" e devolvia vazio (corda 400) ou só a aba (corda 1000, volume da ferramenta). A ferramenta tinha 150 a
+    200 faces (planos, revoluções e extrusões) e, na corda 1000, o analisador acusava autointerseção dela. As
+    causas, medidas: (a) a OML vem de `section` do suporte pelo plano da web, que é polilinha; as amostras ficam
+    nas cordas, até 0,08 mm fora da aresta verdadeira da web na corda 400, e a flecha cresce com o tamanho da
+    peça, enquanto as tolerâncias da booleana são absolutas; (b) `cadeia_exata` nunca achava a aresta (as
+    amostras das pontas ficam até um passo antes das pontas da aresta), então a varredura seguia a polilinha,
+    que o kernel refaz em retas e arcos com quinas entre eles e arcos aceitos a 0,2 % do raio (mais de 1 mm em
+    raio grande); a transição arredondada nas quinas se cruza. Resultado: a face da dobra, tangente à face da
+    web, nasce décimos de mm fora da borda dela, e a booleana não classifica o contato quase tangente. A
+    tolerância difusa só "consertava" com 0,01 mm (tolerâncias de 3e-3 no resultado) e mesmo assim errava o
+    volume na corda 1000; costura ou planos exatos não atacavam a causa (as faces planas já saíam planos).
+  - *Correção*: `oml_exata` pega a aresta exata da web relimitada (uma aresta, a interseção do suporte com o
+    plano), leva as amostras para cima dela (`Shape::curva_projeta`) e a apara entre a primeira e a última
+    amostra (`Shape::curva_aparada`); a varredura segue essa curva (10 faces). A faixa planificada usa spline
+    pelas amostras nas bordas, e o recorte do recuo (posição por fora e por dentro) a mesma borda
+    (`chain_segs` também ajustava arcos a 0,2 % do raio e a fusão perdia 3 % da faixa sem erro). Vale sem limites de lado; com limites, o caminho antigo continua. A fusão é conferida e aplicada
+    de uma vez (`apply_aceita`), em vez de duas.
+  - *Números* (teste `chapa_b566_dobrada_grande.rs`, dobrada / planificada, status ok nos dois):
+    corda 200: 37 180,9 / 37 231,1 mm³, 1,9 s / 0,8 s; corda 400: 128 846,2 / 128 820,1 mm³, 1,9 s / 1,0 s;
+    corda 1000: 730 867,8 / 730 610,1 mm³, 2,5 s / 1,7 s; corda 1000 com suporte deslocado de 20 mm:
+    770 957,2 / 770 705,3 mm³, 6,3 s / 2,4 s. A diferença (de −50 a +260 mm³, até 0,6 mm³ por mm de corda) é a do
+    fator K, θ·(0,5 − k)·t² ≈ 0,38 mm³ por mm de linha de dobra, mais o efeito da curvatura da OML na faixa
+    desenvolvida para fora. Caixa: x de 0 a `c` (+0,1 mm na ponta da dobra), z até 24 mm (2 + r + 20) na
+    dobrada e 2 mm na planificada; em y, o topo do dorso + r + t na dobrada e + ba + 20 na planificada. Na
+    corda 200 a dobrada caiu de 3,3 s para 1,9 s (varredura 0,11 s, fusão 1,3 s); com o suporte deslocado a
+    fusão contra a face deslocada leva 5 s.
 - **Pendente**
-  1. **Dobrada de peça grande** (corda a partir de 400 mm): a união da varredura da dobra com a web sai
-     inválida no kernel e o comando dá erro; o planificado funciona em todas as escalas medidas (até corda
-     1000). Precisa de investigação no kernel (tolerância da união, seção entrando 0,05 mm). Tentativa de
-     trocar o caminho exato pela polilinha não resolveu.
+  1. Com limites de lado, com posição do material por fora ou por dentro (a OML recua e vira polilinha) e na aba
+     curva por arestas, a varredura ainda segue a polilinha refeita em retas e arcos a 0,2 % do raio: o mesmo
+     defeito de escala pode voltar em peça grande. O caminho certo é deslocar e aparar a curva exata no kernel.
+     A aba termina na última amostra (até um passo antes da borda da web: 5 mm na corda 1000), como antes.
   2. Aproximação para superfície de dupla curvatura (estiramento/enrugamento) e recorte de alívio onde a
      OML fecha (hoje só o aviso).
   3. Os limites dos lados, a borda final e os cantos não aparecem na prévia simplificada (só no resultado).
