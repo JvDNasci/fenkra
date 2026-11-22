@@ -35,6 +35,8 @@ pub fn controles(alvo: Alvo) -> Vec<Controle> {
             RefKind::SurfTrim { .. } | RefKind::SurfFillet { .. } => vec![Controle { campo: 0, rotulo: "Fica da superfície 1" }, Controle { campo: 1, rotulo: "Fica da superfície 2" }],
             RefKind::CurveParallel { .. } => vec![Controle { campo: 0, rotulo: "Lado da paralela" }],
             RefKind::SurfRuled { .. } => vec![Controle { campo: 0, rotulo: "Sentido da faixa" }],
+            // B562 (onda 2): irmã da extrusão sólida; o sentido é o sinal dos limites (`sinal_do_valor`)
+            RefKind::SurfExtrude { .. } => vec![Controle { campo: 0, rotulo: "Sentido da extrusão" }],
             _ => vec![],
         },
         Alvo::Feature(k) => match k {
@@ -95,11 +97,15 @@ pub fn estado(alvo: Alvo, campo: u8) -> bool {
                 }
             }
             RefKind::CurveParallel { flip, .. } | RefKind::SurfRuled { flip, .. } => *flip,
+            RefKind::SurfExtrude { length, .. } => extrusao_invertida(length),
             _ => false,
         },
         Alvo::Feature(k) => match k {
             FeatureKind::SplitBody(x) => x.flip,
             FeatureKind::SewSurface(x) => x.flip,
+            // o engrossar inverte trocando as duas espessuras: está invertido quando toda a espessura
+            // ficou do lado 2 (o botão aparece destacado, como nos outros comandos)
+            FeatureKind::ThickSurface(t) if !t.simetrico => crate::sup3d::zerado(&t.t1) && !crate::sup3d::zerado(&t.t2),
             _ => bool_de_feature(&mut k.clone(), campo).map(|b| *b).unwrap_or(false),
         },
     }
@@ -125,8 +131,24 @@ pub fn alternar_ref(k: &mut RefKind, campo: u8) {
             *f = !*f;
         }
         RefKind::CurveParallel { flip, .. } | RefKind::SurfRuled { flip, .. } => *flip = !*flip,
+        // o sinal dos dois limites troca junto: a faixa de -limite 2 a limite 1 vira o espelho dela
+        RefKind::SurfExtrude { length, length2, .. } => alternar_extrusao(length, length2),
         _ => {}
     }
+}
+
+/// B562 (onda 2): a extrusão de superfície está invertida? O sentido é o sinal do limite 1
+/// (`sinal_do_valor`): o botão do painel e a seta do 3D leem daqui.
+pub fn extrusao_invertida(length: &str) -> bool {
+    fenkra_core::expr::sinal_negativo(length)
+}
+
+/// B562 (onda 2): inverte a extrusão de superfície trocando o sinal dos dois limites; a faixa de
+/// `-limite 2` a `limite 1` vira o espelho dela pela curva (a mesma coisa que a extrusão sólida faz com
+/// `reverse`). O botão do painel e a seta do 3D chamam esta.
+pub fn alternar_extrusao(length: &mut String, length2: &mut String) {
+    *length = fenkra_core::expr::negar(length);
+    *length2 = fenkra_core::expr::negar(length2);
 }
 
 /// A única função que inverte o lado de um comando de `features`. No engrossar, as duas espessuras
@@ -216,6 +238,13 @@ pub fn grupos_irmaos() -> Vec<(&'static str, Vec<Vec<Controle>>)> {
             vec![
                 controles(Alvo::Ref(&RefKind::SurfRuled { curves: vec![curva()], support: None, mode: RuledMode::Normal, dir: AxisRef::Origin(OriginAxis::Z), length: "20".into(), flip: false })),
                 controles(Alvo::Ref(&RefKind::CurveParallel { curve: curva(), support: sf(1), d1: "5".into(), d2: "5".into(), flip: false, more: vec![], both: false, d_other: String::new() })),
+            ],
+        ),
+        (
+            "sentido da extrusão de superfície e do engrossar (irmãos da extrusão sólida)",
+            vec![
+                controles(Alvo::Ref(&RefKind::SurfExtrude { curve: curva(), dir: AxisRef::Origin(OriginAxis::Z), length: "30".into(), length2: "0".into(), until: None, until2: None })),
+                controles(Alvo::Feature(&FeatureKind::ThickSurface(ThickSurface::normal(sf(1), "2", "0")))),
             ],
         ),
     ]
@@ -339,6 +368,47 @@ mod tests {
             FeatureKind::SmJoggle(SmJoggle { a: [1., 0., 0.], b: [2., 0., 0.], depth: s("3"), run: s("6"), flip: false, angle: None, plane: None, keep_length: false }),
             FeatureKind::SmLouver(SmLouver { a: [1., 0., 0.], b: [2., 0., 0.], width: s("12"), height: s("5"), flip: false, down: false }),
         ]
+    }
+
+    /// Trecho do código-fonte entre dois marcadores (o braço de um comando no painel).
+    fn braco<'a>(fonte: &'a str, de: &str, ate: &str) -> &'a str {
+        let i = fonte.find(de).unwrap_or_else(|| panic!("não achei {de}"));
+        let j = fonte[i..].find(ate).map(|j| i + j).unwrap_or_else(|| panic!("não achei {ate} depois de {de}"));
+        &fonte[i..j]
+    }
+
+    /// ADR 0107, decisão 4 (onda 2): extrusão sólida, extrusão de superfície e engrossar são irmãos com
+    /// as mesmas opções de direção. Os três têm **um** "⇄ Inverter direção" (o widget padrão), com um
+    /// estado que liga e volta ao documento de antes; as duas extrusões mostram as mesmas seções na
+    /// mesma ordem (Perfil, Extensão, o inverter logo abaixo da extensão) e o campo Direção.
+    #[test]
+    fn paridade_extrusao_solida_superficie_e_engrossar() {
+        // estados: liga e volta (a sólida é a caixa `reverse`, conferida no painel logo abaixo)
+        let sup0 = RefKind::SurfExtrude { curve: slots::curve(), dir: AxisRef::Origin(OriginAxis::Z), length: "30".into(), length2: "5".into(), until: None, until2: None };
+        let mut sup = sup0.clone();
+        assert_eq!(controles(Alvo::Ref(&sup)).len(), 1, "a extrusão de superfície tem um inversor");
+        assert!(!estado(Alvo::Ref(&sup), 0));
+        alternar_ref(&mut sup, 0);
+        assert!(estado(Alvo::Ref(&sup), 0), "invertida, o botão aparece destacado");
+        alternar_ref(&mut sup, 0);
+        assert_eq!(sup, sup0, "inverter duas vezes volta ao documento de antes");
+        let eng0 = FeatureKind::ThickSurface(ThickSurface::normal(slots::surf(), "2", "0"));
+        let mut eng = eng0.clone();
+        assert_eq!(controles(Alvo::Feature(&eng)).len(), 1, "o engrossar tem um inversor");
+        alternar_feature(&mut eng, 0);
+        assert!(estado(Alvo::Feature(&eng), 0));
+        alternar_feature(&mut eng, 0);
+        assert_eq!(eng, eng0);
+
+        // painel: o mesmo widget, as mesmas seções, na mesma ordem
+        let editor = braco(include_str!("editor.rs"), "FeatureKind::Extrude(e) => {", "FeatureKind::Revolve(r) => {");
+        let geo = braco(include_str!("geo_ui.rs"), "R::SurfExtrude { curve, dir, length", "R::SurfRevolve {");
+        for (nome, fonte, botao) in [("extrusão sólida", editor, "inverter::botao(ui, &mut e.reverse)"), ("extrusão de superfície", geo, "inverter::botao(ui, &mut inv)")] {
+            let pos = |x: &str| fonte.find(x).unwrap_or_else(|| panic!("{nome} sem {x}"));
+            let (perfil, extensao, inv) = (pos("section(ui, \"Perfil\")"), pos("section(ui, \"Extensão\")"), pos(botao));
+            assert!(perfil < extensao && extensao < inv, "{nome}: Perfil, Extensão e o inverter, nessa ordem");
+            assert!(fonte.contains("\"Direção\""), "{nome} sem o campo Direção");
+        }
     }
 
     /// Paridade dos comandos de troca direta (Extrusão, Furo, Ângulo de saída, Nervura e os recursos de

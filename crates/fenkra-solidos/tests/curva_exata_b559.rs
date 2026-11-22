@@ -130,7 +130,7 @@ fn extrusao_de_circulo_e_cilindro() {
         let (cc, a, b) = (data.add_point(al, 50., 0.), data.add_point(al, 55., 0.), data.add_point(al, 45., 0.));
         data.add_curve(al, Curve::Arc { c: cc, s: a, e: b }, false)
     });
-    let rv = d.add_geometry(RefKind::SurfRevolve { curve: CurveRef::SketchCurve { sketch: sk2, curve: arco }, axis: AxisRef::Origin(OriginAxis::Y), angle: s("180"), angle2: s("0") });
+    let rv = d.add_geometry(RefKind::SurfRevolve { curve: CurveRef::SketchCurve { sketch: sk2, curve: arco }, axis: AxisRef::Origin(OriginAxis::Y), angle: s("180"), angle2: s("0"), mais: vec![] });
     let r = recompute(&d);
     ok(&r, &d, rv);
     let t = superficie(&d, rv).face_types().unwrap();

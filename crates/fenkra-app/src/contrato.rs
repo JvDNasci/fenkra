@@ -58,6 +58,14 @@ fn n_curva(c: &CurveRef) -> usize {
     usize::from(!matches!(c, CurveRef::Ref(id) if id.a_escolher()))
 }
 
+fn n_eixo(a: &AxisRef) -> usize {
+    usize::from(!matches!(a, AxisRef::Ref(id) if id.a_escolher()))
+}
+
+fn n_plano(p: &PlaneRef) -> usize {
+    usize::from(!matches!(p, PlaneRef::Datum(id) if id.a_escolher()))
+}
+
 // ---------------------------------------------------------------- tipos
 
 /// O que um campo de entrada aceita.
@@ -490,6 +498,26 @@ pub fn curvas_mut<'a>(doc: &'a mut Document, id: Id, campo: &str) -> Option<&'a 
     }
 }
 
+/// ADR 0107 (onda 2): a lista de curvas do campo como um vetor só, para o motor do campo (cadeia
+/// tangente, junção) mexer nela. Os campos de lista de verdade passam por `curvas_mut`; o perfil da
+/// revolução e o Extrair de várias curvas guardam a lista em dois campos do comando (`curve` e `mais`),
+/// que voltam a eles depois de `f`.
+pub fn editar_curvas<R>(doc: &mut Document, id: Id, campo: &str, f: impl FnOnce(&mut Vec<CurveRef>) -> R) -> Option<R> {
+    let em_dois = doc.reference(id).is_some_and(|r| matches!((&r.kind, campo), (RefKind::SurfRevolve { .. }, "g_pf") | (RefKind::CurveCopy { .. }, "g_c")));
+    if !em_dois {
+        return curvas_mut(doc, id, campo).map(f);
+    }
+    let r = doc.references.iter_mut().find(|r| r.id == id)?;
+    let (curve, mais) = match &mut r.kind {
+        RefKind::SurfRevolve { curve, mais, .. } | RefKind::CurveCopy { curve, mais } => (curve, mais),
+        _ => return None,
+    };
+    let mut v: Vec<CurveRef> = std::iter::once(curve.clone()).chain(mais.drain(..)).collect();
+    let out = f(&mut v);
+    crate::geo_ui::juntar_perfil(v, curve, mais);
+    Some(out)
+}
+
 /// O `salt` do widget é o campo `id` do descritor? O widget pode levar o id do comando no fim
 /// (`arestas12`): o resto depois do id tem de ser só dígitos.
 pub fn salt_bate(salt: &str, id: &str) -> bool {
@@ -562,28 +590,84 @@ fn declaradas(alvo: Alvo) -> Vec<Entrada> {
             FeatureKind::StructMember(m) => vec![Entrada::nova("caminhos", "Caminho", T::Curva, varios(1), m.paths.len()).com_juncao()],
             _ => vec![],
         },
-        Alvo::Ref(k) => match k {
-            RefKind::SurfSplit { surface, tool, .. } => vec![
-                Entrada::nova("g_s", "Superfície", T::Superficie, Cardinalidade::Um, n_surf(surface)),
-                Entrada::nova("g_t", "Cortar com", T::Superficie, Cardinalidade::Um, n_surf(tool)).tambem(T::Plano),
-            ],
-            RefKind::SurfTrim { a, b, .. } | RefKind::SurfFillet { a, b, .. } => vec![
-                Entrada::nova("g_a", "Superfície 1", T::Superficie, Cardinalidade::Um, n_surf(a)),
-                Entrada::nova("g_b", "Superfície 2", T::Superficie, Cardinalidade::Um, n_surf(b)),
-            ],
-            RefKind::SurfRuled { curves, .. } => vec![Entrada::nova("g_rc", "Curvas", T::Curva, varios(1), curves.iter().map(n_curva).sum()).com_juncao()],
-            RefKind::CurveParallel { curve, support, .. } => vec![
-                Entrada::nova("g_c", "Curva", T::Curva, Cardinalidade::Um, n_curva(curve)).com_juncao(),
-                Entrada::nova("g_s", "Apoio", T::Superficie, Cardinalidade::Um, n_surf(support)),
-            ],
+        Alvo::Ref(k) => declaradas_ref(k),
+    }
+}
+
+/// Uma superfície de um campo de um item ("Superfície", "Superfície 1"...).
+fn sup(id: &'static str, rotulo: &'static str, s: &SurfRef) -> Entrada {
+    Entrada::nova(id, rotulo, TipoEntrada::Superficie, Cardinalidade::Um, n_surf(s))
+}
+
+/// Uma curva de um campo de um item ("Guia", "Borda 1"...).
+fn curva1(id: &'static str, rotulo: &'static str, c: &CurveRef) -> Entrada {
+    Entrada::nova(id, rotulo, TipoEntrada::Curva, Cardinalidade::Um, n_curva(c))
+}
+
+/// O perfil como lista de curvas de origens mistas, com junção na hora (ADR 0107, onda 2).
+fn perfil(id: &'static str, rotulo: &'static str, curve: &CurveRef, mais: &[CurveRef]) -> Entrada {
+    Entrada::nova(id, rotulo, TipoEntrada::Curva, varios(1), n_curva(curve) + mais.iter().map(n_curva).sum::<usize>()).com_juncao()
+}
+
+/// Entradas declaradas dos elementos de `references` (superfícies e arame). ADR 0107, onda 2: os
+/// comandos de superfície que estavam no adaptador declaram os campos aqui, com o `id` do widget e o
+/// mesmo nome para o mesmo papel em todos (Superfície, Superfície 1 e 2, Apoio, Perfil, Guia).
+fn declaradas_ref(k: &RefKind) -> Vec<Entrada> {
+    use TipoEntrada as T;
+    match k {
+            RefKind::SurfSplit { surface, tool, curve, .. } => {
+                let mut v = vec![sup("g_s", "Superfície", surface), sup("g_t", "Cortar com", tool).tambem(T::Plano)];
+                v.extend(curve.as_ref().map(|c| curva1("g_tc", "Curva de corte", c)));
+                v
+            }
+            RefKind::SurfTrim { a, b, .. } | RefKind::SurfFillet { a, b, .. } | RefKind::SurfConnect { a, b, .. } => vec![sup("g_a", "Superfície 1", a), sup("g_b", "Superfície 2", b)],
+            RefKind::SurfRuled { curves, support, mode, dir, .. } => {
+                let mut v = vec![Entrada::nova("g_rc", "Curvas", T::Curva, varios(1), curves.iter().map(n_curva).sum()).com_juncao()];
+                match (mode, support) {
+                    (RuledMode::Vetor, _) => v.push(Entrada::nova("g_rd", "Direção", T::Eixo, Cardinalidade::Um, n_eixo(dir))),
+                    (_, Some(s)) => v.push(sup("g_apoio", "Apoio", s).opcional()),
+                    _ => {}
+                }
+                v
+            }
+            RefKind::CurveParallel { curve, support, .. } => vec![curva1("g_c", "Curva", curve), sup("g_apoio", "Apoio", support)],
+            RefKind::SurfExtrude { curve, dir, .. } => vec![curva1("g_pf", "Perfil", curve), Entrada::nova("g_d", "Direção", T::Eixo, Cardinalidade::Um, n_eixo(dir))],
+            RefKind::SurfRevolve { curve, axis, mais, .. } => vec![perfil("g_pf", "Perfil", curve, mais), Entrada::nova("g_ax", "Eixo", T::Eixo, Cardinalidade::Um, n_eixo(axis))],
+            RefKind::SurfSweep { profile, spine, .. } => {
+                let mut v = vec![];
+                if let SweepProfile::Curve(c) = profile {
+                    v.push(curva1("g_pf", "Perfil", c));
+                }
+                v.push(curva1("g_sp", "Guia", spine));
+                v
+            }
+            RefKind::SurfBlend { a, sa, b, sb, .. } => {
+                let mut v = vec![curva1("g_borda1", "Borda 1", a)];
+                v.extend(sa.as_ref().map(|s| sup("g_apoio1", "Apoio 1", s).opcional()));
+                v.push(curva1("g_borda2", "Borda 2", b));
+                v.extend(sb.as_ref().map(|s| sup("g_apoio2", "Apoio 2", s).opcional()));
+                v
+            }
+            RefKind::SurfOffset { surface, .. } | RefKind::SurfHeal { surface, .. } | RefKind::SurfUntrim { surface } | RefKind::SurfEdgeFillet { surface, .. } | RefKind::SurfRegions { surface, .. } | RefKind::SurfPart { surface, .. } => vec![sup("g_s", "Superfície", surface)],
+            RefKind::SurfExtrapolate { surface, edges, .. } => vec![sup("g_s", "Superfície", surface), Entrada::nova("g_eb", "Bordas", T::Curva, varios(0), edges.iter().map(n_curva).sum()).opcional()],
+            RefKind::PointProject { surface, .. } => vec![sup("g_s", "Superfície", surface)],
+            RefKind::CurveProjectSurf { curve, surface, .. } => vec![curva1("g_c", "Curva", curve), sup("g_s", "Superfície", surface)],
+            RefKind::LineAngle { support, .. } => vec![Entrada::nova("g_apoio", "Plano de apoio", T::Plano, Cardinalidade::Um, n_plano(support))],
+            RefKind::CurveCopy { curve, mais } => vec![Entrada::nova("g_c", "Arestas/curvas", T::Curva, varios(1), n_curva(curve) + mais.iter().map(n_curva).sum::<usize>())],
             RefKind::SurfJoin { items, curves, .. } => vec![
                 Entrada::nova("g_j", "Elementos", T::Superficie, varios(1), items.iter().map(n_surf).sum()),
                 Entrada::nova("g_jc", "Curvas", T::Curva, varios(0), curves.iter().map(n_curva).sum()).opcional().com_juncao(),
             ],
-            RefKind::SurfLoft { sections, .. } => vec![Entrada::nova("g_sec", "Seções", T::Curva, varios(2), sections.iter().map(n_curva).sum()).ordenada().com_juncao()],
+            RefKind::SurfLoft { sections, guide, opts, .. } => {
+                let mut v = vec![
+                    Entrada::nova("g_sec", "Seções", T::Curva, varios(2), sections.iter().map(n_curva).sum()).ordenada().com_juncao(),
+                    Entrada::nova("g_gds", "Guias", T::Curva, varios(0), opts.guides.iter().map(n_curva).sum()).opcional(),
+                ];
+                v.extend(guide.as_ref().map(|g| curva1("g_gd", "Caminho", g)));
+                v
+            }
             RefKind::CurveJoin { curves } => vec![Entrada::nova("g_cj", "Curvas", T::Curva, varios(1), curves.iter().map(n_curva).sum()).com_juncao()],
             _ => vec![],
-        },
     }
 }
 
@@ -784,6 +868,101 @@ mod tests {
         // as duas preenchidas: completo, sem sobrar marcador
         let k = RefKind::SurfSplit { surface: SurfRef::Ref(Id(5)), tool: SurfRef::Ref(Id(6)), flip: false, more: vec![], curve: None, more_flip: vec![] };
         assert!(!incompleto(Alvo::Ref(&k)));
+    }
+
+    /// ADR 0107, onda 2: os comandos de superfície que estavam no adaptador declaram os campos, com o
+    /// `id` do widget; o perfil da revolução e o Extrair de várias curvas contam `curve` e `mais`.
+    #[test]
+    fn superficies_do_adaptador_declaram_os_campos() {
+        let c = |i: u64| CurveRef::Ref(Id(i));
+        let k = RefKind::SurfExtrude { curve: slots::curve(), dir: AxisRef::Origin(OriginAxis::Z), length: "30".into(), length2: "0".into(), until: None, until2: None };
+        assert_eq!(id_do_ativo(Alvo::Ref(&k)), Some("g_pf"), "a extrusão pede o perfil pelo campo declarado");
+        let k = RefKind::SurfRevolve { curve: c(3), axis: AxisRef::Origin(OriginAxis::Z), angle: "360".into(), angle2: "0".into(), mais: vec![c(4), c(5)] };
+        let s = FeatureSpec::de(Alvo::Ref(&k));
+        let e = s.entrada("g_pf").unwrap();
+        assert_eq!((e.n, e.juncao, e.card.min()), (3, true, 1), "perfil = curve + mais, com junção na hora");
+        assert!(!s.incompleto());
+        let k = RefKind::SurfSweep { profile: SweepProfile::Curve(c(3)), spine: slots::curve(), mode: SweepMode::Corrigido };
+        assert_eq!(FeatureSpec::de(Alvo::Ref(&k)).ordem_tab(), vec!["g_pf", "g_sp"]);
+        assert_eq!(id_do_ativo(Alvo::Ref(&k)), Some("g_sp"));
+        let k = RefKind::SurfBlend { a: c(3), sa: Some(SurfRef::Ref(Id(9))), b: slots::curve(), sb: None, cont: Continuity::G1, tension: "1".into(), tension2: None };
+        assert_eq!(FeatureSpec::de(Alvo::Ref(&k)).ordem_tab(), vec!["g_borda1", "g_apoio1", "g_borda2"]);
+        assert_eq!(id_do_ativo(Alvo::Ref(&k)), Some("g_borda2"));
+        let k = RefKind::CurveCopy { curve: c(3), mais: vec![c(4)] };
+        assert_eq!(FeatureSpec::de(Alvo::Ref(&k)).entrada("g_c").map(|e| e.n), Some(2), "o campo do Extrair mostra os itens de mais");
+        let k = RefKind::CurveProjectSurf { curve: slots::curve(), surface: slots::surf(), dir: None };
+        assert_eq!(id_do_ativo(Alvo::Ref(&k)), Some("g_c"), "a curva continua antes da superfície, como no adaptador");
+    }
+
+    /// Amostra de todos os comandos de `references` que declaram campos.
+    fn amostras_ref() -> Vec<RefKind> {
+        let c = || slots::curve();
+        let s = || slots::surf();
+        vec![
+            RefKind::SurfSplit { surface: s(), tool: s(), flip: false, more: vec![], curve: Some(c()), more_flip: vec![] },
+            RefKind::SurfTrim { a: s(), b: s(), flip_a: false, flip_b: false },
+            RefKind::SurfFillet { a: s(), b: s(), flip_a: false, flip_b: false, radius: "5".into(), radius2: None },
+            RefKind::SurfConnect { a: s(), b: s(), cont: Continuity::G1, tension: "1".into(), tension2: None, near: [None; 2] },
+            RefKind::SurfRuled { curves: vec![c()], support: Some(s()), mode: RuledMode::Normal, dir: AxisRef::Origin(OriginAxis::Z), length: "5".into(), flip: false },
+            RefKind::CurveParallel { curve: c(), support: s(), d1: "5".into(), d2: "5".into(), flip: false, more: vec![], both: false, d_other: String::new() },
+            RefKind::SurfExtrude { curve: c(), dir: AxisRef::Origin(OriginAxis::Z), length: "30".into(), length2: "0".into(), until: None, until2: None },
+            RefKind::SurfRevolve { curve: c(), axis: AxisRef::Origin(OriginAxis::Z), angle: "360".into(), angle2: "0".into(), mais: vec![] },
+            RefKind::SurfSweep { profile: SweepProfile::Curve(c()), spine: c(), mode: SweepMode::Corrigido },
+            RefKind::SurfBlend { a: c(), sa: Some(s()), b: c(), sb: Some(s()), cont: Continuity::G1, tension: "1".into(), tension2: None },
+            RefKind::SurfOffset { surface: s(), dist: "2".into(), both: false, join: Default::default() },
+            RefKind::SurfHeal { surface: s(), tol: "0.1".into() },
+            RefKind::SurfLoft { sections: vec![], guide: Some(c()), ruled: false, closed: false, opts: Default::default() },
+            RefKind::CurveProjectSurf { curve: c(), surface: s(), dir: None },
+            RefKind::CurveCopy { curve: c(), mais: vec![] },
+        ]
+    }
+
+    /// O nome do papel do campo, pelo `id`: o mesmo `id` tem o mesmo nome em todos os comandos.
+    fn regra_do_papel(id: &str, rotulo: &str) -> Result<(), String> {
+        let ok = match id {
+            "g_s" => rotulo == "Superfície",
+            "g_a" => rotulo.ends_with(" 1"),
+            "g_b" => rotulo.ends_with(" 2"),
+            "g_pf" => rotulo == "Perfil",
+            "g_sp" => rotulo == "Guia",
+            x if x.starts_with("g_apoio") => rotulo.starts_with("Apoio") || rotulo == "Plano de apoio",
+            x if x.starts_with("g_borda") => rotulo.starts_with("Borda"),
+            _ => true,
+        };
+        if ok {
+            Ok(())
+        } else {
+            Err(format!("o campo {id} se chama \"{rotulo}\""))
+        }
+    }
+
+    /// ADR 0107, onda 2: mesmo nome para o mesmo papel. "Superfície" é a superfície que o comando
+    /// trabalha (Dividir, Deslocar, Curar...); "Apoio" é a superfície de apoio (Paralela, Regrada,
+    /// Concordância); `g_a`/`g_b` são o primeiro e o segundo elemento do mesmo tipo. Vale no descritor e
+    /// nos rótulos do painel.
+    #[test]
+    fn mesmo_nome_para_o_mesmo_papel() {
+        for k in amostras_ref() {
+            for e in FeatureSpec::de(Alvo::Ref(&k)).entradas.iter().filter(|e| e.declarada) {
+                if let Err(m) = regra_do_papel(e.id, e.rotulo) {
+                    panic!("descritor: {m}");
+                }
+            }
+        }
+        let fonte = include_str!("geo_ui.rs");
+        let mut vistos = 0;
+        for id in ["g_s", "g_a", "g_b", "g_pf", "g_sp", "g_apoio", "g_apoio1", "g_apoio2", "g_borda1", "g_borda2"] {
+            let marca = format!("(ui, \"{id}\", \"");
+            for (i, _) in fonte.match_indices(&marca) {
+                let resto = &fonte[i + marca.len()..];
+                let rotulo = &resto[..resto.find('"').unwrap()];
+                if let Err(m) = regra_do_papel(id, rotulo) {
+                    panic!("painel: {m}");
+                }
+                vistos += 1;
+            }
+        }
+        assert!(vistos > 30, "o teste não achou os campos do painel ({vistos})");
     }
 
     #[test]

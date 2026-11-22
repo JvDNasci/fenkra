@@ -693,7 +693,7 @@ fn superficie_de_revolucao_gera_a_lateral_do_cone() {
     precisa_kernel!();
     let mut d = Document::new("sup revolução");
     let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([10., 0., 0.]), b: PointRef::Fixed([0., 0., 10.]), start: s("0"), end: s("0") });
-    let id = d.add_geometry(RefKind::SurfRevolve { curve: CurveRef::Ref(l), axis: AxisRef::Origin(OriginAxis::Z), angle: s("360"), angle2: s("0") });
+    let id = d.add_geometry(RefKind::SurfRevolve { curve: CurveRef::Ref(l), axis: AxisRef::Origin(OriginAxis::Z), angle: s("360"), angle2: s("0"), mais: vec![] });
     let res = recompute(&d);
     ok(&res, id);
     // lateral de cone: π·r·g com g = 10√2

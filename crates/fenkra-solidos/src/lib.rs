@@ -440,8 +440,21 @@ fn regrada(c: &geo3d::Curve3, apoio: Option<&Shape>, modo: RuledMode, vetor: Opt
     if l == 0. {
         return Err("o comprimento precisa ser diferente de zero".into());
     }
-    // reta tem dois pontos, e o apoio curvo pede mais
-    let pts = if c.pts.len() < 24 { resample(c, 24) } else { c.pts.clone() };
+    // B559/ADR 0107 (onda 2): no modo Vetor a faixa é o prisma da curva exata (uma cadeia unida na hora
+    // sai com uma face por trecho, costuradas); a polilinha interpolada passava do canto entre a reta e o
+    // arco e a faixa ficava mais comprida
+    if let (RuledMode::Vetor, Some(v)) = (modo, vetor) {
+        let (v, l) = if l < 0. { (mul(v, -1.), -l) } else { (v, l) };
+        return Shape::extrude_curva(&c.kernel(), v, l).map_err(|x| x.0);
+    }
+    // reta tem dois pontos, e o apoio curvo pede mais; pontos muito desiguais (uma cadeia de reta e arco)
+    // são reamostrados por igual, senão a interpolação passa do canto
+    let desigual = {
+        let ls: Vec<f64> = c.pts.windows(2).map(|w| dist(w[0], w[1])).filter(|l| *l > 1e-9).collect();
+        let (mn, mx) = ls.iter().fold((f64::MAX, 0f64), |(a, b), l| (a.min(*l), b.max(*l)));
+        !ls.is_empty() && mx > 4. * mn
+    };
+    let pts = if c.pts.len() < 24 || desigual { resample(c, c.pts.len().max(24)) } else { c.pts.clone() };
     let curva = Curve3::poly(pts.clone(), false)?;
     let fora = apoio.map(|s| s.mass().center);
     let mut saida = vec![];
@@ -1250,6 +1263,11 @@ fn ref_sig(doc: &Document, id: Id, vars: &Vars, depth: u32) -> String {
     let Some(r) = doc.reference(id) else { return format!("?{}", id.0) };
     let js = serde_json::to_string(&r.kind).unwrap_or_default();
     let mut out = format!("{}{}{}", id.0, js, vars_sig(&js, vars));
+    // ADR 0107 (onda 2): a junção na hora mora nos campos do comando, fora do `kind`; unir ou separar
+    // itens muda o resultado e tem de refazer ("seguir tangentes" só muda a seleção, não invalida)
+    for c in doc.campos.iter().filter(|c| c.dono == id && !c.juncoes.is_empty()) {
+        out.push_str(&format!("{}{:?}", c.campo, c.juncoes));
+    }
     if depth < 24 {
         let mut ids = vec![];
         r.kind.clone().walk(&mut |x| ids.push(*x), &mut |_| {});
@@ -1699,6 +1717,30 @@ impl Ctx<'_> {
                 })
             }
         }
+    }
+
+    /// ADR 0107 (onda 2): as curvas do campo de lista `campo` do comando `id`, com as junções na hora
+    /// gravadas no campo (`Document::campos`) já feitas: cada grupo vai ao kernel como uma curva só, a
+    /// cadeia exata dos itens. O que a junção apurou (continuidade, pontas que não se tocam) fica na nota
+    /// do comando; pontas afastadas são aviso e os itens seguem separados.
+    fn curvas_do_campo(&self, id: Id, campo: &str, refs: &[&CurveRef], depth: u32) -> Result<Vec<geo3d::CurvaDoCampo>, String> {
+        let cs: Vec<Curve3> = refs.iter().map(|c| self.curve(c, depth)).collect::<Result<_, _>>()?;
+        let juncoes = self.doc.dados_campo(id, campo).map(|d| d.juncoes.as_slice()).unwrap_or(&[]);
+        if juncoes.is_empty() {
+            return Ok(cs.into_iter().enumerate().map(|(i, curva)| geo3d::CurvaDoCampo { curva, itens: vec![i] }).collect());
+        }
+        let j = geo3d::juntar_no_campo(cs, juncoes, join_curves);
+        let mut notas = self.notes.borrow_mut();
+        let n = notas.entry(id).or_default();
+        let textos: Vec<String> = j.avisos.iter().chain(&j.notas).cloned().collect();
+        if !textos.is_empty() {
+            if !n.text.is_empty() {
+                n.text.push_str("; ");
+            }
+            n.text.push_str(&textos.join("; "));
+            n.warn |= !j.avisos.is_empty();
+        }
+        Ok(j.curvas)
     }
 
     fn points(&self, ps: &[PointRef], depth: u32) -> Result<Vec<V3>, String> {
@@ -2715,9 +2757,19 @@ impl Ctx<'_> {
                 if until.is_none() && until2.is_none() {
                     // limite 2: a curva recua para o outro lado antes de extrudar
                     // B559: a curva vai exata (círculo extrudado é cilindro)
-                    let c2 = c.transformada(&Xform::Translate(mul(v, -l2)));
-                    Geo::Surface(Shape::extrude_curva(&c2.kernel(), v, l1 + l2).map_err(|x| x.0)?)
+                    // B562/ADR 0107: o sentido é o sinal do valor ("⇄ Inverter direção" troca o sinal dos
+                    // dois limites); a faixa vai de -limite 2 a limite 1, na ordem que for
+                    let (lo, hi) = if l1 >= -l2 { (-l2, l1) } else { (l1, -l2) };
+                    if hi - lo < 1e-9 {
+                        return Err("os dois limites são zero".into());
+                    }
+                    let c2 = c.transformada(&Xform::Translate(mul(v, lo)));
+                    Geo::Surface(Shape::extrude_curva(&c2.kernel(), v, hi - lo).map_err(|x| x.0)?)
                 } else {
+                    // B562: invertida (sinal de menos no limite 1), cada lado anda para o outro sentido
+                    let inv = fenkra_core::expr::sinal_negativo(length) || l1 < 0.;
+                    let v = if inv { mul(v, -1.) } else { v };
+                    let (l1, l2) = (l1.abs(), l2.abs());
                     // cada lado sai da curva: até o elemento, ou pelo comprimento
                     let side = |dir: V3, len: f64, to: &Option<SurfRef>| -> Result<Option<Shape>, String> {
                         match to {
@@ -2737,8 +2789,7 @@ impl Ctx<'_> {
                     })
                 }
             }
-            SurfRevolve { curve, axis, angle, angle2 } => {
-                let c = self.curve(curve, d)?;
+            SurfRevolve { curve, axis, angle, angle2, mais } => {
                 let (o, v) = self.axis_d(axis, d)?;
                 let (a1, a2) = (e(angle, "ângulo")?, e(angle2, "ângulo 2")?);
                 if (a1 + a2).abs() > 360. + 1e-9 {
@@ -2746,8 +2797,19 @@ impl Ctx<'_> {
                 }
                 // ângulo 2: a curva gira para trás antes de revolver
                 let k = unit(v).ok_or("eixo nulo")?;
-                let c2 = c.transformada(&Xform::Rotate(o, k, -a2));
-                Geo::Surface(Shape::revolve_curva(&c2.kernel(), o, v, a1 + a2).map_err(|x| x.0)?)
+                // ADR 0107 (onda 2): o perfil é a lista de curvas do campo, com as junções na hora feitas;
+                // cada curva que sobra gira sozinha e as superfícies vão juntas
+                let refs: Vec<&CurveRef> = std::iter::once(curve).chain(mais).collect();
+                let mut acc: Option<Shape> = None;
+                for c in self.curvas_do_campo(id, "g_pf", &refs, d)? {
+                    let c2 = c.curva.transformada(&Xform::Rotate(o, k, -a2));
+                    let s = Shape::revolve_curva(&c2.kernel(), o, v, a1 + a2).map_err(|x| x.0)?;
+                    acc = Some(match acc {
+                        Some(a) => a.compound(&s),
+                        None => s,
+                    });
+                }
+                Geo::Surface(acc.ok_or("escolha a curva do perfil")?)
             }
             SurfSphere { center, radius } => Geo::Surface(Shape::sphere_surface(self.point(center, d)?, e(radius, "raio")?).map_err(|x| x.0)?),
             SurfCylinder { point, dir, radius, start, end } => {
@@ -2783,10 +2845,23 @@ impl Ctx<'_> {
                 Geo::Surface(Shape::sweep_surface_c(&prof, &sp.kernel(), m).map_err(|x| x.0)?)
             }
             SurfLoft { sections, guide, ruled, closed, opts } => {
-                let mut curvas = vec![];
-                for c in sections {
-                    curvas.push(self.curve(c, d)?);
-                }
+                // ADR 0107 (onda 2): itens unidos na hora formam uma seção só; o sentido e os conectores
+                // de cada seção vêm do primeiro item dela
+                let refs: Vec<&CurveRef> = sections.iter().collect();
+                let secoes = self.curvas_do_campo(id, "g_sec", &refs, d)?;
+                let juntou = secoes.len() != sections.len();
+                let opts = &if juntou {
+                    let mut o = opts.clone();
+                    let primeiro: Vec<usize> = secoes.iter().map(|s| s.itens[0]).collect();
+                    o.reversed = primeiro.iter().map(|i| opts.reversed.get(*i).copied().unwrap_or(false)).collect();
+                    for c in &mut o.connectors {
+                        *c = primeiro.iter().filter_map(|i| c.get(*i).copied()).collect();
+                    }
+                    o
+                } else {
+                    opts.clone()
+                };
+                let curvas: Vec<Curve3> = secoes.into_iter().map(|s| s.curva).collect();
                 let mut tangentes = [0.; 2];
                 for (t, x) in tangentes.iter_mut().zip(&opts.tangents) {
                     *t = if x.trim().is_empty() { 0. } else { e(x, "tangência")? };
@@ -2829,8 +2904,10 @@ impl Ctx<'_> {
                     _ => None,
                 };
                 let mut acc: Option<Shape> = None;
-                for c in curves {
-                    let faixa = regrada(&self.curve(c, d)?, apoio.as_ref(), *mode, vetor, l)?;
+                // ADR 0107 (onda 2): curvas unidas na hora dão uma faixa só, pela cadeia exata
+                let refs: Vec<&CurveRef> = curves.iter().collect();
+                for c in self.curvas_do_campo(id, "g_rc", &refs, d)? {
+                    let faixa = regrada(&c.curva, apoio.as_ref(), *mode, vetor, l)?;
                     acc = Some(match acc {
                         Some(a) => a.compound(&faixa),
                         None => faixa,

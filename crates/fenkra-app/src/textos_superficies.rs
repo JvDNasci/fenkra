@@ -133,4 +133,9 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("Valem as bordas de frente uma para a outra. No 3D, clique numa bolinha para trocar de borda.", "The edges facing each other are used. In 3D, click a dot to change the edge."),
     ("Voltar às bordas deduzidas", "Back to the deduced edges"),
     ("Clique nas arestas no 3D: o apoio vem junto. Puxe as setas para a tensão de cada lado.", "Click the edges in 3D: the support comes along. Pull the arrows for each side's tension."),
+    // ADR 0107, onda 2 (B561, B562)
+    ("Arestas/curvas", "Edges/curves"),
+    ("Sentido da extrusão", "Extrusion direction"),
+    ("As curvas extraídas formam uma cadeia: precisam se tocar nas pontas.", "The extracted curves form a chain: they must touch at the ends."),
+    ("Limite 1 no sentido da direção; limite 2 para o outro lado. Inverter troca o sinal dos dois limites.", "Limit 1 along the direction; limit 2 to the other side. Flip changes the sign of both limits."),
 ];

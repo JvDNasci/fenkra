@@ -843,6 +843,11 @@ pub enum RefKind {
         /// ângulo 2: giro para o outro lado
         #[serde(default = "zero")]
         angle2: String,
+        /// ADR 0107 (onda 2): o perfil é uma lista de curvas de origens mistas; `curve` é a primeira e
+        /// as outras ficam aqui. Curvas unidas na hora (`Document::campos`, campo `g_pf`) giram como
+        /// uma curva só.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        mais: Vec<CurveRef>,
     },
 
     // ---------------- bancada de superfícies
@@ -1389,9 +1394,12 @@ impl RefKind {
                 exprs(length);
                 exprs(length2)
             }
-            SurfRevolve { curve, axis, angle, angle2 } => {
+            SurfRevolve { curve, axis, angle, angle2, mais } => {
                 exprs(angle2);
                 curve.walk(ids);
+                for c in mais {
+                    c.walk(ids)
+                }
                 axis.walk(ids);
                 exprs(angle)
             }
@@ -5401,7 +5409,8 @@ impl Document {
                 SurfJoin { items, curves, .. } => items.iter().filter_map(sref).chain(curves.iter().filter_map(cref)).collect(),
                 SurfOffset { surface, .. } => sref(surface).into_iter().collect(),
                 SurfFill { curves, conds, .. } => curves.iter().filter_map(cref).chain(conds.iter().filter_map(|c| c.support.as_ref().and_then(sref))).collect(),
-                SurfExtrude { curve, .. } | SurfRevolve { curve, .. } => cref(curve).into_iter().collect(),
+                SurfExtrude { curve, .. } => cref(curve).into_iter().collect(),
+                SurfRevolve { curve, mais, .. } => std::iter::once(curve).chain(mais).filter_map(cref).collect(),
                 SurfSweep { profile, spine, .. } => {
                     let mut v: Vec<Id> = cref(spine).into_iter().collect();
                     if let SweepProfile::Curve(c) = profile {

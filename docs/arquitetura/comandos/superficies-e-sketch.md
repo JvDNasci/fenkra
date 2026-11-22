@@ -7,6 +7,23 @@ para o contrato único de feature (B565), para a padronização de irmãos (B569
 Referências no formato `arquivo:linha`; arquivos sem pasta estão em `crates/fenkra-app/src/` (app),
 `crates/fenkra-solidos/src/` (motor), `crates/fenkra-core/src/` (modelo) e `crates/fenkra-kernel/cpp/`.
 
+> **Atualização da onda 2 do ADR 0107 (22/11/2026, B561/B562).** O que mudou desde o levantamento:
+> - **Junção na hora com efeito**: `curvas_do_campo` (`lib.rs`) lê `Document::campos` e junta cada grupo numa
+>   cadeia exata (`geo3d::juntar_no_campo` + `join_curves`) antes do kernel, na Revolução (`g_pf`), Regrada
+>   (`g_rc`) e Loft de superfície (`g_sec`; sentido e conectores seguem o primeiro item). Índice fora da lista é
+>   ignorado com nota; pontas que não se tocam viram aviso e os itens seguem separados. A junção entra na
+>   assinatura (`ref_sig`).
+> - **Entradas pelo campo universal**: perfil da Extrudada e da Revolução, perfil e guia da Varredura, caminho do
+>   Loft, bordas da Concordância, curva de corte do Dividir, curva da Paralela e o Extrair (com os itens de
+>   `mais`) usam a caixa (`geo_ui::curva_contrato`, `perfil_lista`). A Revolução ganhou `mais` (perfil em lista).
+>   Os `RefKind` de superfície declaram os campos em `contrato::declaradas_ref`.
+> - **Inverter**: a Extrudada tem o "⇄ Inverter direção" abaixo da extensão e seta no 3D; o sentido é o sinal
+>   dos dois limites (`inverter::alternar_extrusao`, `expr::negar`). O botão do Engrossar mostra o estado.
+> - **Mesmo nome para o mesmo papel**: `g_s` = Superfície, `g_apoio*` = Apoio, `g_a`/`g_b` = 1º e 2º elemento,
+>   `g_borda1/2` = Borda, `g_pf` = Perfil (teste `contrato::mesmo_nome_para_o_mesmo_papel`).
+> - Pendente: lista de curvas na Extrudada (precisa tocar `handles.rs`), Varredura (`handles.rs` também),
+>   Engrossar x Espessura com os mesmos nomes (`feat_ui.rs`).
+
 ## 1. Como um comando de Superfícies vive hoje (arquitetura comum)
 
 **Modelo de dados.** Cada comando de Superfícies/wireframe é uma variante de `RefKind` (`doc.rs:613`), guardada
@@ -130,8 +147,8 @@ continuidade; **3D** prévia e manipuladores; **Motor** função Rust e kernel.
 | Extrair vários (`SurfMulti`) :2281 | N faces | lista de faces | – | – | `lib.rs:2850`; `face_of_bodies` |
 | Deslocada (`SurfOffset`) :1849 | 1 sup | distância, dois lados, ligação | sinal da distância | alça de distância, seta da normal | `offset_surface_j` `surfaces.inc:193` |
 | Preencher (`SurfFill`) :2005 | N curvas + pontos | curva a curva com condição G0/G1/G2 e peso, "Aplicar a todas", pontos, tolerância | continuidade por borda | alças de condição | `fill` `lib.rs:2031`; `fill_surface_x` `surfaces.inc:289` |
-| Extrudada (`SurfExtrude`) :2042 | 1 curva, 1 direção | curva, direção, limite 1, limite 2 (comprimento ou "até superfície") | sinal do comprimento; sem inverter | alça L1/L2 | `Shape::extrude_curve` `surfaces.inc:457` |
-| Revolução (`SurfRevolve`) :2049 | 1 curva, 1 eixo | curva, eixo, ângulo 1, ângulo 2 | sem inverter | alça de ângulo | `revolve_curve` `surfaces.inc:466` |
+| Extrudada (`SurfExtrude`) :2042 | 1 curva, 1 direção | Perfil, Extensão (limite 1, limite 2: comprimento ou "até superfície"), Direção | "⇄ Inverter direção" = sinal dos dois limites, seta no 3D (onda 2) | alça L1/L2 | `Shape::extrude_curve` `surfaces.inc:457` |
+| Revolução (`SurfRevolve`) :2049 | perfil (lista com junção, onda 2), 1 eixo | Perfil, eixo, ângulo 1, ângulo 2 | sem inverter | alça de ângulo | `revolve_curve` `surfaces.inc:466` |
 | Esfera / Cilindro :2055/:2059 | ponto, eixo | raio, comprimentos | início/fim | alças | `sphere_surface`, `cylinder_surface` `hybrid.inc:98-107` |
 | Varredura (`SurfSweep`) :2067 | perfil (curva ou círculo), guia | perfil, guia, modo (corrigido, fixo, Frenet) | – | alça do raio do tubo | `sweep_surface` `hybrid.inc:155`; `MakePipeShell` |
 | Varredura avançada (`SurfSweepX`) :1875 | 1 a 3 guias, perfil | tipo (8), spine, solução, suavizar, seções | solução por bolinha | bolinhas de solução | `sweep_x` `lib.rs:3661`; `varredura_guias.rs` (cônica G2) |
