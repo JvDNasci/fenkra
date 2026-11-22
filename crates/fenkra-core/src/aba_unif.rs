@@ -37,6 +37,52 @@ pub fn modo_de(k: &FeatureKind) -> Option<ModoAba> {
     })
 }
 
+/// B560: os modos que a pessoa vê. Aresta, Laço e Curva são um modo só, "Arestas": a lista de arestas
+/// aceita retas e curvas misturadas e o comando guarda o recurso que cabe nela (uma aresta reta, uma
+/// cadeia curva ou o conjunto). Perfil e Superfície seguem modos à parte. Os recursos antigos
+/// (aba, laço, aba curva) abrem e recalculam iguais: só o painel os trata como um.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ModoAbaUi {
+    Arestas,
+    Perfil,
+    Superficie,
+}
+
+pub const MODOS_ABA_UI: [ModoAbaUi; 3] = [ModoAbaUi::Arestas, ModoAbaUi::Perfil, ModoAbaUi::Superficie];
+
+impl ModoAbaUi {
+    pub fn de(m: ModoAba) -> Self {
+        match m {
+            ModoAba::Aresta | ModoAba::Laco | ModoAba::Curva => ModoAbaUi::Arestas,
+            ModoAba::Perfil => ModoAbaUi::Perfil,
+            ModoAba::Superficie => ModoAbaUi::Superficie,
+        }
+    }
+
+    /// O modo do recurso que o grupo cria ao ser escolhido.
+    fn modo(self) -> ModoAba {
+        match self {
+            ModoAbaUi::Arestas => ModoAba::Aresta,
+            ModoAbaUi::Perfil => ModoAba::Perfil,
+            ModoAbaUi::Superficie => ModoAba::Superficie,
+        }
+    }
+}
+
+/// O modo de painel de uma feature de aba; `None` para as outras.
+pub fn modo_ui_de(k: &FeatureKind) -> Option<ModoAbaUi> {
+    modo_de(k).map(ModoAbaUi::de)
+}
+
+/// Troca o recurso para o modo de painel `novo`. Dentro do grupo "Arestas" nada muda (o recurso já
+/// é o que cabe na lista); de fora, leva os campos comuns como `converter_aba`.
+pub fn converter_aba_ui(k: &FeatureKind, novo: ModoAbaUi) -> Option<FeatureKind> {
+    if modo_ui_de(k)? == novo {
+        return Some(k.clone());
+    }
+    converter_aba(k, novo.modo())
+}
+
 /// O que todos os modos compartilham.
 struct Comum {
     comprimento: String,
@@ -60,7 +106,7 @@ fn comum_de(k: &FeatureKind) -> Option<Comum> {
         FeatureKind::SmCurveFlange(c) => Comum { comprimento: c.length.clone(), angulo: angulo(&c.angle), raio: c.radius.clone(), inverter: c.flip, aresta: c.edge.get(c.edge.len() / 2).copied().and_then(ponto), lado: c.side, alivio: c.reta.as_ref().and_then(|r| r.relief.clone().map(|w| (w, r.relief_kind))) },
         // o perfil puxa para os dois lados do plano: o comprimento do lado 2 é o que o usuário vê como "o da aba"
         FeatureKind::SmProfileFlange(p) => Comum { comprimento: p.l2.clone(), angulo: "90".into(), raio: p.radius.clone(), inverter: p.flip, aresta: None, lado: 0, alivio: None },
-        FeatureKind::SmSurfFlange(s) => Comum { comprimento: s.length.clone(), angulo: angulo(&s.angle), raio: s.radius.clone(), inverter: s.flip, aresta: ponto(s.face), lado: 0, alivio: None },
+        FeatureKind::SmSurfFlange(s) => Comum { comprimento: s.length.clone(), angulo: angulo(&s.angle), raio: s.radius.clone(), inverter: s.flip, aresta: ponto(s.face), lado: s.side, alivio: None },
         _ => return None,
     })
 }
@@ -117,6 +163,7 @@ pub fn converter_aba(k: &FeatureKind, novo: ModoAba) -> Option<FeatureKind> {
             miter: true,
             relief: c.alivio.clone().map(|a| a.0),
             relief_kind: c.alivio.map_or(0, |a| a.1),
+            seguir: false,
         }),
         ModoAba::Curva => {
             // a aba reta de origem fica guardada: a volta ao modo reta não perde recuos nem alívio
@@ -137,6 +184,9 @@ pub fn converter_aba(k: &FeatureKind, novo: ModoAba) -> Option<FeatureKind> {
             mode: 0,
             angle: c.angulo,
             limites: LimitesAba::default(),
+            // B563: a posição do material é a mesma dos outros modos
+            side: c.lado,
+            inv_lado: false,
         }),
     })
 }
@@ -144,6 +194,36 @@ pub fn converter_aba(k: &FeatureKind, novo: ModoAba) -> Option<FeatureKind> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn aresta_laco_e_curva_sao_um_modo_so_na_interface() {
+        for m in [ModoAba::Aresta, ModoAba::Laco, ModoAba::Curva] {
+            assert_eq!(ModoAbaUi::de(m), ModoAbaUi::Arestas, "{m:?}");
+        }
+        assert_eq!(ModoAbaUi::de(ModoAba::Perfil), ModoAbaUi::Perfil);
+        assert_eq!(ModoAbaUi::de(ModoAba::Superficie), ModoAbaUi::Superficie);
+        assert_eq!(MODOS_ABA_UI.len(), 3);
+        // dentro do grupo, "trocar" de modo não mexe no recurso (um laço continua laço)
+        let laco = converter_aba(&aba(), ModoAba::Laco).unwrap();
+        assert_eq!(converter_aba_ui(&laco, ModoAbaUi::Arestas), Some(laco.clone()));
+        // de fora, a aresta do suporte volta como aba de aresta
+        let sup = converter_aba(&aba(), ModoAba::Superficie).unwrap();
+        let volta = converter_aba_ui(&sup, ModoAbaUi::Arestas).unwrap();
+        assert_eq!(modo_de(&volta), Some(ModoAba::Aresta));
+    }
+
+    #[test]
+    fn a_posicao_do_material_passa_entre_aresta_e_superficie() {
+        // B563: a aba por superfície tem a mesma posição (lado) das outras e ela viaja entre os modos
+        let FeatureKind::SmFlange(mut f) = aba() else { panic!() };
+        f.side = 2;
+        let sup = converter_aba(&FeatureKind::SmFlange(f), ModoAba::Superficie).unwrap();
+        let FeatureKind::SmSurfFlange(sf) = &sup else { panic!() };
+        assert_eq!(sf.side, 2);
+        let volta = converter_aba(&sup, ModoAba::Aresta).unwrap();
+        let FeatureKind::SmFlange(g) = &volta else { panic!() };
+        assert_eq!(g.side, 2);
+    }
 
     fn aba() -> FeatureKind {
         FeatureKind::SmFlange(SmFlange { edge: [100., 25., 2.], length: "30".into(), angle: "75".into(), radius: Some("1.5*espessura".into()), off1: "5".into(), off2: "6".into(), flip: true, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None })

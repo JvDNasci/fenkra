@@ -298,28 +298,11 @@ pub fn fill<T: Serialize + DeserializeOwned>(k: &mut T, c: &mut Cands) -> bool {
     false
 }
 
-/// Campos que não são referências (pontos clicados guardados como coordenadas, listas):
-/// preenchidos pela seleção quando ainda estão vazios.
-pub fn fill_special(k: &mut FeatureKind, s: &Seed, edge_mid: Option<[f64; 3]>, face_pt: Option<[f64; 3]>, verts: &[[f64; 3]], sketch: Option<Id>, shape: Option<Id>) -> bool {
-    use crate::contrato::ponto_vazio;
+/// Campos de lista que não são referências (centros do furo, caminhos do membro, seções do loft,
+/// fontes de padrão e espelho). Os campos de coordenada (aresta da aba, face da rosca, linha da
+/// dobra) saem do descritor: `contrato::preencher`.
+pub fn fill_special(k: &mut FeatureKind, s: &Seed, sketch: Option<Id>, shape: Option<Id>) -> bool {
     match k {
-        FeatureKind::SmFlange(f) if ponto_vazio(&f.edge) => edge_mid.map(|e| f.edge = e).is_some(),
-        FeatureKind::SmHem(h) if ponto_vazio(&h.edge) => edge_mid.map(|e| h.edge = e).is_some(),
-        // B514: o laço de abas aberto sem aresta recebe a primeira pela seleção
-        FeatureKind::SmFlangeLoop(l) if l.edges.iter().all(ponto_vazio) => edge_mid.map(|e| l.edges = vec![e]).is_some(),
-        FeatureKind::Thread(t) if ponto_vazio(&t.face) => face_pt.map(|p| t.face = p).is_some(),
-        FeatureKind::SmBend(b) if b.a == b.b && verts.len() >= 2 => {
-            (b.a, b.b) = (verts[0], verts[1]);
-            true
-        }
-        FeatureKind::SmLouver(b) if b.a == b.b && verts.len() >= 2 => {
-            (b.a, b.b) = (verts[0], verts[1]);
-            true
-        }
-        FeatureKind::SmJoggle(b) if b.a == b.b && verts.len() >= 2 => {
-            (b.a, b.b) = (verts[0], verts[1]);
-            true
-        }
         FeatureKind::Hole(h) if h.sketch == UNSET_SKETCH && h.points.is_empty() && !s.points.is_empty() => {
             h.points = s.points.clone();
             h.sketch = Id(0);
@@ -427,6 +410,115 @@ pub fn aresta_clicada(k: &mut FeatureKind, mid: [f64; 3], key: Option<EdgeKey>, 
             true
         }
         _ => false,
+    }
+}
+
+/// B560: o que o app sabe da aresta clicada e da malha, para o clique somar na lista de arestas do
+/// modo "Arestas" da aba (retas e curvas misturadas).
+#[derive(Clone, Debug, Default)]
+pub struct CliqueAresta {
+    pub mid: [f64; 3],
+    pub key: Option<EdgeKey>,
+    pub reta: bool,
+    /// polilinha da aresta clicada e da cadeia tangente a ela
+    pub so_pts: Vec<[f64; 3]>,
+    pub cadeia_pts: Vec<[f64; 3]>,
+    /// as arestas da cadeia tangente do clique, com a clicada primeiro (meio e chave de cada uma)
+    pub cadeia: Vec<([f64; 3], Option<EdgeKey>)>,
+    /// as arestas da cadeia da aba curva já aberta (vazio = o app não soube achar)
+    pub existente: Vec<([f64; 3], Option<EdgeKey>)>,
+}
+
+/// B560: um clique numa aresta com a aba de arestas aberta, no modo único "Arestas". A lista aceita
+/// retas e curvas misturadas: cada clique soma (a curva soma a cadeia tangente quando "seguir
+/// tangentes" está ligado) e clicar de novo numa escolhida tira. Com uma aresta só o recurso é o
+/// que sempre foi (aba reta ou aba curva); a segunda aresta o promove a aba de arestas (o laço), que
+/// emenda os trechos curvos numa aba curva contínua e deixa as retas como abas retas. Os parâmetros
+/// (comprimento, ângulo, raio, lado, alívio, direção) vão junto. Devolve se mudou algo.
+pub fn aresta_clicada_lista(k: &mut FeatureKind, c: &CliqueAresta) -> bool {
+    let z = crate::contrato::PONTO_VAZIO;
+    let perto = |a: &[f64; 3], b: &[f64; 3]| (0..3).map(|i| (a[i] - b[i]).powi(2)).sum::<f64>().sqrt() < 0.01;
+    // o que o clique acrescenta: a cadeia tangente (curva, com "seguir") ou só a aresta
+    let entram = |seguir: bool| -> Vec<([f64; 3], Option<EdgeKey>)> {
+        if !c.reta && seguir && !c.cadeia.is_empty() {
+            c.cadeia.clone()
+        } else {
+            vec![(c.mid, c.key)]
+        }
+    };
+    let para_laco = |k: &FeatureKind, itens: Vec<([f64; 3], Option<EdgeKey>)>, seguir: bool| -> Option<FeatureKind> {
+        let Some(FeatureKind::SmFlangeLoop(mut l)) = fenkra_core::aba_unif::converter_aba(k, fenkra_core::aba_unif::ModoAba::Laco) else { return None };
+        l.edges = itens.iter().map(|x| x.0).collect();
+        l.edge_keys = if itens.iter().all(|x| x.1.is_none()) { vec![] } else { itens.iter().map(|x| x.1).collect() };
+        l.loop_all = false;
+        l.seguir = seguir;
+        Some(FeatureKind::SmFlangeLoop(l))
+    };
+    match k {
+        FeatureKind::SmFlange(f) if !crate::contrato::ponto_vazio(&f.edge) => {
+            if perto(&f.edge, &c.mid) {
+                // clicar de novo na escolhida tira (o campo volta a esperar a aresta)
+                f.edge = z;
+                f.edge_key = None;
+                return true;
+            }
+            let mut itens = vec![(f.edge, f.edge_key)];
+            for e in entram(false) {
+                if !itens.iter().any(|(m, _)| perto(m, &e.0)) {
+                    itens.push(e);
+                }
+            }
+            match para_laco(k, itens, false) {
+                Some(novo) => {
+                    *k = novo;
+                    true
+                }
+                None => false,
+            }
+        }
+        FeatureKind::SmCurveFlange(cf) if !cf.edge.is_empty() && !c.existente.is_empty() => {
+            if c.existente.iter().any(|(m, _)| perto(m, &c.mid)) {
+                cf.edge.clear();
+                cf.edge_key = None;
+                return true;
+            }
+            let seguir = !cf.so_aresta;
+            let mut itens = c.existente.clone();
+            for e in entram(seguir) {
+                if !itens.iter().any(|(m, _)| perto(m, &e.0)) {
+                    itens.push(e);
+                }
+            }
+            match para_laco(k, itens, seguir) {
+                Some(novo) => {
+                    *k = novo;
+                    true
+                }
+                None => false,
+            }
+        }
+        FeatureKind::SmFlangeLoop(l) => {
+            let mut pares: Vec<([f64; 3], Option<EdgeKey>)> = l.edges.iter().enumerate().filter(|(_, e)| !crate::contrato::ponto_vazio(e)).map(|(i, e)| (*e, l.edge_keys.get(i).copied().flatten())).collect();
+            let antes = pares.len();
+            let novos = entram(l.seguir);
+            if pares.iter().any(|(m, _)| perto(m, &c.mid)) {
+                // a escolhida (e a cadeia tangente dela, com "seguir") sai
+                pares.retain(|(m, _)| !novos.iter().any(|(n, _)| perto(m, n)));
+            } else {
+                for e in novos {
+                    if !pares.iter().any(|(m, _)| perto(m, &e.0)) {
+                        pares.push(e);
+                    }
+                }
+            }
+            if (antes <= 1) != (pares.len() <= 1) {
+                l.loop_all = pares.len() <= 1;
+            }
+            l.edges = if pares.is_empty() { vec![z] } else { pares.iter().map(|p| p.0).collect() };
+            l.edge_keys = if pares.iter().all(|p| p.1.is_none()) { vec![] } else { pares.iter().map(|p| p.1).collect() };
+            true
+        }
+        _ => aresta_clicada(k, c.mid, c.key, c.reta, |so| if so { c.so_pts.clone() } else { c.cadeia_pts.clone() }),
     }
 }
 

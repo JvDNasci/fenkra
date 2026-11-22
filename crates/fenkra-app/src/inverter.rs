@@ -42,9 +42,41 @@ pub fn controles(alvo: Alvo) -> Vec<Controle> {
             FeatureKind::SewSurface(x) if x.remove => vec![Controle { campo: 0, rotulo: "Fica deste lado" }],
             // simétrico: metade para cada lado, inverter não muda nada
             FeatureKind::ThickSurface(t) if !t.simetrico => vec![Controle { campo: 0, rotulo: "Lado da espessura" }],
+            // onda 1: os comandos com uma caixa de inverter (extrusão, furo, abas, dobras...) têm o
+            // controle declarado aqui; a aba por superfície tem dois (a direção da aba e o lado da
+            // superfície em que a chapa fica)
+            FeatureKind::SmSurfFlange(_) => vec![Controle { campo: 0, rotulo: "Direção da aba" }, Controle { campo: 1, rotulo: "Lado da superfície" }],
+            _ if bool_de_feature(&mut k.clone(), 0).is_some() => vec![Controle { campo: 0, rotulo: "Inverter direção" }],
             _ => vec![],
         },
     }
+}
+
+/// O campo `bool` que um comando de `features` usa como "inverter" (`reverse`, `flip`): o mesmo que o
+/// botão do painel liga e que a seta do 3D troca. `None` onde o comando não tem um campo assim.
+pub fn bool_de_feature(k: &mut FeatureKind, campo: u8) -> Option<&mut bool> {
+    Some(match k {
+        FeatureKind::Extrude(x) => &mut x.reverse,
+        FeatureKind::Hole(x) => &mut x.reverse,
+        FeatureKind::SmWall(x) => &mut x.reverse,
+        FeatureKind::SmFlange(x) => &mut x.flip,
+        FeatureKind::SmFlangeLoop(x) => &mut x.flip,
+        FeatureKind::SmCurveFlange(x) => &mut x.flip,
+        FeatureKind::SmProfileFlange(x) => &mut x.flip,
+        FeatureKind::SmSurfFlange(x) => {
+            if campo == 0 {
+                &mut x.flip
+            } else {
+                &mut x.inv_lado
+            }
+        }
+        FeatureKind::SmHem(x) => &mut x.flip,
+        FeatureKind::SmBend(x) => &mut x.flip,
+        FeatureKind::SmJoggle(x) => &mut x.flip,
+        FeatureKind::SmLouver(x) => &mut x.flip,
+        FeatureKind::SmLoftFlange(x) => &mut x.flip,
+        _ => return None,
+    })
 }
 
 /// O inversor `campo` está ligado? Onde o inverter é uma troca (as duas espessuras), não há estado.
@@ -68,7 +100,7 @@ pub fn estado(alvo: Alvo, campo: u8) -> bool {
         Alvo::Feature(k) => match k {
             FeatureKind::SplitBody(x) => x.flip,
             FeatureKind::SewSurface(x) => x.flip,
-            _ => false,
+            _ => bool_de_feature(&mut k.clone(), campo).map(|b| *b).unwrap_or(false),
         },
     }
 }
@@ -100,12 +132,15 @@ pub fn alternar_ref(k: &mut RefKind, campo: u8) {
 /// A única função que inverte o lado de um comando de `features`. No engrossar, as duas espessuras
 /// trocam de lado.
 pub fn alternar_feature(k: &mut FeatureKind, campo: u8) {
-    let _ = campo;
     match k {
         FeatureKind::SplitBody(x) => x.flip = !x.flip,
         FeatureKind::SewSurface(x) => x.flip = !x.flip,
         FeatureKind::ThickSurface(t) if !t.simetrico => std::mem::swap(&mut t.t1, &mut t.t2),
-        _ => {}
+        _ => {
+            if let Some(b) = bool_de_feature(k, campo) {
+                *b = !*b;
+            }
+        }
     }
 }
 
@@ -247,6 +282,65 @@ mod tests {
         assert!(controles(Alvo::Feature(&k)).is_empty());
     }
 
+    /// Onda 1: o botão do painel e a seta do 3D de um comando de `features` ligam ao mesmo campo. O
+    /// painel usa `inverter::botao(ui, &mut campo)` no campo que `bool_de_feature` devolve; a seta chama
+    /// `alternar_feature`, que troca esse mesmo campo. Para cada comando com inverter, trocar pela seta
+    /// muda exatamente o `bool` do botão e o `estado` acompanha.
+    #[test]
+    fn botao_e_seta_ligam_ao_mesmo_campo_nos_comandos_de_feature() {
+        let kinds = comandos_com_inverter();
+        assert!(kinds.len() >= 11, "a lista cobre extrusão, furo e as abas e dobras de chapa");
+        for mut k in kinds {
+            let nome = format!("{:?}", std::mem::discriminant(&k));
+            let cs = controles(Alvo::Feature(&k));
+            assert!(!cs.is_empty(), "{nome}: sem controle de inverter");
+            for c in cs {
+                let antes = *bool_de_feature(&mut k, c.campo).unwrap_or_else(|| panic!("{nome}: o controle {} não liga a campo nenhum", c.campo));
+                assert_eq!(estado(Alvo::Feature(&k), c.campo), antes, "{nome}");
+                alternar_feature(&mut k, c.campo);
+                let depois = *bool_de_feature(&mut k, c.campo).unwrap();
+                assert_eq!(depois, !antes, "{nome}: a seta não trocou o campo do botão");
+                assert_eq!(estado(Alvo::Feature(&k), c.campo), depois, "{nome}");
+                alternar_feature(&mut k, c.campo);
+                assert_eq!(*bool_de_feature(&mut k, c.campo).unwrap(), antes, "{nome}: duas trocas voltam");
+            }
+        }
+    }
+
+    #[test]
+    fn aba_por_superficie_tem_dois_inversores_independentes() {
+        let mut k = comandos_com_inverter().into_iter().find(|k| matches!(k, FeatureKind::SmSurfFlange(_))).unwrap();
+        assert_eq!(controles(Alvo::Feature(&k)).iter().map(|c| c.campo).collect::<Vec<_>>(), vec![0, 1]);
+        alternar_feature(&mut k, 1);
+        let FeatureKind::SmSurfFlange(s) = &k else { unreachable!() };
+        assert!(s.inv_lado && !s.flip, "o lado da superfície não mexe na direção da aba");
+    }
+
+    /// Nenhum painel de chapa liga o inverter à mão: todos passam pelo botão padrão do `inverter`.
+    #[test]
+    fn paineis_de_chapa_usam_o_botao_padrao() {
+        for (nome, fonte) in [("feat_ui.rs", include_str!("feat_ui.rs")), ("chapa_laco_ui.rs", include_str!("chapa_laco_ui.rs")), ("chapa_b35_ui.rs", include_str!("chapa_b35_ui.rs"))] {
+            assert!(!fonte.contains("chapa_unif_ui::inverter("), "{nome} liga o inverter direto, sem passar por inverter::botao");
+        }
+    }
+
+    fn comandos_com_inverter() -> Vec<FeatureKind> {
+        let s = |x: &str| x.to_string();
+        vec![
+            FeatureKind::Extrude(Extrude { thin_side: 0, sketch: Id(1), op: BoolOp::Add, extent: Extent::Blind(s("10")), reverse: false, taper: s("0"), thin: None, dir: None, ends: Default::default() }),
+            FeatureKind::SmWall(SmWall { sketch: Id(1), reverse: false, offset: String::new(), mid: false, surface: None }),
+            FeatureKind::SmFlange(SmFlange { edge: [1., 0., 0.], length: s("10"), angle: s("90"), radius: None, off1: s("0"), off2: s("0"), flip: false, relief: None, relief_kind: 0, side: 0, miter: false, min_gap: true, edge_key: None }),
+            FeatureKind::SmFlangeLoop(SmFlangeLoop { edges: vec![[1., 0., 0.]], edge_keys: vec![], loop_all: false, extent: ExtensaoAba::Inteira, invert: false, length: s("10"), angle: s("90"), radius: None, flip: false, side: 0, miter: true, relief: None, relief_kind: 0, seguir: false }),
+            FeatureKind::SmCurveFlange(SmCurveFlange { edge: vec![[1., 0., 0.], [2., 0., 0.]], length: s("10"), flip: false, angle: s("90"), radius: None, side: 0, edge_key: None, so_aresta: true, reta: None }),
+            FeatureKind::SmProfileFlange(SmProfileFlange { sketch: Id(1), l1: s("0"), l2: s("10"), radius: None, flip: false }),
+            FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Ref(Id(1)), face: [1., 0., 0.], length: s("10"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90"), limites: Default::default(), side: 0, inv_lado: false }),
+            FeatureKind::SmHem(SmHem { edge: [1., 0., 0.], length: s("8"), gap: s("0"), flip: false, kind: 0, edge_key: None }),
+            FeatureKind::SmBend(SmBend { a: [1., 0., 0.], b: [2., 0., 0.], angle: s("45"), radius: None, flip: false, down: false, sketch: None, position: 0, cega: None }),
+            FeatureKind::SmJoggle(SmJoggle { a: [1., 0., 0.], b: [2., 0., 0.], depth: s("3"), run: s("6"), flip: false, angle: None, plane: None, keep_length: false }),
+            FeatureKind::SmLouver(SmLouver { a: [1., 0., 0.], b: [2., 0., 0.], width: s("12"), height: s("5"), flip: false, down: false }),
+        ]
+    }
+
     /// Paridade dos comandos de troca direta (Extrusão, Furo, Ângulo de saída, Nervura e os recursos de
     /// plástico): nenhum tem caixa de marcar própria, todos usam o botão padrão no campo de sempre.
     #[test]
@@ -263,3 +357,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "chapa_paridade_tests.rs"]
+mod chapa_paridade_tests;

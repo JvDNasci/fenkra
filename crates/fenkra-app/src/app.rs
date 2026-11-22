@@ -791,7 +791,7 @@ impl App {
                 // aba por laço: quatro abas com mitra a partir de uma aresta
                 "laco" => {
                     d.features.truncate(2);
-                    let mut f = SmFlangeLoop { edges: vec![[100., 30., 2.]], edge_keys: vec![], loop_all: true, extent: ExtensaoAba::Inteira, invert: false, length: s("20"), angle: s("90"), radius: None, flip: false, side: 0, miter: true, relief: None, relief_kind: 0 };
+                    let mut f = SmFlangeLoop { edges: vec![[100., 30., 2.]], edge_keys: vec![], loop_all: true, extent: ExtensaoAba::Inteira, invert: false, length: s("20"), angle: s("90"), radius: None, flip: false, side: 0, miter: true, relief: None, relief_kind: 0, seguir: false };
                     d.add_feature(FeatureKind::SmFlangeLoop(f));
                 }
                 // fechamento de canto entre duas abas (B293); o tipo vem de FENKRA_DEMO_CANTO
@@ -2771,7 +2771,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 });
                 let support = seed.surface.unwrap_or_else(|| SurfRef::Plane(seed.planes.last().copied().unwrap_or(PlaneRef::Origin(OriginPlane::YZ))));
                 let d = &mut self.open.doc;
-                Sel::Feature(d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support, face: face.unwrap_or([0.; 3]), length: s("20"), radius: None, flip: false, keep_base: false, mode: 0, angle: "90".into(), limites: Default::default() })))
+                Sel::Feature(d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support, face: face.unwrap_or([0.; 3]), length: s("20"), radius: None, flip: false, keep_base: false, mode: 0, angle: "90".into(), limites: Default::default(), side: 0, inv_lado: false })))
             }
             Cmd::SmCurveFlange | Cmd::SmCornerRelief | Cmd::SmCornerClose | Cmd::SmArcSlot => {
                 if d.sheet.is_none() {
@@ -2865,6 +2865,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         miter: true,
                         relief: None,
                         relief_kind: 0,
+                        seguir: false,
                     }),
                     Cmd::SmHem => FeatureKind::SmHem(SmHem { edge: edge.unwrap_or([0.; 3]), length: s("8"), gap: s("0"), flip: false, kind: 0, edge_key: None }),
                     // B469: sem dois vértices clicados a dobra nasce sem linha (pontas iguais): o
@@ -6747,17 +6748,18 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             None => {
                 seed = self.seed(false);
                 // face clicada onde se espera um plano: vira plano da face
-                let wants_plane = serde_json::to_string(&self.open.doc.feature(id).map(|f| f.kind.clone())).unwrap_or_default().contains(&UNSET_PLANE.0.to_string())
-                    || serde_json::to_string(&self.open.doc.reference(id).map(|r| r.kind.clone())).unwrap_or_default().contains(&UNSET_PLANE.0.to_string());
+                // onda 1: o que o comando ainda espera sai do descritor (campos vazios por tipo), não de
+                // uma busca dos marcadores `UNSET_*` no JSON do comando
+                use crate::contrato::TipoEntrada as T;
+                let espera = |tipos: &[T]| crate::contrato::spec_do(&self.open.doc, id).is_some_and(|s| s.entradas.iter().any(|e| e.vazio() && tipos.contains(&e.tipo)));
+                let wants_plane = espera(&[T::Plano]);
                 if wants_plane && seed.planes.is_empty() && self.picks.iter().any(|p| matches!(p, Pick::Face { .. })) {
                     let pl = self.plane_for_new();
                     seed.planes.push(pl);
                 } else if wants_plane && seed.planes.is_empty() {
                     // curva plana (aresta, curva do wireframe) onde se espera um plano: o plano da curva,
                     // se nenhum campo de curva/eixo/perfil estiver esperando por ela
-                    let js = serde_json::to_string(&self.open.doc.feature(id).map(|f| f.kind.clone())).unwrap_or_default()
-                        + &serde_json::to_string(&self.open.doc.reference(id).map(|r| r.kind.clone())).unwrap_or_default();
-                    let wants_curve = [UNSET_CURVE, UNSET_AXIS, UNSET_SKETCH].iter().any(|u| js.contains(&u.0.to_string()));
+                    let wants_curve = espera(&[T::Curva, T::Eixo, T::Sketch]);
                     let straight = |p: &[[f64; 3]]| {
                         let (a, b) = (p[0], *p.last().unwrap());
                         let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
@@ -6806,7 +6808,8 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
         let d = &mut self.open.doc;
         let filled = if let Some(f) = d.feature_mut(id) {
             let a = fill(&mut f.kind, &mut c);
-            let b = fill_special(&mut f.kind, &seed, if tree_pick { None } else { edge_mid }, if tree_pick { None } else { face_pt }, &verts, sketch, shape);
+            let dado = crate::contrato::Dado { aresta: if tree_pick { None } else { edge_mid }, face: if tree_pick { None } else { face_pt }, vertices: &verts };
+            let b = crate::contrato::preencher(&mut f.kind, &dado) | fill_special(&mut f.kind, &seed, sketch, shape);
             a || b
         } else if let Some(r) = d.references.iter_mut().find(|r| r.id == id) {
             let antes = r.kind.clone();
@@ -7953,10 +7956,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     // soma a aresta (clicar de novo tira) e a aba curva troca a cadeia tangente
                     let m = mid.map(|v| v as f64);
                     let key = r.bodies.get(body).and_then(|b| b.edge_key(edge));
-                    let cadeia = |so: bool| if so { crate::picking::edge_polyline(r, body, edge) } else { crate::picking::tangent_chain(r, body, edge) };
-                    let reta = crate::slots::polilinha_reta(&crate::picking::edge_polyline(r, body, edge));
+                    let _ = key;
                     if let Some(f) = self.open.doc.feature_mut(sid) {
-                        crate::slots::aresta_clicada(&mut f.kind, m, key, reta, cadeia);
+                        // B560: a aba de arestas é um modo só; a lista soma retas e curvas
+                        let clique = crate::aba_arestas::clique(r, body, edge, m, &f.kind);
+                        crate::slots::aresta_clicada_lista(&mut f.kind, &clique);
                     }
                 } else if let (Some(sid), true) = (
                     self.session.as_ref().map(|x| x.id).filter(|id| crate::sup_spline::editavel(&self.open.doc, *id)),

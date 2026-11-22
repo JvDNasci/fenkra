@@ -37,7 +37,7 @@ fn laco(pontos: Vec<[f64; 3]>, todo: bool) -> FeatureKind {
         side: 0,
         miter: true,
         relief: None,
-        relief_kind: 0,
+        relief_kind: 0, seguir: false,
     })
 }
 
@@ -109,4 +109,70 @@ fn laco_inteiro_do_retangulo_arredondado() {
     let rf = confere_ok(&d);
     let (_, maxf) = caixa_da_malha(&rf);
     assert!(maxf[2] < 2.01, "planificada é plana {maxf:?}");
+}
+
+/// B560: o modo único "Arestas": uma lista com reta, curva e reta (a borda de cima, o canto
+/// arredondado e a borda da direita) vira uma aba só, com os trechos curvos emendados às retas; uma
+/// reta sozinha e uma curva sozinha pelo mesmo modo também dão aba. Volume e caixa conferidos.
+#[test]
+fn b560_lista_mista_reta_curva_reta_e_uma_aba_continua() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let mut d = Document::new("lista_mista");
+    chapa(&mut d);
+    let sk = {
+        let mut data = SketchData::default();
+        let mut n = 7_200_000u64;
+        let mut al = || {
+            n += 1;
+            Id(n)
+        };
+        let (r, w, h) = (10., 100., 60.);
+        let mut pt = |x: f64, y: f64| data.add_point(&mut al, x, y);
+        let (a1, a2, c2, b2, b3, c3, a3, a4, c4, b4, b1, c1) = (pt(r, 0.), pt(w - r, 0.), pt(w - r, r), pt(w, r), pt(w, h - r), pt(w - r, h - r), pt(w - r, h), pt(r, h), pt(r, h - r), pt(0., h - r), pt(0., r), pt(r, r));
+        use fenkra_core::sketch::Curve;
+        let cs = [
+            Curve::Line { a: a1, b: a2 },
+            Curve::Arc { c: c2, s: a2, e: b2 },
+            Curve::Line { a: b2, b: b3 },
+            Curve::Arc { c: c3, s: b3, e: a3 },
+            Curve::Line { a: a3, b: a4 },
+            Curve::Arc { c: c4, s: a4, e: b4 },
+            Curve::Line { a: b4, b: b1 },
+            Curve::Arc { c: c1, s: b1, e: a1 },
+        ];
+        for c in cs {
+            data.add_curve(&mut al, c, false);
+        }
+        d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }))
+    };
+    d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+    let vbase = recompute(&d).bodies[0].mass.volume;
+    let arco = [90. + 10. * 45f64.to_radians().cos(), 50. + 10. * 45f64.to_radians().sin(), 2.];
+    // borda de cima + canto + borda da direita, escolhidas uma a uma (sem o laço da face)
+    let id = d.add_feature(laco(vec![[50., 60., 2.], arco, [100., 30., 2.]], false));
+    let r = confere_ok(&d);
+    let (_, hi) = caixa_da_malha(&r);
+    assert!((hi[2] - 16.).abs() < 0.3, "altura da aba {hi:?}");
+    let acresc = r.bodies[0].mass.volume - vbase;
+    // 80 (cima) + 15,7 (arco) + 40 (direita) = 135,7 mm de aresta, seção ~33 mm²
+    assert!(acresc > 3500. && acresc < 5500., "volume das abas da lista mista {acresc}");
+    assert_eq!(r.status[&id], Status::Ok);
+    // planificada correta
+    d.sheet.as_mut().unwrap().flat = true;
+    let rf = confere_ok(&d);
+    assert!(caixa_da_malha(&rf).1[2] < 2.01, "planificada é plana");
+
+    // uma aresta curva sozinha pelo mesmo modo (a aba curva) e uma reta sozinha dão aba
+    for (nome, p) in [("curva", arco), ("reta", [50., 60., 2.])] {
+        let mut d1 = d.clone();
+        d1.sheet.as_mut().unwrap().flat = false;
+        d1.features.pop();
+        d1.add_feature(laco(vec![p], false));
+        let r1 = confere_ok(&d1);
+        let ganho = r1.bodies[0].mass.volume - vbase;
+        assert!(ganho > 300., "{nome}: a aba somou volume ({ganho})");
+        assert!(caixa_da_malha(&r1).1[2] > 15., "{nome}: a aba sobe");
+    }
 }

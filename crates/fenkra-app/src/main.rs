@@ -27,6 +27,7 @@ mod textos_cena;
 mod demo_polimento;
 mod scene;
 mod entradas;
+mod aba_arestas;
 mod inverter;
 mod previa;
 mod previa_leve_ui;

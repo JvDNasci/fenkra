@@ -6189,6 +6189,10 @@ impl Ctx<'_> {
                 }
                 let tan = geo3d::unit(geo3d::sub(best[(best.len() / 2 + 1).min(best.len() - 1)], best[(best.len() / 2).saturating_sub(1)])).ok_or("OML nula")?;
                 let ctr = geo3d::lerp(lo, hi, 0.5);
+                // B563: inverter o lado da superfície em que a chapa fica: o centro da web passa a
+                // ser o espelho do centro verdadeiro pelo plano tangente do suporte, e tudo o que
+                // depende de "de que lado está a chapa" (relimite, sentido para fora, ângulo) segue
+                let ctr = if sf.inv_lado { geo3d::sub(ctr, geo3d::mul(ns, 2. * geo3d::dot(ns, geo3d::sub(ctr, mid)))) } else { ctr };
                 // relimita a web pelo suporte (fica o lado com o grosso do material)
                 if !sf.keep_base {
                     let keep_pos = geo3d::dot(ns, geo3d::sub(ctr, mid)) > 0.;
@@ -6297,7 +6301,7 @@ impl Ctx<'_> {
                         CantoAba::Chanfro(v) => Some((true, chapa_laco::ev_faixa(v, &self.vars, &format!("distância do chanfro {}", i + 1), 0.01, f64::INFINITY, "mm")?)),
                     };
                 }
-                self.curve_flange_exata(f, pts, ang, r, len, sf.flip, Some(d), 0, &lim)
+                self.curve_flange_exata(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim)
             }
             FeatureKind::SmArcSlot(sl) => {
                 let sp = self.sheet()?;
@@ -11646,7 +11650,7 @@ mod tests_aba_superficie {
         d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
         // suporte: plano vertical em x = 80
         let pl = d.add_offset_plane(PlaneRef::Origin(OriginPlane::YZ), "80");
-        d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Plane(PlaneRef::Datum(pl)), face: [40., 25., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90"), limites: Default::default() }));
+        d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Plane(PlaneRef::Datum(pl)), face: [40., 25., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90"), limites: Default::default(), side: 0, inv_lado: false }));
         let r = recompute(&d);
         for f in &d.features {
             assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);

@@ -67,6 +67,10 @@ struct Quadro {
     /// por `definir_contrato`. Vale no lugar da regra "primeiro vazio na ordem do desenho" quando algum
     /// widget registrado leva esse nome; sem widget com o nome, a ordem do painel decide como sempre.
     contrato: Option<&'static str>,
+    /// onda 1: a ordem do Tab que o descritor declara (`FeatureSpec::ordem_tab`). Quando o campo ativo
+    /// não é um dos declarados, o primeiro campo vazio **nessa ordem** vale no lugar do primeiro vazio
+    /// na ordem em que o painel desenhou os widgets.
+    ordem: Vec<&'static str>,
     /// nome (`salt`) de cada widget de seleção, para ligar o campo do descritor ao widget
     nomes: Vec<(egui::Id, String)>,
     /// publicados no fim do quadro, para o `App` ler no quadro seguinte
@@ -113,8 +117,13 @@ fn selecao(t: Tipo) -> bool {
 
 /// O widget do campo que o descritor do comando manda ficar ativo, se ele estiver na tela.
 fn preferido(q: &Quadro) -> Option<egui::Id> {
-    let c = q.contrato?;
-    q.nomes.iter().find(|(_, salt)| crate::contrato::salt_bate(salt, c)).map(|x| x.0)
+    let widget = |c: &str| q.nomes.iter().find(|(_, salt)| crate::contrato::salt_bate(salt, c)).map(|x| x.0);
+    if let Some(w) = q.contrato.and_then(widget) {
+        return Some(w);
+    }
+    // a ordem declarada do comando: o primeiro campo vazio nela (e que está na tela)
+    let tipo_de = |w: egui::Id| q.anterior.iter().chain(q.atual.iter()).find(|x| x.0 == w).map(|x| x.1);
+    q.ordem.iter().filter_map(|c| widget(c)).find(|w| tipo_de(*w).is_some_and(vazio))
 }
 
 /// Índice do campo ativo na lista dada. No automático vale o campo do descritor (`pref`); sem ele, o
@@ -286,6 +295,12 @@ pub fn selecao_campo(ctx: &egui::Context, id: egui::Id, vazio_agora: bool, vario
 /// declarado). O painel chama no começo de cada quadro, depois de `inicio`.
 pub fn definir_contrato(ctx: &egui::Context, ativo: Option<&'static str>) {
     com(ctx, |q| q.contrato = ativo);
+}
+
+/// A ordem do Tab que o descritor do comando aberto declara (ADR 0107, onda 1): vale no lugar da ordem
+/// em que o painel desenhou os widgets quando o campo ativo não é um dos declarados.
+pub fn definir_ordem(ctx: &egui::Context, ordem: Vec<&'static str>) {
+    com(ctx, |q| q.ordem = ordem);
 }
 
 /// Diz a que campo do descritor o widget `id` pertence (o `salt` dele).

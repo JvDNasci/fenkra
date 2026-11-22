@@ -692,6 +692,7 @@ pub fn show(app: &mut App, ui: &mut egui::Ui) {
     crate::campos::inicio(ui.ctx(), id.0, crate::campos::assinatura(&app.picks));
     // ADR 0107: o descritor do comando diz qual campo é o ativo (o widget com esse nome recebe o clique)
     crate::campos::definir_contrato(ui.ctx(), crate::contrato::id_do_ativo_no_doc(&app.open.doc, id));
+    crate::campos::definir_ordem(ui.ctx(), crate::contrato::spec_do(&app.open.doc, id).map(|s| s.ordem_tab()).unwrap_or_default());
     show_painel(app, ui);
     app.aplicar_pedidos_da_caixa(ui.ctx());
     if crate::campos::fim(ui.ctx()) {
