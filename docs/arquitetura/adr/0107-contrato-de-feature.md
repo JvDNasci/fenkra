@@ -115,7 +115,7 @@ nomes de tipos abaixo são de trabalho; a implementação pode escolher outros, 
 - **Junção na hora**: quando a feature precisa de um suporte só, o motor junta as curvas (ou superfícies)
   do campo antes de calcular, com o código de `join_curves`/`chain_indices`. **Recomendação deste ADR:
   gravar a lista no próprio comando** (o campo guarda os itens e a regra; a árvore não ganha item
-  escondido; `refs_of`, `dependents` e a assinatura enxergam o mesmo grafo). Ver Decisões pendentes, 1.
+  escondido; `refs_of`, `dependents` e a assinatura enxergam o mesmo grafo). Ver Decisões do usuário, 1 (subitem dentro do comando).
 - **Botão direito "unir" no item**: força juntar itens marcados num grupo do campo (ou desfazer), com
   aviso se as pontas não se tocam na tolerância.
 - Aplica-se aos comandos de perfil de todas as bancadas: extrusão, revolução, varredura, loft, nervura,
@@ -286,15 +286,18 @@ A onda 0 vem antes de todas. As ondas 1 e 2 podem correr em paralelo depois dela
 tocam arquivos diferentes (`feat_ui`/`chapa_*` contra `geo_ui`/`geo3d`), com o agente `arquiteto` revendo
 a coerência antes de integrar.
 
-## Decisões pendentes
+## Decisões do usuário (21/11/2026)
 
-1. **Junção na hora: lista no comando ou Junção de curvas oculta?** Recomendação: lista no comando
-   (seção 3). **DECISÃO PENDENTE do usuário.** Até a decisão, a onda 0 implementa a lista no campo, que
-   pode virar `CurveJoin` oculta depois sem mudar a interface.
-2. **Abrangência do B561**: Estrutural e Montagem entram nas ondas 5 e 6 (proposta deste ADR) ou ficam
-   fora do item? Pergunta herdada da auditoria.
-3. **OK em modelo muito pesado**: confirmar sempre com espera, ou oferecer "concluir e calcular em
-   segundo plano" acima de um tempo (como a forma livre faz com `SEGUNDOS_DE_ALERTA`)?
-4. **Fundir `FeatureKind` e `RefKind`** depois do contrato, ou manter os dois tipos para sempre?
-5. **Extrusão sólida e de superfície como um comando com modo** (resultado sólido ou superfície), ou dois
-   comandos irmãos com paridade testada?
+1. **Junção na hora**: a união fica **dentro do comando, como subitem** dele (na caixa de seleção e na
+   árvore, sob o comando), sem recurso Junção de curvas oculto. O botão direito no item continua
+   oferecendo "unir" explícito.
+2. **Abrangência do B561**: **todas as bancadas** (Chapa, Superfícies, Sólidos, Estrutural e Montagem;
+   Montagem por último).
+3. **OK em modelo pesado**: **sempre espera**, com a tela congelada e progresso até terminar ou falhar;
+   Esc cancela. Nada de cálculo em segundo plano depois do OK.
+4. **Extrusão (e revolução) sólida e de superfície**: **dois comandos irmãos com as mesmas opções**,
+   conferidas por teste automático de paridade (não um comando com modo).
+
+## Decisão ainda em aberto
+
+- **Fundir `FeatureKind` e `RefKind`** depois do contrato, ou manter os dois tipos. Não bloqueia as ondas.
