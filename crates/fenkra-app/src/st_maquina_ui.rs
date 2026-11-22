@@ -28,6 +28,8 @@ impl Estado {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Acao {
     Exportar(usize, Formato),
+    /// B575: tabela de dobras completa (avanço, rotação, ângulo, raio, pontos)
+    ExportarTabela(usize),
     Importar(usize),
 }
 
@@ -56,6 +58,9 @@ pub fn bloco(ui: &mut egui::Ui, t: &TuboDobrado, n: usize, est: &mut Estado) -> 
                     {
                         acao = Some(Acao::Exportar(n, f));
                     }
+                }
+                if ui.small_button(tr("Exportar tabela de dobras…")).on_hover_text(tr("Para cada dobra: avanço reto antes, rotação do plano, ângulo, raio de centro, arco, coordenadas do ponto de dobra e posição no tubo reto. CSV com ponto e vírgula.")).clicked() {
+                    acao = Some(Acao::ExportarTabela(n));
                 }
                 if ui.small_button(tr("Conferir arquivo…")).on_hover_text(tr("Lê um arquivo LRA, YBC ou XYZ e diz se ele bate com este tubo.")).clicked() {
                     acao = Some(Acao::Importar(n));
@@ -88,6 +93,21 @@ pub fn executar(app: &mut App, tubos: &[TuboDobrado], acao: Acao, est: &mut Esta
                     if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name(&nome).save_file() {
                         match std::fs::write(&p, txt) {
                             Ok(()) => app.toast(tr("Dados de dobra exportados"), false),
+                            Err(e) => app.toast(format!("Erro: {e}"), true),
+                        }
+                    }
+                }
+            }
+        }
+        Acao::ExportarTabela(n) => {
+            let Some(t) = tubos.get(n) else { return };
+            match maq::tabela_de_dobras(t, est.opcoes()) {
+                Err(e) => app.toast(tr(&e).to_string(), true),
+                Ok(txt) => {
+                    let nome = format!("tubo_{}_tabela_de_dobras.csv", n + 1);
+                    if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name(&nome).save_file() {
+                        match std::fs::write(&p, txt) {
+                            Ok(()) => app.toast(tr("Tabela de dobras exportada"), false),
                             Err(e) => app.toast(format!("Erro: {e}"), true),
                         }
                     }

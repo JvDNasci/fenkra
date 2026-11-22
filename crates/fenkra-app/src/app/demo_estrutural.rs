@@ -45,6 +45,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
+                tube_bend: None,
             }));
             if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|x| &mut x.kind) {
                 let b = TubeBend { mode: BendMode::CorteSimples, radius: s("120"), segments: s("4"), ..Default::default() };
@@ -83,6 +84,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
+                tube_bend: None,
             }));
             if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|x| &mut x.kind) {
                 let b = match modo.as_str() {
@@ -132,6 +134,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
+                tube_bend: None,
             }));
             d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 80.], "8", "15")));
             // B174: com FENKRA_DEMO_TOCHA, um tubo vizinho fecha o acesso da tocha ao lado +X do cordão
@@ -213,6 +216,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
+                tube_bend: None,
             };
             let linha = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
             for (y, yd) in [(350., 280.), (-350., -280.)] {
@@ -262,6 +266,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
+                tube_bend: None,
             };
             for (a, b) in [([0., 0., 0.], [0., 0., 500.]), ([0., 0., 0.], [400., 0., 0.])] {
                 let l = CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));

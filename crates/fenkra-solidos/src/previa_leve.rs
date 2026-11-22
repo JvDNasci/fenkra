@@ -377,7 +377,7 @@ impl Ctx<'_> {
         let esboco = |cx: &Self, id: Id| cx.pontos_do_sketch(id).unwrap_or_default();
         let (pts, r): (Vec<V3>, f64) = match &f.kind {
             K::StructMember(m) => {
-                for g in self.members(m)? {
+                for g in self.members(f.id, m)? {
                     viz.caixas.push(caixa_do_membro(&g));
                 }
                 return Ok(());

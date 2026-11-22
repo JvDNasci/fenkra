@@ -369,6 +369,7 @@ fn placa_de_extremidade_segue_a_ponta_do_membro_quando_a_linha_muda() {
         joints: vec![],
         material: String::new(),
         mirror: false,
+        tube_bend: None,
     }));
     // placa na ponta de baixo da primeira linha (arquivo antigo: só o ponto)
     let placa = d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));

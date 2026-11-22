@@ -933,13 +933,18 @@ impl Models {
                     let mut rows = vec![];
                     let mut n = 0;
                     for (t, tubo) in tubos.iter().enumerate() {
-                        for d in &tubo.dobras {
+                        // B575: avanço reto antes e rotação do plano de cada dobra (dados de dobradeira, como em LRA)
+                        let rota = fenkra_solidos::st_dobra_maquina::rota_do_tubo(tubo).ok();
+                        for (k, d) in tubo.dobras.iter().enumerate() {
                             n += 1;
                             let r = &d.resultado;
-                            rows.push(vec![n.to_string(), format!("T{}", t + 1), fenkra_solidos::st_dobra::nome_modo(r.modo).to_string(), format!("{}°", num(r.theta)), num(r.raio), num(d.inicio), num(d.fim), num(tubo.desenvolvido)]);
+                            let avanco = rota.as_ref().and_then(|x| x.retos.get(k)).map(|v| num(*v)).unwrap_or_default();
+                            let rotacao = rota.as_ref().and_then(|x| x.dobras.get(k)).map(|b| format!("{}°", num(b.rotacao))).unwrap_or_default();
+                            let ponto = format!("{}; {}; {}", num(d.ponto[0]), num(d.ponto[1]), num(d.ponto[2]));
+                            rows.push(vec![n.to_string(), format!("T{}", t + 1), fenkra_solidos::st_dobra::nome_modo(r.modo).to_string(), avanco, rotacao, format!("{}°", num(r.theta)), num(r.raio), ponto, num(d.inicio), num(d.fim), num(tubo.desenvolvido)]);
                         }
                     }
-                    return TableData { headers: ["Nº", "Tubo", "Modo", "Ângulo", "Raio", "Início", "Fim", "Desenvolvido"].map(String::from).to_vec(), rows };
+                    return TableData { headers: ["Nº", "Tubo", "Modo", "Avanço", "Rotação", "Ângulo", "Raio", "Ponto de dobra", "Início", "Fim", "Desenvolvido"].map(String::from).to_vec(), rows };
                 }
                 TableData {
                     headers: ["Nº", "Etiqueta", "Dobra", "Ângulo", "Raio", "Desenvolvido", "Dedução"].map(String::from).to_vec(),

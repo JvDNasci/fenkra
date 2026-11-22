@@ -82,11 +82,42 @@ pub(crate) fn blocos_fundidos(c: &CadeiaDobra) -> Vec<(Vec<usize>, Vec<usize>)> 
 }
 
 impl Ctx<'_> {
+    /// Raio do tubo dobrado do comando: o digitado, ou o mínimo automático pela seção (B575).
+    pub(crate) fn dobra_do_tubo(&self, m: &StructMember, tb: &TubeBend) -> TubeBend {
+        let mut b = tb.clone();
+        if b.radius.trim().is_empty() {
+            let dims: Vec<f64> = m.dims.iter().filter_map(|e| ev(e, &self.vars, "").ok()).collect();
+            b.radius = format!("{}", st_dobra::raio_minimo_automatico(m.kind, &dims));
+        }
+        b
+    }
+
+    /// Juntas de dobra do comando: as da tabela de cantos e, com `tube_bend` ligado (B575), uma em cada
+    /// canto entre trechos vizinhos do mesmo caminho. Junta explícita no par (de qualquer modo) manda
+    /// sobre a automática, para a pessoa tratar um canto de outro jeito.
+    pub(crate) fn juntas_dobra(&self, f: &Feature, m: &StructMember, geo: &[MemberGeom]) -> Vec<StructJoint> {
+        let mut out: Vec<StructJoint> = m.joints.iter().filter(|j| j.mode == CornerMode::Dobra && j.bend.is_some()).cloned().collect();
+        let Some(tb) = &m.tube_bend else { return out };
+        let bend = self.dobra_do_tubo(m, tb);
+        for i in 1..geo.len() {
+            if geo[i].caminho != geo[i - 1].caminho {
+                continue;
+            }
+            let par = |j: &StructJoint| j.other == f.id && ((j.mine == i && j.other_path == i - 1) || (j.mine == i - 1 && j.other_path == i));
+            if m.joints.iter().any(par) {
+                continue;
+            }
+            out.push(StructJoint { mine: i, other: f.id, other_path: i - 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend.clone()) });
+        }
+        out
+    }
+
     /// Calcula o plano de dobras de um comando de membro: quais nós são dobra, o ângulo, o
     /// resultado de cada um e a orientação das seções.
     pub(crate) fn plano_dobras(&self, f: &Feature, m: &StructMember, geo: &[MemberGeom]) -> PlanoDobra {
         let mut plano = PlanoDobra::default();
-        let juntas: Vec<&StructJoint> = m.joints.iter().filter(|j| j.mode == CornerMode::Dobra && j.bend.is_some()).collect();
+        let efetivas = self.juntas_dobra(f, m, geo);
+        let juntas: Vec<&StructJoint> = efetivas.iter().collect();
         if juntas.is_empty() {
             return plano;
         }
@@ -381,17 +412,17 @@ fn x_perpendicular(x: V3, z: V3) -> V3 {
 /// dobra de um mesmo comando. Só contas, sem sólido (B331).
 pub fn tubos_dobrados(doc: &Document) -> Vec<TuboDobrado> {
     let Ok(vars) = doc.eval_params() else { return vec![] };
-    if !doc.active_features().any(|(_, f)| matches!(&f.kind, FeatureKind::StructMember(m) if m.joints.iter().any(|j| j.mode == CornerMode::Dobra))) {
+    if !doc.active_features().any(|(_, f)| matches!(&f.kind, FeatureKind::StructMember(m) if m.tube_bend.is_some() || m.joints.iter().any(|j| j.mode == CornerMode::Dobra))) {
         return vec![];
     }
     let cx = Ctx::vazio(doc, vars);
     let mut out = vec![];
     for (_, f) in doc.active_features() {
         let FeatureKind::StructMember(m) = &f.kind else { continue };
-        if !m.joints.iter().any(|j| j.mode == CornerMode::Dobra) {
+        if m.tube_bend.is_none() && !m.joints.iter().any(|j| j.mode == CornerMode::Dobra) {
             continue;
         }
-        let Ok(mut geo) = cx.members(m) else { continue };
+        let Ok(mut geo) = cx.members(f.id, m) else { continue };
         let plano = cx.plano_dobras(f, m, &geo);
         cx.aplicar_dobras(&mut geo, &plano);
         for c in &plano.cadeias {

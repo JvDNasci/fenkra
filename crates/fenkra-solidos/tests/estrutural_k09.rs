@@ -30,6 +30,7 @@ fn tubo(paths: Vec<CurveRef>, corner: CornerMode) -> StructMember {
         joints: vec![],
         material: String::new(),
         mirror: false,
+        tube_bend: None,
     }
 }
 

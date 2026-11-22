@@ -59,7 +59,7 @@ pub fn member_frames(doc: &Document, id: Id) -> Vec<MemberFrame> {
         promoted: RefCell::new(None),
         aviso_cantos: RefCell::new(None),
     };
-    let Ok(geo) = cx.members(m) else { return vec![] };
+    let Ok(geo) = cx.members(id, m) else { return vec![] };
     let num = |e: &str| ev(e, &cx.vars, "").unwrap_or(0.);
     let off = [num(&m.off_x), num(&m.off_y)];
     let angle = num(&m.angle);
@@ -115,6 +115,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         }
     }
 

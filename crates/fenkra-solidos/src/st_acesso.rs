@@ -479,6 +479,7 @@ pub fn inserir(doc: &mut Document, pecas: &[Peca], origem: V3, graus: f64) -> Ve
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         };
         let id = doc.add_feature(FeatureKind::StructMember(m));
         if let Some(f) = doc.feature_mut(id) {

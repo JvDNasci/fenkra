@@ -162,6 +162,7 @@ mod testes {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         }));
         let curva = |d: &Document| {
             let m = crate::st_encaixe_doc::encaixes_da_estrutura(d, &Default::default()).into_iter().find(|m| m.ponta1.is_some() && m.ponta2.is_some()).unwrap();

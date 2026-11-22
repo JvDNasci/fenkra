@@ -450,6 +450,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         }));
         let r = encaixes_da_estrutura(&d, &Opcoes::default());
         r.into_iter().find(|m| m.ponta1.is_some() && m.ponta2.is_some()).expect("travessa com duas pontas de encaixe")

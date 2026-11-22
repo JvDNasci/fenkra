@@ -32,7 +32,9 @@ pub fn member_panel(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMem
         }
     });
     section(ui, "Linhas guia (esqueleto)");
-    crate::geo_ui::curves_list(ui, "st_paths", "Linha", doc, me, &mut m.paths, seed, 1);
+    // B575: o id da caixa é o do campo declarado no descritor ("caminhos"): junção na hora (cadeia) e Tab
+    crate::geo_ui::curves_list(ui, "caminhos", "Linha", doc, me, &mut m.paths, seed, 1);
+    tubo_dobrado_ui(ui, doc, me, m, vars);
     section(ui, "Ancoragem e orientação");
     crate::st_painel::ancoragem(ui, m, vars);
     expr(ui, "Rotação", &mut m.angle, vars, "°");
@@ -58,6 +60,56 @@ pub fn member_panel(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMem
     joints_ui(ui, doc, me, m, vars);
     crate::st_dobra_ui::ficha_do_tubo(ui, me);
     ui.label(RichText::new(tr("Tudo é associativo: mexer no esqueleto (pontos, linhas) atualiza as barras.")).weak().small());
+}
+
+/// B575: seção "Tubo dobrado". Ligada, a guia com cantos (ou as guias unidas em cadeia) vira um tubo só:
+/// cada canto é uma dobra de dobradeira com o raio daqui (vazio = mínimo automático pela seção, que a
+/// dica mostra) e não há encaixe de canto nelas. A opção de unir as guias numa cadeia grava a junção do
+/// campo "caminhos" (a mesma do botão direito "unir" da caixa).
+fn tubo_dobrado_ui(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMember, vars: &HashMap<String, f64>) {
+    section(ui, "Tubo dobrado");
+    let tubo = crate::st_dobra_ui::e_tubo(m.kind);
+    let mut ligado = m.tube_bend.is_some();
+    let dica = if tubo {
+        "Os cantos da guia viram dobras de um tubo só, com raio de dobra: nada de encaixe de canto nas dobras. A lista de corte traz o comprimento desenvolvido e a tabela de dobras (avanço, rotação, ângulo e raio) para a dobradeira."
+    } else {
+        "A dobra de tubo vale só em tubo (redondo, quadrado, retangular)."
+    };
+    let r = ui.add_enabled(tubo || ligado, egui::Checkbox::new(&mut ligado, tr("Cantos viram dobras (tubo dobrado)")));
+    r.on_hover_text(tr(dica));
+    if ligado != m.tube_bend.is_some() {
+        m.tube_bend = ligado.then(|| TubeBend { mode: BendMode::Dobradeira, ..Default::default() });
+    }
+    let Some(b) = m.tube_bend.as_mut() else { return };
+    let dims: Vec<f64> = m.dims.iter().filter_map(|e| fenkra_core::expr::eval_str(e, vars).ok()).collect();
+    let auto = fenkra_solidos::st_dobra::raio_minimo_automatico(m.kind, &dims);
+    let vazio = format!("{} {} mm", tr("automático"), fmt(auto));
+    ui.horizontal(|ui| {
+        ui.add_sized([118., 18.], egui::Label::new(tr("Raio de dobra"))).on_hover_text(tr("Raio de centro das dobras. Vazio usa o mínimo automático pela seção (regra prática: 2 vezes o diâmetro, 3 vezes em parede fina); uma regra de dobra cadastrada e o valor digitado mandam sobre ele."));
+        let ruim = !b.radius.trim().is_empty() && fenkra_core::expr::eval_str(&b.radius, vars).is_err();
+        let mut te = egui::TextEdit::singleline(&mut b.radius).desired_width(90.).hint_text(vazio);
+        if ruim {
+            te = te.text_color(crate::theme::st_err());
+        }
+        ui.add(te).on_hover_text(tr("Número, parâmetro ou expressão, em mm."));
+        ui.label(RichText::new("mm").weak());
+    });
+    // várias guias: uma cadeia (tubo só) ou separadas
+    if m.paths.len() > 1 {
+        let atual = doc.dados_campo(me, "caminhos").cloned().unwrap_or_else(|| DadosCampo::novo(me, "caminhos"));
+        let todas: Vec<usize> = (0..m.paths.len()).collect();
+        let mut cadeia = atual.juncoes.iter().any(|g| g.len() == todas.len());
+        if ui.checkbox(&mut cadeia, tr("Unir as guias numa cadeia (um tubo só)")).on_hover_text(tr("Liga as guias na ordem da lista como uma curva só; o tubo dobra nos cantos entre elas. Desligado, cada guia é um tubo separado. Também dá para unir só algumas pelo botão direito na lista.")).changed() {
+            let mut novo = atual.clone();
+            if cadeia {
+                novo.unir(&todas);
+            } else {
+                novo.separar(&todas);
+            }
+            crate::caixa_selecao::pedir(ui.ctx(), crate::caixa_selecao::Pedido::Dados(novo));
+        }
+    }
+    ui.label(RichText::new(tr("Mínimo automático e regras: o raio vem de regra prática (não é norma); confira com a sua dobradeira.")).weak().small());
 }
 
 fn doc_material(doc: &Document) -> String {
@@ -709,6 +761,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         }));
         assert!(membro_sem_linhas(&d, id));
         if let Some(FeatureKind::StructMember(m)) = d.feature_mut(id).map(|f| &mut f.kind) {

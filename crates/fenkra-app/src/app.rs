@@ -916,6 +916,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
+                tube_bend: None,
             };
             d.add_feature(FeatureKind::StructMember(mk(paths, CornerMode::MeiaEsquadria, 0)));
             d.add_feature(FeatureKind::StructMember(mk(legs, CornerMode::Nenhum, 0)));
@@ -955,6 +956,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
+                tube_bend: None,
             }));
             for r in &mut d.references {
                 r.visible = false;
@@ -1000,6 +1002,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
+                tube_bend: None,
             }));
             if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|x| &mut x.kind) {
                 let mut b1 = TubeBend { mode: BendMode::Dobradeira, radius: s("150"), rule: s("Exemplo de bancada"), ..Default::default() };
@@ -2667,6 +2670,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                             joints: vec![],
                             material: String::new(),
                             mirror: false,
+                            tube_bend: None,
                         }))
                     })
                     .collect();

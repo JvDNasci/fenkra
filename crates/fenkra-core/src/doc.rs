@@ -2072,6 +2072,13 @@ pub struct StructMember {
     /// espelha a seção em torno do eixo Y dela (B253): perfis sem simetria (U, L, T) trocam de lado
     #[serde(default)]
     pub mirror: bool,
+    /// B575: tubo dobrado. Com isto ligado, a linha guia com cantos (uma polilinha, ou várias guias
+    /// unidas em cadeia) vira **um** tubo só: cada canto é uma dobra de dobradeira com este raio e
+    /// não há encaixe de canto nelas. `radius` vazio = o raio mínimo automático pela seção
+    /// (`st_dobra::raio_minimo_automatico`). Arquivo antigo não traz o campo (sem dobra: cada trecho
+    /// reto continua um membro).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tube_bend: Option<TubeBend>,
 }
 
 /// Regra de um canto entre a linha `mine` deste membro e a linha `other_path` de outro membro

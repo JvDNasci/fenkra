@@ -1103,6 +1103,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         }
     }
 

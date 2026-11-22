@@ -30,6 +30,7 @@ fn montagem() -> (Document, Id) {
         joints: vec![],
         material: String::new(),
         mirror: false,
+        tube_bend: None,
     };
     let id = d.add_feature(FeatureKind::StructMember(m));
     d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 500.], "8", "5")));
