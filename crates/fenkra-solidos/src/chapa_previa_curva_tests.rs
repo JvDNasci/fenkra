@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-2.1-or-later
-//! B540: com o comando aberto (cálculo leve), a aba curva e a aba por superfície mostram a peça de
-//! verdade, seguindo o arco e o suporte, e não a caixa de um cubo.
+//! B540/B564: com o comando aberto (cálculo leve), a aba curva mostra a peça de verdade, seguindo o arco, e a
+//! aba por superfície a web inteira com o contorno da parede, e não a caixa de um cubo.
 
 use super::*;
 
@@ -98,14 +98,22 @@ fn aba_por_superficie_aberta_nao_e_a_caixa_de_um_cubo() {
     d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
     let pl = d.add_offset_plane(PlaneRef::Origin(OriginPlane::YZ), "80");
     let id = d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Plane(PlaneRef::Datum(pl)), face: [40., 25., 2.], length: s("15"), radius: None, flip: false, keep_base: false, mode: 0, angle: s("90"), limites: Default::default(), side: 0, inv_lado: false }));
-    assert!(!crate::previa_leve::cobre_no(&d, d.feature(id).unwrap()));
+    // B564: a aba por superfície aberta é a prévia simplificada: web relimitada pelo suporte e a parede
+    // como contorno em linhas (sem varredura da dobra). O cubo da caixa de pontos continua fora.
+    assert!(crate::previa_leve::cobre_no(&d, d.feature(id).unwrap()));
     let r = leve(&d, id);
     assert!(matches!(r.status[&id], Status::Ok | Status::Warning(_)), "{:?}", r.status[&id]);
-    assert!(r.previas.iter().all(|p| p.feature != id), "sem caixa de prévia leve: {:?}", r.previas);
+    let viz: Vec<_> = r.previas.iter().filter(|p| p.feature == id).collect();
+    assert_eq!(viz.len(), 1, "uma prévia: {:?}", r.previas);
+    assert!(viz[0].caixas.is_empty() && !viz[0].linhas.is_empty(), "contorno em linhas, sem caixa");
     let (lo, hi) = caixa(&r);
-    // web relimitada pelo suporte em x = 80, com a aba subindo 15 + dobra: largura 50, não um cubo
-    assert!((hi[2] - 19.).abs() < 0.2, "a aba sobe {hi:?}");
-    assert!(hi[0] < 85. && hi[1] < 50.1 && lo[1] > -0.1, "caixa da peça {lo:?} {hi:?}");
-    let (dx, dy, dz) = ((hi[0] - lo[0]) as f64, (hi[1] - lo[1]) as f64, (hi[2] - lo[2]) as f64);
-    assert!((dx - dy).abs() > 10. && (dy - dz).abs() > 10., "não é um cubo: {dx} x {dy} x {dz}");
+    // web inteira (100 × 50, o corte em x = 80 só vem no final), sem a aba no sólido
+    assert!(hi[0] > 99. && hi[1] < 50.1 && lo[1] > -0.1 && hi[2] < 2.1, "caixa da peça {lo:?} {hi:?}");
+    // o contorno sobe 15 + dobra (r + t) acima da web e fica sobre o suporte (x ≈ 80)
+    let topo = viz[0].linhas.iter().flat_map(|l| l.iter()).map(|p| p[2]).fold(f64::MIN, f64::max);
+    assert!((topo - (2. + 15. + 4.)).abs() < 3., "altura do contorno {topo}");
+    // o resultado final, sem prévia, é o de sempre
+    let final_ = recompute(&d);
+    let (_, hf) = caixa(&final_);
+    assert!((hf[2] - 19.).abs() < 0.2, "a aba final sobe {hf:?}");
 }

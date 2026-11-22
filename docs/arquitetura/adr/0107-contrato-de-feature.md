@@ -431,3 +431,36 @@ a coerência antes de integrar.
   [ADR 0109](0109-encaixe-de-tubo-corte-normal-a-parede.md).
 - **Pendente**: tubo de passagem com rasgo, tubo contra superfície qualquer com ponte, escolha dos tubos
   que cortam um nó pela caixa universal (hoje a ordem é a da árvore) e o descritor dessas entradas.
+
+### B566 e B564, chapa: estados em cache, validação e prévia simplificada (22/11/2026)
+
+- **Dobrado e planificado no cache** (`Cache::trocar_estado`, `recompute_ambos`, `preaquecer_outro_estado`).
+  A assinatura de cada comando já carrega `doc.sheet.flat` (via assinatura global), então o resultado de um
+  estado nunca vale para o outro; em vez de tirar `flat` da assinatura (o que quebraria os comandos que
+  recalculam por estado), o cache guarda **dois conjuntos** (`feats`, `meshes`, `props`) e `recompute`
+  entrega o do estado pedido. O app calcula o outro estado em segundo plano depois de cada resultado
+  (`Pedido::aquecer`, sem resultado, cancelável); alternar vira só `recompute_cached` com tudo reaproveitado.
+  Medido: calcular os dois estados da nervura de 100 × 60 leva 4,4 s; **alternar leva 1,2 ms** (máximo 1,6 ms
+  em 6 voltas, todos os comandos vindos do cache). Mudar um campo a montante invalida só o que depende, nos
+  dois estados (teste `mudar_a_montante_invalida_so_o_que_depende_nos_dois_estados`).
+- **Validação leve da aba por superfície** (`chapa_aba_diag.rs`): menor raio de curvatura côncavo da OML
+  contra `r + t` (a dobra cabe) e `ba + comprimento` (a faixa plana não se cruza); o aviso dá o ponto, o raio
+  e o comprimento máximo que ainda planifica. Entra como aviso do comando.
+- **Aceite**: a nervura de asa com aba de 20 mm dobra e planifica nas três posições do material (teste
+  `nervura_de_asa_com_aba_de_20_mm_dobra_e_planifica`).
+- **Prévia simplificada da aba por superfície** (B564): com o comando aberto a OML é amostrada em 60 pontos,
+  a web fica inteira (o corte pelo suporte só no resultado final) e a parede aparece como contorno em linhas
+  (`PreviaViz::linhas`); sem varredura da dobra nem união. A superfície de suporte (varredura/deslocamento)
+  fica no `Cache::suportes`, com chave pela definição (`ref_sig`). O resultado final é o do cálculo completo.
+- **Pendente**
+  1. **Dobrada de peça grande** (corda a partir de 400 mm): a união da varredura da dobra com a web sai
+     inválida no kernel e o comando dá erro; o planificado funciona em todas as escalas medidas (até corda
+     1000). Precisa de investigação no kernel (tolerância da união, seção entrando 0,05 mm). Tentativa de
+     trocar o caminho exato pela polilinha não resolveu.
+  2. Aproximação para superfície de dupla curvatura (estiramento/enrugamento) e recorte de alívio onde a
+     OML fecha (hoje só o aviso).
+  3. Os limites dos lados, a borda final e os cantos não aparecem na prévia simplificada (só no resultado).
+  4. O cache dos dois estados não entra no teto de memória das malhas (`TETO_CACHE_MALHAS`).
+  5. A validação não cobre "abas se cruzam" entre abas diferentes (só dentro da mesma OML).
+  6. Textos de aviso do motor ainda em português fixo (sem tabela i18n, como os demais erros do motor).
+

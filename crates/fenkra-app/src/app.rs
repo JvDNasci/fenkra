@@ -148,6 +148,13 @@ impl Worker {
                     cache.polir.agora = job.4.agora;
                     cache.leve = job.4.leve;
                     cache.cancelar = Some(ctl.bandeira());
+                    // B566: segundo plano, sem resultado: deixa pronto o outro estado da chapa
+                    if job.4.aquecer {
+                        cache.leve = None;
+                        fenkra_solidos::preaquecer_outro_estado(&job.1, &mut cache);
+                        cache.cancelar = None;
+                        return None;
+                    }
                     cache.progresso = Some(ctl.clone());
                     let r = fenkra_solidos::recompute_cached(&job.1, &mut cache);
                     cache.cancelar = None;
@@ -9000,6 +9007,13 @@ impl eframe::App for App {
                 let novo = g > self.gen_done;
                 self.gen_done = g;
                 self.polir.resultado_chegou(&r);
+                // B566: com o cálculo pronto e nenhum comando aberto, o worker calcula o outro estado
+                // da chapa em segundo plano; alternar dobrado e planificado vira só troca de exibição
+                if novo && g == self.gen_sent && self.chapa_anim.is_none() && self.session.is_none() {
+                    if let Some(d) = self.sent_doc.clone().filter(fenkra_solidos::tem_dobras) {
+                        self.worker.enviar((g, d, false, self.qualidade_malha, polir::Pedido { aquecer: true, ..self.pedido_de_edicao() }));
+                    }
+                }
                 // referências antigas (só o ponto) que resolveram ganham a chave v2 no documento
                 let promoted = std::mem::take(&mut r.promoted);
                 if g == self.gen_sent && self.chapa_anim.is_none() && !promoted.is_empty() {

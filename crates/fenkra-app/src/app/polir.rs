@@ -21,6 +21,9 @@ pub struct Pedido {
     pub agora: bool,
     /// comando aberto para edição: a rosca modelada dele vira só linhas até concluir (B351)
     pub leve: Option<fenkra_core::Id>,
+    /// B566: não devolve resultado; só calcula o outro estado da chapa (dobrado/planificado) e o
+    /// deixa no cache, para alternar sem recalcular
+    pub aquecer: bool,
 }
 
 #[derive(Default)]
@@ -34,7 +37,7 @@ pub struct Polidor {
 impl Polidor {
     /// Pedido de quem edita: não tessela, e o corpo que não mudou segue com a malha que tem.
     pub fn pedido_de_edicao(&self) -> Pedido {
-        Pedido { alvo: self.alvo, agora: false, leve: None }
+        Pedido { alvo: self.alvo, agora: false, leve: None, aquecer: false }
     }
 
     pub fn resultado_chegou(&mut self, r: &fenkra_solidos::RecomputeResult) {
@@ -88,6 +91,6 @@ impl App {
         self.polir.alvo = alvo;
         // B304: na animação de dobrar, a malha fina é a da peça parcial que está na tela
         let Some(doc) = self.doc_enviado() else { return };
-        self.worker.enviar((self.gen_sent, doc, false, self.qualidade_malha, Pedido { alvo, agora: true, leve: self.session.as_ref().map(|s| s.id) }));
+        self.worker.enviar((self.gen_sent, doc, false, self.qualidade_malha, Pedido { alvo, agora: true, aquecer: false, leve: self.session.as_ref().map(|s| s.id) }));
     }
 }

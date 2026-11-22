@@ -38,7 +38,12 @@ pub struct PreviaViz {
     pub caixas: Vec<[V3; 8]>,
     /// filete face a face e completo: pares de pontos em duas faces; a aresta entre elas é a afetada
     pub pares: Vec<[V3; 2]>,
+    /// B564: segmentos soltos (contorno da aba por superfície: a OML, a borda de cima e as ligações)
+    pub linhas: Vec<[V3; 2]>,
 }
+
+/// B564: quantos pontos da OML a prévia simplificada da aba por superfície usa.
+pub const PONTOS_DA_PREVIA: usize = 60;
 
 /// Comandos que têm prévia leve.
 pub fn cobre(k: &FeatureKind) -> bool {
@@ -62,7 +67,10 @@ pub fn cobre(k: &FeatureKind) -> bool {
 /// saíram (B540): a zona era a caixa dos pontos de referência inflada igual para os três lados, que
 /// numa curva (poucos pontos) ou numa face (um ponto só) dava um cubo sem relação com o arco ou o
 /// suporte. A aba curva é uma varredura e uma booleana, e a por superfície uma interseção e um corte:
-/// peças pequenas, e a prévia agora segue a aresta e o suporte de verdade.
+/// peças pequenas, e a prévia agora segue a aresta e o suporte de verdade. A aba por superfície voltou
+/// em B564, mas por dentro (`por_dentro`): a web fica inteira (o corte pelo suporte só no cálculo final) e a parede aparece
+/// como contorno (`PreviaViz::linhas`, OML amostrada), sem a varredura da dobra, que em superfície
+/// grande e curva é o grosso do tempo (medido: 3 de 3,3 s numa asa de corda 200).
 pub fn so_no_fim(k: &FeatureKind) -> bool {
     use FeatureKind as K;
     matches!(
@@ -81,6 +89,7 @@ pub fn so_no_fim(k: &FeatureKind) -> bool {
             | K::SmLoftFlange(_)
             | K::SmConvert(_)
             | K::SmArcSlot(_)
+            | K::SmSurfFlange(_)
             | K::StructMember(_)
             | K::StructPlate(_)
             | K::StructGusset(_)
@@ -94,7 +103,7 @@ pub fn so_no_fim(k: &FeatureKind) -> bool {
 /// que custam por corpo inteiro, não. O recorte fica completo: a prévia dele mostra o contorno nos
 /// dois estados, que só o cálculo real dá.
 pub fn por_dentro(k: &FeatureKind) -> bool {
-    matches!(k, FeatureKind::SmFlange(_) | FeatureKind::SmHem(_) | FeatureKind::SmBend(_))
+    matches!(k, FeatureKind::SmFlange(_) | FeatureKind::SmHem(_) | FeatureKind::SmBend(_) | FeatureKind::SmSurfFlange(_))
 }
 
 /// O comando `f` do documento roda na versão leve quando aberto? Igual a `cobre`, menos chapa e
@@ -220,7 +229,7 @@ impl Ctx<'_> {
     }
 
     fn previa_leve_de(&mut self, f: &Feature) -> Result<Option<String>, String> {
-        let mut viz = PreviaViz { feature: f.id, arestas: vec![], valor: 0., chanfro: false, todas: false, caixas: vec![], pares: vec![] };
+        let mut viz = PreviaViz { feature: f.id, arestas: vec![], valor: 0., chanfro: false, todas: false, caixas: vec![], pares: vec![], linhas: vec![] };
         match &f.kind {
             FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => {
                 if matches!(&o.edges, EdgeSel::Edges(m) if m.is_empty()) {
@@ -349,7 +358,7 @@ impl Ctx<'_> {
     /// Prévia da aba leve: a caixa da própria ferramenta (a parede nova, com a dobra), sem a booleana.
     pub(crate) fn previa_da_ferramenta(&mut self, f: &Feature, tool: &fenkra_kernel::Shape) {
         if let Some((lo, hi)) = tool.bbox() {
-            let mut viz = PreviaViz { feature: f.id, arestas: vec![], valor: 0., chanfro: false, todas: false, caixas: vec![cantos_da_caixa(lo, hi)], pares: vec![] };
+            let mut viz = PreviaViz { feature: f.id, arestas: vec![], valor: 0., chanfro: false, todas: false, caixas: vec![cantos_da_caixa(lo, hi)], pares: vec![], linhas: vec![] };
             viz.valor = (0..3).map(|i| hi[i] - lo[i]).fold(0., f64::max);
             self.previas.push(viz);
         }
@@ -358,7 +367,7 @@ impl Ctx<'_> {
     /// Prévia da dobra por linha leve: a zona da linha, crescida pelo raio e a espessura.
     pub(crate) fn previa_da_dobra(&mut self, f: &Feature, pts: &[V3], r: f64) {
         if let Some(c) = caixa_dos_pontos(pts) {
-            self.previas.push(PreviaViz { feature: f.id, arestas: vec![], valor: r, chanfro: false, todas: false, caixas: vec![inflar(c, r)], pares: vec![] });
+            self.previas.push(PreviaViz { feature: f.id, arestas: vec![], valor: r, chanfro: false, todas: false, caixas: vec![inflar(c, r)], pares: vec![], linhas: vec![] });
         }
     }
 

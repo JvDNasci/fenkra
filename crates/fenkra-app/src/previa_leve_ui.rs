@@ -34,6 +34,10 @@ pub fn desenhar(r: &RecomputeResult, f: &Fantasma, alvo: fenkra_core::Id, s: &mu
                 s.overlay.push(LineVertex { pos: ponto(c[b]), col });
             }
         }
+        for [a, b] in &v.linhas {
+            s.overlay.push(LineVertex { pos: ponto(*a), col });
+            s.overlay.push(LineVertex { pos: ponto(*b), col });
+        }
         if let Some(b) = r.bodies.iter().find(|b| b.collector == alvo) {
             linhas_de_borda(v, &b.mesh, aresta, &mut s.overlay);
         }
@@ -120,7 +124,7 @@ mod testes {
     }
 
     fn viz(valor: f64, chanfro: bool) -> PreviaViz {
-        PreviaViz { feature: fenkra_core::Id(1), arestas: vec![[5., 0., 0.]], valor, chanfro, todas: false, caixas: vec![], pares: vec![] }
+        PreviaViz { feature: fenkra_core::Id(1), arestas: vec![[5., 0., 0.]], valor, chanfro, todas: false, caixas: vec![], pares: vec![], linhas: vec![] }
     }
 
     #[test]
