@@ -14,7 +14,7 @@ fn s(x: &str) -> String {
 /// Folha vertical pela reta de `a` a `b`, 30 mm para cima.
 fn folha(d: &mut Document, a: [f64; 3], b: [f64; 3]) -> SurfRef {
     let c = CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
-    SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None }))
+    SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None, mais: vec![] }))
 }
 
 fn textos(saida: &egui::FullOutput) -> Vec<String> {

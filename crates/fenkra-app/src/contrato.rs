@@ -469,6 +469,17 @@ pub fn entrada_do_doc(doc: &Document, id: Id, salt: &str) -> Option<Entrada> {
     s.entradas.into_iter().find(|e| salt_bate(salt, e.id) && decl.iter().any(|d| d.id == e.id))
 }
 
+/// Pendências das ondas 1 e 2 (ADR 0107): o rótulo e a dica que o painel mostra num campo declarado
+/// saem do descritor, não do widget. `None` onde o comando não declara o campo (o widget usa o dele).
+pub fn ficha_no_doc(doc: &Document, id: Id, salt: &str) -> Option<(&'static str, &'static str)> {
+    entrada_do_doc(doc, id, salt).map(|e| (e.rotulo, e.dica))
+}
+
+/// O rótulo do campo declarado `salt` do comando `id`, ou `padrao` se o comando não o declara.
+pub fn rotulo_no_doc<'a>(doc: &Document, id: Id, salt: &str, padrao: &'a str) -> &'a str {
+    ficha_no_doc(doc, id, salt).map_or(padrao, |f| f.0)
+}
+
 /// Id do campo ativo declarado pelo comando `id` do documento.
 pub fn id_do_ativo_no_doc(doc: &Document, id: Id) -> Option<&'static str> {
     match (doc.feature(id), doc.reference(id)) {
@@ -503,13 +514,19 @@ pub fn curvas_mut<'a>(doc: &'a mut Document, id: Id, campo: &str) -> Option<&'a 
 /// revolução e o Extrair de várias curvas guardam a lista em dois campos do comando (`curve` e `mais`),
 /// que voltam a eles depois de `f`.
 pub fn editar_curvas<R>(doc: &mut Document, id: Id, campo: &str, f: impl FnOnce(&mut Vec<CurveRef>) -> R) -> Option<R> {
-    let em_dois = doc.reference(id).is_some_and(|r| matches!((&r.kind, campo), (RefKind::SurfRevolve { .. }, "g_pf") | (RefKind::CurveCopy { .. }, "g_c")));
+    let em_dois = doc.reference(id).is_some_and(|r| {
+        matches!(
+            (&r.kind, campo),
+            (RefKind::SurfRevolve { .. } | RefKind::SurfExtrude { .. } | RefKind::SurfSweep { profile: SweepProfile::Curve(_), .. }, "g_pf") | (RefKind::CurveCopy { .. }, "g_c")
+        )
+    });
     if !em_dois {
         return curvas_mut(doc, id, campo).map(f);
     }
     let r = doc.references.iter_mut().find(|r| r.id == id)?;
     let (curve, mais) = match &mut r.kind {
-        RefKind::SurfRevolve { curve, mais, .. } | RefKind::CurveCopy { curve, mais } => (curve, mais),
+        RefKind::SurfRevolve { curve, mais, .. } | RefKind::SurfExtrude { curve, mais, .. } | RefKind::CurveCopy { curve, mais } => (curve, mais),
+        RefKind::SurfSweep { profile: SweepProfile::Curve(curve), mais, .. } => (curve, mais),
         _ => return None,
     };
     let mut v: Vec<CurveRef> = std::iter::once(curve.clone()).chain(mais.drain(..)).collect();
@@ -559,10 +576,11 @@ fn declaradas(alvo: Alvo) -> Vec<Entrada> {
             FeatureKind::SmJoggle(x) if x.plane.is_none() => vec![Entrada::nova("face", "Face", T::Face, Cardinalidade::Um, usize::from(x.a != x.b))],
             FeatureKind::SmLouver(x) => vec![Entrada::nova("face", "Face", T::Face, Cardinalidade::Um, usize::from(x.a != x.b))],
             // B31: a aba curva vinda de outro modo ainda não tem a cadeia de arestas
-            FeatureKind::SmCurveFlange(x) => vec![Entrada::nova("aresta", "Aresta", T::Aresta, Cardinalidade::Cadeia, usize::from(x.edge.len() >= 2)).tambem(T::Curva).tambem(T::Face)],
+            FeatureKind::SmCurveFlange(x) => vec![Entrada::nova("aresta", "Arestas", T::Aresta, Cardinalidade::Cadeia, usize::from(x.edge.len() >= 2)).tambem(T::Curva).tambem(T::Face)],
             // B514: o laço de abas aberto sem aresta espera o clique numa aresta
             FeatureKind::SmFlangeLoop(x) => vec![Entrada::nova("smloop_arestas", "Arestas", T::Aresta, varios(1), n_pontos(x.edges.iter())).tambem(T::Face)],
-            FeatureKind::SmFlange(f) => vec![Entrada::nova("smaba_aresta", "Aresta", T::Aresta, Cardinalidade::Um, n_ponto(&f.edge)).tambem(T::Face)],
+            // B560: no modo Arestas a aba reta, a curva e o laço mostram a mesma lista, "Arestas"
+            FeatureKind::SmFlange(f) => vec![Entrada::nova("smaba_aresta", "Arestas", T::Aresta, Cardinalidade::Um, n_ponto(&f.edge)).tambem(T::Face)],
             FeatureKind::SmHem(h) => vec![Entrada::nova("smaba_aresta", "Aresta", T::Aresta, Cardinalidade::Um, n_ponto(&h.edge))],
             // onda 1: os demais comandos de chapa e estrutural que pegam uma face (ou um ponto nela) pelo
             // clique no 3D. Opcionais: o comando tem valor padrão e a pessoa só troca a face; o filtro
@@ -604,9 +622,12 @@ fn curva1(id: &'static str, rotulo: &'static str, c: &CurveRef) -> Entrada {
     Entrada::nova(id, rotulo, TipoEntrada::Curva, Cardinalidade::Um, n_curva(c))
 }
 
+/// Dica do perfil em lista (Revolução, Extrusão e Varredura de superfície).
+pub const DICA_PERFIL: &str = "Curvas do perfil, de qualquer origem (sketch, arame, arestas). Unir junta as marcadas numa curva só: a superfície sai contínua.";
+
 /// O perfil como lista de curvas de origens mistas, com junção na hora (ADR 0107, onda 2).
 fn perfil(id: &'static str, rotulo: &'static str, curve: &CurveRef, mais: &[CurveRef]) -> Entrada {
-    Entrada::nova(id, rotulo, TipoEntrada::Curva, varios(1), n_curva(curve) + mais.iter().map(n_curva).sum::<usize>()).com_juncao()
+    Entrada::nova(id, rotulo, TipoEntrada::Curva, varios(1), n_curva(curve) + mais.iter().map(n_curva).sum::<usize>()).com_juncao().dica(DICA_PERFIL)
 }
 
 /// Entradas declaradas dos elementos de `references` (superfícies e arame). ADR 0107, onda 2: os
@@ -631,12 +652,12 @@ fn declaradas_ref(k: &RefKind) -> Vec<Entrada> {
                 v
             }
             RefKind::CurveParallel { curve, support, .. } => vec![curva1("g_c", "Curva", curve), sup("g_apoio", "Apoio", support)],
-            RefKind::SurfExtrude { curve, dir, .. } => vec![curva1("g_pf", "Perfil", curve), Entrada::nova("g_d", "Direção", T::Eixo, Cardinalidade::Um, n_eixo(dir))],
+            RefKind::SurfExtrude { curve, dir, mais, .. } => vec![perfil("g_pf", "Perfil", curve, mais), Entrada::nova("g_d", "Direção", T::Eixo, Cardinalidade::Um, n_eixo(dir))],
             RefKind::SurfRevolve { curve, axis, mais, .. } => vec![perfil("g_pf", "Perfil", curve, mais), Entrada::nova("g_ax", "Eixo", T::Eixo, Cardinalidade::Um, n_eixo(axis))],
-            RefKind::SurfSweep { profile, spine, .. } => {
+            RefKind::SurfSweep { profile, spine, mais, .. } => {
                 let mut v = vec![];
                 if let SweepProfile::Curve(c) = profile {
-                    v.push(curva1("g_pf", "Perfil", c));
+                    v.push(perfil("g_pf", "Perfil", c, mais));
                 }
                 v.push(curva1("g_sp", "Guia", spine));
                 v
@@ -875,14 +896,14 @@ mod tests {
     #[test]
     fn superficies_do_adaptador_declaram_os_campos() {
         let c = |i: u64| CurveRef::Ref(Id(i));
-        let k = RefKind::SurfExtrude { curve: slots::curve(), dir: AxisRef::Origin(OriginAxis::Z), length: "30".into(), length2: "0".into(), until: None, until2: None };
+        let k = RefKind::SurfExtrude { curve: slots::curve(), dir: AxisRef::Origin(OriginAxis::Z), length: "30".into(), length2: "0".into(), until: None, until2: None, mais: vec![] };
         assert_eq!(id_do_ativo(Alvo::Ref(&k)), Some("g_pf"), "a extrusão pede o perfil pelo campo declarado");
         let k = RefKind::SurfRevolve { curve: c(3), axis: AxisRef::Origin(OriginAxis::Z), angle: "360".into(), angle2: "0".into(), mais: vec![c(4), c(5)] };
         let s = FeatureSpec::de(Alvo::Ref(&k));
         let e = s.entrada("g_pf").unwrap();
         assert_eq!((e.n, e.juncao, e.card.min()), (3, true, 1), "perfil = curve + mais, com junção na hora");
         assert!(!s.incompleto());
-        let k = RefKind::SurfSweep { profile: SweepProfile::Curve(c(3)), spine: slots::curve(), mode: SweepMode::Corrigido };
+        let k = RefKind::SurfSweep { profile: SweepProfile::Curve(c(3)), spine: slots::curve(), mode: SweepMode::Corrigido, mais: vec![] };
         assert_eq!(FeatureSpec::de(Alvo::Ref(&k)).ordem_tab(), vec!["g_pf", "g_sp"]);
         assert_eq!(id_do_ativo(Alvo::Ref(&k)), Some("g_sp"));
         let k = RefKind::SurfBlend { a: c(3), sa: Some(SurfRef::Ref(Id(9))), b: slots::curve(), sb: None, cont: Continuity::G1, tension: "1".into(), tension2: None };
@@ -905,9 +926,9 @@ mod tests {
             RefKind::SurfConnect { a: s(), b: s(), cont: Continuity::G1, tension: "1".into(), tension2: None, near: [None; 2] },
             RefKind::SurfRuled { curves: vec![c()], support: Some(s()), mode: RuledMode::Normal, dir: AxisRef::Origin(OriginAxis::Z), length: "5".into(), flip: false },
             RefKind::CurveParallel { curve: c(), support: s(), d1: "5".into(), d2: "5".into(), flip: false, more: vec![], both: false, d_other: String::new() },
-            RefKind::SurfExtrude { curve: c(), dir: AxisRef::Origin(OriginAxis::Z), length: "30".into(), length2: "0".into(), until: None, until2: None },
+            RefKind::SurfExtrude { curve: c(), dir: AxisRef::Origin(OriginAxis::Z), length: "30".into(), length2: "0".into(), until: None, until2: None, mais: vec![] },
             RefKind::SurfRevolve { curve: c(), axis: AxisRef::Origin(OriginAxis::Z), angle: "360".into(), angle2: "0".into(), mais: vec![] },
-            RefKind::SurfSweep { profile: SweepProfile::Curve(c()), spine: c(), mode: SweepMode::Corrigido },
+            RefKind::SurfSweep { profile: SweepProfile::Curve(c()), spine: c(), mode: SweepMode::Corrigido, mais: vec![] },
             RefKind::SurfBlend { a: c(), sa: Some(s()), b: c(), sb: Some(s()), cont: Continuity::G1, tension: "1".into(), tension2: None },
             RefKind::SurfOffset { surface: s(), dist: "2".into(), both: false, join: Default::default() },
             RefKind::SurfHeal { surface: s(), tol: "0.1".into() },
@@ -1078,3 +1099,7 @@ mod tests {
         assert_eq!(FeatureSpec::de(Alvo::Ref(&k)).ordem_tab(), vec!["g_s", "g_t"]);
     }
 }
+
+#[cfg(test)]
+#[path = "rotulo_descritor_tests.rs"]
+mod rotulo_descritor_tests;

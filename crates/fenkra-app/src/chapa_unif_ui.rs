@@ -55,10 +55,12 @@ pub fn suporte(ui: &mut egui::Ui, doc: &fenkra_core::Document, kind: &mut Featur
         FeatureKind::SmCurveFlange(_) => "aresta",
         _ => "smloop_arestas",
     };
+    // o rótulo do campo é o que o descritor declara (pendências das ondas 1 e 2)
+    let rotulo = crate::contrato::FeatureSpec::de(crate::contrato::Alvo::Feature(kind)).entrada(salt).map_or("Arestas", |e| e.rotulo);
     crate::geo_ui::bag(
         ui,
         salt,
-        "Arestas",
+        rotulo,
         &mut itens,
         &[],
         1,

@@ -124,11 +124,12 @@ pub fn de_referencia(k: &RefKind) -> Vec<Suporte> {
         R::SurfTrim { a, b, .. } | R::SurfFillet { a, b, .. } | R::SurfConnect { a, b, .. } | R::CurveIntersect { a, b, .. } => vec![sup(Papel::Base, a), sup(Papel::Base, b)],
         R::SurfJoin { items, curves, .. } => items.iter().map(|s| sup(Papel::Base, s)).chain(curves.iter().map(|c| cur(Papel::Curva, c))).collect(),
         R::SurfEdgeFillet { surface, .. } => vec![sup(Papel::Base, surface)],
-        R::SurfSweep { profile, spine, .. } => {
+        R::SurfSweep { profile, spine, mais, .. } => {
             let mut v = vec![cur(Papel::Guia, spine)];
             if let SweepProfile::Curve(c) = profile {
                 v.push(cur(Papel::Curva, c));
             }
+            v.extend(mais.iter().map(|c| cur(Papel::Curva, c)));
             v
         }
         R::SurfSweepX { kind, spine, .. } => kind.guides().into_iter().map(|c| cur(Papel::Curva, c)).chain(spine.iter().map(|c| cur(Papel::Guia, c))).collect(),
@@ -346,9 +347,120 @@ pub fn setas_de_lado(doc: &Document, r: &RecomputeResult, id: Id) -> Vec<SetaDeL
                 }
             }
         }
-        _ => {}
+        _ => out.extend(setas_de_feature(doc, r, id)),
     }
     out
+}
+
+/// Pendências das ondas 1 e 2 (ADR 0107): a seta clicável de inverter dos comandos de `features` com um
+/// `bool` de inverter (`inverter::bool_de_feature`: extrusão, furo, espessura, parede, abas, bainha,
+/// dobra, joggle, veneziana). Ela sai de onde o comando parte (centro do sketch, aresta, linha de dobra,
+/// faces) e aponta para onde o material vai; o clique chama `inverter::alternar_feature`, a mesma função
+/// do botão do painel. Onde a regra do lado é explícita (extrusão, parede, linha de dobra) a direção sai
+/// dela; nos demais, do resultado: do ponto de partida para o centro das faces que o comando criou.
+pub(crate) fn setas_de_feature(doc: &Document, r: &RecomputeResult, id: Id) -> Vec<SetaDeLado> {
+    let Some(f) = doc.feature(id) else { return vec![] };
+    let cs = crate::inverter::controles(crate::contrato::Alvo::Feature(&f.kind));
+    if cs.is_empty() {
+        return vec![];
+    }
+    let rotulo = |campo: u8| cs.iter().find(|c| c.campo == campo).map_or("Inverter direção", |c| c.rotulo);
+    let seta = |campo: u8, base: Vec3, dir: Option<Vec3>| dir.map(|dir| SetaDeLado { campo, base, dir, rotulo: rotulo(campo) });
+    // do ponto de partida para o centro das faces criadas; com `eixo`, o sentido dele que leva até lá
+    let pelo_resultado = |base: Vec3, eixo: Option<Vec3>| -> Option<Vec3> {
+        let d = crate::handles::owned_center(r, f.target, id)? - base;
+        match eixo {
+            Some(n) => {
+                let s = d.dot(n);
+                (s.abs() > 1e-6).then_some(if s > 0. { n } else { -n })
+            }
+            None => d.try_normalize(),
+        }
+    };
+    let media = |ps: &[Vec3]| (!ps.is_empty()).then(|| ps.iter().fold(Vec3::ZERO, |a, p| a + *p) / ps.len() as f32);
+    let linha = |a: [f64; 3], b: [f64; 3], flip: bool| -> Option<(Vec3, Vec3)> {
+        // a linha de dobra: o lado que se move (`chapa_linha::lado_movel`), no plano da face da linha
+        let mid = fenkra_solidos::geo3d::lerp(a, b, 0.5);
+        let corpo = r.bodies.iter().find(|x| x.collector == f.target)?;
+        let n = crate::chapa_manip_ui::normal_do_plano_da_linha(&corpo.mesh, a, b).or_else(|| crate::chapa_manip::normal_perto(r, f.target, mid))?;
+        let lado = fenkra_solidos::chapa_linha::lado_movel(a, b, n, flip)?;
+        Some((v3(mid), v3(lado)))
+    };
+    // abas e bainha: o eixo da dobra do comando (`bend_lines`); a normal dele aponta da chapa para o
+    // centro de curvatura, o lado para onde a aba dobra, e inverter leva a dobra para o outro lado
+    let dobra = |base: Option<Vec3>| -> Option<(Vec3, Vec3)> {
+        let e = r.bend_lines.iter().filter(|b| b.feature == id).find_map(|b| b.eixo.as_ref())?;
+        let n = v3(e.normal).try_normalize()?;
+        Some((base.unwrap_or_else(|| (v3(e.a) + v3(e.b)) * 0.5), n))
+    };
+    let pela_dobra = |campo: u8, base: Option<Vec3>| -> Vec<SetaDeLado> {
+        match dobra(base) {
+            Some((b, n)) => seta(campo, b, Some(n)).into_iter().collect(),
+            None => base.and_then(|b| seta(campo, b, pelo_resultado(b, None))).into_iter().collect(),
+        }
+    };
+    match &f.kind {
+        FeatureKind::Extrude(e) => {
+            if let Some((c, n)) = crate::handles::sketch_center(r, e.sketch) {
+                // a regra da seta de distância (`handles`): o corte entra no material, inverter troca
+                let n = e.dir.as_ref().and_then(|a| crate::handles::axis_pos(r, doc, a)).and_then(|x| x.1.try_normalize()).unwrap_or(n);
+                let into = (e.op == BoolOp::Cut) != e.reverse;
+                return seta(0, c, Some(if into { -n } else { n })).into_iter().collect();
+            }
+        }
+        FeatureKind::SmWall(w) if !w.mid => {
+            if let Some((c, n)) = crate::handles::sketch_center(r, w.sketch) {
+                // a espessura vai para o lado da normal do sketch, ou para o outro com `reverse`
+                return seta(0, c, Some(if w.reverse { -n } else { n })).into_iter().collect();
+            }
+        }
+        FeatureKind::Hole(h) => {
+            // a regra do cálculo: o furo entra no material pela direção escolhida ou contra a normal do
+            // sketch; nos pontos 3D, contra a normal da superfície; `reverse` troca
+            let eixo = h.dir.as_ref().and_then(|a| crate::handles::axis_pos(r, doc, a)).and_then(|x| x.1.try_normalize());
+            let sinal = if h.reverse { -1. } else { 1. };
+            if h.points.is_empty() {
+                let Some((c, n)) = crate::handles::sketch_center(r, h.sketch) else { return vec![] };
+                return seta(0, c, Some(eixo.unwrap_or(-n) * sinal)).into_iter().collect();
+            }
+            let ps: Vec<Vec3> = h.points.iter().filter_map(|p| crate::picking::point_pos(r, p)).map(v3).collect();
+            let Some(b) = media(&ps) else { return vec![] };
+            let dir = eixo.map(|e| e * sinal).or_else(|| pelo_resultado(b, None));
+            return seta(0, b, dir).into_iter().collect();
+        }
+        FeatureKind::Thickness(t) => {
+            // a camada sai da face escolhida: o ponto da peça mais perto dele está na face nova, para
+            // fora (acrescenta) ou para dentro (remove)
+            let ps: Vec<Vec3> = t.faces.iter().map(|p| v3(*p)).collect();
+            let (Some(b), Some(corpo)) = (media(&ps), r.bodies.iter().find(|x| x.collector == f.target)) else { return vec![] };
+            let p0 = ps[0];
+            let dir = perto_na_malha(&corpo.mesh, p0).and_then(|(q, n)| (q - p0).try_normalize().or(Some(if t.remove { -n } else { n })));
+            return seta(0, b, dir).into_iter().collect();
+        }
+        FeatureKind::SmFlange(x) => return pela_dobra(0, Some(v3(x.edge))),
+        FeatureKind::SmHem(x) => return pela_dobra(0, Some(v3(x.edge))),
+        FeatureKind::SmCurveFlange(x) => return pela_dobra(0, x.edge.get(x.edge.len() / 2).map(|p| v3(*p))),
+        FeatureKind::SmFlangeLoop(x) => return pela_dobra(0, x.edges.first().map(|p| v3(*p))),
+        FeatureKind::SmProfileFlange(x) => {
+            if let Some((c, _)) = crate::handles::sketch_center(r, x.sketch) {
+                return seta(0, c, pelo_resultado(c, None)).into_iter().collect();
+            }
+        }
+        FeatureKind::SmSurfFlange(x) => {
+            let b = v3(x.face);
+            let mut v = pela_dobra(0, Some(b));
+            // o lado da superfície em que a chapa fica: a normal do suporte ali, ou o oposto
+            if let Some((q, n)) = ancora(r, &x.support, b) {
+                v.extend(seta(1, q, Some(if x.inv_lado { -n } else { n })));
+            }
+            return v;
+        }
+        FeatureKind::SmBend(x) => return linha(x.a, x.b, x.flip).and_then(|(m, d)| seta(0, m, Some(d))).into_iter().collect(),
+        FeatureKind::SmJoggle(x) => return linha(x.a, x.b, x.flip).and_then(|(m, d)| seta(0, m, Some(d))).into_iter().collect(),
+        FeatureKind::SmLouver(x) => return linha(x.a, x.b, x.flip).and_then(|(m, d)| seta(0, m, Some(d))).into_iter().collect(),
+        _ => {}
+    }
+    vec![]
 }
 
 /// Ponto na metade do comprimento e a tangente ali. Uma reta tem só dois pontos: o do meio da lista
@@ -722,7 +834,7 @@ fn demo_b290(nome: &str, doc: &mut Document) -> crate::previa::DemoPrevia {
     let fx = PointRef::Fixed;
     let folha = |d: &mut Document, a: [f64; 3], b: [f64; 3]| {
         let c = CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: fx(a), b: fx(b), start: t("0"), end: t("0") }));
-        d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("50"), length2: t("0"), until: None, until2: None })
+        d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("50"), length2: t("0"), until: None, until2: None, mais: vec![] })
     };
     if nome == "sup_conectores" {
         let z = doc.add_offset_plane(PlaneRef::Origin(OriginPlane::XY), "60");
@@ -748,7 +860,7 @@ fn demo_b34(nome: &str, doc: &mut Document) -> crate::previa::DemoPrevia {
     let curva = |d: &mut Document, p: &[[f64; 3]]| CurveRef::Ref(d.add_geometry(RefKind::Spline { points: p.iter().map(|q| fx(*q)).collect(), closed: false, tangents: vec![] }));
     let onda = |d: &mut Document, z: f64| {
         let c = curva(d, &[[-40., 0., 0. + z], [0., 12., z], [40., 0., z]]);
-        SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("50"), length2: t("0"), until: None, until2: None }))
+        SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("50"), length2: t("0"), until: None, until2: None, mais: vec![] }))
     };
     match nome {
         "sup_guias" => {
@@ -766,13 +878,13 @@ fn demo_b34(nome: &str, doc: &mut Document) -> crate::previa::DemoPrevia {
         "sup_conexao" => {
             let a = onda(doc, 0.);
             let c = curva(doc, &[[-40., 0., 0.], [0., 12., 0.], [40., 0., 0.]]);
-            let b = SurfRef::Ref(doc.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: t("40"), length2: t("0"), until: None, until2: None }));
+            let b = SurfRef::Ref(doc.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: t("40"), length2: t("0"), until: None, until2: None, mais: vec![] }));
             Ref(RefKind::SurfCheck { mode: CheckMode::Conexao, a, b, curve: CurveRef::default(), samples: t("24"), scale: t("1") })
         }
         "sup_desvio" => {
             let a = onda(doc, 0.);
             let c = curva(doc, &[[-40., 0., 6.], [0., 12., 0.], [40., 0., 2.]]);
-            let b = SurfRef::Ref(doc.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("50"), length2: t("0"), until: None, until2: None }));
+            let b = SurfRef::Ref(doc.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("50"), length2: t("0"), until: None, until2: None, mais: vec![] }));
             Ref(RefKind::SurfCheck { mode: CheckMode::Desvio, a, b, curve: CurveRef::default(), samples: t("2"), scale: t("1") })
         }
         _ => {
@@ -793,7 +905,7 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<crate::previa::DemoPrevia>
     let reta = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: t("0"), end: t("0") }));
     let folha = |d: &mut Document, a: [f64; 3], b: [f64; 3]| {
         let c = reta(d, a, b);
-        SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("30"), until: None, until2: None }))
+        SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("30"), until: None, until2: None, mais: vec![] }))
     };
     let yz = SurfRef::Plane(PlaneRef::Origin(OriginPlane::YZ));
     Some(match nome {
@@ -885,7 +997,7 @@ mod tests {
     /// Folha vertical pela reta `a`→`b`, 30 mm para cima e para baixo.
     fn folha(d: &mut Document, a: [f64; 3], b: [f64; 3]) -> Id {
         let c = reta(d, a, b);
-        d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("30"), until: None, until2: None })
+        d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("30"), until: None, until2: None, mais: vec![] })
     }
 
     fn fantasma(id: Id, antes: &[CorpoBase]) -> crate::previa::Fantasma<'_> {
@@ -1173,7 +1285,7 @@ mod tests {
 
         let mut d = Document::new("t");
         let c = reta(&mut d, [-40., 0., 0.], [40., 0., 0.]);
-        let id = d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0"), until: None, until2: None });
+        let id = d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0"), until: None, until2: None, mais: vec![] });
         let r = recompute(&d);
         let s = cena(&d, &r, id);
         assert!(s.wide.iter().any(|v| v.col == cor(Papel::Curva)), "curva de entrada");
@@ -1236,7 +1348,7 @@ mod tests {
             d.add_geometry(RefKind::SurfFillet { a: SurfRef::Ref(a), b: SurfRef::Ref(b), flip_a: false, flip_b: false, radius: t("5"), radius2: None }),
             d.add_geometry(RefKind::CurveParallel { curve: c.clone(), support: SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY)), d1: t("12"), d2: t("12"), flip: false, more: vec![], both: false, d_other: String::new() }),
             // B562 (onda 2): extrusão de superfície (sentido pelo sinal) e regrada
-            d.add_geometry(RefKind::SurfExtrude { curve: c.clone(), dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0"), until: None, until2: None }),
+            d.add_geometry(RefKind::SurfExtrude { curve: c.clone(), dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0"), until: None, until2: None, mais: vec![] }),
             d.add_geometry(RefKind::SurfRuled { curves: vec![c], support: None, mode: RuledMode::Vetor, dir: AxisRef::Origin(OriginAxis::Z), length: t("20"), flip: false }),
         ];
         let r = recompute(&d);
@@ -1256,7 +1368,7 @@ mod tests {
         use crate::contrato::Alvo;
         let mut d = Document::new("t");
         let c = reta(&mut d, [0., 0., 0.], [40., 0., 0.]);
-        let id = d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("5"), until: None, until2: None });
+        let id = d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("5"), until: None, until2: None, mais: vec![] });
         let r = recompute(&d);
         let seta = setas_de_lado(&d, &r, id).pop().expect("seta da extrusão");
         assert!(seta.dir.z > 0.99, "no sentido da direção: {:?}", seta.dir);
@@ -1291,3 +1403,7 @@ mod tests {
         assert!(!crate::inverter::estado(Alvo::Feature(&k), 0));
     }
 }
+
+#[cfg(test)]
+#[path = "setas_feature_tests.rs"]
+mod setas_feature_tests;

@@ -163,7 +163,7 @@ fn extracao_de_superficie_de_referencia_refaz_quando_a_superficie_muda() {
     }
     let mut d = Document::new("b534");
     let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([20., 0., 0.]), start: s("0"), end: s("0") });
-    let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None });
+    let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None, mais: vec![] });
     let r = recompute(&d);
     let sv = r.surfaces.iter().find(|x| x.id == sup).unwrap();
     let (p, key) = (sv.mesh.face_info[0].point, sv.face_key(0).expect("chave da face da superfície"));

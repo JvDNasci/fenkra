@@ -52,8 +52,8 @@ fn superficies() -> Document {
     let s = |x: &str| x.to_string();
     let la = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([0., 40., 0.]), start: s("0"), end: s("0") });
     let lb = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([40., 0., 0.]), b: PointRef::Fixed([40., 40., 0.]), start: s("0"), end: s("0") });
-    d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("40"), length2: s("0"), until: None, until2: None });
-    d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None });
+    d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("40"), length2: s("0"), until: None, until2: None, mais: vec![] });
+    d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None, mais: vec![] });
     d
 }
 

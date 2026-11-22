@@ -58,7 +58,7 @@ mod tests {
     use super::*;
 
     fn extrusao() -> RefKind {
-        RefKind::SurfExtrude { curve: CurveRef::Axis(OriginAxis::X), dir: AxisRef::Origin(OriginAxis::Z), length: "10".into(), length2: "0".into(), until: None, until2: None }
+        RefKind::SurfExtrude { curve: CurveRef::Axis(OriginAxis::X), dir: AxisRef::Origin(OriginAxis::Z), length: "10".into(), length2: "0".into(), until: None, until2: None, mais: vec![] }
     }
 
     #[test]

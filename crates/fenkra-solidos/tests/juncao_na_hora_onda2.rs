@@ -210,7 +210,7 @@ fn regrada_com_curvas_unidas() {
 // ------------------------------------------------------------------ inverter da extrusão de superfície
 
 fn extrusao(curve: CurveRef, l1: &str, l2: &str) -> RefKind {
-    RefKind::SurfExtrude { curve, dir: AxisRef::Origin(OriginAxis::Z), length: s(l1), length2: s(l2), until: None, until2: None }
+    RefKind::SurfExtrude { curve, dir: AxisRef::Origin(OriginAxis::Z), length: s(l1), length2: s(l2), until: None, until2: None, mais: vec![] }
 }
 
 /// B562: inverter a extrusão de superfície troca o sinal dos dois limites; a faixa vira o espelho dela

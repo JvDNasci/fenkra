@@ -52,7 +52,7 @@ fn nervura_naca(side: u8, flip: bool, inv_lado: bool) -> (Document, Id) {
         })
         .collect();
     let curva = d.add_geometry(RefKind::Spline { points: pts, closed: false, tangents: vec![] });
-    let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(curva), dir: AxisRef::Origin(OriginAxis::Z), length: s("60"), length2: s("0"), until: None, until2: None });
+    let sup = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(curva), dir: AxisRef::Origin(OriginAxis::Z), length: s("60"), length2: s("0"), until: None, until2: None, mais: vec![] });
     let aba = d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support: SurfRef::Ref(sup), face: [50., 10., 2.], length: s("15"), radius: None, flip, keep_base: false, mode: 0, angle: s("90"), limites: Default::default(), side, inv_lado }));
     (d, aba)
 }

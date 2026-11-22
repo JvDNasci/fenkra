@@ -60,6 +60,9 @@ pub fn bool_de_feature(k: &mut FeatureKind, campo: u8) -> Option<&mut bool> {
     Some(match k {
         FeatureKind::Extrude(x) => &mut x.reverse,
         FeatureKind::Hole(x) => &mut x.reverse,
+        // pendências das ondas 1 e 2: a camada da Espessura cresce para fora (acrescenta) ou para dentro
+        // (remove); inverter é trocar esse lado, o mesmo campo da operação
+        FeatureKind::Thickness(x) => &mut x.remove,
         FeatureKind::SmWall(x) => &mut x.reverse,
         FeatureKind::SmFlange(x) => &mut x.flip,
         FeatureKind::SmFlangeLoop(x) => &mut x.flip,
@@ -105,7 +108,7 @@ pub fn estado(alvo: Alvo, campo: u8) -> bool {
             FeatureKind::SewSurface(x) => x.flip,
             // o engrossar inverte trocando as duas espessuras: está invertido quando toda a espessura
             // ficou do lado 2 (o botão aparece destacado, como nos outros comandos)
-            FeatureKind::ThickSurface(t) if !t.simetrico => crate::sup3d::zerado(&t.t1) && !crate::sup3d::zerado(&t.t2),
+            FeatureKind::ThickSurface(t) if !t.simetrico => engrossar_invertido(t),
             _ => bool_de_feature(&mut k.clone(), campo).map(|b| *b).unwrap_or(false),
         },
     }
@@ -157,12 +160,26 @@ pub fn alternar_feature(k: &mut FeatureKind, campo: u8) {
     match k {
         FeatureKind::SplitBody(x) => x.flip = !x.flip,
         FeatureKind::SewSurface(x) => x.flip = !x.flip,
-        FeatureKind::ThickSurface(t) if !t.simetrico => std::mem::swap(&mut t.t1, &mut t.t2),
+        FeatureKind::ThickSurface(t) if !t.simetrico => alternar_engrossar(t),
         _ => {
             if let Some(b) = bool_de_feature(k, campo) {
                 *b = !*b;
             }
         }
+    }
+}
+
+/// O engrossar está invertido quando toda a espessura ficou do lado 2 (o botão do painel aparece
+/// destacado, como nos outros comandos). O simétrico nunca está.
+pub fn engrossar_invertido(t: &ThickSurface) -> bool {
+    !t.simetrico && crate::sup3d::zerado(&t.t1) && !crate::sup3d::zerado(&t.t2)
+}
+
+/// Inverte o engrossar trocando as duas espessuras de lado. O botão do painel (`feat_ui`) e a seta do
+/// 3D (`alternar_feature`) chamam esta.
+pub fn alternar_engrossar(t: &mut ThickSurface) {
+    if !t.simetrico {
+        std::mem::swap(&mut t.t1, &mut t.t2);
     }
 }
 
@@ -200,19 +217,6 @@ pub fn botoes_ref(ui: &mut egui::Ui, k: &mut RefKind) -> bool {
     mudou
 }
 
-/// Os botões de inverter de um comando de `features`.
-pub fn botoes_feature(ui: &mut egui::Ui, k: &mut FeatureKind) -> bool {
-    let cs = controles(Alvo::Feature(k));
-    let mut mudou = false;
-    for c in &cs {
-        let ligado = estado(Alvo::Feature(k), c.campo);
-        if botao_de(ui, ligado, (cs.len() > 1).then_some(c.rotulo)) {
-            alternar_feature(k, c.campo);
-            mudou = true;
-        }
-    }
-    mudou
-}
 
 /// Os grupos de comandos irmãos que o painel trata do mesmo jeito (teste de paridade): dentro de um
 /// grupo, todos têm de ter inversor.
@@ -243,7 +247,7 @@ pub fn grupos_irmaos() -> Vec<(&'static str, Vec<Vec<Controle>>)> {
         (
             "sentido da extrusão de superfície e do engrossar (irmãos da extrusão sólida)",
             vec![
-                controles(Alvo::Ref(&RefKind::SurfExtrude { curve: curva(), dir: AxisRef::Origin(OriginAxis::Z), length: "30".into(), length2: "0".into(), until: None, until2: None })),
+                controles(Alvo::Ref(&RefKind::SurfExtrude { curve: curva(), dir: AxisRef::Origin(OriginAxis::Z), length: "30".into(), length2: "0".into(), until: None, until2: None, mais: vec![] })),
                 controles(Alvo::Feature(&FeatureKind::ThickSurface(ThickSurface::normal(sf(1), "2", "0")))),
             ],
         ),
@@ -384,7 +388,7 @@ mod tests {
     #[test]
     fn paridade_extrusao_solida_superficie_e_engrossar() {
         // estados: liga e volta (a sólida é a caixa `reverse`, conferida no painel logo abaixo)
-        let sup0 = RefKind::SurfExtrude { curve: slots::curve(), dir: AxisRef::Origin(OriginAxis::Z), length: "30".into(), length2: "5".into(), until: None, until2: None };
+        let sup0 = RefKind::SurfExtrude { curve: slots::curve(), dir: AxisRef::Origin(OriginAxis::Z), length: "30".into(), length2: "5".into(), until: None, until2: None, mais: vec![] };
         let mut sup = sup0.clone();
         assert_eq!(controles(Alvo::Ref(&sup)).len(), 1, "a extrusão de superfície tem um inversor");
         assert!(!estado(Alvo::Ref(&sup), 0));

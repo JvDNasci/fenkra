@@ -2751,25 +2751,26 @@ impl Ctx<'_> {
                 Geo::Surface(edge_fillet(&sh, &mids, e(radius, "raio")?, radius2.as_ref().map(|r| e(r, "raio final")).transpose()?)?)
             }
             SurfFill { curves, conds, points, tol } => Geo::Surface(self.fill(id, curves, conds, points, e(tol, "tolerância")?, d, &|s: &String, w: &str| e(s, w))?),
-            SurfExtrude { curve, dir, length, length2, until, until2 } => {
-                let c = self.curve(curve, d)?;
+            SurfExtrude { curve, dir, length, length2, until, until2, mais } => {
                 let (_, v) = self.axis_d(dir, d)?;
                 let v = unit(v).ok_or("direção nula")?;
                 let (l1, l2) = (e(length, "comprimento")?, e(length2, "comprimento 2")?);
-                if until.is_none() && until2.is_none() {
-                    // limite 2: a curva recua para o outro lado antes de extrudar
-                    // B559: a curva vai exata (círculo extrudado é cilindro)
-                    // B562/ADR 0107: o sentido é o sinal do valor ("⇄ Inverter direção" troca o sinal dos
-                    // dois limites); a faixa vai de -limite 2 a limite 1, na ordem que for
-                    let (lo, hi) = if l1 >= -l2 { (-l2, l1) } else { (l1, -l2) };
-                    if hi - lo < 1e-9 {
-                        return Err("os dois limites são zero".into());
+                // B562/ADR 0107: invertida (sinal de menos no limite 1), cada lado anda para o outro sentido
+                let inv = fenkra_core::expr::sinal_negativo(length) || l1 < 0.;
+                // uma curva do perfil: a faixa dela, pelos dois limites
+                let faixa = |c: &Curve3| -> Result<Shape, String> {
+                    if until.is_none() && until2.is_none() {
+                        // limite 2: a curva recua para o outro lado antes de extrudar
+                        // B559: a curva vai exata (círculo extrudado é cilindro)
+                        // B562/ADR 0107: o sentido é o sinal do valor ("⇄ Inverter direção" troca o sinal
+                        // dos dois limites); a faixa vai de -limite 2 a limite 1, na ordem que for
+                        let (lo, hi) = if l1 >= -l2 { (-l2, l1) } else { (l1, -l2) };
+                        if hi - lo < 1e-9 {
+                            return Err("os dois limites são zero".into());
+                        }
+                        let c2 = c.transformada(&Xform::Translate(mul(v, lo)));
+                        return Shape::extrude_curva(&c2.kernel(), v, hi - lo).map_err(|x| x.0);
                     }
-                    let c2 = c.transformada(&Xform::Translate(mul(v, lo)));
-                    Geo::Surface(Shape::extrude_curva(&c2.kernel(), v, hi - lo).map_err(|x| x.0)?)
-                } else {
-                    // B562: invertida (sinal de menos no limite 1), cada lado anda para o outro sentido
-                    let inv = fenkra_core::expr::sinal_negativo(length) || l1 < 0.;
                     let v = if inv { mul(v, -1.) } else { v };
                     let (l1, l2) = (l1.abs(), l2.abs());
                     // cada lado sai da curva: até o elemento, ou pelo comprimento
@@ -2783,13 +2784,26 @@ impl Ctx<'_> {
                             None => Ok(Some(Shape::extrude_curva(&c.kernel(), dir, len).map_err(|x| x.0)?)),
                         }
                     };
-                    let (a, b) = (side(v, l1, until)?, side(mul(v, -1.), l2, until2)?);
-                    Geo::Surface(match (a, b) {
-                        (Some(a), Some(b)) => a.compound(&b).sewn(1e-3).map_err(|x| x.0)?,
-                        (Some(x), None) | (None, Some(x)) => x,
-                        (None, None) => return Err("os dois limites são zero".into()),
-                    })
+                    match (side(v, l1, until)?, side(mul(v, -1.), l2, until2)?) {
+                        (Some(a), Some(b)) => a.compound(&b).sewn(1e-3).map_err(|x| x.0),
+                        (Some(x), None) | (None, Some(x)) => Ok(x),
+                        (None, None) => Err("os dois limites são zero".into()),
+                    }
+                };
+                // ADR 0107 (pendências das ondas 1 e 2): o perfil é a lista de curvas do campo, com as
+                // junções na hora feitas. Um grupo unido vai ao kernel como uma cadeia só e sai como uma
+                // superfície contínua (as faces dos trechos costuradas pela aresta comum); cada curva que
+                // sobra é extrudada sozinha e as superfícies vão juntas
+                let refs: Vec<&CurveRef> = std::iter::once(curve).chain(mais).collect();
+                let mut acc: Option<Shape> = None;
+                for c in self.curvas_do_campo(id, "g_pf", &refs, d)? {
+                    let s = faixa(&c.curva)?;
+                    acc = Some(match acc {
+                        Some(a) => a.compound(&s),
+                        None => s,
+                    });
                 }
+                Geo::Surface(acc.ok_or("escolha a curva do perfil")?)
             }
             SurfRevolve { curve, axis, angle, angle2, mais } => {
                 let (o, v) = self.axis_d(axis, d)?;
@@ -2820,10 +2834,15 @@ impl Ctx<'_> {
                 let v = unit(v).ok_or("direção nula")?;
                 Geo::Surface(Shape::cylinder_surface(o, v, e(radius, "raio")?, -e(start, "comprimento 1")?, e(end, "comprimento 2")?).map_err(|x| x.0)?)
             }
-            SurfSweep { profile, spine, mode } => {
+            SurfSweep { profile, spine, mode, mais } => {
                 let sp = self.curve(spine, d)?;
-                let prof = match profile {
-                    SweepProfile::Curve(c) => self.curve(c, d)?.kernel(),
+                // ADR 0107 (pendências das ondas 1 e 2): o perfil de curva é a lista do campo `g_pf`, com
+                // as junções na hora feitas; cada curva que sobra varre sozinha e as superfícies vão juntas
+                let perfis: Vec<geo3d::Curva3> = match profile {
+                    SweepProfile::Curve(c) => {
+                        let refs: Vec<&CurveRef> = std::iter::once(c).chain(mais).collect();
+                        self.curvas_do_campo(id, "g_pf", &refs, d)?.into_iter().map(|x| x.curva.kernel()).collect()
+                    }
                     SweepProfile::Circle(r) => {
                         // círculo normal à guia no início dela (tubo); B559: círculo exato
                         let fr = frame_from(sp.start(), sp.end_tangent(false), None)?;
@@ -2831,7 +2850,7 @@ impl Ctx<'_> {
                         if r <= 0. {
                             return Err("o raio do tubo precisa ser positivo".into());
                         }
-                        geo3d::Curva3(vec![geo3d::Trecho3::Circulo { centro: fr.origin, normal: fr.normal, x: fr.x, raio: r }])
+                        vec![geo3d::Curva3(vec![geo3d::Trecho3::Circulo { centro: fr.origin, normal: fr.normal, x: fr.x, raio: r }])]
                     }
                 };
                 let m = match mode {
@@ -2844,7 +2863,16 @@ impl Ctx<'_> {
                     SweepMode::Frenet if matches!(profile, SweepProfile::Circle(_)) => 0,
                     SweepMode::Frenet => 2,
                 };
-                Geo::Surface(Shape::sweep_surface_c(&prof, &sp.kernel(), m).map_err(|x| x.0)?)
+                let guia = sp.kernel();
+                let mut acc: Option<Shape> = None;
+                for prof in &perfis {
+                    let s = Shape::sweep_surface_c(prof, &guia, m).map_err(|x| x.0)?;
+                    acc = Some(match acc {
+                        Some(a) => a.compound(&s),
+                        None => s,
+                    });
+                }
+                Geo::Surface(acc.ok_or("escolha a curva do perfil")?)
             }
             SurfLoft { sections, guide, ruled, closed, opts } => {
                 // ADR 0107 (onda 2): itens unidos na hora formam uma seção só; o sentido e os conectores
@@ -9954,19 +9982,19 @@ mod tests {
         // deslocada dos dois lados = duas cópias; filete entre duas superfícies que se cruzam
         let c_base = line(&mut d, [0., -50., 0.], [100., -50., 0.]);
 
-        let base = d.add_geometry(RefKind::SurfExtrude { curve: c_base, dir: AxisRef::Origin(OriginAxis::Y), length: s("60"), length2: s("0"), until: None, until2: None });
+        let base = d.add_geometry(RefKind::SurfExtrude { curve: c_base, dir: AxisRef::Origin(OriginAxis::Y), length: s("60"), length2: s("0"), until: None, until2: None, mais: vec![] });
         let c_wall = line(&mut d, [50., -60., -20.], [50., 20., -20.]);
 
-        let wall = d.add_geometry(RefKind::SurfExtrude { curve: c_wall, dir: AxisRef::Origin(OriginAxis::Z), length: s("50"), length2: s("0"), until: None, until2: None });
+        let wall = d.add_geometry(RefKind::SurfExtrude { curve: c_wall, dir: AxisRef::Origin(OriginAxis::Z), length: s("50"), length2: s("0"), until: None, until2: None, mais: vec![] });
         let off = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(base), dist: s("5"), both: true, join: OffsetJoin::Automatico });
         let fil = d.add_geometry(RefKind::SurfFillet { a: SurfRef::Ref(base), b: SurfRef::Ref(wall), flip_a: false, flip_b: false, radius: s("5"), radius2: None });
         // conectar duas faixas coplanares separadas (bordas que se olham ficam ligadas)
         let c_s1 = line(&mut d, [0., 200., 0.], [40., 200., 0.]);
 
-        let s1 = d.add_geometry(RefKind::SurfExtrude { curve: c_s1, dir: AxisRef::Origin(OriginAxis::Y), length: s("20"), length2: s("0"), until: None, until2: None });
+        let s1 = d.add_geometry(RefKind::SurfExtrude { curve: c_s1, dir: AxisRef::Origin(OriginAxis::Y), length: s("20"), length2: s("0"), until: None, until2: None, mais: vec![] });
         let c_s2 = line(&mut d, [0., 250., 0.], [40., 250., 0.]);
 
-        let s2 = d.add_geometry(RefKind::SurfExtrude { curve: c_s2, dir: AxisRef::Origin(OriginAxis::Y), length: s("20"), length2: s("0"), until: None, until2: None });
+        let s2 = d.add_geometry(RefKind::SurfExtrude { curve: c_s2, dir: AxisRef::Origin(OriginAxis::Y), length: s("20"), length2: s("0"), until: None, until2: None, mais: vec![] });
         let con = d.add_geometry(RefKind::SurfConnect { a: SurfRef::Ref(s1), b: SurfRef::Ref(s2), cont: Continuity::G0, tension: s("1"), tension2: None, near: [None; 2] });
         // dividir pela curva que corta a faixa ao meio
         let cutc = line(&mut d, [20., 190., 0.], [20., 230., 0.]);
@@ -10680,10 +10708,10 @@ mod tests {
         // duas bordas paralelas: tubo por varredura, multi-seções e concordância G1 entre duas faixas planas
         let la = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([0., 30., 0.]), start: s("0"), end: s("0") });
         let lb = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([20., 0., 10.]), b: PointRef::Fixed([20., 30., 10.]), start: s("0"), end: s("0") });
-        let tube = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(s("2")), spine: CurveRef::Ref(la), mode: SweepMode::Corrigido });
+        let tube = d.add_geometry(RefKind::SurfSweep { profile: SweepProfile::Circle(s("2")), spine: CurveRef::Ref(la), mode: SweepMode::Corrigido, mais: vec![] });
         let loft = d.add_geometry(RefKind::SurfLoft { sections: vec![CurveRef::Ref(la), CurveRef::Ref(lb)], guide: None, ruled: false, closed: false, opts: Default::default() });
-        let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-10"), length2: "0".into(), until: None, until2: None });
-        let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("10"), length2: "0".into(), until: None, until2: None });
+        let fa = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(la), dir: AxisRef::Origin(OriginAxis::X), length: s("-10"), length2: "0".into(), until: None, until2: None, mais: vec![] });
+        let fb = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(lb), dir: AxisRef::Origin(OriginAxis::X), length: s("10"), length2: "0".into(), until: None, until2: None, mais: vec![] });
         let blend = d.add_geometry(RefKind::SurfBlend {
             a: CurveRef::Ref(la),
             sa: Some(SurfRef::Ref(fa)),
@@ -10941,7 +10969,7 @@ mod tests {
             return;
         }
         // superfícies: extrusão de curva, preenchimento, deslocamento
-        let se = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(sp), dir: AxisRef::Origin(OriginAxis::Z), length: s_("10"), length2: "0".into(), until: None, until2: None });
+        let se = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(sp), dir: AxisRef::Origin(OriginAxis::Z), length: s_("10"), length2: "0".into(), until: None, until2: None, mais: vec![] });
         let so = d.add_geometry(RefKind::SurfOffset { surface: SurfRef::Ref(se), dist: s_("2"), both: false, join: OffsetJoin::Automatico });
         let sq = d.add_geometry(RefKind::Polyline { points: vec![PointRef::Origin, PointRef::Fixed([10., 0., 0.]), PointRef::Fixed([10., 10., 3.]), PointRef::Fixed([0., 10., 0.])], closed: true });
         let sf = d.add_geometry(RefKind::SurfFill { curves: vec![CurveRef::Ref(sq)], conds: vec![], points: vec![], tol: "0.01".into() });

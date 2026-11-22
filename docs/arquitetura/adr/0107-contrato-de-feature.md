@@ -395,3 +395,32 @@ a coerência antes de integrar.
   Avanço, Rotação e Ponto de dobra.
 - **Pendente.** Trecho curvo exato entre retas num caminho com dobra; seta e alças 3D do raio de dobra no
   caminho (as alças existentes são as do nó); descritor com o bloco "tubo dobrado" como entrada declarada.
+
+### Pendências das ondas 1 e 2 (22/11/2026; B561 e B562)
+
+- **Perfil em lista na Extrudada e na Varredura de superfície.** `RefKind::SurfExtrude` e `SurfSweep`
+  ganharam `mais` (`serde(default)`, fora do arquivo quando vazio: arquivo antigo abre e grava igual). O
+  painel usa `geo_ui::perfil_lista`; o motor do campo (`contrato::editar_curvas`) trata `curve` + `mais`
+  como uma lista. O cálculo lê `Ctx::curvas_do_campo(id, "g_pf")`: um grupo unido vai ao kernel como uma
+  cadeia exata e o prisma (`BRepPrimAPI_MakePrism` do fio) sai como **uma** superfície contínua (reta +
+  arco: um domínio, 6 bordas livres; sem a junção, dois domínios e 8). Teste
+  `fenkra-solidos/tests/perfil_em_lista_b561.rs`.
+- **Espessura e Engrossar com as mesmas opções e nomes** (`feat_ui.rs`): entrada, seção Espessura (campo
+  "Espessura" e `inverter::botao`), Operação com os textos da família (`feat_ui::OPERACOES`, os mesmos de
+  `editor::op_combo`). Na Espessura o inverter e a operação ligam ao mesmo campo (`remove`): a camada de
+  uma face sólida só tem um lado útil, então Dois lados, Simétrico e Interseção não se aplicam. O editor
+  não soma mais um segundo botão de inverter depois do painel (a chapa aparecia com dois); cada painel
+  desenha o seu. Teste `espessar_paridade_tests.rs`.
+- **Seta clicável de inverter das features** (`sup3d::setas_de_feature`): extrusão, furo, espessura,
+  parede, abas (reta, curva, laço, perfil, superfície com as duas setas), bainha, dobra, joggle e
+  veneziana. Regra explícita onde existe (normal do sketch, lado da espessura da parede, lado móvel da
+  linha de dobra); nos demais, do ponto de partida para o centro das faces que o comando criou. O clique
+  chama `inverter::alternar_feature`. Teste `setas_feature_tests.rs` (botão == seta, a seta vira ao
+  inverter, a da extrusão aponta para o corpo).
+- **Rótulo e dica do descritor.** `contrato::ficha_no_doc` e `rotulo_no_doc`; a caixa em árvore mostra o
+  rótulo e a dica da `Entrada`; `curva_contrato` e `perfil_lista` não recebem mais rótulo (lêem do
+  descritor); `surf_slot` usa o do descritor quando o campo é declarado; a lista de arestas da aba (B560)
+  usa o rótulo da entrada ("Arestas" nos três recursos). Teste `rotulo_descritor_tests.rs`.
+- **Pendente.** Os widgets de ponto, eixo e plano ainda recebem o rótulo do chamador (o descritor ainda
+  não declara esses campos em todos os comandos); a dica da `Entrada` só está preenchida no perfil em
+  lista. A seta de feature por resultado só aparece depois de um cálculo com sucesso.

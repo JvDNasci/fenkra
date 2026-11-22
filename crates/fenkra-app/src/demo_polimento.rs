@@ -71,9 +71,9 @@ fn bolso(d: &mut Document) {
 fn filete_de_superficie(d: &mut Document) {
     let linha = |d: &mut Document, a, b| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
     let c_base = linha(d, [0., -50., 0.], [100., -50., 0.]);
-    let base = d.add_geometry(RefKind::SurfExtrude { curve: c_base, dir: AxisRef::Origin(OriginAxis::Y), length: s("60"), length2: s("0"), until: None, until2: None });
+    let base = d.add_geometry(RefKind::SurfExtrude { curve: c_base, dir: AxisRef::Origin(OriginAxis::Y), length: s("60"), length2: s("0"), until: None, until2: None, mais: vec![] });
     let c_parede = linha(d, [50., -50., -20.], [50., 10., -20.]);
-    let parede = d.add_geometry(RefKind::SurfExtrude { curve: c_parede, dir: AxisRef::Origin(OriginAxis::Z), length: s("50"), length2: s("0"), until: None, until2: None });
+    let parede = d.add_geometry(RefKind::SurfExtrude { curve: c_parede, dir: AxisRef::Origin(OriginAxis::Z), length: s("50"), length2: s("0"), until: None, until2: None, mais: vec![] });
     let filete = d.add_geometry(RefKind::SurfFillet { a: SurfRef::Ref(base), b: SurfRef::Ref(parede), flip_a: false, flip_b: false, radius: s("8"), radius2: None });
     for r in d.references.iter_mut().filter(|r| r.id != filete) {
         r.visible = false;

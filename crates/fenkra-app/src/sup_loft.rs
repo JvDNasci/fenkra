@@ -325,7 +325,7 @@ mod tests {
         let mut d = Document::new("folhas");
         let mut folha = |a: [f64; 3], b: [f64; 3]| {
             let c = CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: t("0"), end: t("0") }));
-            d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("40"), length2: t("0"), until: None, until2: None })
+            d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Y), length: t("40"), length2: t("0"), until: None, until2: None, mais: vec![] })
         };
         let (a, b) = (folha([-40., 0., 0.], [0., 0., 0.]), folha([30., 0., 20.], [70., 0., 20.]));
         let r = fenkra_solidos::recompute(&d);

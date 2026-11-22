@@ -16,7 +16,7 @@ fn reta(d: &mut Document, a: [f64; 3], b: [f64; 3]) -> CurveRef {
 /// Folha plana: a reta `a`–`b` extrudada 30 mm em Z.
 fn folha(d: &mut Document, a: [f64; 3], b: [f64; 3]) -> SurfRef {
     let curve = reta(d, a, b);
-    SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0"), until: None, until2: None }))
+    SurfRef::Ref(d.add_geometry(RefKind::SurfExtrude { curve, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0"), until: None, until2: None, mais: vec![] }))
 }
 
 fn plano(d: &mut Document, base: OriginPlane, dist: &str) -> SurfRef {
@@ -99,7 +99,7 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
         }
         "sup_extrusao" => {
             let curve = reta(d, [-40., 0., 0.], [40., 0., 0.]);
-            RefKind::SurfExtrude { curve, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("20"), until: None, until2: None }
+            RefKind::SurfExtrude { curve, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("20"), until: None, until2: None, mais: vec![] }
         }
         "sup_revolucao" => {
             let curve = reta(d, [30., 0., 0.], [50., 0., 40.]);
@@ -108,7 +108,7 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
         "sup_cilindro" => RefKind::SurfCylinder { point: PointRef::Fixed([0.; 3]), dir: AxisRef::Origin(OriginAxis::Z), radius: t("25"), start: t("0"), end: t("60") },
         "sup_tubo" => {
             let spine = reta(d, [0., 0., 0.], [0., 0., 80.]);
-            RefKind::SurfSweep { profile: SweepProfile::Circle(t("15")), spine, mode: Default::default() }
+            RefKind::SurfSweep { profile: SweepProfile::Circle(t("15")), spine, mode: Default::default(), mais: vec![] }
         }
         "sup_extrapolar" => {
             let surface = folha(d, [-40., 0., 0.], [40., 0., 0.]);

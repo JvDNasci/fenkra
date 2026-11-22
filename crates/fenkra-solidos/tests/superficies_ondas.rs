@@ -179,8 +179,8 @@ fn juntar_faces_e_curvas_relata_dominios_bordas_e_folga() {
     let l = |d: &mut Document, a: [f64; 3], b: [f64; 3]| d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") });
     let (c1, c2) = (l(&mut d, [0., 0., 0.], [10., 0., 0.]), l(&mut d, [10., 0., 0.], [20., 0., 0.]));
     let ez = AxisRef::Origin(OriginAxis::Z);
-    let f1 = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(c1), dir: ez, length: s("10"), length2: s("0"), until: None, until2: None });
-    let f2 = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(c2), dir: ez, length: s("10"), length2: s("0"), until: None, until2: None });
+    let f1 = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(c1), dir: ez, length: s("10"), length2: s("0"), until: None, until2: None, mais: vec![] });
+    let f2 = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(c2), dir: ez, length: s("10"), length2: s("0"), until: None, until2: None, mais: vec![] });
     let longe = l(&mut d, [0., 50., 0.], [10., 50., 0.]);
     let j = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(f1), SurfRef::Ref(f2)], tol: s("0.01"), curves: vec![CurveRef::Ref(longe)] });
     let r = recompute(&d);
@@ -382,7 +382,7 @@ fn ponto_em_vertice_e_aresta_seguem_a_chave() {
 /// Faixa plana de 20 × 30 no plano XZ, y = 0, x de 0 a 20 e z de 0 a 30.
 fn faixa(d: &mut Document) -> Id {
     let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([20., 0., 0.]), start: s("0"), end: s("0") });
-    d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None })
+    d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None, mais: vec![] })
 }
 
 fn plano_z(d: &mut Document, z: &str) -> SurfRef {
@@ -399,8 +399,8 @@ fn superficie_extrudada_ate_elemento_dos_dois_lados() {
     let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([0., 0., 0.]), b: PointRef::Fixed([20., 0., 0.]), start: s("0"), end: s("0") });
     let (alto, baixo) = (plano_z(&mut d, "12"), plano_z(&mut d, "-7"));
     let z = AxisRef::Origin(OriginAxis::Z);
-    let ate = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: z, length: s("0"), length2: s("0"), until: Some(alto), until2: Some(baixo) });
-    let misto = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: z, length: s("0"), length2: s("5"), until: Some(alto), until2: None });
+    let ate = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: z, length: s("0"), length2: s("0"), until: Some(alto), until2: Some(baixo), mais: vec![] });
+    let misto = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: z, length: s("0"), length2: s("5"), until: Some(alto), until2: None, mais: vec![] });
     let r = recompute(&d);
     ok(&r, ate);
     ok(&r, misto);
@@ -541,7 +541,7 @@ fn filete_de_aresta_de_superficie_nao_troca_de_aresta() {
     let mut d = Document::new("t");
     let a = faixa(&mut d);
     let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([20., 0., 0.]), b: PointRef::Fixed([20., 20., 0.]), start: s("0"), end: s("0") });
-    let b = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None });
+    let b = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None, mais: vec![] });
     let j = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(a), SurfRef::Ref(b)], tol: s("0.01"), curves: vec![] });
     let bom = d.add_geometry(RefKind::SurfEdgeFillet { surface: SurfRef::Ref(j), edges: vec![[20., 0., 15.]], radius: s("3"), radius2: None });
     let ruim = d.add_geometry(RefKind::SurfEdgeFillet { surface: SurfRef::Ref(j), edges: vec![[20., 0., 15.5], [20.5, 0., 15.]], radius: s("3"), radius2: None });
@@ -560,7 +560,7 @@ fn filete_de_superficie_marca_as_bordas_tangentes_como_suaves() {
     let mut d = Document::new("t");
     let a = faixa(&mut d);
     let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([20., 0., 0.]), b: PointRef::Fixed([20., 20., 0.]), start: s("0"), end: s("0") });
-    let b = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None });
+    let b = d.add_geometry(RefKind::SurfExtrude { curve: CurveRef::Ref(l), dir: AxisRef::Origin(OriginAxis::Z), length: s("30"), length2: s("0"), until: None, until2: None, mais: vec![] });
     let j = d.add_geometry(RefKind::SurfJoin { items: vec![SurfRef::Ref(a), SurfRef::Ref(b)], tol: s("0.01"), curves: vec![] });
     let f = d.add_geometry(RefKind::SurfEdgeFillet { surface: SurfRef::Ref(j), edges: vec![[20., 0., 15.]], radius: s("3"), radius2: None });
     let r = recompute(&d);

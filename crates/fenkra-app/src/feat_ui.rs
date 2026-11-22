@@ -384,18 +384,22 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             crate::selecao_regras::acompanhar_sementes(&mut d.regras, &before, &d.faces);
             ui.label(RichText::new(tr("Inclina as faces a partir do plano neutro; a extração segue a normal dele.")).weak().small());
         }
+        // pendências das ondas 1 e 2 (ADR 0107): irmã do Engrossar superfície, com as mesmas seções e
+        // nomes (Espessura, "⇄ Inverter direção", Operação). A camada de uma face sólida só tem um lado
+        // útil: para fora ela acrescenta, para dentro remove; por isso o inverter e a operação ligam ao
+        // mesmo campo (`remove`), e Dois lados e Simétrico não se aplicam (ver `paridade_espessar`)
         FeatureKind::Thickness(t) => {
-            expr(ui, "Distância", &mut t.value, vars, "mm");
-            ui.horizontal(|ui| {
-                ui.radio_value(&mut t.remove, false, tr("Acrescentar"));
-                ui.radio_value(&mut t.remove, true, tr("Remover"));
-            });
-            ui.label(RichText::new(tr("Escolha acrescentar ou remover; a distância é sempre positiva (valor negativo também remove).")).weak().small());
+            section(ui, "Faces");
             crate::selecao_regras::regra_faces_ui(ui, &mut t.regras, &t.faces);
             let before = t.faces.clone();
             faces_ui(ui, doc, &mut t.faces, &t.face_keys, picked_faces);
             t.face_keys = carry_keys(&before, &t.face_keys, &t.faces);
             crate::selecao_regras::acompanhar_sementes(&mut t.regras, &before, &t.faces);
+            section(ui, "Espessura");
+            expr(ui, "Espessura", &mut t.value, vars, "mm");
+            crate::inverter::botao(ui, &mut t.remove);
+            ui.label(RichText::new(tr("A seta do 3D mostra para onde a camada cresce; inverter leva a camada para dentro da peça (remove). Valor negativo também remove.")).weak().small());
+            operacao_da_camada(ui, &mut t.remove);
         }
         FeatureKind::DirectEdit(e) => crate::edicao_direta_ui::painel(ui, doc, e, vars, picked_faces),
         FeatureKind::Pattern(p) => {
@@ -1050,12 +1054,20 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         FeatureKind::SplitBody(sp) => {
             section(ui, "Dividir o corpo");
             geo_ui::surf_slot(ui, "hb_s", "Superfície", doc, me, &mut sp.surface, seed);
+            // o widget padrão no campo da seta do 3D (`inverter::alternar_feature` troca o mesmo `flip`)
+            let mut fica = sp.flip;
+            if crate::inverter::botao(ui, &mut fica) {
+                sp.flip = fica;
+            }
             crate::sup3d::dica_de_lado(ui);
             ui.label(RichText::new(tr("Face do corpo é estendida para cortar a peça inteira; superfícies de referência cortam como estão.")).weak().small());
         }
+        // pendências das ondas 1 e 2 (ADR 0107): mesmas seções e nomes da Espessura (Espessura com o
+        // "⇄ Inverter direção" padrão, Operação), mais os lados e a direção que só a superfície tem
         FeatureKind::ThickSurface(t) => {
-            section(ui, "Engrossar superfície");
+            section(ui, "Superfície");
             geo_ui::surf_slot(ui, "hb_s", "Superfície", doc, me, &mut t.surface, seed);
+            section(ui, "Espessura");
             engrossar_lados(ui, t, vars);
             engrossar_direcao(ui, doc, me, t, seed);
             hyb_op(ui, &mut t.op);
@@ -1078,6 +1090,10 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 sw.remove = i == 1;
             }
             if sw.remove {
+                let mut fica = sw.flip;
+                if crate::inverter::botao(ui, &mut fica) {
+                    sw.flip = fica;
+                }
                 crate::sup3d::dica_de_lado(ui);
             }
         }
@@ -1202,11 +1218,13 @@ fn engrossar_lados(ui: &mut egui::Ui, t: &mut ThickSurface, vars: &Vars) {
         0 => {
             let lado2 = crate::sup3d::zerado(&t.t1) && !crate::sup3d::zerado(&t.t2);
             expr(ui, "Espessura", if lado2 { &mut t.t2 } else { &mut t.t1 }, vars, "mm");
+            inverter_engrossar(ui, t);
             crate::sup3d::dica_de_lado(ui);
         }
         1 => {
             expr(ui, "Espessura 1", &mut t.t1, vars, "mm");
             expr(ui, "Espessura 2", &mut t.t2, vars, "mm");
+            inverter_engrossar(ui, t);
             ui.label(RichText::new(tr("1 = lado da seta (normal ou direção); 2 = lado oposto. A seta troca os dois.")).weak().small());
         }
         _ => {
@@ -1246,15 +1264,36 @@ fn engrossar_direcao(ui: &mut egui::Ui, doc: &Document, me: Id, t: &mut ThickSur
     }
 }
 
-/// Operação do sólido gerado pela superfície.
+/// ADR 0107: as opções de operação de todo comando que gera sólido, com os mesmos ícones e textos da
+/// extrusão (`editor::op_combo`): Adicionar, Remover, Interseção.
+pub(crate) const OPERACOES: [(&str, &str, &str); 3] = [("op_adicionar", "Adicionar", "Une ao corpo"), ("op_remover", "Remover", "Subtrai do corpo"), ("op_intersecao", "Interseção", "Mantém só a parte comum")];
+
+/// Operação do sólido gerado pela superfície (Engrossar, Fechar, Preencher fronteiras).
 fn hyb_op(ui: &mut egui::Ui, op: &mut BoolOp) {
-    let opts = [
-        ("op_unir", "Acrescentar", "Une ao corpo (ou cria o corpo)", *op == BoolOp::Add),
-        ("op_remover", "Remover", "Tira do corpo", *op == BoolOp::Cut),
-        ("op_intersecao", "Interseção", "Fica só a parte comum", *op == BoolOp::Intersect),
-    ];
+    ui.label(RichText::new(tr("Operação")).weak());
+    let todas = [BoolOp::Add, BoolOp::Cut, BoolOp::Intersect];
+    let opts: Vec<(&str, &str, &str, bool)> = OPERACOES.iter().zip(todas).map(|((i, n, d), o)| (*i, *n, *d, *op == o)).collect();
     if let Some(i) = icon_choice(ui, &opts) {
-        *op = [BoolOp::Add, BoolOp::Cut, BoolOp::Intersect][i];
+        *op = todas[i];
+    }
+}
+
+/// Operação da Espessura: a camada para fora acrescenta, para dentro remove (o mesmo campo do
+/// inverter). Interseção não se aplica a uma camada que fica fora ou dentro da peça.
+fn operacao_da_camada(ui: &mut egui::Ui, remove: &mut bool) {
+    ui.label(RichText::new(tr("Operação")).weak());
+    let opts: Vec<(&str, &str, &str, bool)> = OPERACOES[..2].iter().zip([false, true]).map(|((i, n, d), r)| (*i, *n, *d, *remove == r)).collect();
+    if let Some(i) = icon_choice(ui, &opts) {
+        *remove = i == 1;
+    }
+}
+
+/// O "⇄ Inverter direção" padrão do Engrossar: troca as duas espessuras de lado, o mesmo que a seta do
+/// 3D faz (`inverter::alternar_feature`).
+fn inverter_engrossar(ui: &mut egui::Ui, t: &mut ThickSurface) {
+    let mut inv = crate::inverter::engrossar_invertido(t);
+    if crate::inverter::botao(ui, &mut inv) {
+        crate::inverter::alternar_engrossar(t);
     }
 }
 
@@ -1574,3 +1613,7 @@ fn ancora(doc: &Document, me: Id, campo: &str, p: [f64; 3]) -> String {
 fn meio(a: [f64; 3], b: [f64; 3]) -> [f64; 3] {
     [0, 1, 2].map(|i| (a[i] + b[i]) / 2.)
 }
+
+#[cfg(test)]
+#[path = "espessar_paridade_tests.rs"]
+mod espessar_paridade_tests;
