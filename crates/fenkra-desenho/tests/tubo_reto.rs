@@ -34,6 +34,7 @@ fn tubo_em_u() -> Document {
         joints: vec![],
         material: String::new(),
         mirror: false,
+        tube_bend: None,
     }));
     if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|f| &mut f.kind) {
         let bend = TubeBend { mode: BendMode::VComum, radius: s("40"), cuts: s("3"), ..Default::default() };

@@ -23,6 +23,7 @@ fn membro(paths: Vec<CurveRef>, designation: &str, dims: [&str; 2]) -> StructMem
         joints: vec![],
         material: String::new(),
         mirror: false,
+        tube_bend: None,
     }
 }
 

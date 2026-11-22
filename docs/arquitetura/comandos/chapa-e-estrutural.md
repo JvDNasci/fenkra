@@ -311,13 +311,15 @@ sequência: `chapa_dobra_sim.rs`; nesting: `nesting.rs`; DFM: `dfm*.rs`.
 ### 2.1 Membro (`StructMember`, `doc.rs:2016`; painel `st_ui.rs:23`; motor `lib.rs:6205`)
 
 - **Entradas.** `paths: Vec<CurveRef>` (linhas guia) em `geo_ui::curves_list` (cada linha vira um membro no
-  cálculo; polilinha é fatiada em cantos de mais de ~11°, `lib.rs:3317–3329`, o que gera N membros soltos:
-  B575). Família, designação e cotas da seção (`st_painel::seletor`).
+  cálculo; polilinha é fatiada em cantos de mais de ~11°, `Ctx::pernas_do_caminho`, o que gera N membros soltos
+  quando `tube_bend` está desligado; ligado (B575), o caminho vira um tubo só com raio de dobra: limite de 5°,
+  junta de dobra automática, sem encaixe de canto). Família, designação e cotas da seção (`st_painel::seletor`).
 - **Painel.** "Perfil" (família e cotas), "Linhas guia (esqueleto)" (caixa de curvas), "Ancoragem e orientação"
   (âncora, Rotação, Deslocamento X e Y, Prolongar início e fim), "Cantos (padrão)" (4 ícones, Folga de solda,
   Material), "Cantos com outros membros" (combo por canto, quem continua, folga, dobra de tubo), ficha do tubo.
-  Inverter: "espelhar seção" (`mirror`, caixa). Falta: botão padrão de inverter, Limites (lado 1/2), campo
-  universal para várias guias como uma cadeia só.
+  Inverter: "espelhar seção" (`mirror`, caixa). Seção "Tubo dobrado" (B575): caixa de ligar, raio (vazio = mínimo automático
+  pela seção) e "Unir as guias numa cadeia" (junção do campo `caminhos`). Falta: botão padrão de inverter e
+  Limites (lado 1/2).
 - **Referência.** `CurveRef::Edge(pts)` promovida a chave por `promover_caminhos` (`ancoras.rs:156`, B516); canto
   guardado por (comando, trecho) em `StructJoint` (`doc.rs:2050`) no comando posterior do par.
 - **Prévia.** Leve: cada membro como caixa orientada da seção ao longo da linha (`previa_leve.rs:372`,

@@ -35,6 +35,7 @@ fn tubo(pontos: &[[f64; 3]], raios: &[&str], modo: BendMode) -> (Document, Id) {
         joints: vec![],
         material: String::new(),
         mirror: false,
+        tube_bend: None,
     }));
     if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|x| &mut x.kind) {
         for (k, r) in raios.iter().enumerate() {

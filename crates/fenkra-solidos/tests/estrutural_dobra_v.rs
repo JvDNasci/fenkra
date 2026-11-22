@@ -30,6 +30,7 @@ fn membro(paths: Vec<CurveRef>, kind: SectionKind, dims: &[&str]) -> StructMembe
         joints: vec![],
         material: String::new(),
         mirror: false,
+        tube_bend: None,
     }
 }
 

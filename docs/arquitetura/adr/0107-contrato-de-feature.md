@@ -373,3 +373,25 @@ a coerência antes de integrar.
   para Dividir, Aparar, Filete entre superfícies, Paralela, Regrada e Extrudada.
 - **Pendente**: perfil em lista na Extrudada e na Varredura (o literal desses `RefKind` está em `handles.rs`,
   fora desta onda); Engrossar e Espessura com as mesmas opções e nomes (`feat_ui.rs`, fora desta onda).
+
+### Onda 5, estrutural: tubo dobrado, spline e cadeia (22/11/2026; B575)
+
+- **Um membro só.** `StructMember::tube_bend` (`Option<TubeBend>`, `serde(default)` e fora do arquivo quando
+  vazio: arquivo antigo abre e recalcula igual). Ligado, os trechos vizinhos de um mesmo caminho ganham uma
+  junta de dobra automática (`Ctx::juntas_dobra`), com o raio digitado ou o mínimo automático
+  (`st_dobra::raio_minimo_automatico`: 2 vezes o diâmetro ou o maior lado, 3 vezes em parede fina; regra
+  prática de duas fontes públicas, não norma). O canto entre eles é `Dobra` em `joint_rule`: sem encaixe nem
+  esquadria. A dobra, o arco, a lista de corte e o desenho reaproveitam o nó de dobra do B326.
+- **Caminho do membro** (`Ctx::pernas_do_caminho`): o campo "caminhos" passa por `curvas_do_campo` (junção
+  na hora do ADR 0107), cada cadeia é quebrada em retas e cada trecho guarda o caminho de origem
+  (`MemberGeom::caminho`). `Ctx::members` ganhou o id do comando. Com a dobra ligada o limite do canto é 5
+  graus; sem ela, 11,5 como antes.
+- **Spline e curva exata** seguem como um trecho só (B559); o teste de hélice 3D confere status, volume e caixa.
+- **Painel.** A caixa de guias usa o id do campo declarado (`caminhos`), o que liga a junção na hora e o Tab
+  do descritor; a seção "Tubo dobrado" tem a caixa de ligar, o raio (com o automático como dica) e "Unir as
+  guias numa cadeia" (grava a junção pelo pedido `Pedido::Dados`, o mesmo do botão direito).
+- **Tabela de dobras.** `st_dobra_maquina::tabela_de_dobras`: CSV com avanço, rotação, ângulo, raio, arco,
+  ponto de dobra e posição no tubo reto; botão na lista de corte. A tabela de dobras do desenho ganhou
+  Avanço, Rotação e Ponto de dobra.
+- **Pendente.** Trecho curvo exato entre retas num caminho com dobra; seta e alças 3D do raio de dobra no
+  caminho (as alças existentes são as do nó); descritor com o bloco "tubo dobrado" como entrada declarada.

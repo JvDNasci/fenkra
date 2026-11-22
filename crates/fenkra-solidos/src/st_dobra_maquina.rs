@@ -371,6 +371,56 @@ pub fn exportar(r: &RotaTubo, formato: Formato, opc: Opcoes, tubo: &str) -> Resu
     Ok(t)
 }
 
+/// B575: tabela de dobras do tubo para dobradeira CNC ou dobra manual, num arquivo só: para cada dobra,
+/// o avanço reto antes dela (mm), a rotação do plano em relação à dobra anterior (graus), o ângulo, o
+/// raio de centro, o arco, as coordenadas do ponto de dobra (cruzamento das linhas guia, no sistema do
+/// documento) e onde a dobra começa e termina no tubo reto desenvolvido. O avanço final (reto depois da
+/// última dobra) vem na linha `fim`. As colunas avanço, rotação e ângulo são as mesmas do LRA
+/// (`exportar`) e valem as mesmas opções de modo, ângulo com retorno e rotação invertida.
+pub fn tabela_de_dobras(t: &TuboDobrado, opc: Opcoes) -> Result<String, String> {
+    let r = rota_do_tubo(t)?;
+    let sinal = if opc.inverter_rotacao { -1. } else { 1. };
+    let mut out = String::new();
+    out += "formato;TABELA
+versao;1
+unidade;mm;graus
+";
+    out += &format!("modo;{}
+", if opc.modo == Modo::Absoluto { "absoluto" } else { "incremental" });
+    out += &format!("angulo;{}
+", if opc.angulo_maquina { "maquina" } else { "nominal" });
+    out += &format!("rotacao;{}
+", if opc.inverter_rotacao { "invertida" } else { "normal" });
+    out += &format!("tubo;{}
+", t.designacao.replace(';', ","));
+    out += &format!("desenvolvido;{}
+", n6(r.desenvolvido()));
+    out += "n;avanco;rotacao;angulo;raio;arco;x;y;z;inicio;fim
+";
+    let (mut pos, mut rot_acc) = (0., 0.);
+    for (i, (b, d)) in r.dobras.iter().zip(&t.dobras).enumerate() {
+        let ang = if opc.angulo_maquina { b.angulo_maquina } else { b.angulo };
+        let (lv, rv) = match opc.modo {
+            Modo::Incremental => (r.retos[i], b.rotacao),
+            Modo::Absoluto => {
+                pos += r.retos[i];
+                rot_acc += b.rotacao;
+                (pos, rot_acc)
+            }
+        };
+        out += &format!("{};{};{};{};{};{};{};{};{};{};{}
+", i + 1, n6(lv), n6(sinal * rv), n6(ang), n6(b.raio), n6(b.arco), n6(d.ponto[0]), n6(d.ponto[1]), n6(d.ponto[2]), n6(d.inicio), n6(d.fim));
+        pos += b.arco;
+    }
+    let fim = match opc.modo {
+        Modo::Incremental => r.retos[r.dobras.len()],
+        Modo::Absoluto => pos + r.retos[r.dobras.len()],
+    };
+    out += &format!("fim;{}
+", n6(fim));
+    Ok(out)
+}
+
 /// Escreve os pontos XYZ do eixo.
 pub fn exportar_xyz(r: &RotaTubo, tubo: &str) -> Result<String, String> {
     let x = para_xyz(r)?;

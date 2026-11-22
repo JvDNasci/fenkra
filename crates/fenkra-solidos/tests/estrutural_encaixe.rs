@@ -40,6 +40,7 @@ fn ele(kind: SectionKind, dims: &[&str], angulo_graus: f64, folga: &str) -> (Doc
         joints: vec![],
         material: String::new(),
         mirror: false,
+        tube_bend: None,
     }));
     (d, f)
 }

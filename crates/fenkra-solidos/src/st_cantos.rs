@@ -345,6 +345,7 @@ mod tests {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
+                tube_bend: None,
             }))
         };
         let a = mk(&mut d, [0., 0., 0.], [400., 0., 0.]);

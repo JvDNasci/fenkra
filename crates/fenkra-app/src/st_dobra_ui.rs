@@ -473,6 +473,7 @@ mod tests {
             joints: vec![mk("a"), mk("b")],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         };
         let f = d.add_feature(FeatureKind::StructMember(m));
         renomear_em_dobras(&mut d, "a", "novo");
@@ -500,6 +501,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         };
         let v = HashMap::new();
         // 2,5 vezes a maior das duas medidas da seção

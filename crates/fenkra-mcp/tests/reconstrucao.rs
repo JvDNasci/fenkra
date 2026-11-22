@@ -1147,6 +1147,7 @@ fn estrutural_pelo_servidor_membro_placa_e_reforco() {
         joints: vec![],
         material: String::new(),
         mirror: false,
+        tube_bend: None,
     }));
     d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 500.], "8", "5")));
     d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 0.], "60", "6", "10")));
@@ -1293,6 +1294,7 @@ fn quadro_em_codigo() -> Document {
         joints: vec![],
         material: String::new(),
         mirror: false,
+        tube_bend: None,
     }));
     d
 }

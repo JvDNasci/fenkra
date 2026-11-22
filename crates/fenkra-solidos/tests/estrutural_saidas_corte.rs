@@ -36,6 +36,7 @@ fn l_de_tubo(dims: &[&str], b: TubeBend) -> Document {
         joints: vec![],
         material: String::new(),
         mirror: false,
+        tube_bend: None,
     }));
     if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|f| &mut f.kind) {
         m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b) });

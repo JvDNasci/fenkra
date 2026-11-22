@@ -1241,6 +1241,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         }));
         if let Some(FeatureKind::StructMember(m)) = doc.feature_mut(f).map(|x| &mut x.kind) {
             m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: BendMode::Dobradeira, radius: s("100"), ..Default::default() }) });
@@ -1259,12 +1260,17 @@ mod tests {
         assert_eq!(t.rows.len(), 1, "{:?}", t.rows);
         let r = &t.rows[0];
         assert_eq!(r[2], "Dobradeira");
-        assert_eq!(r[3], format!("{}°", d.num(90.)));
-        assert_eq!(r[4], d.num(100.));
+        // B575: avanço reto antes da dobra (300 - tangente 100) e rotação do plano (a primeira é a referência)
+        assert_eq!(t.headers[3], "Avanço");
+        assert_eq!(r[3], d.num(200.));
+        assert_eq!(r[4], format!("{}°", d.num(0.)));
+        assert_eq!(r[5], format!("{}°", d.num(90.)));
+        assert_eq!(r[6], d.num(100.));
+        assert_eq!(r[7], format!("{}; {}; {}", d.num(300.), d.num(0.), d.num(0.)), "ponto de dobra");
         // a dobra começa a 200 mm da ponta, termina em 357,08 e a barra reta tem 557,08 mm
-        assert_eq!(r[5], d.num(200.));
-        assert_eq!(r[6], d.num(357.08));
-        assert_eq!(r[7], d.num(557.08));
+        assert_eq!(r[8], d.num(200.));
+        assert_eq!(r[9], d.num(357.08));
+        assert_eq!(r[10], d.num(557.08));
         // a lista de corte da mesma peça traz a barra pelo desenvolvido
         d.tables.push(Table { id: tid, sheet, kind: TableKind::CutList, source: src, pos: [20., 100.], level: Default::default(), cfg: Default::default() });
         let c = m.table(&d.tables[1], &d);
@@ -1304,6 +1310,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         }));
         let dir = std::env::temp_dir().join("fenkra_desenho_corte_item");
         std::fs::create_dir_all(&dir).unwrap();

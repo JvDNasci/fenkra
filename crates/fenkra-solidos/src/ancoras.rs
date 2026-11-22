@@ -95,7 +95,7 @@ impl Ctx<'_> {
         if let Some(ch @ ChaveAncora::PontaMembro { membro, trecho, fim }) = f.ancora(campo, at) {
             let dono = self.doc.features.iter().take_while(|g| g.id != f.id).find(|g| g.id == *membro);
             let achado = match dono.map(|g| &g.kind) {
-                Some(FeatureKind::StructMember(m)) => self.members(m)?.into_iter().nth(*trecho as usize),
+                Some(FeatureKind::StructMember(m)) => self.members(*membro, m)?.into_iter().nth(*trecho as usize),
                 _ => None,
             };
             if let Some(g) = achado {

@@ -30,6 +30,7 @@ fn tubo(d: &mut Document, x: f64, z1: f64, kind: SectionKind, dims: &[&str]) -> 
         joints: vec![],
         material: String::new(),
         mirror: false,
+        tube_bend: None,
     }))
 }
 

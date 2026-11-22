@@ -486,6 +486,26 @@ pub fn calcular(e: &EntradaDobra) -> ResultadoDobra {
     r
 }
 
+/// B575: raio de centro mínimo automático de um tubo dobrado, pela seção. Regra prática de oficina, **não
+/// é norma** (as normas de raio de dobra são pagas e o Fenkra não traz os valores delas; ver ADR 0035):
+/// 2 vezes a referência (diâmetro do redondo, maior lado do quadrado e do retangular) em parede normal e
+/// 3 vezes em parede fina (esbeltez `referência / parede` acima de 30). Duas fontes públicas conferem a
+/// faixa: um guia de projeto de dobra de tubo dá 1,5 a 2,5 vezes o diâmetro para a dobra comum, com
+/// mandril acima de esbeltez 40, e outro põe 3 vezes o diâmetro como prática corrente do tubo dobrado a
+/// frio (limite contra o enrugamento). A regra cadastrada pelo usuário (`TubeBend::rule`) e o raio
+/// digitado mandam sobre isto. Seção que não é tubo usa a maior medida da caixa e fator 2.
+pub fn raio_minimo_automatico(tipo: SectionKind, d: &[f64]) -> f64 {
+    let g = |i: usize| d.get(i).copied().unwrap_or(0.);
+    let (referencia, parede) = match tipo {
+        SectionKind::TuboRedondo | SectionKind::TuboQuadrado => (g(0), g(1)),
+        SectionKind::TuboRetangular => (g(0).max(g(1)), g(2)),
+        _ => (d.iter().copied().fold(0., f64::max), 0.),
+    };
+    let fino = parede > 0. && referencia / parede > 30.;
+    let fator = if fino { 3. } else { 2. };
+    ((fator * referencia) * 10.).round() / 10.
+}
+
 /// Monta a entrada a partir do nó cadastrado. `vars` avalia as expressões; a regra é buscada por
 /// nome entre as cadastradas e só vale se servir para a seção e o material.
 pub fn entrada_do_no(b: &TubeBend, tipo: SectionKind, dims: &[f64], theta: f64, material: &str, regras: &[TubeRule], vars: &HashMap<String, f64>) -> Result<EntradaDobra, String> {

@@ -1733,11 +1733,13 @@ impl Ctx<'_> {
         let mut notas = self.notes.borrow_mut();
         let n = notas.entry(id).or_default();
         let textos: Vec<String> = j.avisos.iter().chain(&j.notas).cloned().collect();
-        if !textos.is_empty() {
+        // a nota não repete quando o campo é lido de novo (o membro lê as guias várias vezes)
+        let junto = textos.join("; ");
+        if !textos.is_empty() && !n.text.contains(&junto) {
             if !n.text.is_empty() {
                 n.text.push_str("; ");
             }
-            n.text.push_str(&textos.join("; "));
+            n.text.push_str(&junto);
             n.warn |= !j.avisos.is_empty();
         }
         Ok(j.curvas)
@@ -3494,7 +3496,7 @@ impl Ctx<'_> {
 
     /// Geometria de cada membro (eixos da seção, tamanho, prolongamentos — pontas ligadas ganham
     /// sobra para o tratamento de canto cortar).
-    fn members(&self, m: &StructMember) -> Result<Vec<MemberGeom>, String> {
+    fn members(&self, id: Id, m: &StructMember) -> Result<Vec<MemberGeom>, String> {
         let dims: Vec<f64> = m.dims.iter().map(|e| ev(e, &self.vars, "cota da seção")).collect::<Result<_, _>>()?;
         let (loops, w, h, cen) = structural::section(m.kind, &dims)?;
         // B253: espelhar a seção troca o lado dos perfis sem simetria (a caixa não muda)
@@ -3507,35 +3509,11 @@ impl Ctx<'_> {
         let (e1, e2) = (ev(&m.ext1, &self.vars, "prolongamento 1")?, ev(&m.ext2, &self.vars, "prolongamento 2")?);
         let mut out = vec![];
         // polilinha com cantos vivos: cada trecho reto é um membro (os cantos são tratados entre eles)
-        let mut pieces: Vec<Curve3> = vec![];
-        for p in &m.paths {
-            let c = self.curve(p, 0)?;
-            let n = c.pts.len();
-            let mut cut = vec![0];
-            for i in 1..n.saturating_sub(1) {
-                if let (Some(u), Some(v)) = (geo3d::unit(geo3d::sub(c.pts[i], c.pts[i - 1])), geo3d::unit(geo3d::sub(c.pts[i + 1], c.pts[i]))) {
-                    if geo3d::dot(u, v) < 0.98 {
-                        cut.push(i);
-                    }
-                }
-            }
-            cut.push(n - 1);
-            // B559: guia de um trecho curvo exato (arco, spline, aresta curva) é um membro só, varrido
-            // pela curva de verdade
-            let curva_unica = c.exata.as_ref().is_some_and(|e| e.0.len() == 1 && !matches!(e.0[0], geo3d::Trecho3::Reta(..) | geo3d::Trecho3::Pontos(_)));
-            if cut.len() <= 2 || c.circle.is_some() || curva_unica {
-                pieces.push(c);
-                continue;
-            }
-            for w in cut.windows(2) {
-                let seg = c.pts[w[0]..=w[1]].to_vec();
-                pieces.push(if seg.len() == 2 { Curve3::line(seg[0], seg[1])? } else { Curve3::poly(seg, false)? });
-            }
-        }
+        let pieces = self.pernas_do_caminho(id, m)?;
         // B491: quadro num plano inclinado: todos os trechos orientam a seção pela normal do plano, para
         // as pontas das seções serem imagens espelhadas uma da outra no plano da meia-esquadria
-        let normal_plano = plano_inclinado(&pieces);
-        for c in pieces {
+        let normal_plano = plano_inclinado(&pieces.iter().map(|(_, c)| c.clone()).collect::<Vec<_>>());
+        for (caminho, c) in pieces {
             let (start, end) = (c.start(), c.end());
             let z = if c.is_straight() { geo3d::unit(geo3d::sub(end, start)).ok_or("linha guia sem comprimento")? } else { c.end_tangent(false) };
             let up = match normal_plano {
@@ -3553,9 +3531,46 @@ impl Ctx<'_> {
             let x = geo3d::rotate(x0, z, ang);
             let y = fenkra_kernel::cross(z, x);
             let straight = c.is_straight();
-            out.push(MemberGeom { start, end, z, x, x0, y, w, h, wall, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight, exata: if straight { None } else { c.exata.clone() } });
+            out.push(MemberGeom { start, end, z, x, x0, y, w, h, wall, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight, exata: if straight { None } else { c.exata.clone() }, caminho });
         }
         Ok(out)
+    }
+
+    /// Trechos do membro: cada guia (ou cadeia de guias unidas na caixa, ADR 0107) vira uma ou mais
+    /// curvas, com o índice do caminho de origem. Polilinha com cantos vivos é quebrada em trechos
+    /// retos; com `tube_bend` os trechos vizinhos de um mesmo caminho viram um tubo só (B575) e o
+    /// limite do canto cai de ~11,5 graus para 5 graus. Guia curva exata (arco, spline, aresta curva) é
+    /// um trecho só.
+    fn pernas_do_caminho(&self, id: Id, m: &StructMember) -> Result<Vec<(usize, Curve3)>, String> {
+        // B575: itens unidos na caixa universal (campo "caminhos") entram como uma guia só
+        let refs: Vec<&CurveRef> = m.paths.iter().collect();
+        let guias: Vec<Curve3> = self.curvas_do_campo(id, "caminhos", &refs, 0)?.into_iter().map(|c| c.curva).collect();
+        let limite = if m.tube_bend.is_some() { LIMITE_CANTO_DOBRA } else { 0.98 };
+        let mut pieces: Vec<(usize, Curve3)> = vec![];
+        for (k, c) in guias.into_iter().enumerate() {
+            let n = c.pts.len();
+            let mut cut = vec![0];
+            for i in 1..n.saturating_sub(1) {
+                if let (Some(u), Some(v)) = (geo3d::unit(geo3d::sub(c.pts[i], c.pts[i - 1])), geo3d::unit(geo3d::sub(c.pts[i + 1], c.pts[i]))) {
+                    if geo3d::dot(u, v) < limite {
+                        cut.push(i);
+                    }
+                }
+            }
+            cut.push(n - 1);
+            // B559: guia de um trecho curvo exato (arco, spline, aresta curva) é um membro só, varrido
+            // pela curva de verdade
+            let curva_unica = c.exata.as_ref().is_some_and(|e| e.0.len() == 1 && !matches!(e.0[0], geo3d::Trecho3::Reta(..) | geo3d::Trecho3::Pontos(_)));
+            if cut.len() <= 2 || c.circle.is_some() || curva_unica {
+                pieces.push((k, c));
+                continue;
+            }
+            for w in cut.windows(2) {
+                let seg = c.pts[w[0]..=w[1]].to_vec();
+                pieces.push((k, if seg.len() == 2 { Curve3::line(seg[0], seg[1])? } else { Curve3::poly(seg, false)? }));
+            }
+        }
+        Ok(pieces)
     }
 
     fn member_shape(&self, g: &MemberGeom) -> Result<Shape, String> {
@@ -3585,7 +3600,7 @@ impl Ctx<'_> {
                 continue;
             }
             let FeatureKind::StructMember(m) = &f.kind else { continue };
-            if let Ok(gs) = self.members(m) {
+            if let Ok(gs) = self.members(f.id, m) {
                 out.extend(gs.into_iter().enumerate().map(|(i, g)| (f.id, i, k, g)));
             }
         }
@@ -3604,8 +3619,14 @@ impl Ctx<'_> {
             Some(FeatureKind::StructMember(e)) => e.joints.iter().find(|j| j.mine == early.1 && j.other == late.0 && j.other_path == late.1).map(|j| (j.mode, !j.first, j.gap.clone())),
             _ => None,
         });
+        // B575: canto entre trechos vizinhos de um mesmo caminho de um tubo dobrado é dobra, nunca encaixe
+        let dobra_do_tubo = hit.is_none() && m.tube_bend.is_some() && early.0 == late.0 && late.1 == early.1 + 1 && {
+            let pernas = self.pernas_do_caminho(late.0, m)?;
+            pernas.get(early.1).zip(pernas.get(late.1)).is_some_and(|(a, b)| a.0 == b.0)
+        };
         let (mode, late_first, gap) = match hit {
             Some((mode, first, gap)) => (mode, first, gap.unwrap_or_else(|| m.gap.clone())),
+            None if dobra_do_tubo => (CornerMode::Dobra, true, "0".to_string()),
             None => (m.corner, false, m.gap.clone()),
         };
         let gap = ev(&gap, &self.vars, "folga de solda")?;
@@ -4065,7 +4086,7 @@ impl Ctx<'_> {
         let mut best: Option<(f64, MemberGeom, bool, Id, usize)> = None;
         for f in self.doc.features.iter().take_while(|g| g.id != me.id) {
             let FeatureKind::StructMember(m) = &f.kind else { continue };
-            for (i, g) in self.members(m)?.into_iter().enumerate() {
+            for (i, g) in self.members(f.id, m)?.into_iter().enumerate() {
                 for (p, s) in [(g.start, true), (g.end, false)] {
                     let d = geo3d::sub(at, p);
                     let along = geo3d::dot(d, g.z);
@@ -4087,7 +4108,7 @@ impl Ctx<'_> {
         let mut ends: Vec<(f64, MemberGeom, V3, V3)> = vec![];
         for f in self.doc.features.iter().take_while(|g| g.id != me.id) {
             let FeatureKind::StructMember(m) = &f.kind else { continue };
-            for g in self.members(m)? {
+            for g in self.members(f.id, m)? {
                 ends.push((geo3d::dist(g.start, at), g.clone(), g.z, g.start));
                 ends.push((geo3d::dist(g.end, at), g.clone(), geo3d::mul(g.z, -1.), g.end));
             }
@@ -6455,7 +6476,7 @@ impl Ctx<'_> {
                 if let Some(c) = self.promover_caminhos(&m.paths) {
                     *self.promoted.borrow_mut() = Some(Promoted::Caminhos(c));
                 }
-                let mut geo = self.members(m)?;
+                let mut geo = self.members(f.id, m)?;
                 // B326: nós de dobra de tubo (pernas encadeadas num tubo só)
                 let plano_dobra = self.plano_dobras(f, m, &geo);
                 self.aplicar_dobras(&mut geo, &plano_dobra);
@@ -7183,6 +7204,8 @@ fn guia_com_cantos(pts: &[[f64; 3]]) -> bool {
     })
 }
 
+/// B575: cos de 5 graus; num tubo dobrado, desvio de direção maior que isto é uma dobra (canto), menor é curva suave.
+const LIMITE_CANTO_DOBRA: f64 = 0.996_194_698;
 const AVISO_CANTOS_FIXO: &str = "orientação fixa numa guia com cantos: a seção não gira neles e segue inclinada depois de cada canto; use o modo corrigido para a seção acompanhar a guia";
 const AVISO_CANTOS_TOMBOU: &str = "a seção não conseguiu girar nos cantos da guia sem tombar e saiu com orientação fixa (sem girar): arredonde os cantos ou alinhe o perfil à guia";
 const AVISO_CANTOS_MIGRADO: &str = "a seção agora gira nos cantos da guia (B350): o volume deste comando mudou em relação ao arquivo gravado por uma versão anterior; confira e salve";
@@ -7967,6 +7990,9 @@ struct MemberGeom {
     straight: bool,
     /// B559: a guia exata (membro curvo), quando a curva tem forma exata
     exata: Option<geo3d::Curva3>,
+    /// B575: de qual caminho (guia, ou cadeia de guias unidas) vem este trecho; trechos vizinhos do
+    /// mesmo caminho formam um tubo dobrado quando `StructMember::tube_bend` está ligado
+    caminho: usize,
 }
 
 /// Ponta de `a` que cai no meio do eixo de `b` (junta em T): (ponto, direção para dentro de `a`,
@@ -8527,7 +8553,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         if solid.contains(&f.id) {
             continue;
         }
-        let Ok(geo) = cx.members(m) else { continue };
+        let Ok(geo) = cx.members(f.id, m) else { continue };
         let explicit = (ev(&m.ext1, &cx.vars, "").unwrap_or(0.), ev(&m.ext2, &cx.vars, "").unwrap_or(0.));
         for (i, g) in geo.iter().enumerate() {
             let len = member_length(g, explicit);
@@ -9182,6 +9208,7 @@ mod tests {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
+                tube_bend: None,
             }));
             d
         };
@@ -9219,6 +9246,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         }));
         let v0 = vol(&d);
         d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));
@@ -9256,6 +9284,7 @@ mod tests {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
+                tube_bend: None,
             }));
         };
         let pr = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b.abs().max(1.);
@@ -9307,6 +9336,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         }));
         // um sólido por trecho, no referencial local (Z ao longo do membro, seção centrada)
         let ms = structural_members(&d);
@@ -9358,6 +9388,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         }));
         d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));
         d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 500.], "60", "6", "0")));
@@ -9741,6 +9772,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         }));
         let r = recompute(&d);
         assert!(matches!(r.status[&m], Status::Ok), "{:?}", r.status[&m]);
@@ -9778,6 +9810,7 @@ mod tests {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
+                tube_bend: None,
             }))
         };
         let (m0, m1, m2) = (mk(&mut d, 0), mk(&mut d, 1), mk(&mut d, 5));
@@ -10095,6 +10128,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
+            tube_bend: None,
         };
         let vol = |d: &Document| recompute(d).bodies.iter().map(|b| b.mass.volume).sum::<f64>();
         let lado = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
