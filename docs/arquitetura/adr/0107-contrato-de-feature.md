@@ -301,3 +301,29 @@ a coerência antes de integrar.
 ## Decisão ainda em aberto
 
 - **Fundir `FeatureKind` e `RefKind`** depois do contrato, ou manter os dois tipos. Não bloqueia as ondas.
+
+## Estado da implantação
+
+### Onda 0, base comum (22/11/2026; B561 e B562, parte base)
+
+- **Descritor** em `crates/fenkra-app/src/contrato.rs` (`FeatureSpec`, `Entrada`, `TipoEntrada`,
+  `Cardinalidade`, `Candidato`, `Motivo`). O descritor é montado do valor atual do comando, então cada
+  entrada já traz `n` (quantos itens reais) e o campo vazio é um estado explícito. Dele saem o campo ativo
+  (`entradas::campo_ativo`), o estado incompleto (`slots::feature_incomplete`), a contagem do painel, o
+  filtro temporário do 3D (`selecao::tipos_do_comando`) e o campo ativo do painel (`campos::definir_contrato`).
+  `PONTO_VAZIO` e `ponto_vazio` são o único lugar que sabe como um campo de coordenada vazio se parece.
+- **Adaptador**: comando que ainda não declarou entradas é lido pelos marcadores `UNSET_*` (mesma ordem de
+  prioridade de antes). Migrados: casca, saída, espessura, edição direta, rosca, filete e chanfro (arestas,
+  entre faces, completo), aba, bainha, laço de abas, aba curva, dobra por linha, joggle, veneziana, loft e
+  membro estrutural (sólidos, chapa e estrutural); dividir, aparar, filete entre superfícies, regrada,
+  curva paralela, juntar, loft e junção de curvas (superfícies).
+- **Caixa universal em árvore** em `caixa_arvore.rs` (desenho) e `caixa_selecao.rs` (lógica). `geo_ui::bag`
+  é a mesma caixa sem descritor; `geo_ui::bag_contrato` é a caixa com ordem, junção, validação e nós por
+  origem. O clique na árvore de recursos entra no campo ativo pelo mesmo caminho do 3D
+  (`contrato::picks_da_arvore`).
+- **Junção na hora como subitem do comando**: os grupos ficam em `Document::campos` (`DadosCampo`, em
+  `fenkra-core/src/campo_dados.rs`), junto do comando e do campo, com `serde(default)`; a lista de itens do
+  comando não muda. **Pendente para a onda das superfícies (geo3d):** o cálculo ainda trata cada item da
+  lista como uma curva; falta ler `Document::dados_campo` para juntar os itens de um grupo antes do kernel.
+- **Inverter único** em `inverter.rs`: o botão do painel e a seta do 3D chamam a mesma função
+  (`alternar_ref`, `alternar_feature`); `chapa_unif_ui::inverter` é o widget padrão.
