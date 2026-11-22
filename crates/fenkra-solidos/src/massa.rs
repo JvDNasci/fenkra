@@ -181,6 +181,8 @@ pub fn relatorio_massa(doc: &Document) -> RelatorioMassa {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        suportes: Default::default(),
+        chave_suportes: 0,
         notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,

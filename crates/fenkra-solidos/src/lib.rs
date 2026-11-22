@@ -104,6 +104,7 @@ pub mod previa_leve;
 pub mod chapa_animacao;
 pub mod chapa_linha;
 mod chapa_dobra_curva;
+mod chapa_aba_diag;
 mod chapa_aba_limites;
 pub mod chapa_cega;
 pub mod chapa_cone;
@@ -947,6 +948,11 @@ struct Ctx<'a> {
     tools: HashMap<Id, (Shape, BoolOp)>,
     /// geometria de referência já avaliada neste cálculo (cadeias de referências não recalculam)
     memo: RefCell<HashMap<Id, Geo>>,
+    /// B564: superfícies de referência já construídas, vindas do cache e devolvidas a ele no fim do
+    /// cálculo (ao contrário de `memo`, não é esvaziada entre comandos)
+    suportes: RefCell<HashMap<Id, (u64, Shape, Option<RefNote>)>>,
+    /// B564: parte da chave das superfícies guardadas (o que vale para o documento todo)
+    chave_suportes: u64,
     /// o que cada referência tem a dizer além do resultado
     notes: RefCell<HashMap<Id, RefNote>>,
     /// assinatura do último passo que mudou o corpo de cada coletor (cache de malha)
@@ -1164,9 +1170,44 @@ pub struct Cache {
     /// B413: comandos calculados enquanto um comando estava aberto para edição (`leve`), sem conferir a
     /// validade para não pesar a prévia. Quem for reaproveitado depois é conferido nesse momento.
     sem_validar: std::collections::HashSet<Id>,
+    /// B566: em que estado (planificado ou dobrado) estão `feats`, `meshes` e `props` agora. O outro
+    /// estado fica guardado em `outro_estado`; alternar só troca os dois, sem recalcular nada.
+    plano_atual: bool,
+    outro_estado: EstadoGuardado,
+    /// quantas vezes o cálculo trocou de estado usando o que o cache já tinha (diagnóstico e testes)
+    pub trocas_de_estado: usize,
+    /// B564: forma exata de cada superfície de referência já construída, com a assinatura de quem a
+    /// definiu. A aba por superfície lê o suporte a cada quadro da edição; construir de novo uma
+    /// superfície grande (varredura de spline, deslocamento) era o grosso do custo da prévia.
+    suportes: HashMap<Id, (u64, Shape, Option<RefNote>)>,
+}
+
+/// B566: resultados de comando e malhas de um dos dois estados da chapa. O estado que o documento
+/// mostra mora nos campos do `Cache`; o outro mora aqui e entra no lugar na troca.
+#[derive(Default)]
+struct EstadoGuardado {
+    feats: HashMap<Id, FeatEntry>,
+    meshes: HashMap<(Id, u64), Mesh>,
+    props: HashMap<(Id, u64), (MassProps, u32)>,
+    sem_validar: std::collections::HashSet<Id>,
 }
 
 impl Cache {
+    /// B566: leva o cache para o estado `plano` (planificado ou dobrado). A assinatura de cada comando
+    /// já traz o estado da chapa (`doc.sheet.flat` entra na assinatura global), então o que foi
+    /// calculado num estado nunca é confundido com o do outro; trocar só põe o conjunto certo à mão.
+    fn trocar_estado(&mut self, plano: bool) {
+        if self.plano_atual == plano {
+            return;
+        }
+        std::mem::swap(&mut self.feats, &mut self.outro_estado.feats);
+        std::mem::swap(&mut self.meshes, &mut self.outro_estado.meshes);
+        std::mem::swap(&mut self.props, &mut self.outro_estado.props);
+        std::mem::swap(&mut self.sem_validar, &mut self.outro_estado.sem_validar);
+        self.plano_atual = plano;
+        self.trocas_de_estado += 1;
+    }
+
     pub fn com_qualidade(qualidade: QualidadeMalha) -> Self {
         Cache { qualidade, ..Default::default() }
     }
@@ -2300,9 +2341,36 @@ impl Ctx<'_> {
         if let Some(g) = self.memo.borrow().get(&id) {
             return Ok(g.clone());
         }
+        // B564: superfície de referência que não lê corpos vale enquanto a definição dela (e das
+        // entradas) não mudar: reaproveita a forma do quadro anterior em vez de construir de novo
+        let chave = self.chave_do_suporte(id);
+        if let Some(k) = chave {
+            if let Some((_, sh, nota)) = self.suportes.borrow().get(&id).filter(|(c, _, _)| *c == k) {
+                if let Some(n) = nota {
+                    self.notes.borrow_mut().insert(id, n.clone());
+                }
+                let g = Geo::Surface(sh.clone());
+                self.memo.borrow_mut().insert(id, g.clone());
+                return Ok(g);
+            }
+        }
         let g = self.geo_eval(id, depth)?;
+        if let (Some(k), Geo::Surface(sh)) = (chave, &g) {
+            let nota = self.notes.borrow().get(&id).cloned();
+            self.suportes.borrow_mut().insert(id, (k, sh.clone(), nota));
+        }
         self.memo.borrow_mut().insert(id, g.clone());
         Ok(g)
+    }
+
+    /// Chave de guarda de uma superfície de referência (`None` quando ela não é superfície ou lê os
+    /// corpos, que mudam com a linha do tempo).
+    fn chave_do_suporte(&self, id: Id) -> Option<u64> {
+        let r = self.doc.reference(id)?;
+        if !matches!(r.kind.class(), RefClass::Surface) || ref_reads_bodies(self.doc, id, 0) {
+            return None;
+        }
+        Some(hash_of(&[&ref_sig(self.doc, id, &self.vars, 0)], self.chave_suportes))
     }
 
     fn geo_eval(&self, id: Id, depth: u32) -> Result<Geo, String> {
@@ -6404,6 +6472,14 @@ impl Ctx<'_> {
                     mid = best[best.len() / 2];
                     ns = support.surface_near(mid).map_err(k)?.1;
                 }
+                // B564: prévia simplificada: a OML segue amostrada em poucas dezenas de pontos, que bastam para
+                // o contorno
+                let leve = self.leve_dentro(f);
+                if leve && best.len() > previa_leve::PONTOS_DA_PREVIA {
+                    let passo = (best.len() - 1) as f64 / (previa_leve::PONTOS_DA_PREVIA - 1) as f64;
+                    best = (0..previa_leve::PONTOS_DA_PREVIA).map(|i| best[((i as f64 * passo).round() as usize).min(best.len() - 1)]).collect();
+                    mid = best[best.len() / 2];
+                }
                 let tan = geo3d::unit(geo3d::sub(best[(best.len() / 2 + 1).min(best.len() - 1)], best[(best.len() / 2).saturating_sub(1)])).ok_or("OML nula")?;
                 let ctr = geo3d::lerp(lo, hi, 0.5);
                 // B563: inverter o lado da superfície em que a chapa fica: o centro da web passa a
@@ -6411,15 +6487,17 @@ impl Ctx<'_> {
                 // depende de "de que lado está a chapa" (relimite, sentido para fora, ângulo) segue
                 let ctr = if sf.inv_lado { geo3d::sub(ctr, geo3d::mul(ns, 2. * geo3d::dot(ns, geo3d::sub(ctr, mid)))) } else { ctr };
                 // relimita a web pelo suporte (fica o lado com o grosso do material)
-                if !sf.keep_base {
+                // B564: na prévia simplificada a web não é relimitada (a booleana com o suporte grande e o
+                // prisma de corte custam mais que todo o resto); o contorno mostra onde o corte vai ficar
+                if !sf.keep_base && !leve {
                     let keep_pos = geo3d::dot(ns, geo3d::sub(ctr, mid)) > 0.;
                     // B529: o suporte só relimita a base se de fato atravessa a placa. Suporte finito
                     // (arco curto, spline que termina dentro da placa) não divide: erro ou nada muda.
                     // Nesse caso a linha de dobra (OML) é prolongada pelas tangentes das pontas até
                     // passar da placa e vira a ferramenta de corte do lado que sai.
                     let v0 = b.mass().volume;
-                    let cortou = match b.split_side(&support, keep_pos, true) {
-                        Ok(t) if !t.is_null() && t.face_count() > 0 && t.mass().volume < v0 - 1e-4 * v0.abs().max(1.) => Some(t),
+                    let cortou = match b.split_side(&support, keep_pos, true).ok() {
+                        Some(t) if !t.is_null() && t.face_count() > 0 && t.mass().volume < v0 - 1e-4 * v0.abs().max(1.) => Some(t),
                         _ => None,
                     };
                     if let Some(t) = cortou {
@@ -6470,13 +6548,44 @@ impl Ctx<'_> {
                 }
                 // a OML fica na face e só onde há web (depois de relimitar)
                 let web = self.body(f.target).cloned().unwrap_or(b);
+                // B564: na prévia simplificada a OML já é a borda da web relimitada (e foi cortada à caixa
+                // da web): não há o que conferir ponto a ponto com o kernel
                 let pts: Vec<V3> = best
                     .iter()
                     .map(|q| geo3d::sub(*q, geo3d::mul(n, geo3d::dot(geo3d::sub(*q, on), n))))
-                    .filter(|q| web.surface_near(*q).map(|(p, _)| geo3d::dist(p, *q) < 0.05).unwrap_or(false))
+                    .filter(|q| leve || web.surface_near(*q).map(|(p, _)| geo3d::dist(p, *q) < 0.05).unwrap_or(false))
                     .collect();
                 if pts.len() < 2 {
                     return Err(if lm.lado1.is_some() || lm.lado2.is_some() { "os limites dos lados não deixam trecho da aba sobre a web".into() } else { "o suporte não encontra a borda da web".to_string() });
+                }
+                // B564: prévia simplificada: a web já está relimitada pelo suporte; a aba aparece como o
+                // contorno da parede (OML e borda de cima), sem varredura da dobra, limites nem cantos. O
+                // cálculo completo (e o resultado final) só roda ao concluir.
+                if leve {
+                    let ba = chapa::compensacao(sp.t, r, ang, sp.k_for(r)).ba;
+                    let aviso = chapa_aba_diag::diagnosticar(&pts, n, out, r, sp.t, ba + len).aviso(ba);
+                    let a = ang.to_radians();
+                    let alt = len + r + sp.t;
+                    let mut viz = previa_leve::PreviaViz { feature: f.id, arestas: vec![], valor: alt, chanfro: false, todas: false, caixas: vec![], pares: vec![], linhas: vec![] };
+                    let topo: Vec<V3> = (0..pts.len())
+                        .map(|i| {
+                            let tg = geo3d::unit(geo3d::sub(pts[(i + 1).min(pts.len() - 1)], pts[i.saturating_sub(1)])).unwrap_or(tan);
+                            let mut o = geo3d::unit(fenkra_kernel::cross(tg, n)).unwrap_or(out);
+                            if geo3d::dot(o, out) < 0. {
+                                o = geo3d::mul(o, -1.);
+                            }
+                            geo3d::add(pts[i], geo3d::mul(geo3d::add(geo3d::mul(o, a.cos()), geo3d::mul(d, a.sin())), alt))
+                        })
+                        .collect();
+                    for i in 0..pts.len() - 1 {
+                        viz.linhas.push([pts[i], pts[i + 1]]);
+                        viz.linhas.push([topo[i], topo[i + 1]]);
+                    }
+                    for i in (0..pts.len()).step_by(5) {
+                        viz.linhas.push([pts[i], topo[i]]);
+                    }
+                    self.previas.push(viz);
+                    return Ok(aviso);
                 }
                 // B556: borda final limitada e cantos
                 let mut len = len;
@@ -6518,7 +6627,14 @@ impl Ctx<'_> {
                         CantoAba::Chanfro(v) => Some((true, chapa_laco::ev_faixa(v, &self.vars, &format!("distância do chanfro {}", i + 1), 0.01, f64::INFINITY, "mm")?)),
                     };
                 }
-                self.curve_flange_exata(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim)
+                // B566: validação leve da OML antes de construir: a dobra cabe? a faixa planificada se cruza?
+                let ba = chapa::compensacao(sp.t, r, ang, sp.k_for(r)).ba;
+                let aviso = chapa_aba_diag::diagnosticar(&pts, n, out, r, sp.t, ba + len).aviso(ba);
+                let feito = self.curve_flange_exata(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim)?;
+                Ok(match (feito, aviso) {
+                    (Some(a), Some(b)) => Some(format!("{a}; {b}")),
+                    (a, b) => a.or(b),
+                })
             }
             FeatureKind::SmArcSlot(sl) => {
                 let sp = self.sheet()?;
@@ -7402,6 +7518,37 @@ pub fn recompute_cached(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     }
 }
 
+/// B566: o documento tem chapa com dobras, então vale ter os dois estados prontos?
+pub fn tem_dobras(doc: &Document) -> bool {
+    doc.sheet.is_some() && doc.features.iter().enumerate().any(|(i, f)| doc.is_active(i) && (chapa_desdobra::e_dobra(&f.kind) || matches!(f.kind, FeatureKind::SmBend(_) | FeatureKind::SmJoggle(_) | FeatureKind::SmLoftFlange(_) | FeatureKind::SmConvert(_))))
+}
+
+/// B566: calcula o outro estado da chapa (planificado se o documento está dobrado, e vice-versa) e
+/// guarda no cache, sem devolver resultado. Depois disso, alternar dobrado e planificado é só
+/// `recompute_cached` com o `flat` trocado: todos os comandos saem do cache e só a exibição troca.
+/// Devolve `false` quando não há o que preparar (sem chapa) ou o cálculo foi cancelado no meio.
+pub fn preaquecer_outro_estado(doc: &Document, cache: &mut Cache) -> bool {
+    if !tem_dobras(doc) {
+        return false;
+    }
+    let mut outro = doc.clone();
+    if let Some(s) = outro.sheet.as_mut() {
+        s.flat = !s.flat;
+    }
+    let reaproveitados = cache.reused;
+    let _ = recompute_cached(&outro, cache);
+    cache.reused = reaproveitados;
+    !cache.cancelar.as_ref().is_some_and(|c| c.load(std::sync::atomic::Ordering::Relaxed))
+}
+
+/// B566: calcula o estado pedido e, em seguida, o outro. O resultado devolvido é o do estado do
+/// documento; o outro fica no cache para a alternância instantânea.
+pub fn recompute_ambos(doc: &Document, cache: &mut Cache) -> RecomputeResult {
+    let r = recompute_cached(doc, cache);
+    preaquecer_outro_estado(doc, cache);
+    r
+}
+
 fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     let t0 = Instant::now();
     // B52: a engrenagem do gerador redesenha o perfil quando m, z, alpha, beta... mudaram
@@ -7424,10 +7571,13 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
     let qualidade_mudou = cache.meshes_q != Some(cache.qualidade);
     if qualidade_mudou {
         cache.meshes.clear();
+        cache.outro_estado.meshes.clear();
         cache.fills.clear();
         cache.refs.clear();
         cache.meshes_q = Some(cache.qualidade);
     }
+    // B566: dobrado e planificado têm cada um o seu conjunto de resultados; alternar só os troca
+    cache.trocar_estado(doc.sheet.as_ref().is_some_and(|s| s.flat));
     let mut cx = Ctx {
         doc,
         vars,
@@ -7437,6 +7587,8 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        suportes: RefCell::new(std::mem::take(&mut cache.suportes)),
+        chave_suportes: hash_of(&[&serde_json::to_string(&doc.external).unwrap_or_default()], 0),
         notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
@@ -7731,6 +7883,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         }
     }
     cache.feats.retain(|id, _| seen.contains(id));
+    cache.outro_estado.feats.retain(|id, _| seen.contains(id));
     // linhas de dobra no planificado: cada dobra leva as linhas pelas dobras anteriores
     let mut bend_lines: Vec<BendLine> = (0..cx.sheet_maps.len())
         .map(|i| {
@@ -7959,6 +8112,9 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         }
     }
     cache.limitar(&vivas, &fills_vivos, TETO_CACHE_MALHAS);
+    // B564: as superfícies de suporte construídas ficam para o próximo quadro (só as que ainda existem)
+    cache.suportes = cx.suportes.take();
+    cache.suportes.retain(|id, _| doc.reference(*id).is_some());
     let mut formas = formas_visiveis(doc, &cx.status, &cx.formas_resolvidas);
     cache.polir.formas(doc, &mut formas, &cx.formas_resolvidas);
     let exibicao = {
@@ -8033,6 +8189,8 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
                 status: HashMap::new(),
                 tools: HashMap::new(),
                 memo: RefCell::new(HashMap::new()),
+                suportes: Default::default(),
+                chave_suportes: 0,
                 notes: Default::default(),
                 body_sig: HashMap::new(),
                 last_sheet: None,
@@ -8088,6 +8246,8 @@ fn ctx_no_fim(doc: &Document) -> Option<Ctx<'_>> {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        suportes: Default::default(),
+        chave_suportes: 0,
         notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
@@ -8648,6 +8808,8 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        suportes: Default::default(),
+        chave_suportes: 0,
         notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
@@ -8759,6 +8921,8 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        suportes: Default::default(),
+        chave_suportes: 0,
         notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
@@ -8802,6 +8966,8 @@ pub fn member_corners(doc: &Document) -> Vec<st_cantos::Canto> {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        suportes: Default::default(),
+        chave_suportes: 0,
         notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
@@ -8864,6 +9030,8 @@ pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        suportes: Default::default(),
+        chave_suportes: 0,
         body_sig: HashMap::new(),
         last_sheet: None,
         sheet_maps: vec![],
@@ -9151,6 +9319,8 @@ pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, pres
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        suportes: Default::default(),
+        chave_suportes: 0,
         notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
@@ -9216,6 +9386,8 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         status: HashMap::new(),
         tools: HashMap::new(),
         memo: RefCell::new(HashMap::new()),
+        suportes: Default::default(),
+        chave_suportes: 0,
         notes: Default::default(),
         body_sig: HashMap::new(),
         last_sheet: None,
