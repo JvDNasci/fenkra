@@ -6,7 +6,6 @@
 
 use crate::previa::Fantasma;
 use crate::render::{LineVertex, Scene};
-use crate::slots::{UNSET_AXIS, UNSET_CURVE, UNSET_PLANE, UNSET_POINT, UNSET_SKETCH, UNSET_SURF};
 use eframe::egui::{self, Color32, RichText};
 use fenkra_core::*;
 use fenkra_kernel::Mesh;
@@ -65,89 +64,19 @@ impl Espera {
             _ => crate::theme::st_ok(),
         }
     }
-
-    /// Ordem em que os campos de um comando são pedidos.
-    fn prioridade(self) -> u8 {
-        match self {
-            Espera::Perfil => 0,
-            Espera::Face => 1,
-            Espera::Aresta => 2,
-            Espera::Corpo => 3,
-            Espera::Eixo => 4,
-            Espera::Plano => 5,
-            Espera::Curva => 6,
-            Espera::Superficie => 7,
-            Espera::Ponto => 8,
-        }
-    }
-}
-
-fn espera_do_sentinela(u: u64) -> Option<Espera> {
-    Some(match u {
-        x if x == UNSET_SKETCH.0 => Espera::Perfil,
-        x if x == UNSET_AXIS.0 => Espera::Eixo,
-        x if x == UNSET_PLANE.0 => Espera::Plano,
-        x if x == UNSET_POINT.0 => Espera::Ponto,
-        x if x == UNSET_CURVE.0 => Espera::Curva,
-        x if x == UNSET_SURF.0 => Espera::Superficie,
-        _ => return None,
-    })
 }
 
 /// O campo que o próximo clique no 3D preenche, ou `None` quando o comando tem tudo o que precisa.
-/// Quando falta mais de um, vale a ordem do comando (perfil, faces, arestas, eixo, plano…).
+/// Quando falta mais de um, vale a ordem declarada do comando (ADR 0107: `contrato::FeatureSpec`); os
+/// comandos que ainda não declararam o descritor entram pelo adaptador, na ordem de prioridade de
+/// sempre (perfil, faces, arestas, eixo, plano…).
 pub fn campo_ativo(k: &FeatureKind) -> Option<Espera> {
-    let z = [0.; 3];
-    let proprio = match k {
-        FeatureKind::Shell(x) if x.faces.is_empty() => Some(Espera::Face),
-        FeatureKind::Draft(x) if x.faces.is_empty() => Some(Espera::Face),
-        FeatureKind::Thickness(x) if x.faces.is_empty() => Some(Espera::Face),
-        FeatureKind::DirectEdit(x) if x.faces.is_empty() => Some(Espera::Face),
-        FeatureKind::Thread(t) if t.face == z => Some(Espera::Face),
-        // B243: dobra por linha, joggle e veneziana sem linha ainda pedem a face fixa
-        FeatureKind::SmBend(x) if x.sketch.is_none() && x.a == x.b => Some(Espera::Face),
-        FeatureKind::SmJoggle(x) if x.plane.is_none() && x.a == x.b => Some(Espera::Face),
-        FeatureKind::SmLouver(x) if x.a == x.b => Some(Espera::Face),
-        // B31: a aba curva vinda de outro modo ainda não tem a cadeia de arestas
-        FeatureKind::SmCurveFlange(x) if x.edge.len() < 2 => Some(Espera::Aresta),
-        // B514: o laço de abas aberto sem aresta espera o clique numa aresta
-        FeatureKind::SmFlangeLoop(x) if x.edges.iter().all(|e| *e == z) => Some(Espera::Aresta),
-        FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => match (&o.mode, &o.edges) {
-            (EdgeMode::FaceFace(a, b), _) if *a == z || *b == z => Some(Espera::Face),
-            (EdgeMode::FullRound { mid, a, b }, _) if [mid, a, b].iter().any(|p| **p == z) => Some(Espera::Face),
-            (EdgeMode::FaceFace(..) | EdgeMode::FullRound { .. }, _) => None,
-            (_, EdgeSel::Edges(m)) if m.is_empty() => Some(Espera::Aresta),
-            _ => None,
-        },
-        _ => None,
-    };
-    if proprio.is_some() {
-        return proprio;
-    }
-    // B466: na ordem da declaração (a do painel), para empatar igual ao preenchimento de `slots::fill`
-    let falta = crate::slots::vazios_em_ordem(k).into_iter().filter_map(espera_do_sentinela);
-    falta.min_by_key(|e| e.prioridade())
+    crate::contrato::campo_ativo(crate::contrato::Alvo::Feature(k))
 }
 
 /// Quantos itens do campo de lista o comando já tem (faces da casca, arestas do filete…).
 pub fn contagem(k: &FeatureKind) -> Option<(Espera, usize)> {
-    let z = [0.; 3];
-    match k {
-        FeatureKind::Shell(x) => Some((Espera::Face, x.faces.len())),
-        FeatureKind::Draft(x) => Some((Espera::Face, x.faces.len())),
-        FeatureKind::Thickness(x) => Some((Espera::Face, x.faces.len())),
-        FeatureKind::DirectEdit(x) => Some((Espera::Face, x.faces.len())),
-        FeatureKind::Thread(t) => Some((Espera::Face, usize::from(t.face != z))),
-        FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => match &o.mode {
-            EdgeMode::FaceFace(a, b) => Some((Espera::Face, [a, b].iter().filter(|p| ***p != z).count())),
-            EdgeMode::FullRound { mid, a, b } => Some((Espera::Face, [mid, a, b].iter().filter(|p| ***p != z).count())),
-            _ => match &o.edges {
-                EdgeSel::Edges(m) => Some((Espera::Aresta, m.len())),
-                _ => None,
-            },
-        },
-        _ => None,
-    }
+    crate::contrato::contagem(crate::contrato::Alvo::Feature(k))
 }
 
 /// Booleana: clicar num corpo troca o corpo ferramenta. Não aceita o corpo onde o resultado fica.
@@ -538,7 +467,7 @@ mod tests {
     /// Revolução: perfil, depois eixo; cada seleção preenche um campo e o ativo avança.
     #[test]
     fn revolucao_pede_perfil_e_depois_eixo() {
-        let mut k = FeatureKind::Revolve(Revolve { sketch: UNSET_SKETCH, axis: crate::slots::axis(), angle: s("360"), symmetric: false, op: BoolOp::Add, thin: None, thin_side: 0, angle2: None });
+        let mut k = FeatureKind::Revolve(Revolve { sketch: crate::slots::UNSET_SKETCH, axis: crate::slots::axis(), angle: s("360"), symmetric: false, op: BoolOp::Add, thin: None, thin_side: 0, angle2: None });
         assert_eq!(campo_ativo(&k), Some(Espera::Perfil));
         assert!(fill(&mut k, &mut Cands::from_seed(&Seed::default(), Some(Id(42)))));
         assert_eq!(campo_ativo(&k), Some(Espera::Eixo));

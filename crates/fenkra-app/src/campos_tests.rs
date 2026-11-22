@@ -46,6 +46,8 @@ fn quadro(ctx: &egui::Context, d: &Document, r: &mut RefElement, seed: &Seed, ev
         let caixa = egui::Rect::from_min_size(egui::pos2(8., 8.), egui::vec2(crate::paineis::LARGURA_COLUNA - 16., 880.));
         let mut ui = root.new_child(egui::UiBuilder::new().max_rect(caixa));
         crate::campos::inicio(ui.ctx(), r.id.0, crate::campos::assinatura(&sel));
+        // ADR 0107: o descritor do comando diz qual campo é o ativo, como o `editor::show` publica
+        crate::campos::definir_contrato(ui.ctx(), crate::contrato::id_do_ativo(crate::contrato::Alvo::Ref(&r.kind)));
         crate::geo_ui::panel(&mut ui, d, r, &Default::default(), seed, None, None);
         usou = crate::campos::fim(ui.ctx());
     });
@@ -127,6 +129,29 @@ fn juncao_tres_superficies_pelo_clique_tab_e_ok() {
     for (v, e) in lo.iter().zip([-40., 0., 0.]).chain(hi.iter().zip([0., 40., 30.])) {
         assert!((v - e).abs() < 1e-3, "caixa {lo:?} {hi:?}");
     }
+}
+
+/// ADR 0107: o campo ativo sai do descritor do comando, não da ordem em que o painel desenha. O
+/// "Dividir" declara a superfície e depois a ferramenta; clicar (ou dar Tab) no campo da ferramenta e
+/// preencher a superfície leva o clique seguinte ao campo que o descritor pede.
+#[test]
+fn campo_ativo_do_dividir_sai_do_descritor() {
+    let mut d = Document::new("t");
+    let a = folha(&mut d, [-40., 0., 0.], [0., 0., 0.]);
+    let id = d.add_geometry(RefKind::SurfSplit { surface: crate::slots::surf(), tool: crate::slots::surf(), flip: false, more: vec![], curve: None, more_flip: vec![] });
+    let mut r = d.reference(id).unwrap().clone();
+    let ctx = egui::Context::default();
+    quadro(&ctx, &d, &mut r, &Seed::default(), vec![]);
+    let (t, _) = quadro(&ctx, &d, &mut r, &Seed::default(), vec![]);
+    assert!(t.iter().any(|x| x.starts_with("▶ Superfície")), "o primeiro campo declarado é o ativo: {t:?}");
+    // o clique entra na superfície, e a vez passa sozinha à ferramenta
+    let (_, usou) = quadro(&ctx, &d, &mut r, &Seed { surface: Some(a), ..Default::default() }, vec![]);
+    let _ = usou;
+    quadro(&ctx, &d, &mut r, &Seed::default(), vec![]);
+    let (t, _) = quadro(&ctx, &d, &mut r, &Seed::default(), vec![]);
+    assert!(matches!(&r.kind, RefKind::SurfSplit { surface, .. } if *surface == a), "{:?}", r.kind);
+    assert!(t.iter().any(|x| x.starts_with("▶ Cortar com")), "a vez passou à ferramenta: {t:?}");
+    assert!(!t.iter().any(|x| x.starts_with("▶ Superfície")), "um só campo ativo: {t:?}");
 }
 
 /// Junção que já tem tudo e nada vazio: o Enter só passa ao campo seguinte enquanto há um campo de

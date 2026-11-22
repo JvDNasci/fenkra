@@ -5,6 +5,11 @@
 //! clicado e Del (ou Backspace) tira os marcados. A lógica de marcar e remover mora aqui, sem egui,
 //! para ser testada; `geo_ui::bag` só desenha e liga as teclas.
 //!
+//! ADR 0107, onda 0: a caixa é o widget único de todo campo de seleção. Aqui mora a parte sem egui
+//! da caixa universal em árvore: somar o clique com validação (tipo errado e excesso recusados com
+//! mensagem por campo), reordenar quando o descritor pede ordem, e levar as junções (subitens
+//! dentro do comando) junto quando a lista muda. O desenho está em `caixa_arvore.rs`.
+//!
 //! Os marcados também podem acender no 3D: quem sabe a posição de cada item chama
 //! `publicar_realce` e a viewport desenha pelo `desenhar_realce`.
 
@@ -87,6 +92,127 @@ pub fn remover_marcados<T: Clone>(items: &mut Vec<T>, marcas: &mut Marcas, min: 
     n
 }
 
+// ---------------------------------------------------------------- somar com validação
+
+use crate::contrato::{Candidato, Entrada};
+
+/// O que aconteceu ao somar o que foi clicado a um campo.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Soma {
+    /// a primeira recusa (tipo errado, campo cheio, validador): o campo mostra a mensagem
+    pub recusa: Option<String>,
+    /// índices dos itens que entraram
+    pub adicionados: Vec<usize>,
+    /// quantos itens já estavam e saíram (clicar de novo num escolhido o tira)
+    pub tirados: usize,
+}
+
+/// O clique entra no campo. Item que já está sai (como sempre); item novo passa pelo descritor: o
+/// tipo, a quantidade que ainda cabe e o validador. Recusado não entra, e o motivo volta em
+/// `Soma::recusa`. `cand` descreve cada item para o validador (sem ele, só o máximo é conferido).
+#[allow(clippy::too_many_arguments)]
+pub fn somar<T: Clone + PartialEq>(items: &mut Vec<T>, picked: &[T], min: usize, vazio: Option<&T>, mesmo: &impl Fn(&T, &T) -> bool, entrada: Option<&Entrada>, cand: Option<&dyn Fn(&T) -> Candidato>) -> Soma {
+    let mut soma = Soma::default();
+    let e_vazio = |y: &T| vazio == Some(y);
+    for x in picked {
+        if let Some(k) = items.iter().position(|y| !e_vazio(y) && mesmo(y, x)) {
+            crate::geo_ui::tirar_da_lista(items, k, min, vazio);
+            soma.tirados += 1;
+            continue;
+        }
+        if let Some(e) = entrada {
+            let reais: Vec<&T> = items.iter().filter(|y| !e_vazio(y)).collect();
+            let erro = match cand {
+                Some(f) => {
+                    let no_campo: Vec<Candidato> = reais.iter().map(|y| f(y)).collect();
+                    e.validar(&f(x), &no_campo, reais.len()).err()
+                }
+                None => e.cheio(reais.len()),
+            };
+            if let Some(m) = erro {
+                soma.recusa.get_or_insert_with(|| m.texto());
+                continue;
+            }
+        }
+        let pos = match items.iter().position(e_vazio) {
+            Some(k) => {
+                items[k] = x.clone();
+                k
+            }
+            None => {
+                items.push(x.clone());
+                items.len() - 1
+            }
+        };
+        soma.adicionados.push(pos);
+    }
+    soma
+}
+
+/// Para onde cada item da lista `antes` foi parar em `depois` (`None` = saiu). Serve para as junções e
+/// as marcas seguirem os itens quando a lista muda.
+pub fn onde_foram<T>(antes: &[T], depois: &[T], mesmo: &impl Fn(&T, &T) -> bool) -> Vec<Option<usize>> {
+    let mut usados = vec![false; depois.len()];
+    antes
+        .iter()
+        .map(|a| {
+            let k = (0..depois.len()).find(|k| !usados[*k] && mesmo(a, &depois[*k]));
+            if let Some(k) = k {
+                usados[k] = true;
+            }
+            k
+        })
+        .collect()
+}
+
+/// Sobe (`-1`) ou desce (`+1`) o item `i` na lista ordenada. Devolve o índice novo (ou `None` na ponta).
+pub fn mover<T>(items: &mut [T], i: usize, passo: isize) -> Option<usize> {
+    let j = i as isize + passo;
+    if i >= items.len() || j < 0 || j as usize >= items.len() {
+        return None;
+    }
+    items.swap(i, j as usize);
+    Some(j as usize)
+}
+
+// ---------------------------------------------------------------- pedidos ao app
+
+/// O que a caixa pede ao app (o painel só enxerga o documento de leitura): gravar os dados do campo e
+/// expandir a cadeia tangente de um item.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Pedido {
+    /// grava as junções e a opção "seguir tangentes" do campo no documento
+    Dados(fenkra_core::DadosCampo),
+    /// duplo clique: o item do campo puxa a cadeia tangente dele
+    Cadeia { dono: fenkra_core::Id, campo: String, indice: usize },
+}
+
+fn chave_pedidos() -> egui::Id {
+    egui::Id::new("caixa_pedidos")
+}
+
+pub fn pedir(ctx: &egui::Context, p: Pedido) {
+    ctx.data_mut(|d| d.get_temp_mut_or_default::<Vec<Pedido>>(chave_pedidos()).push(p));
+}
+
+/// Os pedidos feitos neste quadro, para o app aplicar.
+pub fn drenar(ctx: &egui::Context) -> Vec<Pedido> {
+    ctx.data_mut(|d| std::mem::take(d.get_temp_mut_or_default::<Vec<Pedido>>(chave_pedidos())))
+}
+
+fn chave_recusa(salt: &str) -> egui::Id {
+    egui::Id::new(("caixa_recusa", salt))
+}
+
+/// Mensagem de validação do campo (a última recusa); vazia depois de um clique aceito.
+pub fn recusa(ctx: &egui::Context, salt: &str) -> Option<String> {
+    ctx.data(|d| d.get_temp::<Option<String>>(chave_recusa(salt))).flatten()
+}
+
+pub fn guardar_recusa(ctx: &egui::Context, salt: &str, m: Option<String>) {
+    ctx.data_mut(|d| d.insert_temp(chave_recusa(salt), m));
+}
+
 fn chave_marcas(salt: &str) -> egui::Id {
     egui::Id::new(("caixa_marcas", salt))
 }
@@ -112,9 +238,18 @@ pub fn ha_marcados(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<u64>(egui::Id::new("caixa_marcas_vivas"))).is_some_and(|p| passo.saturating_sub(p) <= 2)
 }
 
-/// Del ou Backspace pressionado sem modificador e sem campo de texto com o foco.
+/// Del, Backspace ou X pressionado sem modificador e sem campo de texto com o foco.
 pub fn tecla_de_remover(ctx: &egui::Context) -> bool {
-    !ctx.text_edit_focused() && ctx.input(|i| (i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace)) && !i.modifiers.any())
+    !ctx.text_edit_focused() && ctx.input(|i| (i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace) || i.key_pressed(egui::Key::X)) && !i.modifiers.any())
+}
+
+/// Consome as teclas de remover, para o resto do app não agir sobre elas.
+pub fn consumir_teclas_de_remover(ctx: &egui::Context) {
+    ctx.input_mut(|i| {
+        i.consume_key(egui::Modifiers::NONE, egui::Key::Delete);
+        i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace);
+        i.consume_key(egui::Modifiers::NONE, egui::Key::X);
+    });
 }
 
 fn chave_realce() -> egui::Id {
@@ -226,6 +361,58 @@ mod tests {
         remover_marcados(&mut it, &mut m, 2, Some(&-1));
         // 3 -> removido (3 > 2); depois 2 itens = mínimo, então 2 e 1 viram vazio
         assert_eq!(it, vec![-1, -1]);
+    }
+
+    fn cand_i32(x: &i32) -> Candidato {
+        Candidato { tipo: if *x < 100 { crate::contrato::TipoEntrada::Aresta } else { crate::contrato::TipoEntrada::Face }, origem: Some(fenkra_core::Id((*x / 10) as u64)), nome: format!("item {x}") }
+    }
+
+    #[test]
+    fn somar_entra_tira_e_recusa_tipo_errado() {
+        use crate::contrato::{Cardinalidade, TipoEntrada};
+        let e = Entrada::nova("arestas", "Arestas", TipoEntrada::Aresta, Cardinalidade::Varios { min: 1, max: Some(3) }, 0);
+        let mut it: Vec<i32> = vec![];
+        let c: &dyn Fn(&i32) -> Candidato = &cand_i32;
+        let s = somar(&mut it, &[1, 2], 0, None, &|a: &i32, b: &i32| a == b, Some(&e), Some(c));
+        assert_eq!((it.clone(), s.adicionados.clone(), s.recusa.clone()), (vec![1, 2], vec![0, 1], None));
+        // uma face (>= 100) não entra numa caixa de arestas, e a mensagem diz o porquê
+        let s = somar(&mut it, &[150], 0, None, &|a: &i32, b: &i32| a == b, Some(&e), Some(c));
+        assert_eq!(it, vec![1, 2]);
+        let m = s.recusa.expect("recusa");
+        assert!(m.contains("aresta") && m.contains("face"), "{m}");
+        // clicar de novo num escolhido o tira
+        let s = somar(&mut it, &[1], 0, None, &|a: &i32, b: &i32| a == b, Some(&e), Some(c));
+        assert_eq!((it.clone(), s.tirados), (vec![2], 1));
+        // o máximo de 3 itens: o quarto é recusado
+        somar(&mut it, &[3, 4], 0, None, &|a: &i32, b: &i32| a == b, Some(&e), Some(c));
+        assert_eq!(it, vec![2, 3, 4]);
+        let s = somar(&mut it, &[5], 0, None, &|a: &i32, b: &i32| a == b, Some(&e), Some(c));
+        assert_eq!(it.len(), 3);
+        assert!(s.recusa.unwrap().contains('3'));
+    }
+
+    #[test]
+    fn somar_ocupa_o_item_vazio_antes_de_acrescentar() {
+        let mut it = vec![-1, 7];
+        let s = somar(&mut it, &[9], 2, Some(&-1), &|a: &i32, b: &i32| a == b, None, None);
+        assert_eq!((it, s.adicionados), (vec![9, 7], vec![0]));
+    }
+
+    #[test]
+    fn onde_foram_segue_itens_ao_tirar_e_reordenar() {
+        let antes = vec![10, 11, 12, 13];
+        let depois = vec![13, 11, 12];
+        assert_eq!(onde_foram(&antes, &depois, &|a: &i32, b: &i32| a == b), vec![None, Some(1), Some(2), Some(0)]);
+    }
+
+    #[test]
+    fn mover_troca_com_o_vizinho_e_para_nas_pontas() {
+        let mut it = vec!['a', 'b', 'c'];
+        assert_eq!(mover(&mut it, 1, -1), Some(0));
+        assert_eq!(it, vec!['b', 'a', 'c']);
+        assert_eq!(mover(&mut it, 0, -1), None);
+        assert_eq!(mover(&mut it, 2, 1), None);
+        assert_eq!(mover(&mut it, 1, 1), Some(2));
     }
 
     #[test]

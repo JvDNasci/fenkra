@@ -398,7 +398,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 ui.add_sized([96., 18.], egui::Label::new(tr("Plano neutro")));
                 plane_combo(ui, "dr_pl", doc, &mut d.neutral, None);
             });
-            crate::editor::check(ui, &mut d.reverse, "inverter a direção de extração");
+            crate::inverter::botao(ui, &mut d.reverse);
             crate::selecao_regras::regra_faces_ui(ui, &mut d.regras, &d.faces);
             let before = d.faces.clone();
             faces_ui(ui, doc, &mut d.faces, &d.face_keys, picked_faces);
@@ -507,7 +507,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             if !st.to_body {
                 expr(ui, "Profundidade", &mut st.depth, vars, "mm");
             }
-            crate::editor::check(ui, &mut st.reverse, "para o lado da normal do plano");
+            crate::inverter::botao(ui, &mut st.reverse);
             ui.horizontal_wrapped(|ui| {
                 ui.label(tr("Lado da parede"));
                 ui.radio_value(&mut st.side, 0, tr("dois lados"));

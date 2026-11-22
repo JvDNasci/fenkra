@@ -181,16 +181,14 @@ impl TiposTemporarios {
 }
 
 /// O que o comando aberto precisa escolher: faces (casca, saída, rosca…) ou arestas (filete e
-/// chanfro com arestas escolhidas). Os demais comandos usam o filtro da barra.
+/// chanfro com arestas escolhidas). O filtro sai do descritor do comando (`contrato::filtro`: os tipos
+/// que o campo ativo aceita); os comandos que ainda não declararam o descritor usam a lista de
+/// `wants_faces` (adaptador), e os demais, o filtro da barra.
 pub fn tipos_do_comando(kind: &fenkra_core::FeatureKind) -> Option<TiposTemporarios> {
-    use fenkra_core::{EdgeSel, FeatureKind};
-    if crate::feat_ui::wants_faces(kind) {
-        return Some(TiposTemporarios { faces: true, arestas: false, vertices: false });
+    if let Some(t) = crate::contrato::filtro(crate::contrato::Alvo::Feature(kind)) {
+        return Some(t);
     }
-    match kind {
-        FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) if matches!(o.edges, EdgeSel::Edges(_)) => Some(TiposTemporarios { faces: true, arestas: true, vertices: false }),
-        _ => None,
-    }
+    crate::feat_ui::wants_faces(kind).then_some(TiposTemporarios { faces: true, arestas: false, vertices: false })
 }
 
 /// Estado do laço e do espelho do conjunto na cena.

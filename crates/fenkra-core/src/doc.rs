@@ -525,6 +525,17 @@ impl Document {
             self.transparencias.push((id, t.min(100)));
         }
     }
+    /// ADR 0107: dados do campo `campo` do comando `dono` (junções e cadeia tangente), se houver.
+    pub fn dados_campo(&self, dono: Id, campo: &str) -> Option<&crate::campo_dados::DadosCampo> {
+        self.campos.iter().find(|c| c.dono == dono && c.campo == campo)
+    }
+    /// ADR 0107: grava os dados de um campo; dado vazio tira a marca (o arquivo não carrega lixo).
+    pub fn set_dados_campo(&mut self, d: crate::campo_dados::DadosCampo) {
+        self.campos.retain(|c| !(c.dono == d.dono && c.campo == d.campo));
+        if !d.vazio() {
+            self.campos.push(d);
+        }
+    }
     pub fn set_line_style(&mut self, id: Id, st: Option<LineStyle>) {
         self.line_styles.retain(|(x, _)| *x != id);
         if let Some(st) = st {
@@ -4566,6 +4577,10 @@ pub struct Document {
     /// recálculo não muda). Vazio = todo recurso gerado aparece dentro de quem o gerou.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub soltos_do_gerador: Vec<Id>,
+    /// ADR 0107: dados da caixa de seleção universal por campo de comando (junções na hora e cadeia
+    /// tangente). A lista de itens fica no próprio comando; aqui só o agrupamento.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub campos: Vec<crate::campo_dados::DadosCampo>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -4633,6 +4648,7 @@ impl Document {
             idioma: crate::nomes::idioma(),
             medidas: vec![],
             soltos_do_gerador: vec![],
+            campos: vec![],
         };
         let n = crate::nomes::base("Corpo principal");
         let c = d.add_collector(&n);
@@ -5541,6 +5557,7 @@ impl Document {
         let freed: Vec<Id> = kill.iter().flat_map(|k| self.consumed(*k)).filter(|x| !kill.contains(x)).collect();
         self.features.retain(|f| !kill.contains(&f.id));
         self.references.retain(|r| !kill.contains(&r.id));
+        self.campos.retain(|c| !kill.contains(&c.dono));
         let ids: Vec<Id> = self.features.iter().map(|f| f.id).chain(self.references.iter().map(|r| r.id)).collect();
         let still: HashSet<Id> = ids.iter().flat_map(|i| self.consumed(*i)).collect();
         for x in freed {

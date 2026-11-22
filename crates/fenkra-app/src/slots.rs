@@ -301,13 +301,13 @@ pub fn fill<T: Serialize + DeserializeOwned>(k: &mut T, c: &mut Cands) -> bool {
 /// Campos que não são referências (pontos clicados guardados como coordenadas, listas):
 /// preenchidos pela seleção quando ainda estão vazios.
 pub fn fill_special(k: &mut FeatureKind, s: &Seed, edge_mid: Option<[f64; 3]>, face_pt: Option<[f64; 3]>, verts: &[[f64; 3]], sketch: Option<Id>, shape: Option<Id>) -> bool {
-    let z = [0.; 3];
+    use crate::contrato::ponto_vazio;
     match k {
-        FeatureKind::SmFlange(f) if f.edge == z => edge_mid.map(|e| f.edge = e).is_some(),
-        FeatureKind::SmHem(h) if h.edge == z => edge_mid.map(|e| h.edge = e).is_some(),
+        FeatureKind::SmFlange(f) if ponto_vazio(&f.edge) => edge_mid.map(|e| f.edge = e).is_some(),
+        FeatureKind::SmHem(h) if ponto_vazio(&h.edge) => edge_mid.map(|e| h.edge = e).is_some(),
         // B514: o laço de abas aberto sem aresta recebe a primeira pela seleção
-        FeatureKind::SmFlangeLoop(l) if l.edges.iter().all(|e| *e == z) => edge_mid.map(|e| l.edges = vec![e]).is_some(),
-        FeatureKind::Thread(t) if t.face == z => face_pt.map(|p| t.face = p).is_some(),
+        FeatureKind::SmFlangeLoop(l) if l.edges.iter().all(ponto_vazio) => edge_mid.map(|e| l.edges = vec![e]).is_some(),
+        FeatureKind::Thread(t) if ponto_vazio(&t.face) => face_pt.map(|p| t.face = p).is_some(),
         FeatureKind::SmBend(b) if b.a == b.b && verts.len() >= 2 => {
             (b.a, b.b) = (verts[0], verts[1]);
             true
@@ -368,7 +368,7 @@ pub fn recebe_aresta_clicada(k: &FeatureKind) -> bool {
 /// aresta curva (`reta` falso) troca o recurso pela aba curva, com os mesmos comprimento, ângulo,
 /// raio, lado e sentido, e a aresta clicada só (sem as tangentes).
 pub fn aresta_clicada(k: &mut FeatureKind, mid: [f64; 3], key: Option<EdgeKey>, reta: bool, cadeia: impl FnOnce(bool) -> Vec<[f64; 3]>) -> bool {
-    let z = [0.; 3];
+    let z = crate::contrato::PONTO_VAZIO;
     let perto = |a: &[f64; 3]| (0..3).map(|i| (a[i] - mid[i]).powi(2)).sum::<f64>().sqrt() < 0.01;
     match k {
         FeatureKind::SmFlange(f) if !reta => {
@@ -391,7 +391,7 @@ pub fn aresta_clicada(k: &mut FeatureKind, mid: [f64; 3], key: Option<EdgeKey>, 
         }
         FeatureKind::SmFlangeLoop(l) => {
             // as chaves andam junto com as arestas (uma por aresta; faltando, sem chave)
-            let mut pares: Vec<([f64; 3], Option<EdgeKey>)> = l.edges.iter().enumerate().filter(|(_, e)| **e != z).map(|(i, e)| (*e, l.edge_keys.get(i).copied().flatten())).collect();
+            let mut pares: Vec<([f64; 3], Option<EdgeKey>)> = l.edges.iter().enumerate().filter(|(_, e)| !crate::contrato::ponto_vazio(e)).map(|(i, e)| (*e, l.edge_keys.get(i).copied().flatten())).collect();
             let antes = pares.len();
             match pares.iter().position(|(e, _)| perto(e)) {
                 Some(i) => {
@@ -498,28 +498,11 @@ pub fn polilinha_reta(p: &[[f64; 3]]) -> bool {
     })
 }
 
-/// Algum campo ainda vazio (também os especiais)?
+/// Algum campo ainda vazio? Quem responde é o descritor do comando (`contrato::FeatureSpec`): as
+/// entradas declaradas (aresta da aba, face da rosca, linha da dobra, faces da casca…) e os
+/// marcadores "a escolher" que o adaptador lê. Aqui não sobra comparação com `[0.; 3]`.
 pub fn feature_incomplete(k: &FeatureKind) -> bool {
-    let z = [0.; 3];
-    count_unset(k) > 0
-        || match k {
-            FeatureKind::SmFlange(f) => f.edge == z,
-            FeatureKind::SmHem(h) => h.edge == z,
-            FeatureKind::SmFlangeLoop(l) => l.edges.iter().all(|e| *e == z),
-            FeatureKind::SmCurveFlange(c) => c.edge.len() < 2,
-            FeatureKind::Thread(t) => t.face == z,
-            FeatureKind::SmBend(b) => b.a == b.b,
-            FeatureKind::SmLouver(b) => b.a == b.b,
-            FeatureKind::SmJoggle(b) => b.a == b.b,
-            FeatureKind::Loft(l) => l.sections.len() < 2,
-            FeatureKind::StructMember(m) => m.paths.is_empty(),
-            FeatureKind::Fillet(o) | FeatureKind::Chamfer(o) => matches!(&o.edges, EdgeSel::Edges(m) if m.is_empty()),
-            FeatureKind::Shell(x) => x.faces.is_empty(),
-            FeatureKind::Draft(x) => x.faces.is_empty(),
-            FeatureKind::Thickness(x) => x.faces.is_empty(),
-            FeatureKind::DirectEdit(x) => x.faces.is_empty(),
-            _ => false,
-        }
+    crate::contrato::incompleto(crate::contrato::Alvo::Feature(k))
 }
 
 #[cfg(test)]

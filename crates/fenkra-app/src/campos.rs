@@ -63,6 +63,12 @@ struct Quadro {
     enter_do_painel: bool,
     /// editor de um item de lista aberto: os campos dele não entram na ordem do painel
     suspenso: bool,
+    /// ADR 0107: id (do descritor) do campo ativo que o comando aberto declara, publicado a cada quadro
+    /// por `definir_contrato`. Vale no lugar da regra "primeiro vazio na ordem do desenho" quando algum
+    /// widget registrado leva esse nome; sem widget com o nome, a ordem do painel decide como sempre.
+    contrato: Option<&'static str>,
+    /// nome (`salt`) de cada widget de seleção, para ligar o campo do descritor ao widget
+    nomes: Vec<(egui::Id, String)>,
     /// publicados no fim do quadro, para o `App` ler no quadro seguinte
     consome: bool,
     enter: bool,
@@ -105,9 +111,16 @@ fn selecao(t: Tipo) -> bool {
     matches!(t, Tipo::Selecao { .. })
 }
 
-/// Índice do campo ativo na lista dada.
-fn ativo_em(l: &[(egui::Id, Tipo)], foco: Foco) -> Option<usize> {
-    let auto = || l.iter().position(|x| vazio(x.1)).or_else(|| l.iter().position(|x| lista(x.1)));
+/// O widget do campo que o descritor do comando manda ficar ativo, se ele estiver na tela.
+fn preferido(q: &Quadro) -> Option<egui::Id> {
+    let c = q.contrato?;
+    q.nomes.iter().find(|(_, salt)| crate::contrato::salt_bate(salt, c)).map(|x| x.0)
+}
+
+/// Índice do campo ativo na lista dada. No automático vale o campo do descritor (`pref`); sem ele, o
+/// primeiro vazio, ou a primeira lista.
+fn ativo_em(l: &[(egui::Id, Tipo)], foco: Foco, pref: Option<egui::Id>) -> Option<usize> {
+    let auto = || pref.and_then(|p| l.iter().position(|x| x.0 == p)).or_else(|| l.iter().position(|x| vazio(x.1))).or_else(|| l.iter().position(|x| lista(x.1)));
     match foco {
         Foco::Nenhum => None,
         Foco::Campo(k) => l.iter().position(|x| x.0 == k).or_else(auto),
@@ -171,7 +184,7 @@ pub fn inicio(ctx: &egui::Context, dono: u64, assinatura: u64) {
         // Tab só é do painel quando ninguém de fora está digitando (um parâmetro do painel pode)
         let nosso = focado.is_some_and(|f| q.anterior.iter().any(|x| x.0 == f));
         if (tab || volta) && !q.anterior.is_empty() && (!texto_fora || nosso) {
-            let de = ativo_em(&q.anterior, q.foco);
+            let de = ativo_em(&q.anterior, q.foco, preferido(q));
             mover(q, de, if volta { -1 } else { 1 });
             q.avancou = true;
             cancelar_navegacao = true;
@@ -193,13 +206,14 @@ pub fn fim(ctx: &egui::Context) -> bool {
     let enter = ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.is_none());
     let (consumiu, teclado, soltar) = com(ctx, |q| {
         if q.enter_do_painel && enter && !q.avancou {
-            let de = ativo_em(&q.anterior, q.foco);
+            let de = ativo_em(&q.anterior, q.foco, preferido(q));
             mover(q, de, 1);
             q.avancou = true;
         }
         // decisões do próximo quadro, com a lista completa deste
+        let pref = preferido(q);
         let l = &q.atual;
-        let i = ativo_em(l, q.foco);
+        let i = ativo_em(l, q.foco, pref);
         let primeiro_vazio = l.iter().position(|x| vazio(x.1));
         q.consome = q.sessao && i.is_some_and(|i| lista(l[i].1) || (selecao(l[i].1) && Some(i) != primeiro_vazio));
         q.enter = q.sessao && i.is_some_and(|i| selecao(l[i].1) && selecao_depois(l, i));
@@ -248,6 +262,8 @@ pub fn selecao_campo(ctx: &egui::Context, id: egui::Id, vazio_agora: bool, vario
         let ativo = match q.foco {
             Foco::Nenhum => false,
             Foco::Campo(k) if q.anterior.iter().any(|x| x.0 == k) || q.atual.iter().any(|x| x.0 == k) => k == id,
+            // ADR 0107: o descritor do comando diz qual campo é o ativo
+            _ if preferido(q).is_some_and(|p| q.anterior.iter().chain(q.atual.iter()).any(|x| x.0 == p)) => preferido(q) == Some(id),
             _ => {
                 let vazio_antes = q.atual.iter().any(|x| vazio(x.1));
                 if vazio_agora {
@@ -264,6 +280,21 @@ pub fn selecao_campo(ctx: &egui::Context, id: egui::Id, vazio_agora: bool, vario
         q.atual.push((id, tipo));
         Estado { ativo, novo: ativo && q.novos && q.sessao && !q.consumiu }
     })
+}
+
+/// ADR 0107: o comando aberto declara qual campo é o ativo (`id` do descritor; `None` = nenhum
+/// declarado). O painel chama no começo de cada quadro, depois de `inicio`.
+pub fn definir_contrato(ctx: &egui::Context, ativo: Option<&'static str>) {
+    com(ctx, |q| q.contrato = ativo);
+}
+
+/// Diz a que campo do descritor o widget `id` pertence (o `salt` dele).
+pub fn nomear(ctx: &egui::Context, id: egui::Id, salt: &str) {
+    com(ctx, |q| {
+        if !q.nomes.iter().any(|x| x.0 == id) {
+            q.nomes.push((id, salt.to_string()));
+        }
+    });
 }
 
 /// Liga/desliga o registro (o editor de um item de lista desenha campos que não são do painel).
@@ -370,28 +401,28 @@ mod tests {
     #[test]
     fn ativo_automatico_e_o_primeiro_vazio_senao_a_lista() {
         let l = campos(&[(1, CHEIO), (2, LISTA), (3, VAZIO), (4, Tipo::Numero)]);
-        assert_eq!(ativo_em(&l, Foco::Auto), Some(2));
+        assert_eq!(ativo_em(&l, Foco::Auto, None), Some(2));
         let l = campos(&[(1, CHEIO), (2, LISTA), (3, CHEIO), (4, Tipo::Numero)]);
-        assert_eq!(ativo_em(&l, Foco::Auto), Some(1));
+        assert_eq!(ativo_em(&l, Foco::Auto, None), Some(1));
         let l = campos(&[(1, CHEIO), (4, Tipo::Numero)]);
-        assert_eq!(ativo_em(&l, Foco::Auto), None, "tudo preenchido e sem lista: nada ativo, o Enter conclui");
+        assert_eq!(ativo_em(&l, Foco::Auto, None), None, "tudo preenchido e sem lista: nada ativo, o Enter conclui");
     }
 
     #[test]
     fn tab_anda_pelos_campos_e_o_numero_pede_o_teclado() {
         let mut q = Quadro { anterior: campos(&[(1, LISTA), (2, LISTA), (3, Tipo::Numero)]), ..Default::default() };
-        let de = ativo_em(&q.anterior, q.foco);
+        let de = ativo_em(&q.anterior, q.foco, None);
         assert_eq!(de, Some(0));
         mover(&mut q, de, 1);
         assert_eq!(q.foco, Foco::Campo(egui::Id::new(2)));
         assert!(q.soltar && q.teclado.is_none());
-        let de = ativo_em(&q.anterior, q.foco);
+        let de = ativo_em(&q.anterior, q.foco, None);
         mover(&mut q, de, 1);
         assert_eq!(q.teclado, Some(egui::Id::new(3)), "o parâmetro recebe o foco do teclado");
-        let de = ativo_em(&q.anterior, q.foco);
+        let de = ativo_em(&q.anterior, q.foco, None);
         mover(&mut q, de, 1);
         assert_eq!(q.foco, Foco::Nenhum, "depois do último, nada ativo");
-        let de = ativo_em(&q.anterior, q.foco);
+        let de = ativo_em(&q.anterior, q.foco, None);
         mover(&mut q, de, -1);
         assert_eq!(q.foco, Foco::Campo(egui::Id::new(3)), "Shift+Tab a partir do fim volta ao último");
     }

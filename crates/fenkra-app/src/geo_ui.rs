@@ -29,6 +29,7 @@ pub struct Seed {
 /// primeiro campo vazio na ordem do painel, que é a ordem da declaração (a mesma de `slots::fill`);
 /// Tab, Enter e o clique no rótulo escolhem outro. Devolve o estado do campo `salt` neste quadro.
 pub(crate) fn campo_ativo(ui: &egui::Ui, salt: &str, vazio: bool) -> crate::campos::Estado {
+    crate::campos::nomear(ui.ctx(), id_do_campo(salt), salt);
     crate::campos::selecao_campo(ui.ctx(), id_do_campo(salt), vazio, false)
 }
 
@@ -1048,6 +1049,10 @@ fn radius_ui(ui: &mut egui::Ui, radius: &mut String, radius2: &mut Option<String
 /// janela à parte. `vazio` é o marcador de item a escolher (os campos vazios de `slots`): abaixo do
 /// mínimo o item tirado volta a ele, e o comando continua pedindo o elemento. `mesmo` diz se dois
 /// itens são o mesmo elemento (a face clicada em outro ponto continua sendo a mesma face).
+///
+/// ADR 0107: este é o widget de sempre, agora uma chamada da caixa universal em árvore
+/// (`caixa_arvore::caixa`) sem descritor: sem nós por origem, junção nem validação por tipo. Quem tem
+/// descritor usa `bag_contrato`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
     ui: &mut egui::Ui,
@@ -1062,119 +1067,36 @@ pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
     vazio: Option<T>,
     mesmo: impl Fn(&T, &T) -> bool,
 ) {
-    let ctx = ui.ctx().clone();
-    let id = id_do_campo(salt);
-    let e_vazio = |x: &T| vazio.as_ref() == Some(x);
-    let reais = items.iter().filter(|x| !e_vazio(x)).count();
-    // vazio = abaixo do mínimo (uma lista opcional, de mínimo zero, nunca toma a vez de um campo vazio)
-    let est = crate::campos::selecao_campo(&ctx, id, reais < min, true);
-    if est.novo && !picked.is_empty() {
-        alternar_na_lista(items, picked, min, vazio.as_ref(), &mesmo);
-        crate::campos::consumido(&ctx);
-        // os índices mudaram: a marcação da caixa recomeça (B555)
-        crate::caixa_selecao::guardar_marcas(&ctx, salt, Default::default());
-    }
-    let mut marcas = crate::caixa_selecao::marcas(&ctx, salt);
-    marcas.ajustar(items.len());
-    let reais = items.iter().filter(|x| !e_vazio(x)).count();
-    let cor = if est.ativo { crate::entradas::Espera::Superficie.cor() } else { ui.visuals().widgets.noninteractive.bg_stroke.color };
-    ui.horizontal(|ui| {
-        let txt = format!("{} ({reais})", tr(label));
-        let r = if est.ativo {
-            ui.add(egui::Label::new(RichText::new(format!("▶ {txt}")).strong().color(cor)).sense(egui::Sense::click())).on_hover_text(tr("Campo ativo: cada clique no 3D soma um elemento; clicar de novo num escolhido o tira."))
-        } else {
-            ui.add(egui::Label::new(txt).sense(egui::Sense::click())).on_hover_text(tr("Clique para escolher este campo: o próximo clique no 3D vem para cá (Tab passa ao seguinte)."))
-        };
-        if r.clicked() {
-            crate::campos::focar(&ctx, id);
-        }
-    });
-    let aberto_key = egui::Id::new(("lista_item_aberto", salt));
-    let mut aberto: Option<usize> = ctx.data(|d| d.get_temp::<Option<usize>>(aberto_key)).flatten();
-    let (mut del, mut novo) = (None, false);
-    let quadro = egui::Frame::NONE.stroke(egui::Stroke::new(if est.ativo { 1.5 } else { 1. }, cor)).corner_radius(4.).inner_margin(4.);
-    let resp = quadro
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            if items.is_empty() {
-                ui.label(RichText::new(tr("nenhum elemento: clique no 3D")).weak().small());
-            }
-            for (i, it) in items.iter_mut().enumerate() {
-                // B555: o item marcado ganha o fundo de seleção do tema
-                let fundo = if marcas.esta(i) { ui.visuals().selection.bg_fill } else { egui::Color32::TRANSPARENT };
-                egui::Frame::NONE.fill(fundo).corner_radius(3.).show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(format!("{}.", i + 1)).weak());
-                        let n = name(it);
-                        let w = (ui.available_width() - 52.).max(40.);
-                        let txt = if vazio.as_ref() == Some(&*it) { RichText::new(n).weak() } else { RichText::new(n) };
-                        let r = ui.add_sized([w, 18.], egui::Label::new(txt).truncate().sense(egui::Sense::click())).on_hover_text(tr("Clique marca; Ctrl soma ou tira da marcação; Shift marca o intervalo; Del tira os marcados."));
-                        if r.clicked() {
-                            let (ctrl, shift) = ui.input(|k| (k.modifiers.command, k.modifiers.shift));
-                            marcas.clicar(i, ctrl, shift);
-                            crate::campos::focar(&ctx, id);
-                        }
-                        if ui.small_button("✎").on_hover_text(tr("Trocar este item pela lista ▾")).clicked() {
-                            aberto = if aberto == Some(i) { None } else { Some(i) };
-                        }
-                        if ui.small_button("✖").on_hover_text(tr("remover")).clicked() {
-                            del = Some(i);
-                        }
-                    });
-                });
-                if aberto == Some(i) {
-                    // o editor do item não é um campo do painel: não entra na ordem do Tab
-                    crate::campos::suspender(&ctx, true);
-                    ui.indent(("item", i), |ui| edit(ui, i, it));
-                    crate::campos::suspender(&ctx, false);
-                }
-            }
-            if est.ativo {
-                ui.label(RichText::new(tr("Clique no 3D para somar; clique de novo num escolhido para tirar.")).weak().small());
-            }
-            ui.horizontal(|ui| {
-                if ui.small_button(tr("+ pela lista")).on_hover_text(tr("Acrescenta um item para escolher pela lista ▾, sem o 3D.")).clicked() {
-                    novo = true;
-                }
-                if reais > 0 && ui.small_button(tr("Limpar")).clicked() {
-                    items.truncate(min);
-                    if let Some(v) = &vazio {
-                        for x in items.iter_mut() {
-                            *x = v.clone();
-                        }
-                    }
-                    aberto = None;
-                    marcas.limpar();
-                }
-            });
-        })
-        .response;
-    if resp.interact(egui::Sense::click()).clicked() {
-        crate::campos::focar(&ctx, id);
-    }
-    if let Some(i) = del {
-        tirar_da_lista(items, i, min, vazio.as_ref());
-        aberto = None;
-        // o índice tirado desloca os seguintes: a marcação recomeça
-        marcas.limpar();
-    }
-    // B555: Del/Backspace tira os marcados, só com a caixa ativa ou sob o mouse e sem texto em edição
-    let sobre = ctx.input(|i| i.pointer.hover_pos()).is_some_and(|p| resp.rect.contains(p));
-    if !marcas.vazia() && (est.ativo || sobre) && crate::caixa_selecao::tecla_de_remover(&ctx) {
-        crate::caixa_selecao::remover_marcados(items, &mut marcas, min, vazio.as_ref());
-        aberto = None;
-        ctx.input_mut(|i| {
-            i.consume_key(egui::Modifiers::NONE, egui::Key::Delete);
-            i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace);
-        });
-    }
-    marcas.ajustar(items.len());
-    crate::caixa_selecao::guardar_marcas(&ctx, salt, marcas);
-    if novo {
-        items.push(blank());
-        aberto = Some(items.len() - 1);
-    }
-    ctx.data_mut(|d| d.insert_temp(aberto_key, aberto));
+    let c = crate::caixa_arvore::Caixa { salt, label, min, entrada: None, dono: None, dados: None, clicados: vec![], nome: &name, origem: None, cand: None, blank: &blank, vazio, mesmo: &mesmo };
+    crate::caixa_arvore::caixa(ui, c, items, picked, &mut edit);
+}
+
+/// A caixa de seleção de um campo que o comando declara no descritor (`contrato`): ordem, junção,
+/// validação e nós por origem vêm dele. `dono` é o comando; `seed` traz o que a seleção atual tem (para
+/// recusar o tipo errado com mensagem).
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn bag_contrato<T: Clone + PartialEq + Send + Sync + 'static>(
+    ui: &mut egui::Ui,
+    doc: &Document,
+    dono: Id,
+    seed: &Seed,
+    salt: &str,
+    label: &str,
+    items: &mut Vec<T>,
+    picked: &[T],
+    min: usize,
+    name: impl Fn(&T) -> String,
+    origem: Option<&dyn Fn(&T) -> Option<String>>,
+    cand: Option<&dyn Fn(&T) -> crate::contrato::Candidato>,
+    mut edit: impl FnMut(&mut egui::Ui, usize, &mut T),
+    blank: impl Fn() -> T,
+    vazio: Option<T>,
+    mesmo: impl Fn(&T, &T) -> bool,
+) {
+    let entrada = crate::contrato::entrada_do_doc(doc, dono, salt);
+    let dados = entrada.as_ref().and_then(|e| doc.dados_campo(dono, e.id));
+    let c = crate::caixa_arvore::Caixa { salt, label, min, entrada: entrada.as_ref(), dono: Some(dono), dados, clicados: crate::contrato::tipos_clicados(seed), nome: &name, origem, cand, blank: &blank, vazio, mesmo: &mesmo };
+    crate::caixa_arvore::caixa(ui, c, items, picked, &mut edit);
 }
 
 /// Tira o item `i`; abaixo do mínimo ele volta a ser o marcador de vazio (se houver).
@@ -1226,20 +1148,72 @@ pub(crate) fn mesmo_ponto(a: &PointRef, b: &PointRef) -> bool {
     }
 }
 
+/// De onde a curva vem, para o nó da árvore na caixa: o sketch, o comando que gerou a aresta, o
+/// wireframe ou o modelo.
+pub(crate) fn origem_da_curva(doc: &Document, c: &CurveRef) -> Option<String> {
+    Some(match c {
+        CurveRef::SketchCurve { sketch, .. } | CurveRef::SketchLine { sketch, .. } => doc.name_of(*sketch),
+        CurveRef::BodyEdge { key, .. } => doc.name_of(key.a.owner),
+        CurveRef::Ref(id) if id.a_escolher() => return None,
+        CurveRef::Ref(_) | CurveRef::Segment { .. } => tr("Arame").to_string(),
+        CurveRef::Edge(_) => tr("Arestas do modelo").to_string(),
+        CurveRef::Axis(_) => tr("Origem").to_string(),
+    })
+}
+
+/// A curva como o validador do campo a vê.
+pub(crate) fn candidato_da_curva(doc: &Document, c: &CurveRef) -> crate::contrato::Candidato {
+    use crate::contrato::{Candidato, TipoEntrada};
+    let (tipo, origem) = match c {
+        CurveRef::SketchCurve { sketch, .. } | CurveRef::SketchLine { sketch, .. } => (TipoEntrada::Curva, Some(*sketch)),
+        CurveRef::BodyEdge { key, .. } => (TipoEntrada::Aresta, Some(key.a.owner)),
+        CurveRef::Edge(_) => (TipoEntrada::Aresta, None),
+        _ => (TipoEntrada::Curva, None),
+    };
+    Candidato { tipo, origem, nome: curve_name(doc, c) }
+}
+
+/// De onde a superfície vem, para o nó da árvore na caixa.
+pub(crate) fn origem_da_superficie(doc: &Document, s: &SurfRef) -> Option<String> {
+    Some(match s {
+        SurfRef::Face { owner: Some(o), .. } => doc.name_of(*o),
+        SurfRef::Face { .. } => tr("Faces do modelo").to_string(),
+        SurfRef::Plane(_) => tr("Planos").to_string(),
+        SurfRef::Ref(id) if id.a_escolher() => return None,
+        SurfRef::Ref(_) => tr("Superfícies").to_string(),
+    })
+}
+
+/// A superfície como o validador do campo a vê.
+pub(crate) fn candidato_da_superficie(doc: &Document, s: &SurfRef) -> crate::contrato::Candidato {
+    use crate::contrato::{Candidato, TipoEntrada};
+    let (tipo, origem) = match s {
+        SurfRef::Face { owner, .. } => (TipoEntrada::Face, *owner),
+        SurfRef::Plane(_) => (TipoEntrada::Plano, None),
+        SurfRef::Ref(id) => (TipoEntrada::Superficie, Some(*id)),
+    };
+    Candidato { tipo, origem, nome: surf_name(doc, s) }
+}
+
 /// Lista de curvas (seções), com mínimo de itens.
 pub(crate) fn curves_list(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, cs: &mut Vec<CurveRef>, seed: &Seed, min: usize) {
     let plural = match label {
         "Seção" => "Seções".to_string(),
         l => format!("{l}s"),
     };
-    bag(
+    bag_contrato(
         ui,
+        doc,
+        me,
+        seed,
         salt,
         &plural,
         cs,
         &seed.curves,
         min,
         |c| curve_name(doc, c),
+        Some(&|c: &CurveRef| origem_da_curva(doc, c)),
+        Some(&|c: &CurveRef| candidato_da_curva(doc, c)),
         |ui, i, c| curve_slot(ui, &format!("{salt}{i}"), &format!("{label} {}", i + 1), doc, me, c, seed),
         || CurveRef::Axis(OriginAxis::X),
         Some(crate::slots::curve()),
@@ -1250,14 +1224,19 @@ pub(crate) fn curves_list(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docu
 /// Lista de superfícies (juntar, preencher fronteiras).
 pub(crate) fn surfs_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id, items: &mut Vec<SurfRef>, seed: &Seed) {
     let picked: Vec<SurfRef> = seed.surface.iter().cloned().chain(seed.planes.iter().map(|p| SurfRef::Plane(*p))).collect();
-    bag(
+    bag_contrato(
         ui,
+        doc,
+        me,
+        seed,
         salt,
         "Elementos",
         items,
         &picked,
         1,
         |s| surf_name(doc, s),
+        Some(&|s: &SurfRef| origem_da_superficie(doc, s)),
+        Some(&|s: &SurfRef| candidato_da_superficie(doc, s)),
         |ui, i, s| surf_slot(ui, &format!("{salt}{i}"), &format!("Elemento {}", i + 1), doc, me, s, seed),
         || SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY)),
         Some(crate::slots::surf()),
@@ -1976,8 +1955,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             expr(ui, "Seções", sections, vars, "");
             ui.label(RichText::new(tr("As seções ficam em planos normais à spine; as guias são cortadas nesses planos.")).weak().small());
         }
-        R::SurfFillet { a, b, flip_a, flip_b, radius, radius2 } => {
-            let _ = (flip_a, flip_b);
+        R::SurfFillet { a, b, radius, radius2, .. } => {
             surf_slot(ui, "g_a", "Superfície 1", doc, me, a, seed);
             surf_slot(ui, "g_b", "Superfície 2", doc, me, b, seed);
             crate::sup3d::dica_de_lado(ui);
@@ -2430,6 +2408,11 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             };
             ui.label(format!("tipo: {k}"));
         }
+    }
+    // B562/ADR 0107: o "⇄ Inverter direção" padrão, ligado ao mesmo campo da seta do 3D
+    if !crate::inverter::controles(crate::contrato::Alvo::Ref(&r.kind)).is_empty() {
+        section(ui, "Direção");
+        crate::inverter::botoes_ref(ui, &mut r.kind);
     }
     ui.add_space(4.);
     ui.label(RichText::new(tr("O campo marcado com ▶ recebe o clique no 3D; clique no nome de outro campo para trocar, Tab passa ao seguinte.")).weak().small());
