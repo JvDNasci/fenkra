@@ -40,6 +40,7 @@
 #include <BRepTools_WireExplorer.hxx>
 #include <BOPAlgo_MakerVolume.hxx>
 #include <GeomConvert.hxx>
+#include <Geom_Line.hxx>
 #include <GeomLib.hxx>
 #include <Geom_BSplineSurface.hxx>
 #include <Geom_BoundedSurface.hxx>

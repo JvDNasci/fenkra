@@ -154,11 +154,12 @@ bool varre_superficie(const TopoDS_Wire& w, const TopoDS_Wire& p, uint8_t mode, 
 // com o triedro discreto, inteira e depois dividida em trechos de uma mesma B-spline (sem criar canto).
 std::unique_ptr<Shape> sweep_surface(rust::Slice<const double> profile, rust::Slice<const double> spine, uint8_t mode) {
     return guard("varredura de superfície", [&] {
-        TopoDS_Wire p = spine_wire(profile), w = spine_wire(spine);
+        TopoDS_Wire p = wire_curva(profile), w = wire_curva(spine);
         TopoDS_Shape out;
         const char* motivo = nullptr;
         if (varre_superficie(w, p, mode, false, out, motivo)) return wrap(out);
-        Handle(Geom_BSplineCurve) c = guia_suave(spine);
+        // guia de uma curva só (exata ou suave): pode ser dividida em trechos da mesma B-spline
+        Handle(Geom_BSplineCurve) c = e_curva_codificada(spine) ? bspline_do_fio(w) : guia_suave(spine);
         if (!c.IsNull()) {
             if (varre_superficie(w, p, mode, true, out, motivo)) return wrap(out);
             for (int k : {4, 8, 16}) {
@@ -178,8 +179,8 @@ std::unique_ptr<Shape> loft_surface(rust::Slice<const double> flat, rust::Slice<
     return guard("multi-seções de superfície", [&] {
         std::vector<TopoDS_Wire> ws = curves_of(flat, ends);
         if (ws.size() < 2) throw std::runtime_error("são precisas pelo menos duas seções");
-        if (guide.size() >= 6) {
-            BRepOffsetAPI_MakePipeShell mk(spine_wire(guide));
+        if (guide.size() >= 6 || e_curva_codificada(guide)) {
+            BRepOffsetAPI_MakePipeShell mk(wire_curva(guide));
             mk.SetMode(Standard_False);
             for (auto& w : ws) mk.Add(w, Standard_False, Standard_False);
             mk.Build();
@@ -1664,6 +1665,46 @@ rust::Vec<uint32_t> face_types(const Shape& s) {
         }
     }
     return out;
+}
+
+// B559: arestas por tipo de curva: reta, círculo, elipse, B-spline/Bézier e outras.
+rust::Vec<uint32_t> edge_types(const Shape& s) {
+    rust::Vec<uint32_t> out;
+    for (int i = 0; i < 5; ++i) out.push_back(0);
+    TopTools_IndexedMapOfShape edges;
+    TopExp::MapShapes(s.s, TopAbs_EDGE, edges);
+    for (int i = 1; i <= edges.Extent(); ++i) {
+        const TopoDS_Edge& e = TopoDS::Edge(edges(i));
+        if (BRep_Tool::Degenerated(e)) continue;
+        BRepAdaptor_Curve a(e);
+        switch (a.GetType()) {
+            case GeomAbs_Line: out[0]++; break;
+            case GeomAbs_Circle: out[1]++; break;
+            case GeomAbs_Ellipse: out[2]++; break;
+            case GeomAbs_BSplineCurve:
+            case GeomAbs_BezierCurve: out[3]++; break;
+            default: out[4]++;
+        }
+    }
+    return out;
+}
+
+// B559/B576: curva exata da aresta mais perto do ponto, codificada como curva de um trecho.
+rust::Vec<double> edge_curve_at(const Shape& s, double px, double py, double pz) {
+    return guard("aresta", [&] {
+        TopoDS_Vertex v = BRepBuilderAPI_MakeVertex(gp_Pnt(px, py, pz));
+        TopoDS_Edge best;
+        double bd = 1e300;
+        for (TopExp_Explorer x(s.s, TopAbs_EDGE); x.More(); x.Next()) {
+            if (BRep_Tool::Degenerated(TopoDS::Edge(x.Current()))) continue;
+            BRepExtrema_DistShapeShape d(x.Current(), v);
+            if (d.IsDone() && d.Value() < bd) bd = d.Value(), best = TopoDS::Edge(x.Current());
+        }
+        if (best.IsNull()) throw std::runtime_error("a forma não tem arestas");
+        rust::Vec<double> out;
+        codifica_aresta(best, out);
+        return out;
+    });
 }
 
 }  // namespace fenkra

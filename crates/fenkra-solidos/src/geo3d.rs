@@ -3,6 +3,8 @@
 //! quando existem) e planos construídos a partir deles. Tudo em Rust, sem o kernel.
 
 pub use fenkra_kernel::cross;
+pub use fenkra_kernel::{Curva3, Trecho3};
+use fenkra_core::spline::Hermite;
 use fenkra_kernel::Frame;
 use std::f64::consts::{PI, TAU};
 
@@ -58,13 +60,17 @@ pub fn frame_from(origin: V3, normal: V3, hint: Option<V3>) -> Result<Frame, Str
     Ok(Frame { origin, x, normal: n })
 }
 
-/// Curva avaliada: polilinha densa + dados analíticos de círculo, se houver.
+/// Curva avaliada. B559: `exata` é a geometria de verdade (reta, arco, círculo, B-spline, spline pelos
+/// pontos, aresta do modelo) e é ela que vai ao kernel; `pts` é a polilinha densa para desenhar, medir
+/// e escolher. Curva sem forma exata conhecida (`exata = None`) vai ao kernel como polilinha.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Curve3 {
     pub pts: Vec<V3>,
     pub closed: bool,
     /// (centro, normal, raio) quando a curva é um círculo/arco
     pub circle: Option<(V3, V3, f64)>,
+    /// geometria exata (B559)
+    pub exata: Option<Curva3>,
 }
 
 impl Curve3 {
@@ -76,13 +82,49 @@ impl Curve3 {
         if closed && dist(pts[0], *pts.last().unwrap()) > 1e-9 {
             pts.push(pts[0]);
         }
-        Ok(Curve3 { pts, closed, circle: None })
+        Ok(Curve3 { pts, closed, circle: None, exata: None })
     }
     pub fn line(a: V3, b: V3) -> Result<Curve3, String> {
         if dist(a, b) < 1e-9 {
             return Err("linha de comprimento zero (pontos coincidentes)".into());
         }
-        Curve3::poly(vec![a, b], false)
+        Ok(Curve3::poly(vec![a, b], false)?.com_exata(Curva3(vec![Trecho3::Reta(a, b)])))
+    }
+    /// Polilinha de retas de verdade: cada vértice é um canto vivo (G0).
+    pub fn retas(pts: Vec<V3>, closed: bool) -> Result<Curve3, String> {
+        let c = Curve3::poly(pts, closed)?;
+        let e = Curva3::retas(&c.pts);
+        Ok(if e.vazia() { c } else { c.com_exata(e) })
+    }
+    /// A mesma curva com a geometria exata dada.
+    pub fn com_exata(mut self, e: Curva3) -> Curve3 {
+        self.exata = (!e.vazia()).then_some(e);
+        self
+    }
+    /// O que vai ao kernel: a curva exata, ou a polilinha quando não há forma exata.
+    pub fn kernel(&self) -> Curva3 {
+        self.exata.clone().unwrap_or_else(|| Curva3::pontos(&self.pts))
+    }
+    /// A curva transformada (polilinha e curva exata juntas).
+    pub fn transformada(&self, x: &fenkra_kernel::Xform) -> Curve3 {
+        let f = |p: V3| fenkra_kernel::curva::xform_ponto(x, p);
+        Curve3 {
+            pts: self.pts.iter().map(|p| f(*p)).collect(),
+            closed: self.closed,
+            circle: self.circle.map(|(c, n, r)| {
+                let c2 = f(c);
+                let n2 = sub(f(add(c, n)), c2);
+                (c2, unit(n2).unwrap_or(n), r * norm(n2))
+            }),
+            exata: self.exata.as_ref().map(|e| e.transformada(x)),
+        }
+    }
+    /// Percorre ao contrário (polilinha e curva exata juntas).
+    pub fn reverse(&mut self) {
+        self.pts.reverse();
+        if let Some(e) = &self.exata {
+            self.exata = Some(e.invertida());
+        }
     }
     pub fn start(&self) -> V3 {
         self.pts[0]
@@ -324,7 +366,13 @@ pub fn circle_curve(ctr: V3, f: &Frame, r: f64, a0: f64, a1: f64) -> Result<Curv
     }
     let full = (a1 - a0).abs() >= TAU - 1e-9;
     let pts = arc_pts(ctr, f.x, f.y(), r, a0, if full { a0 + TAU } else { a1 });
-    let mut c = Curve3::poly(pts, full)?;
+    let ponto = |t: f64| add(ctr, add(mul(f.x, r * t.cos()), mul(f.y(), r * t.sin())));
+    let exata = if full {
+        Trecho3::Circulo { centro: ctr, normal: f.normal, x: sub(ponto(a0), ctr), raio: r }
+    } else {
+        Trecho3::Arco(ponto(a0), ponto((a0 + a1) / 2.), ponto(a1))
+    };
+    let mut c = Curve3::poly(pts, full)?.com_exata(Curva3(vec![exata]));
     c.circle = Some((ctr, f.normal, r));
     Ok(c)
 }
@@ -370,6 +418,12 @@ fn passo_centripeto(a: V3, b: V3) -> f64 {
 /// Derivada que a spline tem no ponto `i`, em relação ao parâmetro centrípeto: é a mesma nos dois
 /// trechos que se encontram ali, porque a curva é C1 nesse parâmetro.
 pub fn tangente_natural(pts: &[V3], closed: bool, i: usize) -> V3 {
+    // B559: a derivada da spline única no ponto (parâmetro pelo comprimento das cordas)
+    if let Some(h) = Hermite::interpolada(pts, closed) {
+        if let Some(m) = h.m.get(i) {
+            return *m;
+        }
+    }
     let k = i as isize;
     let (a, b, c) = (vizinho(pts, closed, k - 1), pts[i], vizinho(pts, closed, k + 1));
     let (h0, h1) = (passo_centripeto(a, b), passo_centripeto(b, c));
@@ -385,6 +439,22 @@ pub fn spline_tan(pts: &[V3], closed: bool, tan: &[Option<fenkra_core::SplineTan
     }
     if pts.len() < 2 {
         return Err("a spline precisa de pelo menos dois pontos".into());
+    }
+    // B559: a curva natural é a spline única (C2 pelo comprimento das cordas); fixar a tangente troca só
+    // a derivada daquele ponto (direção dada, módulo da natural vezes a tensão). Fixar na direção
+    // natural com tensão 1 não muda a forma. Vai ao kernel como B-spline exata (sem amostrar).
+    if let Some(h) = Hermite::interpolada(pts, closed) {
+        let k = h.p.len();
+        let fixas: Vec<Option<V3>> = (0..k)
+            .map(|i| {
+                let j = if closed && i == k - 1 { 0 } else { i };
+                tan.get(j).copied().flatten().map(|t| mul(unit(t.dir).unwrap_or([1., 0., 0.]), norm(h.m[i]).max(1e-9) * t.tension))
+            })
+            .collect();
+        let h = h.com_derivadas(&fixas);
+        let b = h.bspline();
+        let c = Curve3::poly(h.amostra(24), closed)?;
+        return Ok(c.com_exata(Curva3(vec![Trecho3::BSpline { grau: b.grau as u32, polos: b.polos, pesos: vec![], nos: b.nos }])));
     }
     let n = pts.len();
     let derivada = |i: usize| {
@@ -410,8 +480,29 @@ pub fn spline_tan(pts: &[V3], closed: bool, tan: &[Option<fenkra_core::SplineTan
     Curve3::poly(out, closed)
 }
 
-/// Spline interpolada (Catmull-Rom centrípeta) pelos pontos.
+/// Spline pelos pontos (B559): a mesma interpolação do kernel e do sketch (`fenkra_core::spline`). A
+/// polilinha é a amostra dessa curva e o kernel recebe os pontos para interpolar igual.
 pub fn spline(pts: &[V3], closed: bool) -> Result<Curve3, String> {
+    if pts.len() < 2 {
+        return Err("a spline precisa de pelo menos dois pontos".into());
+    }
+    if pts.len() == 2 {
+        return Curve3::line(pts[0], pts[1]);
+    }
+    let h = Hermite::interpolada(pts, closed).ok_or("a spline precisa de pelos menos dois pontos distintos")?;
+    let c = Curve3::poly(h.amostra(24), closed)?;
+    if closed {
+        // fechada: a cúbica C2 periódica vai como B-spline pronta (a interpolação periódica do kernel
+        // não é a C2 periódica pelo comprimento das cordas: sai torta numa curva simétrica)
+        let b = h.bspline();
+        return Ok(c.com_exata(Curva3(vec![Trecho3::BSpline { grau: 3, polos: b.polos, pesos: vec![], nos: b.nos }])));
+    }
+    Ok(c.com_exata(Curva3(vec![Trecho3::Interpolada { pts: pts.to_vec(), fechada: false }])))
+}
+
+/// A Catmull-Rom centrípeta de antes do B559, guardada só para comparação nos testes.
+#[cfg(test)]
+pub fn spline_catmull(pts: &[V3], closed: bool) -> Result<Curve3, String> {
     if pts.len() < 2 {
         return Err("a spline precisa de pelo menos dois pontos".into());
     }
@@ -469,6 +560,47 @@ pub fn hermite(p0: V3, d0: V3, a0: V3, p1: V3, d1: V3, a1: V3, quintic: bool) ->
             }
         })
         .collect()
+}
+
+/// Polos de Bézier da Hermite cúbica (grau 3) ou quíntica (grau 5) de `hermite` (B559).
+pub fn hermite_polos(p0: V3, d0: V3, a0: V3, p1: V3, d1: V3, a1: V3, quintic: bool) -> Vec<V3> {
+    if quintic {
+        vec![
+            p0,
+            add(p0, mul(d0, 0.2)),
+            add(add(p0, mul(d0, 0.4)), mul(a0, 0.05)),
+            add(sub(p1, mul(d1, 0.4)), mul(a1, 0.05)),
+            sub(p1, mul(d1, 0.2)),
+            p1,
+        ]
+    } else {
+        vec![p0, add(p0, mul(d0, 1. / 3.)), sub(p1, mul(d1, 1. / 3.)), p1]
+    }
+}
+
+/// Polos de Bézier (grau 7) da Hermite de `hermite7`: da base de potências para a de Bernstein,
+/// b_i = Σ_{j≤i} C(i,j)/C(7,j)·c_j.
+pub fn hermite7_polos(p0: V3, d0: V3, a0: V3, j0: V3, p1: V3, d1: V3, a1: V3, j1: V3) -> Vec<V3> {
+    let coef = hermite7_coef(p0, d0, a0, j0, p1, d1, a1, j1);
+    let c = |n: usize, k: usize| -> f64 { (0..k).fold(1., |acc, i| acc * (n - i) as f64 / (i + 1) as f64) };
+    (0..8).map(|i| [0, 1, 2].map(|k| (0..=i).map(|j| c(i, j) / c(7, j) * coef[k][j]).sum())).collect()
+}
+
+fn hermite7_coef(p0: V3, d0: V3, a0: V3, j0: V3, p1: V3, d1: V3, a1: V3, j1: V3) -> [[f64; 8]; 3] {
+    let m = [[1., 1., 1., 1.], [4., 5., 6., 7.], [12., 20., 30., 42.], [24., 60., 120., 210.]];
+    let mut coef = [[0.; 8]; 3];
+    for k in 0..3 {
+        let c = [p0[k], d0[k], a0[k] / 2., j0[k] / 6.];
+        let rhs = [
+            p1[k] - (c[0] + c[1] + c[2] + c[3]),
+            d1[k] - (c[1] + 2. * c[2] + 3. * c[3]),
+            a1[k] - (2. * c[2] + 6. * c[3]),
+            j1[k] - 6. * c[3],
+        ];
+        let x = solve4(m, rhs);
+        coef[k] = [c[0], c[1], c[2], c[3], x[0], x[1], x[2], x[3]];
+    }
+    coef
 }
 
 /// Hermite de grau 7: posição, 1ª, 2ª e 3ª derivadas nas duas pontas (continuidade G3).
@@ -589,7 +721,17 @@ pub fn conic(ctr: V3, f: &Frame, kind: fenkra_core::ConicKind, a: f64, b: f64, e
             }).collect(), false)
         }
     };
-    Curve3::poly(pts, closed)
+    let c = Curve3::poly(pts, closed)?;
+    // B559: elipse e parábola têm forma exata (a parábola é uma Bézier quadrática)
+    Ok(match kind {
+        Elipse => c.com_exata(Curva3(vec![Trecho3::Elipse { centro: ctr, normal: f.normal, maior: mul(f.x, a), menor: b, t0: 0., t1: TAU }])),
+        Parabola => {
+            let h = extent * extent / (4. * a);
+            let polos = vec![p2(-extent, h), p2(0., -h), p2(extent, h)];
+            c.com_exata(Curva3(vec![Trecho3::BSpline { grau: 2, polos, pesos: vec![], nos: vec![0., 0., 0., 1., 1., 1.] }]))
+        }
+        Hiperbole => c,
+    })
 }
 
 /// Concordância entre duas linhas (só o arco): (curva, ponto de tangência em a, em b).
@@ -639,7 +781,8 @@ pub fn corner(a: &Curve3, b: &Curve3, r: f64) -> Result<Curve3, String> {
     let end_dir = unit(sub(t2, ctr)).unwrap();
     let sgn = if dot(cross(x, end_dir), n) >= 0. { 1. } else { -1. };
     let pts = arc_pts(ctr, x, mul(y, sgn), r, 0., sweep);
-    let mut c = Curve3::poly(pts, false)?;
+    let arco = Trecho3::Arco(pts[0], pts[pts.len() / 2], *pts.last().unwrap());
+    let mut c = Curve3::poly(pts, false)?.com_exata(Curva3(vec![arco]));
     c.circle = Some((ctr, mul(n, sgn), r));
     Ok(c)
 }
@@ -925,6 +1068,11 @@ pub fn snap_contour(cs: &mut [Curve3], rep: &ContourReport) {
         let m = lerp(tip(&cs[*i], *ie), tip(&cs[*j], *je), 0.5);
         for (k, at_end) in [(*i, *ie), (*j, *je)] {
             let n = cs[k].pts.len();
+            let q = cs[k].pts[if at_end { n - 1 } else { 0 }];
+            // a ponta exata não acompanha o ajuste: com folga de verdade, a curva vai como polilinha
+            if dist(q, m) > 1e-7 {
+                cs[k].exata = None;
+            }
             cs[k].pts[if at_end { n - 1 } else { 0 }] = m;
         }
     }
@@ -1024,4 +1172,36 @@ pub fn edge_chain(cs: &[Curve3], start: usize, prop: fenkra_core::Propagation, t
 /// Reamostra a curva em `n` pontos igualmente espaçados pelo comprimento.
 pub fn resample(c: &Curve3, n: usize) -> Vec<V3> {
     (0..n).map(|i| c.at_ratio(i as f64 / (n - 1).max(1) as f64).0).collect()
+}
+
+/// B559: tangente unitária no começo de um trecho exato, no sentido do percurso.
+pub fn tangente_inicio(t: &Trecho3) -> Option<V3> {
+    match t {
+        Trecho3::Reta(a, b) => unit(sub(*b, *a)),
+        Trecho3::Arco(a, m, b) => {
+            let (c, n, _) = circle3(*a, *m, *b).ok()?;
+            unit(cross(n, sub(*a, c)))
+        }
+        Trecho3::Circulo { normal, x, .. } => unit(cross(*normal, *x)),
+        Trecho3::Elipse { normal, maior, menor, t0, .. } => {
+            let y = mul(cross(unit(*normal)?, unit(*maior)?), *menor);
+            unit(add(mul(*maior, -t0.sin()), mul(y, t0.cos())))
+        }
+        Trecho3::BSpline { polos, .. } => polos.iter().skip(1).find(|p| dist(**p, polos[0]) > 1e-12).and_then(|p| unit(sub(*p, polos[0]))),
+        Trecho3::Interpolada { pts, fechada } => Hermite::interpolada(pts, *fechada).and_then(|h| unit(h.m[0])),
+        Trecho3::Pontos(p) => p.iter().skip(1).find(|q| dist(**q, p[0]) > 1e-12).and_then(|q| unit(sub(*q, p[0]))),
+    }
+}
+
+/// Tangente unitária no fim de um trecho exato, no sentido do percurso.
+pub fn tangente_fim(t: &Trecho3) -> Option<V3> {
+    tangente_inicio(&t.invertido()).map(|v| mul(v, -1.))
+}
+
+/// A curva exata é G1: cada trecho começa na direção em que o anterior termina (sem canto vivo).
+pub fn curva_g1(c: &Curva3, tol_rad: f64) -> bool {
+    c.0.windows(2).all(|w| match (tangente_fim(&w[0]), tangente_inicio(&w[1])) {
+        (Some(a), Some(b)) => dot(a, b).clamp(-1., 1.).acos() <= tol_rad,
+        _ => false,
+    })
 }

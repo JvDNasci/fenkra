@@ -156,18 +156,27 @@ TopoDS_Shape desloca_peca(const TopoDS_Shape& p, double d, double tol, int modo)
     return r;
 }
 
-// Curva (polilinha xyz) como aresta suave ou polilinha, igual à curva guia.
-TopoDS_Wire curve_wire(rust::Slice<const double> pts) { return spine_wire(pts); }
+// Curva como fio: exata (B559) ou, na polilinha antiga, arestas suaves entre os cantos.
+TopoDS_Wire curve_wire(rust::Slice<const double> pts) { return wire_curva(pts); }
 
-// Fatia `flat` em curvas: `ends[i]` = índice final (em pontos) da curva i.
-std::vector<TopoDS_Wire> curves_of(rust::Slice<const double> flat, rust::Slice<const uint32_t> ends) {
-    std::vector<TopoDS_Wire> out;
+// Fatia `flat` nas curvas. Curvas codificadas (B559): `ends[i]` = posição final (em números) da curva
+// i. Lista crua antiga: `ends[i]` = índice final em pontos.
+std::vector<std::vector<double>> partes_de(rust::Slice<const double> flat, rust::Slice<const uint32_t> ends) {
+    std::vector<std::vector<double>> out;
+    const bool cod = e_curva_codificada(flat);
     size_t start = 0;
     for (uint32_t e : ends) {
-        std::vector<double> part(flat.begin() + 3 * start, flat.begin() + 3 * e);
-        out.push_back(spine_wire(rust::Slice<const double>(part.data(), part.size())));
+        const size_t a = cod ? start : 3 * start, b = cod ? e : 3 * size_t(e);
+        if (b > flat.size() || a > b) throw std::runtime_error("lista de curvas incoerente");
+        out.emplace_back(flat.begin() + a, flat.begin() + b);
         start = e;
     }
+    return out;
+}
+
+std::vector<TopoDS_Wire> curves_of(rust::Slice<const double> flat, rust::Slice<const uint32_t> ends) {
+    std::vector<TopoDS_Wire> out;
+    for (auto& part : partes_de(flat, ends)) out.push_back(wire_curva(rust::Slice<const double>(part.data(), part.size())));
     return out;
 }
 
@@ -293,20 +302,30 @@ std::unique_ptr<Shape> fill_surface_x(rust::Slice<const double> flat, rust::Slic
         for (int32_t o : orders) tangent = tangent || o > 0;
         // a tolerância angular padrão (0,01 rad) deixa passar 0,57 grau; G1 de verdade pede menos
         BRepOffsetAPI_MakeFilling mk(3, tangent ? 30 : 15, tangent ? 4 : 2, Standard_False, 1e-5, 1e-4, tangent ? 2e-3 : 1e-2, 0.1, 8, tangent ? 20 : 9);
+        // cada curva vira fio exato (B559); a polilinha dele serve às medidas por amostra
+        std::vector<TopoDS_Wire> fios;
+        std::vector<std::vector<double>> polis;
+        for (auto& part : partes_de(flat, ends)) {
+            fios.push_back(wire_curva(rust::Slice<const double>(part.data(), part.size())));
+            std::vector<double> v;
+            for (const gp_Pnt& q : pontos_do_fio(fios.back())) v.insert(v.end(), {q.X(), q.Y(), q.Z()});
+            polis.push_back(std::move(v));
+        }
         gp_XYZ sum(0, 0, 0);
-        for (size_t i = 0; i + 2 < flat.size(); i += 3) sum += gp_XYZ(flat[i], flat[i + 1], flat[i + 2]);
-        const gp_Pnt centre(sum / std::max<double>(1.0, flat.size() / 3.0));
+        double cnt = 0;
+        for (auto& v : polis)
+            for (size_t i = 0; i + 2 < v.size(); i += 3) sum += gp_XYZ(v[i], v[i + 1], v[i + 2]), cnt += 1;
+        const gp_Pnt centre(sum / std::max<double>(1.0, cnt));
         std::vector<gp_Pnt> reach;
-        size_t start = 0;
         int n = 0;
-        for (size_t k = 0; k < ends.size(); ++k) {
-            const size_t e = ends[k];
-            const double* v = flat.data() + 3 * start;
+        for (size_t k = 0; k < fios.size(); ++k) {
+            const double* v = polis[k].data();
+            const size_t npts = polis[k].size() / 3;
             const int order = k < orders.size() ? orders[k] : 0;
             const double w = k < weights.size() ? weights[k] : 1.0;
             if (order > 0) {
                 // a polilinha da curva vem da malha ou de amostragem com flecha de até 0,1 mm
-                auto edges = support_edges(support.s, v, e - start, 0.15);
+                auto edges = support_edges(support.s, v, npts, 0.15);
                 if (edges.empty()) throw std::runtime_error("a curva " + std::to_string(k + 1) + " não é borda da face de apoio: G1 e G2 precisam de uma face vizinha");
                 for (auto& [ed, face] : edges) {
                     // o preenchimento converte o enum em número de derivadas: GeomAbs_G2 vale 3 e é
@@ -334,13 +353,11 @@ std::unique_ptr<Shape> fill_surface_x(rust::Slice<const double> flat, rust::Slic
                     }
                 }
             } else {
-                std::vector<double> part(v, v + 3 * (e - start));
-                for (TopExp_Explorer x(spine_wire(rust::Slice<const double>(part.data(), part.size())), TopAbs_EDGE); x.More(); x.Next()) {
+                for (TopExp_Explorer x(fios[k], TopAbs_EDGE); x.More(); x.Next()) {
                     mk.Add(TopoDS::Edge(x.Current()), GeomAbs_C0);
                     ++n;
                 }
             }
-            start = e;
         }
         if (n == 0) throw std::runtime_error("escolha as curvas do contorno");
         for (auto& p : reach) mk.Add(p);

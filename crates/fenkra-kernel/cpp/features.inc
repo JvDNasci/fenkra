@@ -72,6 +72,8 @@ TopoDS_Wire spine_wire(rust::Slice<const double> pts) {
     return w.Wire();
 }
 
+#include "curva.inc"
+
 // A mesma curva em `k` arestas de parâmetro igual. Como todas apontam para a mesma B-spline, a tangente
 // e a curvatura nas emendas são as da própria curva: dividir não cria canto.
 TopoDS_Wire guia_dividida(const Handle(Geom_BSplineCurve)& c, int k) {
@@ -348,9 +350,44 @@ bool varre_cantos(rust::Slice<const double> spine, const TopoDS_Shape& perfil, T
 
 }  // namespace
 
-std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> spine, uint8_t mode) {
+std::unique_ptr<Shape> sweep_tool(const Shape& face, rust::Slice<const double> spine_in, uint8_t mode) {
     return guard("varredura", [&] {
-        Handle(Geom_BSplineCurve) c = guia_suave(spine);
+        // B559: guia exata. Uma aresta curva só vai inteira como B-spline; um fio de retas segue pela
+        // esquadria nos vértices (B350); o resto tenta o fio exato e, se não varrer, a regra de sempre
+        // sobre a polilinha densa do fio.
+        std::vector<double> crus;
+        Handle(Geom_BSplineCurve) exata;
+        rust::Slice<const double> spine = spine_in;
+        if (e_curva_codificada(spine_in)) {
+            const TopoDS_Wire fio = wire_curva(spine_in);
+            exata = bspline_do_fio(fio);
+            bool retas = true;
+            for (TopExp_Explorer x(fio, TopAbs_EDGE); x.More(); x.Next()) {
+                double f, l;
+                Handle(Geom_Curve) g = BRep_Tool::Curve(TopoDS::Edge(x.Current()), f, l);
+                retas = retas && !g.IsNull() && g->DynamicType() == STANDARD_TYPE(Geom_Line);
+            }
+            std::vector<gp_Pnt> pts;
+            if (retas) {
+                TopoDS_Edge ultima;
+                for (BRepTools_WireExplorer x(fio); x.More(); x.Next()) {
+                    pts.push_back(BRep_Tool::Pnt(TopExp::FirstVertex(x.Current(), Standard_True)));
+                    ultima = x.Current();
+                }
+                if (!ultima.IsNull()) pts.push_back(BRep_Tool::Pnt(TopExp::LastVertex(ultima, Standard_True)));
+            } else {
+                pts = pontos_do_fio(fio);
+            }
+            for (auto& q : pts) crus.insert(crus.end(), {q.X(), q.Y(), q.Z()});
+            spine = rust::Slice<const double>(crus.data(), crus.size());
+            if (exata.IsNull() && !retas && mode != 1 && curva_tem_trecho_exato(spine_in) && fio_tangente(fio)) {
+                // fio de várias curvas tangentes (reta, arco, spline): varre o fio exato primeiro
+                const GeomFill_Trihedron t0 = mode == 2 ? GeomFill_IsFrenet : GeomFill_IsCorrectedFrenet;
+                TopoDS_Shape out0;
+                if (varre(fio, face.s, t0, out0)) return wrap(out0);
+            }
+        }
+        Handle(Geom_BSplineCurve) c = exata.IsNull() ? guia_suave(spine) : exata;
         if (!c.IsNull()) {
             // Curva mais fechada que o braço do perfil: a parede passa por cima dela mesma. O kernel
             // aprova esse sólido, e nenhum triedro corrige, porque o defeito está na geometria pedida.

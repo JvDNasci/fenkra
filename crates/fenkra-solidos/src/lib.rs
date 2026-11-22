@@ -546,6 +546,34 @@ fn edge_fillet(sh: &Shape, mids: &[[f64; 3]], r: f64, r2: Option<f64>) -> Result
     res.map(|x| x.0).map_err(|e| format!("filete da superfície: {} (raio grande demais ou arestas que não ligam duas faces)", e.0))
 }
 
+/// B559/B576: a aresta de `sh` mais perto de `m` como curva: polilinha para desenhar e a geometria
+/// exata do B-rep para o kernel (o tipo é mantido: círculo continua círculo).
+pub fn edge_curve(sh: &Shape, m: V3) -> Result<Curve3, String> {
+    let p = sh.edge_at(m).map_err(|e| e.0)?;
+    let closed = p.len() > 2 && geo3d::dist(p[0], *p.last().unwrap()) < 1e-6;
+    Ok(com_aresta_exata(sh, Curve3::poly(p, closed)?))
+}
+
+/// Junta à polilinha de uma aresta de `sh` a curva exata dessa aresta (achada pelo meio da polilinha),
+/// no mesmo sentido. Se a aresta não for achada, a curva segue só como polilinha.
+pub fn com_aresta_exata(sh: &Shape, c: Curve3) -> Curve3 {
+    let m = c.pts[c.pts.len() / 2];
+    match sh.edge_curve_at(m) {
+        Ok(e) => {
+            let (a, b) = (e.inicio().unwrap_or(c.start()), e.fim().unwrap_or(c.end()));
+            // a aresta achada tem de ser a da polilinha (mesmas pontas)
+            let mesmo = geo3d::dist(a, c.start()) + geo3d::dist(b, c.end());
+            let contra = geo3d::dist(a, c.end()) + geo3d::dist(b, c.start());
+            let tol = 1e-3 * c.length().max(1.);
+            if mesmo.min(contra) > tol {
+                return c;
+            }
+            c.com_exata(if mesmo <= contra + 1e-12 { e } else { e.invertida() })
+        }
+        Err(_) => c,
+    }
+}
+
 /// Encadeia curvas pelas pontas (na ordem que se encaixarem; inverte as que vierem ao contrário).
 pub fn join_curves(mut cs: Vec<Curve3>) -> Result<Curve3, String> {
     if cs.is_empty() {
@@ -558,6 +586,9 @@ pub fn join_curves(mut cs: Vec<Curve3>) -> Result<Curve3, String> {
     if first.closed && cs.is_empty() {
         return Ok(first);
     }
+    // B559: a curva exata acompanha a junção, trecho a trecho, no mesmo sentido; se alguma peça não
+    // tem forma exata, ou as pontas exatas não coincidem, a junção vai ao kernel como polilinha
+    let mut exata = first.exata.clone();
     while !cs.is_empty() {
         let (s, e) = (pts[0], *pts.last().unwrap());
         let near = |a: V3, b: V3| geo3d::dist(a, b) <= tol;
@@ -577,7 +608,25 @@ pub fn join_curves(mut cs: Vec<Curve3>) -> Result<Curve3, String> {
         }) else {
             return Err(format!("{} curva(s) não tocam as outras nas pontas (tolerância {:.3} mm)", cs.len(), tol));
         };
-        let mut q = cs.remove(i).pts;
+        let peca = cs.remove(i);
+        exata = match (exata.take(), peca.exata) {
+            (Some(mut acc), Some(e)) => {
+                let e = if how == 1 || how == 3 { e.invertida() } else { e };
+                let encaixa = |a: Option<V3>, b: Option<V3>| a.zip(b).is_some_and(|(a, b)| geo3d::dist(a, b) < 1e-6);
+                if how <= 1 && encaixa(acc.fim(), e.inicio()) {
+                    acc.junta(e);
+                    Some(acc)
+                } else if how >= 2 && encaixa(e.fim(), acc.inicio()) {
+                    let mut novo = e;
+                    novo.junta(acc);
+                    Some(novo)
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+        let mut q = peca.pts;
         match how {
             0 => pts.extend(q.into_iter().skip(1)),
             1 => {
@@ -601,7 +650,11 @@ pub fn join_curves(mut cs: Vec<Curve3>) -> Result<Curve3, String> {
     if closed {
         pts.pop();
     }
-    Curve3::poly(pts, closed)
+    let c = Curve3::poly(pts, closed)?;
+    Ok(match exata {
+        Some(e) => c.com_exata(e),
+        None => c,
+    })
 }
 
 /// Valor de um elemento de geometria de referência.
@@ -1290,7 +1343,9 @@ fn bspline(ctrl: &[V3], closed: bool) -> Result<Curve3, String> {
     } else {
         out.push(*ctrl.last().unwrap());
     }
-    Curve3::poly(out, closed)
+    // B559: a mesma B-spline cúbica uniforme vai exata ao kernel (polos estendidos, nós 0, 1, 2…)
+    let nos: Vec<f64> = (0..p.len() + 4).map(|i| i as f64).collect();
+    Ok(Curve3::poly(out, closed)?.com_exata(geo3d::Curva3(vec![geo3d::Trecho3::BSpline { grau: 3, polos: p, pesos: vec![], nos }])))
 }
 
 impl Ctx<'_> {
@@ -1413,16 +1468,16 @@ impl Ctx<'_> {
         Some(achar())
     }
 
-    /// B515: a aresta da superfície de referência que a chave indica, como polilinha.
-    fn surface_edge(&self, k: &EdgeKey, mid: V3) -> Option<Result<Vec<V3>, String>> {
+    /// B515: a aresta da superfície de referência que a chave indica: a forma e o meio da aresta.
+    fn surface_edge(&self, k: &EdgeKey, mid: V3) -> Option<Result<(Shape, V3), String>> {
         let sh = self.surface_owner(k.a.owner)?;
-        let achar = || -> Result<Vec<V3>, String> {
+        let achar = || -> Result<(Shape, V3), String> {
             let sh = sh?;
             let topo = sh.topology().map_err(|e| e.0)?;
             let (owners, roles) = (vec![k.a.owner; topo.faces.len()], refs::surface_roles(topo.faces.len()));
             let achada = refs::find_surface_edge(&refs::View { topo: &topo, owners: &owners, roles: &roles }, k, Some(mid));
             match achada {
-                Ok(e) => sh.edge_at(topo.edge_mids[e]).map_err(|e| e.0),
+                Ok(e) => Ok((sh.clone(), topo.edge_mids[e])),
                 Err(l) => {
                     let n = k.edge.map_or(String::new(), |i| format!("{} ", i + 1));
                     let who = format!("a aresta {n}de '{}'", self.doc.name_of(k.a.owner));
@@ -1446,6 +1501,19 @@ impl Ctx<'_> {
 
     /// Polilinha atual da aresta: pela chave, ou pelo ponto médio.
     fn live_edge(&self, mid: V3, key: Option<&EdgeKey>) -> Result<Vec<V3>, String> {
+        let (sh, m) = self.live_edge_at(mid, key)?;
+        sh.edge_at(m).map_err(|e| e.0)
+    }
+
+    /// B559/B576: a aresta atual como curva, com a geometria exata do B-rep (reta, arco, círculo,
+    /// elipse ou B-spline) e a polilinha para desenhar.
+    fn live_edge_curve(&self, mid: V3, key: Option<&EdgeKey>) -> Result<Curve3, String> {
+        let (sh, m) = self.live_edge_at(mid, key)?;
+        edge_curve(&sh, m)
+    }
+
+    /// A forma onde a aresta vive e o meio dela: pela chave, ou pelo ponto médio.
+    fn live_edge_at(&self, mid: V3, key: Option<&EdgeKey>) -> Result<(Shape, V3), String> {
         if let Some(found) = key.and_then(|k| self.surface_edge(k, mid)) {
             return found;
         }
@@ -1458,7 +1526,7 @@ impl Ctx<'_> {
                 None => refs::edge_near(&v, mid, 0.1).ok_or(refs::Lost::None),
             };
             match found {
-                Ok(e) => return b.edge_at(topo.edge_mids[e]).map_err(|e| e.0),
+                Ok(e) => return Ok((b.clone(), topo.edge_mids[e])),
                 Err(refs::Lost::None) => {}
                 Err(l) => lost = l,
             }
@@ -1647,11 +1715,7 @@ impl Ctx<'_> {
                 let closed = pts.len() > 2 && geo3d::dist(pts[0], *pts.last().unwrap()) < 1e-6;
                 Curve3::poly(pts.clone(), closed)
             }
-            CurveRef::BodyEdge { pts, key } => {
-                let p = self.live_edge(pts[pts.len() / 2], Some(key))?;
-                let closed = p.len() > 2 && geo3d::dist(p[0], *p.last().unwrap()) < 1e-6;
-                Curve3::poly(p, closed)
-            }
+            CurveRef::BodyEdge { pts, key } => self.live_edge_curve(pts[pts.len() / 2], Some(key)),
             CurveRef::SketchLine { sketch, entity } => {
                 let (af, ask) = &self.sketch(*sketch)?;
                 let (a, b) = ask.lines.get(entity).ok_or("a linha do sketch não existe mais — reedite")?;
@@ -1670,7 +1734,12 @@ impl Ctx<'_> {
                 }
                 let closed = p3.len() > 2 && geo3d::dist(p3[0], *p3.last().unwrap()) < 1e-6;
                 let p3 = if closed { p3[..p3.len() - 1].to_vec() } else { p3 };
-                Curve3::poly(p3, closed)
+                // B559: a curva do sketch vai ao kernel exata (círculo é círculo, spline é a do perfil)
+                let c = Curve3::poly(p3, closed)?;
+                Ok(match es.exatas.get(curve) {
+                    Some(s) => c.com_exata(geo3d::Curva3(vec![profile::trecho3(fr, s)])),
+                    None => c,
+                })
             }
             CurveRef::Segment { curve, index } => {
                 let a = self.point(&PointRef::CurveVertex { curve: *curve, index: *index }, depth + 1)?;
@@ -1988,13 +2057,14 @@ impl Ctx<'_> {
             }
         };
         let n = set.len() as u32;
-        Ok((join_curves(set.into_iter().map(|i| cs[i].clone()).collect())?, n))
+        // B559/B576: cada aresta da borda leva a curva exata dela
+        Ok((join_curves(set.into_iter().map(|i| com_aresta_exata(sh, cs[i].clone())).collect())?, n))
     }
 
     /// Aresta extraída com propagação (B21): acha de novo a aresta mais perto de `mid` nas formas e
     /// junta a cadeia que a propagação gravada alcança.
     fn edge_extract(&self, shapes: &[Shape], mid: V3, prop: Propagation) -> Result<(Curve3, u32), String> {
-        let mut best: Option<(f64, Vec<Curve3>, usize)> = None;
+        let mut best: Option<(f64, Vec<Curve3>, usize, &Shape)> = None;
         for sh in shapes {
             let Ok(m) = tesselar(sh, &self.qualidade) else { continue };
             let all = geo3d::mesh_edge_curves(&m);
@@ -2003,18 +2073,19 @@ impl Ctx<'_> {
             for (k, c) in cs.iter().enumerate() {
                 let g = geo3d::dist(c.nearest(mid).1, mid);
                 if best.as_ref().is_none_or(|b| g < b.0) {
-                    best = Some((g, cs.clone(), k));
+                    best = Some((g, cs.clone(), k, sh));
                 }
             }
         }
-        let (gap, cs, start) = best.ok_or("nenhuma aresta no modelo")?;
+        let (gap, cs, start, sh) = best.ok_or("nenhuma aresta no modelo")?;
         if gap > 0.5 {
             return Err(format!("referência perdida: a aresta extraída não existe mais (a mais perto fica a {gap:.2} mm); escolha de novo"));
         }
         let size = cs.iter().map(|c| c.length()).sum::<f64>().max(1.);
         let set = geo3d::edge_chain(&cs, start, prop, (1e-4 * size).max(1e-3))?;
         let n = set.len() as u32;
-        Ok((join_curves(set.into_iter().map(|i| cs[i].clone()).collect())?, n))
+        // B559/B576: a aresta extraída mantém o tipo (reta, arco, círculo, B-spline do modelo)
+        Ok((join_curves(set.into_iter().map(|i| com_aresta_exata(sh, cs[i].clone())).collect())?, n))
     }
 
     /// Guarda o que a extração alcançou; se mudou desde que foi feita, vira aviso.
@@ -2061,8 +2132,8 @@ impl Ctx<'_> {
                 support = if support.is_null() { s } else { support.compound(&s) };
             }
         }
-        let pts: Vec<Vec<V3>> = cs.into_iter().map(|c| c.pts).collect();
-        let (sh, _, g1, _) = Shape::fill_surface_x(&pts, &orders, &weights, &support, &self.points(points, d)?).map_err(|x| x.0)?;
+        let ks: Vec<geo3d::Curva3> = cs.iter().map(Curve3::kernel).collect();
+        let (sh, _, g1, _) = Shape::fill_surface_x_c(&ks, &orders, &weights, &support, &self.points(points, d)?).map_err(|x| x.0)?;
         if orders.iter().any(|o| *o > 0) {
             let deg = g1.to_degrees();
             let mut n = self.notes.borrow_mut();
@@ -2339,6 +2410,8 @@ impl Ctx<'_> {
                 let (q, n) = self.surf_at(surface, self.point(point, d)?, d)?;
                 Geo::Curve(Curve3::line(add(q, mul(n, e(start, "início")?)), add(q, mul(n, e(end, "fim")?)))?)
             }
+            // a polilinha segue como pontos: o kernel quebra nos cantos vivos (mais de 20°) e mantém
+            // suave o trecho de voltas pequenas, que é como ela já servia de contorno (B559)
             Polyline { points, closed } => Geo::Curve(Curve3::poly(self.points(points, d)?, *closed)?),
             Circle { center, plane, radius, start, end } => {
                 let c = self.point(center, d)?;
@@ -2374,6 +2447,23 @@ impl Ctx<'_> {
                     return Err("as pontas escolhidas já se tocam".into());
                 }
                 let (ta, tb) = (ca.end_tangent(*a_end), cb.end_tangent(*b_end));
+                // B559: a Hermite de cada continuidade é uma Bézier (grau 3, 5 ou 7) e vai exata ao kernel
+                let bezier = |polos: Vec<V3>| geo3d::Curva3(vec![geo3d::Trecho3::BSpline { grau: polos.len() as u32 - 1, nos: [vec![0.; polos.len()], vec![1.; polos.len()]].concat(), polos, pesos: vec![] }]);
+                let exata = match cont {
+                    Continuity::G0 => geo3d::Curva3(vec![geo3d::Trecho3::Reta(pa, pb)]),
+                    Continuity::G1 => bezier(geo3d::hermite_polos(pa, mul(ta, l), [0.; 3], pb, mul(tb, -l), [0.; 3], false)),
+                    Continuity::G2 => bezier(geo3d::hermite_polos(pa, mul(ta, l), mul(ca.end_curvature(*a_end), l * l), pb, mul(tb, -l), mul(cb.end_curvature(*b_end), l * l), true)),
+                    Continuity::G3 => bezier(geo3d::hermite7_polos(
+                        pa,
+                        mul(ta, l),
+                        mul(ca.end_curvature(*a_end), l * l),
+                        mul(ca.end_jerk(*a_end), l * l * l),
+                        pb,
+                        mul(tb, -l),
+                        mul(cb.end_curvature(*b_end), l * l),
+                        mul(cb.end_jerk(*b_end), -l * l * l),
+                    )),
+                };
                 let pts = match cont {
                     Continuity::G0 => vec![pa, pb],
                     Continuity::G1 => hermite(pa, mul(ta, l), [0.; 3], pb, mul(tb, -l), [0.; 3], false),
@@ -2390,7 +2480,7 @@ impl Ctx<'_> {
                         mul(cb.end_jerk(*b_end), -l * l * l),
                     ),
                 };
-                Geo::Curve(Curve3::poly(pts, false)?)
+                Geo::Curve(Curve3::poly(pts, false)?.com_exata(exata))
             }
             Corner { a, b, radius } => Geo::Curve(corner(&self.curve(a, d)?, &self.curve(b, d)?, e(radius, "raio")?)?),
             PointCurvePlane { curve, plane, which } => {
@@ -2511,7 +2601,15 @@ impl Ctx<'_> {
                 Geo::Curve(Curve3::poly(pts, c.closed)?)
             }
             SplineControl { points, closed } => Geo::Curve(bspline(&self.points(points, d)?, *closed)?),
-            CurveCopy { curve } => Geo::Curve(self.curve(curve, d)?),
+            CurveCopy { curve, mais } if mais.is_empty() => Geo::Curve(self.curve(curve, d)?),
+            CurveCopy { curve, mais } => {
+                // B576: extração de várias curvas = a cadeia delas, ainda como Extrair
+                let mut cs = vec![self.curve(curve, d)?];
+                for c in mais {
+                    cs.push(self.curve(c, d)?);
+                }
+                Geo::Curve(join_curves(cs)?)
+            }
             CurveExtract { edge, surface, prop, expected } => {
                 // o meio da aresta, seguida pela chave quando há; a cadeia sai do modelo atual
                 let seed = self.curve(edge, d)?;
@@ -2616,18 +2714,19 @@ impl Ctx<'_> {
                 let (l1, l2) = (e(length, "comprimento")?, e(length2, "comprimento 2")?);
                 if until.is_none() && until2.is_none() {
                     // limite 2: a curva recua para o outro lado antes de extrudar
-                    let pts: Vec<V3> = c.pts.iter().map(|p| sub(*p, mul(v, l2))).collect();
-                    Geo::Surface(Shape::extrude_curve(&pts, v, l1 + l2).map_err(|x| x.0)?)
+                    // B559: a curva vai exata (círculo extrudado é cilindro)
+                    let c2 = c.transformada(&Xform::Translate(mul(v, -l2)));
+                    Geo::Surface(Shape::extrude_curva(&c2.kernel(), v, l1 + l2).map_err(|x| x.0)?)
                 } else {
                     // cada lado sai da curva: até o elemento, ou pelo comprimento
                     let side = |dir: V3, len: f64, to: &Option<SurfRef>| -> Result<Option<Shape>, String> {
                         match to {
                             Some(t) => {
-                                let long = Shape::extrude_curve(&c.pts, dir, self.model_size()).map_err(|x| x.0)?;
+                                let long = Shape::extrude_curva(&c.kernel(), dir, self.model_size()).map_err(|x| x.0)?;
                                 Ok(Some(long.clip_surface(&self.cut_shape(t, d)?, c.pts[c.pts.len() / 2], true).map_err(|x| x.0)?))
                             }
                             None if len.abs() < 1e-9 => Ok(None),
-                            None => Ok(Some(Shape::extrude_curve(&c.pts, dir, len).map_err(|x| x.0)?)),
+                            None => Ok(Some(Shape::extrude_curva(&c.kernel(), dir, len).map_err(|x| x.0)?)),
                         }
                     };
                     let (a, b) = (side(v, l1, until)?, side(mul(v, -1.), l2, until2)?);
@@ -2647,8 +2746,8 @@ impl Ctx<'_> {
                 }
                 // ângulo 2: a curva gira para trás antes de revolver
                 let k = unit(v).ok_or("eixo nulo")?;
-                let pts: Vec<V3> = c.pts.iter().map(|p| add(o, geo3d::rotate(sub(*p, o), k, -a2.to_radians()))).collect();
-                Geo::Surface(Shape::revolve_curve(&pts, o, v, a1 + a2).map_err(|x| x.0)?)
+                let c2 = c.transformada(&Xform::Rotate(o, k, -a2));
+                Geo::Surface(Shape::revolve_curva(&c2.kernel(), o, v, a1 + a2).map_err(|x| x.0)?)
             }
             SurfSphere { center, radius } => Geo::Surface(Shape::sphere_surface(self.point(center, d)?, e(radius, "raio")?).map_err(|x| x.0)?),
             SurfCylinder { point, dir, radius, start, end } => {
@@ -2660,17 +2759,15 @@ impl Ctx<'_> {
             SurfSweep { profile, spine, mode } => {
                 let sp = self.curve(spine, d)?;
                 let prof = match profile {
-                    SweepProfile::Curve(c) => self.curve(c, d)?.pts,
+                    SweepProfile::Curve(c) => self.curve(c, d)?.kernel(),
                     SweepProfile::Circle(r) => {
-                        // círculo normal à guia no início dela (tubo)
+                        // círculo normal à guia no início dela (tubo); B559: círculo exato
                         let fr = frame_from(sp.start(), sp.end_tangent(false), None)?;
                         let r = e(r, "raio")?;
-                        let mut v: Vec<V3> = (0..48).map(|i| {
-                            let a = i as f64 / 48. * std::f64::consts::TAU;
-                            fr.point(r * a.cos(), r * a.sin())
-                        }).collect();
-                        v.push(v[0]);
-                        v
+                        if r <= 0. {
+                            return Err("o raio do tubo precisa ser positivo".into());
+                        }
+                        geo3d::Curva3(vec![geo3d::Trecho3::Circulo { centro: fr.origin, normal: fr.normal, x: fr.x, raio: r }])
                     }
                 };
                 let m = match mode {
@@ -2683,7 +2780,7 @@ impl Ctx<'_> {
                     SweepMode::Frenet if matches!(profile, SweepProfile::Circle(_)) => 0,
                     SweepMode::Frenet => 2,
                 };
-                Geo::Surface(Shape::sweep_surface(&prof, &sp.pts, m).map_err(|x| x.0)?)
+                Geo::Surface(Shape::sweep_surface_c(&prof, &sp.kernel(), m).map_err(|x| x.0)?)
             }
             SurfLoft { sections, guide, ruled, closed, opts } => {
                 let mut curvas = vec![];
@@ -2708,12 +2805,12 @@ impl Ctx<'_> {
                 let sh = if controle {
                     loft::superficie(&loft::Entrada { secoes: curvas, guias, conectores: opts.connectors.clone(), invertidas: opts.reversed.clone(), regrada: *ruled, fechar: *closed, tangentes })?
                 } else {
-                    let cs: Vec<Vec<V3>> = curvas.into_iter().map(|c| c.pts).collect();
+                    let cs: Vec<geo3d::Curva3> = curvas.iter().map(Curve3::kernel).collect();
                     let g = match guide {
-                        Some(g) => Some(self.curve(g, d)?.pts),
+                        Some(g) => Some(self.curve(g, d)?.kernel()),
                         None => None,
                     };
-                    Shape::loft_surface(&cs, *ruled, *closed, g.as_deref()).map_err(|x| x.0)?
+                    Shape::loft_surface_c(&cs, *ruled, *closed, g.as_ref()).map_err(|x| x.0)?
                 };
                 if opts.iso > 0 {
                     let iso = sh.iso_curves(opts.iso).map_err(|x| x.0)?;
@@ -2794,7 +2891,7 @@ impl Ctx<'_> {
                 while !rest.is_empty() {
                     let group = chain_indices(&rest, 0, t.max(1e-3));
                     let cs: Vec<Curve3> = group.iter().rev().map(|i| rest.remove(*i)).rev().collect();
-                    let w = Shape::curve_shape(&join_curves(cs)?.pts).map_err(|x| x.0)?;
+                    let w = Shape::curve_shape_c(&join_curves(cs)?.kernel()).map_err(|x| x.0)?;
                     acc = if acc.is_null() { w } else { acc.compound(&w) };
                 }
                 if acc.is_null() {
@@ -2814,8 +2911,8 @@ impl Ctx<'_> {
                     let mid = c.pts[c.pts.len() / 2];
                     let (_, n) = sh.surface_near(mid).map_err(|x| x.0)?;
                     let l = self.model_size();
-                    let pts: Vec<V3> = c.pts.iter().map(|p| sub(*p, mul(n, l))).collect();
-                    let cutter = Shape::extrude_curve(&pts, n, 2. * l).map_err(|x| x.0)?;
+                    let c2 = c.transformada(&Xform::Translate(mul(n, -l)));
+                    let cutter = Shape::extrude_curva(&c2.kernel(), n, 2. * l).map_err(|x| x.0)?;
                     sh = sh.split_side(&cutter, !*flip, false).map_err(|x| x.0)?;
                     cut_any = true;
                 }
@@ -3117,7 +3214,26 @@ impl Ctx<'_> {
             pts.pop();
         }
         pts.dedup_by(|a, b| geo3d::dist(*a, *b) < 1e-9);
-        let lp: Vec<Seg2> = if let Some((ctr, _, r)) = c.circle.filter(|_| c.closed) {
+        // B559: com a curva exata, cada trecho vira o segmento exato do perfil
+        let exato = c.exata.as_ref().and_then(|e| {
+            let no_plano = |n: V3| geo3d::dot(geo3d::unit(n).unwrap_or([0.; 3]), fr.normal) > 1. - 1e-9;
+            let fora = |p: V3| geo3d::dot(geo3d::sub(p, fr.origin), fr.normal).abs() > 1e-6;
+            e.0.iter()
+                .map(|t| match t {
+                    geo3d::Trecho3::Reta(a, b) if !fora(*a) && !fora(*b) => Some(Seg2::Line(uv(*a), uv(*b))),
+                    geo3d::Trecho3::Arco(a, m, b) if ![a, m, b].iter().any(|p| fora(**p)) => Some(Seg2::Arc(uv(*a), uv(*m), uv(*b))),
+                    geo3d::Trecho3::Circulo { centro, normal, raio, .. } if !fora(*centro) && geo3d::dot(*normal, fr.normal).abs() > 1. - 1e-9 => Some(Seg2::Circle(uv(*centro), *raio)),
+                    geo3d::Trecho3::Interpolada { pts, fechada: false } if !pts.iter().any(|p| fora(*p)) => Some(Seg2::Spline(pts.iter().map(|p| uv(*p)).collect())),
+                    geo3d::Trecho3::Elipse { centro, normal, maior, menor, t0, t1 } if !fora(*centro) && no_plano(*normal) => {
+                        Some(Seg2::Ellipse(uv(*centro), [geo3d::dot(*maior, fr.x), geo3d::dot(*maior, fr.y())], *menor, *t0, *t1))
+                    }
+                    _ => None,
+                })
+                .collect::<Option<Vec<Seg2>>>()
+        });
+        let lp: Vec<Seg2> = if let Some(segs) = exato {
+            segs
+        } else if let Some((ctr, _, r)) = c.circle.filter(|_| c.closed) {
             vec![Seg2::Circle(uv(ctr), r)]
         } else {
             let p: Vec<[f64; 2]> = pts.iter().map(|q| uv(*q)).collect();
@@ -3327,7 +3443,10 @@ impl Ctx<'_> {
                 }
             }
             cut.push(n - 1);
-            if cut.len() <= 2 || c.circle.is_some() {
+            // B559: guia de um trecho curvo exato (arco, spline, aresta curva) é um membro só, varrido
+            // pela curva de verdade
+            let curva_unica = c.exata.as_ref().is_some_and(|e| e.0.len() == 1 && !matches!(e.0[0], geo3d::Trecho3::Reta(..) | geo3d::Trecho3::Pontos(_)));
+            if cut.len() <= 2 || c.circle.is_some() || curva_unica {
                 pieces.push(c);
                 continue;
             }
@@ -3356,7 +3475,8 @@ impl Ctx<'_> {
             let x0 = fenkra_kernel::cross(v, z);
             let x = geo3d::rotate(x0, z, ang);
             let y = fenkra_kernel::cross(z, x);
-            out.push(MemberGeom { start, end, z, x, x0, y, w, h, wall, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight: c.is_straight() });
+            let straight = c.is_straight();
+            out.push(MemberGeom { start, end, z, x, x0, y, w, h, wall, shift, ext: (e1, e2), loops: loops.clone(), pts: c.pts.clone(), straight, exata: if straight { None } else { c.exata.clone() } });
         }
         Ok(out)
     }
@@ -3372,7 +3492,10 @@ impl Ctx<'_> {
         } else {
             let fr = Frame { origin: g.start, x: g.x, normal: g.z };
             let face = Shape::face(&fr, &loops).map_err(k)?;
-            self.varrer(&face, &g.pts, 0)
+            match &g.exata {
+                Some(e) => self.varrer_c(&face, e, 0),
+                None => self.varrer(&face, &g.pts, 0),
+            }
         }
     }
 
@@ -3426,6 +3549,18 @@ impl Ctx<'_> {
         match face.sweep(pts, mode) {
             Err(e) if e.0.contains("girar nos cantos") => {
                 let s = face.sweep(pts, 1).map_err(|e| e.0)?;
+                *self.aviso_cantos.borrow_mut() = Some(AVISO_CANTOS_TOMBOU.into());
+                Ok(s)
+            }
+            r => r.map_err(|e| e.0),
+        }
+    }
+
+    /// `varrer` com a guia exata (B559).
+    fn varrer_c(&self, face: &Shape, guia: &geo3d::Curva3, mode: u8) -> Result<Shape, String> {
+        match face.sweep_c(guia, mode) {
+            Err(e) if e.0.contains("girar nos cantos") => {
+                let s = face.sweep_c(guia, 1).map_err(|e| e.0)?;
                 *self.aviso_cantos.borrow_mut() = Some(AVISO_CANTOS_TOMBOU.into());
                 Ok(s)
             }
@@ -4189,11 +4324,24 @@ impl Ctx<'_> {
         self.curve_flange_lim(f, pts, ang, r, len, flip, want, side, &chapa_aba_limites::AbaLim::default())
     }
 
+    /// `curve_flange_lim` com a curva exata da cadeia (B559) quando as arestas da chapa a dão.
+    #[allow(clippy::too_many_arguments)]
+    fn curve_flange_exata(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, len: f64, flip: bool, want: Option<V3>, side: u8, lim: &chapa_aba_limites::AbaLim) -> Result<Option<String>, String> {
+        let exata = self.cadeia_exata(f.target, &pts);
+        self.curve_flange_lim_x(f, pts, ang, r, len, flip, want, side, lim, exata)
+    }
+
     /// `curve_flange` com os recortes e cantos da aba por superfície (B556): a ferramenta da aba é
     /// recortada pelo limite da borda final e ganha os cantos antes de se unir à chapa. A ponta 1 é
     /// o começo de `pts`; a ponta 2, o fim.
     #[allow(clippy::too_many_arguments)]
     fn curve_flange_lim(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, len: f64, flip: bool, want: Option<V3>, side: u8, lim: &chapa_aba_limites::AbaLim) -> Result<Option<String>, String> {
+        self.curve_flange_lim_x(f, pts, ang, r, len, flip, want, side, lim, None)
+    }
+
+    /// `curve_flange_lim` com o caminho exato opcional (`exata`, no sentido de `pts`).
+    #[allow(clippy::too_many_arguments)]
+    fn curve_flange_lim_x(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, len: f64, flip: bool, want: Option<V3>, side: u8, lim: &chapa_aba_limites::AbaLim, exata: Option<geo3d::Curva3>) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
         let sp = self.sheet()?;
         if !(1.0..=179.0).contains(&ang) {
@@ -4282,12 +4430,25 @@ impl Ctx<'_> {
             self.marca_cadeia(f.id, &inner, &outs, ang, r, sobe, &cmp, true);
             return Ok(None);
         }
+        // B559: a cadeia exata (as arestas da chapa) é o caminho da varredura; vale quando a aba não
+        // recua (recuar é deslocar a curva no plano, e aí segue a polilinha). A tangente do começo
+        // sai da curva exata, para a seção ficar normal ao caminho de verdade.
+        // só cadeia lisa (G1): com canto vivo entre trechos, a varredura de seção fixa não contorna o
+        // canto, e a polilinha (que arredonda os cantos suaves) continua sendo o caminho
+        let caminho = if off > 1e-6 { None } else { exata }.filter(|e| geo3d::curva_g1(e, 0.02)).map(|e| e.transformada(&Xform::Translate(shift)));
+        let (tan0, out0) = match caminho.as_ref().and_then(|e| e.0.first()).and_then(geo3d::tangente_inicio) {
+            Some(t0) => {
+                let o = geo3d::unit(fenkra_kernel::cross(t0, n)).map(|o| geo3d::mul(o, s)).unwrap_or(outs[0]);
+                (t0, o)
+            }
+            None => (tan(0), outs[0]),
+        };
         // seção no plano normal à aresta: arco da dobra (raio interno r, externo r+t) e parede
         // a normal da seção segue o sentido da varredura (senão o sólido sai do avesso);
         // com a normal trocada, o eixo v da seção vira −d
-        let nsec = fenkra_kernel::cross(outs[0], d);
-        let sv = if geo3d::dot(nsec, tan(0)) >= 0. { 1. } else { -1. };
-        let fr = Frame { origin: inner[0], x: outs[0], normal: geo3d::mul(nsec, sv) };
+        let nsec = fenkra_kernel::cross(out0, d);
+        let sv = if geo3d::dot(nsec, tan0) >= 0. { 1. } else { -1. };
+        let fr = Frame { origin: inner[0], x: out0, normal: geo3d::mul(nsec, sv) };
         let arc = |rad: f64, t0: f64, t1: f64| -> Vec<[f64; 2]> {
             (0..=8).map(|i| {
                 let t = t0 + (t1 - t0) * i as f64 / 8.;
@@ -4345,7 +4506,13 @@ impl Ctx<'_> {
                 ch.push(inner[inner.len() - 1]);
             }
             let face = Shape::face(&fr, &[secao(e0)]).map_err(k)?;
-            let t = if straight { face.extrude(geo3d::unit(axis).unwrap_or([1., 0., 0.]), geo3d::norm(axis), 0.).map_err(k)? } else { face.sm_chain_sweep(&ch, n).map_err(k)? };
+            let t = if straight {
+                face.extrude(geo3d::unit(axis).unwrap_or([1., 0., 0.]), geo3d::norm(axis), 0.).map_err(k)?
+            } else if let Some(c) = &caminho {
+                face.sm_chain_sweep_c(c, n).map_err(k)?
+            } else {
+                face.sm_chain_sweep(&ch, n).map_err(k)?
+            };
             let t = if lim.ponta.is_some() || !lim.lados.is_empty() || lim.cantos.iter().any(|c| c.is_some()) {
                 let (n_, tg0, tg1) = (inner.len() - 1, tan(0), tan(inner.len() - 1));
                 let geo = chapa_aba_limites::CantoGeo {
@@ -5156,7 +5323,7 @@ impl Ctx<'_> {
                     SweepMode::Fixo => 1,
                     SweepMode::Frenet => 2,
                 };
-                let tool = self.varrer(&face, &spine.pts, mode)?;
+                let tool = self.varrer_c(&face, &spine.kernel(), mode)?;
                 // B15: tampas e laterais da varredura pela geometria (o tubo por trecho não guarda o histórico)
                 let papeis = papeis::por_perfil(&tool, &face, papeis::Fim::MesmaArea).filter(|r| r.len() == tool.face_count() as usize);
                 self.apply_roles(f.target, tool, w.op, f.id, papeis)?;
@@ -5961,7 +6128,7 @@ impl Ctx<'_> {
                     Some(c) => c,
                     None => cf.edge.iter().map(|q| self.map_point(geo3d::add(*q, if from == f.flat_space && geo3d::norm(shift) > 1e-9 { shift } else { [0.; 3] }), from, sp.flat)).collect(),
                 };
-                self.curve_flange(f, pts, ang, r, len, cf.flip, None, cf.side)
+                self.curve_flange_exata(f, pts, ang, r, len, cf.flip, None, cf.side, &chapa_aba_limites::AbaLim::default())
             }
             FeatureKind::SmSurfFlange(sf) => {
                 let sp = self.sheet()?;
@@ -6130,7 +6297,7 @@ impl Ctx<'_> {
                         CantoAba::Chanfro(v) => Some((true, chapa_laco::ev_faixa(v, &self.vars, &format!("distância do chanfro {}", i + 1), 0.01, f64::INFINITY, "mm")?)),
                     };
                 }
-                self.curve_flange_lim(f, pts, ang, r, len, sf.flip, Some(d), 0, &lim)
+                self.curve_flange_exata(f, pts, ang, r, len, sf.flip, Some(d), 0, &lim)
             }
             FeatureKind::SmArcSlot(sl) => {
                 let sp = self.sheet()?;
@@ -7650,6 +7817,20 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
 
 /// Superfície de referência avaliada no fim da linha do tempo, em texto B-rep.
 pub fn surface_brep(doc: &Document, id: Id) -> Option<String> {
+    let cx = ctx_no_fim(doc)?;
+    // B511: a forma livre aberta também é superfície
+    cx.surface(id, 0).ok()?.to_brep().ok()
+}
+
+/// B559: curva de referência avaliada no fim da linha do tempo, com a geometria exata que vai ao
+/// kernel (`Curve3::exata`) e a polilinha de desenho.
+pub fn curva_de_referencia(doc: &Document, id: Id) -> Result<Curve3, String> {
+    let cx = ctx_no_fim(doc).ok_or("parâmetros inválidos")?;
+    cx.curve(&CurveRef::Ref(id), 0)
+}
+
+/// Contexto com todos os recursos ativos calculados (para avaliar uma referência no fim).
+fn ctx_no_fim(doc: &Document) -> Option<Ctx<'_>> {
     let vars = doc.eval_params().ok()?;
     let mut cx = Ctx {
         doc,
@@ -7679,8 +7860,7 @@ pub fn surface_brep(doc: &Document, id: Id) -> Option<String> {
     for f in doc.active_features().map(|(_, f)| f) {
         let _ = cx.run(f);
     }
-    // B511: a forma livre aberta também é superfície
-    cx.surface(id, 0).ok()?.to_brep().ok()
+    Some(cx)
 }
 
 /// Geometria de um membro estrutural.
@@ -7704,6 +7884,8 @@ struct MemberGeom {
     loops: Vec<fenkra_kernel::Loop2>,
     pts: Vec<V3>,
     straight: bool,
+    /// B559: a guia exata (membro curvo), quando a curva tem forma exata
+    exata: Option<geo3d::Curva3>,
 }
 
 /// Ponta de `a` que cai no meio do eixo de `b` (junta em T): (ponto, direção para dentro de `a`,

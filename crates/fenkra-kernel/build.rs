@@ -18,6 +18,7 @@ fn main() {
     println!("cargo:rerun-if-changed=cpp/xde.inc");
     println!("cargo:rerun-if-changed=cpp/xde_pmi.inc");
     println!("cargo:rerun-if-changed=cpp/nurbs.inc");
+    println!("cargo:rerun-if-changed=cpp/curva.inc");
     println!("cargo:rerun-if-changed=src/ffi.rs");
 
     let root = std::env::var("OCCT_ROOT")

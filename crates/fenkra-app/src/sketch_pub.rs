@@ -91,13 +91,10 @@ pub fn pontos_soltos(doc: &Document, sketch: Id) -> Vec<PointRef> {
         .collect()
 }
 
-/// O elemento que representa um conjunto de curvas: cópia de uma, ou junção de várias.
+/// O elemento que representa um conjunto de curvas: o Extrair delas (B576), com uma ou várias.
 pub fn kind_de_curvas(set: &[CurveRef]) -> Option<RefKind> {
-    match set {
-        [] => None,
-        [c] => Some(RefKind::CurveCopy { curve: c.clone() }),
-        _ => Some(RefKind::CurveJoin { curves: set.to_vec() }),
-    }
+    let (c, mais) = set.split_first()?;
+    Some(RefKind::CurveCopy { curve: c.clone(), mais: mais.to_vec() })
 }
 
 /// Cópia associativa de um ponto. Não há um tipo só para isso: o ponto entre ele e ele mesmo, na
@@ -110,6 +107,10 @@ pub fn kind_de_ponto(p: PointRef) -> RefKind {
 fn mesmo(a: &RefKind, b: &RefKind) -> bool {
     match (a, b) {
         (RefKind::CurveJoin { curves: x }, RefKind::CurveJoin { curves: y }) => x.len() == y.len() && x.iter().all(|c| y.contains(c)),
+        (RefKind::CurveCopy { curve: a, mais: x }, RefKind::CurveCopy { curve: b, mais: y }) => {
+            let (x, y): (Vec<&CurveRef>, Vec<&CurveRef>) = (std::iter::once(a).chain(x).collect(), std::iter::once(b).chain(y).collect());
+            x.len() == y.len() && x.iter().all(|c| y.contains(c))
+        }
         _ => a == b,
     }
 }
@@ -285,7 +286,7 @@ mod testes {
         let r = recompute(&d);
         let (ids, _) = extrair_sketch(&mut d, &r, sk, false);
         let r = recompute(&d);
-        let contorno = ids.iter().copied().find(|id| matches!(d.reference(*id).map(|e| &e.kind), Some(RefKind::CurveJoin { curves }) if curves.len() == 4)).unwrap();
+        let contorno = ids.iter().copied().find(|id| matches!(d.reference(*id).map(|e| &e.kind), Some(RefKind::CurveCopy { mais, .. }) if mais.len() == 3)).unwrap();
         assert!(r.curves.iter().any(|c| c.id == contorno));
         d.add_feature(FeatureKind::Extrude(Extrude { sketch: contorno, op: BoolOp::Add, extent: Extent::Blind("5".into()), reverse: false, taper: "0".into(), thin: None, dir: None, thin_side: 0, ends: Default::default() }));
         let r = recompute(&d);

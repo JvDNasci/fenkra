@@ -162,7 +162,9 @@ pub fn traco(sk: &SketchData, id: Id) -> Option<Traco> {
             Traco::Arco { c: pc, r: dist(ps, pc), a0, varre: if v < 1e-12 { TAU } else { v } }
         }
         // pelos nós, não por `spline_uv`: com tangente própria ela já devolve a curva amostrada, e as
-        // tangentes, que são uma por nó, cairiam nas primeiras amostras
+        // tangentes, que são uma por nó, cairiam nas primeiras amostras. Fica a Hermite do solver: aparar
+        // e estender gravam tangentes próprias nesse modelo para manter a forma (B559: a spline sem
+        // tangente desenhada é a do kernel, que esse modelo de parâmetro uniforme não reproduz exato)
         Curve::Spline { pts } => Traco::poli(spline_eval(&pts.iter().map(|q| sk.pos(*q)).collect::<Vec<_>>(), &sk.own_tangents(id), POR_TRECHO)),
         Curve::Ellipse { c, major, minor, t0, t1, .. } => Traco::poli(fenkra_core::projecao::elipse_amostras(sk.pos(*c), *major, *minor, *t0, *t1)),
         Curve::Point { .. } => return None,

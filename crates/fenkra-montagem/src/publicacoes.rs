@@ -35,10 +35,10 @@ pub fn publicar_sketch(doc: &mut Document, sketch: Id) -> usize {
     let mut novas = 0;
     for (i, curve) in curvas.into_iter().enumerate() {
         let alvo = fenkra_core::CurveRef::SketchCurve { sketch, curve };
-        if doc.references.iter().any(|r| r.published && matches!(&r.kind, fenkra_core::RefKind::CurveCopy { curve: c } if *c == alvo)) {
+        if doc.references.iter().any(|r| r.published && matches!(&r.kind, fenkra_core::RefKind::CurveCopy { curve: c, mais } if *c == alvo && mais.is_empty())) {
             continue;
         }
-        let id = doc.add_geometry(fenkra_core::RefKind::CurveCopy { curve: alvo });
+        let id = doc.add_geometry(fenkra_core::RefKind::CurveCopy { curve: alvo, mais: vec![] });
         if let Some(r) = doc.references.iter_mut().find(|r| r.id == id) {
             r.published = true;
             r.name = format!("{nome}.{}", i + 1);

@@ -106,6 +106,17 @@ Consequências factuais (candidatos para o B559):
    diagonal e 20° (`fenkra-core/src/qualidade.rs:21-23`): faces curvas ficam visivelmente faceteadas em peças
    pequenas diante da diagonal e em superfícies de curvatura variável.
 
+**Estado depois do B559/B576 (22/11/2026, ADR 0108).** `Curve3` carrega `exata: Option<Curva3>` e os
+consumidores de superfície (extrusão, revolução, varredura, loft sem controle, preenchimento, dividir por
+curva, curva solta), a varredura sólida, o membro curvo e as abas curva e por superfície mandam a curva
+exata (`Shape::*_c`, `extrude_curva`, `revolve_curva`, `sm_chain_sweep_c`). Fontes exatas: reta, círculo,
+arco, curva do sketch (`EvalSketch::exatas`), aresta do modelo (`edge_curve_at`), spline e spline por
+controle, Conectar, elipse, parábola, canto entre retas (a polilinha segue como pontos; o kernel quebra
+só nos cantos acima de 20°). Spline única = interpolação do
+kernel (Lagrange nas pontas), replicada em `fenkra-core/src/spline.rs` para desenho, Aparar e prévia; a
+fechada do wireframe vai como B-spline C2 periódica pronta. Itens 1 a 4 acima resolvidos; 5 (G1/G2 por
+amostras) e 6 (malha) continuam. Extrair várias = `CurveCopy { mais }` (não Junção).
+
 ## 3. Comandos de Superfícies (um a um)
 
 Legenda das colunas das tabelas: **Ent.** entradas; **Painel** seções/opções; **Dir.** direção/inverter/limites/

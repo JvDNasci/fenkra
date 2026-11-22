@@ -303,45 +303,11 @@ pub fn smooth_runs(p: &[[f64; 2]], closed: bool) -> Vec<Vec<usize>> {
         .collect()
 }
 
-/// Amostra uma spline que passa pelos pontos (Catmull-Rom centrípeta), para desenhar.
+/// Amostra a spline que passa pelos pontos, para desenhar e aparar. B559: é a definição única
+/// (`crate::spline`, a interpolação do kernel), a mesma curva que o perfil vira no sólido; antes era uma
+/// Catmull-Rom, e o desenho não coincidia com o sólido.
 pub fn spline_samples(p: &[[f64; 2]], per_seg: usize) -> Vec<[f64; 2]> {
-    let n = p.len();
-    if n < 3 {
-        return p.to_vec();
-    }
-    let get = |i: isize| -> [f64; 2] {
-        if i < 0 {
-            // ponto fantasma refletido nas pontas
-            [2. * p[0][0] - p[1][0], 2. * p[0][1] - p[1][1]]
-        } else if i as usize >= n {
-            [2. * p[n - 1][0] - p[n - 2][0], 2. * p[n - 1][1] - p[n - 2][1]]
-        } else {
-            p[i as usize]
-        }
-    };
-    let mut out = vec![p[0]];
-    for i in 0..n - 1 {
-        let (p0, p1, p2, p3) = (get(i as isize - 1), get(i as isize), get(i as isize + 1), get(i as isize + 2));
-        let tj = |a: [f64; 2], b: [f64; 2], t: f64| t + ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2)).sqrt().sqrt().max(1e-9);
-        let t0 = 0.;
-        let t1 = tj(p0, p1, t0);
-        let t2 = tj(p1, p2, t1);
-        let t3 = tj(p2, p3, t2);
-        for k in 1..=per_seg {
-            let t = t1 + (t2 - t1) * k as f64 / per_seg as f64;
-            let l = |a: [f64; 2], b: [f64; 2], ta: f64, tb: f64| {
-                let w = (t - ta) / (tb - ta);
-                [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w]
-            };
-            let a1 = l(p0, p1, t0, t1);
-            let a2 = l(p1, p2, t1, t2);
-            let a3 = l(p2, p3, t2, t3);
-            let b1 = l(a1, a2, t0, t2);
-            let b2 = l(a2, a3, t1, t3);
-            out.push(l(b1, b2, t1, t2));
-        }
-    }
-    out
+    crate::spline::amostra_interpolada(p, per_seg)
 }
 
 /// Tangente própria num ponto de spline (alça tipo Bézier: o ponto ± vetor/3).
@@ -553,6 +519,19 @@ impl SketchData {
         }
         spline_eval(&p, &self.own_tangents(curve), 16)
     }
+    /// A spline amostrada com `por_vao` pontos por vão entre os nós, na mesma curva do perfil (B559):
+    /// sem tangente, a interpolação única; com tangente, a Hermite que o solver enxerga.
+    pub fn spline_pelos_nos(&self, curve: Id, por_vao: usize) -> Vec<[f64; 2]> {
+        let Some(Curve::Spline { pts }) = self.curves.iter().find(|c| c.id == curve).map(|c| &c.geom) else { return vec![] };
+        let p: Vec<[f64; 2]> = pts.iter().map(|q| self.pos(*q)).collect();
+        let tangent = self.constraints.iter().any(|c| matches!(c.kind, Kind::Tangent(a, b) if a == curve || b == curve));
+        if !tangent && !self.spline_tan.iter().any(|t| t.curve == curve) && p.len() >= 3 {
+            if let Some(h) = crate::spline::Hermite::interpolada(&p, false) {
+                return h.amostra(por_vao);
+            }
+        }
+        spline_eval(&p, &self.own_tangents(curve), por_vao)
+    }
     /// Tangente própria (ou nenhuma) de cada ponto da spline, na ordem.
     pub fn own_tangents(&self, curve: Id) -> Vec<Option<[f64; 2]>> {
         let Some(Curve::Spline { pts }) = self.curves.iter().find(|c| c.id == curve).map(|c| &c.geom) else { return vec![] };
@@ -571,8 +550,7 @@ impl SketchData {
             Some(Curve::Spline { pts }) => pts.clone(),
             _ => return None,
         };
-        let p: Vec<[f64; 2]> = pts.iter().map(|q| self.pos(*q)).collect();
-        let s = spline_eval(&p, &self.own_tangents(curve), 20);
+        let s = self.spline_pelos_nos(curve, 20);
         let mut best = (f64::MAX, 0usize);
         for (k, q) in s.iter().enumerate() {
             let d = (q[0] - at[0]).powi(2) + (q[1] - at[1]).powi(2);

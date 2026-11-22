@@ -70,6 +70,42 @@ impl Ctx<'_> {
         Some(cadeia)
     }
 
+    /// B559: a curva exata da cadeia que passa por `pts` (as arestas do B-rep, cada uma com a curva
+    /// dela), no sentido de `pts`. `None` se as arestas exatas não cobrem a cadeia de ponta a ponta.
+    pub(crate) fn cadeia_exata(&self, target: Id, pts: &[V3]) -> Option<geo3d::Curva3> {
+        if pts.len() < 2 {
+            return None;
+        }
+        let (b, _, _) = self.body_owned(target)?;
+        let topo = b.topology().ok()?;
+        let cs: Vec<Curve3> = topo.edge_mids.iter().filter_map(|m| b.edge_at(*m).ok()).filter_map(|p| Curve3::poly(p, false).ok()).collect();
+        // as arestas cujos pontos caem todos sobre a cadeia (a cadeia guardada pode ser uma polilinha
+        // grossa da malha: uma flecha de até 0,15 mm ainda é a mesma aresta)
+        let tol = SOBRE.max(0.15);
+        let poli = Curve3::poly(pts.to_vec(), false).ok()?;
+        // (os meios dos trechos também: uma reta com as duas pontas nas pontas da cadeia não é dela)
+        let na_cadeia = |q: V3| geo3d::dist(poli.nearest(q).1, q) < tol;
+        let sobre: Vec<Curve3> = cs.into_iter().filter(|c| c.pts.iter().all(|q| na_cadeia(*q)) && c.pts.windows(2).all(|w| na_cadeia(geo3d::lerp(w[0], w[1], 0.5)))).collect();
+        if sobre.is_empty() {
+            return None;
+        }
+        let j = join_curves(sobre.into_iter().map(|c| com_aresta_exata(b, c)).collect()).ok()?;
+        let mut e = j.exata?;
+        let (a, z) = (e.inicio()?, e.fim()?);
+        let (p0, p1) = (pts[0], pts[pts.len() - 1]);
+        let fechada = geo3d::dist(p0, p1) < tol;
+        if !fechada {
+            if geo3d::dist(a, p1) + geo3d::dist(z, p0) < geo3d::dist(a, p0) + geo3d::dist(z, p1) {
+                e = e.invertida();
+            }
+            let (a, z) = (e.inicio()?, e.fim()?);
+            if geo3d::dist(a, p0) > tol || geo3d::dist(z, p1) > tol {
+                return None;
+            }
+        }
+        Some(e)
+    }
+
     /// Dobra por linha em curva. `pts` é a linha já no estado atual; ela marca o centro da zona, ou
     /// o que `position` disser, igual à dobra reta.
     pub(crate) fn dobra_curva(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, bd: &SmBend) -> Result<Option<String>, String> {
@@ -104,7 +140,11 @@ impl Ctx<'_> {
             [geo3d::dot(q, fr.x), geo3d::dot(q, y)]
         };
         let p2: Vec<[f64; 2]> = linha.iter().map(|p| loc(*p)).collect();
-        let (fim, comeco) = (loc(geo3d::add(depois, geo3d::mul(saida[ultimo], big))), loc(geo3d::add(antes, geo3d::mul(saida[0], big))));
+        // os dois cantos do fundo saem pela mesma direção (a saída média): lançados pela saída de cada
+        // ponta, uma linha de pontas muito inclinadas (parábola de três pontos) fechava a região pelo
+        // lado errado e ela dava a volta na chapa
+        let media = geo3d::unit(geo3d::add(geo3d::add(saida[0], saida[ultimo]), saida[ultimo / 2])).unwrap_or(saida[ultimo / 2]);
+        let (fim, comeco) = (loc(geo3d::add(depois, geo3d::mul(media, big))), loc(geo3d::add(antes, geo3d::mul(media, big))));
         let ponta = p2[p2.len() - 1];
         let lp = [chapa::chain_segs(&p2), vec![fenkra_kernel::Seg2::Line(ponta, fim), fenkra_kernel::Seg2::Line(fim, comeco), fenkra_kernel::Seg2::Line(comeco, p2[0])]].concat();
         let alem = Shape::face(&fr, &[lp]).map_err(k)?.extrude(n, big, big).map_err(k)?;
