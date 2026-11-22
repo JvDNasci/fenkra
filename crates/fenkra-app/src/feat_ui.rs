@@ -149,7 +149,7 @@ pub(crate) fn faces_ui(ui: &mut egui::Ui, doc: &Document, faces: &mut Vec<[f64; 
         ui.horizontal(|ui| {
             // B516: a face pelo nome (dono e papel), não pela coordenada
             let nome = crate::ref_nome::campo_face(doc, keys.get(i).and_then(|k| k.as_ref()), *f);
-            ui.label(RichText::new(format!("{} {} · {nome}", tr("Face"), i + 1)).small()).on_hover_text(crate::ref_nome::dica_face());
+            ui.label(RichText::new(format!("{}. {nome}", i + 1)).small()).on_hover_text(crate::ref_nome::dica_face_em(*f));
             if ui.small_button(tr("✖")).clicked() {
                 del = Some(i);
             }
@@ -236,7 +236,7 @@ fn suporte_aba_modos(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind
         }
         FeatureKind::SmSurfFlange(sf) => {
             section(ui, "Suporte");
-            ui.label(RichText::new(if sf.face == [0.; 3] { tr("⚠ clique na face da web (a parede base)").to_string() } else { ancora(doc, me, "face", sf.face) }).small()).on_hover_text(crate::ref_nome::dica_face());
+            ui.label(RichText::new(if sf.face == [0.; 3] { tr("⚠ clique na face da web (a parede base)").to_string() } else { ancora(doc, me, "face", sf.face) }).small()).on_hover_text(crate::ref_nome::dica_face_em(sf.face));
             crate::geo_ui::surf_slot(ui, "smsf_sup", "Superfície", doc, me, &mut sf.support, seed);
         }
         _ => {}
@@ -340,7 +340,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             if s.closed {
                 ui.label(RichText::new(tr("Sem face aberta: o corpo vira uma casca com a cavidade fechada por dentro.")).weak().small());
             } else {
-                crate::selecao_regras::regra_faces_ui(ui, &mut s.regras, &s.faces);
+                crate::selecao_regras::regra_faces_ui(ui, doc, &mut s.regras, &s.faces, &s.face_keys);
                 let before = s.faces.clone();
                 faces_ui(ui, doc, &mut s.faces, &s.face_keys, picked_faces);
                 s.face_keys = carry_keys(&before, &s.face_keys, &s.faces);
@@ -377,7 +377,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 plane_combo(ui, "dr_pl", doc, &mut d.neutral, None);
             });
             crate::inverter::botao(ui, &mut d.reverse);
-            crate::selecao_regras::regra_faces_ui(ui, &mut d.regras, &d.faces);
+            crate::selecao_regras::regra_faces_ui(ui, doc, &mut d.regras, &d.faces, &d.face_keys);
             let before = d.faces.clone();
             faces_ui(ui, doc, &mut d.faces, &d.face_keys, picked_faces);
             d.face_keys = carry_keys(&before, &d.face_keys, &d.faces);
@@ -390,7 +390,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         // mesmo campo (`remove`), e Dois lados e Simétrico não se aplicam (ver `paridade_espessar`)
         FeatureKind::Thickness(t) => {
             section(ui, "Faces");
-            crate::selecao_regras::regra_faces_ui(ui, &mut t.regras, &t.faces);
+            crate::selecao_regras::regra_faces_ui(ui, doc, &mut t.regras, &t.faces, &t.face_keys);
             let before = t.faces.clone();
             faces_ui(ui, doc, &mut t.faces, &t.face_keys, picked_faces);
             t.face_keys = carry_keys(&before, &t.face_keys, &t.faces);
@@ -533,7 +533,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             expr(ui, "Início", &mut t.start, vars, "mm");
             ui.label(RichText::new(tr("Distância da borda da face até onde a rosca começa; vazio começa na borda.")).weak().small());
             section(ui, "Face cilíndrica");
-            ui.label(RichText::new(crate::ref_nome::campo_face(doc, t.face_key.as_ref(), t.face)).small()).on_hover_text(crate::ref_nome::dica_face());
+            ui.label(RichText::new(crate::ref_nome::campo_face(doc, t.face_key.as_ref(), t.face)).small()).on_hover_text(crate::ref_nome::dica_face_em(t.face));
             if let Some(p) = picked_faces.last() {
                 if ui.button(tr("Usar a face selecionada")).clicked() {
                     t.face = *p;
@@ -998,7 +998,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
         }
         FeatureKind::SmCornerRelief(cr) => {
             section(ui, "Alívio de canto");
-            ui.label(RichText::new(format!("{} {} — {}", tr("canto em"), crate::app::p3(cr.at, 1), tr("clique outro vértice/face para trocar"))).small());
+            ui.label(RichText::new(format!("{} — {}", crate::ref_nome::campo_vertice(doc, cr.at), tr("clique outro vértice/face para trocar"))).small()).on_hover_text(format!("{}: {}", tr("Ponto de referência"), crate::app::p3(cr.at, 1)));
             ui.horizontal_wrapped(|ui| {
                 for (k, n) in [(0u8, "redondo"), (1, "quadrado"), (2, "gota"), (3, "aeronáutico"), (4, "rasgo")] {
                     ui.selectable_value(&mut cr.kind, k, tr(n));
@@ -1006,7 +1006,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             });
             expr(ui, "Tamanho", &mut cr.size, vars, "mm");
         }
-        FeatureKind::SmCornerClose(cc) => crate::chapa_canto_ui::painel(ui, cc, vars),
+        FeatureKind::SmCornerClose(cc) => crate::chapa_canto_ui::painel(ui, doc, cc, vars),
         FeatureKind::SmLoftFlange(lf) => crate::chapa_b35_ui::painel_perfis(ui, doc, idx, lf),
         FeatureKind::SmUnfoldPartial(u) => crate::chapa_b35_ui::painel_desdobra(ui, doc, idx, u),
         FeatureKind::SmConvert(c) => crate::chapa_b35_ui::painel_converte(ui, doc, me, c, vars),
@@ -1104,7 +1104,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             let mut del = None;
             for (i, p) in bf.exclude.iter().enumerate() {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(format!("ponto {}", crate::app::p3(p, 1))).small());
+                    ui.label(RichText::new(format!("{} {}", tr("Célula"), i + 1)).small()).on_hover_text(format!("{}: {}", tr("Ponto de referência"), crate::app::p3(p, 1)));
                     if ui.small_button(tr("✖")).clicked() {
                         del = Some(i);
                     }
@@ -1598,14 +1598,14 @@ pub fn cut_overlay(app: &crate::app::App, ui: &mut egui::Ui, rect: egui::Rect, c
 fn edge_line(ui: &mut egui::Ui, doc: &Document, e: &[f64; 3], key: Option<&fenkra_core::EdgeKey>) {
     // B516: a aresta pelo nome (as duas faces vizinhas), não pela coordenada
     let txt = if *e == [0.; 3] { tr("⚠ clique numa aresta reta da chapa na viewport").to_string() } else { format!("{} — {}", crate::ref_nome::campo_aresta(doc, key, *e), tr("clique outra aresta para trocar")) };
-    ui.label(RichText::new(txt).small()).on_hover_text(crate::ref_nome::dica_aresta());
+    ui.label(RichText::new(txt).small()).on_hover_text(crate::ref_nome::dica_aresta_em(*e));
 }
 
 /// Nome do que o campo de ponto `campo` do comando `me` guarda (B516), ou o ponto se ainda não tem nome.
 fn ancora(doc: &Document, me: Id, campo: &str, p: [f64; 3]) -> String {
     match doc.feature(me) {
         Some(f) => crate::ref_nome::campo_ancora(doc, f, campo, p),
-        None => crate::app::p3(p, 1),
+        None => tr("Ponto sem nome (espera o cálculo)").to_string(),
     }
 }
 

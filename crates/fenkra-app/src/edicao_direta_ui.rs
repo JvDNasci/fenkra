@@ -46,7 +46,7 @@ pub fn painel(ui: &mut egui::Ui, doc: &fenkra_core::Document, e: &mut DirectEdit
         OpDireta::Apagar => {}
     }
     ui.label(RichText::new(tr(dica(e.op))).weak().small());
-    crate::selecao_regras::regra_faces_ui(ui, &mut e.regras, &e.faces);
+    crate::selecao_regras::regra_faces_ui(ui, doc, &mut e.regras, &e.faces, &e.face_keys);
     let before = e.faces.clone();
     crate::feat_ui::faces_ui(ui, doc, &mut e.faces, &e.face_keys, picked);
     e.face_keys = carry_keys(&before, &e.face_keys, &e.faces);

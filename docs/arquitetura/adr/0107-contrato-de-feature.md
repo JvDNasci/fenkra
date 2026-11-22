@@ -431,3 +431,25 @@ a coerência antes de integrar.
   [ADR 0109](0109-encaixe-de-tubo-corte-normal-a-parede.md).
 - **Pendente**: tubo de passagem com rasgo, tubo contra superfície qualquer com ponte, escolha dos tubos
   que cortam um nó pela caixa universal (hoje a ordem é a da árvore) e o descritor dessas entradas.
+
+### B577, subelementos com nome próprio (22/11/2026)
+
+- **Regra.** Todo subelemento aparece como `Dono · Face n · Aresta m · Vértice k`, nunca por coordenada nem
+  por índice interno. `fenkra_solidos::nomes_sub::SubNomes` é montada de cada resultado de recálculo
+  (corpos e superfícies de referência). **Face n**: n-ésima do dono pela ordem do papel (`FaceKey::role`;
+  na superfície, o índice da face). **Aresta m**: m-ésima da face de menor ordem entre as duas vizinhas,
+  pela ordem da vizinha. **Vértice k**: ponta 1 ou 2 daquela aresta. A estrutura não muda quando uma cota
+  muda, então o nome segue o elemento; o comando guarda a chave (`FaceKey`/`EdgeKey`) e o recálculo continua
+  resolvendo pela chave (ADR 0010). A tabela só traduz.
+- **Onde aparece.** `ref_nome` (campos de painel, regra gravada, âncoras), `Pick::label` (menu, barra
+  "Seleção:"), `geo_ui` (extrair face, borda de superfície, superfície por faces), listas de face e aresta
+  (`feat_ui`, `editor`, `st_solda_ui`), canto e face aberta da chapa (nome do que está no ponto), canto do
+  estrutural (linhas que chegam nele) e nó do pórtico ("Nó n"). Sem chave, o campo diz "sem nome (espera o
+  cálculo)"; o ponto vai só na dica.
+- **Árvore na caixa** (`caixa_sub.rs`, em `caixa_arvore::caixa`, campos de face, aresta, superfície e
+  curva): "Elementos do modelo" com dono, faces, arestas e vértices; a seta abre, o clique escolhe
+  (`Pedido::Selecionar`), acende no 3D e entra no campo ativo pelo caminho do clique no 3D.
+- **Pendente.** Vértice sem chave própria (`ChaveAncora::Vertice`); faces com `role < 0` (varredura, loft,
+  revolução, membro estrutural) têm número mas não chave; `SketchLine`, `SketchCurve` e `Pick::SkCurve`
+  ainda mostram "#id"; nível "dono" escolhe só faces (falta recurso inteiro para campos de corpo); listas de
+  pontos de arquivo antigo (extrapolar) seguem por ponto; realce ao passar o mouse sobre um nível.

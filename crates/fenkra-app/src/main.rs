@@ -290,6 +290,10 @@ mod textos_dfm;
 mod textos_paineis;
 mod textos_layout;
 mod textos_barras;
+mod textos_subelementos;
+mod caixa_sub;
+#[cfg(test)]
+mod subelementos_testes;
 mod textos_elementos;
 mod textos_rodada2;
 mod textos_r3c;

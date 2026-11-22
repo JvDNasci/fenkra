@@ -83,6 +83,7 @@ pub mod calculo_rotativos;
 pub mod profile;
 pub mod sketch_posicao;
 pub mod refs;
+pub mod nomes_sub;
 pub mod papeis;
 pub mod reparo;
 mod fixos;
@@ -119,6 +120,8 @@ mod chapa_laco;
 mod ancoras;
 #[cfg(test)]
 mod referencias_b516_tests;
+#[cfg(test)]
+mod nomes_sub_tests;
 #[cfg(test)]
 mod st_cantos_b491_tests;
 #[cfg(test)]

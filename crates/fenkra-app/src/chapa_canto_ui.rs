@@ -22,9 +22,9 @@ const TIPOS: [(&str, &str, &str); 4] = [
 /// Alívio do vértice: (rótulo, dica) na ordem de `SmCornerClose::relief_kind`.
 const ALIVIOS: [&str; 4] = ["sem alívio", "redondo", "quadrado", "rasgo"];
 
-pub fn painel(ui: &mut egui::Ui, cc: &mut SmCornerClose, vars: &Vars) {
+pub fn painel(ui: &mut egui::Ui, doc: &fenkra_core::Document, cc: &mut SmCornerClose, vars: &Vars) {
     section(ui, "Fechamento de canto");
-    ui.label(RichText::new(format!("{} {} — {}", tr("canto em"), crate::app::p3(cc.at, 1), tr("clique outro vértice para trocar"))).small());
+    ui.label(RichText::new(format!("{} — {}", crate::ref_nome::campo_vertice(doc, cc.at), tr("clique outro vértice para trocar"))).small()).on_hover_text(format!("{}: {}", tr("Ponto de referência"), crate::app::p3(cc.at, 1)));
     ui.label(RichText::new(tr("Tipo do canto")).weak());
     let opts: Vec<(&str, &str, &str, bool)> = TIPOS.iter().enumerate().map(|(i, (ic, n, d))| (*ic, tr(n), tr(d), cc.kind as usize == i)).collect();
     if let Some(i) = icon_choice(ui, &opts) {

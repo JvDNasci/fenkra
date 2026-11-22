@@ -70,7 +70,7 @@ fn lista_de_faces(ui: &mut egui::Ui, doc: &Document, w: &mut StructWeld, segundo
         ui.horizontal(|ui| {
             // B516: a face pelo nome (dono e papel), não pela coordenada
             let nome = crate::ref_nome::campo_face(doc, w.face_keys.get(i).and_then(|k| k.as_ref()), w.faces[i]);
-            ui.label(RichText::new(format!("{} {} · {nome}", tr("Face"), i + 1)).small()).on_hover_text(crate::ref_nome::dica_face());
+            ui.label(RichText::new(format!("{}. {nome}", i + 1)).small()).on_hover_text(crate::ref_nome::dica_face_em(w.faces[i]));
             if ui.small_button("✖").on_hover_text(tr("Tira esta face do conjunto")).clicked() {
                 tirar = Some(i);
             }

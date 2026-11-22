@@ -87,13 +87,13 @@ pub fn nome_gravada(r: fenkra_core::RegraSelecao) -> &'static str {
 }
 
 /// Linha do painel dos comandos de face com a regra gravada (B95) e o botão de soltá-la.
-pub fn regra_faces_ui(ui: &mut eframe::egui::Ui, regras: &mut Vec<fenkra_core::RegraAresta>, faces: &[[f64; 3]]) {
+pub fn regra_faces_ui(ui: &mut eframe::egui::Ui, doc: &fenkra_core::Document, regras: &mut Vec<fenkra_core::RegraAresta>, faces: &[[f64; 3]], keys: &[Option<fenkra_core::FaceKey>]) {
     use crate::i18n::tr;
     let Some(r) = regras.first().copied() else { return };
     let mut soltar = false;
     ui.horizontal_wrapped(|ui| {
-        ui.label(eframe::egui::RichText::new(format!("{}: {} {} {}", tr("Regra gravada"), tr(nome_gravada(r.regra)), tr("a partir da face"), faces.get(r.semente).map(|p| crate::app::p3(p, 1)).unwrap_or_default())).small())
-            .on_hover_text(tr("A cada recálculo a regra é refeita a partir da face semente: faces que a mudança do modelo criar entram sozinhas."));
+        ui.label(eframe::egui::RichText::new(format!("{}: {} {} {}", tr("Regra gravada"), tr(nome_gravada(r.regra)), tr("a partir da face"), crate::ref_nome::campo_face(doc, keys.get(r.semente).and_then(|k| k.as_ref()), faces.get(r.semente).copied().unwrap_or_default()))).small())
+            .on_hover_text(crate::ref_nome::dica_em(tr("A cada recálculo a regra é refeita a partir da face semente: faces que a mudança do modelo criar entram sozinhas."), faces.get(r.semente).copied().unwrap_or_default()));
         soltar = ui.small_button(tr("Soltar a regra")).on_hover_text(tr("Deixa só as faces da lista, sem refazer a regra.")).clicked();
     });
     if soltar {

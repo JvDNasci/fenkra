@@ -39,17 +39,43 @@ impl Pick {
         }
     }
 
+    /// Nome do que foi escolhido (B577): "Dono · Face n", "Dono · Face n · Aresta m" ou "... · Vértice k",
+    /// pela hierarquia de nomes do último cálculo; nunca o índice nem a coordenada (essa fica na dica,
+    /// ver [`Pick::dica`]).
     pub fn label(&self, doc: &Document) -> String {
+        let tr = |s: &str| crate::i18n::tr(s).to_string();
+        let tabela = crate::ref_nome::tabela();
         match self {
-            Pick::Face { owner, .. } => format!("{} {}", crate::i18n::tr("Face de"), doc.name_of(*owner)),
-            Pick::Edge { body, .. } if *body >= SURF_BASE => crate::i18n::tr("Aresta de superfície").into(),
-            Pick::Edge { edge, .. } => format!("{} #{edge}", crate::i18n::tr("Aresta")),
-            Pick::Vertex { pos, .. } => format!("{} {}", crate::i18n::tr("Vértice"), crate::app::p3(pos, 1)),
+            Pick::Face { body, face, owner, .. } => match tabela.as_ref().and_then(|t| t.face_de(*body, *face).map(|f| t.nome_da_face(doc, f, &tr))) {
+                Some(n) => n,
+                None => format!("{} {}", crate::i18n::tr("Face de"), doc.name_of(*owner)),
+            },
+            Pick::Edge { body, edge, .. } => match tabela.as_ref().and_then(|t| t.aresta_de(*body, *edge).map(|a| t.nome_da_aresta(doc, a, &tr))) {
+                Some(n) => n,
+                None if *body >= SURF_BASE => crate::i18n::tr("Aresta de superfície").into(),
+                None => crate::i18n::tr("Aresta").into(),
+            },
+            Pick::Vertex { body, pos } => match tabela.as_ref().and_then(|t| t.aresta_com_ponta(*body, *pos).map(|(a, k)| t.nome_do_vertice(doc, a, k, &tr))) {
+                Some(n) => n,
+                None => crate::i18n::tr("Vértice").into(),
+            },
             Pick::Plane(p) => crate::scene::plane_ref_name(doc, p),
             Pick::Geo(id) => doc.name_of(*id),
             Pick::SkCurve { sketch, curve, .. } => format!("{} · curva #{}", doc.name_of(*sketch), curve.0),
             Pick::SkPoint { sketch, point, .. } => format!("{} · ponto #{}", doc.name_of(*sketch), point.0),
             Pick::CurveVtx { curve, index, .. } => format!("{} · vértice {}", doc.name_of(*curve), index + 1),
+        }
+    }
+}
+
+impl Pick {
+    /// Dica do nome (B577): a posição do elemento, que é só informação e nunca identidade.
+    pub fn dica(&self) -> Option<String> {
+        match self {
+            Pick::Face { point, .. } => Some(crate::app::p3(point, 1)),
+            Pick::Edge { mid, .. } => Some(crate::app::p3(mid, 1)),
+            Pick::Vertex { pos, .. } => Some(crate::app::p3(pos, 1)),
+            _ => None,
         }
     }
 }

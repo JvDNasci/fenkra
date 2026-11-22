@@ -1073,7 +1073,7 @@ pub(crate) fn bag<T: Clone + PartialEq + Send + Sync + 'static>(
     vazio: Option<T>,
     mesmo: impl Fn(&T, &T) -> bool,
 ) {
-    let c = crate::caixa_arvore::Caixa { salt, label, min, entrada: None, dono: None, dados: None, clicados: vec![], nome: &name, origem: None, cand: None, blank: &blank, vazio, mesmo: &mesmo };
+    let c = crate::caixa_arvore::Caixa { salt, label, min, entrada: None, dono: None, dados: None, clicados: vec![], nome: &name, origem: None, cand: None, blank: &blank, vazio, mesmo: &mesmo, navegar: None };
     crate::caixa_arvore::caixa(ui, c, items, picked, &mut edit);
 }
 
@@ -1101,7 +1101,7 @@ pub(crate) fn bag_contrato<T: Clone + PartialEq + Send + Sync + 'static>(
 ) {
     let entrada = crate::contrato::entrada_do_doc(doc, dono, salt);
     let dados = entrada.as_ref().and_then(|e| doc.dados_campo(dono, e.id));
-    let c = crate::caixa_arvore::Caixa { salt, label, min, entrada: entrada.as_ref(), dono: Some(dono), dados, clicados: crate::contrato::tipos_clicados(seed), nome: &name, origem, cand, blank: &blank, vazio, mesmo: &mesmo };
+    let c = crate::caixa_arvore::Caixa { salt, label, min, entrada: entrada.as_ref(), dono: Some(dono), dados, clicados: crate::contrato::tipos_clicados(seed), nome: &name, origem, cand, blank: &blank, vazio, mesmo: &mesmo, navegar: Some(doc) };
     crate::caixa_arvore::caixa(ui, c, items, picked, &mut edit);
 }
 
@@ -1823,7 +1823,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         }
         R::SurfExtract { face, owner, prop, complement, expected, key } => {
             // B516: a face pelo nome (dono e papel), não pela coordenada
-            ui.label(RichText::new(crate::ref_nome::campo_face(doc, key.as_ref(), *face)).small()).on_hover_text(crate::ref_nome::dica_face());
+            ui.label(RichText::new(crate::ref_nome::campo_face(doc, key.as_ref(), *face)).small()).on_hover_text(crate::ref_nome::dica_face_em(*face));
             // B534: a face pode ser de corpo, de superfície de referência ou de forma livre; o dono vai
             // junto, e a chave faz a extração seguir a face quando o recurso de origem muda
             if let Some(SurfRef::Face { point, owner: o, key: k, .. }) = face_da_extracao(seed) {
@@ -1844,7 +1844,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
             match near {
                 Some(p) => {
-                    ui.label(RichText::new(format!("{} ({}, {}, {})", tr("Borda perto de"), fmt(p[0]), fmt(p[1]), fmt(p[2]))).small());
+                    ui.label(RichText::new(format!("{} {}", tr("Borda"), crate::ref_nome::campo_aresta_no_ponto(doc, *p))).small()).on_hover_text(format!("{}: {}", tr("Ponto de referência"), crate::app::p3(*p, 1)));
                     prop_ui(ui, prop, expected);
                     count_ui(ui, note, expected);
                 }
@@ -2349,7 +2349,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             let mut del = None;
             for (i, f) in faces.iter().enumerate() {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(format!("Face {} em ({}, {}, {})", i + 1, fmt(f[0]), fmt(f[1]), fmt(f[2]))).small());
+                    ui.label(RichText::new(format!("{}. {}", i + 1, crate::ref_nome::campo_face(doc, keys.get(i).and_then(|k| k.as_ref()), *f))).small()).on_hover_text(crate::ref_nome::dica_face_em(*f));
                     if ui.small_button(tr("✖")).clicked() {
                         del = Some(i);
                     }

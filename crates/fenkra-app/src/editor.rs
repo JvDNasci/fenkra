@@ -1682,8 +1682,8 @@ fn feature_ui(
             if let (Some(r), EdgeSel::Edges(m)) = (o.extra.regras.first().copied(), &o.edges) {
                 let mut soltar = false;
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(format!("{}: {} {} {}", tr("Regra gravada"), tr(crate::selecao_regras::nome_gravada(r.regra)), tr("a partir da aresta"), m.get(r.semente).map(|p| crate::app::p3(p, 1)).unwrap_or_default())).small())
-                        .on_hover_text(tr("A cada recálculo a regra é refeita a partir da aresta semente: arestas que a mudança do modelo criar ou mover entram sozinhas."));
+                    ui.label(RichText::new(format!("{}: {} {} {}", tr("Regra gravada"), tr(crate::selecao_regras::nome_gravada(r.regra)), tr("a partir da aresta"), crate::ref_nome::campo_aresta(doc, o.keys.get(r.semente).and_then(|k| k.as_ref()), m.get(r.semente).copied().unwrap_or_default()))).small())
+                        .on_hover_text(crate::ref_nome::dica_em(tr("A cada recálculo a regra é refeita a partir da aresta semente: arestas que a mudança do modelo criar ou mover entram sozinhas."), m.get(r.semente).copied().unwrap_or_default()));
                     soltar = ui.small_button(tr("Soltar a regra")).on_hover_text(tr("Deixa só as arestas da lista, sem refazer a regra.")).clicked();
                 });
                 if soltar {
@@ -1710,7 +1710,7 @@ fn feature_ui(
                     None,
                     None,
                     |ui, i, p| {
-                        ui.label(crate::ref_nome::campo_aresta(doc, chaves.get(i).and_then(|k| k.as_ref()), *p)).on_hover_text(crate::ref_nome::dica_aresta());
+                        ui.label(crate::ref_nome::campo_aresta(doc, chaves.get(i).and_then(|k| k.as_ref()), *p)).on_hover_text(crate::ref_nome::dica_aresta_em(*p));
                     },
                     || [0.; 3],
                     None,

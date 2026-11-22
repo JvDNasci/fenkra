@@ -6706,6 +6706,17 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             match p {
                 Pedido::Dados(d) => self.open.doc.set_dados_campo(d),
                 Pedido::Cadeia { dono, campo, indice } => self.expandir_cadeia(dono, &campo, indice),
+                Pedido::Selecionar { picks, somar } => {
+                    if !somar {
+                        self.picks.clear();
+                    }
+                    for p in picks {
+                        if !self.picks.contains(&p) {
+                            self.picks.push(p);
+                        }
+                    }
+                    ctx.request_repaint();
+                }
             }
         }
     }
@@ -7056,6 +7067,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 made.extend(crate::sketch_pub::extrair_sketch(&mut self.open.doc, &r, id, false).0);
             }
         }
+        crate::ref_nome::atualizar(&r);
         self.result = Some(r);
         if o.multi {
             let all_e: Vec<CurveRef> = edges.drain(..).flatten().collect();
@@ -9049,6 +9061,7 @@ impl eframe::App for App {
                 if let Some(a) = self.result.as_ref().filter(|_| !novo) {
                     r.elapsed_ms = a.elapsed_ms;
                 }
+                crate::ref_nome::atualizar(&r);
                 self.result = Some(r);
                 self.enquadrar_abertura.resultado(g == self.gen_sent);
                 if g == self.gen_sent {

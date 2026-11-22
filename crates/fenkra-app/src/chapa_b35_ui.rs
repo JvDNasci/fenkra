@@ -55,8 +55,8 @@ pub fn painel_desdobra(ui: &mut egui::Ui, doc: &Document, idx: usize, u: &mut Sm
 pub fn painel_converte(ui: &mut egui::Ui, doc: &Document, me: Id, c: &mut SmConvert, vars: &Vars) {
     section(ui, "Converter em chapa");
     // B516: a face fixa pelo nome (dono e papel), guardado no comando
-    let nome = doc.feature(me).map_or_else(|| crate::app::p3(c.face, 1), |f| crate::ref_nome::campo_ancora(doc, f, "face", c.face));
-    ui.label(RichText::new(if c.face == [0.; 3] { tr("Face fixa: nenhuma (clique numa face plana da chapa para escolher)").to_string() } else { format!("{nome} — {}", tr("clique outra face para trocar")) }).small()).on_hover_text(crate::ref_nome::dica_face());
+    let nome = doc.feature(me).map_or_else(|| crate::ref_nome::campo_face_no_ponto(doc, c.face), |f| crate::ref_nome::campo_ancora(doc, f, "face", c.face));
+    ui.label(RichText::new(if c.face == [0.; 3] { tr("Face fixa: nenhuma (clique numa face plana da chapa para escolher)").to_string() } else { format!("{nome} — {}", tr("clique outra face para trocar")) }).small()).on_hover_text(crate::ref_nome::dica_face_em(c.face));
     // B522: sólido maciço (um cubo, por exemplo): espessura da chapa e faces a abrir
     if check(ui, &mut c.solido, "sólido maciço: esvaziar em chapa").changed() && c.solido && c.thickness.trim().is_empty() {
         c.thickness = "2".into();
@@ -67,7 +67,7 @@ pub fn painel_converte(ui: &mut egui::Ui, doc: &Document, me: Id, c: &mut SmConv
         let mut tirar = None;
         for (i, p) in c.open_faces.iter().enumerate() {
             ui.horizontal(|ui| {
-                ui.label(RichText::new(format!("{} {} — {}", tr("Face aberta"), i + 1, crate::app::p3(*p, 1))).small());
+                ui.label(RichText::new(format!("{} {} — {}", tr("Face aberta"), i + 1, crate::ref_nome::campo_face_no_ponto(doc, *p))).small()).on_hover_text(format!("{}: {}", tr("Ponto de referência"), crate::app::p3(*p, 1)));
                 if ui.small_button("✕").on_hover_text(tr("Remover esta face aberta")).clicked() {
                     tirar = Some(i);
                 }
