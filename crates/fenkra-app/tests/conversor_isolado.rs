@@ -152,7 +152,9 @@ fn cancelar_encerra_o_filho_sem_esperar_o_limite() {
     let inicio = Instant::now();
     cancelar.store(true, std::sync::atomic::Ordering::Relaxed);
     assert_eq!(quem.join().unwrap().unwrap_err(), ErroConv::Cancelado);
-    assert!(inicio.elapsed() < Duration::from_secs(2));
+    // A medida inclui terminar de abrir o filho (carrega o kernel), que passa de 2 s com a
+    // máquina carregada; o que importa é não esperar o limite de 600 s.
+    assert!(inicio.elapsed() < Duration::from_secs(15));
 }
 
 #[test]
