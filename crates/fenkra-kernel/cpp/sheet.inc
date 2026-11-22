@@ -5,6 +5,11 @@
 #include <Geom_Circle.hxx>
 #include <Geom_TrimmedCurve.hxx>
 #include <BRepBuilderAPI_TransitionMode.hxx>
+#include <BOPAlgo_ArgumentAnalyzer.hxx>
+#include <BOPAlgo_CheckResult.hxx>
+#include <BRepCheck_Result.hxx>
+#include <BRepCheck_ListOfStatus.hxx>
+#include <ShapeAnalysis_ShapeTolerance.hxx>
 
 namespace fenkra {
 
@@ -278,6 +283,178 @@ std::unique_ptr<Shape> poly_prism(rust::Slice<const double> pts, double dx, doub
         TopoDS_Face f = BRepBuilderAPI_MakeFace(pg.Wire(), Standard_True).Face();
         return wrap(BRepPrimAPI_MakePrism(f, gp_Vec(dx, dy, dz)).Shape());
     });
+}
+
+// B566: curva exata de um trecho só aparada entre os pontos dela mais perto de (a) e de (b), no
+// sentido de (a) para (b). Serve para a linha de dobra da aba por superfície seguir a aresta exata da web
+// só no trecho das amostras.
+rust::Vec<double> curva_aparada(rust::Slice<const double> v, double ax, double ay, double az, double bx, double by, double bz) {
+    return guard("aparar curva", [&] {
+        TopoDS_Wire w = wire_curva(v);
+        TopoDS_Edge e;
+        int n = 0;
+        for (TopExp_Explorer x(w, TopAbs_EDGE); x.More(); x.Next(), ++n) e = TopoDS::Edge(x.Current());
+        if (n != 1) throw std::runtime_error("a curva a aparar precisa ter um trecho só");
+        double f, l;
+        Handle(Geom_Curve) g = BRep_Tool::Curve(e, f, l);
+        if (g.IsNull()) throw std::runtime_error("trecho sem curva 3D");
+        auto param = [&](const gp_Pnt& p) {
+            GeomAPI_ProjectPointOnCurve pr(p, g, f, l);
+            if (pr.NbPoints() == 0) throw std::runtime_error("o ponto não projeta na curva");
+            return pr.LowerDistanceParameter();
+        };
+        double u0 = param(gp_Pnt(ax, ay, az)), u1 = param(gp_Pnt(bx, by, bz));
+        if (std::abs(u1 - u0) < 1e-12) throw std::runtime_error("trecho aparado nulo");
+        TopoDS_Edge t = BRepBuilderAPI_MakeEdge(g, std::min(u0, u1), std::max(u0, u1)).Edge();
+        rust::Vec<double> out;
+        codifica_aresta(t, out);
+        return out;
+    });
+}
+
+// B566: cada ponto (x, y, z em sequência) levado ao ponto mais perto da curva de um trecho só.
+rust::Vec<double> curva_projeta(rust::Slice<const double> v, rust::Slice<const double> pts) {
+    return guard("projetar na curva", [&] {
+        TopoDS_Wire w = wire_curva(v);
+        TopExp_Explorer x(w, TopAbs_EDGE);
+        if (!x.More()) throw std::runtime_error("curva vazia");
+        double f, l;
+        Handle(Geom_Curve) g = BRep_Tool::Curve(TopoDS::Edge(x.Current()), f, l);
+        if (g.IsNull()) throw std::runtime_error("trecho sem curva 3D");
+        GeomAPI_ProjectPointOnCurve pr;
+        pr.Init(g, f, l);
+        rust::Vec<double> out;
+        for (size_t i = 0; i + 2 < pts.size(); i += 3) {
+            gp_Pnt p(pts[i], pts[i + 1], pts[i + 2]);
+            pr.Perform(p);
+            if (pr.NbPoints() > 0) p = pr.NearestPoint();
+            out.push_back(p.X());
+            out.push_back(p.Y());
+            out.push_back(p.Z());
+        }
+        return out;
+    });
+}
+
+// ---------------------------------------------------------------- B566: diagnóstico de fusão
+namespace {
+void diag_forma(std::ostringstream& o, const char* nome, const TopoDS_Shape& s) {
+    BRepCheck_Analyzer an(s);
+    int nf = 0, ne = 0, nv = 0, nso = 0, nsh = 0;
+    for (TopExp_Explorer e(s, TopAbs_FACE); e.More(); e.Next()) ++nf;
+    for (TopExp_Explorer e(s, TopAbs_EDGE); e.More(); e.Next()) ++ne;
+    for (TopExp_Explorer e(s, TopAbs_VERTEX); e.More(); e.Next()) ++nv;
+    for (TopExp_Explorer e(s, TopAbs_SOLID); e.More(); e.Next()) ++nso;
+    for (TopExp_Explorer e(s, TopAbs_SHELL); e.More(); e.Next()) ++nsh;
+    ShapeAnalysis_ShapeTolerance st;
+    GProp_GProps g;
+    BRepGProp::VolumeProperties(s, g);
+    o << nome << ": tipo " << int(s.ShapeType()) << " valida " << an.IsValid() << " solidos " << nso << " cascas " << nsh << " faces " << nf << " arestas " << ne
+      << " vertices " << nv << " tolmax " << st.Tolerance(s, 1) << " tolmed " << st.Tolerance(s, 0) << " volume " << g.Mass() << "\n";
+    // faces por tipo de superfície (código do GeomAbs_SurfaceType × quantidade)
+    int tipos[12] = {0};
+    for (TopExp_Explorer e(s, TopAbs_FACE); e.More(); e.Next()) tipos[std::min(int(BRepAdaptor_Surface(TopoDS::Face(e.Current())).GetType()), 11)]++;
+    o << "  tipos de superficie:";
+    for (int j = 0; j < 12; ++j)
+        if (tipos[j]) o << " " << j << "x" << tipos[j];
+    o << "\n";
+    if (an.IsValid()) return;
+    int listados = 0;
+    for (TopAbs_ShapeEnum t : {TopAbs_SOLID, TopAbs_SHELL, TopAbs_FACE, TopAbs_WIRE, TopAbs_EDGE, TopAbs_VERTEX}) {
+        TopTools_IndexedMapOfShape m;
+        TopExp::MapShapes(s, t, m);
+        for (int i = 1; i <= m.Extent() && listados < 40; ++i) {
+            Handle(BRepCheck_Result) r = an.Result(m(i));
+            if (r.IsNull()) continue;
+            std::ostringstream st2;
+            for (BRepCheck_ListIteratorOfListOfStatus it(r->Status()); it.More(); it.Next())
+                if (it.Value() != BRepCheck_NoError) st2 << " " << int(it.Value());
+            for (r->InitContextIterator(); r->MoreShapeInContext(); r->NextShapeInContext())
+                for (BRepCheck_ListIteratorOfListOfStatus it(r->StatusOnShape()); it.More(); it.Next())
+                    if (it.Value() != BRepCheck_NoError) st2 << " c" << int(it.Value());
+            if (st2.str().empty()) continue;
+            ++listados;
+            o << "  sub tipo " << int(t) << " #" << i << ":" << st2.str();
+            if (t == TopAbs_FACE) o << " superficie " << int(BRepAdaptor_Surface(TopoDS::Face(m(i))).GetType());
+            if (t == TopAbs_EDGE) {
+                const TopoDS_Edge& e = TopoDS::Edge(m(i));
+                o << " tol " << BRep_Tool::Tolerance(e) << " curva " << int(BRepAdaptor_Curve(e).GetType());
+                TopoDS_Vertex va, vb;
+                TopExp::Vertices(e, va, vb);
+                if (!va.IsNull()) {
+                    gp_Pnt p = BRep_Tool::Pnt(va);
+                    o << " em (" << p.X() << ", " << p.Y() << ", " << p.Z() << ")";
+                }
+            }
+            if (t == TopAbs_VERTEX) {
+                gp_Pnt p = BRep_Tool::Pnt(TopoDS::Vertex(m(i)));
+                o << " tol " << BRep_Tool::Tolerance(TopoDS::Vertex(m(i))) << " em (" << p.X() << ", " << p.Y() << ", " << p.Z() << ")";
+            }
+            o << "\n";
+        }
+    }
+}
+}  // namespace
+
+// Relatório de uma fusão que falha: a análise de cada argumento (tipo, validade, tolerâncias e as
+// subformas reprovadas com o código do `BRepCheck`), o analisador de argumentos da booleana e a fusão
+// repetida com tolerância difusa crescente. Só para diagnóstico (testes e investigação).
+rust::String diag_fusao(const Shape& a, const Shape& b) {
+    std::ostringstream o;
+    o.precision(6);
+    try {
+        diag_forma(o, "A", a.s);
+        diag_forma(o, "B", b.s);
+        BOPAlgo_ArgumentAnalyzer aa;
+        aa.SetShape1(a.s);
+        aa.SetShape2(b.s);
+        aa.OperationType() = BOPAlgo_FUSE;
+        aa.ArgumentTypeMode() = Standard_True;
+        aa.SelfInterMode() = Standard_True;
+        aa.SmallEdgeMode() = Standard_True;
+        aa.RebuildFaceMode() = Standard_True;
+        aa.TangentMode() = Standard_True;
+        aa.MergeVertexMode() = Standard_True;
+        aa.MergeEdgeMode() = Standard_True;
+        aa.ContinuityMode() = Standard_True;
+        aa.CurveOnSurfaceMode() = Standard_True;
+        aa.Perform();
+        o << "analisador: falhas " << aa.HasFaulty() << "\n";
+        int n = 0;
+        for (const BOPAlgo_CheckResult& c : aa.GetCheckResult()) {
+            if (++n > 30) break;
+            o << "  estado " << int(c.GetCheckStatus()) << " dist1 " << c.GetMaxDistance1() << " dist2 " << c.GetMaxDistance2() << " formas1 " << c.GetFaultyShapes1().Extent()
+              << " formas2 " << c.GetFaultyShapes2().Extent() << "\n";
+        }
+        for (double fz : {0.0, 1e-4, 1e-3, 1e-2}) {
+            TopTools_ListOfShape args, tools;
+            args.Append(a.s);
+            tools.Append(b.s);
+            BRepAlgoAPI_Fuse f;
+            f.SetArguments(args);
+            f.SetTools(tools);
+            f.SetNonDestructive(Standard_True);
+            if (fz > 0) f.SetFuzzyValue(fz);
+            f.Build();
+            o << "fusao difusa " << fz << ": erros " << f.HasErrors() << " avisos " << f.HasWarnings();
+            if (f.HasWarnings()) {
+                std::ostringstream w;
+                f.DumpWarnings(w);
+                std::string ws = w.str();
+                for (char& ch : ws)
+                    if (ch == '\n') ch = '|';
+                o << " [" << ws.substr(0, 400) << "]";
+            }
+            o << "\n";
+            if (!f.HasErrors()) {
+                diag_forma(o, "  resultado", f.Shape());
+                diag_forma(o, "  unificado", unify(f.Shape()));
+            }
+        }
+    } catch (const Standard_Failure& e) {
+        o << "excecao " << e.GetMessageString() << "\n";
+    }
+    return rust::String(o.str());
 }
 
 }  // namespace fenkra

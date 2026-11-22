@@ -4609,11 +4609,38 @@ impl Ctx<'_> {
         self.curve_flange_lim(f, pts, ang, r, len, flip, want, side, &chapa_aba_limites::AbaLim::default())
     }
 
+    /// B566: a linha de dobra exata. As amostras `pts` vêm da seção do suporte pelo plano da web, que o
+    /// kernel entrega como polilinha: elas caem nas cordas, até décimos de mm fora da aresta verdadeira da
+    /// web (0,08 mm na asa de corda 400, e a flecha cresce com o tamanho da peça). A aresta exata da web
+    /// (interseção do suporte com o plano, uma aresta só) é aparada entre a primeira e a última amostra,
+    /// e as amostras são levadas para cima dela: a aba ocupa o mesmo trecho de antes, dobrada e
+    /// planificada, e a dobra nasce exatamente na borda da web. `None` quando a aresta mais perto não é a
+    /// da linha de dobra (aresta partida, amostras longe dela).
+    fn oml_exata(web: &Shape, pts: &[V3]) -> Option<(Vec<V3>, geo3d::Curva3)> {
+        if pts.len() < 3 {
+            return None;
+        }
+        let c = web.edge_curve_at(pts[pts.len() / 2]).ok()?;
+        if !c.exata() || c.0.len() != 1 {
+            return None;
+        }
+        let q = Shape::curva_projeta(&c, pts).ok()?;
+        // a flecha das cordas é pequena perto do passo: amostra longe é outra aresta
+        let passo = pts.windows(2).map(|w| geo3d::dist(w[0], w[1])).fold(0., f64::max);
+        if q.len() != pts.len() || pts.iter().zip(&q).any(|(p, q)| geo3d::dist(*p, *q) > 0.05 + 0.1 * passo) {
+            return None;
+        }
+        let n = q.len() - 1;
+        let c = Shape::curva_aparada(&c, q[0], q[n]).ok()?;
+        let ok = c.inicio().is_some_and(|a| geo3d::dist(a, q[0]) < 1e-4) && c.fim().is_some_and(|z| geo3d::dist(z, q[n]) < 1e-4);
+        ok.then_some((q, c))
+    }
+
     /// `curve_flange_lim` com a curva exata da cadeia (B559) quando as arestas da chapa a dão.
     #[allow(clippy::too_many_arguments)]
     fn curve_flange_exata(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, len: f64, flip: bool, want: Option<V3>, side: u8, lim: &chapa_aba_limites::AbaLim) -> Result<Option<String>, String> {
         let exata = self.cadeia_exata(f.target, &pts);
-        self.curve_flange_lim_x(f, pts, ang, r, len, flip, want, side, lim, exata)
+        self.curve_flange_lim_x(f, pts, ang, r, len, flip, want, side, lim, exata, false)
     }
 
     /// `curve_flange` com os recortes e cantos da aba por superfície (B556): a ferramenta da aba é
@@ -4621,12 +4648,14 @@ impl Ctx<'_> {
     /// o começo de `pts`; a ponta 2, o fim.
     #[allow(clippy::too_many_arguments)]
     fn curve_flange_lim(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, len: f64, flip: bool, want: Option<V3>, side: u8, lim: &chapa_aba_limites::AbaLim) -> Result<Option<String>, String> {
-        self.curve_flange_lim_x(f, pts, ang, r, len, flip, want, side, lim, None)
+        self.curve_flange_lim_x(f, pts, ang, r, len, flip, want, side, lim, None, false)
     }
 
-    /// `curve_flange_lim` com o caminho exato opcional (`exata`, no sentido de `pts`).
+    /// `curve_flange_lim` com o caminho exato opcional (`exata`, no sentido de `pts`). `suave`: `pts` são
+    /// amostras de uma curva lisa (a linha de dobra exata da aba por superfície, B566), e as bordas da
+    /// faixa planificada viram uma spline pelas amostras em vez de retas e arcos ajustados.
     #[allow(clippy::too_many_arguments)]
-    fn curve_flange_lim_x(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, len: f64, flip: bool, want: Option<V3>, side: u8, lim: &chapa_aba_limites::AbaLim, exata: Option<geo3d::Curva3>) -> Result<Option<String>, String> {
+    fn curve_flange_lim_x(&mut self, f: &Feature, pts: Vec<V3>, ang: f64, r: f64, len: f64, flip: bool, want: Option<V3>, side: u8, lim: &chapa_aba_limites::AbaLim, exata: Option<geo3d::Curva3>, suave: bool) -> Result<Option<String>, String> {
         let k = |e: KernelError| e.0;
         let sp = self.sheet()?;
         if !(1.0..=179.0).contains(&ang) {
@@ -4678,7 +4707,10 @@ impl Ctx<'_> {
             let a2: Vec<[f64; 2]> = back.iter().map(|p| loc(*p)).collect();
             let mut b2: Vec<[f64; 2]> = edge.iter().map(|p| loc(*p)).collect();
             b2.reverse();
-            let lp = [chapa::chain_segs(&a2), vec![fenkra_kernel::Seg2::Line(a2[a2.len() - 1], b2[0])], chapa::chain_segs(&b2), vec![fenkra_kernel::Seg2::Line(b2[b2.len() - 1], a2[0])]].concat();
+            // B566: na planificada a faixa vem em spline pelas amostras (abaixo); o recorte do recuo usa a
+            // mesma borda, senão sobra uma fresta entre o recorte e a faixa
+            let corte = |v: &[[f64; 2]]| if suave && sp.flat && v.len() >= 4 { vec![fenkra_kernel::Seg2::Spline(v.to_vec())] } else { chapa::chain_segs(v) };
+            let lp = [corte(&a2), vec![fenkra_kernel::Seg2::Line(a2[a2.len() - 1], b2[0])], corte(&b2), vec![fenkra_kernel::Seg2::Line(b2[b2.len() - 1], a2[0])]].concat();
             let strip = Shape::face(&fr, &[lp]).map_err(k)?.extrude(n, sp.t * 2. + 1., sp.t * 2. + 1.).map_err(k)?;
             self.apply(f.target, strip, BoolOp::Cut, f.id)?;
             back
@@ -4704,7 +4736,11 @@ impl Ctx<'_> {
             let p2: Vec<[f64; 2]> = inner.iter().zip(&outs).map(|(p, o)| loc(geo3d::sub(*p, geo3d::mul(*o, 0.05)))).collect();
             let mut q2: Vec<[f64; 2]> = inner.iter().zip(&outs).map(|(p, o)| loc(geo3d::add(*p, geo3d::mul(*o, dev)))).collect();
             q2.reverse();
-            let lp = [chapa::chain_segs(&p2), vec![fenkra_kernel::Seg2::Line(p2[p2.len() - 1], q2[0])], chapa::chain_segs(&q2), vec![fenkra_kernel::Seg2::Line(q2[q2.len() - 1], p2[0])]].concat();
+            // B566: `chain_segs` aceita um arco quando os pontos ficam a até 0,2 % do raio dele: em peça
+            // grande isso é mais de 1 mm fora da linha de dobra, a borda da faixa sai da web e a fusão
+            // perde parte da faixa sem erro. Amostras de uma curva lisa viram uma spline por elas.
+            let segs = |v: &[[f64; 2]]| if suave && v.len() >= 4 { vec![fenkra_kernel::Seg2::Spline(v.to_vec())] } else { chapa::chain_segs(v) };
+            let lp = [segs(&p2), vec![fenkra_kernel::Seg2::Line(p2[p2.len() - 1], q2[0])], segs(&q2), vec![fenkra_kernel::Seg2::Line(q2[q2.len() - 1], p2[0])]].concat();
             let face = Shape::face(&fr, &[lp]).map_err(k)?;
             let mut tool = face.extrude(geo3d::mul(d, -1.), sp.t, 0.).map_err(k)?;
             if lim.cantos.iter().any(|c| c.is_some()) {
@@ -4782,7 +4818,7 @@ impl Ctx<'_> {
         // B529: a fusão da varredura com a base pode falhar sem erro (volume vazio ou de um lado só)
         // com cadeia curva e a seção entrando só 0,05 mm: confere o volume da fusão e repete com a
         // seção entrando mais. Se nenhuma fechar, é erro explícito (nunca corpo vazio com status Ok).
-        let mut tool = None;
+        let mut feito = false;
         let mut ultimo = String::from("a aba não pôde ser unida à chapa");
         for (e0, dec) in [(0.05, 1usize), (0.3, 1), (0.3, 4), (0.5, 8)] {
             // pontos muito próximos (amostragem densa de uma spline) fazem a varredura ondular
@@ -4813,21 +4849,21 @@ impl Ctx<'_> {
                 t
             };
             let tv = t.mass().volume;
-            match self.body(f.target).map(|x| x.boolean(&t, Bool::Fuse)) {
-                None => {
-                    tool = Some(t);
+            // a fusão é conferida e aplicada de uma vez (antes era feita duas vezes)
+            let aceita = |s: &Shape| tv > 1e-6 && s.is_valid() && s.mass().volume > base_vol + 0.5 * tv;
+            let res = self.apply_aceita(f.target, t, BoolOp::Add, f.id, None, Some(&aceita));
+            match res {
+                Ok(None) => {
+                    feito = true;
                     break;
                 }
-                Some(Ok(s)) if tv > 1e-6 && s.is_valid() && s.mass().volume > base_vol + 0.5 * tv => {
-                    tool = Some(t);
-                    break;
-                }
-                Some(Ok(s)) => ultimo = format!("a união da aba com a chapa saiu inválida ou vazia (volume {:.1}, chapa {:.1}, aba {:.1})", s.mass().volume, base_vol, tv),
-                Some(Err(e)) => ultimo = e.0,
+                Ok(Some(s)) => ultimo = format!("a união da aba com a chapa saiu inválida ou vazia (volume {:.1}, chapa {:.1}, aba {:.1})", s.mass().volume, base_vol, tv),
+                Err(e) => ultimo = e,
             }
         }
-        let tool = tool.ok_or(ultimo)?;
-        self.apply(f.target, tool, BoolOp::Add, f.id)?;
+        if !feito {
+            return Err(ultimo);
+        }
         self.marca_cadeia(f.id, &inner, &outs, ang, r, sobe, &cmp, false);
         Ok(None)
             
@@ -5054,6 +5090,13 @@ impl Ctx<'_> {
     /// Como `apply`, com o papel de cada face da ferramenta (extrusão e revolução): as faces que
     /// a ferramenta deixa no corpo levam esse papel, com o comando `fid` como dono.
     fn apply_roles(&mut self, target: Id, tool: Shape, op: BoolOp, fid: Id, tool_roles: Option<Vec<i32>>) -> Result<(), String> {
+        self.apply_aceita(target, tool, op, fid, tool_roles, None).map(|_| ())
+    }
+
+    /// `apply_roles` que só grava o resultado da booleana se `aceita` o aprovar; reprovado, nada muda
+    /// (corpo, ferramenta e passos do comando) e devolve `Ok(Some(resultado))` para a mensagem. Evita
+    /// fazer a mesma booleana duas vezes (uma para conferir e outra para aplicar, B566).
+    fn apply_aceita(&mut self, target: Id, tool: Shape, op: BoolOp, fid: Id, tool_roles: Option<Vec<i32>>, aceita: Option<&dyn Fn(&Shape) -> bool>) -> Result<Option<Shape>, String> {
         let k = |e: KernelError| e.0;
         // a ferramenta levada entre o dobrado e o planificado perde a correspondência com os papéis
         let mismatch = self.sheet_mismatch(fid);
@@ -5061,6 +5104,7 @@ impl Ctx<'_> {
             Some((from, to)) => (self.map_tool(tool, from, to)?, None),
             None => (tool, tool_roles),
         };
+        let antes = (self.tools.get(&fid).cloned(), self.steps.get(&fid).map(|v| v.len()));
         // guarda a ferramenta (furos com rosca somam várias)
         let kept = match self.tools.remove(&fid) {
             Some((t, o)) if o == op => t.compound(&tool),
@@ -5111,8 +5155,23 @@ impl Ctx<'_> {
                 (s, own, new_roles)
             }
         };
+        if let Some(ok) = aceita {
+            if !ok(&next.0) {
+                match antes.0 {
+                    Some(t) => self.tools.insert(fid, t),
+                    None => self.tools.remove(&fid),
+                };
+                match antes.1 {
+                    Some(n) => self.steps.entry(fid).or_default().truncate(n),
+                    None => {
+                        self.steps.remove(&fid);
+                    }
+                }
+                return Ok(Some(next.0));
+            }
+        }
         self.bodies.insert(target, next);
-        Ok(())
+        Ok(None)
     }
 
     /// Repete as ferramentas dos comandos `sources` (ou o corpo inteiro) pelas transformações.
@@ -6630,7 +6689,13 @@ impl Ctx<'_> {
                 // B566: validação leve da OML antes de construir: a dobra cabe? a faixa planificada se cruza?
                 let ba = chapa::compensacao(sp.t, r, ang, sp.k_for(r)).ba;
                 let aviso = chapa_aba_diag::diagnosticar(&pts, n, out, r, sp.t, ba + len).aviso(ba);
-                let feito = self.curve_flange_exata(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim)?;
+                // B566: a linha de dobra é a aresta da web relimitada (interseção exata suporte × plano). A
+                // varredura vai por ela, uma aresta só, e não pela polilinha das amostras.
+                let oml_exata = if lm.lado1.is_none() && lm.lado2.is_none() { Self::oml_exata(&web, &pts) } else { None };
+                let feito = match oml_exata {
+                    Some((pts, c)) => self.curve_flange_lim_x(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim, Some(c), true)?,
+                    None => self.curve_flange_exata(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim)?,
+                };
                 Ok(match (feito, aviso) {
                     (Some(a), Some(b)) => Some(format!("{a}; {b}")),
                     (a, b) => a.or(b),

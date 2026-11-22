@@ -164,6 +164,9 @@ std::unique_ptr<Shape> poly_prism(rust::Slice<const double> pts, double dx, doub
 std::unique_ptr<Shape> sm_flange(const Shape& body, double px, double py, double pz, double t, double r, double angle_deg, double length,
                                  double off1, double off2, bool flip, bool flat, double k, rust::Vec<double>& info);
 std::unique_ptr<Shape> sm_chain_sweep(const Shape& face, rust::Slice<const double> pts, double nx, double ny, double nz);
+rust::String diag_fusao(const Shape& a, const Shape& b);
+rust::Vec<double> curva_projeta(rust::Slice<const double> v, rust::Slice<const double> pts);
+rust::Vec<double> curva_aparada(rust::Slice<const double> v, double ax, double ay, double az, double bx, double by, double bz);
 std::unique_ptr<Shape> from_brep(rust::Str text);
 std::unique_ptr<Shape> hole_tool_ext(double ox, double oy, double oz, double dx, double dy, double dz, double diameter, double depth,
                                      uint8_t kind, double d2, double p2, double a3, double tip, double taper);

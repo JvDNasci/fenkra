@@ -65,6 +65,11 @@ Registre aqui erros que se repetiram.
   chapa) e passe em `apply_roles`. A booleana já leva a origem de cada face (`boolean_tagged_src`, histórico do
   OCCT); em geral não é preciso `BRepTools_History` novo na fachada. Na dúvida (face sem papel ou papel único que
   repete), devolva `None`: sem papel a referência segue pelo ponto; papel errado escolhe a face errada sem aviso.
+- `Shape::section` devolve polilinha: pontos subdivididos entre os vértices ficam nas cordas, décimos de mm fora
+  da curva em peça grande (a flecha cresce com a escala; as tolerâncias da booleana não). Varrer uma dobra
+  tangente à chapa por essas amostras faz a fusão devolver vazio sem erro (B566). Varra pela aresta exata
+  (`edge_curve_at`, `Shape::curva_aparada`) e leve as amostras para cima dela (`Shape::curva_projeta`). Para
+  investigar uma fusão que sai vazia ou incompleta, comece por `Shape::diag_fusao`.
 - `posicionado` (montagem) copia a forma sem a malha: quem tessela a peça posicionada refaz a malha inteira a cada
   vez. Use a malha da vista quando ela basta, ou tessele em threads (B394).
 

@@ -1091,6 +1091,11 @@ mod imp {
             let flat: Vec<f64> = pts.iter().flatten().copied().collect();
             b::sm_chain_sweep(&self.0, &flat, normal[0], normal[1], normal[2]).map(Shape).map_err(err)
         }
+        /// B566: relatório de diagnóstico da fusão desta forma com `other` (validade e tolerâncias de
+        /// cada uma, subformas reprovadas, analisador de argumentos e fusão com tolerância difusa).
+        pub fn diag_fusao(&self, other: &Shape) -> String {
+            b::diag_fusao(&self.0, &other.0)
+        }
         // ---------------- B559: curvas exatas (ver `curva.rs`)
         /// Varredura da seção ao longo da cadeia exata (uma aresta por trecho).
         pub fn sm_chain_sweep_c(&self, c: &Curva3, normal: [f64; 3]) -> KResult<Shape> {
@@ -1140,6 +1145,20 @@ mod imp {
         pub fn edge_curve_at(&self, p: [f64; 3]) -> KResult<Curva3> {
             let v = b::edge_curve_at(&self.0, p[0], p[1], p[2]).map_err(err)?;
             Curva3::decodifica(&v).ok_or_else(|| KernelError("curva da aresta ilegível".into()))
+        }
+        /// B566: a curva de um trecho só aparada entre os pontos dela mais perto de `a` e de `b`, no
+        /// sentido de `a` para `b`.
+        pub fn curva_aparada(c: &Curva3, a: [f64; 3], b: [f64; 3]) -> KResult<Curva3> {
+            let v = b::curva_aparada(&c.codifica(), a[0], a[1], a[2], b[0], b[1], b[2]).map_err(err)?;
+            let r = Curva3::decodifica(&v).ok_or_else(|| KernelError("curva aparada ilegível".into()))?;
+            let d = |p: Option<[f64; 3]>, q: [f64; 3]| p.map_or(f64::INFINITY, |p| (0..3).map(|i| (p[i] - q[i]).powi(2)).sum::<f64>());
+            Ok(if d(r.inicio(), b) + d(r.fim(), a) < d(r.inicio(), a) + d(r.fim(), b) { r.invertida() } else { r })
+        }
+        /// B566: cada ponto levado ao ponto mais perto da curva de um trecho só.
+        pub fn curva_projeta(c: &Curva3, pts: &[[f64; 3]]) -> KResult<Vec<[f64; 3]>> {
+            let flat: Vec<f64> = pts.iter().flatten().copied().collect();
+            let v = b::curva_projeta(&c.codifica(), &flat).map_err(err)?;
+            Ok(v.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect())
         }
         /// Arestas por tipo: reta, círculo, elipse, B-spline e outras.
         pub fn edge_types(&self) -> KResult<Vec<u32>> {
@@ -1444,6 +1463,9 @@ mod imp {
         pub fn sm_chain_sweep(&self, _: &[[f64; 3]], _: [f64; 3]) -> KResult<Shape> {
             no()
         }
+        pub fn diag_fusao(&self, _: &Shape) -> String {
+            String::new()
+        }
         pub fn sm_chain_sweep_c(&self, _: &Curva3, _: [f64; 3]) -> KResult<Shape> {
             no()
         }
@@ -1472,6 +1494,12 @@ mod imp {
             no()
         }
         pub fn edge_curve_at(&self, _: [f64; 3]) -> KResult<Curva3> {
+            no()
+        }
+        pub fn curva_aparada(_: &Curva3, _: [f64; 3], _: [f64; 3]) -> KResult<Curva3> {
+            no()
+        }
+        pub fn curva_projeta(_: &Curva3, _: &[[f64; 3]]) -> KResult<Vec<[f64; 3]>> {
             no()
         }
         pub fn edge_types(&self) -> KResult<Vec<u32>> {
