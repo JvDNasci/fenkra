@@ -5,6 +5,8 @@ description: Diretrizes da bancada Montagem do Fenkra. Use ao criar, corrigir ou
 
 # Montagem
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 ## Domínio
 
 crates/fenkra-montagem/src/ (solve.rs, kin.rs, bom.rs, fixadores.rs); crates/fenkra-app/src/asm_ui.rs

@@ -5,6 +5,8 @@ description: Diretrizes da bancada Desenho técnico do Fenkra. Use ao criar, cor
 
 # Desenho técnico
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 ## Domínio
 
 crates/fenkra-desenho/src/; crates/fenkra-kernel/cpp/drawing.inc; crates/fenkra-app/src/dwg_ui.rs

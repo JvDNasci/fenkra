@@ -5,6 +5,8 @@ description: Diretrizes da bancada PMI 3D do Fenkra. Use ao criar, corrigir ou p
 
 # PMI 3D
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 ## Domínio
 
 crates/fenkra-core/src/pmi.rs; crates/fenkra-app/src/pmi_ui.rs, pmi_draw.rs

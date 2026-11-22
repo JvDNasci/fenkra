@@ -5,6 +5,8 @@ description: Fluxo completo para executar trabalho no Fenkra: escolhe os especia
 
 # Fluxo de execução do Fenkra
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 Siga estas etapas junto com a skill `maestro`. O painel mostra em qual etapa você está.
 
 ```mermaid

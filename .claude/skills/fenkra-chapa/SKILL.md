@@ -5,6 +5,8 @@ description: Diretrizes da bancada Chapa metálica do Fenkra. Use ao criar, corr
 
 # Chapa metálica
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 ## Domínio
 
 crates/fenkra-kernel/cpp/sheet.inc; trechos de chapa em crates/fenkra-solidos/src/lib.rs e crates/fenkra-app/src/feat_ui.rs

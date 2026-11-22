@@ -5,6 +5,8 @@ description: Diretrizes da bancada Interface do Fenkra. Use ao criar, corrigir o
 
 # Interface
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 ## Domínio
 
 crates/fenkra-app/src/ (toolbar.rs, theme.rs, icons.rs, i18n.rs, viewcube.rs, gizmo.rs, keymap.rs, render.rs, picking.rs); assets/

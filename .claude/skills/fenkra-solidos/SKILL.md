@@ -5,6 +5,8 @@ description: Diretrizes da bancada Sólidos do Fenkra. Use ao criar, corrigir ou
 
 # Sólidos
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 ## Domínio
 
 crates/fenkra-solidos/src/lib.rs, profile.rs, refs.rs; crates/fenkra-kernel/cpp/features.inc; crates/fenkra-app/src/feat_ui.rs

@@ -5,6 +5,8 @@ description: Diretrizes da bancada Sketch do Fenkra. Use ao criar, corrigir ou p
 
 # Sketch
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 ## Domínio
 
 crates/fenkra-core/src/sketch.rs, crates/fenkra-app/src/sketch_ui.rs, sketch_ext.rs

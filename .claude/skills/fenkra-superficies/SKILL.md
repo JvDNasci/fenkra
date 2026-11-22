@@ -5,6 +5,8 @@ description: Diretrizes da bancada Superfícies e wireframe do Fenkra. Use ao cr
 
 # Superfícies e wireframe
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 ## Domínio
 
 crates/fenkra-solidos/src/geo3d.rs; crates/fenkra-kernel/cpp/surfaces.inc, hybrid.inc; crates/fenkra-app/src/geo_ui.rs

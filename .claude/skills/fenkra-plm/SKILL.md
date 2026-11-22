@@ -5,6 +5,8 @@ description: Diretrizes da bancada PDM / PLM do Fenkra. Use ao criar, corrigir o
 
 # PDM / PLM
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 ## Domínio
 
 crates/fenkra-project/src/

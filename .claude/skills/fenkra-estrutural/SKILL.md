@@ -5,6 +5,8 @@ description: Diretrizes da bancada Estrutural e soldas do Fenkra. Use ao criar, 
 
 # Estrutural e soldas
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 ## Domínio
 
 crates/fenkra-solidos/src/structural.rs; crates/fenkra-montagem/src/estrutura.rs; crates/fenkra-app/src/st_ui.rs

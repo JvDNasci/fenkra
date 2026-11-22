@@ -5,6 +5,8 @@ description: Diretrizes da bancada Kernel do Fenkra. Use ao criar, corrigir ou p
 
 # Kernel
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 ## Domínio
 
 crates/fenkra-kernel/ (lib.rs, cpp/kernel.cpp, kernel.h)

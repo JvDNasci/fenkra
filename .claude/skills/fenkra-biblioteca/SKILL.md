@@ -5,6 +5,8 @@ description: Diretrizes da bancada Biblioteca de normas do Fenkra. Use ao criar,
 
 # Biblioteca de normas
 
+Antes de criar ou mudar um comando, siga a skill `fenkra-comando` (contrato do ADR 0107).
+
 ## Domínio
 
 crates/fenkra-solidos/src/biblioteca.rs, hardware.rs, fixadores.rs, engrenagens.rs, eixos.rs; biblioteca/
