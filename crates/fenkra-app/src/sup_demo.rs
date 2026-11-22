@@ -103,7 +103,7 @@ pub fn demo(nome: &str, doc: &mut Document) -> Option<DemoPrevia> {
         }
         "sup_revolucao" => {
             let curve = reta(d, [30., 0., 0.], [50., 0., 40.]);
-            RefKind::SurfRevolve { curve, axis: AxisRef::Origin(OriginAxis::Z), angle: t("200"), angle2: t("0") }
+            RefKind::SurfRevolve { curve, axis: AxisRef::Origin(OriginAxis::Z), angle: t("200"), angle2: t("0"), mais: vec![] }
         }
         "sup_cilindro" => RefKind::SurfCylinder { point: PointRef::Fixed([0.; 3]), dir: AxisRef::Origin(OriginAxis::Z), radius: t("25"), start: t("0"), end: t("60") },
         "sup_tubo" => {

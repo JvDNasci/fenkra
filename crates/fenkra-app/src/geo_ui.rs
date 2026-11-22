@@ -469,7 +469,8 @@ impl GeoKind {
             SurfEdgeFillet => R::SurfEdgeFillet { surface: sf, edges: edge_mids(s), radius: t("3"), radius2: None },
             SurfFill => R::SurfFill { curves: if s.curves.is_empty() { vec![c(0)] } else { s.curves.clone() }, conds: vec![], points: s.points.clone(), tol: t("0.01") },
             SurfExtrude => R::SurfExtrude { curve: c(0), dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0"), until: None, until2: None },
-            SurfRevolve => R::SurfRevolve { curve: c(0), axis: AxisRef::Origin(OriginAxis::Z), angle: t("360"), angle2: t("0") },
+            // ADR 0107 (onda 2): as curvas escolhidas formam o perfil (lista de origens mistas)
+            SurfRevolve => R::SurfRevolve { curve: c(0), axis: AxisRef::Origin(OriginAxis::Z), angle: t("360"), angle2: t("0"), mais: s.curves.iter().skip(1).cloned().collect() },
             SurfSphere => R::SurfSphere { center: p(0), radius: t("20") },
             SurfCylinder => R::SurfCylinder { point: p(0), dir: ax(OriginAxis::Z), radius: t("10"), start: t("0"), end: t("40") },
             SurfSweep => R::SurfSweep { profile: SweepProfile::Curve(c(0)), spine: c(1), mode: SweepMode::Corrigido },
@@ -639,7 +640,8 @@ pub fn inputs_of(k: &RefKind) -> Seed {
         }
         R::PointOffset { point, .. } => s.points.push(*point),
         R::SplineControl { points, .. } => s.points.extend(points.iter().copied()),
-        R::CurveCopy { curve, .. } | R::CurveExtract { edge: curve, .. } | R::SurfExtrude { curve, .. } | R::SurfRevolve { curve, .. } => s.curves.push(curve.clone()),
+        R::CurveExtract { edge: curve, .. } | R::SurfExtrude { curve, .. } => s.curves.push(curve.clone()),
+        R::CurveCopy { curve, mais } | R::SurfRevolve { curve, mais, .. } => s.curves.extend(std::iter::once(&*curve).chain(mais.iter()).cloned()),
         R::SurfFill { curves, .. } | R::CurveJoin { curves } => s.curves.extend(curves.iter().cloned()),
         R::SurfOffset { surface, .. } => s.surface = Some(*surface),
         R::SurfSphere { center, .. } => s.points.push(*center),
@@ -1221,6 +1223,65 @@ pub(crate) fn curves_list(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Docu
     );
 }
 
+/// ADR 0107 (onda 2): a caixa universal de um campo de curvas com rótulo próprio (sem o plural
+/// automático de `curves_list`). `vazio` = o item que ocupa o lugar do campo sem escolha.
+fn caixa_de_curvas(ui: &mut egui::Ui, salt: &str, label: &str, item: &str, doc: &Document, me: Id, cs: &mut Vec<CurveRef>, seed: &Seed, min: usize) {
+    bag_contrato(
+        ui,
+        doc,
+        me,
+        seed,
+        salt,
+        label,
+        cs,
+        &seed.curves,
+        min,
+        |c| curve_name(doc, c),
+        Some(&|c: &CurveRef| origem_da_curva(doc, c)),
+        Some(&|c: &CurveRef| candidato_da_curva(doc, c)),
+        |ui, i, c| curve_slot(ui, &format!("{salt}{i}"), &format!("{} {}", tr(item), i + 1), doc, me, c, seed),
+        || CurveRef::Axis(OriginAxis::X),
+        Some(crate::slots::curve()),
+        mesma_curva,
+    );
+}
+
+/// ADR 0107 (onda 2): campo de **uma** curva pela caixa universal (clique no 3D e na árvore, validação,
+/// nó por origem). O clique numa curva nova troca a escolhida, como o slot antigo fazia.
+pub(crate) fn curva_contrato(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, c: &mut CurveRef, seed: &Seed) {
+    let mut v = vec![c.clone()];
+    caixa_de_curvas(ui, salt, label, label, doc, me, &mut v, seed, 1);
+    *c = trocar_pela_ultima(v);
+}
+
+/// O campo de um item só depois da caixa: a curva que entrou por último fica (troca), e a lista vazia
+/// volta ao marcador de campo vazio.
+fn trocar_pela_ultima(mut v: Vec<CurveRef>) -> CurveRef {
+    let vazio = crate::slots::curve();
+    v.retain(|x| *x != vazio);
+    v.pop().unwrap_or(vazio)
+}
+
+/// ADR 0107 (onda 2): o perfil como lista de curvas de origens mistas (sketches, arame, arestas,
+/// extrações): `curve` é o primeiro item, as outras ficam em `mais`. A caixa universal mostra todas, com
+/// junção na hora e "seguir tangentes"; o cálculo une cada grupo numa curva só antes do kernel.
+pub(crate) fn perfil_lista(ui: &mut egui::Ui, salt: &str, label: &str, doc: &Document, me: Id, curve: &mut CurveRef, mais: &mut Vec<CurveRef>, seed: &Seed) {
+    let mut v: Vec<CurveRef> = std::iter::once(curve.clone()).chain(mais.iter().cloned()).collect();
+    caixa_de_curvas(ui, salt, label, "Curva", doc, me, &mut v, seed, 1);
+    juntar_perfil(v, curve, mais);
+}
+
+/// Devolve a lista da caixa aos dois campos do comando (`curve` e `mais`).
+pub(crate) fn juntar_perfil(mut v: Vec<CurveRef>, curve: &mut CurveRef, mais: &mut Vec<CurveRef>) {
+    if v.is_empty() {
+        *curve = crate::slots::curve();
+        mais.clear();
+        return;
+    }
+    *curve = v.remove(0);
+    *mais = v;
+}
+
 /// Lista de superfícies (juntar, preencher fronteiras).
 pub(crate) fn surfs_list(ui: &mut egui::Ui, salt: &str, doc: &Document, me: Id, items: &mut Vec<SurfRef>, seed: &Seed) {
     let picked: Vec<SurfRef> = seed.surface.iter().cloned().chain(seed.planes.iter().map(|p| SurfRef::Plane(*p))).collect();
@@ -1463,7 +1524,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             point_slot(ui, "g_p", "Passa por", doc, me, point, seed);
         }
         R::AxisSystem { origin, x, z } => {
-            point_slot(ui, "g_a", "Origem", doc, me, origin, seed);
+            point_slot(ui, "g_o", "Origem", doc, me, origin, seed);
             axis_slot(ui, "g_x", "Eixo X", doc, me, x, seed);
             axis_slot(ui, "g_z", "Eixo Z", doc, me, z, seed);
         }
@@ -1591,7 +1652,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         R::LineAngle { curve, point, support, angle, start, end } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
             point_slot(ui, "g_p", "Ponto", doc, me, point, seed);
-            plane_slot(ui, "g_s", "Plano de apoio", doc, me, support, seed);
+            plane_slot(ui, "g_apoio", "Plano de apoio", doc, me, support, seed);
             expr(ui, "Ângulo", angle, vars, "°");
             ui.horizontal(|ui| {
                 ui.add_space(100.);
@@ -1730,7 +1791,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         }
         R::PointProject { point, surface } => {
             point_slot(ui, "g_p", "Ponto", doc, me, point, seed);
-            surf_slot(ui, "g_s", "Em", doc, me, surface, seed);
+            surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
         }
         R::PointProjectCurve { point, curve } => {
             point_slot(ui, "g_p", "Ponto", doc, me, point, seed);
@@ -1810,7 +1871,14 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             ui.checkbox(closed, tr("fechada"));
             crate::sup_spline::painel(ui, me, &mut r.kind, note.map_or(&[], |n| n.pontos.as_slice()));
         }
-        R::CurveCopy { curve, .. } => curve_slot(ui, "g_c", "Aresta/curva", doc, me, curve, seed),
+        R::CurveCopy { curve, mais } => {
+            // B576/ADR 0107 (onda 2): o Extrair de várias curvas mostra todas no campo; o resultado é a
+            // cadeia delas, ainda como Extrair
+            perfil_lista(ui, "g_c", "Arestas/curvas", doc, me, curve, mais, seed);
+            if !mais.is_empty() {
+                ui.label(RichText::new(tr("As curvas extraídas formam uma cadeia: precisam se tocar nas pontas.")).weak().small());
+            }
+        }
         R::CurveExtract { edge, prop, expected, .. } => {
             let antes = edge.clone();
             curve_slot(ui, "g_c", "Aresta", doc, me, edge, seed);
@@ -2018,14 +2086,23 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             ui.label(RichText::new(tr("As curvas precisam fechar um contorno.")).weak().small());
         }
         R::SurfExtrude { curve, dir, length, length2, until, until2 } => {
-            curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
-            axis_slot(ui, "g_d", "Direção", doc, me, dir, seed);
+            // B562/ADR 0107 (onda 2): irmã da extrusão sólida, com as mesmas seções (Perfil, Extensão) e o
+            // mesmo "⇄ Inverter direção" logo abaixo da extensão, ligado à seta do 3D
+            section(ui, "Perfil");
+            curva_contrato(ui, "g_pf", "Perfil", doc, me, curve, seed);
+            section(ui, "Extensão");
             limit_ui(ui, "g_l1", "Limite 1", length, until, doc, me, vars, seed);
             limit_ui(ui, "g_l2", "Limite 2", length2, until2, doc, me, vars, seed);
-            ui.label(RichText::new(tr("Limite 1 no sentido da direção; limite 2 para o outro lado.")).weak().small());
+            let mut inv = crate::inverter::extrusao_invertida(length);
+            if crate::inverter::botao(ui, &mut inv) {
+                crate::inverter::alternar_extrusao(length, length2);
+            }
+            axis_slot(ui, "g_d", "Direção", doc, me, dir, seed);
+            ui.label(RichText::new(tr("Limite 1 no sentido da direção; limite 2 para o outro lado. Inverter troca o sinal dos dois limites.")).weak().small());
         }
-        R::SurfRevolve { curve, axis, angle, angle2 } => {
-            curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
+        R::SurfRevolve { curve, axis, angle, angle2, mais } => {
+            section(ui, "Perfil");
+            perfil_lista(ui, "g_pf", "Perfil", doc, me, curve, mais, seed);
             axis_slot(ui, "g_ax", "Eixo", doc, me, axis, seed);
             expr(ui, "Ângulo 1", angle, vars, "°");
             expr(ui, "Ângulo 2", angle2, vars, "°");
@@ -2044,10 +2121,10 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         }
         R::SurfSweep { profile, spine, mode } => {
             match profile {
-                SweepProfile::Curve(c) => curve_slot(ui, "g_pf", "Perfil", doc, me, c, seed),
+                SweepProfile::Curve(c) => curva_contrato(ui, "g_pf", "Perfil", doc, me, c, seed),
                 SweepProfile::Circle(r) => expr(ui, "Raio do tubo", r, vars, "mm"),
             }
-            curve_slot(ui, "g_sp", "Guia", doc, me, spine, seed);
+            curva_contrato(ui, "g_sp", "Guia", doc, me, spine, seed);
             let opts = [
                 ("sweep_corrigido", "Corrigido", "Frenet corrigido: acompanha a guia sem torcer", *mode == SweepMode::Corrigido),
                 ("sweep_fixo", "Fixo", "O perfil mantém a orientação", *mode == SweepMode::Fixo),
@@ -2068,7 +2145,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 *guide = has.then(|| seed.curves.last().cloned().unwrap_or(CurveRef::Axis(OriginAxis::Z)));
             }
             if let Some(g) = guide {
-                curve_slot(ui, "g_gd", "Caminho", doc, me, g, seed);
+                curva_contrato(ui, "g_gd", "Caminho", doc, me, g, seed);
                 ui.label(RichText::new(tr("As seções devem cruzar o caminho, na ordem.")).weak().small());
             } else {
                 ui.checkbox(ruled, tr("regrada (faces retas entre seções)"));
@@ -2089,7 +2166,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             if *mode == RuledMode::Vetor {
                 axis_slot(ui, "g_rd", "Direção", doc, me, dir, seed);
             } else {
-                opt_surf(ui, "g_rs", "Apoio", doc, me, support, seed);
+                opt_surf(ui, "g_apoio", "Apoio", doc, me, support, seed);
             }
             expr(ui, "Comprimento", length, vars, "mm");
             crate::sup3d::dica_de_lado(ui);
@@ -2108,18 +2185,18 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                     expr(ui, "Folga máxima da junção", scale, vars, "mm");
                 }
                 CheckMode::Desvio => {
-                    surf_slot(ui, "g_a", "Pintada", doc, me, a, seed);
-                    surf_slot(ui, "g_b", "Referência", doc, me, b, seed);
+                    surf_slot(ui, "g_pintada", "Pintada", doc, me, a, seed);
+                    surf_slot(ui, "g_referencia", "Referência", doc, me, b, seed);
                 }
             }
             crate::sup_analise::resumo(ui, note.and_then(|n| n.analise.as_ref()));
         }
         R::SurfBlend { a, sa, b, sb, cont, tension, tension2 } => {
             let antes = (a.clone(), b.clone());
-            curve_slot(ui, "g_a", "Borda 1", doc, me, a, seed);
-            opt_surf(ui, "g_sa", "Apoio 1", doc, me, sa, seed);
-            curve_slot(ui, "g_b", "Borda 2", doc, me, b, seed);
-            opt_surf(ui, "g_sb", "Apoio 2", doc, me, sb, seed);
+            curva_contrato(ui, "g_borda1", "Borda 1", doc, me, a, seed);
+            opt_surf(ui, "g_apoio1", "Apoio 1", doc, me, sa, seed);
+            curva_contrato(ui, "g_borda2", "Borda 2", doc, me, b, seed);
+            opt_surf(ui, "g_apoio2", "Apoio 2", doc, me, sb, seed);
             // borda nova traz o apoio dela
             let apoio = |c: &CurveRef| seed.apoios.iter().find(|(x, _)| x == c).map(|x| x.1);
             if *a != antes.0 {
@@ -2179,7 +2256,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                 *curve = by_curve.then(|| seed.curves.first().cloned().unwrap_or_else(crate::slots::curve));
             }
             if let Some(c) = curve {
-                curve_slot(ui, "g_tc", "Curva de corte", doc, me, c, seed);
+                curva_contrato(ui, "g_tc", "Curva de corte", doc, me, c, seed);
             }
             crate::sup3d::dica_de_lado(ui);
         }
@@ -2346,7 +2423,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
         }
         R::CurveProjectSurf { curve, surface, dir } => {
             curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
-            surf_slot(ui, "g_s", "Na superfície", doc, me, surface, seed);
+            surf_slot(ui, "g_s", "Superfície", doc, me, surface, seed);
             let opts = [
                 ("linha_normal", "Normal", "Cada ponto vai para o ponto mais próximo da superfície", dir.is_none()),
                 ("linha_direcao", "Direção", "Projeção ao longo de um vetor", dir.is_some()),
@@ -2361,7 +2438,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             }
         }
         R::CurveParallel { curve, support, d1, d2, flip, more, both, d_other } => {
-            curve_slot(ui, "g_c", "Curva", doc, me, curve, seed);
+            curva_contrato(ui, "g_c", "Curva", doc, me, curve, seed);
             if !more.is_empty() || ui.small_button(tr("+ mais curvas (conjunto)")).clicked() {
                 if more.is_empty() {
                     more.push(crate::slots::curve());
@@ -2375,7 +2452,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
                     ui.label("mm");
                 });
             }
-            surf_slot(ui, "g_s", "Apoio", doc, me, support, seed);
+            surf_slot(ui, "g_apoio", "Apoio", doc, me, support, seed);
             expr(ui, "Distância inicial", d1, vars, "mm");
             expr(ui, "Distância final", d2, vars, "mm");
             crate::sup3d::dica_de_lado(ui);
@@ -2409,8 +2486,9 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             ui.label(format!("tipo: {k}"));
         }
     }
-    // B562/ADR 0107: o "⇄ Inverter direção" padrão, ligado ao mesmo campo da seta do 3D
-    if !crate::inverter::controles(crate::contrato::Alvo::Ref(&r.kind)).is_empty() {
+    // B562/ADR 0107: o "⇄ Inverter direção" padrão, ligado ao mesmo campo da seta do 3D (a extrusão
+    // desenha o dela logo abaixo da extensão, como a extrusão sólida)
+    if !matches!(r.kind, R::SurfExtrude { .. }) && !crate::inverter::controles(crate::contrato::Alvo::Ref(&r.kind)).is_empty() {
         section(ui, "Direção");
         crate::inverter::botoes_ref(ui, &mut r.kind);
     }

@@ -310,6 +310,16 @@ pub fn setas_de_lado(doc: &Document, r: &RecomputeResult, id: Id) -> Vec<SetaDeL
                     }
                 }
             }
+            RefKind::SurfExtrude { curve, dir, length, .. } => {
+                // B562 (onda 2): do meio da curva no sentido da extrusão; invertida (sinal de menos no
+                // limite 1), aponta para o outro lado. O clique é o mesmo "⇄ Inverter direção" do painel
+                let base = crate::picking::curve_pts(r, curve).and_then(|p| meio_da_curva(&p)).map(|x| x.0);
+                let eixo = crate::handles::axis_pos(r, doc, dir).and_then(|x| x.1.try_normalize());
+                if let (Some(b), Some(n)) = (base, eixo) {
+                    let n = if crate::inverter::extrusao_invertida(length) { -n } else { n };
+                    out.push(SetaDeLado { campo: 0, base: b, dir: n, rotulo: "Sentido da extrusão" });
+                }
+            }
             _ => {}
         }
         return out;
@@ -1191,6 +1201,12 @@ mod tests {
             d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(a), tool: SurfRef::Plane(PlaneRef::Origin(OriginPlane::YZ)), flip: false, more: vec![], curve: None, more_flip: vec![] }),
             d.add_geometry(RefKind::SurfTrim { a: SurfRef::Ref(a), b: SurfRef::Ref(b), flip_a: false, flip_b: false }),
             d.add_geometry(RefKind::SurfFillet { a: SurfRef::Ref(a), b: SurfRef::Ref(b), flip_a: false, flip_b: false, radius: t("5"), radius2: None }),
+            // B562 (onda 2): a extrusão de superfície e a regrada também
+            folha(&mut d, [0., 0., 0.], [40., 0., 0.]),
+            {
+                let c = reta(&mut d, [0., 0., 0.], [40., 0., 0.]);
+                d.add_geometry(RefKind::SurfRuled { curves: vec![c], support: None, mode: RuledMode::Vetor, dir: AxisRef::Origin(OriginAxis::Z), length: t("20"), flip: false })
+            },
         ];
         for id in ids {
             let campos: Vec<u8> = crate::inverter::controles(Alvo::Ref(&d.reference(id).unwrap().kind)).iter().map(|c| c.campo).collect();
@@ -1218,7 +1234,10 @@ mod tests {
             d.add_geometry(RefKind::SurfSplit { surface: SurfRef::Ref(a), tool: SurfRef::Plane(PlaneRef::Origin(OriginPlane::YZ)), flip: false, more: vec![SurfRef::Plane(PlaneRef::Datum(p))], curve: None, more_flip: vec![true] }),
             d.add_geometry(RefKind::SurfTrim { a: SurfRef::Ref(a), b: SurfRef::Ref(b), flip_a: false, flip_b: false }),
             d.add_geometry(RefKind::SurfFillet { a: SurfRef::Ref(a), b: SurfRef::Ref(b), flip_a: false, flip_b: false, radius: t("5"), radius2: None }),
-            d.add_geometry(RefKind::CurveParallel { curve: c, support: SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY)), d1: t("12"), d2: t("12"), flip: false, more: vec![], both: false, d_other: String::new() }),
+            d.add_geometry(RefKind::CurveParallel { curve: c.clone(), support: SurfRef::Plane(PlaneRef::Origin(OriginPlane::XY)), d1: t("12"), d2: t("12"), flip: false, more: vec![], both: false, d_other: String::new() }),
+            // B562 (onda 2): extrusão de superfície (sentido pelo sinal) e regrada
+            d.add_geometry(RefKind::SurfExtrude { curve: c.clone(), dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("0"), until: None, until2: None }),
+            d.add_geometry(RefKind::SurfRuled { curves: vec![c], support: None, mode: RuledMode::Vetor, dir: AxisRef::Origin(OriginAxis::Z), length: t("20"), flip: false }),
         ];
         let r = recompute(&d);
         for id in ids {
@@ -1227,5 +1246,48 @@ mod tests {
             assert!(!setas.is_empty(), "{id:?} sem seta: o teste não confere nada");
             assert_eq!(botoes, setas, "painel e 3D têm de oferecer os mesmos inversores em {id:?}");
         }
+    }
+
+    /// B562 (onda 2): a seta da extrusão de superfície aponta no sentido da extrusão e vira junto com o
+    /// botão; o estado "invertido" (botão destacado) é o mesmo que a seta mostra, e a caixa da superfície
+    /// vai para o outro lado da curva.
+    #[test]
+    fn seta_da_extrusao_segue_o_inverter_e_a_caixa_vira() {
+        use crate::contrato::Alvo;
+        let mut d = Document::new("t");
+        let c = reta(&mut d, [0., 0., 0.], [40., 0., 0.]);
+        let id = d.add_geometry(RefKind::SurfExtrude { curve: c, dir: AxisRef::Origin(OriginAxis::Z), length: t("30"), length2: t("5"), until: None, until2: None });
+        let r = recompute(&d);
+        let seta = setas_de_lado(&d, &r, id).pop().expect("seta da extrusão");
+        assert!(seta.dir.z > 0.99, "no sentido da direção: {:?}", seta.dir);
+        assert!(!crate::inverter::estado(Alvo::Ref(&d.reference(id).unwrap().kind), 0));
+        let caixa = |d: &Document, r: &fenkra_solidos::RecomputeResult| {
+            let s = r.surfaces.iter().find(|s| s.id == id).expect("superfície mostrada");
+            let zs: Vec<f32> = s.mesh.positions.chunks_exact(3).map(|p| p[2]).collect();
+            let _ = d;
+            (zs.iter().copied().fold(f32::MAX, f32::min), zs.iter().copied().fold(f32::MIN, f32::max))
+        };
+        let (z0, z1) = caixa(&d, &r);
+        assert!((z0 + 5.).abs() < 1e-3 && (z1 - 30.).abs() < 1e-3, "{z0} {z1}");
+        inverter_lado(&mut d, id, seta.campo);
+        let r = recompute(&d);
+        let seta = setas_de_lado(&d, &r, id).pop().unwrap();
+        assert!(seta.dir.z < -0.99, "a seta virou: {:?}", seta.dir);
+        assert!(crate::inverter::estado(Alvo::Ref(&d.reference(id).unwrap().kind), 0), "o botão aparece destacado");
+        let (z0, z1) = caixa(&d, &r);
+        assert!((z0 + 30.).abs() < 1e-3 && (z1 - 5.).abs() < 1e-3, "a superfície foi para o outro lado: {z0} {z1}");
+    }
+
+    /// B562: o botão do engrossar mostra o estado (antes era sempre apagado): invertido quando toda a
+    /// espessura passou para o lado 2.
+    #[test]
+    fn botao_do_engrossar_mostra_o_estado() {
+        use crate::contrato::Alvo;
+        let mut k = FeatureKind::ThickSurface(ThickSurface::normal(SurfRef::Ref(Id(1)), "6", "0"));
+        assert!(!crate::inverter::estado(Alvo::Feature(&k), 0));
+        crate::inverter::alternar_feature(&mut k, 0);
+        assert!(crate::inverter::estado(Alvo::Feature(&k), 0), "espessura do outro lado: destacado");
+        crate::inverter::alternar_feature(&mut k, 0);
+        assert!(!crate::inverter::estado(Alvo::Feature(&k), 0));
     }
 }

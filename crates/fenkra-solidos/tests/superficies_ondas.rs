@@ -414,8 +414,8 @@ fn superficie_extrudada_ate_elemento_dos_dois_lados() {
 fn superficie_de_revolucao_com_dois_angulos() {
     let mut d = Document::new("t");
     let l = d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed([10., 0., 0.]), b: PointRef::Fixed([10., 0., 20.]), start: s("0"), end: s("0") });
-    let rv = d.add_geometry(RefKind::SurfRevolve { curve: CurveRef::Ref(l), axis: AxisRef::Origin(OriginAxis::Z), angle: s("90"), angle2: s("30") });
-    let demais = d.add_geometry(RefKind::SurfRevolve { curve: CurveRef::Ref(l), axis: AxisRef::Origin(OriginAxis::Z), angle: s("300"), angle2: s("100") });
+    let rv = d.add_geometry(RefKind::SurfRevolve { curve: CurveRef::Ref(l), axis: AxisRef::Origin(OriginAxis::Z), angle: s("90"), angle2: s("30"), mais: vec![] });
+    let demais = d.add_geometry(RefKind::SurfRevolve { curve: CurveRef::Ref(l), axis: AxisRef::Origin(OriginAxis::Z), angle: s("300"), angle2: s("100"), mais: vec![] });
     let r = recompute(&d);
     ok(&r, rv);
     let area = 120f64.to_radians() * 10. * 20.;

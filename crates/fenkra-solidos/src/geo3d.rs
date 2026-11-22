@@ -1205,3 +1205,160 @@ pub fn curva_g1(c: &Curva3, tol_rad: f64) -> bool {
         _ => false,
     })
 }
+
+// ---------------------------------------------------------------- ADR 0107, onda 2: junção na hora
+
+/// Uma curva de um campo de lista depois da junção na hora: a curva (a cadeia exata, quando houve
+/// junção) e os índices dos itens do campo que ela representa, em ordem.
+#[derive(Clone, Debug)]
+pub struct CurvaDoCampo {
+    pub curva: Curve3,
+    pub itens: Vec<usize>,
+}
+
+/// O que a junção na hora apurou: as curvas que vão ao kernel, os avisos (pontas que não se tocam) e
+/// as notas (continuidade de cada junção).
+#[derive(Clone, Debug, Default)]
+pub struct JuncaoDoCampo {
+    pub curvas: Vec<CurvaDoCampo>,
+    pub avisos: Vec<String>,
+    pub notas: Vec<String>,
+}
+
+/// Tolerância de encadeamento da junção: a mesma de `join_curves` (1e-4 do tamanho, no mínimo 1e-3 mm).
+pub fn tol_juncao(cs: &[Curve3]) -> f64 {
+    let size = cs.iter().map(|c| c.length()).sum::<f64>().max(1.);
+    (1e-4 * size).max(1e-3)
+}
+
+/// Maior folga de um grupo: para cada curva, a ponta mais próxima de outra curva; a folga do grupo é a
+/// pior delas (a curva mais afastada das outras).
+fn folga_do_grupo(cs: &[Curve3]) -> f64 {
+    let pontas = |c: &Curve3| [c.start(), c.end()];
+    (0..cs.len())
+        .map(|i| {
+            (0..cs.len())
+                .filter(|j| *j != i)
+                .flat_map(|j| {
+                    let (a, b) = (pontas(&cs[i]), pontas(&cs[j]));
+                    a.into_iter().flat_map(move |p| b.into_iter().map(move |q| dist(p, q)))
+                })
+                .fold(f64::MAX, f64::min)
+        })
+        .fold(0., f64::max)
+}
+
+/// Junção na hora (ADR 0107, decisão do usuário 1): cada grupo gravado no campo do comando
+/// (`DadosCampo::juncoes`) vira **uma** curva, a cadeia exata dos itens (trechos encadeados pela
+/// função `juntar`, que é `join_curves`); o item fora de grupo segue sozinho. A ordem de saída é a do
+/// primeiro item de cada curva.
+///
+/// Tolerante a lista que mudou fora da caixa: índice que não existe mais é ignorado, item repetido em
+/// dois grupos fica no primeiro, e grupo que sobra com menos de dois itens não junta nada. Grupo cujas
+/// pontas não se tocam na tolerância vira aviso e os itens seguem separados (nada some em silêncio).
+pub fn juntar_no_campo(cs: Vec<Curve3>, juncoes: &[Vec<usize>], juntar: impl Fn(Vec<Curve3>) -> Result<Curve3, String>) -> JuncaoDoCampo {
+    let n = cs.len();
+    let mut dono: Vec<Option<usize>> = vec![None; n];
+    let mut grupos: Vec<Vec<usize>> = vec![];
+    let mut out = JuncaoDoCampo::default();
+    let mut fora = 0;
+    for g in juncoes {
+        let mut m: Vec<usize> = vec![];
+        for i in g {
+            if *i >= n {
+                fora += 1;
+            } else if dono[*i].is_none() && !m.contains(i) {
+                m.push(*i);
+            }
+        }
+        m.sort_unstable();
+        if m.len() >= 2 {
+            for i in &m {
+                dono[*i] = Some(grupos.len());
+            }
+            grupos.push(m);
+        }
+    }
+    if fora > 0 {
+        out.notas.push(format!("{fora} item(ns) de junção não existem mais na lista e foram ignorados"));
+    }
+    let tol = tol_juncao(&cs);
+    let mut feito = vec![false; grupos.len()];
+    for i in 0..n {
+        match dono[i] {
+            None => out.curvas.push(CurvaDoCampo { curva: cs[i].clone(), itens: vec![i] }),
+            Some(g) if feito[g] => {}
+            Some(g) => {
+                feito[g] = true;
+                let membros = &grupos[g];
+                let pecas: Vec<Curve3> = membros.iter().map(|k| cs[*k].clone()).collect();
+                let rotulo = membros.iter().map(|k| (k + 1).to_string()).collect::<Vec<_>>().join(", ");
+                match juntar(pecas.clone()) {
+                    Ok(c) => {
+                        let cont = match &c.exata {
+                            Some(e) if curva_g1(e, 5f64.to_radians()) => "tangente (G1)",
+                            Some(_) => "com canto vivo (G0)",
+                            None => "como polilinha (sem forma exata)",
+                        };
+                        out.notas.push(format!("junção dos itens {rotulo}: uma curva só, {cont}"));
+                        out.curvas.push(CurvaDoCampo { curva: c, itens: membros.clone() });
+                    }
+                    Err(_) => {
+                        out.avisos.push(format!("junção dos itens {rotulo}: as pontas não se tocam (folga {:.3} mm, tolerância {:.3} mm); os itens seguem separados", folga_do_grupo(&pecas), tol));
+                        for (k, c) in membros.iter().zip(pecas) {
+                            out.curvas.push(CurvaDoCampo { curva: c, itens: vec![*k] });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod juncao_tests {
+    use super::*;
+
+    fn juntar(cs: Vec<Curve3>) -> Result<Curve3, String> {
+        crate::join_curves(cs)
+    }
+
+    #[test]
+    fn grupo_vira_uma_curva_e_o_resto_segue_sozinho() {
+        let a = Curve3::line([0., 0., 0.], [10., 0., 0.]).unwrap();
+        let b = Curve3::line([10., 0., 0.], [20., 0., 0.]).unwrap();
+        let c = Curve3::line([0., 5., 0.], [0., 15., 0.]).unwrap();
+        let j = juntar_no_campo(vec![a, c, b], &[vec![0, 2]], juntar);
+        assert_eq!(j.curvas.len(), 2);
+        assert_eq!(j.curvas[0].itens, vec![0, 2]);
+        assert!((j.curvas[0].curva.length() - 20.).abs() < 1e-9);
+        assert_eq!(j.curvas[0].curva.exata.as_ref().map(|e| e.0.len()), Some(2), "dois trechos exatos encadeados");
+        assert_eq!(j.curvas[1].itens, vec![1]);
+        assert!(j.avisos.is_empty());
+        assert!(j.notas[0].contains("G1"), "{:?}", j.notas);
+    }
+
+    #[test]
+    fn indice_fora_da_lista_e_tolerado() {
+        let a = Curve3::line([0., 0., 0.], [10., 0., 0.]).unwrap();
+        let b = Curve3::line([10., 0., 0.], [10., 10., 0.]).unwrap();
+        // o item 7 saiu da lista fora da caixa; o grupo {0, 7} desfaz, {0, 1} vale
+        let j = juntar_no_campo(vec![a.clone(), b.clone()], &[vec![0, 7], vec![0, 1]], juntar);
+        assert_eq!(j.curvas.len(), 1);
+        assert!(j.notas.iter().any(|n| n.contains("G0")), "canto vivo: {:?}", j.notas);
+        assert!(j.notas.iter().any(|n| n.contains("não existem mais")));
+        let j = juntar_no_campo(vec![a, b], &[vec![3, 9]], juntar);
+        assert_eq!(j.curvas.len(), 2, "grupo todo fora da lista não junta nada");
+    }
+
+    #[test]
+    fn pontas_afastadas_dao_aviso_e_nao_somem() {
+        let a = Curve3::line([0., 0., 0.], [10., 0., 0.]).unwrap();
+        let b = Curve3::line([12., 0., 0.], [20., 0., 0.]).unwrap();
+        let j = juntar_no_campo(vec![a, b], &[vec![0, 1]], juntar);
+        assert_eq!(j.curvas.len(), 2, "os itens seguem separados");
+        assert_eq!(j.avisos.len(), 1);
+        assert!(j.avisos[0].contains("2.000 mm"), "{}", j.avisos[0]);
+    }
+}

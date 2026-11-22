@@ -327,3 +327,26 @@ a coerência antes de integrar.
   lista como uma curva; falta ler `Document::dados_campo` para juntar os itens de um grupo antes do kernel.
 - **Inverter único** em `inverter.rs`: o botão do painel e a seta do 3D chamam a mesma função
   (`alternar_ref`, `alternar_feature`); `chapa_unif_ui::inverter` é o widget padrão.
+
+### Onda 2, superfícies (22/11/2026; B561 e B562)
+
+- **Junção na hora com efeito geométrico** (fecha o pendente da onda 0): `Ctx::curvas_do_campo`
+  (`fenkra-solidos/src/lib.rs`) lê `Document::dados_campo` do comando e junta os itens de cada grupo numa
+  cadeia exata (`geo3d::juntar_no_campo`, que usa `join_curves`: trechos encadeados, G0/G1) antes do kernel.
+  Ligado na Revolução (`g_pf`), Regrada (`g_rc`) e Loft de superfície (`g_sec`). Tolera índice fora da lista
+  (nota) e avisa quando as pontas não se tocam na tolerância (os itens seguem separados). A junção entra em
+  `ref_sig`, então unir ou separar refaz o cache. A Revolução ganhou `mais` (perfil em lista, `serde(default)`).
+- **Curvas de entrada pelo campo universal**: Extrudada, Revolução, Varredura (perfil e guia), Loft (caminho),
+  Concordância (bordas), Dividir (curva de corte), Paralela e Extrair (mostra os itens de `mais`) usam
+  `bag_contrato` (`geo_ui::curva_contrato` para um item, `perfil_lista` para lista); a cadeia dupla
+  (`curve` + `mais`) passa pelo motor do campo em `contrato::editar_curvas`. Os `RefKind` de superfície que
+  estavam no adaptador declaram os campos em `contrato::declaradas_ref`.
+- **Inverter da extrusão de superfície**: sentido = sinal dos dois limites (`sinal_do_valor`), com o botão
+  padrão logo abaixo da extensão (como a extrusão sólida) e seta no 3D; os dois chamam
+  `inverter::alternar_extrusao` (`expr::negar`, volta ao texto de antes). O botão do Engrossar mostra o estado.
+- **Mesmo nome para o mesmo papel**: `g_s` Superfície, `g_apoio*` Apoio, `g_a`/`g_b` primeiro e segundo
+  elemento, `g_borda1/2` Borda, `g_pf` Perfil, conferido por teste no descritor e no painel.
+- **Testes de paridade**: extrusão sólida × de superfície × engrossar (inverter, seções, Direção), botão == seta
+  para Dividir, Aparar, Filete entre superfícies, Paralela, Regrada e Extrudada.
+- **Pendente**: perfil em lista na Extrudada e na Varredura (o literal desses `RefKind` está em `handles.rs`,
+  fora desta onda); Engrossar e Espessura com as mesmas opções e nomes (`feat_ui.rs`, fora desta onda).

@@ -6708,23 +6708,27 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     /// Duplo clique num item do campo de curvas: ele puxa a cadeia tangente dele. As curvas que ainda
     /// não estavam no campo entram, e a cadeia toda vira uma junção (subitens do próprio campo).
     fn expandir_cadeia(&mut self, dono: Id, campo: &str, indice: usize) {
-        let Some(curva) = crate::contrato::curvas_mut(&mut self.open.doc, dono, campo).and_then(|l| l.get(indice).cloned()) else { return };
+        let Some(curva) = crate::contrato::editar_curvas(&mut self.open.doc, dono, campo, |l| l.get(indice).cloned()).flatten() else { return };
         let cadeia = self.chained(vec![curva]);
         if cadeia.len() < 2 {
             self.toast(tr("Esta curva não tem vizinhas tangentes para juntar.").to_string(), false);
             return;
         }
-        let Some(lista) = crate::contrato::curvas_mut(&mut self.open.doc, dono, campo) else { return };
-        let mut indices = vec![];
-        for c in cadeia {
-            match lista.iter().position(|y| crate::geo_ui::mesma_curva(y, &c)) {
-                Some(k) => indices.push(k),
-                None => {
-                    lista.push(c);
-                    indices.push(lista.len() - 1);
+        let Some(indices) = crate::contrato::editar_curvas(&mut self.open.doc, dono, campo, |lista| {
+            let mut indices = vec![];
+            for c in cadeia {
+                match lista.iter().position(|y| crate::geo_ui::mesma_curva(y, &c)) {
+                    Some(k) => indices.push(k),
+                    None => {
+                        lista.push(c);
+                        indices.push(lista.len() - 1);
+                    }
                 }
             }
-        }
+            indices
+        }) else {
+            return;
+        };
         let mut d = self.open.doc.dados_campo(dono, campo).cloned().unwrap_or_else(|| fenkra_core::DadosCampo::novo(dono, campo));
         d.unir(&indices);
         self.open.doc.set_dados_campo(d);

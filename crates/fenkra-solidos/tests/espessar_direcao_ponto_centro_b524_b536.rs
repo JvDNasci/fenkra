@@ -127,7 +127,7 @@ fn retangulo(d: &mut Document) -> Id {
 /// Faixa de cilindro de raio 20 e comprimento 50 em volta do eixo X, de -60° a 60° a partir do topo.
 fn faixa_curva(d: &mut Document) -> Id {
     let c = reta(d, [0., 0., 20.], [50., 0., 20.]);
-    d.add_geometry(RefKind::SurfRevolve { curve: c, axis: AxisRef::Origin(OriginAxis::X), angle: s("60"), angle2: s("60") })
+    d.add_geometry(RefKind::SurfRevolve { curve: c, axis: AxisRef::Origin(OriginAxis::X), angle: s("60"), angle2: s("60"), mais: vec![] })
 }
 
 fn engrossar(d: &mut Document, sup: Id, t1: &str, t2: &str, simetrico: bool, dir: Option<DirecaoEspessura>) -> Id {

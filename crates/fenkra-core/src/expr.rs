@@ -150,6 +150,47 @@ pub fn eval(ast: &Ast, vars: &HashMap<String, f64>) -> Result<f64, ExprError> {
     })
 }
 
+/// ADR 0107 (B562): o texto da expressão começa com sinal de menos? É o estado "invertido" dos
+/// comandos cujo sentido é o sinal do valor (extrusão de superfície): o botão "⇄ Inverter direção" e a
+/// seta do 3D leem este estado, e `-0` também conta (o limite zero invertido continua invertido).
+pub fn sinal_negativo(src: &str) -> bool {
+    src.trim_start().starts_with('-')
+}
+
+/// ADR 0107 (B562): a mesma expressão com o sinal trocado, sem perder o texto: número troca o sinal,
+/// `-(x)` volta a `x`, o resto vira `-(x)`. Aplicar duas vezes devolve o texto de antes.
+pub fn negar(src: &str) -> String {
+    let t = src.trim();
+    if t.is_empty() {
+        return "-0".into();
+    }
+    if let Some(r) = t.strip_prefix("-(").and_then(|r| r.strip_suffix(')')) {
+        // só quando o parêntese do começo fecha no fim: "-(a)+(b)" não é "-(...)"
+        let mut nivel = 0i32;
+        let fecha_no_fim = r.chars().all(|c| {
+            match c {
+                '(' => nivel += 1,
+                ')' => nivel -= 1,
+                _ => {}
+            }
+            nivel >= 0
+        });
+        if fecha_no_fim && nivel == 0 {
+            return r.to_string();
+        }
+    }
+    let numero = |x: &str| !x.is_empty() && x.replace(',', ".").parse::<f64>().is_ok();
+    if let Some(r) = t.strip_prefix('-') {
+        if numero(r.trim()) {
+            return r.trim().to_string();
+        }
+    }
+    if numero(t) {
+        return format!("-{t}");
+    }
+    format!("-({t})")
+}
+
 /// Avalia uma expressão isolada contra um conjunto de valores.
 pub fn eval_str(src: &str, vars: &HashMap<String, f64>) -> Result<f64, ExprError> {
     eval(&parse(src)?, vars)
@@ -368,5 +409,18 @@ mod tests {
         assert!(matches!(eval_str("x+1", &v), Err(ExprError::UnknownName(_))));
         assert!(matches!(eval_str("(1+2", &v), Err(ExprError::Syntax(..))));
         assert!(matches!(eval_str("foo(1)", &v), Err(ExprError::UnknownFunction(_))));
+    }
+
+    /// B562 (onda 2): trocar o sinal duas vezes devolve o texto de antes, e o valor troca de sinal.
+    #[test]
+    fn negar_e_volta_ao_texto() {
+        let v: HashMap<String, f64> = [("a".to_string(), 4.), ("b".to_string(), 1.)].into();
+        for t in ["30", "-30", "0", "a+b", "2*a", "12.5"] {
+            let n = negar(t);
+            assert_eq!(negar(&n), t, "{t} -> {n}");
+            assert_ne!(sinal_negativo(&n), sinal_negativo(t), "{t} -> {n}");
+            let (x, y) = (eval_str(t, &v).unwrap(), eval_str(&n, &v).unwrap());
+            assert!((x + y).abs() < 1e-12, "{t}={x}, {n}={y}");
+        }
     }
 }
