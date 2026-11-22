@@ -2024,7 +2024,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             // aresta do modelo: extração com a propagação gravada (B21); curva de sketch: cópia
             let kind = match &old {
                 CurveRef::Edge(_) | CurveRef::BodyEdge { .. } => RefKind::CurveExtract { edge: old.clone(), surface: None, prop, expected: None },
-                _ => RefKind::CurveCopy { curve: old.clone() },
+                _ => RefKind::CurveCopy { curve: old.clone(), mais: vec![] },
             };
             let new = CurveRef::Ref(d.add_geometry(kind));
             if let Some(r) = d.references.iter_mut().find(|r| Some(r.id) == target) {
@@ -6387,7 +6387,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             TreeAction::PublicarSk(p) => {
                 use crate::picking::Pick;
                 let k = match p {
-                    Pick::SkCurve { sketch, curve, .. } => RefKind::CurveCopy { curve: CurveRef::SketchCurve { sketch, curve } },
+                    Pick::SkCurve { sketch, curve, .. } => RefKind::CurveCopy { curve: CurveRef::SketchCurve { sketch, curve }, mais: vec![] },
                     Pick::SkPoint { sketch, point, .. } => crate::sketch_pub::kind_de_ponto(PointRef::SketchPoint { sketch, point }),
                     _ => return,
                 };
@@ -7019,12 +7019,11 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
             }
         }
         let d = &mut self.open.doc;
+        // B576: o conjunto extraído é um Extrair (cópia associativa), nunca uma Junção de curvas
         for set in edges {
-            made.push(if set.len() == 1 {
-                d.add_geometry(RefKind::CurveCopy { curve: set.into_iter().next().unwrap() })
-            } else {
-                d.add_geometry(RefKind::CurveJoin { curves: set })
-            });
+            let mut it = set.into_iter();
+            let Some(curve) = it.next() else { continue };
+            made.push(d.add_geometry(RefKind::CurveCopy { curve, mais: it.collect() }));
         }
         for set in faces {
             made.push(if set.len() == 1 {

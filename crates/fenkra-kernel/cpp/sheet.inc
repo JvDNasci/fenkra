@@ -153,6 +153,16 @@ std::unique_ptr<Shape> sm_flange(const Shape& body, double px, double py, double
 // retas (a spline única por todos os pontos oscilava na emenda reta-curva e arruinava o sólido).
 std::unique_ptr<Shape> sm_chain_sweep(const Shape& face, rust::Slice<const double> pts, double nx, double ny, double nz) {
     return guard("aba em cadeia", [&] {
+        // B559: cadeia exata (arestas do modelo, curva do sketch): o fio vem pronto, uma aresta por
+        // trecho, sem refazer a curva a partir de amostras
+        TopoDS_Wire caminho;
+        bool fechada = false;
+        if (e_curva_codificada(pts)) {
+            caminho = wire_curva(pts);
+            TopoDS_Vertex va, vb;
+            TopExp::Vertices(caminho, va, vb);
+            fechada = BRep_Tool::Pnt(va).Distance(BRep_Tool::Pnt(vb)) < 1e-6;
+        } else {
         std::vector<gp_Pnt> p;
         for (size_t i = 0; i + 2 < pts.size(); i += 3) {
             gp_Pnt q(pts[i], pts[i + 1], pts[i + 2]);
@@ -207,12 +217,15 @@ std::unique_ptr<Shape> sm_chain_sweep(const Shape& face, rust::Slice<const doubl
             i = c1;
         }
         if (!w.IsDone()) throw std::runtime_error("cadeia de arestas inválida");
-        BRepOffsetAPI_MakePipeShell ps(w.Wire());
+        caminho = w.Wire();
+        fechada = p.front().Distance(p.back()) < 1e-6;
+        }
+        BRepOffsetAPI_MakePipeShell ps(caminho);
         ps.SetMode(gp_Dir(nx, ny, nz));
         ps.SetTransitionMode(BRepBuilderAPI_RoundCorner);
         // paredes retas de uma cadeia fechada saíam com 0,5 mm de ondulação com a tolerância padrão
         // (só na cadeia fechada: numa spline aberta a tolerância apertada fazia a varredura falhar, B529)
-        if (p.front().Distance(p.back()) < 1e-6) {
+        if (fechada) {
             ps.SetTolerance(1e-6, 1e-6, 1e-4);
             ps.SetMaxDegree(8);
             ps.SetMaxSegments(300);

@@ -451,7 +451,7 @@ impl GeoKind {
             LineAxis => R::AxisLine { axis: seed_axis(s), length: String::new() },
             CurveProject => R::CurveProject { curve: c(0), plane: pl },
             SplineControl => R::SplineControl { points: pts(4), closed: false },
-            CurveCopy => R::CurveCopy { curve: c(0) },
+            CurveCopy => R::CurveCopy { curve: c(0), mais: vec![] },
             CurveJoin => R::CurveJoin { curves: if s.curves.len() >= 2 { s.curves.clone() } else { vec![c(0), c(1)] } },
             SurfExtract => match face_da_extracao(s) {
                 Some(SurfRef::Face { point, owner, key, .. }) => R::SurfExtract { face: point, owner, prop: Propagation::Nenhuma, complement: false, expected: None, key },
@@ -638,7 +638,7 @@ pub fn inputs_of(k: &RefKind) -> Seed {
         }
         R::PointOffset { point, .. } => s.points.push(*point),
         R::SplineControl { points, .. } => s.points.extend(points.iter().copied()),
-        R::CurveCopy { curve } | R::CurveExtract { edge: curve, .. } | R::SurfExtrude { curve, .. } | R::SurfRevolve { curve, .. } => s.curves.push(curve.clone()),
+        R::CurveCopy { curve, .. } | R::CurveExtract { edge: curve, .. } | R::SurfExtrude { curve, .. } | R::SurfRevolve { curve, .. } => s.curves.push(curve.clone()),
         R::SurfFill { curves, .. } | R::CurveJoin { curves } => s.curves.extend(curves.iter().cloned()),
         R::SurfOffset { surface, .. } => s.surface = Some(*surface),
         R::SurfSphere { center, .. } => s.points.push(*center),
@@ -1831,7 +1831,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, r: &mut RefElement, vars: &HashM
             ui.checkbox(closed, tr("fechada"));
             crate::sup_spline::painel(ui, me, &mut r.kind, note.map_or(&[], |n| n.pontos.as_slice()));
         }
-        R::CurveCopy { curve } => curve_slot(ui, "g_c", "Aresta/curva", doc, me, curve, seed),
+        R::CurveCopy { curve, .. } => curve_slot(ui, "g_c", "Aresta/curva", doc, me, curve, seed),
         R::CurveExtract { edge, prop, expected, .. } => {
             let antes = edge.clone();
             curve_slot(ui, "g_c", "Aresta", doc, me, edge, seed);

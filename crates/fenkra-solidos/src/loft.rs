@@ -285,7 +285,7 @@ fn orientar(secoes: &[Curve3], invertidas: &[bool]) -> (Vec<Curve3>, Vec<bool>) 
         }
         inv ^= invertidas.get(i).copied().unwrap_or(false);
         if inv {
-            c.pts.reverse();
+            c.reverse();
         }
         virou.push(inv);
         cs.push(c);
@@ -451,7 +451,7 @@ pub fn grades(e: &Entrada) -> Result<Vec<Vec<Vec<V3>>>, String> {
         if mapa.windows(2).all(|w| w[1].1 < w[0].1) {
             mapa.iter_mut().for_each(|x| x.1 = 1. - x.1);
             let mut c = g.clone();
-            c.pts.reverse();
+            c.reverse();
             guias.push(Guia { curva: c, mapa, u });
         } else if mapa.windows(2).all(|w| w[1].1 > w[0].1) {
             guias.push(Guia { curva: g.clone(), mapa, u });

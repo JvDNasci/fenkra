@@ -744,8 +744,14 @@ pub enum RefKind {
     CurveProject { curve: CurveRef, plane: PlaneRef },
     /// Spline pelo polígono de controle (B-spline uniforme).
     SplineControl { points: Vec<PointRef>, closed: bool },
-    /// Cópia de uma curva (aresta extraída do modelo).
-    CurveCopy { curve: CurveRef },
+    /// Cópia de uma curva (aresta extraída do modelo, curva de sketch): o recurso Extrair de curva.
+    /// B576: extrair várias de uma vez continua sendo um Extrair (não uma Junção de curvas): as
+    /// outras ficam em `mais` e o resultado é a cadeia delas, com a geometria exata de cada uma.
+    CurveCopy {
+        curve: CurveRef,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        mais: Vec<CurveRef>,
+    },
     /// Aresta extraída com propagação gravada (B21): o recálculo acha a aresta de novo no modelo
     /// e refaz a cadeia de vizinhas pelo critério escolhido.
     CurveExtract {
@@ -1299,7 +1305,12 @@ impl RefKind {
                     q.walk(ids)
                 }
             }
-            CurveCopy { curve } => curve.walk(ids),
+            CurveCopy { curve, mais } => {
+                curve.walk(ids);
+                for c in mais {
+                    c.walk(ids)
+                }
+            }
             CurveExtract { edge, surface, .. } => {
                 edge.walk(ids);
                 if let Some(x) = surface {

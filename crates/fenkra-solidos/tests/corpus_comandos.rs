@@ -1035,6 +1035,15 @@ fn comprimento_da_guia_longa() -> f64 {
     fenkra_solidos::geo3d::spline(&GUIA_LONGA, false).unwrap().pts.windows(2).map(|q| fenkra_solidos::geo3d::dist(q[0], q[1])).sum()
 }
 
+/// Cosseno entre a normal do perfil (X, plano YZ) e a tangente da guia no começo. O perfil é varrido
+/// com a inclinação que tem em relação à guia, então a seção efetiva é π·cos θ. B559: a spline do
+/// wireframe passou a ser a do kernel (derivada de Lagrange nas pontas), com a tangente inicial menos
+/// alinhada ao X que a Catmull-Rom de antes; o volume esperado acompanha esse cosseno.
+fn cos_inicio(p: &[[f64; 3]]) -> f64 {
+    let m = fenkra_core::spline::Hermite::interpolada(p, false).unwrap().m[0];
+    m[0] / (m[0] * m[0] + m[1] * m[1] + m[2] * m[2]).sqrt()
+}
+
 #[test]
 fn nervura_com_spline_longa_varre_o_tubo_inteiro() {
     precisa_kernel!();
@@ -1044,7 +1053,7 @@ fn nervura_com_spline_longa_varre_o_tubo_inteiro() {
     let r = recompute(&d);
     ok(&r, id);
     // perfil de área π pela guia inteira; a malha inscrita fica um pouco abaixo
-    let (v, esperado) = (volume_da_malha(&r.bodies[0]), PI * comprimento_da_guia_longa());
+    let (v, esperado) = (volume_da_malha(&r.bodies[0]), PI * comprimento_da_guia_longa() * cos_inicio(&GUIA_LONGA));
     assert!((v / esperado - 1.).abs() < 0.08, "volume {v:.1}, esperado {esperado:.1}");
     let (a, b) = caixa_da_malha(&r);
     assert!(b[0] - a[0] > 129. && b[0] - a[0] < 134., "caixa {a:?} {b:?}");
@@ -1159,13 +1168,15 @@ fn varredura_segue_com_polilinha_e_com_spline_curta() {
     assert!(b[0] - a[0] > 129. && b[0] - a[0] < 140., "caixa da polilinha {a:?} {b:?}");
 
     let mut d = Document::new("spline curta");
-    let g = spline_fixa(&mut d, &[[0., 0., 0.], [20., 5., 0.], [40., -5., 0.], [60., 0., 0.]]);
+    let curta = [[0., 0., 0.], [20., 5., 0.], [40., -5., 0.], [60., 0., 0.]];
+    let g = spline_fixa(&mut d, &curta);
     let id = varredura(&mut d, g, BoolOp::Add);
     let r = recompute(&d);
     ok(&r, id);
-    // perfil de área π varrido pela curva: um pouco mais que o vão de 60 mm, e nunca o dobro
-    let v = volume_total(&r);
-    assert!(v > PI * 55. && v < PI * 120., "volume da spline curta {v}");
+    // perfil de área π (inclinado pela tangente do começo) varrido pela curva: um pouco mais que o vão
+    // de 60 mm, e nunca o dobro
+    let v = volume_total(&r) / cos_inicio(&curta);
+    assert!(v > PI * 55. && v < PI * 120., "volume da spline curta (seção reta) {v}");
     let (a, b) = caixa_da_malha(&r);
     assert!(b[0] - a[0] > 58. && b[0] - a[0] < 66., "caixa da spline curta {a:?} {b:?}");
 }

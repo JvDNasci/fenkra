@@ -299,6 +299,8 @@ mod ffi;
 pub mod xde;
 pub mod pmi_xde;
 mod nurbs;
+pub mod curva;
+pub use curva::{Curva3, Trecho3};
 pub use pmi_xde::{AlvoDatumXde, AlvoXde, AnotacaoXde, ApresentacaoXde, DadoXde, VistaXde, MaterialXde, ModToleranciaXde, ModZonaXde, TipoDimensaoXde, TipoToleranciaXde, ZonaXde};
 pub use xde::{DefeitoForma, EsquemaStep, InfoReparo, InstanciaXde, ModeloXde, OpcoesGravarIges, OpcoesGravarXde, OpcoesLerXde, ProdutoXde, TipoDefeito, UnidadeStep, IDENTIDADE};
 
@@ -1089,6 +1091,60 @@ mod imp {
             let flat: Vec<f64> = pts.iter().flatten().copied().collect();
             b::sm_chain_sweep(&self.0, &flat, normal[0], normal[1], normal[2]).map(Shape).map_err(err)
         }
+        // ---------------- B559: curvas exatas (ver `curva.rs`)
+        /// Varredura da seção ao longo da cadeia exata (uma aresta por trecho).
+        pub fn sm_chain_sweep_c(&self, c: &Curva3, normal: [f64; 3]) -> KResult<Shape> {
+            b::sm_chain_sweep(&self.0, &c.codifica(), normal[0], normal[1], normal[2]).map(Shape).map_err(err)
+        }
+        /// Varredura sólida desta seção ao longo da guia exata.
+        pub fn sweep_c(&self, guia: &Curva3, mode: u8) -> KResult<Shape> {
+            b::sweep_tool(&self.0, &guia.codifica(), mode).map(Shape).map_err(err)
+        }
+        pub fn curve_shape_c(c: &Curva3) -> KResult<Shape> {
+            b::curve_shape(&c.codifica()).map(Shape).map_err(err)
+        }
+        pub fn extrude_curva(c: &Curva3, dir: [f64; 3], len: f64) -> KResult<Shape> {
+            b::extrude_curve(&c.codifica(), dir[0], dir[1], dir[2], len).map(Shape).map_err(err)
+        }
+        pub fn revolve_curva(c: &Curva3, origin: [f64; 3], dir: [f64; 3], angle_deg: f64) -> KResult<Shape> {
+            b::revolve_curve(&c.codifica(), origin[0], origin[1], origin[2], dir[0], dir[1], dir[2], angle_deg).map(Shape).map_err(err)
+        }
+        pub fn sweep_surface_c(perfil: &Curva3, guia: &Curva3, mode: u8) -> KResult<Shape> {
+            b::sweep_surface(&perfil.codifica(), &guia.codifica(), mode).map(Shape).map_err(err)
+        }
+        fn curvas_planas(cs: &[Curva3]) -> (Vec<f64>, Vec<u32>) {
+            let (mut flat, mut ends) = (vec![], vec![]);
+            for c in cs {
+                flat.extend(c.codifica());
+                ends.push(flat.len() as u32);
+            }
+            (flat, ends)
+        }
+        pub fn loft_surface_c(secoes: &[Curva3], ruled: bool, closed: bool, guia: Option<&Curva3>) -> KResult<Shape> {
+            let (flat, ends) = Self::curvas_planas(secoes);
+            let g = guia.map(|g| g.codifica()).unwrap_or_default();
+            b::loft_surface(&flat, &ends, ruled, closed, &g).map(Shape).map_err(err)
+        }
+        pub fn fill_surface_c(cs: &[Curva3]) -> KResult<Shape> {
+            let (flat, ends) = Self::curvas_planas(cs);
+            b::fill_surface(&flat, &ends).map(Shape).map_err(err)
+        }
+        pub fn fill_surface_x_c(cs: &[Curva3], orders: &[i32], weights: &[f64], support: &Shape, pts: &[[f64; 3]]) -> KResult<(Shape, f64, f64, f64)> {
+            let (flat, ends) = Self::curvas_planas(cs);
+            let p: Vec<f64> = pts.iter().flatten().copied().collect();
+            let mut errs = vec![];
+            let s = b::fill_surface_x(&flat, &ends, orders, weights, &support.0, &p, &mut errs).map(Shape).map_err(err)?;
+            Ok((s, errs.first().copied().unwrap_or(0.), errs.get(1).copied().unwrap_or(0.), errs.get(2).copied().unwrap_or(0.)))
+        }
+        /// Curva exata da aresta mais perto de `p` (B576: o extraído mantém o tipo).
+        pub fn edge_curve_at(&self, p: [f64; 3]) -> KResult<Curva3> {
+            let v = b::edge_curve_at(&self.0, p[0], p[1], p[2]).map_err(err)?;
+            Curva3::decodifica(&v).ok_or_else(|| KernelError("curva da aresta ilegível".into()))
+        }
+        /// Arestas por tipo: reta, círculo, elipse, B-spline e outras.
+        pub fn edge_types(&self) -> KResult<Vec<u32>> {
+            Ok(b::edge_types(&self.0))
+        }
         /// Perfil plano deslocado para fora (d > 0) ou para dentro.
         pub fn offset_face(&self, d: f64) -> KResult<Shape> {
             b::offset_face(&self.0, d).map(Shape).map_err(err)
@@ -1386,6 +1442,39 @@ mod imp {
             no()
         }
         pub fn sm_chain_sweep(&self, _: &[[f64; 3]], _: [f64; 3]) -> KResult<Shape> {
+            no()
+        }
+        pub fn sm_chain_sweep_c(&self, _: &Curva3, _: [f64; 3]) -> KResult<Shape> {
+            no()
+        }
+        pub fn sweep_c(&self, _: &Curva3, _: u8) -> KResult<Shape> {
+            no()
+        }
+        pub fn curve_shape_c(_: &Curva3) -> KResult<Shape> {
+            no()
+        }
+        pub fn extrude_curva(_: &Curva3, _: [f64; 3], _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn revolve_curva(_: &Curva3, _: [f64; 3], _: [f64; 3], _: f64) -> KResult<Shape> {
+            no()
+        }
+        pub fn sweep_surface_c(_: &Curva3, _: &Curva3, _: u8) -> KResult<Shape> {
+            no()
+        }
+        pub fn loft_surface_c(_: &[Curva3], _: bool, _: bool, _: Option<&Curva3>) -> KResult<Shape> {
+            no()
+        }
+        pub fn fill_surface_c(_: &[Curva3]) -> KResult<Shape> {
+            no()
+        }
+        pub fn fill_surface_x_c(_: &[Curva3], _: &[i32], _: &[f64], _: &Shape, _: &[[f64; 3]]) -> KResult<(Shape, f64, f64, f64)> {
+            no()
+        }
+        pub fn edge_curve_at(&self, _: [f64; 3]) -> KResult<Curva3> {
+            no()
+        }
+        pub fn edge_types(&self) -> KResult<Vec<u32>> {
             no()
         }
         pub fn loft(&self, _: bool, _: bool, _: bool) -> KResult<Shape> {

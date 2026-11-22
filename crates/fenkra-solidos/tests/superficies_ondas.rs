@@ -366,7 +366,7 @@ fn ponto_em_vertice_e_aresta_seguem_a_chave() {
     let key = b.edge_key(e).unwrap();
     let m = &b.mesh.edge_mids;
     let mid = [m[3 * e] as f64, m[3 * e + 1] as f64, m[3 * e + 2] as f64];
-    let linha = d.add_geometry(RefKind::CurveCopy { curve: CurveRef::BodyEdge { pts: vec![mid, mid], key } });
+    let linha = d.add_geometry(RefKind::CurveCopy { curve: CurveRef::BodyEdge { pts: vec![mid, mid], key }, mais: vec![] });
     let ponto = d.add_geometry(RefKind::PointBetween { a: PointRef::Vertex { point: mid, edge: key }, b: PointRef::Origin, ratio: s("0") });
     let r = recompute(&d);
     ok(&r, linha);

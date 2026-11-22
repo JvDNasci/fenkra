@@ -170,6 +170,11 @@ Legenda do motor: **Rust** = função em `fenkra-solidos`; **kernel** = função
 - **Saídas.** Corpo; `marca_cadeia`; sem ramo próprio no estado planificado (nenhum `sp.flat` no trecho
   5966–6133 além de `ponto_na_face`): depende do ramo plano de `curve_flange_lim` (B566, "não planificam").
 - **Problemas.** B563 (posição, inversão, contato: não verificado em bancada), B564, B566, B559.
+- **B559 (22/11).** Aba curva e aba por superfície tentam primeiro a cadeia exata (`cadeia_exata`: as
+  arestas da chapa sobre a cadeia, cada uma com a curva do B-rep) e varrem por `sm_chain_sweep_c`; a
+  polilinha segue só quando a aba recua (lado 1/2) ou quando a OML aparada não coincide com a aresta da
+  web (limites dos lados). Perfil de asa: 6 faces novas em vez de 18. Membro curvo de um trecho exato
+  varre pela curva exata.
 
 ### 1.7 Bainha (`SmHem`, `doc.rs:3043`; painel `feat_ui.rs:672`; motor `lib.rs:6181`)
 

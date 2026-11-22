@@ -44,6 +44,7 @@ pub mod regra_plastica;
 pub mod recurso_plastico;
 pub mod requisitos;
 pub mod sketch;
+pub mod spline;
 pub mod sketch_controle;
 pub mod sketch_formas;
 pub mod sketch_origem;

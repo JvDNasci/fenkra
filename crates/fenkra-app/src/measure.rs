@@ -106,7 +106,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             Sel::Params
         }
         Act::Point(p) => Sel::Ref(d.add_geometry(RefKind::PointCoords { x: fmt(p[0]).replace(',', "."), y: fmt(p[1]).replace(',', "."), z: fmt(p[2]).replace(',', "."), frame: None })),
-        Act::Curve(pts) => Sel::Ref(d.add_geometry(RefKind::CurveCopy { curve: chave_aresta.map_or_else(|| CurveRef::Edge(pts.clone()), |key| CurveRef::BodyEdge { pts: pts.clone(), key }) })),
+        Act::Curve(pts) => Sel::Ref(d.add_geometry(RefKind::CurveCopy { curve: chave_aresta.map_or_else(|| CurveRef::Edge(pts.clone()), |key| CurveRef::BodyEdge { pts: pts.clone(), key }), mais: vec![] })),
         Act::Surface(p, owner) => Sel::Ref(d.add_geometry(RefKind::SurfExtract { face: p, owner, prop: Propagation::Nenhuma, complement: false, expected: None, key: chave_face })),
         Act::AbrirMedir => unreachable!(),
     };

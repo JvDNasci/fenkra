@@ -27,6 +27,8 @@ pub struct EvalSketch {
     pub viz: Vec<(bool, Vec<[f64; 2]>)>,
     /// cada curva amostrada, pelo id (outro sketch pode projetá-la)
     pub curves: HashMap<Id, Vec<[f64; 2]>>,
+    /// B559: a geometria exata de cada curva (reta, arco, círculo, spline pelos pontos, elipse)
+    pub exatas: HashMap<Id, Seg2>,
     /// curvas de construção (ids)
     pub cons: Vec<Id>,
     /// todos os pontos resolvidos (para referências a pontos do sketch)
@@ -119,23 +121,28 @@ pub fn eval_sketch(data: &SketchData, vars: &Vars) -> Result<EvalSketch, String>
             }
             continue;
         }
-        let pts = match c.geom {
+        let exata = match c.geom {
             Curve::Line { a, b } => {
                 out.lines.insert(c.id, (sk.pos(a), sk.pos(b)));
-                vec![sk.pos(a), sk.pos(b)]
+                Seg2::Line(sk.pos(a), sk.pos(b))
             }
-            Curve::Circle { c: ctr, r } => sample(&[Seg2::Circle(sk.pos(ctr), r)]),
+            Curve::Circle { c: ctr, r } => Seg2::Circle(sk.pos(ctr), r),
             Curve::Arc { c: ctr, s, e } => {
                 let (pc, ps, pe) = (sk.pos(ctr), sk.pos(s), sk.pos(e));
-                sample(&[Seg2::Arc(ps, SketchData::arc_mid(pc, ps, pe), pe)])
+                Seg2::Arc(ps, SketchData::arc_mid(pc, ps, pe), pe)
             }
             Curve::Point { p } => {
                 out.curves.insert(c.id, vec![sk.pos(p)]);
                 continue;
             }
-            Curve::Spline { .. } => sample(&[Seg2::Spline(sk.spline_uv(c.id))]),
-            Curve::Ellipse { c: ctr, major, minor, t0, t1, .. } => sample(&[Seg2::Ellipse(sk.pos(ctr), major, minor, t0, t1)]),
+            Curve::Spline { .. } => Seg2::Spline(sk.spline_uv(c.id)),
+            Curve::Ellipse { c: ctr, major, minor, t0, t1, .. } => Seg2::Ellipse(sk.pos(ctr), major, minor, t0, t1),
         };
+        let pts = match &exata {
+            Seg2::Line(a, b) => vec![*a, *b],
+            s => sample(std::slice::from_ref(s)),
+        };
+        out.exatas.insert(c.id, exata);
         out.curves.insert(c.id, pts.clone());
         if c.construction {
             out.cons.push(c.id);
@@ -144,6 +151,23 @@ pub fn eval_sketch(data: &SketchData, vars: &Vars) -> Result<EvalSketch, String>
     }
     out.report = report;
     Ok(out)
+}
+
+/// B559: o segmento exato do sketch no espaço, no plano `fr`.
+pub fn trecho3(fr: &Frame, s: &Seg2) -> fenkra_kernel::Trecho3 {
+    use fenkra_kernel::Trecho3;
+    let p = |q: [f64; 2]| fr.point(q[0], q[1]);
+    match s {
+        Seg2::Line(a, b) => Trecho3::Reta(p(*a), p(*b)),
+        Seg2::Arc(a, m, b) => Trecho3::Arco(p(*a), p(*m), p(*b)),
+        Seg2::Circle(c, r) => Trecho3::Circulo { centro: p(*c), normal: fr.normal, x: fr.x, raio: *r },
+        Seg2::Spline(v) => Trecho3::Interpolada { pts: v.iter().map(|q| p(*q)).collect(), fechada: false },
+        Seg2::Ellipse(c, m, r, t0, t1) => {
+            let y = fr.y();
+            let maior = [0, 1, 2].map(|i| fr.x[i] * m[0] + y[i] * m[1]);
+            Trecho3::Elipse { centro: p(*c), normal: fr.normal, maior, menor: *r, t0: *t0, t1: *t1 }
+        }
+    }
 }
 
 /// Amostra o laço em pontos para desenhar.
