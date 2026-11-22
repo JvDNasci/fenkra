@@ -606,7 +606,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
-            tube_bend: None,
+            tube_bend: None, fit: Default::default(),
         }));
         let (mut p, origem) = modelo_da_estrutura(&d).unwrap();
         assert_eq!(p.nos.len(), 6, "{:?}", p.nos.iter().map(|n| n.p).collect::<Vec<_>>());

@@ -27,7 +27,7 @@ fn membro(paths: Vec<CurveRef>, kind: SectionKind, dims: &[&str]) -> StructMembe
         joints: vec![],
         material: String::new(),
         mirror: false,
-        tube_bend: None,
+        tube_bend: None, fit: Default::default(),
     }
 }
 
@@ -47,7 +47,7 @@ fn l_dobrado(kind: SectionKind, dims: &[&str], b: TubeBend, regras: Vec<TubeRule
     let l2 = linha(&mut d, [300., 0., 0.], [300., 300., 0.]);
     let f = d.add_feature(FeatureKind::StructMember(membro(vec![l1, l2], kind, dims)));
     if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|f| &mut f.kind) {
-        m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b) });
+        m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b) , fit: None });
     }
     (d, f)
 }
@@ -273,7 +273,7 @@ fn dobra_entre_comandos_diferentes_e_recusada() {
     let a = d.add_feature(FeatureKind::StructMember(membro(vec![l1], SectionKind::TuboRedondo, &["50", "3"])));
     let b = d.add_feature(FeatureKind::StructMember(membro(vec![l2], SectionKind::TuboRedondo, &["50", "3"])));
     if let Some(FeatureKind::StructMember(m)) = d.feature_mut(b).map(|f| &mut f.kind) {
-        m.joints.push(StructJoint { mine: 0, other: a, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend(BendMode::Dobradeira, "100")) });
+        m.joints.push(StructJoint { mine: 0, other: a, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend(BendMode::Dobradeira, "100")) , fit: None });
     }
     let r = recompute(&d);
     match &r.status[&b] {
@@ -293,8 +293,8 @@ fn tres_pernas_com_duas_dobras_fazem_um_tubo_so() {
     let l3 = linha(&mut d, [300., 300., 0.], [0., 300., 0.]);
     let f = d.add_feature(FeatureKind::StructMember(membro(vec![l1, l2, l3], SectionKind::TuboRedondo, &["30", "2"])));
     if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|f| &mut f.kind) {
-        m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend(BendMode::Dobradeira, "50")) });
-        m.joints.push(StructJoint { mine: 2, other: f, other_path: 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend(BendMode::Dobradeira, "50")) });
+        m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend(BendMode::Dobradeira, "50")) , fit: None });
+        m.joints.push(StructJoint { mine: 2, other: f, other_path: 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend(BendMode::Dobradeira, "50")) , fit: None });
     }
     let r = recompute(&d);
     assert_eq!(r.status[&f], Status::Ok, "{:?}", r.status[&f]);
@@ -326,7 +326,7 @@ fn salvar_e_abrir_preserva_a_dobra_e_as_regras() {
     let (vazio, _) = l_dobrado(SectionKind::TuboRedondo, &["50", "3"], bend(BendMode::Dobradeira, "100"), vec![]);
     assert!(!vazio.to_json().contains("tube_rules"));
     // uma junta de arquivo antigo (sem o campo bend) abre sem dobra
-    let antigo = StructJoint { mine: 1, other: Id(7), other_path: 0, mode: CornerMode::Encaixe, first: true, gap: None, bend: None };
+    let antigo = StructJoint { mine: 1, other: Id(7), other_path: 0, mode: CornerMode::Encaixe, first: true, gap: None, bend: None, fit: None };
     let txt = serde_json::to_string(&antigo).unwrap();
     assert!(!txt.contains("bend"));
     let lido: StructJoint = serde_json::from_str(&txt).unwrap();

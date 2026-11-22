@@ -34,11 +34,11 @@ fn tubo_em_u() -> Document {
         joints: vec![],
         material: String::new(),
         mirror: false,
-        tube_bend: None,
+        tube_bend: None, fit: Default::default(),
     }));
     if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|f| &mut f.kind) {
         let bend = TubeBend { mode: BendMode::VComum, radius: s("40"), cuts: s("3"), ..Default::default() };
-        m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend) });
+        m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend) , fit: None });
     }
     d
 }

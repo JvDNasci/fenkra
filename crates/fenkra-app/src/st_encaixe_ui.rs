@@ -15,6 +15,7 @@ use crate::app::App;
 use crate::i18n::tr;
 use crate::theme;
 use eframe::egui::{self, Color32, RichText};
+use fenkra_core::{FitCut, FitFace, FitOptions, FitWall};
 use fenkra_solidos::st_cantos::Canto;
 use fenkra_solidos::st_dobra_saida;
 use fenkra_solidos::st_encaixe::{ModoParede, Opcoes, Parede};
@@ -105,13 +106,80 @@ fn salvar(ui: &egui::Ui, nome: &str, filtro: (&str, &str), bytes: Vec<u8>) {
     ui.ctx().data_mut(|d| d.insert_temp(id, msg));
 }
 
+/// B574: os três campos do encaixe (tipo de corte, parede que a curva segue, face do tubo que recebe),
+/// com dica em cada um. Devolve `true` se algum mudou. Vale para as opções do membro e as de um canto.
+pub fn campos_do_fit(ui: &mut egui::Ui, fit: &mut FitOptions, id: &str) -> bool {
+    let antes = *fit;
+    ui.horizontal(|ui| {
+        ui.label(tr("Tipo de corte"));
+        let nome = |c: FitCut| if c == FitCut::Normal { tr("Normal à parede") } else { tr("Booleana") };
+        egui::ComboBox::from_id_salt((id, "corte")).selected_text(nome(fit.cut)).width(150.).show_ui(ui, |ui| {
+            for c in [FitCut::Normal, FitCut::Boolean] {
+                ui.selectable_value(&mut fit.cut, c, nome(c));
+            }
+        })
+        .response
+        .on_hover_text(tr("Booleana: o outro tubo é subtraído e a face de corte cola na superfície dele; em ângulo, a borda da parede vira ponta fina. Normal à parede: como o corte de plasma ou o traçado à mão, a face de corte contém a normal da parede em cada ponto, e a borda mantém a espessura inteira."));
+    });
+    if fit.cut == FitCut::Normal {
+        ui.horizontal(|ui| {
+            ui.label(tr("Parede que a curva segue"));
+            let nome = |w: FitWall| match w {
+                FitWall::Auto => tr("Automático"),
+                FitWall::Outer => tr("Parede externa"),
+                FitWall::Inner => tr("Parede interna"),
+                FitWall::Middle => tr("Média das paredes"),
+            };
+            egui::ComboBox::from_id_salt((id, "parede")).selected_text(nome(fit.wall)).width(150.).show_ui(ui, |ui| {
+                for w in [FitWall::Auto, FitWall::Outer, FitWall::Inner, FitWall::Middle] {
+                    ui.selectable_value(&mut fit.wall, w, nome(w));
+                }
+            })
+            .response
+            .on_hover_text(tr("Automático: ponto a ponto, a parede que toca primeiro; nunca invade o outro tubo. Externa, interna e média escolhem uma só; a interferência, se houver, é medida e avisada."));
+        });
+        ui.horizontal(|ui| {
+            ui.label(tr("Face do tubo que recebe"));
+            let nome = |f: FitFace| match f {
+                FitFace::Outer => tr("Face externa"),
+                FitFace::Middle => tr("Meio da parede"),
+                FitFace::Inner => tr("Face interna"),
+            };
+            egui::ComboBox::from_id_salt((id, "face")).selected_text(nome(fit.face)).width(150.).show_ui(ui, |ui| {
+                for f in [FitFace::Outer, FitFace::Middle, FitFace::Inner] {
+                    ui.selectable_value(&mut fit.face, f, nome(f));
+                }
+            })
+            .response
+            .on_hover_text(tr("Superfície do tubo que recebe usada como encosto: face externa (a solda de sempre), meio da parede ou face interna (o tubo que chega entra até o furo do outro)."));
+        });
+    }
+    *fit != antes
+}
+
 /// Seção "Corte de encaixe" do cartão do canto. Só aparece com o tratamento Encaixe.
-pub fn cartao(ui: &mut egui::Ui, app: &App, c: &Canto) {
+pub fn cartao(ui: &mut egui::Ui, app: &App, c: &Canto, novo: &mut Option<Box<dyn FnOnce(&mut fenkra_core::Document)>>) {
     let ctx = ui.ctx().clone();
     let mut opc = opcoes(&ctx);
     let id_cab = egui::Id::new(("st_encaixe_cab", (c.ponto[0] * 10.) as i64, (c.ponto[1] * 10.) as i64, (c.ponto[2] * 10.) as i64));
     egui::CollapsingHeader::new(tr("Corte de encaixe (laser ou plasma em tubo)")).id_salt(id_cab).default_open(true).show(ui, |ui| {
+        // B574: opções gravadas no canto (corte normal à parede, parede, face); mudar grava no documento
+        let mut fit = c.fit;
+        if campos_do_fit(ui, &mut fit, "st_fit_canto") {
+            let (c2, f2) = (c.clone(), fit);
+            *novo = Some(Box::new(move |d| {
+                fenkra_solidos::st_cantos::definir_fit(d, &c2, Some(f2));
+            }));
+        }
+        if fit != FitOptions::default() && ui.small_button(tr("Usar as do membro")).on_hover_text(tr("Opções do encaixe só deste canto; vazio usa as do membro.")).clicked() {
+            let c2 = c.clone();
+            *novo = Some(Box::new(move |d| {
+                fenkra_solidos::st_cantos::definir_fit(d, &c2, None);
+            }));
+        }
+        let normal = fit.cut == FitCut::Normal;
         ui.horizontal(|ui| {
+            ui.add_enabled_ui(!normal, |ui| {
             ui.label(tr("Parede"));
             egui::ComboBox::from_id_salt("st_encaixe_parede").selected_text(tr(opc.modo.nome())).width(150.).show_ui(ui, |ui| {
                 for m in ModoParede::TODOS {
@@ -120,13 +188,14 @@ pub fn cartao(ui: &mut egui::Ui, app: &App, c: &Canto) {
             })
             .response
             .on_hover_text(tr("Automático: ponto a ponto, a parede que toca primeiro; nunca invade o outro tubo e dá a menor abertura. Externa, interna e média escolhem uma só, e a invasão, se houver, é avisada."));
+            });
         });
         ui.horizontal(|ui| {
             ui.label(tr("Orçamento de folga"));
             let r = ui.add(crate::ui_ext::dv(&mut opc.orcamento).speed(0.05).range(0.0..=20.0).suffix(" mm").max_decimals(2).dica(tr("Abertura de raiz máxima admissível, medida na normal do outro tubo. Os trechos acima dela ficam em vermelho: só um chanfro resolve.")));
             crate::ui_ext::wheel(ui, &r, &mut opc.orcamento);
         });
-        ui.checkbox(&mut opc.perpendicular, tr("Corte perpendicular à parede")).on_hover_text(tr("Ligado: laser de 3 eixos, uma curva só para a espessura inteira (sobra abertura de raiz). Desligado: com chanfro, a face de corte acompanha o outro tubo e a abertura é zero."));
+        ui.add_enabled(!normal, egui::Checkbox::new(&mut opc.perpendicular, tr("Corte perpendicular à parede"))).on_hover_text(tr("Ligado: laser de 3 eixos, uma curva só para a espessura inteira (sobra abertura de raiz). Desligado: com chanfro, a face de corte acompanha o outro tubo e a abertura é zero."));
         ctx.data_mut(|d| d.insert_temp(egui::Id::new(OPC_ID), opc));
 
         let todos = encaixes_da_estrutura(app.doc(), &opc);
@@ -147,7 +216,16 @@ pub fn cartao(ui: &mut egui::Ui, app: &App, c: &Canto) {
             }
         });
         ui.label(format!("{} {:.2} mm · {} {:.2} mm", tr("Comprimento de corte:"), k.comprimento_corte(), tr("abertura máxima:"), k.folga_max()));
-        if opc.perpendicular {
+        // B574: vão, interferência e espessura da borda, conferidos contra o tubo que recebe
+        let val = &ponta.validacao;
+        ui.label(format!("{} {:.2} mm · {} {:.2} mm · {} {:.2} mm", tr("Vão de raiz máximo:"), val.vao_max, tr("interferência:"), val.interferencia_max, tr("espessura da borda:"), val.espessura_borda)).on_hover_text(tr("Medidos na curva de corte contra o tubo que recebe. Vão e interferência vêm da normal dele; a espessura da borda é a parede inteira no corte normal."));
+        for a in &val.avisos {
+            ui.label(RichText::new(format!("⚠ {}", tr(a))).color(theme::st_warn()).small());
+        }
+        if fit.cut == FitCut::Normal {
+            ui.label(RichText::new(tr("Corte normal à parede: o vão acima da tolerância pede chanfro na solda (a tolerância é o orçamento ou a parede, o que for maior).")).weak().small());
+        }
+        if opc.perpendicular && fit.cut == FitCut::Boolean {
             let ac = k.trechos_acima();
             if ac.is_empty() {
                 ui.label(RichText::new(tr("Toda a curva cabe no orçamento de folga.")).color(theme::st_ok()));
@@ -173,7 +251,7 @@ pub fn cartao(ui: &mut egui::Ui, app: &App, c: &Canto) {
         if let Some(msg) = ctx.data(|d| d.get_temp::<String>(egui::Id::new("st_encaixe_msg"))) {
             ui.label(RichText::new(msg).weak().small());
         }
-        ui.label(RichText::new(format!("⚠ {}", tr("Sem protótipo: a validar em peça real."))).weak().small());
+        ui.label(RichText::new(format!("⚠ {}", tr("Sem protótipo: o corte normal e o vão aceito vêm de hipótese de trabalho; confira em peça real."))).weak().small());
 
         // dados para o 3D
         let dir = ponta.dir;

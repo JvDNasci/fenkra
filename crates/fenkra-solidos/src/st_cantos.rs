@@ -9,7 +9,7 @@
 //! (`corner`/`gap`). Este módulo só lê esse resultado e reescreve essas regras; o corte em si
 //! continua no recompute.
 
-use fenkra_core::{CornerMode, Document, FeatureKind, Id, StructJoint};
+use fenkra_core::{CornerMode, Document, FeatureKind, FitOptions, Id, StructJoint};
 
 /// Linha guia de um membro: (comando, índice da linha).
 pub type Linha = (Id, usize);
@@ -48,6 +48,8 @@ pub struct EntradaCanto {
     /// perfil de cada linha ("Tubo quadrado 40x3"), para agrupar cantos iguais
     pub perfil_a: String,
     pub perfil_b: String,
+    /// B574: opções de encaixe em vigor neste par (as do canto ou, sem regra própria, as do membro)
+    pub fit: FitOptions,
 }
 
 #[derive(Clone, Debug)]
@@ -66,6 +68,8 @@ pub struct Canto {
     pub angulo: Option<f64>,
     /// pares do canto (um nos cantos de dois membros)
     pub pares: Vec<EntradaCanto>,
+    /// B574: opções de encaixe do primeiro par (só importam nos cantos de dois membros)
+    pub fit: FitOptions,
 }
 
 impl Canto {
@@ -128,6 +132,7 @@ pub fn montar_cantos(entradas: Vec<EntradaCanto>) -> Vec<Canto> {
                 continua,
                 folga: p0.folga,
                 angulo: duas.then(|| dot.clamp(-1., 1.).acos().to_degrees()),
+                fit: p0.fit,
                 linhas,
                 pares,
             }
@@ -176,14 +181,51 @@ fn remover_regra(doc: &mut Document, a: Linha, b: Linha) {
 /// membro estrutural.
 pub fn definir_regra(doc: &mut Document, a: Linha, b: Linha, modo: Option<CornerMode>, continua: Option<Linha>, folga: Option<String>) -> bool {
     let (early, late) = ordenar(doc, a, b);
+    // B574: trocar tratamento, folga ou quem continua não perde as opções de encaixe do canto
+    let fit = fit_proprio(doc, a, b);
     remover_regra(doc, a, b);
     let Some(modo) = modo else { return true };
     // padrão: o anterior é o membro 1 (continua)
     let primeiro = continua.map(|c| c == late).unwrap_or(false);
     let Some(f) = doc.feature_mut(late.0) else { return false };
     let FeatureKind::StructMember(m) = &mut f.kind else { return false };
-    m.joints.push(StructJoint { mine: late.1, other: early.0, other_path: early.1, mode: modo, first: primeiro, gap: folga.filter(|g| !g.trim().is_empty()), bend: None });
+    m.joints.push(StructJoint { mine: late.1, other: early.0, other_path: early.1, mode: modo, first: primeiro, gap: folga.filter(|g| !g.trim().is_empty()), bend: None, fit });
     true
+}
+
+/// B574: opções de encaixe guardadas na regra própria do par (`None` = sem regra ou sem opções).
+pub fn fit_proprio(doc: &Document, a: Linha, b: Linha) -> Option<FitOptions> {
+    let (early, late) = ordenar(doc, a, b);
+    let em = |dono: Linha, mine: usize, other: Linha| match doc.feature(dono.0).map(|f| &f.kind) {
+        Some(FeatureKind::StructMember(m)) => m.joints.iter().find(|j| j.mine == mine && j.other == other.0 && j.other_path == other.1).and_then(|j| j.fit),
+        _ => None,
+    };
+    em(late, late.1, early).or_else(|| em(early, early.1, late))
+}
+
+/// B574: grava as opções de encaixe do canto. Sem regra própria cria uma com o tratamento Encaixe e
+/// a folga e quem continua do canto; `fit` `None` volta às do membro.
+pub fn definir_fit(doc: &mut Document, c: &Canto, fit: Option<FitOptions>) -> bool {
+    let [a, b] = match c.linhas.as_slice() {
+        [a, b] => [*a, *b],
+        _ => return false,
+    };
+    let (early, late) = ordenar(doc, a, b);
+    if !c.explicito || c.modo != CornerMode::Encaixe {
+        let folga = (c.folga != 0.).then(|| format!("{}", c.folga));
+        if !definir_regra(doc, a, b, Some(CornerMode::Encaixe), c.continua.or(Some(a)), folga) {
+            return false;
+        }
+    }
+    let Some(f) = doc.feature_mut(late.0) else { return false };
+    let FeatureKind::StructMember(m) = &mut f.kind else { return false };
+    match m.joints.iter_mut().find(|j| j.mine == late.1 && j.other == early.0 && j.other_path == early.1) {
+        Some(j) => {
+            j.fit = fit;
+            true
+        }
+        None => false,
+    }
 }
 
 /// Troca quem continua num canto de dois membros com Aparar ou Encaixe. Sem regra própria, cria uma
@@ -272,6 +314,7 @@ mod tests {
             explicito,
             perfil_a: "Tubo quadrado 40x3".into(),
             perfil_b: "Tubo quadrado 40x3".into(),
+            fit: FitOptions::default(),
         }
     }
 
@@ -345,7 +388,7 @@ mod tests {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             }))
         };
         let a = mk(&mut d, [0., 0., 0.], [400., 0., 0.]);
@@ -363,7 +406,7 @@ mod tests {
         assert_eq!(m.joints.len(), 1);
         assert_eq!((m.joints[0].mine, m.joints[0].other, m.joints[0].first), (0, a, false));
         // trocar quem continua: agora o posterior (b) continua
-        let c = Canto { ponto: [400., 0., 0.], linhas: vec![(a, 0), (b, 0)], classe: ClasseCanto::Tratado, modo: CornerMode::Aparar, explicito: true, continua: Some((a, 0)), folga: 0., angulo: Some(90.), pares: vec![] };
+        let c = Canto { ponto: [400., 0., 0.], linhas: vec![(a, 0), (b, 0)], classe: ClasseCanto::Tratado, modo: CornerMode::Aparar, explicito: true, continua: Some((a, 0)), folga: 0., angulo: Some(90.), pares: vec![], fit: FitOptions::default() };
         assert!(trocar_continua(&mut d, &c));
         let Some(FeatureKind::StructMember(m)) = d.feature(b).map(|f| &f.kind) else { unreachable!() };
         assert_eq!(m.joints.len(), 1, "a regra antiga foi substituída, não duplicada");

@@ -30,7 +30,7 @@ fn tubo(paths: Vec<CurveRef>, corner: CornerMode) -> StructMember {
         joints: vec![],
         material: String::new(),
         mirror: false,
-        tube_bend: None,
+        tube_bend: None, fit: Default::default(),
     }
 }
 
@@ -47,7 +47,7 @@ fn longarina(d: &mut Document, y: f64, yd: f64) -> Id {
     let f = d.add_feature(FeatureKind::StructMember(tubo(c, CornerMode::Nenhum)));
     if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|f| &mut f.kind) {
         for i in 1..4 {
-            m.joints.push(StructJoint { mine: i, other: f, other_path: i - 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: BendMode::Dobradeira, radius: s("90"), ..Default::default() }) });
+            m.joints.push(StructJoint { mine: i, other: f, other_path: i - 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: BendMode::Dobradeira, radius: s("90"), ..Default::default() }) , fit: None });
         }
     }
     f

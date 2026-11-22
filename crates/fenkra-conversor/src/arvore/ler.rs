@@ -327,7 +327,7 @@ impl<'a> Tabela<'a> {
                 joints: vec![],
                 material: m.material.clone(),
                 mirror: m.espelhar,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             }),
             Comando::PlacaExtremidade { em, espessura, sobra, lado, recuo, sobra_em, furos } => FeatureKind::StructPlate(StructPlate {
                 at: *em,

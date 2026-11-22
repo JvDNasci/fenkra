@@ -1241,10 +1241,10 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
-            tube_bend: None,
+            tube_bend: None, fit: Default::default(),
         }));
         if let Some(FeatureKind::StructMember(m)) = doc.feature_mut(f).map(|x| &mut x.kind) {
-            m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: BendMode::Dobradeira, radius: s("100"), ..Default::default() }) });
+            m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: BendMode::Dobradeira, radius: s("100"), ..Default::default() }) , fit: None });
         }
         let dir = std::env::temp_dir().join("fenkra_desenho_tubo_dobrado");
         std::fs::create_dir_all(&dir).unwrap();
@@ -1310,7 +1310,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
-            tube_bend: None,
+            tube_bend: None, fit: Default::default(),
         }));
         let dir = std::env::temp_dir().join("fenkra_desenho_corte_item");
         std::fs::create_dir_all(&dir).unwrap();

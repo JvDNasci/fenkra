@@ -33,6 +33,7 @@ fn membro(paths: Vec<CurveRef>, kind: SectionKind, dims: &[&str], raio: Option<&
         material: String::new(),
         mirror: false,
         tube_bend: raio.map(|r| TubeBend { mode: BendMode::Dobradeira, radius: s(r), ..Default::default() }),
+        fit: Default::default(),
     }
 }
 

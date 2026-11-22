@@ -282,7 +282,7 @@ pub fn trechos(curva: Id, n: usize) -> Vec<CurveRef> {
 pub fn dobra_nos(d: &mut Document, f: Id, n: usize, raio: &str) {
     if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|f| &mut f.kind) {
         for i in 1..n {
-            m.joints.push(StructJoint { mine: i, other: f, other_path: i - 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: BendMode::Dobradeira, radius: raio.into(), ..Default::default() }) });
+            m.joints.push(StructJoint { mine: i, other: f, other_path: i - 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(TubeBend { mode: BendMode::Dobradeira, radius: raio.into(), ..Default::default() }) , fit: None });
         }
     }
 }

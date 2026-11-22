@@ -107,7 +107,7 @@ impl Ctx<'_> {
             if m.joints.iter().any(par) {
                 continue;
             }
-            out.push(StructJoint { mine: i, other: f.id, other_path: i - 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend.clone()) });
+            out.push(StructJoint { mine: i, other: f.id, other_path: i - 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(bend.clone()) , fit: None });
         }
         out
     }

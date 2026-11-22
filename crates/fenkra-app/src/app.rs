@@ -916,7 +916,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             };
             d.add_feature(FeatureKind::StructMember(mk(paths, CornerMode::MeiaEsquadria, 0)));
             d.add_feature(FeatureKind::StructMember(mk(legs, CornerMode::Nenhum, 0)));
@@ -956,7 +956,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             }));
             for r in &mut d.references {
                 r.visible = false;
@@ -1002,7 +1002,7 @@ impl App {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             }));
             if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|x| &mut x.kind) {
                 let mut b1 = TubeBend { mode: BendMode::Dobradeira, radius: s("150"), rule: s("Exemplo de bancada"), ..Default::default() };
@@ -1018,8 +1018,8 @@ impl App {
                         }
                     }
                 }
-                m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b1) });
-                m.joints.push(StructJoint { mine: 2, other: f, other_path: 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b2) });
+                m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b1) , fit: None });
+                m.joints.push(StructJoint { mine: 2, other: f, other_path: 1, mode: CornerMode::Dobra, first: false, gap: None, bend: Some(b2) , fit: None });
             }
             for r in &mut d.references {
                 r.visible = false;
@@ -2670,7 +2670,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                             joints: vec![],
                             material: String::new(),
                             mirror: false,
-                            tube_bend: None,
+                            tube_bend: None, fit: Default::default(),
                         }))
                     })
                     .collect();

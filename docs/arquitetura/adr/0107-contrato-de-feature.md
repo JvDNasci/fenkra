@@ -395,3 +395,11 @@ a coerência antes de integrar.
   Avanço, Rotação e Ponto de dobra.
 - **Pendente.** Trecho curvo exato entre retas num caminho com dobra; seta e alças 3D do raio de dobra no
   caminho (as alças existentes são as do nó); descritor com o bloco "tubo dobrado" como entrada declarada.
+
+### Onda 5, estrutural: boca de lobo (22/11/2026; B574, parcial)
+
+- **Corte normal à parede** no encaixe de tubo, com a parede que a curva segue e a face do tubo que recebe
+  como opções no documento (`StructMember::fit`, `StructJoint::fit`). Decisão e conferência no
+  [ADR 0109](0109-encaixe-de-tubo-corte-normal-a-parede.md).
+- **Pendente**: tubo de passagem com rasgo, tubo contra superfície qualquer com ponte, escolha dos tubos
+  que cortam um nó pela caixa universal (hoje a ordem é a da árvore) e o descritor dessas entradas.

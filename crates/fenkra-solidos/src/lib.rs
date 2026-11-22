@@ -40,6 +40,7 @@ pub mod st_cantos;
 pub mod st_limite;
 pub mod st_encaixe;
 pub mod st_encaixe_doc;
+pub mod st_boca_lobo;
 #[cfg(test)]
 mod st_encaixe_tests;
 pub mod st_dobra;
@@ -3633,6 +3634,96 @@ impl Ctx<'_> {
         Ok((mode, if a == late { late_first } else { !late_first }, gap))
     }
 
+    /// B574: opções de encaixe do par. Valem as do canto, se tiver regra própria; senão as do membro que
+    /// carrega a regra padrão (o posterior, como em `joint_rule`).
+    pub(crate) fn joint_fit(&self, a: (Id, usize, usize), b: (Id, usize, usize)) -> FitOptions {
+        let (early, late) = if (a.2, a.1) <= (b.2, b.1) { (a, b) } else { (b, a) };
+        let Some(FeatureKind::StructMember(m)) = self.doc.feature(late.0).map(|f| &f.kind) else { return FitOptions::default() };
+        if let Some(j) = m.joints.iter().find(|j| j.mine == late.1 && j.other == early.0 && j.other_path == early.1) {
+            return j.fit.unwrap_or(m.fit);
+        }
+        if let Some(FeatureKind::StructMember(e)) = self.doc.feature(early.0).map(|f| &f.kind) {
+            if let Some(j) = e.joints.iter().find(|j| j.mine == early.1 && j.other == late.0 && j.other_path == late.1) {
+                return j.fit.unwrap_or(e.fit);
+            }
+        }
+        m.fit
+    }
+
+    /// B574: aplica os encaixes de corte normal à parede de uma linha. Cada ponta vira uma curva só
+    /// (todos os vizinhos dela entram: o de maior alcance segura a ponta em cada ponto) e uma face de
+    /// corte varrida pela normal da parede (`st_boca_lobo`). Onde o corte normal não vale (barra
+    /// maciça, membro curvo, seção que não é tubo) ou o kernel falha, a ponta cai para o corte
+    /// booleano de sempre e o motivo vai para o aviso do comando; nunca se troca em silêncio.
+    #[allow(clippy::too_many_arguments)]
+    fn encaixes_normais(&self, sh: Shape, m: &StructMember, g: &MemberGeom, linha: usize, manter: V3, js: &[&JuntaDoCanto], avisos: &RefCell<Vec<String>>) -> Result<Shape, String> {
+        let mut sh = sh;
+        let mut grupos: Vec<(V3, Vec<&JuntaDoCanto>)> = vec![];
+        for j in js {
+            match grupos.iter_mut().find(|(p, _)| geo3d::dist(*p, j.p) < 1e-4) {
+                Some(x) => x.1.push(j),
+                None => grupos.push((j.p, vec![*j])),
+            }
+        }
+        for (p, grupo) in grupos {
+            let fit = grupo[0].fit;
+            let folga = grupo.iter().map(|j| j.gap).fold(0., f64::max);
+            let ext = if geo3d::dist(p, g.start) < 1e-4 { g.ext.0 } else { g.ext.1 };
+            let feito: Result<(Shape, st_boca_lobo::Validacao), String> = (|| {
+                if !g.straight {
+                    return Err("o membro é curvo".into());
+                }
+                let sec = st_encaixe_doc::secao_do_membro(m.kind, g).ok_or("a seção não é tubo nem barra")?;
+                let eu = st_boca_lobo::membro_nominal(sec, g.x, g.y, g.shift, geo3d::dist(g.start, g.end), p, grupo[0].di);
+                let mut hs = vec![];
+                for j in &grupo {
+                    if !j.og.straight {
+                        return Err("o tubo que recebe é curvo".into());
+                    }
+                    let Some(FeatureKind::StructMember(om)) = self.doc.feature(j.outro).map(|f| &f.kind) else { return Err("o outro membro não é estrutural".into()) };
+                    let hsec = st_encaixe_doc::secao_do_membro(om.kind, &j.og).ok_or("a seção do tubo que recebe não é tubo nem barra")?;
+                    let (no, dentro) = if j.em_t {
+                        (j.og.start, j.og.z)
+                    } else if geo3d::dist(p, j.og.start) < 1e-4 {
+                        (p, j.og.z)
+                    } else {
+                        (p, geo3d::mul(j.og.z, -1.))
+                    };
+                    hs.push(st_boca_lobo::membro_nominal(hsec, j.og.x, j.og.y, j.og.shift, geo3d::dist(j.og.start, j.og.end), no, dentro));
+                }
+                let opc = st_boca_lobo::opcoes_do_fit(&fit, st_encaixe::Opcoes { folga, ..Default::default() });
+                let c = st_encaixe::calcular(&eu, &hs, opc)?;
+                let val = st_boca_lobo::validar(&c, st_boca_lobo::tolerancia_de_vao(sec, opc.orcamento));
+                let novo = st_boca_lobo::aparar(&sh, &eu, &c, manter, ext)?;
+                Ok((novo, val))
+            })();
+            match feito {
+                Ok((novo, val)) => {
+                    sh = novo;
+                    for a in val.avisos {
+                        avisos.borrow_mut().push(format!("linha {}: {a}", linha + 1));
+                    }
+                }
+                Err(e) => {
+                    avisos.borrow_mut().push(format!("linha {}: corte normal indisponível ({e}); usou o corte por booleana", linha + 1));
+                    for j in &grupo {
+                        let mut o2 = j.og.clone();
+                        let hi = g.w.max(g.h) / 2.;
+                        if geo3d::dist(j.p, o2.start) < 1e-4 {
+                            o2.ext.0 = o2.ext.0.max(hi);
+                        } else if geo3d::dist(j.p, o2.end) < 1e-4 {
+                            o2.ext.1 = o2.ext.1.max(hi);
+                        }
+                        let prim = self.member_shape(&o2)?;
+                        let prim = if j.gap > 1e-9 { prim.offset_surface(j.gap).map_err(|e| e.0)? } else { prim };
+                        sh = sh.clip_until(&prim, manter, false).map_err(|e| e.0)?;
+                    }
+                }
+            }
+        }
+        Ok(sh)
+    }
+
     /// Mensagem de referência perdida (ou ambígua) de um comando: nunca se escolhe em silêncio.
     fn lost(&self, what: &str, f: &Feature, why: refs::Lost, who: String) -> String {
         match why {
@@ -6484,7 +6575,7 @@ impl Ctx<'_> {
                 let my_k = self.doc.features.iter().position(|g| g.id == f.id).unwrap_or(0);
                 // cantos com qualquer outra linha de membro (deste comando ou de outro)
                 let diag = |g: &MemberGeom| (g.w * g.w + g.h * g.h).sqrt() + 1.;
-                let mut joints: Vec<Vec<(V3, V3, V3, MemberGeom, CornerMode, bool, f64)>> = vec![vec![]; geo.len()];
+                let mut joints: Vec<Vec<JuntaDoCanto>> = vec![vec![]; geo.len()];
                 // B387: linhas cuja ponta entra no meio de outro membro sem Aparar nem Encaixe
                 let mut sem_tratamento: Vec<usize> = vec![];
                 for i in 0..geo.len() {
@@ -6558,10 +6649,11 @@ impl Ctx<'_> {
                         } else {
                             geo[i].ext.1 = geo[i].ext.1.max(e);
                         }
-                        joints[i].push((p, di, dj, og.clone(), mode, first, gap));
+                        joints[i].push(JuntaDoCanto { p, di, dj, og: og.clone(), mode, first, gap, outro: *oid, em_t, fit: self.joint_fit((f.id, i, my_k), (*oid, *oi, *ok)) });
                     }
                 }
                 let mid = |g: &MemberGeom| geo3d::lerp(g.start, g.end, 0.5);
+                let avisos_boca: RefCell<Vec<String>> = RefCell::new(vec![]);
                 let mut shapes: Vec<Shape> = vec![];
                 // B79: a falha de uma linha não derruba as outras; cada uma vira um aviso com o motivo
                 let mut kept: Vec<usize> = vec![];
@@ -6572,7 +6664,15 @@ impl Ctx<'_> {
                         return Err(e.clone());
                     }
                     let mut sh = self.member_shape(g)?;
-                    for (p, di, dj, og, mode, first, gap) in &joints[i] {
+                    // B574: encaixes de corte normal à parede, por ponta (todos os vizinhos de uma
+                    // ponta entram juntos na mesma curva)
+                    let mut normais: Vec<&JuntaDoCanto> = vec![];
+                    for jc in &joints[i] {
+                        let JuntaDoCanto { p, di, dj, og, mode, first, gap, .. } = jc;
+                        if *mode == CornerMode::Encaixe && !*first && st_boca_lobo::e_normal(&jc.fit) {
+                            normais.push(jc);
+                            continue;
+                        }
                         match mode {
                             CornerMode::Nenhum | CornerMode::Dobra => {}
                             CornerMode::MeiaEsquadria => {
@@ -6600,6 +6700,9 @@ impl Ctx<'_> {
                                 sh = sh.clip_until(&prim, mid(g), *mode == CornerMode::Aparar).map_err(k)?;
                             }
                         }
+                    }
+                    if !normais.is_empty() {
+                        sh = self.encaixes_normais(sh, m, g, i, mid(g), &normais, &avisos_boca)?;
                     }
                     Ok(sh)
                     })();
@@ -6753,6 +6856,18 @@ impl Ctx<'_> {
                         Some(w) => format!("{t} | {w}"),
                         None => t,
                     })
+                };
+                let warn = {
+                    let b = avisos_boca.into_inner();
+                    if b.is_empty() {
+                        warn
+                    } else {
+                        let t = format!("⚠ encaixe normal à parede: {}", b.join(" | "));
+                        Some(match warn {
+                            Some(w) => format!("{t} | {w}"),
+                            None => t,
+                        })
+                    }
                 };
                 let warn = if dobra_avisos.is_empty() {
                     warn
@@ -7995,6 +8110,24 @@ struct MemberGeom {
     caminho: usize,
 }
 
+/// Um canto de uma linha com outra, como o recompute o aplica (B574: com o dono do outro lado e as
+/// opções de encaixe).
+#[derive(Clone)]
+struct JuntaDoCanto {
+    p: V3,
+    di: V3,
+    dj: V3,
+    og: MemberGeom,
+    mode: CornerMode,
+    first: bool,
+    gap: f64,
+    /// o comando da outra linha
+    outro: Id,
+    /// a ponta cai no meio da outra linha (junta em T)
+    em_t: bool,
+    fit: FitOptions,
+}
+
 /// Ponta de `a` que cai no meio do eixo de `b` (junta em T): (ponto, direção para dentro de `a`,
 /// direção de `b`). Fica de fora a ponta que já coincide com uma ponta de `b` (é `shared_end`) e a que
 /// está fora da linha. A tolerância é de 0,05 mm do eixo.
@@ -8682,6 +8815,7 @@ pub fn member_corners(doc: &Document) -> Vec<st_cantos::Canto> {
                 explicito: st_cantos::tem_regra(doc, (la.0, la.1), (lb.0, lb.1)),
                 perfil_a: perfil(la.0),
                 perfil_b: perfil(lb.0),
+                fit: cx.joint_fit((la.0, la.1, la.2), (lb.0, lb.1, lb.2)),
             });
         }
     }
@@ -9208,7 +9342,7 @@ mod tests {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             }));
             d
         };
@@ -9246,7 +9380,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
-            tube_bend: None,
+            tube_bend: None, fit: Default::default(),
         }));
         let v0 = vol(&d);
         d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));
@@ -9284,7 +9418,7 @@ mod tests {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             }));
         };
         let pr = |a: f64, b: f64, tol: f64| (a - b).abs() <= tol * b.abs().max(1.);
@@ -9336,7 +9470,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
-            tube_bend: None,
+            tube_bend: None, fit: Default::default(),
         }));
         // um sólido por trecho, no referencial local (Z ao longo do membro, seção centrada)
         let ms = structural_members(&d);
@@ -9361,7 +9495,7 @@ mod tests {
         assert_eq!(cl[0].members, vec![(f, 1), (f, 3)]);
         // outro tratamento num canto: os dois membros que ele toca deixam de ser iguais aos opostos
         if let Some(FeatureKind::StructMember(m)) = d.feature_mut(f).map(|f| &mut f.kind) {
-            m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Aparar, first: false, gap: None, bend: None });
+            m.joints.push(StructJoint { mine: 1, other: f, other_path: 0, mode: CornerMode::Aparar, first: false, gap: None, bend: None, fit: None });
         }
         let gs2 = structural_groups(&d);
         assert!(gs2.len() > 2, "pontas diferentes separam os grupos: {}", gs2.len());
@@ -9388,7 +9522,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
-            tube_bend: None,
+            tube_bend: None, fit: Default::default(),
         }));
         d.add_feature(FeatureKind::StructPlate(StructPlate::nova([0., 0., 0.], "8", "5")));
         d.add_feature(FeatureKind::StructGusset(StructGusset::novo([0., 0., 500.], "60", "6", "0")));
@@ -9772,7 +9906,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
-            tube_bend: None,
+            tube_bend: None, fit: Default::default(),
         }));
         let r = recompute(&d);
         assert!(matches!(r.status[&m], Status::Ok), "{:?}", r.status[&m]);
@@ -9810,7 +9944,7 @@ mod tests {
                 joints: vec![],
                 material: String::new(),
                 mirror: false,
-                tube_bend: None,
+                tube_bend: None, fit: Default::default(),
             }))
         };
         let (m0, m1, m2) = (mk(&mut d, 0), mk(&mut d, 1), mk(&mut d, 5));
@@ -10128,7 +10262,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
-            tube_bend: None,
+            tube_bend: None, fit: Default::default(),
         };
         let vol = |d: &Document| recompute(d).bodies.iter().map(|b| b.mass.volume).sum::<f64>();
         let lado = |d: &mut Document, a: [f64; 3], b: [f64; 3]| CurveRef::Ref(d.add_geometry(RefKind::LinePoints { a: PointRef::Fixed(a), b: PointRef::Fixed(b), start: s("0"), end: s("0") }));
@@ -10147,13 +10281,13 @@ mod tests {
         assert_eq!(member_joints(&d).len(), 1);
         // regra própria do canto: sem tratamento → barras retas, sem sobra
         if let Some(FeatureKind::StructMember(m)) = d.feature_mut(ids[1]).map(|f| &mut f.kind) {
-            m.joints.push(StructJoint { mine: 0, other: ids[0], other_path: 0, mode: CornerMode::Nenhum, first: false, gap: None, bend: None });
+            m.joints.push(StructJoint { mine: 0, other: ids[0], other_path: 0, mode: CornerMode::Nenhum, first: false, gap: None, bend: None, fit: None });
         }
         let v_none = vol(&d);
         assert!(near(v_none, a * 800., 1e-3), "sem tratamento: {v_none}");
         // aparar com o posterior (linha horizontal) como membro 1
         if let Some(FeatureKind::StructMember(m)) = d.feature_mut(ids[1]).map(|f| &mut f.kind) {
-            m.joints[0] = StructJoint { mine: 0, other: ids[0], other_path: 0, mode: CornerMode::Aparar, first: true, gap: None, bend: None };
+            m.joints[0] = StructJoint { mine: 0, other: ids[0], other_path: 0, mode: CornerMode::Aparar, first: true, gap: None, bend: None, fit: None };
         }
         let r = recompute(&d);
         assert!(r.status.values().all(|x| !matches!(x, Status::Error(_))), "{:?}", r.status);

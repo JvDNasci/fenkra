@@ -53,6 +53,11 @@ pub fn member_panel(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMem
         m.corner = [CornerMode::MeiaEsquadria, CornerMode::Aparar, CornerMode::Encaixe, CornerMode::Nenhum][i];
     }
     expr(ui, "Folga de solda", &mut m.gap, vars, "mm");
+    // B574: encaixe com corte normal à parede, padrão do membro (cada canto pode ter o seu)
+    if m.corner == CornerMode::Encaixe || m.joints.iter().any(|j| j.mode == CornerMode::Encaixe) {
+        section(ui, "Encaixe do tubo (boca de lobo)");
+        crate::st_encaixe_ui::campos_do_fit(ui, &mut m.fit, "st_fit_membro");
+    }
     ui.horizontal(|ui| {
         ui.add_sized([96., 18.], egui::Label::new(tr("Material")));
         ui.add(egui::TextEdit::singleline(&mut m.material).desired_width(180.).hint_text(doc_material(doc))).on_hover_text(tr("Material do membro (vazio = o da peça)"));
@@ -195,7 +200,7 @@ fn joints_ui(ui: &mut egui::Ui, doc: &Document, me: Id, m: &mut StructMember, va
                             }
                         }
                         // padrão: o anterior é o membro 1
-                        None => m.joints.push(StructJoint { mine: i, other, other_path: j, mode, first: (pos(me), i) < (pos(other), j), gap: None, bend }),
+                        None => m.joints.push(StructJoint { mine: i, other, other_path: j, mode, first: (pos(me), i) < (pos(other), j), gap: None, bend , fit: None }),
                     }
                 }
                 None => {}
@@ -492,6 +497,7 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     let mut export = false;
     let mut export_ifc = false;
     let mut export_nc = false;
+    let mut gabaritos = false;
     let mut gerar = false;
     let mut acao_maq: Option<crate::st_maquina_ui::Acao> = None;
     let mut hover_row: Option<usize> = None;
@@ -633,6 +639,9 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
                 if ui.button(tr("Exportar NC1 e STEP…")).on_hover_text(tr("Para as máquinas de perfil e de tubo: um arquivo DSTV NC1 (cabeçalho, cortes inclinados, contornos recortados e furos, também no tubo redondo) e um STEP do sólido já cortado por item da lista, numa pasta.")).clicked() {
                     export_nc = true;
                 }
+                if ui.button(tr("Gabaritos de encaixe…")).on_hover_text(tr("Grava, numa pasta, um DXF por tubo com o gabarito planificado da boca de lobo (curva de corte desenrolada na pele externa, em milímetros).")).clicked() {
+                    gabaritos = true;
+                }
                 if ui.button(tr("Caminho de corte…")).on_hover_text(tr("Caminho da máquina de tubo rotativo para os encaixes: vista desenvolvida, tabela por ponto, CSV e animação do cabeçote.")).clicked() {
                     crate::st_corte_tubo_ui::abrir(ui.ctx());
                 }
@@ -664,6 +673,9 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     if export_nc {
         exportar_nc(app);
     }
+    if gabaritos {
+        exportar_gabaritos(app);
+    }
     if export {
         if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_corte.csv").save_file() {
             let mut t = String::from("perfil;material;comprimento_mm;angulo1_graus;angulo2_graus;quantidade;barras_materia_prima;dobras;modo_da_dobra;corte_encaixe_mm\n");
@@ -673,6 +685,13 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
             let encaixes = fenkra_solidos::st_encaixe_doc::encaixes_da_estrutura(app.doc(), &Default::default());
             for r in &rows {
                 let encaixe = r.members.first().and_then(|m| encaixes.iter().find(|e| (e.feature, e.linha) == *m)).map(|e| fmt(e.comprimento_de_corte())).unwrap_or_default();
+                // B574: boca de lobo normal à parede: vão, interferência e espessura da borda de cada ponta
+                let normal = r
+                    .members
+                    .first()
+                    .and_then(|m| encaixes.iter().find(|e| (e.feature, e.linha) == *m))
+                    .map(|e| e.pontas().filter(|p| p.fit.cut == fenkra_core::FitCut::Normal).map(|p| format!("vao {} interf {} borda {}", fmt(p.validacao.vao_max), fmt(p.validacao.interferencia_max), fmt(p.validacao.espessura_borda))).collect::<Vec<_>>().join(" / "))
+                    .unwrap_or_default();
                 let dobras = r.tubo.as_ref().map(|t| t.resumo()).unwrap_or_default();
                 let modo = r.tubo.as_ref().and_then(|t| t.modo()).map(|m| fenkra_solidos::st_dobra::nome_modo(m)).unwrap_or_default();
                 t += &format!("{};{};{};{};{};{};{};{};{};{}\n", r.designation, r.material, fmt(r.length), ponta(r.angle1, r.encaixe1), ponta(r.angle2, r.encaixe2), r.count, r.bars * r.count, dobras, modo, encaixe);
@@ -686,6 +705,27 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
     if !open {
         app.st_cut_open = false;
     }
+}
+
+/// B574: grava, numa pasta escolhida, um DXF por tubo com o gabarito planificado da boca de lobo (as
+/// pontas com corte normal à parede; as demais encaixes têm o contorno no cartão do canto).
+fn exportar_gabaritos(app: &mut App) {
+    let membros = fenkra_solidos::st_encaixe_doc::encaixes_da_estrutura(app.doc(), &Default::default());
+    let normais: Vec<_> = membros.iter().filter(|m| m.pontas().any(|p| p.fit.cut == fenkra_core::FitCut::Normal)).collect();
+    if normais.is_empty() {
+        app.toast(tr("Nenhum encaixe com corte normal à parede neste modelo"), true);
+        return;
+    }
+    let Some(pasta) = rfd::FileDialog::new().pick_folder() else { return };
+    let mut n = 0;
+    for m in normais {
+        let nome: String = format!("{}-linha{}", m.designacao, m.linha + 1).chars().map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' }).collect();
+        let d = m.desenho();
+        if std::fs::write(pasta.join(format!("gabarito-{nome}.dxf")), fenkra_solidos::st_dobra_saida::dxf(&d)).is_ok() {
+            n += 1;
+        }
+    }
+    app.toast(format!("{}: {} {}", tr("Gabaritos gravados"), n, tr("arquivos")), false);
 }
 
 /// B176: grava, numa pasta escolhida, o NC1 e o STEP de cada item da lista de corte.
@@ -761,7 +801,7 @@ mod tests {
             joints: vec![],
             material: String::new(),
             mirror: false,
-            tube_bend: None,
+            tube_bend: None, fit: Default::default(),
         }));
         assert!(membro_sem_linhas(&d, id));
         if let Some(FeatureKind::StructMember(m)) = d.feature_mut(id).map(|f| &mut f.kind) {

@@ -39,7 +39,7 @@ fn estrutura() -> (Document, Vec<Id>) {
         joints: vec![],
         material: String::new(),
         mirror: false,
-        tube_bend: None,
+        tube_bend: None, fit: Default::default(),
     };
     let quadro = d.add_feature(FeatureKind::StructMember(base(c, "Tubo quadrado", "40x3", SectionKind::TuboQuadrado, &["40", "3"])));
     let l = linha(&mut d, [1000., 0., 0.], [1000., 0., 800.]);

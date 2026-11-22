@@ -258,7 +258,7 @@ fn cartao(ui: &mut egui::Ui, app: &App, c: &Canto, novo: &mut Option<Box<dyn FnO
             }
         });
         if c.modo == CornerMode::Encaixe {
-            crate::st_encaixe_ui::cartao(ui, app, c);
+            crate::st_encaixe_ui::cartao(ui, app, c, novo);
         }
     }
 }

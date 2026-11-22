@@ -1096,7 +1096,7 @@ fn membro_estrutural_com_spline_longa_segue_a_guia() {
         joints: vec![],
         material: String::new(),
         mirror: false,
-        tube_bend: None,
+        tube_bend: None, fit: Default::default(),
     }));
     let r = recompute(&d);
     ok(&r, id);

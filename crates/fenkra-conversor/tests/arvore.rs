@@ -607,7 +607,7 @@ fn estilo_de_chapa_vai_resolvido_e_ordem_manual_fica_escrita() {
 }
 
 fn membro(paths: Vec<CurveRef>, kind: SectionKind, dims: &[&str], corner: CornerMode) -> StructMember {
-    StructMember { paths, family: "Tubo".into(), designation: "40x3".into(), kind, dims: dims.iter().map(|d| d.to_string()).collect(), anchor: 0, angle: "0".into(), off_x: "0".into(), off_y: "0".into(), ext1: "0".into(), ext2: "10".into(), corner, gap: "0".into(), joints: vec![], material: String::new(), mirror: false, tube_bend: None }
+    StructMember { paths, family: "Tubo".into(), designation: "40x3".into(), kind, dims: dims.iter().map(|d| d.to_string()).collect(), anchor: 0, angle: "0".into(), off_x: "0".into(), off_y: "0".into(), ext1: "0".into(), ext2: "10".into(), corner, gap: "0".into(), joints: vec![], material: String::new(), mirror: false, tube_bend: None, fit: Default::default() }
 }
 
 fn reta(d: &mut Document, a: [f64; 3], b: [f64; 3]) -> CurveRef {
