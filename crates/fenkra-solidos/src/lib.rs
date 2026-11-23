@@ -928,6 +928,11 @@ pub fn origin_axis(a: OriginAxis) -> [f64; 3] {
     }
 }
 
+/// B566: a maior flecha das cordas da polilinha que `Shape::section` devolve (a deflexão de curvatura de
+/// `wires_to_pts` no kernel: 0,05 rad e 0,1 mm). Vale em qualquer escala: é o quanto uma amostra da seção
+/// pode ficar fora da curva exata.
+const FLECHA_SECAO: f64 = 0.1;
+
 /// Malha de exibição de uma forma na qualidade pedida (desvio pela diagonal da caixa envolvente).
 pub fn tesselar(sh: &Shape, q: &QualidadeMalha) -> Result<Mesh, KernelError> {
     let diagonal = sh.bbox().map(|(a, b)| geo3d::dist(a, b)).unwrap_or(100.);
@@ -4632,10 +4637,24 @@ impl Ctx<'_> {
         if !c.exata() || c.0.len() != 1 {
             return None;
         }
-        let mut q = Shape::curva_projeta(&c, pts).ok()?;
-        // a flecha das cordas é pequena perto do passo: amostra longe é outra aresta
+        let q0 = Shape::curva_projeta(&c, pts).ok()?;
+        // a seção do kernel é polilinha com flecha de até FLECHA_SECAO; amostra mais longe que isso (mais um
+        // décimo do passo, folga das amostras subdivididas) é de outra aresta. Antes o limite era 0,05 mm +
+        // 0,1·passo, abaixo da flecha possível na corda de 50 mm (a linha exata não era achada e a aba parava
+        // antes dos cantos, 0,6 % a menos).
         let passo = pts.windows(2).map(|w| geo3d::dist(w[0], w[1])).fold(0., f64::max);
-        if q.len() != pts.len() || pts.iter().zip(&q).any(|(p, q)| geo3d::dist(*p, *q) > 0.05 + 0.1 * passo) {
+        if q0.len() != pts.len() || pts.iter().zip(&q0).any(|(p, q)| geo3d::dist(*p, *q) > 1.5 * FLECHA_SECAO + 0.1 * passo) {
+            return None;
+        }
+        // amostras um pouco além da ponta da aresta (o filtro da web deixa passar até 0,05 mm fora) caem na
+        // ponta (`curva_projeta` prende na ponta): ficam uma vez só, senão a linha volta para trás (zigue-zague)
+        let mut q: Vec<V3> = Vec::with_capacity(q0.len());
+        for p in q0 {
+            if q.last().is_none_or(|l| geo3d::dist(*l, p) > 1e-9 * (1. + passo)) {
+                q.push(p);
+            }
+        }
+        if q.len() < 3 {
             return None;
         }
         if ate_borda {
@@ -4643,27 +4662,24 @@ impl Ctx<'_> {
                 if geo3d::dist(a, z) > 2. * passo {
                     let perto = |p: V3| if geo3d::dist(p, a) <= geo3d::dist(p, z) { a } else { z };
                     let (pa, pz) = (perto(q[0]), perto(q[q.len() - 1]));
-                    let alcance = 1.5 * passo + 0.05;
-                    // a ponta entra como amostra nova, ou toma o lugar da amostra da ponta quando fica a menos de
-                    // meio passo dela: duas amostras quase juntas fazem a spline da faixa planificada oscilar e
-                    // a tangente da ponta (cantos, direção para fora) sair do ruído
-                    if pa != pz && q.len() >= 3 {
-                        let d0 = geo3d::dist(q[0], pa);
-                        if d0 <= alcance {
-                            if d0 < 0.5 * passo {
-                                q[0] = pa;
-                            } else {
-                                q.insert(0, pa);
+                    // a última amostra sobre a web fica a até um passo da ponta: a mais de um passo e meio, a
+                    // aba para antes de propósito (limite de lado dentro da web)
+                    let alcance = 1.5 * passo;
+                    // a ponta entra como amostra; as que ficam a menos de meio passo dela saem: duas amostras
+                    // quase juntas fazem a spline da faixa planificada oscilar e a tangente da ponta (cantos,
+                    // direção para fora) sair do ruído
+                    if pa != pz {
+                        if geo3d::dist(q[0], pa) <= alcance {
+                            while q.len() > 3 && geo3d::dist(q[0], pa) < 0.5 * passo {
+                                q.remove(0);
                             }
+                            q.insert(0, pa);
                         }
-                        let n = q.len() - 1;
-                        let d1 = geo3d::dist(q[n], pz);
-                        if d1 <= alcance {
-                            if d1 < 0.5 * passo {
-                                q[n] = pz;
-                            } else {
-                                q.push(pz);
+                        if geo3d::dist(q[q.len() - 1], pz) <= alcance {
+                            while q.len() > 3 && geo3d::dist(q[q.len() - 1], pz) < 0.5 * passo {
+                                q.pop();
                             }
+                            q.push(pz);
                         }
                     }
                 }
@@ -4677,13 +4693,14 @@ impl Ctx<'_> {
 
     /// B566: a curva exata deslocada no plano da chapa (normal `n`) para dentro (`-outs`) de `off`, e a
     /// borda de fora (`outs`, 0,5 mm além da linha de dobra), para o recuo da aba (posição do material
-    /// por fora ou por dentro). Só curva aberta de um trecho: numa cadeia de vários trechos os
-    /// deslocamentos de cada um não se encontram nas emendas quando a cadeia não é tangente de verdade, e
-    /// fica a polilinha. `s` é o sinal de `outs` em relação a tangente × `n`. As pontas deslocadas são
-    /// conferidas contra o deslocamento das amostras (`None` se divergem).
+    /// por fora ou por dentro). Curva aberta de um trecho ou cadeia de vários: onde dois trechos não são
+    /// exatamente tangentes, o kernel fecha a fresta do lado de fora com um arco e apara o cruzamento do
+    /// lado de dentro (`Shape::curva_deslocada`); antes a cadeia ficava na polilinha. `s` é o sinal de
+    /// `outs` em relação a tangente × `n`. As pontas deslocadas são conferidas contra o deslocamento das
+    /// amostras (`None` se divergem).
     #[allow(clippy::too_many_arguments)]
     fn recuo_exato(exata: &geo3d::Curva3, n: V3, s: f64, off: f64, p0: V3, o0: V3, p1: V3, o1: V3) -> Option<(geo3d::Curva3, geo3d::Curva3)> {
-        if exata.0.len() != 1 || !exata.exata() || exata.inicio().zip(exata.fim()).is_none_or(|(a, z)| geo3d::dist(a, z) < 1e-3) {
+        if !exata.exata() || exata.inicio().zip(exata.fim()).is_none_or(|(a, z)| geo3d::dist(a, z) < 1e-3) {
             return None;
         }
         let back = Shape::curva_deslocada(exata, n, -s * off).ok()?;
@@ -4806,14 +4823,30 @@ impl Ctx<'_> {
             // o recorte também para nos limites dos lados (a aba é cortada neles), senão o recuo passa do
             // limite pela margem da varredura e deixa um entalhe sem aba
             let strip = if sp.flat { strip } else { self.aba_corta_lados(strip, lim)? };
-            self.apply(f.target, strip, BoolOp::Cut, f.id)?;
+            // B566: o recorte tem de tirar a faixa inteira (recuo × linha de dobra × espessura): se tira menos, a
+            // chapa é mais estreita que o recuo em algum ponto (na corda de 10 mm com o recuo de 14,5 mm a web
+            // sumia e sobrava só a aba, com status Ok). A ferramenta é a faixa do recuo mais 0,5 mm para fora da
+            // linha, extrudada 2·(2t + 1) de altura.
+            let antes_corte = self.body(f.target).map(|x| x.mass().volume).unwrap_or(0.);
+            let faixa = strip.mass().volume / (2. * (sp.t * 2. + 1.)) * off / (off + 0.5) * sp.t;
+            let corta = |s: &Shape| s.is_valid() && s.is_solid() && antes_corte - s.mass().volume > 0.8 * faixa;
+            if let Some(s) = self.apply_aceita(f.target, strip, BoolOp::Cut, f.id, None, Some(&corta))? {
+                return Err(format!(
+                    "o recuo da linha de dobra ({off:.3} mm, da posição do material) não cabe na chapa: o recorte tirou {:.4} mm³ de {faixa:.4} mm³ (a chapa é mais estreita que o recuo em algum ponto); use a dobra por fora (posição na linha) ou uma chapa maior",
+                    antes_corte - s.mass().volume
+                ));
+            }
             match &recuo {
                 Some((cb, _)) => {
                     // as amostras vão para cima da curva recuada, e a varredura segue a aresta que o recorte
-                    // deixou na chapa (a mesma curva, como o kernel a gravou)
+                    // deixou na chapa (a mesma curva, como o kernel a gravou): uma aresta, ou a cadeia das
+                    // arestas da chapa por cima das amostras quando a curva tem vários trechos
                     let bq = Shape::curva_projeta(cb, &back).unwrap_or(back);
                     let web = self.body(f.target).cloned();
-                    caminho_recuo = web.as_ref().and_then(|w| Self::oml_exata(w, &bq, false)).map(|(_, c)| c).or_else(|| Some(cb.clone()));
+                    caminho_recuo = if cb.0.len() == 1 { web.as_ref().and_then(|w| Self::oml_exata(w, &bq, false)).map(|(_, c)| c) } else { self.cadeia_exata(f.target, &bq) };
+                    if caminho_recuo.is_none() {
+                        caminho_recuo = Some(cb.clone());
+                    }
                     bq
                 }
                 None => back,
@@ -4851,7 +4884,23 @@ impl Ctx<'_> {
                 let n_ = inner.len() - 1;
                 tool = self.aba_cantos_planos(tool, lim, [(inner[0], outs[0]), (inner[n_], outs[n_])], dev, d, sp.t)?;
             }
-            self.apply(f.target, tool, BoolOp::Add, f.id)?;
+            // B566: a faixa que se cruza (linha de dobra curva demais para o comprimento) sai inválida sem erro
+            // na construção, e a fusão com ela devolvia um corpo válido com parte da chapa: confere a faixa e a
+            // fusão e, se falham, é erro (nunca corpo errado com status Ok). Numa cadeia fechada (laço) a faixa é
+            // um anel com a costura no começo da cadeia, que a conferência de forma acusa sem ser defeito: ali vale
+            // só a conferência da fusão.
+            let tv = tool.mass().volume;
+            let fechada = geo3d::dist(inner[0], inner[inner.len() - 1]) < 1e-6 * (1. + dev);
+            if (!fechada && !tool.is_valid()) || tv <= 1e-12 {
+                return Err(format!("a faixa planificada da aba ({dev:.3} mm de largura) se cruza ou sai vazia: a linha de dobra curva demais para o comprimento"));
+            }
+            let base_vol = self.body(f.target).map(|x| x.mass().volume).unwrap_or(0.);
+            // a faixa entra 0,05 mm na chapa: só o resto dela é volume novo
+            let novo = tv * dev / (dev + 0.05);
+            let aceita = |s: &Shape| s.is_valid() && s.mass().volume > base_vol + 0.5 * novo;
+            if let Some(s) = self.apply_aceita(f.target, tool, BoolOp::Add, f.id, None, Some(&aceita))? {
+                return Err(format!("a união da faixa planificada da aba com a chapa saiu inválida ou incompleta (volume {:.4}, chapa {base_vol:.4}, faixa {tv:.4})", s.mass().volume));
+            }
             self.marca_cadeia(f.id, &inner, &outs, ang, r, sobe, &cmp, true);
             return Ok(None);
         }
@@ -6715,10 +6764,15 @@ impl Ctx<'_> {
                 let web = self.body(f.target).cloned().unwrap_or(b);
                 // B564: na prévia simplificada a OML já é a borda da web relimitada (e foi cortada à caixa
                 // da web): não há o que conferir ponto a ponto com o kernel
+                // B566: a folga cobre a flecha da seção (FLECHA_SECAO): numa OML côncava para a aba as cordas
+                // ficam fora da web, e com 0,05 mm as amostras do meio delas saíam, ficavam só as dos vértices,
+                // espaçadas de forma irregular, e a faixa planificada da nervura de 100 mm saía inválida (status Ok).
+                // Em peça pequena a folga não passa do passo das amostras (fora da ponta, só até um passo).
+                let folga = (1.5 * FLECHA_SECAO).min(0.05f64.max(step));
                 let pts: Vec<V3> = best
                     .iter()
                     .map(|q| geo3d::sub(*q, geo3d::mul(n, geo3d::dot(geo3d::sub(*q, on), n))))
-                    .filter(|q| leve || web.surface_near(*q).map(|(p, _)| geo3d::dist(p, *q) < 0.05).unwrap_or(false))
+                    .filter(|q| leve || web.surface_near(*q).map(|(p, _)| geo3d::dist(p, *q) < folga).unwrap_or(false))
                     .collect();
                 if pts.len() < 2 {
                     return Err(if lm.lado1.is_some() || lm.lado2.is_some() { "os limites dos lados não deixam trecho da aba sobre a web".into() } else { "o suporte não encontra a borda da web".to_string() });
@@ -6801,9 +6855,14 @@ impl Ctx<'_> {
                 // borda da web quando as amostras chegam perto dela
                 let oml_exata = Self::oml_exata(&web, &pts, true);
                 let feito = match oml_exata {
-                    Some((pts, c)) => self.curve_flange_lim_x(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim, Some(c), true)?,
-                    None => self.curve_flange_exata(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim)?,
+                    Some((pts, c)) => self.curve_flange_lim_x(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim, Some(c), true),
+                    None => self.curve_flange_exata(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim),
                 };
+                // B566: quando a aba não fecha, o motivo geométrico (a dobra não cabe, a faixa se cruza) vai junto
+                let feito = feito.map_err(|e| match &aviso {
+                    Some(a) => format!("{e}; {a}"),
+                    None => e,
+                })?;
                 Ok(match (feito, aviso) {
                     (Some(a), Some(b)) => Some(format!("{a}; {b}")),
                     (a, b) => a.or(b),

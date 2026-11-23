@@ -82,6 +82,21 @@ Registre aqui erros que se repetiram.
   oscila e se cruza: a face sai inválida sem erro na construção, e a tangente medida entre os dois vira ruído. Ao
   acrescentar um ponto exato (a ponta de uma aresta) a amostras, troque a amostra vizinha quando ele cai a menos de
   meio passo dela, em vez de inserir (B566).
+- Tolerância absoluta pedida a uma aproximação (`GeomConvert_ApproxCurve` a 1e-7 mm) quebra em peça grande: numa
+  curva de 2 m é 5e-11 do tamanho e a aproximação desiste, sem erro visível para quem chama (a função devolvia
+  `None` e o comando voltava à polilinha, 7,6 % de volume a menos). Peça a tolerância relativa ao comprimento e a
+  continuidade que a curva tem de verdade: o deslocamento de uma B-spline cúbica C2 é só C1 (B566).
+- Constante em mm num critério (0,05 mm de folga, 0,5° por vértice, 0,2 % do raio) quase sempre é escala escondida:
+  ou fica pequena demais em peça grande, ou vira um passo inteiro em peça de 10 mm. Ao criar um critério, diga de
+  onde vem o número (a flecha da seção é 0,1 mm, `FLECHA_SECAO`; o desvio da malha é relativo à diagonal) e teste
+  o caso escalado de 10 a 10 000 mm, como `chapa_b566_escala.rs` (B566).
+- `GeomAPI_ProjectPointOnCurve` sem projeção ortogonal (ponto além da ponta do trecho) dá `NbPoints() == 0`: quem
+  mantém o ponto como estava fica com um ponto fora da curva que parece projetado. `Shape::curva_projeta` leva o
+  ponto para a ponta mais perto (B566).
+- `volume_preciso` (integração adaptativa) não converge em sólido de faces planas aparadas por spline longa: informa
+  erro de 1e-16 e o volume muda 3e-5 quando o eps muda. Ali a integração padrão (`mass`) é a certa; em faces varridas
+  longas é o contrário (a padrão erra ~6e-6 do total). Antes de concluir que a geometria está errada, compare as
+  duas com uma conta feita à parte (B566).
 - `posicionado` (montagem) copia a forma sem a malha: quem tessela a peça posicionada refaz a malha inteira a cada
   vez. Use a malha da vista quando ela basta, ou tessele em threads (B394).
 
