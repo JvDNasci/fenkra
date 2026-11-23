@@ -1155,7 +1155,9 @@ mod imp {
             Ok(if d(r.inicio(), b) + d(r.fim(), a) < d(r.inicio(), a) + d(r.fim(), b) { r.invertida() } else { r })
         }
         /// B566: a curva plana deslocada de `d` no plano de normal `n`, para o lado de tangente × `n`
-        /// (`d` > 0) ou o oposto. Cada trecho vira uma B-spline (o deslocamento exato aproximado a 1e-7).
+        /// (`d` > 0) ou o oposto. Cada trecho vira uma B-spline (o deslocamento exato aproximado a 1e-9 do
+        /// comprimento, no mínimo 1e-7 mm; reta continua reta). Numa cadeia, a fresta entre dois trechos não
+        /// tangentes vira arco de raio |d| e o cruzamento é aparado: a curva deslocada sai contínua.
         pub fn curva_deslocada(c: &Curva3, n: [f64; 3], d: f64) -> KResult<Curva3> {
             let v = b::curva_deslocada(&c.codifica(), n[0], n[1], n[2], d).map_err(err)?;
             Curva3::decodifica(&v).ok_or_else(|| KernelError("curva deslocada ilegível".into()))
@@ -1164,7 +1166,8 @@ mod imp {
         pub fn face_curva(c: &Curva3) -> KResult<Shape> {
             b::face_curva(&c.codifica()).map(Shape).map_err(err)
         }
-        /// B566: cada ponto levado ao ponto mais perto da curva de um trecho só.
+        /// B566: cada ponto levado ao ponto mais perto da curva (o trecho mais perto). Ponto além de uma
+        /// ponta vai para a ponta.
         pub fn curva_projeta(c: &Curva3, pts: &[[f64; 3]]) -> KResult<Vec<[f64; 3]>> {
             let flat: Vec<f64> = pts.iter().flatten().copied().collect();
             let v = b::curva_projeta(&c.codifica(), &flat).map_err(err)?;
@@ -2449,6 +2452,53 @@ mod tests {
         let vol = face.extrude([0., 0., 1.], 1., 0.).unwrap().mass().volume;
         let anel = std::f64::consts::PI * (105f64.powi(2) - 95f64.powi(2)) / 4.;
         assert!((vol - anel).abs() < 1e-3 * anel, "{vol} contra {anel}");
+    }
+
+    /// B566: o deslocamento de uma spline de 10 m (61 pontos) sai, e fica a |d| da curva em todos os
+    /// pontos; antes a aproximação pedia 1e-7 mm em C2 e desistia a partir de ~2 m.
+    #[test]
+    fn curva_deslocada_em_peca_grande_e_em_cadeia() {
+        let dist = |a: [f64; 3], b: [f64; 3]| ((a[0] - b[0]).powi(2) + (a[1] - b[1]).powi(2) + (a[2] - b[2]).powi(2)).sqrt();
+        for escala in [1., 100., 1000.] {
+            let pts: Vec<[f64; 3]> = (0..=60).map(|i| {
+                let x = i as f64 / 60.;
+                [10. * escala * x, escala * (3. * (2. * x).sin() + 0.5 * (7. * x).cos()), 0.]
+            }).collect();
+            let c = Curva3(vec![Trecho3::Interpolada { pts: pts.clone(), fechada: false }]);
+            let d = 0.2 * escala;
+            for s in [1., -1.] {
+                let o = Shape::curva_deslocada(&c, [0., 0., 1.], s * d).unwrap_or_else(|e| panic!("escala {escala}: {}", e.0));
+                let amostra: Vec<[f64; 3]> = pts.iter().map(|p| [p[0], p[1] + s * 0.1 * d, 0.]).collect();
+                let em_o = Shape::curva_projeta(&o, &amostra).unwrap();
+                let volta = Shape::curva_projeta(&c, &em_o).unwrap();
+                for (p, q) in em_o.iter().zip(&volta).skip(1).take(58) {
+                    assert!((dist(*p, *q) - d).abs() < 1e-6 * escala.max(1.), "escala {escala}: {} contra {d}", dist(*p, *q));
+                }
+            }
+        }
+        // cadeia com canto de 1°: a fresta de fora vira arco, o cruzamento de dentro é aparado; nos dois a
+        // curva deslocada é contínua e fica a |d| da cadeia
+        let k = 1f64.to_radians();
+        let cadeia = Curva3(vec![Trecho3::Reta([0., 0., 0.], [100., 0., 0.]), Trecho3::Reta([100., 0., 0.], [100. + 100. * k.cos(), 100. * k.sin(), 0.])]);
+        let poli = |q: [f64; 3]| -> f64 {
+            let seg = |a: [f64; 3], b: [f64; 3]| {
+                let (ab, aq) = ([b[0] - a[0], b[1] - a[1]], [q[0] - a[0], q[1] - a[1]]);
+                let t = ((ab[0] * aq[0] + ab[1] * aq[1]) / (ab[0] * ab[0] + ab[1] * ab[1])).clamp(0., 1.);
+                dist(q, [a[0] + t * ab[0], a[1] + t * ab[1], 0.])
+            };
+            seg([0., 0., 0.], [100., 0., 0.]).min(seg([100., 0., 0.], [100. + 100. * k.cos(), 100. * k.sin(), 0.]))
+        };
+        for (d, trechos) in [(5., 3), (-5., 2)] {
+            let o = Shape::curva_deslocada(&cadeia, [0., 0., 1.], d).unwrap();
+            assert_eq!(o.0.len(), trechos, "d = {d}: {o:?}");
+            for w in o.0.windows(2) {
+                assert!(dist(w[0].fim(), w[1].inicio()) < 1e-6, "d = {d}: emenda aberta {:?} {:?}", w[0].fim(), w[1].inicio());
+            }
+            let amostra: Vec<[f64; 3]> = (0..=40).map(|i| [5. * i as f64, if d > 0. { -3. } else { 3. }, 0.]).collect();
+            for q in Shape::curva_projeta(&o, &amostra).unwrap() {
+                assert!((poli(q) - d.abs()).abs() < 1e-6, "d = {d}: ponto {q:?} a {} da cadeia", poli(q));
+            }
+        }
     }
 
     #[cfg(windows)]

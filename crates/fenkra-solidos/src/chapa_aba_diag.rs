@@ -99,11 +99,14 @@ pub fn diagnosticar(pts: &[V3], n: V3, fora: V3, r: f64, t: f64, desenvolvimento
     // janela de três pontos: longa o bastante para não medir o ruído da amostragem (a polilinha vem de
     // uma interseção subdividida), curta o bastante para pegar o raio de uma curva fechada
     let passo = total / (pts.len() - 1) as f64;
-    let h = (passo * 3.).max(0.75).min(total / 4.);
+    // B566: o piso de 0,75 mm vale até 1/20 da linha (numa peça de 10 mm a janela era 7 % dela)
+    let h = (passo * 3.).max(0.75f64.min(total / 20.)).min(total / 4.);
     let mut menor: Option<(f64, V3)> = None;
     for i in 1..pts.len() - 1 {
-        let Some(j) = (0..i).rev().find(|j| s[i] - s[*j] >= h) else { continue };
-        let Some(k) = (i + 1..pts.len()).find(|k| s[*k] - s[i] >= h) else { continue };
+        // B566: perto das pontas a janela fica de um lado só (até a ponta), com pelo menos um terço dela:
+        // antes as pontas ficavam de fora, e a curva mais fechada da asa (perto do canto) não era vista
+        let Some(j) = (0..i).rev().find(|j| s[i] - s[*j] >= h).or((s[i] >= h / 3.).then_some(0)) else { continue };
+        let Some(k) = (i + 1..pts.len()).find(|k| s[*k] - s[i] >= h).or((total - s[i] >= h / 3.).then_some(pts.len() - 1)) else { continue };
         let Some((rc, para_centro)) = circulo(pts[j], pts[i], pts[k]) else { continue };
         // o centro no lado da aba (e no plano da OML): curva côncava para a aba
         let no_plano = geo3d::sub(para_centro, geo3d::mul(n, geo3d::dot(n, para_centro)));

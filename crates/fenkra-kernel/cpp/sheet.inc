@@ -178,25 +178,42 @@ std::unique_ptr<Shape> sm_chain_sweep(const Shape& face, rust::Slice<const doubl
         std::vector<char> curved(n, 0);
         for (int i = 1; i + 1 < n; ++i) curved[i] = gp_Vec(p[i - 1], p[i]).Angle(gp_Vec(p[i], p[i + 1])) > 0.0087;
         BRepBuilderAPI_MakeWire w;
-        auto add_line = [&](const gp_Pnt& a, const gp_Pnt& b) {
-            if (a.Distance(b) > 1e-6) w.Add(BRepBuilderAPI_MakeEdge(a, b).Edge());
+        auto interpola = [&](int a, int b) {
+            Handle(TColgp_HArray1OfPnt) arr = new TColgp_HArray1OfPnt(1, b - a + 1);
+            for (int j = a; j <= b; ++j) arr->SetValue(j - a + 1, p[j]);
+            GeomAPI_Interpolate ip(arr, Standard_False, 1e-6);
+            ip.Perform();
+            if (!ip.IsDone()) throw std::runtime_error("não foi possível ajustar a curva da aresta");
+            w.Add(BRepBuilderAPI_MakeEdge(ip.Curve()).Edge());
+        };
+        // B566: um trecho de vértices "retos" (desvio de direção < 0,5° em cada um) só vira uma reta se
+        // todos os pontos dele ficam a 1 µm dela. O desvio por vértice depende do passo da amostragem:
+        // uma curva suave de raio grande amostrada fino passa em todos, e a reta da primeira à última
+        // amostra ficava milímetros fora da curva. Senão é curva lisa pelos pontos.
+        auto add_line = [&](int a, int b) {
+            if (p[a].Distance(p[b]) <= 1e-6) return;
+            const gp_Lin lin(p[a], gp_Dir(gp_Vec(p[a], p[b])));
+            double pior = 0;
+            for (int j = a + 1; j < b; ++j) pior = std::max(pior, lin.Distance(p[j]));
+            if (pior < 1e-3) w.Add(BRepBuilderAPI_MakeEdge(p[a], p[b]).Edge());
+            else interpola(a, b);
         };
         int i = 0;  // ponto onde o próximo trecho começa
         while (i + 1 < n) {
             int c0 = i + 1;
             while (c0 < n - 1 && !curved[c0]) ++c0;
             if (c0 >= n - 1) {  // só retas até o fim
-                add_line(p[i], p[n - 1]);
+                add_line(i, n - 1);
                 break;
             }
             int c1 = c0;
             while (c1 + 1 < n - 1 && curved[c1 + 1]) ++c1;
             if (c1 == c0) {  // quina isolada: duas retas se encontram
-                add_line(p[i], p[c0]);
+                add_line(i, c0);
                 i = c0;
                 continue;
             }
-            add_line(p[i], p[c0]);
+            add_line(i, c0);
             // curva de p[c0] a p[c1]
             bool ok = false;
             const int m = (c0 + c1) / 2;
@@ -207,18 +224,13 @@ std::unique_ptr<Shape> sm_chain_sweep(const Shape& face, rust::Slice<const doubl
                 if (!circ.IsNull()) {
                     double rad = circ->Radius(), worst = 0;
                     for (int j = c0; j <= c1; ++j) worst = std::max(worst, std::abs(circ->Circ().Distance(p[j])));
-                    ok = worst < std::max(1e-3, rad * 2e-3);
+                    // B566: erro absoluto (1 µm), nunca relativo ao raio: 0,2 % do raio aceitava
+                    // pontos a mais de 1 mm do arco em raio grande
+                    ok = worst < 1e-3;
                 }
                 if (ok) w.Add(BRepBuilderAPI_MakeEdge(tc).Edge());
             }
-            if (!ok) {
-                Handle(TColgp_HArray1OfPnt) arr = new TColgp_HArray1OfPnt(1, c1 - c0 + 1);
-                for (int j = c0; j <= c1; ++j) arr->SetValue(j - c0 + 1, p[j]);
-                GeomAPI_Interpolate ip(arr, Standard_False, 1e-6);
-                ip.Perform();
-                if (!ip.IsDone()) throw std::runtime_error("não foi possível ajustar a curva da aresta");
-                w.Add(BRepBuilderAPI_MakeEdge(ip.Curve()).Edge());
-            }
+            if (!ok) interpola(c0, c1);
             i = c1;
         }
         if (!w.IsDone()) throw std::runtime_error("cadeia de arestas inválida");
@@ -312,42 +324,105 @@ rust::Vec<double> curva_aparada(rust::Slice<const double> v, double ax, double a
     });
 }
 
-// B566: cada ponto (x, y, z em sequência) levado ao ponto mais perto da curva de um trecho só.
+// B566: cada ponto (x, y, z em sequência) levado ao ponto mais perto da curva (de todos os trechos). Ponto
+// além de uma ponta (sem projeção ortogonal no trecho) vai para a ponta mais perto: antes ficava onde
+// estava, fora da curva, e uma amostra da OML um pouco além do canto da web virava zigue-zague na linha de
+// dobra (a planificada da corda 10 saía com 1/4 do volume, válida e sem erro).
 rust::Vec<double> curva_projeta(rust::Slice<const double> v, rust::Slice<const double> pts) {
     return guard("projetar na curva", [&] {
-        TopoDS_Wire w = wire_curva(v);
-        TopExp_Explorer x(w, TopAbs_EDGE);
-        if (!x.More()) throw std::runtime_error("curva vazia");
-        double f, l;
-        Handle(Geom_Curve) g = BRep_Tool::Curve(TopoDS::Edge(x.Current()), f, l);
-        if (g.IsNull()) throw std::runtime_error("trecho sem curva 3D");
-        GeomAPI_ProjectPointOnCurve pr;
-        pr.Init(g, f, l);
+        std::vector<TopoDS_Edge> es = arestas_da_curva(v);
+        if (es.empty()) throw std::runtime_error("curva vazia");
+        struct Trecho {
+            Handle(Geom_Curve) g;
+            double f, l;
+        };
+        std::vector<Trecho> ts;
+        for (const TopoDS_Edge& e : es) {
+            double f, l;
+            TopLoc_Location loc;
+            Handle(Geom_Curve) g0 = BRep_Tool::Curve(e, loc, f, l);
+            if (g0.IsNull()) throw std::runtime_error("trecho sem curva 3D");
+            ts.push_back(Trecho{Handle(Geom_Curve)::DownCast(g0->Transformed(loc.Transformation())), f, l});
+        }
+        std::vector<GeomAPI_ProjectPointOnCurve> prs(ts.size());
+        for (size_t k = 0; k < ts.size(); ++k) prs[k].Init(ts[k].g, ts[k].f, ts[k].l);
         rust::Vec<double> out;
         for (size_t i = 0; i + 2 < pts.size(); i += 3) {
-            gp_Pnt p(pts[i], pts[i + 1], pts[i + 2]);
-            pr.Perform(p);
-            if (pr.NbPoints() > 0) p = pr.NearestPoint();
-            out.push_back(p.X());
-            out.push_back(p.Y());
-            out.push_back(p.Z());
+            const gp_Pnt p(pts[i], pts[i + 1], pts[i + 2]);
+            gp_Pnt best = p;
+            double dmin = std::numeric_limits<double>::max();
+            for (size_t k = 0; k < ts.size(); ++k) {
+                prs[k].Perform(p);
+                if (prs[k].NbPoints() > 0 && prs[k].LowerDistance() < dmin) dmin = prs[k].LowerDistance(), best = prs[k].NearestPoint();
+                for (double u : {ts[k].f, ts[k].l}) {
+                    const gp_Pnt q = ts[k].g->Value(u);
+                    if (q.Distance(p) < dmin) dmin = q.Distance(p), best = q;
+                }
+            }
+            out.push_back(best.X());
+            out.push_back(best.Y());
+            out.push_back(best.Z());
         }
         return out;
     });
 }
 
+namespace {
+// B566: o deslocamento exato de um trecho (Geom_OffsetCurve) aproximado por B-spline. A tolerância é
+// relativa ao comprimento (1e-9 dele, nunca menos que 1e-7 mm): pedir 1e-7 mm numa curva de 2 m já é pedir
+// 5e-11 do tamanho, a aproximação desistia, a curva recuada sumia em peça grande e a aba voltava à
+// polilinha (7,6 % de volume a menos na aba da corda de 10 m). A continuidade pedida é a que o deslocamento
+// tem: o de uma B-spline cúbica C2 é só C1 (a normal depende da derivada), e pedir C2 obrigava a
+// aproximação a alisar cada nó, com erro que cresce com a peça. Reta deslocada é a reta transladada.
+Handle(Geom_Curve) aproxima_deslocamento(const Handle(Geom_OffsetCurve)& oc, const Handle(Geom_TrimmedCurve)& base) {
+    GeomAdaptor_Curve ab(base);
+    if (ab.GetType() == GeomAbs_Line) {
+        const double u = base->FirstParameter();
+        return Handle(Geom_Curve)::DownCast(base->Translated(base->Value(u), oc->Value(u)));
+    }
+    const double comp = GCPnts_AbscissaPoint::Length(ab);
+    const double tol = std::max(1e-7, 1e-9 * comp), aceita = std::max(1e-5, 1e-8 * comp);
+    int nos = 1;
+    if (Handle(Geom_BSplineCurve) bs = Handle(Geom_BSplineCurve)::DownCast(base->BasisCurve())) nos = bs->NbKnots();
+    const int segmentos = std::max(200, 8 * nos);
+    std::vector<GeomAbs_Shape> conts;
+    const GeomAbs_Shape c0 = base->BasisCurve()->Continuity();
+    if (c0 >= GeomAbs_C3) conts.push_back(GeomAbs_C2);
+    if (c0 >= GeomAbs_C2) conts.push_back(GeomAbs_C1);
+    conts.push_back(GeomAbs_C0);
+    double pior = -1;
+    for (GeomAbs_Shape c : conts) {
+        GeomConvert_ApproxCurve ap(oc, tol, c, segmentos, 9);
+        if (!ap.HasResult()) continue;
+        if (ap.MaxError() <= aceita) return ap.Curve();
+        pior = ap.MaxError();
+    }
+    std::ostringstream m;
+    m << "o deslocamento da curva saiu impreciso (erro " << pior << " mm em " << comp << " mm de curva)";
+    throw std::runtime_error(m.str());
+}
+}  // namespace
+
 // B566: cada trecho da curva (plana, no plano de normal n) deslocado de d no plano, para o lado de
 // tangente × n (d > 0) ou o oposto (d < 0). O deslocamento de uma curva é a Geom_OffsetCurve; ela vira
-// B-spline por aproximação com 1e-7 (a codificação da ponte só leva retas, cônicas e B-splines). As pontas
-// do trecho deslocado são as pontas deslocadas na normal: a aproximação as mantém.
+// B-spline por aproximação (aproxima_deslocamento; a codificação da ponte só leva retas, cônicas e
+// B-splines). As pontas do trecho deslocado são as pontas deslocadas na normal: a aproximação as mantém.
+//
+// Cadeia de vários trechos: onde dois trechos não são exatamente tangentes, os deslocamentos não se
+// encontram. Do lado de fora do canto sobra uma fresta, fechada por um arco de raio |d| com centro no canto
+// (é o que o deslocamento de verdade faz: os pontos a |d| do canto) e tangente aos dois; do lado de dentro os
+// dois se cruzam e cada um é aparado no cruzamento. A cadeia deslocada sai contínua, sem voltar à polilinha.
 rust::Vec<double> curva_deslocada(rust::Slice<const double> v, double nx, double ny, double nz, double d) {
     return guard("deslocar curva no plano", [&] {
         std::vector<TopoDS_Edge> es = arestas_da_curva(v);
         if (es.empty()) throw std::runtime_error("curva vazia");
         const gp_Dir n(nx, ny, nz);
-        rust::Vec<double> out;
-        out.push_back(std::numeric_limits<double>::quiet_NaN());
-        out.push_back(static_cast<double>(es.size()));
+        struct Desl {
+            Handle(Geom_Curve) c;
+            double f, l;
+            gp_Vec tan_fim;
+        };
+        std::vector<Desl> ds;
         for (const TopoDS_Edge& e : es) {
             double f, l;
             TopLoc_Location loc;
@@ -368,10 +443,50 @@ rust::Vec<double> curva_deslocada(rust::Slice<const double> v, double nx, double
                 gp_Pnt quer = p0.Translated(lado.Normalized() * d);
                 if (oc->Value(tc->FirstParameter()).Distance(quer) > 0.5 * std::abs(d)) oc = new Geom_OffsetCurve(tc, -d, n);
             }
-            GeomConvert_ApproxCurve ap(oc, 1e-7, GeomAbs_C2, 200, 9);
-            if (!ap.HasResult()) throw std::runtime_error("o deslocamento da curva não pôde ser aproximado");
-            if (ap.MaxError() > 1e-5) throw std::runtime_error("o deslocamento da curva saiu impreciso");
-            TopoDS_Edge t = BRepBuilderAPI_MakeEdge(ap.Curve()).Edge();
+            Handle(Geom_Curve) ap = aproxima_deslocamento(oc, tc);
+            gp_Pnt p1;
+            gp_Vec t1;
+            tc->D1(tc->LastParameter(), p1, t1);
+            ds.push_back(Desl{ap, ap->FirstParameter(), ap->LastParameter(), t1.Normalized()});
+        }
+        // emendas: fresta vira arco; cruzamento apara os dois
+        std::vector<std::pair<Handle(Geom_Curve), std::pair<double, double>>> pecas;
+        const double junta = std::max(1e-7, 1e-9 * std::abs(d));
+        for (size_t i = 0; i < ds.size(); ++i) {
+            if (i + 1 < ds.size()) {
+                Desl &a = ds[i], &b = ds[i + 1];
+                const gp_Pnt e = a.c->Value(a.l), s0 = b.c->Value(b.f);
+                if (e.Distance(s0) > junta) {
+                    if (gp_Vec(e, s0).Dot(a.tan_fim) > 0) {
+                        // fresta do lado de fora do canto: arco tangente ao fim de a, até o começo de b
+                        GC_MakeArcOfCircle arc(e, a.tan_fim, s0);
+                        if (!arc.IsDone()) throw std::runtime_error("não foi possível fechar a emenda da curva deslocada");
+                        Handle(Geom_TrimmedCurve) ac = arc.Value();
+                        pecas.push_back({a.c, {a.f, a.l}});
+                        pecas.push_back({ac, {ac->FirstParameter(), ac->LastParameter()}});
+                        continue;
+                    }
+                    // cruzamento do lado de dentro: os dois trechos são aparados onde se encontram
+                    GeomAPI_ExtremaCurveCurve ex(a.c, b.c, a.f, a.l, b.f, b.l);
+                    double ua = -1, ub = -1, melhor = std::numeric_limits<double>::max();
+                    for (int k = 1; k <= ex.NbExtrema(); ++k) {
+                        double u1, u2;
+                        ex.Parameters(k, u1, u2);
+                        if (ex.Distance(k) < melhor) melhor = ex.Distance(k), ua = u1, ub = u2;
+                    }
+                    if (melhor > std::max(1e-6, 1e-8 * std::abs(d)) || ua <= a.f || ub >= b.l)
+                        throw std::runtime_error("os trechos deslocados da cadeia não se encontram: o deslocamento é maior que a curva perto do canto");
+                    a.l = ua;
+                    b.f = ub;
+                }
+            }
+            pecas.push_back({ds[i].c, {ds[i].f, ds[i].l}});
+        }
+        rust::Vec<double> out;
+        out.push_back(std::numeric_limits<double>::quiet_NaN());
+        out.push_back(static_cast<double>(pecas.size()));
+        for (auto& pc : pecas) {
+            TopoDS_Edge t = BRepBuilderAPI_MakeEdge(pc.first, pc.second.first, pc.second.second).Edge();
             rust::Vec<double> um;
             codifica_aresta(t, um);
             // pula o cabeçalho [NaN, 1] de cada trecho

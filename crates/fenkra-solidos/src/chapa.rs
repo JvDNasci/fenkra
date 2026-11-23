@@ -161,9 +161,15 @@ fn circulo(a: [f64; 2], b: [f64; 2], c: [f64; 2]) -> Option<([f64; 2], f64)> {
     Some(([ux, uy], (a[0] - ux).hypot(a[1] - uy)))
 }
 
+/// B566: quanto um ponto pode ficar fora da reta ou do arco que `chain_segs` põe no lugar dele (1 µm, em
+/// qualquer escala). Antes o arco valia com os pontos a até 0,2 % do raio (mais de 1 mm em raio grande) e a
+/// reta só olhava o desvio de direção em cada vértice, que depende do passo da amostragem.
+pub const TOL_CADEIA: f64 = 1e-3;
+
 /// Cadeia plana (retas e curvas tangentes) em segmentos exatos: vértices com desvio menor que ~0,5°
-/// são reta; um trecho de vértices com desvio maior vira arco (se os pontos caem num círculo) ou
-/// spline. Uma spline única por todos os pontos oscila na emenda reta-curva.
+/// são reta, se todos os pontos do trecho ficam a `TOL_CADEIA` dela; um trecho de vértices com desvio
+/// maior vira arco (se os pontos caem num círculo, a `TOL_CADEIA`) ou spline. Uma spline única por
+/// todos os pontos oscila na emenda reta-curva.
 pub fn chain_segs(v: &[[f64; 2]]) -> Vec<Seg2> {
     let mut p: Vec<[f64; 2]> = vec![];
     for q in v {
@@ -176,6 +182,13 @@ pub fn chain_segs(v: &[[f64; 2]]) -> Vec<Seg2> {
         return vec![];
     }
     let curved: Vec<bool> = (0..n).map(|i| i > 0 && i + 1 < n && ang(p[i - 1], p[i], p[i + 1]) > RETA).collect();
+    // trecho de vértices retos: reta se todos os pontos ficam nela; senão é curva lisa (spline) por eles
+    let reta = |a: usize, b: usize| -> Seg2 {
+        let (pa, pb) = (p[a], p[b]);
+        let l = (pb[0] - pa[0]).hypot(pb[1] - pa[1]).max(1e-300);
+        let fora = (a + 1..b).map(|j| ((p[j][0] - pa[0]) * (pb[1] - pa[1]) - (p[j][1] - pa[1]) * (pb[0] - pa[0])).abs() / l).fold(0., f64::max);
+        if fora < TOL_CADEIA { Seg2::Line(pa, pb) } else { Seg2::Spline(p[a..=b].to_vec()) }
+    };
     let mut out = vec![];
     let mut i = 0;
     while i + 1 < n {
@@ -184,7 +197,7 @@ pub fn chain_segs(v: &[[f64; 2]]) -> Vec<Seg2> {
             c0 += 1;
         }
         if c0 >= n - 1 {
-            out.push(Seg2::Line(p[i], p[n - 1]));
+            out.push(reta(i, n - 1));
             break;
         }
         let mut c1 = c0;
@@ -192,14 +205,14 @@ pub fn chain_segs(v: &[[f64; 2]]) -> Vec<Seg2> {
             c1 += 1;
         }
         if p[i] != p[c0] {
-            out.push(Seg2::Line(p[i], p[c0]));
+            out.push(reta(i, c0));
         }
         if c1 == c0 {
             i = c0;
             continue;
         }
         let m = (c0 + c1) / 2;
-        let fits = circulo(p[c0], p[m], p[c1]).is_some_and(|(c, r)| (c0..=c1).all(|j| ((p[j][0] - c[0]).hypot(p[j][1] - c[1]) - r).abs() < (r * 2e-3).max(1e-3)));
+        let fits = circulo(p[c0], p[m], p[c1]).is_some_and(|(c, r)| (c0..=c1).all(|j| ((p[j][0] - c[0]).hypot(p[j][1] - c[1]) - r).abs() < TOL_CADEIA));
         if fits {
             out.push(Seg2::Arc(p[c0], p[m], p[c1]));
         } else {

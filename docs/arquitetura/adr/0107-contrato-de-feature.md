@@ -525,14 +525,81 @@ a coerência antes de integrar.
     dois trechos de até um passo que faltavam nas pontas. Caixa conferida em x (a dobra que sai da web nas pontas,
     calculada pela tangente do dorso), em y (topo da OML recuada + r + t, ou + ba + 20 na planificada, ou o topo
     da web fora dos limites) e em z.
+- **Qualquer escala, terceira parte (23/11/2026)**. Pedido: "o erro de 1000 mm não pode acontecer em nenhuma
+  dimensão, nem superior nem inferior". Teste novo `chapa_b566_escala.rs`: o mesmo caso montado da corda de 10 mm à
+  de 10 000 mm (10, 20, 50, 100, 200, 400, 1000, 2000, 5000, 10 000), com t, r e comprimento proporcionais (2, 2 e
+  20 mm na corda 200) e com t fixo de 1 e 3 mm (r = t, aba de 20 mm) em peça grande; 45°, 90° e 135°; posição na
+  linha, por fora e por dentro; com e sem limites de lado; dobrada e planificada; suporte plano, dorso (spline de
+  61 pontos) e dorso deslocado; e a aba curva por arestas numa cadeia reta + arco + reta (placa com canto
+  arredondado), com recuo. A conta é feita à parte, sem o motor: a OML teórica são 20 001 pontos levados para
+  cima da spline do kernel (`curva_projeta`), a web é a área sob ela, a aba dobrada é a seção varrida pela linha
+  recuada pelo teorema de Pappus (`A·L + (Q − recuo·A)·Φ`, `Φ` o giro da tangente; com limite de lado, o corte por
+  plano x = constante soma `Q'·Oₓ/Tₓ` em cada ponta) e a planificada é `t·(dev·L' + dev²·Φ/2)`. A caixa é o
+  envelope da seção ao longo da OML. 119 casos (238 cálculos) rodam por padrão em ~2,2 min com 7 testes em
+  paralelo; a combinação completa fica em `escala_completa` (`#[ignore]`).
+  - *Causas achadas pela varredura, todas de constante absoluta ou de critério que depende da amostragem*:
+    (a) `curva_deslocada` pedia a aproximação a 1e-7 mm e em C2: o deslocamento de uma B-spline cúbica C2 é só C1
+    (a normal depende da derivada), e 1e-7 mm numa curva de 2 m é 5e-11 do tamanho; a partir de ~2 m a
+    aproximação desistia, `recuo_exato` devolvia `None` e o recuo voltava à polilinha: −7,6 % no volume da aba
+    na corda de 10 m (45°, por fora, com lados) e −1,6 % na corda 200 com o suporte deslocado (a OML da face
+    deslocada tem muitos nós). Agora a tolerância é 1e-9 do comprimento (no mínimo 1e-7 mm), a continuidade é a
+    que o deslocamento tem (C2, C1 ou C0, nessa ordem), os segmentos são 8 por nó e a reta deslocada é a reta
+    transladada. (b) `curva_projeta` deixava o ponto além da ponta da curva onde estava (o
+    `GeomAPI_ProjectPointOnCurve` não acha projeção ortogonal): a amostra da OML até 0,05 mm além do canto da web
+    (o filtro da web deixa passar) virava zigue-zague na linha de dobra, e na corda de 10 mm a planificada saía
+    válida, com status Ok e um quarto do volume. Agora o ponto vai para a ponta, e a projeção olha todos os trechos.
+    (c) `oml_exata` recusava a aresta exata quando uma amostra ficava a mais de 0,05 + 0,1·passo dela, abaixo da
+    flecha possível da seção (0,1 mm, a deflexão de `wires_to_pts`, agora `FLECHA_SECAO`): na corda de 50 mm a
+    linha exata não era achada e a aba parava antes dos cantos (−0,6 % dobrada, −1 % planificada). Agora o limite é
+    1,5·`FLECHA_SECAO` + 0,1·passo, o alcance da borda é 1,5·passo (sem os +0,05 mm, que na corda 10 eram um passo
+    inteiro) e as amostras repetidas na ponta saem. (d) `chain_segs` (e a cadeia por pontos do `sm_chain_sweep` no
+    kernel) aceitava arco com os pontos a até 0,2 % do raio e chamava de reta todo trecho de vértices com desvio
+    de direção menor que 0,5° em cada um, o que depende do passo (uma curva suave de raio grande amostrada fino
+    virava uma reta só da primeira à última amostra). Agora arco e reta só valem com todos os pontos a 1 µm
+    (`TOL_CADEIA`); senão é spline pelos pontos. (e) `cadeia_exata` achava as arestas da cadeia com folga fixa de
+    0,15 mm: a flecha da malha cresce com a peça, e em chapa mais fina que 0,4 mm a aresta da outra face também
+    cabia. Agora a folga é max(0,15; 4e-4 da diagonal), limitada a 0,4·t. (f) As amostras da OML só ficavam se
+    estivessem a menos de 0,05 mm da web: numa OML côncava para a aba (lado do suporte invertido) as cordas da
+    seção ficam fora da web, as amostras do meio delas saíam (179 viravam 75, espaçadas de forma irregular) e a
+    faixa planificada da nervura de 100 mm (teste B563, lado invertido) saía inválida, com status Ok; o teste
+    antigo não conferia a validade. A folga agora é min(1,5·`FLECHA_SECAO`; max(0,05; passo)).
+  - *Recuo em cadeia de várias arestas* (pendência 1, resolvida): `curva_deslocada` desloca cada trecho e emenda:
+    onde dois trechos não são exatamente tangentes, a fresta do lado de fora do canto vira um arco de raio |d|
+    centrado no canto e tangente aos dois (o que o deslocamento exato faz), e o cruzamento do lado de dentro é
+    aparado nos dois (`GeomAPI_ExtremaCurveCurve`). `recuo_exato` aceita a cadeia; depois do recorte a varredura
+    segue a cadeia das arestas que ele deixou na chapa (`cadeia_exata`), e só se ela não for achada a curva
+    deslocada. Na placa de canto arredondado o erro da aba fica abaixo de 3,5e-6 em 10, 1000 e 10 000 mm.
+  - *O que não cabe é erro, nunca corpo errado com status Ok*: a faixa planificada inválida (se cruza) é erro com a
+    largura (numa cadeia fechada, o laço, a faixa é um anel com costura que a conferência acusa sem defeito: ali
+    vale só a conferência da fusão); a fusão planificada é conferida como a dobrada (válida e com pelo menos metade do volume novo); o
+    recorte do recuo tem de tirar pelo menos 80 % da faixa (recuo × linha × t), senão "o recuo não cabe na chapa"
+    (na corda 10 com t = 3 a 135°, recuo de 14,5 mm numa web de 4 mm, a web sumia e sobrava a aba com status Ok);
+    quando a aba falha, o aviso da validação (a dobra não cabe, a faixa se cruza) vai junto na mensagem. A
+    validação agora mede a curvatura também perto das pontas (janela de um lado só) e o piso da janela é
+    min(0,75 mm; 1/20 da linha).
+  - *Medida do volume nos testes*: na dobrada, a integração padrão (`mass`, pontos de Gauss fixos) erra ~6e-6 do
+    total nas faces varridas, e com t fixo em peça grande isso passa de 1e-3 do volume da aba; a adaptativa
+    (`volume_preciso`) acerta a 1e-7. Na planificada (faces planas aparadas por spline longa e extrusões) é o
+    contrário: a adaptativa não converge (informa erro de 1e-16 e o volume muda 3e-5 quando o eps vai de 1e-6 a
+    1e-12) e a padrão bate com a conta a 2e-7. O teste usa a adaptativa na dobrada e a padrão na planificada.
+  - *Números* (erro do volume da aba contra a conta, pior caso de cada grupo): suporte plano, todas as escalas e
+    ângulos: < 5e-11; dorso proporcional, de 10 a 10 000 mm: dobrada ≤ 2,3e-6, planificada ≤ 4,1e-6; dorso
+    deslocado proporcional: dobrada ≤ 1,3e-6, planificada ≤ 3,1e-6; t fixo de 1 e 3 mm, de 1000 a 10 000 mm:
+    dobrada ≤ 1,2e-7, planificada ≤ 3,0e-5; com limites de lado na planificada: ≤ 1,1e-4 (corda 10); cadeia de três
+    arestas com recuo: ≤ 2,4e-5. Tempo por cálculo: 0,1 s (plano), 1 a 3 s (dorso), 1,5 a 9 s (dorso deslocado,
+    o maior na corda de 10 m a 135°). Caixa dentro de 6e-4 da corda (o desvio da malha de exibição).
 - **Pendente**
-  1. A aba curva por arestas com recuo e cadeia de várias arestas segue a polilinha (ver acima).
-  2. Aproximação para superfície de dupla curvatura (estiramento/enrugamento) e recorte de alívio onde a
+  1. Aproximação para superfície de dupla curvatura (estiramento/enrugamento) e recorte de alívio onde a
      OML fecha (hoje só o aviso).
-  3. Os limites dos lados, a borda final e os cantos não aparecem na prévia simplificada (só no resultado).
-  4. O cache dos dois estados não entra no teto de memória das malhas (`TETO_CACHE_MALHAS`).
-  5. A validação não cobre "abas se cruzam" entre abas diferentes (só dentro da mesma OML).
-  6. Textos de aviso do motor ainda em português fixo (sem tabela i18n, como os demais erros do motor).
+  2. Os limites dos lados, a borda final e os cantos não aparecem na prévia simplificada (só no resultado).
+  3. O cache dos dois estados não entra no teto de memória das malhas (`TETO_CACHE_MALHAS`).
+  4. A validação não cobre "abas se cruzam" entre abas diferentes (só dentro da mesma OML).
+  5. Textos de aviso do motor ainda em português fixo (sem tabela i18n, como os demais erros do motor).
+  6. A integração padrão de volume (`mass`, a que a interface mostra) erra ~6e-6 do total em faces varridas
+     longas; a adaptativa erra em faces planas aparadas por spline longa. Um volume que escolha por face ficou de
+     fora (muda a medida de todas as peças, não só da chapa).
+  7. A aba curva por arestas com cadeia de canto vivo (não G1) continua varrida pela polilinha (a varredura de
+     seção fixa não contorna o canto); o recuo dela já é exato.
 
 ### B577, subelementos com nome próprio (22/11/2026)
 

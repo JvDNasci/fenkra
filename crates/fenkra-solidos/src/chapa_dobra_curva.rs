@@ -80,8 +80,12 @@ impl Ctx<'_> {
         let topo = b.topology().ok()?;
         let cs: Vec<Curve3> = topo.edge_mids.iter().filter_map(|m| b.edge_at(*m).ok()).filter_map(|p| Curve3::poly(p, false).ok()).collect();
         // as arestas cujos pontos caem todos sobre a cadeia (a cadeia guardada pode ser uma polilinha
-        // grossa da malha: uma flecha de até 0,15 mm ainda é a mesma aresta)
-        let tol = SOBRE.max(0.15);
+        // grossa da malha: uma flecha de até 0,15 mm ainda é a mesma aresta). B566: a flecha da malha cresce
+        // com a peça (o desvio é relativo à diagonal), e em chapa mais fina que 0,4 mm a aresta da outra face
+        // (a uma espessura) também cairia "sobre" a cadeia: a folga segue a peça e fica abaixo de 0,4·t
+        let diag = b.bbox().map(|(lo, hi)| geo3d::dist(lo, hi)).unwrap_or(0.);
+        let t = self.sheet().map(|s| s.t).unwrap_or(f64::INFINITY);
+        let tol = 0.15f64.max(4e-4 * diag).min(0.4 * t).max(SOBRE);
         let poli = Curve3::poly(pts.to_vec(), false).ok()?;
         // (os meios dos trechos também: uma reta com as duas pontas nas pontas da cadeia não é dela)
         let na_cadeia = |q: V3| geo3d::dist(poli.nearest(q).1, q) < tol;
