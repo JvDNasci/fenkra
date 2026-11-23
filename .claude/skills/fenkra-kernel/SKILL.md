@@ -70,6 +70,18 @@ Registre aqui erros que se repetiram.
   tangente à chapa por essas amostras faz a fusão devolver vazio sem erro (B566). Varra pela aresta exata
   (`edge_curve_at`, `Shape::curva_aparada`) e leve as amostras para cima dela (`Shape::curva_projeta`). Para
   investigar uma fusão que sai vazia ou incompleta, comece por `Shape::diag_fusao`.
+- Ferramenta que precisa casar com uma borda que outra booleana criou (a dobra sobre a borda recuada da chapa): não
+  varra pela curva que fez o recorte; depois do recorte, leia a aresta que ficou (`edge_curve_at`) e varra por ela.
+  A booleana grava a interseção do jeito dela, com a tolerância dela. Deslocar curva no plano é
+  `Shape::curva_deslocada` (`Geom_OffsetCurve` aproximada); o cabeçalho do `Geom_OffsetCurve` diz que o lado é
+  V × T, o medido no 8.0.1 é T × V: confira o lado no resultado, nunca pelo comentário (B566).
+- Uma ponta de ferramenta no meio de uma face cara de avaliar (`Geom_OffsetSurface`) custa segundos de booleana: a
+  aba que parava um passo antes da borda da web deslocada levava 4,8 s na fusão, e 2,0 s indo até o canto (B566).
+  Antes de mexer em tolerância, veja onde as faces da ferramenta cortam faces do corpo sem precisar.
+- Spline por pontos (`GeomAPI_Interpolate`, `Seg2::Spline`) com dois pontos quase juntos no meio de pontos espaçados
+  oscila e se cruza: a face sai inválida sem erro na construção, e a tangente medida entre os dois vira ruído. Ao
+  acrescentar um ponto exato (a ponta de uma aresta) a amostras, troque a amostra vizinha quando ele cai a menos de
+  meio passo dela, em vez de inserir (B566).
 - `posicionado` (montagem) copia a forma sem a malha: quem tessela a peça posicionada refaz a malha inteira a cada
   vez. Use a malha da vista quando ela basta, ou tessele em threads (B394).
 

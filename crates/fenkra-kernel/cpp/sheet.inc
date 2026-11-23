@@ -336,6 +336,65 @@ rust::Vec<double> curva_projeta(rust::Slice<const double> v, rust::Slice<const d
     });
 }
 
+// B566: cada trecho da curva (plana, no plano de normal n) deslocado de d no plano, para o lado de
+// tangente × n (d > 0) ou o oposto (d < 0). O deslocamento de uma curva é a Geom_OffsetCurve; ela vira
+// B-spline por aproximação com 1e-7 (a codificação da ponte só leva retas, cônicas e B-splines). As pontas
+// do trecho deslocado são as pontas deslocadas na normal: a aproximação as mantém.
+rust::Vec<double> curva_deslocada(rust::Slice<const double> v, double nx, double ny, double nz, double d) {
+    return guard("deslocar curva no plano", [&] {
+        std::vector<TopoDS_Edge> es = arestas_da_curva(v);
+        if (es.empty()) throw std::runtime_error("curva vazia");
+        const gp_Dir n(nx, ny, nz);
+        rust::Vec<double> out;
+        out.push_back(std::numeric_limits<double>::quiet_NaN());
+        out.push_back(static_cast<double>(es.size()));
+        for (const TopoDS_Edge& e : es) {
+            double f, l;
+            TopLoc_Location loc;
+            Handle(Geom_Curve) g0 = BRep_Tool::Curve(e, loc, f, l);
+            if (g0.IsNull()) throw std::runtime_error("trecho sem curva 3D");
+            Handle(Geom_Curve) g = Handle(Geom_Curve)::DownCast(g0->Transformed(loc.Transformation()));
+            Handle(Geom_TrimmedCurve) tc = new Geom_TrimmedCurve(g, f, l);
+            if (e.Orientation() == TopAbs_REVERSED) tc->Reverse();
+            Handle(Geom_OffsetCurve) oc = new Geom_OffsetCurve(tc, d, n);
+            // o lado do deslocamento é conferido no começo do trecho (o comentário do cabeçalho fala em
+            // n × tangente; o medido no 8.0.1 é tangente × n): o contrato desta função é tangente × n
+            {
+                gp_Pnt p0;
+                gp_Vec t0;
+                tc->D1(tc->FirstParameter(), p0, t0);
+                gp_Vec lado = t0.Crossed(gp_Vec(n));
+                if (lado.Magnitude() < 1e-12) throw std::runtime_error("a curva não está no plano do deslocamento");
+                gp_Pnt quer = p0.Translated(lado.Normalized() * d);
+                if (oc->Value(tc->FirstParameter()).Distance(quer) > 0.5 * std::abs(d)) oc = new Geom_OffsetCurve(tc, -d, n);
+            }
+            GeomConvert_ApproxCurve ap(oc, 1e-7, GeomAbs_C2, 200, 9);
+            if (!ap.HasResult()) throw std::runtime_error("o deslocamento da curva não pôde ser aproximado");
+            if (ap.MaxError() > 1e-5) throw std::runtime_error("o deslocamento da curva saiu impreciso");
+            TopoDS_Edge t = BRepBuilderAPI_MakeEdge(ap.Curve()).Edge();
+            rust::Vec<double> um;
+            codifica_aresta(t, um);
+            // pula o cabeçalho [NaN, 1] de cada trecho
+            for (size_t i = 2; i < um.size(); ++i) out.push_back(um[i]);
+        }
+        return out;
+    });
+}
+
+// B566: face plana limitada por uma curva fechada (trechos exatos encadeados).
+std::unique_ptr<Shape> face_curva(rust::Slice<const double> v) {
+    return guard("face pela curva", [&] {
+        TopoDS_Wire w = wire_curva(v);
+        if (!w.Closed()) throw std::runtime_error("a curva da face não fecha");
+        BRepBuilderAPI_MakeFace mf(w, Standard_True);
+        if (!mf.IsDone()) throw std::runtime_error("a curva da face não é plana");
+        TopoDS_Face fc = mf.Face();
+        ShapeFix_Face sf(fc);
+        sf.Perform();
+        return wrap(sf.Face());
+    });
+}
+
 // ---------------------------------------------------------------- B566: diagnóstico de fusão
 namespace {
 void diag_forma(std::ostringstream& o, const char* nome, const TopoDS_Shape& s) {

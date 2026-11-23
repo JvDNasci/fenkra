@@ -181,8 +181,9 @@ impl Ctx<'_> {
         })
     }
 
-    /// Recorta a ferramenta da aba pelo limite da borda final e faz os cantos das pontas.
-    pub(crate) fn aba_pos_ferramenta(&self, t: Shape, lim: &AbaLim, g: &CantoGeo) -> Result<Shape, String> {
+    /// Corta a ferramenta (a varredura da aba ou o recorte do recuo) nos limites dos lados: fica o lado da
+    /// raiz. Corte que não toca a ferramenta (a OML acabou antes) deixa a ponta como está.
+    pub(crate) fn aba_corta_lados(&self, t: Shape, lim: &AbaLim) -> Result<Shape, String> {
         let k = |e: KernelError| e.0;
         let mut t = t;
         for (cut, raiz) in &lim.lados {
@@ -191,13 +192,19 @@ impl Ctx<'_> {
             if lado.abs() < 1e-6 {
                 continue;
             }
-            // se o corte não toca a varredura (a OML acabou antes), a ponta fica como está
             if let Ok(c) = t.split_side(cut, lado > 0., true) {
                 if !c.is_null() && c.face_count() > 0 && c.mass().volume > 1e-3 {
                     t = c;
                 }
             }
         }
+        Ok(t)
+    }
+
+    /// Recorta a ferramenta da aba pelo limite da borda final e faz os cantos das pontas.
+    pub(crate) fn aba_pos_ferramenta(&self, t: Shape, lim: &AbaLim, g: &CantoGeo) -> Result<Shape, String> {
+        let k = |e: KernelError| e.0;
+        let mut t = self.aba_corta_lados(t, lim)?;
         if let Some((cut, raiz)) = &lim.ponta {
             let (p0, nl) = cut.surface_near(*raiz).map_err(k)?;
             let lado = geo3d::dot(nl, geo3d::sub(*raiz, p0));

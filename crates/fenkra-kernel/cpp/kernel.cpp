@@ -93,6 +93,8 @@
 #include <GeomAPI_Interpolate.hxx>
 #include <GeomAPI_IntCS.hxx>
 #include <Geom_TrimmedCurve.hxx>
+#include <Geom_OffsetCurve.hxx>
+#include <GeomConvert_ApproxCurve.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Elips.hxx>
 #include <TColgp_HArray1OfPnt.hxx>

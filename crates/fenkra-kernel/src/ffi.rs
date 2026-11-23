@@ -361,6 +361,8 @@ pub mod bridge {
         fn diag_fusao(a: &Shape, b: &Shape) -> String;
         fn curva_projeta(v: &[f64], pts: &[f64]) -> Result<Vec<f64>>;
         fn curva_aparada(v: &[f64], ax: f64, ay: f64, az: f64, bx: f64, by: f64, bz: f64) -> Result<Vec<f64>>;
+        fn curva_deslocada(v: &[f64], nx: f64, ny: f64, nz: f64, d: f64) -> Result<Vec<f64>>;
+        fn face_curva(v: &[f64]) -> Result<UniquePtr<Shape>>;
         fn from_brep(text: &str) -> Result<UniquePtr<Shape>>;
         fn hole_tool_ext(
             ox: f64, oy: f64, oz: f64, dx: f64, dy: f64, dz: f64, diameter: f64, depth: f64,

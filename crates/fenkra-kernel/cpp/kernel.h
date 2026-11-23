@@ -167,6 +167,8 @@ std::unique_ptr<Shape> sm_chain_sweep(const Shape& face, rust::Slice<const doubl
 rust::String diag_fusao(const Shape& a, const Shape& b);
 rust::Vec<double> curva_projeta(rust::Slice<const double> v, rust::Slice<const double> pts);
 rust::Vec<double> curva_aparada(rust::Slice<const double> v, double ax, double ay, double az, double bx, double by, double bz);
+rust::Vec<double> curva_deslocada(rust::Slice<const double> v, double nx, double ny, double nz, double d);
+std::unique_ptr<Shape> face_curva(rust::Slice<const double> v);
 std::unique_ptr<Shape> from_brep(rust::Str text);
 std::unique_ptr<Shape> hole_tool_ext(double ox, double oy, double oz, double dx, double dy, double dz, double diameter, double depth,
                                      uint8_t kind, double d2, double p2, double a3, double tip, double taper);

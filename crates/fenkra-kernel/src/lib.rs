@@ -1154,6 +1154,16 @@ mod imp {
             let d = |p: Option<[f64; 3]>, q: [f64; 3]| p.map_or(f64::INFINITY, |p| (0..3).map(|i| (p[i] - q[i]).powi(2)).sum::<f64>());
             Ok(if d(r.inicio(), b) + d(r.fim(), a) < d(r.inicio(), a) + d(r.fim(), b) { r.invertida() } else { r })
         }
+        /// B566: a curva plana deslocada de `d` no plano de normal `n`, para o lado de tangente × `n`
+        /// (`d` > 0) ou o oposto. Cada trecho vira uma B-spline (o deslocamento exato aproximado a 1e-7).
+        pub fn curva_deslocada(c: &Curva3, n: [f64; 3], d: f64) -> KResult<Curva3> {
+            let v = b::curva_deslocada(&c.codifica(), n[0], n[1], n[2], d).map_err(err)?;
+            Curva3::decodifica(&v).ok_or_else(|| KernelError("curva deslocada ilegível".into()))
+        }
+        /// B566: face plana limitada pela curva fechada `c` (trechos exatos encadeados).
+        pub fn face_curva(c: &Curva3) -> KResult<Shape> {
+            b::face_curva(&c.codifica()).map(Shape).map_err(err)
+        }
         /// B566: cada ponto levado ao ponto mais perto da curva de um trecho só.
         pub fn curva_projeta(c: &Curva3, pts: &[[f64; 3]]) -> KResult<Vec<[f64; 3]>> {
             let flat: Vec<f64> = pts.iter().flatten().copied().collect();
@@ -1497,6 +1507,12 @@ mod imp {
             no()
         }
         pub fn curva_aparada(_: &Curva3, _: [f64; 3], _: [f64; 3]) -> KResult<Curva3> {
+            no()
+        }
+        pub fn curva_deslocada(_: &Curva3, _: [f64; 3], _: f64) -> KResult<Curva3> {
+            no()
+        }
+        pub fn face_curva(_: &Curva3) -> KResult<Shape> {
             no()
         }
         pub fn curva_projeta(_: &Curva3, _: &[[f64; 3]]) -> KResult<Vec<[f64; 3]>> {
@@ -2406,6 +2422,33 @@ mod tests {
         }
         // as entradas saem como entraram
         assert!((placa.mass().volume - (120. * 50. - 6. * std::f64::consts::PI * 16.) * 20.).abs() < 1e-3);
+    }
+
+    /// B566: o deslocamento no plano sai para tangente × n (d > 0), com o raio certo, e a faixa entre a curva
+    /// e o deslocamento vira face plana com a área do anel.
+    #[test]
+    fn curva_deslocada_no_plano_e_face_pela_curva() {
+        // arco de raio 100 no plano XY, de (100, 0) a (0, 100), anti-horário: tangente × z aponta para fora
+        let h = std::f64::consts::FRAC_1_SQRT_2 * 100.;
+        let arco = Curva3(vec![Trecho3::Arco([100., 0., 0.], [h, h, 0.], [0., 100., 0.])]);
+        let fora = Shape::curva_deslocada(&arco, [0., 0., 1.], 5.).unwrap();
+        let dentro = Shape::curva_deslocada(&arco, [0., 0., 1.], -5.).unwrap();
+        let raio = |c: &Curva3| {
+            let p = Shape::curva_projeta(c, &[[200., 200., 0.]]).unwrap()[0];
+            (p[0] * p[0] + p[1] * p[1]).sqrt()
+        };
+        assert!((raio(&fora) - 105.).abs() < 1e-6, "{}", raio(&fora));
+        assert!((raio(&dentro) - 95.).abs() < 1e-6, "{}", raio(&dentro));
+        assert!(fora.inicio().is_some_and(|p| (p[0] - 105.).abs() < 1e-7 && p[1].abs() < 1e-7), "{:?}", fora.inicio());
+        // anel de 95 a 105 num quarto de volta
+        let mut laco = dentro.clone();
+        laco.0.push(Trecho3::Reta(dentro.fim().unwrap(), fora.fim().unwrap()));
+        laco.junta(fora.invertida());
+        laco.0.push(Trecho3::Reta(fora.inicio().unwrap(), dentro.inicio().unwrap()));
+        let face = Shape::face_curva(&laco).unwrap();
+        let vol = face.extrude([0., 0., 1.], 1., 0.).unwrap().mass().volume;
+        let anel = std::f64::consts::PI * (105f64.powi(2) - 95f64.powi(2)) / 4.;
+        assert!((vol - anel).abs() < 1e-3 * anel, "{vol} contra {anel}");
     }
 
     #[cfg(windows)]
