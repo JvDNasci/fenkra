@@ -4619,7 +4619,12 @@ impl Ctx<'_> {
     /// e as amostras são levadas para cima dela: a aba ocupa o mesmo trecho de antes, dobrada e
     /// planificada, e a dobra nasce exatamente na borda da web. `None` quando a aresta mais perto não é a
     /// da linha de dobra (aresta partida, amostras longe dela).
-    fn oml_exata(web: &Shape, pts: &[V3]) -> Option<(Vec<V3>, geo3d::Curva3)> {
+    ///
+    /// `ate_borda`: as amostras param até um passo antes da ponta da aresta (a última que ainda cai na
+    /// web); quando a primeira ou a última fica a menos de um passo e meio da ponta, a aba vai até a ponta
+    /// (a borda da web), que entra como amostra. Com limite de lado dentro da web as amostras param longe
+    /// da ponta (no limite mais a margem) e nada muda.
+    fn oml_exata(web: &Shape, pts: &[V3], ate_borda: bool) -> Option<(Vec<V3>, geo3d::Curva3)> {
         if pts.len() < 3 {
             return None;
         }
@@ -4627,16 +4632,66 @@ impl Ctx<'_> {
         if !c.exata() || c.0.len() != 1 {
             return None;
         }
-        let q = Shape::curva_projeta(&c, pts).ok()?;
+        let mut q = Shape::curva_projeta(&c, pts).ok()?;
         // a flecha das cordas é pequena perto do passo: amostra longe é outra aresta
         let passo = pts.windows(2).map(|w| geo3d::dist(w[0], w[1])).fold(0., f64::max);
         if q.len() != pts.len() || pts.iter().zip(&q).any(|(p, q)| geo3d::dist(*p, *q) > 0.05 + 0.1 * passo) {
             return None;
         }
+        if ate_borda {
+            if let (Some(a), Some(z)) = (c.inicio(), c.fim()) {
+                if geo3d::dist(a, z) > 2. * passo {
+                    let perto = |p: V3| if geo3d::dist(p, a) <= geo3d::dist(p, z) { a } else { z };
+                    let (pa, pz) = (perto(q[0]), perto(q[q.len() - 1]));
+                    let alcance = 1.5 * passo + 0.05;
+                    // a ponta entra como amostra nova, ou toma o lugar da amostra da ponta quando fica a menos de
+                    // meio passo dela: duas amostras quase juntas fazem a spline da faixa planificada oscilar e
+                    // a tangente da ponta (cantos, direção para fora) sair do ruído
+                    if pa != pz && q.len() >= 3 {
+                        let d0 = geo3d::dist(q[0], pa);
+                        if d0 <= alcance {
+                            if d0 < 0.5 * passo {
+                                q[0] = pa;
+                            } else {
+                                q.insert(0, pa);
+                            }
+                        }
+                        let n = q.len() - 1;
+                        let d1 = geo3d::dist(q[n], pz);
+                        if d1 <= alcance {
+                            if d1 < 0.5 * passo {
+                                q[n] = pz;
+                            } else {
+                                q.push(pz);
+                            }
+                        }
+                    }
+                }
+            }
+        }
         let n = q.len() - 1;
         let c = Shape::curva_aparada(&c, q[0], q[n]).ok()?;
         let ok = c.inicio().is_some_and(|a| geo3d::dist(a, q[0]) < 1e-4) && c.fim().is_some_and(|z| geo3d::dist(z, q[n]) < 1e-4);
         ok.then_some((q, c))
+    }
+
+    /// B566: a curva exata deslocada no plano da chapa (normal `n`) para dentro (`-outs`) de `off`, e a
+    /// borda de fora (`outs`, 0,5 mm além da linha de dobra), para o recuo da aba (posição do material
+    /// por fora ou por dentro). Só curva aberta de um trecho: numa cadeia de vários trechos os
+    /// deslocamentos de cada um não se encontram nas emendas quando a cadeia não é tangente de verdade, e
+    /// fica a polilinha. `s` é o sinal de `outs` em relação a tangente × `n`. As pontas deslocadas são
+    /// conferidas contra o deslocamento das amostras (`None` se divergem).
+    #[allow(clippy::too_many_arguments)]
+    fn recuo_exato(exata: &geo3d::Curva3, n: V3, s: f64, off: f64, p0: V3, o0: V3, p1: V3, o1: V3) -> Option<(geo3d::Curva3, geo3d::Curva3)> {
+        if exata.0.len() != 1 || !exata.exata() || exata.inicio().zip(exata.fim()).is_none_or(|(a, z)| geo3d::dist(a, z) < 1e-3) {
+            return None;
+        }
+        let back = Shape::curva_deslocada(exata, n, -s * off).ok()?;
+        let fora = Shape::curva_deslocada(exata, n, s * 0.5).ok()?;
+        let tol = 0.25 * off + 0.05;
+        let perto = |c: &geo3d::Curva3, a: V3, z: V3| c.inicio().is_some_and(|i| geo3d::dist(i, a) < tol) && c.fim().is_some_and(|f| geo3d::dist(f, z) < tol);
+        let ok = perto(&back, geo3d::sub(p0, geo3d::mul(o0, off)), geo3d::sub(p1, geo3d::mul(o1, off))) && perto(&fora, geo3d::add(p0, geo3d::mul(o0, 0.5)), geo3d::add(p1, geo3d::mul(o1, 0.5)));
+        ok.then_some((back, fora))
     }
 
     /// `curve_flange_lim` com a curva exata da cadeia (B559) quando as arestas da chapa a dão.
@@ -4678,7 +4733,22 @@ impl Ctx<'_> {
         let inward = geo3d::unit(geo3d::sub(ctr, mid)).unwrap_or([0., 0., -1.]);
         let (_, n) = b.surface_near(geo3d::add(mid, geo3d::mul(inward, sp.t * 0.25))).map_err(k)?;
         // para fora (no plano da chapa), com o mesmo sentido ao longo da cadeia
-        let tan = |i: usize| geo3d::unit(geo3d::sub(pts[(i + 1).min(pts.len() - 1)], pts[i.saturating_sub(1)])).unwrap_or([1., 0., 0.]);
+        // B566: nas pontas, com a curva exata, a tangente é a dela: a diferença das duas amostras da ponta erra
+        // κ·passo/2, e a ponta da faixa planificada (normal à linha de dobra) sairia torta décimos de mm
+        let ponta_exata = |fim: bool| -> Option<V3> {
+            let e = exata.as_ref()?;
+            let (p, t) = if fim { (e.fim()?, e.0.last().and_then(geo3d::tangente_fim)?) } else { (e.inicio()?, e.0.first().and_then(geo3d::tangente_inicio)?) };
+            (geo3d::dist(p, pts[if fim { pts.len() - 1 } else { 0 }]) < 1e-4).then_some(t)
+        };
+        let (t_ini, t_fim) = (ponta_exata(false), ponta_exata(true));
+        let tan = |i: usize| {
+            let dif = || geo3d::unit(geo3d::sub(pts[(i + 1).min(pts.len() - 1)], pts[i.saturating_sub(1)])).unwrap_or([1., 0., 0.]);
+            match (i, t_ini, t_fim) {
+                (0, Some(t), _) => t,
+                (j, _, Some(t)) if j == pts.len() - 1 => t,
+                _ => dif(),
+            }
+        };
         let im = pts.len() / 2;
         let w0 = geo3d::unit(fenkra_kernel::cross(tan(im), n)).ok_or("aresta normal à chapa")?;
         let s = if geo3d::dot(w0, geo3d::sub(mid, ctr)) >= 0. { 1. } else { -1. };
@@ -4698,25 +4768,56 @@ impl Ctx<'_> {
             2 => (r + sp.t) * half.tan(),
             _ => 0.,
         };
+        // B566: com a curva exata, o recuo é o deslocamento dela no plano (kernel), e não as amostras
+        // deslocadas refeitas em retas e arcos; o recorte e a varredura seguem a mesma curva
+        let recuo = if off > 1e-6 {
+            let n_ = pts.len() - 1;
+            exata.as_ref().and_then(|e| Self::recuo_exato(e, n, s, off, pts[0], outs[0], pts[n_], outs[n_]))
+        } else {
+            None
+        };
+        let mut caminho_recuo: Option<geo3d::Curva3> = None;
         let pts: Vec<V3> = if off > 1e-6 {
             let back: Vec<V3> = pts.iter().zip(&outs).map(|(p, o)| geo3d::sub(*p, geo3d::mul(*o, off))).collect();
-            let edge: Vec<V3> = pts.iter().zip(&outs).map(|(p, o)| geo3d::add(*p, geo3d::mul(*o, 0.5))).collect();
-            let fr = Frame { origin: pts[0], x: outs[0], normal: n };
-            let y = fenkra_kernel::cross(n, outs[0]);
-            let loc = |p: V3| {
-                let q = geo3d::sub(p, pts[0]);
-                [geo3d::dot(q, outs[0]), geo3d::dot(q, y)]
+            let strip = if let Some((cb, cf)) = &recuo {
+                let (b0, b1, f0, f1) = (cb.inicio().unwrap_or(back[0]), cb.fim().unwrap_or(back[back.len() - 1]), cf.inicio().unwrap_or(pts[0]), cf.fim().unwrap_or(pts[pts.len() - 1]));
+                let mut laco = cb.clone();
+                laco.0.push(geo3d::Trecho3::Reta(b1, f1));
+                laco.junta(cf.invertida());
+                laco.0.push(geo3d::Trecho3::Reta(f0, b0));
+                Shape::face_curva(&laco).map_err(k)?.extrude(n, sp.t * 2. + 1., sp.t * 2. + 1.).map_err(k)?
+            } else {
+                let edge: Vec<V3> = pts.iter().zip(&outs).map(|(p, o)| geo3d::add(*p, geo3d::mul(*o, 0.5))).collect();
+                let fr = Frame { origin: pts[0], x: outs[0], normal: n };
+                let y = fenkra_kernel::cross(n, outs[0]);
+                let loc = |p: V3| {
+                    let q = geo3d::sub(p, pts[0]);
+                    [geo3d::dot(q, outs[0]), geo3d::dot(q, y)]
+                };
+                let a2: Vec<[f64; 2]> = back.iter().map(|p| loc(*p)).collect();
+                let mut b2: Vec<[f64; 2]> = edge.iter().map(|p| loc(*p)).collect();
+                b2.reverse();
+                // B566: na planificada a faixa vem em spline pelas amostras (abaixo); o recorte do recuo usa a
+                // mesma borda, senão sobra uma fresta entre o recorte e a faixa
+                let corte = |v: &[[f64; 2]]| if suave && sp.flat && v.len() >= 4 { vec![fenkra_kernel::Seg2::Spline(v.to_vec())] } else { chapa::chain_segs(v) };
+                let lp = [corte(&a2), vec![fenkra_kernel::Seg2::Line(a2[a2.len() - 1], b2[0])], corte(&b2), vec![fenkra_kernel::Seg2::Line(b2[b2.len() - 1], a2[0])]].concat();
+                Shape::face(&fr, &[lp]).map_err(k)?.extrude(n, sp.t * 2. + 1., sp.t * 2. + 1.).map_err(k)?
             };
-            let a2: Vec<[f64; 2]> = back.iter().map(|p| loc(*p)).collect();
-            let mut b2: Vec<[f64; 2]> = edge.iter().map(|p| loc(*p)).collect();
-            b2.reverse();
-            // B566: na planificada a faixa vem em spline pelas amostras (abaixo); o recorte do recuo usa a
-            // mesma borda, senão sobra uma fresta entre o recorte e a faixa
-            let corte = |v: &[[f64; 2]]| if suave && sp.flat && v.len() >= 4 { vec![fenkra_kernel::Seg2::Spline(v.to_vec())] } else { chapa::chain_segs(v) };
-            let lp = [corte(&a2), vec![fenkra_kernel::Seg2::Line(a2[a2.len() - 1], b2[0])], corte(&b2), vec![fenkra_kernel::Seg2::Line(b2[b2.len() - 1], a2[0])]].concat();
-            let strip = Shape::face(&fr, &[lp]).map_err(k)?.extrude(n, sp.t * 2. + 1., sp.t * 2. + 1.).map_err(k)?;
+            // o recorte também para nos limites dos lados (a aba é cortada neles), senão o recuo passa do
+            // limite pela margem da varredura e deixa um entalhe sem aba
+            let strip = if sp.flat { strip } else { self.aba_corta_lados(strip, lim)? };
             self.apply(f.target, strip, BoolOp::Cut, f.id)?;
-            back
+            match &recuo {
+                Some((cb, _)) => {
+                    // as amostras vão para cima da curva recuada, e a varredura segue a aresta que o recorte
+                    // deixou na chapa (a mesma curva, como o kernel a gravou)
+                    let bq = Shape::curva_projeta(cb, &back).unwrap_or(back);
+                    let web = self.body(f.target).cloned();
+                    caminho_recuo = web.as_ref().and_then(|w| Self::oml_exata(w, &bq, false)).map(|(_, c)| c).or_else(|| Some(cb.clone()));
+                    bq
+                }
+                None => back,
+            }
         } else {
             pts.clone()
         };
@@ -4754,12 +4855,12 @@ impl Ctx<'_> {
             self.marca_cadeia(f.id, &inner, &outs, ang, r, sobe, &cmp, true);
             return Ok(None);
         }
-        // B559: a cadeia exata (as arestas da chapa) é o caminho da varredura; vale quando a aba não
-        // recua (recuar é deslocar a curva no plano, e aí segue a polilinha). A tangente do começo
-        // sai da curva exata, para a seção ficar normal ao caminho de verdade.
+        // B559: a cadeia exata (as arestas da chapa) é o caminho da varredura. Com recuo (B566), o caminho
+        // é a curva exata deslocada no plano, como o recorte a deixou na chapa (só curva de um trecho). A
+        // tangente do começo sai da curva exata, para a seção ficar normal ao caminho de verdade.
         // só cadeia lisa (G1): com canto vivo entre trechos, a varredura de seção fixa não contorna o
         // canto, e a polilinha (que arredonda os cantos suaves) continua sendo o caminho
-        let caminho = if off > 1e-6 { None } else { exata }.filter(|e| geo3d::curva_g1(e, 0.02)).map(|e| e.transformada(&Xform::Translate(shift)));
+        let caminho = if off > 1e-6 { caminho_recuo } else { exata }.filter(|e| geo3d::curva_g1(e, 0.02)).map(|e| e.transformada(&Xform::Translate(shift)));
         let (tan0, out0) = match caminho.as_ref().and_then(|e| e.0.first()).and_then(geo3d::tangente_inicio) {
             Some(t0) => {
                 let o = geo3d::unit(fenkra_kernel::cross(t0, n)).map(|o| geo3d::mul(o, s)).unwrap_or(outs[0]);
@@ -6598,7 +6699,9 @@ impl Ctx<'_> {
                     chapa_aba_limites::orienta_oml(&mut best);
                     let no_plano = |l: &Option<LimiteAba>| -> Result<Option<Vec<Vec<V3>>>, String> { l.as_ref().map(|l| self.aba_limite_no_plano(l, on, n, big)).transpose() };
                     let (l1, l2) = (no_plano(&lm.lado1)?, no_plano(&lm.lado2)?);
-                    let margem = 2. * (len + 2. * (r + sp.t)) + 1.;
+                    // a varredura dobrada passa do limite pela margem e é cortada nele; a faixa planificada para
+                    // no limite (B566: antes ia até a margem, e a planificada tinha aba onde a dobrada não tem)
+                    let margem = if sp.flat { 0. } else { 2. * (len + 2. * (r + sp.t)) + 1. };
                     let (apar, raiz) = chapa_aba_limites::aparar_oml(&best, on, n, l1.as_deref(), l2.as_deref(), big, margem)?;
                     best = apar;
                     // a varredura passa do limite e é cortada nele: o fim da aba segue o limite, oblíquo ou não
@@ -6694,7 +6797,9 @@ impl Ctx<'_> {
                 let aviso = chapa_aba_diag::diagnosticar(&pts, n, out, r, sp.t, ba + len).aviso(ba);
                 // B566: a linha de dobra é a aresta da web relimitada (interseção exata suporte × plano). A
                 // varredura vai por ela, uma aresta só, e não pela polilinha das amostras.
-                let oml_exata = if lm.lado1.is_none() && lm.lado2.is_none() { Self::oml_exata(&web, &pts) } else { None };
+                // B566: vale também com limites de lado (a varredura passa do limite e é cortada nele) e vai até a
+                // borda da web quando as amostras chegam perto dela
+                let oml_exata = Self::oml_exata(&web, &pts, true);
                 let feito = match oml_exata {
                     Some((pts, c)) => self.curve_flange_lim_x(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim, Some(c), true)?,
                     None => self.curve_flange_exata(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim)?,

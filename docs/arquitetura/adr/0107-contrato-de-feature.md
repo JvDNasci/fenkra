@@ -472,7 +472,7 @@ a coerência antes de integrar.
     plano), leva as amostras para cima dela (`Shape::curva_projeta`) e a apara entre a primeira e a última
     amostra (`Shape::curva_aparada`); a varredura segue essa curva (10 faces). A faixa planificada usa spline
     pelas amostras nas bordas, e o recorte do recuo (posição por fora e por dentro) a mesma borda
-    (`chain_segs` também ajustava arcos a 0,2 % do raio e a fusão perdia 3 % da faixa sem erro). Vale sem limites de lado; com limites, o caminho antigo continua. A fusão é conferida e aplicada
+    (`chain_segs` também ajustava arcos a 0,2 % do raio e a fusão perdia 3 % da faixa sem erro). Valia só sem limites de lado (a segunda parte, abaixo, estende aos limites e ao recuo). A fusão é conferida e aplicada
     de uma vez (`apply_aceita`), em vez de duas.
   - *Números* (teste `chapa_b566_dobrada_grande.rs`, dobrada / planificada, status ok nos dois):
     corda 200: 37 180,9 / 37 231,1 mm³, 1,9 s / 0,8 s; corda 400: 128 846,2 / 128 820,1 mm³, 1,9 s / 1,0 s;
@@ -483,11 +483,50 @@ a coerência antes de integrar.
     dobrada e 2 mm na planificada; em y, o topo do dorso + r + t na dobrada e + ba + 20 na planificada. Na
     corda 200 a dobrada caiu de 3,3 s para 1,9 s (varredura 0,11 s, fusão 1,3 s); com o suporte deslocado a
     fusão contra a face deslocada leva 5 s.
+- **Dobrada de peça grande, segunda parte (22/11/2026): limites, recuo, borda e tempo**.
+  - *Limites de lado*: `oml_exata` passa a valer também com `lado1`/`lado2`. As amostras ficam entre os
+    limites mais a margem da varredura; a aresta exata da web é aparada nelas e a varredura é cortada nos
+    limites como antes (`aba_corta_lados`, que saiu de `aba_pos_ferramenta`). Dois defeitos antigos achados no
+    teste e corrigidos: (a) na planificada a faixa ia até a margem (2·(comprimento + 2·(r + t)) + 1 mm além de
+    cada limite, 5,6 cm³ a mais na asa de 1 m), porque o corte nos limites só existia na dobrada: a planificada
+    apara a OML com margem zero; (b) com recuo, o recorte da faixa da web também passava do limite pela margem e
+    deixava um entalhe sem aba: o recorte agora é cortado nos limites como a varredura.
+  - *Recuo (material por fora e por dentro)*: a OML recuada é o deslocamento da curva exata no plano da web, no
+    kernel (`Shape::curva_deslocada`: `Geom_OffsetCurve` aproximada por B-spline a 1e-7, `GeomConvert_ApproxCurve`).
+    O recorte da faixa é uma face plana limitada pela curva recuada, duas retas normais e a curva 0,5 mm para fora
+    (`Shape::face_curva`); depois do recorte a varredura segue a aresta que ele deixou na web (lida de novo com
+    `oml_exata`, como no caso sem recuo), e não a curva da ferramenta. Só curva aberta de um trecho
+    (`recuo_exato`); cadeia de vários trechos (a aba curva por arestas com cadeia de várias arestas) segue a
+    polilinha, porque os deslocamentos de trechos não exatamente tangentes não se encontram nas emendas. A aba
+    curva por arestas de uma aresta só (arco, spline) com recuo usa o mesmo caminho. O lado do deslocamento é
+    conferido no kernel: o comentário do cabeçalho do `Geom_OffsetCurve` fala em V × T, o medido no 8.0.1 é T × V.
+  - *Até a borda*: quando a primeira ou a última amostra fica a menos de um passo e meio da ponta da aresta
+    exata, a ponta (o canto da web) entra como amostra e a aba vai até ela; se ela cai a menos de meio passo da
+    amostra da ponta, toma o lugar dela (duas amostras quase juntas faziam a spline da faixa planificada oscilar,
+    face inválida na nervura de 100 × 50, e a tangente da ponta virar ruído, canto sem achar a ponta da aba).
+    Ela termina normal à linha de dobra,
+    num plano que passa pelo canto: onde a borda da web é oblíqua à OML a dobra sai da web (r + t)·|cos| (0,6 mm
+    na asa) na dobrada e (ba + comprimento)·|cos| na planificada, como numa aba de aresta. Com recuo, o mesmo
+    plano passa pelo canto e pela ponta da curva recuada.
+  - *Tempo do suporte deslocado*: medido por etapa na corda 1000 com o suporte deslocado de 20 mm: relimite
+    0,17 s, ferramenta 0,07 s, fusão 4,8 s com a aba parando um passo antes da borda e **2,0 s** com a aba até a
+    borda (a dobrada inteira de 5,7 s para 2,9 s). A ponta da varredura no meio da web cortava a face deslocada
+    (`Geom_OffsetSurface`, cara de avaliar) e a booleana calculava essas interseções; no canto da web elas somem.
+    A fusão restante contra a face deslocada (2,0 s, contra 1,0 s com o dorso puro) não foi atacada: converter a
+    face deslocada em B-spline mexeria no suporte, que é de outra bancada, por ganho de no máximo 1 s.
+  - *Números* (teste `chapa_b566_dobrada_grande.rs`, dobrada / planificada, status ok nos dois, aba dobrada por mm
+    de linha de dobra contra 49,4 teóricos): corda 200: 37 224,9 / 37 282,2 mm³ (49,6); corda 400: 128 918,3 /
+    128 899,0 mm³ (49,5); corda 1000: 731 049,1 / 730 798,2 mm³ (49,5), 1,7 s / 1,7 s; com suporte deslocado:
+    771 222,8 / 770 974,3 mm³ (49,4), 2,9 s / 2,2 s; lados em x = 250 e 750: 706 171,3 / 706 025,5 mm³ (49,4),
+    2,1 s / 0,6 s; material por fora: 726 998,0 / 726 752,7 mm³ (49,4), 2,6 s / 2,3 s; material por dentro:
+    722 954,6 / 722 709,5 mm³ (49,4), 2,5 s / 2,3 s; recuo por dentro, lados e suporte deslocado juntos:
+    742 336,3 / 742 177,5 mm³ (49,4), 3,8 s / 2,1 s. A ferramenta da aba tem 10 faces em todos os casos (a
+    polilinha dava 150 a 200). O volume subiu ~180 mm³ nos casos sem limite em relação à primeira parte: são os
+    dois trechos de até um passo que faltavam nas pontas. Caixa conferida em x (a dobra que sai da web nas pontas,
+    calculada pela tangente do dorso), em y (topo da OML recuada + r + t, ou + ba + 20 na planificada, ou o topo
+    da web fora dos limites) e em z.
 - **Pendente**
-  1. Com limites de lado, com posição do material por fora ou por dentro (a OML recua e vira polilinha) e na aba
-     curva por arestas, a varredura ainda segue a polilinha refeita em retas e arcos a 0,2 % do raio: o mesmo
-     defeito de escala pode voltar em peça grande. O caminho certo é deslocar e aparar a curva exata no kernel.
-     A aba termina na última amostra (até um passo antes da borda da web: 5 mm na corda 1000), como antes.
+  1. A aba curva por arestas com recuo e cadeia de várias arestas segue a polilinha (ver acima).
   2. Aproximação para superfície de dupla curvatura (estiramento/enrugamento) e recorte de alívio onde a
      OML fecha (hoje só o aviso).
   3. Os limites dos lados, a borda final e os cantos não aparecem na prévia simplificada (só no resultado).
