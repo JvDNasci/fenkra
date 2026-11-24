@@ -316,7 +316,7 @@ fn confere(k: &Caso, flat: bool) -> String {
     let res = recompute(&d);
     let dt = t0.elapsed().as_secs_f64();
     let estado = if flat { "planificada" } else { "dobrada" };
-    assert_eq!(res.status[&aba], Status::Ok, "{k:?} {estado}");
+    assert!(ok_ou_conformacao(&res.status[&aba]), "{k:?} {estado}");
     assert_eq!(res.bodies.len(), 1, "{k:?} {estado}: um corpo só");
     // A medida do volume. Na dobrada, a integração padrão do kernel (`mass`, pontos de Gauss fixos) erra
     // ~6e-6 do total nas faces varridas da dobra, mais que 1e-3 do volume da aba quando a espessura é fixa e a
@@ -505,7 +505,7 @@ fn aba_curva_em_cadeia_de_tres_arestas_com_recuo_em_qualquer_escala() {
                 let erro = (v - esperado) / aba_v;
                 let linha = format!("B566 cadeia corda {c} ângulo {ang} posição {side} planificada {flat}: {:?}, {dt:.2} s, volume {v:.6e} (teórico {esperado:.6e}), erro na aba {erro:+.3e}", res.status[&aba]);
                 println!("{linha}");
-                if res.status[&aba] != Status::Ok || !forma.is_some_and(|fm| fm.is_valid()) || res.bodies.len() != 1 || erro.abs() > 1e-3 {
+                if !ok_ou_conformacao(&res.status[&aba]) || !forma.is_some_and(|fm| fm.is_valid()) || res.bodies.len() != 1 || erro.abs() > 1e-3 {
                     falhas.push(linha);
                 }
             }

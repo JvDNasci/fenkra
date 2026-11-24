@@ -18,7 +18,7 @@ fn chapa(d: &mut Document) {
 fn confere_ok(d: &Document) -> fenkra_solidos::RecomputeResult {
     let r = recompute(d);
     for f in &d.features {
-        assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);
+        assert!(ok_ou_conformacao(&r.status[&f.id]), "{}: {:?}", f.name, r.status[&f.id]);
     }
     r
 }
@@ -158,7 +158,7 @@ fn b560_lista_mista_reta_curva_reta_e_uma_aba_continua() {
     let acresc = r.bodies[0].mass.volume - vbase;
     // 80 (cima) + 15,7 (arco) + 40 (direita) = 135,7 mm de aresta, seção ~33 mm²
     assert!(acresc > 3500. && acresc < 5500., "volume das abas da lista mista {acresc}");
-    assert_eq!(r.status[&id], Status::Ok);
+    assert!(ok_ou_conformacao(&r.status[&id]));
     // planificada correta
     d.sheet.as_mut().unwrap().flat = true;
     let rf = confere_ok(&d);

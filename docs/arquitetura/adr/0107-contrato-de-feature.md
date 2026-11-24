@@ -622,3 +622,108 @@ a coerência antes de integrar.
   revolução, membro estrutural) têm número mas não chave; `SketchLine`, `SketchCurve` e `Pick::SkCurve`
   ainda mostram "#id"; nível "dono" escolhe só faces (falta recurso inteiro para campos de corpo); listas de
   pontos de arquivo antigo (extrapolar) seguem por ponto; realce ao passar o mouse sobre um nível.
+
+### B579, nervura de asa e caverna de fuselagem: aba em perfil curvo fechado e conformação (23/11/2026)
+
+Pedido: a aba por superfície e a aba curva por arestas têm de contornar o perímetro inteiro de um perfil fechado
+(aerofólio NACA 2412, oval de fuselagem), para os dois lados da chapa, dobrada e planificada, e a planificação
+de aba com curvatura segue a conformação (prensa com borracha, hidroconformação), não a dobradeira. O teste com
+mouse de 23/11 (`docs/pesquisa/asa/relatorio-asa.md`) mostrou a aba só num trecho, erro de raio pequeno e "o
+suporte não encontra a borda da web".
+
+**Causas, medidas uma a uma** (cada uma só aparecia depois de resolver a anterior):
+
+1. *A seção do suporte chega em pedaços.* A interseção de um suporte fechado com o plano da web é uma ou várias
+   polilinhas, quebradas na costura ou entre faces; o código ficava com a maior e a aba saía num trecho.
+   `chapa_fechada::junta` une os pedaços pelas pontas e `fechada` reconhece o laço.
+2. *Relimitar a web pelo suporte não existe num laço.* O suporte contorna a web inteira (ou coincide com a borda
+   dela): `split_side` não divide e a ferramenta de corte do lado "que sai" não tem lado. Em laço a web não é
+   relimitada quando a borda dela já é a OML (as 8 amostras caem na aresta, com a folga da flecha da seção); se a
+   OML cai dentro da web, a web fica só dentro dela (prisma da OML, `Common`).
+3. *"Para fora" pela caixa da peça.* Vale em perfil aberto; no contorno de um furo (caverna) o lado de fora aponta
+   para o centro. `chapa_fechada::lado_fora` põe dois pontos no plano da face, um de cada lado da borda, e fica
+   com o que cai fora do material.
+4. *A faixa planificada é um anel.* Com um laço só, a tira voltava ao começo por um corte de largura zero. A face
+   do kernel com dois laços decide quem é o furo pela área integrada, que erra em laço de spline longa (a
+   faixa saía cheia); `chapa_fechada::anel` faz o prisma do laço maior menos o do menor, cada laço em duas
+   metades (uma aresta que fecha sobre si mesma deixa a costura frágil nas booleanas). A borda deslocada vira
+   polígono, não spline: no nariz do aerofólio ela abre em leque (pontos a dezenas de mm ao lado de pontos a 1 mm)
+   e a spline interpolada oscila.
+5. *A costura da spline fechada.* A tangente do primeiro e do último ponto atravessa o começo (senão a linha de
+   fora do começo e a do fim não se encontram e o anel não fecha). A varredura da dobra mantém a tangente de um
+   lado só no começo (a seção tem de ficar normal ao primeiro trecho do caminho).
+6. *A integração de volume do kernel (`mass`) erra até 13 %* numa face plana limitada por uma spline longa: a web
+   da nervura de 1500 mm dava 239 602 mm³ contra 275 962 da malha, e as conferências "a fusão tem volume"
+   (`aceita`) rejeitavam fusões boas e aceitavam ruins. Em perfil fechado elas usam o volume da malha
+   (`chapa_fechada::volume`, teorema da divergência, flecha 2e-4 da diagonal, uns 2 % abaixo do verdadeiro nas paredes curvas, o que basta para uma conferência com margem de 50 %). O volume que a interface mostra
+   continua o do kernel (pendência).
+7. *A varredura pela curva exata de um laço saía inválida* (nervura de 1500 mm, G1 aparente por causa do trecho
+   único); pela polilinha da aresta da web (cadeia de arcos e splines pelos pontos) sai válida. Na aba por
+   superfície a linha de dobra de um laço é a aresta da web (`edge_at`), e o suporte só a escolhe: a polilinha da
+   seção do kernel tem a flecha da tesselação.
+8. *Canto vivo.* Uma spline fechada que se fecha num bordo de fuga agudo (canto de 14°, giro de 164°) não une: o
+   erro diz o canto, o ângulo, o ponto e o que fazer (`Analise::dica_falha`), em vez de "a união saiu inválida".
+
+*Armadilha do comando de aba curva (não era defeito do kernel, mas custou muito teste).* O comando acha a aresta
+pelo elemento do meio da lista (`edge[len/2]`) e leva a cadeia inteira pelo quanto esse ponto andou até o ponto
+médio que o kernel dá à aresta. Numa aresta fechada o ponto do meio da polilinha não é o ponto médio do kernel, e
+a aba saía deslocada (4 a 12 mm, exatamente a coordenada do primeiro ponto): o teste monta a lista com o ponto
+médio do kernel no meio. O app grava a aresta pelo clique, que é o ponto médio dela.
+
+**Testes antigos.** O aviso de conformação aparece como `Status::Warning` em abas de curva forte dos testes do B529 a B566 (arco de raio 72 mm com aba de 20 mm, o dorso de asa em escala); a conferência de geometria deles passou a aceitar `Ok` ou aviso de conformação (`ok_ou_conformacao` em `tests/common/mod.rs`), sem tocar nos números de volume e caixa. A bandeja curva de exemplo ganhou aba de 10 mm (a de 18 mm acusava contração).
+
+**Caminhos comparados** (aba de 90°, mesmo contorno; tempo do recálculo completo; erro = (medido − teoria) / volume
+da aba; volume pela malha, teoria de Pappus):
+
+| caso | caminho | dobrada | planificada |
+|---|---|---|---|
+| oval 1200 × 900, t 1,2, aba 12, cima | superfície (suporte = extrusão) | −0,28 %, 19 s | −0,19 %, 13 s |
+| idem, baixo | superfície | −0,14 %, 19 s | −0,19 %, 13 s |
+| idem, cima | aresta com ângulo | −0,28 %, 17 s | −0,20 %, 12 s |
+| idem, baixo | aresta com ângulo | −0,15 %, 17 s | −0,20 %, 12 s |
+| fuselagem de dupla curvatura (loft 1200 × 900 → 800 × 600, estação 1500), cima | superfície (suporte = loft) | 0,00 %, 111 s | +0,53 %, 11 s |
+| NACA 2412 corda 2000, t 1, aba 8, cima | aresta | **só com `--ignored`** (fusão de minutos) | −0,26 %, 21 s |
+| idem | superfície | idem | −0,26 %, 19 s |
+| NACA 2412 corda 2000, t 2, aba 25, baixo | aresta / superfície | idem | −0,09 %, 8 s / 9 s |
+| NACA 2412 corda 1500, t 1,5, aba 15, cima | aresta / superfície | idem | −0,15 %, 8 s / 9 s |
+| asa enflechada (loft 2000 → 1500, envergadura 4000, recuo 600), estação 1500 | superfície (suporte = loft) | idem | −0,48 %, 19 s |
+
+Os dois caminhos de aba dão o mesmo resultado (diferença de décimos de por cento); a aba por superfície é o padrão
+(a escolha do suporte acha a aresta e o laço sozinha, e é a mais rápida na dobrada). O planificado é mais exato que
+o dobrado porque a faixa é um anel de superfície plana. A varredura exata pela aresta fechada, a terceira via
+pedida, foi descartada para laço (causa 7). A aba dobrada do aerofólio (spline de 139 pontos com a ponta de
+bordo de fuga) varre em 8 s, mas a fusão com a web leva de 100 a 500 s e às vezes é recusada: a face lateral da web
+é uma superfície B-spline e a parede entra nela 0,05 mm, contato quase tangente que a booleana do kernel resolve
+mal; o teste dela (`nervura_naca_dobrada_aresta`) fica `#[ignore]`. Na oval (spline de 96 pontos) a mesma fusão leva
+17 s.
+
+**Conformação (hidroconformação, prensa com borracha)** em `chapa_hidro.rs`. A aba reta continua na dobradeira
+(desenvolvimento `ba = ângulo·(r + k·t)`). Quando a linha de dobra é curva a faixa plana é a curva deslocada, para
+fora, por `D = ba + comprimento` (a linha neutra conserva o comprimento e cada fibra normal à linha de dobra
+mantém o dela: o desenvolvimento geodésico da aba), e a peça dobrada tem a borda livre a `x_f = (r + k·t)·sen θ +
+comprimento·cos θ` da linha de dobra. Uma curva paralela a uma de curvatura κ (positiva no lado convexo) tem o
+comprimento multiplicado por `1 + κ·d`; logo a deformação circunferencial da borda é
+
+```
+ε = (1 + κ·x_f) / (1 + κ·D) − 1  ≈  −κ·(D − x_f)        (aba reta de altura h num arco de raio R: ε ≈ −h/R)
+t' = t / (1 + ε)                                           (constância de volume, comprimento radial fixo)
+```
+
+Convexo: `ε < 0`, flange de contração (a borda se comprime, a chapa espessa, enruga). Côncavo: `ε > 0`, flange de
+estiramento (a borda estica, a chapa afina, trinca). Risco em três faixas (ok abaixo de 0,5, atenção até 1,
+falha de 1 em diante): na compressão, `ρ = |ε| / (ψ·ε_cr)` com `ε_cr = 0,425·π²/(12·(1 − ν²))·(t/h)²` (flambagem
+local da borda livre, placa com uma borda apoiada e a outra livre) e `ψ = 20` (apoio da borracha ou da pressão);
+na tração, `ρ = ε / ε_trinca` com `ε_trinca = 15 %` (alumínio recozido; editável em Chapa › Parâmetros ›
+"Limite de conformação da borda"). Cantos vivos (giro de mais de 35° num vértice) são tratados à parte: a
+curvatura não vale ali e a aba pede alívio de canto. O resultado é um `Status::Warning` com o trecho, o valor, a
+espessura final e o comprimento de aba que ainda fica abaixo do limite; nunca um erro. `ψ` e `ε_trinca` são
+hipóteses de trabalho a calibrar (nenhuma fonte pública foi consultada; ver `procedencia.md`).
+
+**Ficou de fora.** (a) O mapa de deformação "tipo elementos finitos" com cores no 3D, a legenda e a opção
+"Mostrar deformação" (pedido de 23/11, depois do núcleo): o cálculo por ponto da linha de dobra
+(`Analise::pontos`: κ, ε, t'/t, regime, faixa de risco) está pronto e testado; falta a ponte com o renderer (cor por
+vértice da malha da aba). (b) A simulação completa de conformação (FEA) vai para depois do lançamento. (c) O bordo
+de fuga agudo: pede alívio de canto ou aba em dois trechos (o erro diz como); o alívio automático não foi feito.
+(d) Aba em perfil fechado com limites de lado e canto: não se aplicam (a cadeia é um laço); o recuo (posição do
+material) de um laço segue a polilinha. (e) O volume que a interface mostra (`mass`) segue com o erro da
+integração em face de spline longa. (f) A aba dobrada da nervura de aerofólio (spline longa na web) pela fusão lenta e às vezes recusada, descrita acima: o caminho natural é uma fusão sem contato quase tangente (a seção encostar na face da web em vez de entrar 0,05 mm) ou converter a face lateral da web em B-spline de menos nós, e fica para a bancada de kernel. (g) Aba por superfície em perfil fechado com loft de aerofólio (asa enflechada) só testada planificada; a dobrada do mesmo caso cai na mesma fusão lenta.

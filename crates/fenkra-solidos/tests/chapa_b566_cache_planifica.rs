@@ -64,12 +64,12 @@ fn nervura_de_asa_com_aba_de_20_mm_dobra_e_planifica() {
         let (d, aba, _) = nervura("20", side);
         let mut cache = Cache::default();
         let dobrada = recompute_ambos(&d, &mut cache);
-        assert_eq!(dobrada.status[&aba], Status::Ok, "posição {side} dobrada: {:?}", dobrada.status[&aba]);
+        assert!(ok_ou_conformacao(&dobrada.status[&aba]), "posição {side} dobrada: {:?}", dobrada.status[&aba]);
         let (lo, hi) = caixa_da_malha(&dobrada);
         assert!(hi[2] > 20. + 2. - 0.5, "posição {side}: a aba sobe 20 mm além da dobra ({hi:?})");
         assert!(lo[0] > -6. && hi[0] < 106., "posição {side}: caixa em x {lo:?} {hi:?}");
         let plana = recompute_cached(&com_flat(&d, true), &mut cache);
-        assert_eq!(plana.status[&aba], Status::Ok, "posição {side} planificada: {:?}", plana.status[&aba]);
+        assert!(ok_ou_conformacao(&plana.status[&aba]), "posição {side} planificada: {:?}", plana.status[&aba]);
         let (_, hip) = caixa_da_malha(&plana);
         assert!(hip[2] < 2.1, "posição {side}: planificada fica plana (z máximo {})", hip[2]);
         // a web é relimitada pelo suporte (~11,9 mil mm³ medidos com 20 mm) e a faixa da aba vem em cima
@@ -93,7 +93,7 @@ fn alternar_dobrado_e_planificado_usa_o_cache_sem_recalcular() {
     let t0 = Instant::now();
     let dobrada = recompute_ambos(&d, &mut cache);
     let conjunto = ms(t0);
-    assert_eq!(dobrada.status[&aba], Status::Ok);
+    assert!(ok_ou_conformacao(&dobrada.status[&aba]));
     let vol_dobrada = volume_total(&dobrada);
 
     // referência independente: o planificado calculado do zero
@@ -111,7 +111,7 @@ fn alternar_dobrado_e_planificado_usa_o_cache_sem_recalcular() {
         max_ms = max_ms.max(dt);
         soma += dt;
         assert_eq!(cache.reused, n_comandos, "volta {i}: todos os comandos saem do cache (sem recálculo)");
-        assert_eq!(r.status[&aba], Status::Ok, "volta {i}");
+        assert!(ok_ou_conformacao(&r.status[&aba]), "volta {i}");
         let esperado = if flat { vol_plana } else { vol_dobrada };
         assert!((volume_total(&r) - esperado).abs() < 1e-6 * esperado, "volta {i}: volume {} esperado {esperado}", volume_total(&r));
         let (_, hi) = caixa_da_malha(&r);
@@ -148,7 +148,7 @@ fn mudar_a_montante_invalida_so_o_que_depende_nos_dois_estados() {
     }
     let nova = recompute_cached(&mais_curta, &mut cache);
     assert_eq!(cache.reused, d.features.len() - 1, "só a aba refaz");
-    assert_eq!(nova.status[&aba], Status::Ok);
+    assert!(ok_ou_conformacao(&nova.status[&aba]));
     let plana_nova = recompute_cached(&com_flat(&mais_curta, true), &mut cache);
     assert_eq!(cache.reused, d.features.len() - 1, "o planificado antigo (20 mm) não vale: só a aba refaz");
     let zero_dobrada = recompute(&mais_curta);

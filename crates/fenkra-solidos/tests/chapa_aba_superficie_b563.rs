@@ -83,7 +83,7 @@ fn plana_as_tres_posicoes_encostam_a_aba_na_superficie() {
     for side in 0..=2u8 {
         let (d, aba) = nervura_plana(side, false, false);
         let r = calcula(&d, false);
-        assert_eq!(r.status[&aba], Status::Ok, "posição {side}: {:?}", r.status[&aba]);
+        assert!(ok_ou_conformacao(&r.status[&aba]), "posição {side}: {:?}", r.status[&aba]);
         let (lo, hi) = caixa_da_malha(&r);
         assert!((hi[0] - x_maximo_esperado(side)).abs() < 0.15, "posição {side}: x máximo {} (esperado {})", hi[0], x_maximo_esperado(side));
         assert!(lo[0].abs() < 0.1, "posição {side}: a base começa em x = 0 ({lo:?})");
@@ -104,7 +104,7 @@ fn plana_face_interna_e_externa_tem_distancia_zero_da_superficie() {
     for (side, deve) in [(1u8, 75.), (2u8, 75.)] {
         let (d, aba) = nervura_plana(side, false, false);
         let r = calcula(&d, false);
-        assert_eq!(r.status[&aba], Status::Ok);
+        assert!(ok_ou_conformacao(&r.status[&aba]));
         let alto: Vec<[f64; 3]> = r.bodies.iter().flat_map(|b| b.mesh.positions.chunks_exact(3).map(|p| [p[0] as f64, p[1] as f64, p[2] as f64])).filter(|p| p[2] > 8.).collect();
         assert!(!alto.is_empty(), "posição {side}: sem parede reta");
         let (xmin, xmax) = alto.iter().fold((f64::MAX, f64::MIN), |(a, b), p| (a.min(p[0]), b.max(p[0])));
@@ -124,7 +124,7 @@ fn plana_as_quatro_inversoes_em_cada_posicao_ficam_validas_e_planificam() {
                 let nome = format!("plana posição {side}, direção invertida {flip}, lado invertido {inv}");
                 let (d, aba) = nervura_plana(side, flip, inv);
                 let r = calcula(&d, false);
-                assert_eq!(r.status[&aba], Status::Ok, "{nome}: {:?}", r.status[&aba]);
+                assert!(ok_ou_conformacao(&r.status[&aba]), "{nome}: {:?}", r.status[&aba]);
                 let (lo, hi) = caixa_da_malha(&r);
                 // direção invertida: a aba desce (z negativo) em vez de subir
                 if flip {
@@ -142,7 +142,7 @@ fn plana_as_quatro_inversoes_em_cada_posicao_ficam_validas_e_planificam() {
                 let vol = volume_total(&r);
                 assert!(vol > 3000., "{nome}: volume {vol}");
                 let plana = calcula(&d, true);
-                assert_eq!(plana.status[&aba], Status::Ok, "{nome} planificada: {:?}", plana.status[&aba]);
+                assert!(ok_ou_conformacao(&plana.status[&aba]), "{nome} planificada: {:?}", plana.status[&aba]);
                 let (_, hip) = caixa_da_malha(&plana);
                 assert!(hip[2] < 2.1, "{nome}: planificada fica plana ({})", hip[2]);
                 assert!(volume_total(&plana) > 3000., "{nome}: volume planificado {}", volume_total(&plana));
@@ -162,7 +162,7 @@ fn curva_as_tres_posicoes_e_quatro_inversoes_de_uma_nervura_de_asa() {
                 let nome = format!("naca posição {side}, direção invertida {flip}, lado invertido {inv}");
                 let (d, aba) = nervura_naca(side, flip, inv);
                 let r = calcula(&d, false);
-                assert_eq!(r.status[&aba], Status::Ok, "{nome}: {:?}", r.status[&aba]);
+                assert!(ok_ou_conformacao(&r.status[&aba]), "{nome}: {:?}", r.status[&aba]);
                 assert!(r.bodies.iter().all(|b| !b.mesh.positions.is_empty() && b.mass.volume > 1000.), "{nome}: corpo vazio com status Ok");
                 let (lo, hi) = caixa_da_malha(&r);
                 if flip {
@@ -173,7 +173,7 @@ fn curva_as_tres_posicoes_e_quatro_inversoes_de_uma_nervura_de_asa() {
                 // a peça fica na caixa da web de 100 × 60 (mais a folga da parede que acompanha a curva nas pontas)
                 assert!(lo[0] > -2. && hi[0] < 102. && lo[1] > -0.1 && hi[1] < 62., "{nome}: fora da caixa {lo:?} {hi:?}");
                 let plana = calcula(&d, true);
-                assert_eq!(plana.status[&aba], Status::Ok, "{nome} planificada: {:?}", plana.status[&aba]);
+                assert!(ok_ou_conformacao(&plana.status[&aba]), "{nome} planificada: {:?}", plana.status[&aba]);
                 let (_, hip) = caixa_da_malha(&plana);
                 assert!(hip[2] < 2.1, "{nome}: planificada fica plana ({})", hip[2]);
             }

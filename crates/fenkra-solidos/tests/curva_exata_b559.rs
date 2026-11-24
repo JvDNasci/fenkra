@@ -21,7 +21,7 @@ fn s(x: &str) -> String {
 }
 
 fn ok(r: &RecomputeResult, d: &Document, id: Id) {
-    assert!(matches!(r.status.get(&id), Some(Status::Ok)), "{}: {:?}", d.name_of(id), r.status.get(&id));
+    assert!(r.status.get(&id).is_some_and(ok_ou_conformacao), "{}: {:?}", d.name_of(id), r.status.get(&id));
 }
 
 fn superficie(d: &Document, id: Id) -> Shape {

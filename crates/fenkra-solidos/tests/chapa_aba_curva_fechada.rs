@@ -30,7 +30,7 @@ fn circulo(r: f64, z: f64, n: usize) -> Vec<[f64; 3]> {
 fn confere_ok(d: &Document) -> fenkra_solidos::RecomputeResult {
     let r = recompute(d);
     for f in &d.features {
-        assert_eq!(r.status[&f.id], Status::Ok, "{}: {:?}", f.name, r.status[&f.id]);
+        assert!(ok_ou_conformacao(&r.status[&f.id]), "{}: {:?}", f.name, r.status[&f.id]);
     }
     r
 }

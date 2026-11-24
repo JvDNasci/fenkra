@@ -29,6 +29,10 @@ depurar. Escreva com suas palavras, sem copiar texto ou imagem, e registre as fo
 
 Preencha com o que for aprendido. Cada regra leva o motivo.
 
+- Aba em perfil fechado (B579, nervura e caverna): a cadeia fechada exige quatro cuidados. (1) Lado de fora pela sonda no material (`chapa_fechada::lado_fora`), nunca pela caixa da peça (contorno de furo aponta para o centro). (2) Faixa planificada é um anel: `chapa_fechada::anel` (prisma da curva maior menos o da menor, cada laço em duas metades); a face do kernel com dois laços decide o furo pela área integrada, que erra em spline longa, e saía cheia. (3) Volume de conferência pela malha (`chapa_fechada::volume`): `mass()` erra até 13 % em face plana de spline longa. (4) A varredura de laço vai pela polilinha da aresta, não pela curva exata (saía inválida). Na costura da spline fechada a linha de fora usa a tangente que atravessa o começo.
+- O comando de aba curva acha a aresta pelo elemento do meio da lista (`edge[len/2]`) e leva a cadeia inteira pelo quanto ele andou até o ponto médio do kernel: numa aresta fechada o ponto do meio tem de ser o ponto médio que o kernel dá (teste: `aresta_da_web`), senão a aba sai deslocada.
+- Aba de linha de dobra curva: a planificação segue a conformação (prensa com borracha, hidroconformação), analisada em `chapa_hidro.rs`: ε = (1 + κ·x_f)/(1 + κ·D) − 1, convexo contrai e enruga, côncavo estica e trinca; `Status::Warning` com o trecho, nunca erro. Trecho reto continua pela dobradeira com fator K. Os limites (`Limites`) são hipóteses a calibrar; o alongamento limite está em Chapa › Parâmetros.
+
 ## Como verificar
 
 `cargo test -p <crate> <filtro>`, com documento montado em código conferindo status, volume e caixa
