@@ -24,7 +24,7 @@ pub fn fechar(s: &mut Settings) {
 }
 
 /// `✕` sobre o canto direito da barra de título do painel. Devolve se foi clicado.
-fn botao_fechar(ctx: &egui::Context, rect: Rect, nome: &str) -> bool {
+pub(crate) fn botao_fechar(ctx: &egui::Context, rect: Rect, nome: &str) -> bool {
     let lado = 18.;
     // painel recolhido (só a barra de título): o título ocupa a largura toda, então o ✕ fica ao lado
     let recolhido = rect.height() < 48.;

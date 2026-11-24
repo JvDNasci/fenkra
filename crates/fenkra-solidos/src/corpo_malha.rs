@@ -434,6 +434,7 @@ fn com_contexto<R>(doc: &Document, f: impl FnOnce(&Ctx) -> R) -> Option<R> {
         malhas: HashMap::new(),
         roscas: vec![],
         previas: vec![],
+        conformacoes: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],

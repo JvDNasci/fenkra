@@ -305,6 +305,7 @@ pub fn passos_planificados(doc: &Document) -> Vec<PassoPlanificado> {
         malhas: HashMap::new(),
         roscas: vec![],
         previas: vec![],
+        conformacoes: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],

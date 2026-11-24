@@ -622,6 +622,14 @@ mod imp {
             let s = b::boolean_t(&self.0, &other.0, op as u8, tags, &mut out, &mut out_b).map_err(err)?;
             Ok((Shape(s), out, out_b))
         }
+        /// B579: une `other` (a aba, que só encosta nesta chapa) por costura das arestas livres, sem booleana
+        /// geral: a lateral da chapa e a face de ligação da aba saem e o casco fecha pelas bordas de cima e de baixo.
+        /// `tol` é a folga máxima entre as bordas costuradas. Etiquetas como em `boolean_tagged_src`.
+        pub fn costura_tagged_src(&self, other: &Shape, tol: f64, tags: &[i32]) -> KResult<(Shape, Vec<i32>, Vec<i32>)> {
+            let (mut out, mut out_b) = (vec![], vec![]);
+            let s = b::costura_t(&self.0, &other.0, tol, tags, &mut out, &mut out_b).map_err(err)?;
+            Ok((Shape(s), out, out_b))
+        }
         /// Filete (`chamfer = false`) ou chanfro nas arestas mais próximas dos pontos médios dados.
         pub fn edges_tagged(&self, v: f64, mids: &[[f64; 3]], tol: f64, chamfer: bool, tags: &[i32]) -> KResult<(Shape, Vec<i32>)> {
             let flat: Vec<f64> = mids.iter().flatten().copied().collect();
@@ -1399,6 +1407,9 @@ mod imp {
             no()
         }
         pub fn boolean_tagged_src(&self, _: &Shape, _: Bool, _: &[i32]) -> KResult<(Shape, Vec<i32>, Vec<i32>)> {
+            no()
+        }
+        pub fn costura_tagged_src(&self, _: &Shape, _: f64, _: &[i32]) -> KResult<(Shape, Vec<i32>, Vec<i32>)> {
             no()
         }
         pub fn topology(&self) -> KResult<Topology> {

@@ -464,6 +464,7 @@ impl<'a> Ctx<'a> {
             malhas: HashMap::new(),
             roscas: vec![],
             previas: vec![],
+            conformacoes: vec![],
             leve: None,
             steps: HashMap::new(),
             miter_next: false,

@@ -757,6 +757,10 @@ impl App {
             }
             app.started = true;
         }
+        // desenvolvimento (B579): FENKRA_DEMO_DEFORMACAO=1 liga "Mostrar deformação" (a aba curva vem pintada)
+        if std::env::var("FENKRA_DEMO_DEFORMACAO").is_ok() {
+            app.settings.mostrar_deformacao = true;
+        }
         // desenvolvimento: FENKRA_DEMO_CHAPA=1 abre uma peça de chapa de exemplo na bancada Chapa
         if std::env::var("FENKRA_DEMO_CHAPA").is_ok() {
             let s = |x: &str| x.to_string();
@@ -9405,6 +9409,7 @@ impl eframe::App for App {
         crate::sup_analise::painel_curvatura(self, ctx, area);
         crate::analise_janela::painel_listras(self, ctx, area);
         crate::sup_inclinacao::painel_inclinacao(self, ctx, area);
+        crate::chapa_deformacao::legenda(self, ctx, area);
         crate::dfm_ui::painel(self, ctx, area);
         crate::verificar_ui::painel(self, ctx, area);
         crate::plastico_ui::painel(self, ctx, area);
@@ -9656,6 +9661,10 @@ impl eframe::App for App {
 
         // a primeira composição ainda não chegou: sem ela a cena seria a da peça de trás
         let esperando_vista = self.in_asm() && self.asm.as_ref().is_some_and(|s| s.view.is_none() && (s.compondo || s.dirty));
+        // B579: a opção "Mostrar deformação" do painel de aba muda a cor da cena
+        if crate::chapa_deformacao::sincroniza(ctx, &mut self.settings.mostrar_deformacao) {
+            self.scene_dirty = true;
+        }
         if self.scene_dirty && !esperando_vista {
             let forma_oculta = crate::forma_ui::oculta(self);
             let asm_view = if self.in_asm() { self.asm.as_ref().and_then(|s| s.view.as_ref().map(|v| (&s.view_doc, v))) } else { None };
@@ -9681,6 +9690,7 @@ impl eframe::App for App {
                     forma_oculta,
                     sombra_perfil: !self.settings.display.e_analise(),
                     curvatura: crate::sup_inclinacao::escala_do_mapa(&self.settings, &ctx.global_style().visuals),
+                    deformacao: self.settings.mostrar_deformacao.then(|| crate::sup_analise::paradas(&ctx.global_style().visuals)),
                     instancias: self.asm.as_ref().filter(|_| asm_view.is_some()).map_or(&[], |s| s.instancias.as_slice()),
                 };
                 let mut s = crate::medir_quadros::fase("cena", || scene::build(scene_doc, r, &opts));

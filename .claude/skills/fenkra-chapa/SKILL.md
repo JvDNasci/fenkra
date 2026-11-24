@@ -32,6 +32,8 @@ Preencha com o que for aprendido. Cada regra leva o motivo.
 - Aba em perfil fechado (B579, nervura e caverna): a cadeia fechada exige quatro cuidados. (1) Lado de fora pela sonda no material (`chapa_fechada::lado_fora`), nunca pela caixa da peça (contorno de furo aponta para o centro). (2) Faixa planificada é um anel: `chapa_fechada::anel` (prisma da curva maior menos o da menor, cada laço em duas metades); a face do kernel com dois laços decide o furo pela área integrada, que erra em spline longa, e saía cheia. (3) Volume de conferência pela malha (`chapa_fechada::volume`): `mass()` erra até 13 % em face plana de spline longa. (4) A varredura de laço vai pela polilinha da aresta, não pela curva exata (saía inválida). Na costura da spline fechada a linha de fora usa a tangente que atravessa o começo.
 - O comando de aba curva acha a aresta pelo elemento do meio da lista (`edge[len/2]`) e leva a cadeia inteira pelo quanto ele andou até o ponto médio do kernel: numa aresta fechada o ponto do meio tem de ser o ponto médio que o kernel dá (teste: `aresta_da_web`), senão a aba sai deslocada.
 - Aba de linha de dobra curva: a planificação segue a conformação (prensa com borracha, hidroconformação), analisada em `chapa_hidro.rs`: ε = (1 + κ·x_f)/(1 + κ·D) − 1, convexo contrai e enruga, côncavo estica e trinca; `Status::Warning` com o trecho, nunca erro. Trecho reto continua pela dobradeira com fator K. Os limites (`Limites`) são hipóteses a calibrar; o alongamento limite está em Chapa › Parâmetros.
+- Aba dobrada de perfil fechado (nervura de aerofólio): a união com a chapa é costura das arestas (`costura_t` em `sheet.inc`, `apply_aceita_x` com `costura = Some(tol)`), não a booleana geral: a lateral da chapa é B-spline longa e a dobra encosta nela de raspão, e a booleana leva 50 a 500 s. Fusão difusa não serve (só um valor passou e perdia material), cola também gasta 50 s. A costura só vale se `chapa_fechada::volume_estavel` (malha em duas flechas) concorda: a costura de loft saía com volume do kernel certo e malha de dezenas de vezes o volume nas flechas finas. Falhando, o comando cai na booleana de antes (loft: 80 a 437 s, anotado no ADR 0107).
+- Mapa de deformação ("Mostrar deformação"): `RecomputeResult::conformacoes` guarda a `Analise` de cada aba curva e `scene::build` pinta o vértice (`chapa_deformacao.rs`); a cor vai em `MeshVertex::col`, sem mexer no wgpu. Opção nova de `Settings` entra em `config_camadas::CLASSIFICACAO`.
 
 ## Como verificar
 
@@ -54,6 +56,9 @@ Registre aqui erros que se repetiram.
 
 - Comando que tira o corpo do coletor antes de montar o novo e falha no meio deixava a peça sem corpo (B580). O recálculo devolve os corpos ao estado anterior em qualquer erro (`erro_corpo.rs`); não restaure à mão dentro do comando.
 - Parede base sem furo costuma ser contorno externo aberto, não bug de furo: `make_face` fura por profundidade. Para a nervura/caverna a partir de um corpo use a Interseção do sketch com "Corpo inteiro" (`LinkSrc::Body`), que dá o contorno fechado e acompanha a estação.
+
+- Edição por script Python no Windows: abra e grave com `newline=''`; sem isso o arquivo vira CRLF e os testes que leem o próprio fonte (`espessar_paridade_tests`) falham em "não achei }".
+- Volume pela malha de uma forma costurada ou com arestas de tolerância alta pode variar com a flecha (o do kernel não): confira em duas flechas antes de aceitar.
 
 ## Ao terminar
 

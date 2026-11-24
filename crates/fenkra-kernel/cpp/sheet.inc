@@ -632,3 +632,112 @@ rust::String diag_fusao(const Shape& a, const Shape& b) {
 }
 
 }  // namespace fenkra
+
+namespace fenkra {
+
+namespace {
+
+// Pontos de uma face a 30-70 % da caixa UV e dentro do contorno (uma grade 3 x 3): onde a face encosta noutra
+// forma, todos eles encostam; nas bordas a face de uma dobra sempre toca a vizinha, por isso ficam de fora.
+std::vector<gp_Pnt> amostras_internas(const TopoDS_Face& f) {
+    std::vector<gp_Pnt> v;
+    double u1, u2, v1, v2;
+    BRepTools::UVBounds(f, u1, u2, v1, v2);
+    BRepAdaptor_Surface su(f);
+    for (double a : {0.3, 0.5, 0.7})
+        for (double b : {0.3, 0.5, 0.7}) {
+            const double u = u1 + (u2 - u1) * a, w = v1 + (v2 - v1) * b;
+            if (BRepClass_FaceClassifier(f, gp_Pnt2d(u, w), 1e-6).State() == TopAbs_IN) v.push_back(su.Value(u, w));
+        }
+    return v;
+}
+
+// A face encosta em `alvo` (a menos de `tol`) em todos os pontos internos?
+bool encosta(const TopoDS_Face& f, const TopoDS_Shape& alvo, double tol) {
+    const std::vector<gp_Pnt> pts = amostras_internas(f);
+    if (pts.empty()) return false;
+    for (const gp_Pnt& p : pts) {
+        BRepExtrema_DistShapeShape d(BRepBuilderAPI_MakeVertex(p).Vertex(), alvo);
+        if (!d.IsDone() || d.Value() > tol) return false;
+    }
+    return true;
+}
+
+}  // namespace
+
+// B579: uniao por costura de uma aba que contorna a chapa inteira (perfil fechado). `a` e a chapa, `b` a aba
+// (solido que so encosta na chapa, sem entrar nela): as faces de `b` que encostam na chapa (a face de ligacao
+// da secao varrida) e as faces da chapa que encostam nela (a lateral da borda) saem, e o resto vira um casco
+// so pela costura das arestas livres que sobram (a borda de cima e a de baixo da chapa com o comeco e o fim da
+// dobra). Nao ha intersecao de superficie com superficie: a booleana geral gasta minutos quando a lateral da
+// chapa e uma B-spline longa (nervura de aerofolio) e a dobra encosta nela quase tangente. As arestas costuradas
+// ficam com a tolerancia da folga entre a borda da chapa e o caminho da varredura (ate `tol`).
+// `tags`/`out`/`out_b` seguem o contrato de `boolean_t`.
+std::unique_ptr<Shape> costura_t(const Shape& a, const Shape& b, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out, rust::Vec<int32_t>& out_b) {
+    return guard("costura da aba", [&] {
+        TopTools_IndexedMapOfShape am, bm;
+        TopExp::MapShapes(a.s, TopAbs_FACE, am);
+        TopExp::MapShapes(b.s, TopAbs_FACE, bm);
+        // faces de `b` que encostam na chapa
+        std::vector<bool> b_liga(bm.Extent() + 1, false);
+        TopoDS_Compound ligacao;
+        BRep_Builder bb;
+        bb.MakeCompound(ligacao);
+        int n_liga = 0;
+        for (int i = 1; i <= bm.Extent(); ++i) {
+            if (encosta(TopoDS::Face(bm(i)), a.s, tol)) {
+                b_liga[i] = true;
+                bb.Add(ligacao, bm(i));
+                ++n_liga;
+            }
+        }
+        if (n_liga == 0) throw std::runtime_error("a aba não encosta na chapa");
+        BRepBuilderAPI_Sewing sw(tol, Standard_True, Standard_True, Standard_True, Standard_False);
+        std::vector<int> a_usadas, b_usadas;
+        for (int i = 1; i <= am.Extent(); ++i) {
+            if (encosta(TopoDS::Face(am(i)), ligacao, tol)) continue;
+            sw.Add(am(i));
+            a_usadas.push_back(i);
+        }
+        for (int i = 1; i <= bm.Extent(); ++i) {
+            if (b_liga[i]) continue;
+            sw.Add(bm(i));
+            b_usadas.push_back(i);
+        }
+        sw.Perform();
+        const TopoDS_Shape sewn = sw.SewedShape();
+        TopExp_Explorer se(sewn, TopAbs_SHELL);
+        if (!se.More()) throw std::runtime_error("a costura não formou casco");
+        TopoDS_Shell sh = TopoDS::Shell(se.Current());
+        if (!BRep_Tool::IsClosed(sh)) throw std::runtime_error("a costura da aba deixou bordas livres: a borda da chapa e o caminho da dobra estão a mais de " + std::to_string(tol) + " mm");
+        BRepBuilderAPI_MakeSolid ms(sh);
+        if (!ms.IsDone()) throw std::runtime_error("o casco da aba não fecha um volume");
+        Handle(ShapeFix_Solid) fx = new ShapeFix_Solid(ms.Solid());
+        fx->Perform();
+        TopoDS_Shape r = fx->Solid();
+        GProp_GProps g;
+        BRepGProp::VolumeProperties(r, g);
+        if (g.Mass() < 0) r.Reverse();
+        // etiquetas: cada face de saída vem da face de `a` (dono) ou de `b` (índice) que a costura deu
+        TopTools_IndexedMapOfShape rm;
+        TopExp::MapShapes(r, TopAbs_FACE, rm);
+        std::vector<int> t1(rm.Extent(), -1), t2(rm.Extent(), -1);
+        auto destino = [&](const TopoDS_Shape& f) {
+            TopoDS_Shape img = sw.IsModified(f) ? sw.Modified(f) : f;
+            return rm.FindIndex(img);
+        };
+        for (int i : a_usadas) {
+            const int k = destino(am(i));
+            if (k > 0) t1[k - 1] = i - 1 < static_cast<int>(tags.size()) ? tags[i - 1] : -1;
+        }
+        for (int i : b_usadas) {
+            const int k = destino(bm(i));
+            if (k > 0) t2[k - 1] = i - 1;
+        }
+        fill(out, t1);
+        fill(out_b, t2);
+        return wrap(r);
+    });
+}
+
+}  // namespace fenkra

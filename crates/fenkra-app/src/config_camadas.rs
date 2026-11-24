@@ -62,6 +62,7 @@ pub const CLASSIFICACAO: &[(&str, Classe)] = &[
     ("curv_raio", Interface),
     ("incl_eixo", Interface),
     ("incl_inverte", Interface),
+    ("mostrar_deformacao", Interface),
     ("incl_min", Interface),
     ("edges_in_render", Interface),
     ("tangent_edges", Interface),

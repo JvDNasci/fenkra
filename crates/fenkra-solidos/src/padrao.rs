@@ -166,6 +166,7 @@ fn contexto_vazio<'a>(doc: &'a Document, vars: Vars) -> Ctx<'a> {
         malhas: HashMap::new(),
         roscas: vec![],
         previas: vec![],
+        conformacoes: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
