@@ -48,6 +48,8 @@ Consulte solidos, superficies quando a mudança atravessar a fronteira da área.
 
 Registre aqui erros que se repetiram.
 
+- Interseção de uma face de sólido com o plano é curva aberta (o bordo de fuga de uma asa é outra face). Para seção fechada use `LinkSrc::Body` (seletor "Corpo inteiro"): corta o sólido todo (`section_loops`), refeito a cada recálculo (B580). Fechar com linha manual não acompanha a estação.
+
 - Pontas a 10 m (eixos) levadas à tela por `cam.project` somem na perspectiva (caem atrás da câmera). Projete
   pontos perto do meio (`perto_do_meio`) e estenda na tela.
 - "O quadro criou algo" não é "o elemento terminou" (B572). O 1º clique da Linha já cria o ponto e, sobre

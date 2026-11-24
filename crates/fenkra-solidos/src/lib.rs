@@ -6,6 +6,8 @@
 
 pub mod erro;
 pub mod erro_acionavel;
+mod erro_corpo;
+mod secao_corpo;
 pub mod validade;
 pub mod sentido_corte;
 pub mod verificar;
@@ -3546,6 +3548,8 @@ impl Ctx<'_> {
                 Ok(vec![p])
             }
             LinkSrc::Face { point } => cut(&self.face_of_bodies(*point)?),
+            // B580: seção do corpo inteiro, contorno fechado
+            LinkSrc::Body { point } => self.secao_do_corpo(*point, frame),
         }
     }
 
@@ -6017,7 +6021,22 @@ impl Ctx<'_> {
                     return Ok(None);
                 }
                 let (frame, sk) = &self.sketch(w.sketch)?;
+                // B580: perfil que é a seção de um corpo e a seção falhou (o plano deixou de cortar o
+                // corpo): o sketch guarda os pontos da seção anterior, e a parede sairia com o perfil
+                // velho e status Ok. O erro diz o motivo
+                if let Some(FeatureKind::Sketch(skf)) = self.doc.feature(w.sketch).map(|g| &g.kind) {
+                    let quebrada = skf.data.links.iter().any(|l| matches!(l.source, fenkra_core::sketch::LinkSrc::Body { .. }) && sk.link_quebrados.contains(&l.id));
+                    if quebrada {
+                        let motivo = sk.warnings.iter().find(|m| m.starts_with("geometria externa")).cloned().unwrap_or_default();
+                        return Err(format!("a seção do corpo pelo plano do sketch falhou ({motivo}): leve o plano para dentro do corpo ou escolha a seção de novo"));
+                    }
+                }
                 if sk.loops.is_empty() {
+                    // B580: perfil que viria da seção de um corpo e não veio: diz o motivo (o plano não
+                    // corta o corpo, o corpo sumiu...), em vez de só pedir um perfil fechado
+                    if let Some(motivo) = sk.warnings.iter().find(|w| w.starts_with("geometria externa")) {
+                        return Err(format!("a parede base não tem perfil porque a seção do sketch falhou ({motivo}); confira o plano e o corpo de origem"));
+                    }
                     return Err("a parede base precisa de um perfil fechado".into());
                 }
                 // B553: uma peça de chapa tem um só corpo. Cada contorno externo disjunto daria uma
@@ -7951,7 +7970,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         if let FeatureKind::Sketch(sk) = &f.kind {
             // sketch: lê corpos se o plano ou a geometria externa vierem de faces/arestas
             let ext = serde_json::to_string(&sk.data.links).unwrap_or_default();
-            all |= ext.contains("\"Edge\"") || ext.contains("\"Vertex\"") || ext.contains("\"Face\"");
+            all |= ext.contains("\"Edge\"") || ext.contains("\"Vertex\"") || ext.contains("\"Face\"") || ext.contains("\"Body\"");
             if let PlaneRef::Datum(pid) = sk.plane {
                 all |= ref_reads_bodies(doc, pid, 0);
             }
@@ -8027,10 +8046,15 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 let resolvidas_before = cx.formas_resolvidas.len();
                 *cx.promoted.borrow_mut() = None;
                 *cx.aviso_cantos.borrow_mut() = None;
+                // B580: comando em erro não leva o corpo junto: guarda o estado de antes para devolver
+                let antes_do_erro = erro_corpo::guarda(&cx.bodies, &touched);
                 let st = match cx.run(f) {
                     Ok(None) => Status::Ok,
                     Ok(Some(w)) => Status::Warning(w),
-                    Err(e) => Status::Error(e),
+                    Err(e) => {
+                        erro_corpo::restaura(&mut cx.bodies, antes_do_erro);
+                        Status::Error(e)
+                    }
                 };
                 // B350: varredura interna (membro, tubo do filete, nervura) que não girou nos cantos avisa
                 let st = match (st, cx.aviso_cantos.borrow_mut().take()) {

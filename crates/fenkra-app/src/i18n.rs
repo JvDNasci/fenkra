@@ -163,6 +163,10 @@ pub fn em_ingles(s: &str) -> &str {
 }
 
 static TABLE: &[(&str, &str)] = &[
+    ("Corpo inteiro", "Whole body"),
+    ("Só a face", "Face only"),
+    ("O plano corta o corpo inteiro e o contorno sai fechado (a nervura de asa, a caverna). A seção acompanha o plano e o corpo ao recalcular.", "The plane cuts the whole body and the outline comes out closed (wing rib, bulkhead). The section follows the plane and the body when recomputing."),
+    ("Só o corte da face clicada. Em corpo com mais de uma face no contorno (bordo de fuga separado), a curva sai aberta.", "Only the cut of the clicked face. On a body whose outline spans more than one face (separate trailing edge), the curve comes out open."),
     ("Filtrar: nome, :erro, :suprimido, :oculto", "Filter: name, :erro, :suprimido, :oculto"),
     ("Limpar o filtro", "Clear the filter"),
     ("Nenhum comando com erro.", "No commands with errors."),

@@ -91,6 +91,8 @@ pub fn dica_campo(rotulo: &str) -> &'static str {
 
 const DICA_ESPERA: &str = "Este valor abre quando o passo dele chegar.";
 const DICA_LADOS: &str = "Número de lados do polígono regular, de 3 a 40. Com o desenho aberto, as teclas + e - trocam.";
+const DICA_CORPO_INTEIRO: &str = "O plano corta o corpo inteiro e o contorno sai fechado (a nervura de asa, a caverna). A seção acompanha o plano e o corpo ao recalcular.";
+const DICA_SO_FACE: &str = "Só o corte da face clicada. Em corpo com mais de uma face no contorno (bordo de fuga separado), a curva sai aberta.";
 const DICA_INSCRITO: &str = "O círculo passa pelos vértices: o raio vai do centro a um vértice.";
 const DICA_CIRCUNSCRITO: &str = "O círculo fica dentro, tangente aos lados: o raio vai do centro ao meio de um lado.";
 const DICA_CHANFRO_IGUAIS: &str = "O corte recua a mesma distância nas duas linhas.";
@@ -173,6 +175,14 @@ pub fn comando(app: &mut App, ui: &mut egui::Ui) {
         ui.horizontal_wrapped(|ui| {
             for (circ, nome, dica) in [(false, "Inscrito", DICA_INSCRITO), (true, "Circunscrito", DICA_CIRCUNSCRITO)] {
                 ui.selectable_value(&mut edit.polygon_circunscrito, circ, tr(nome)).on_hover_text(tr(dica));
+            }
+        });
+    }
+    if tool == Tool::Intersect {
+        ui.add_space(2.);
+        ui.horizontal_wrapped(|ui| {
+            for (corpo, nome, dica) in [(true, "Corpo inteiro", DICA_CORPO_INTEIRO), (false, "Só a face", DICA_SO_FACE)] {
+                ui.selectable_value(&mut edit.secao_corpo, corpo, tr(nome)).on_hover_text(tr(dica));
             }
         });
     }
@@ -350,7 +360,7 @@ mod tests {
         for (_, nome, dica) in MODOS_CHANFRO {
             assert!(tem_traducao(nome) && tem_traducao(dica), "{nome}");
         }
-        for d in ["Inscrito", "Circunscrito", DICA_INSCRITO, DICA_CIRCUNSCRITO, DICA_SEGUNDA, DICA_ANGULO_CANTO, DICA_MANTER, "manter canto", "2ª distância"] {
+        for d in ["Corpo inteiro", "Só a face", DICA_CORPO_INTEIRO, DICA_SO_FACE, "Inscrito", "Circunscrito", DICA_INSCRITO, DICA_CIRCUNSCRITO, DICA_SEGUNDA, DICA_ANGULO_CANTO, DICA_MANTER, "manter canto", "2ª distância"] {
             assert!(tem_traducao(d), "{d}");
         }
         for d in [DICA_ESPERA, DICA_LADOS, DICA_RAIO_CANTO, DICA_DIST_CANTO, DICA_CONSTRUCAO, DICA_COTA_DIGITAR, DICA_AUTO_REST, DICA_AUTO_COTA, DICA_SNAPS, crate::sketch_snap::DICA_RESTRINGE, crate::sketch_snap::DICA_JUNTAR] {

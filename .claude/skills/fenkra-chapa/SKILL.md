@@ -48,6 +48,9 @@ Registre aqui erros que se repetiram.
 - Teste de chapa que só monta o documento pronto não pega bug de interface. Use `chapa_fluxo_tests.rs`: `Cache::leve` com o comando aberto, aresta chegando depois, ponto em `f32` e chave promovida gravada.
 - No reconhecimento de espessura, faces paralelas só contam se estão de costas (normais opostas, material entre elas): a fenda de um rasgo também tem faces que se enfrentam, com ar no meio.
 
+- Comando que tira o corpo do coletor antes de montar o novo e falha no meio deixava a peça sem corpo (B580). O recálculo devolve os corpos ao estado anterior em qualquer erro (`erro_corpo.rs`); não restaure à mão dentro do comando.
+- Parede base sem furo costuma ser contorno externo aberto, não bug de furo: `make_face` fura por profundidade. Para a nervura/caverna a partir de um corpo use a Interseção do sketch com "Corpo inteiro" (`LinkSrc::Body`), que dá o contorno fechado e acompanha a estação.
+
 ## Ao terminar
 
 Comando criado ou alterado gera o material simples em `Comandos/`, como manda o `CLAUDE.md`.
