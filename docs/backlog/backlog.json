@@ -1,6 +1,6 @@
 {
  "gerado_em": "2026-10-29",
- "tokens_total_k": 133060,
+ "tokens_total_k": 133960,
  "ondas": {
   "0": {
    "titulo": "Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes)",
@@ -18,19 +18,19 @@
    "titulo": "Onda 2 — filosofia base + VPM local",
    "versao": "0.1.0-alpha.32",
    "tokens_k": 32350,
-   "pct": 24.3
+   "pct": 24.1
   },
   "3": {
    "titulo": "Onda 3 — módulos novos e lacunas do benchmark",
    "versao": "0.1.0-alpha.33+",
    "tokens_k": 24700,
-   "pct": 18.6
+   "pct": 18.4
   },
   "4": {
    "titulo": "Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…)",
    "versao": "0.2.x",
-   "tokens_k": 57220,
-   "pct": 43.0
+   "tokens_k": 58120,
+   "pct": 43.4
   }
  },
  "itens": [
@@ -54,7 +54,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B02",
@@ -672,7 +672,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "em andamento",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B44",
@@ -726,7 +726,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B30",
@@ -827,7 +827,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B34",
@@ -963,7 +963,7 @@
    "teste": "Auto",
    "area": "Superfícies e wireframe",
    "status": "em andamento",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B41",
@@ -1056,7 +1056,7 @@
    "teste": "Auto",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B52",
@@ -1293,7 +1293,7 @@
    "teste": "Auto + Visual",
    "area": "Navegação",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B64",
@@ -1328,7 +1328,7 @@
    "teste": "Auto",
    "area": "PDM / PLM",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B66",
@@ -1933,7 +1933,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B102",
@@ -2132,7 +2132,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B114",
@@ -2549,7 +2549,7 @@
    "teste": "Auto",
    "area": "Navegação",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B140",
@@ -2597,7 +2597,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B143",
@@ -2645,7 +2645,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B146",
@@ -3061,7 +3061,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B172",
@@ -3141,7 +3141,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "em andamento",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B177",
@@ -3173,7 +3173,7 @@
    "teste": "Auto",
    "area": "Montagem",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B179",
@@ -3429,7 +3429,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B195",
@@ -3525,7 +3525,7 @@
    "teste": "Auto",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B201",
@@ -3737,7 +3737,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B214",
@@ -3785,7 +3785,7 @@
    "teste": "Auto + Visual",
    "area": "PDM / PLM",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B217",
@@ -3993,7 +3993,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B230",
@@ -4105,7 +4105,7 @@
    "teste": "Auto + Visual",
    "area": "Navegação",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B237",
@@ -4121,7 +4121,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B238",
@@ -4361,7 +4361,7 @@
    "teste": "Auto + Visual",
    "area": "Desenho técnico",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B253",
@@ -4665,7 +4665,7 @@
    "teste": "Auto + Visual",
    "area": "Sketch",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B272",
@@ -4713,7 +4713,7 @@
    "teste": "Visual",
    "area": "Sketch",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B275",
@@ -4745,7 +4745,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B277",
@@ -4761,7 +4761,7 @@
    "teste": "Auto + Visual",
    "area": "Superfícies e wireframe",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B278",
@@ -4841,7 +4841,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B283",
@@ -5001,7 +5001,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B293",
@@ -5129,7 +5129,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B301",
@@ -5353,7 +5353,7 @@
    "teste": "Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B315",
@@ -5529,7 +5529,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B326",
@@ -5561,7 +5561,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B328",
@@ -5641,7 +5641,7 @@
    "teste": "Auto",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B333",
@@ -5737,7 +5737,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "feito",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B339",
@@ -5833,7 +5833,7 @@
    "teste": "Auto + Visual",
    "area": "Biblioteca de normas",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B345",
@@ -5978,7 +5978,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "em andamento",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B354",
@@ -6378,7 +6378,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B379",
@@ -7082,7 +7082,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B423",
@@ -7242,7 +7242,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B433",
@@ -7258,7 +7258,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B434",
@@ -7322,7 +7322,7 @@
    "teste": "Auto + Visual",
    "area": "Sketch",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B438",
@@ -7354,7 +7354,7 @@
    "teste": "Auto + Visual",
    "area": "Montagem",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B440",
@@ -8122,7 +8122,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B490",
@@ -8170,7 +8170,7 @@
    "teste": "Auto + Visual",
    "area": "Estrutural e soldas",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B493",
@@ -8186,7 +8186,7 @@
    "teste": "Auto + Visual",
    "area": "Sólidos",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B494",
@@ -8506,7 +8506,7 @@
    "teste": "Auto",
    "area": "Sólidos",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B514",
@@ -8650,7 +8650,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B523",
@@ -8794,7 +8794,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B532",
@@ -9034,7 +9034,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B547",
@@ -9146,7 +9146,7 @@
    "teste": "Auto",
    "area": "Chapa",
    "status": "feito",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B554",
@@ -9228,7 +9228,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B559",
@@ -9324,7 +9324,7 @@
    "teste": "Auto + Visual",
    "area": "Chapa metálica",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B565",
@@ -9404,7 +9404,7 @@
    "teste": "Auto + Visual",
    "area": "Geral",
    "status": "a fazer",
-   "pct": 0.5
+   "pct": 0.4
   },
   {
    "id": "B570",
@@ -9436,7 +9436,7 @@
    "teste": "Auto + Visual",
    "area": "Interface",
    "status": "a fazer",
-   "pct": 0.2
+   "pct": 0.1
   },
   {
    "id": "B572",
@@ -9547,6 +9547,38 @@
    "tokens_k": 400,
    "teste": "Auto + Visual",
    "area": "Sketch",
+   "status": "a fazer",
+   "pct": 0.3
+  },
+  {
+   "id": "B579",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Nervura e caverna de chapa: aba em perfil curvo fechado, para dentro e para fora, planificada por hidroconformação",
+   "oque": "Teste com mouse da asa enflechada em 23/11 (docs/pesquisa/asa/relatorio-asa.md): a aba por superfície num aerofólio fechado sai só num trecho ou dá erro (raio do bordo de ataque menor que o desenvolvimento), e na caverna oval dá \"o suporte não encontra a borda da web\". Pedido do usuário: nervura e caverna têm de funcionar muito bem no dia a dia. A aba contorna o perímetro fechado inteiro (aerofólio, elipse, contorno com bordo de fuga agudo), para dentro e para fora (caverna com aba interna e externa), por superfície e também por aresta com ângulo; testar os caminhos e ficar com o mais exato. Planificação: aba com curvatura é feita por hidroconformação ou prensa (flange de contração no convexo e de estiramento no côncavo, linha neutra conservada); trecho reto sai pela dobradeira com o fator K. Aceite: testes montam nervura de aerofólio (corda 2000 e 1500) e caverna oval, nas duas direções da aba, recalculam e conferem status, volume e caixa dobrada e planificada.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 500,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
+   "status": "a fazer",
+   "pct": 0.4
+  },
+  {
+   "id": "B580",
+   "onda": 4,
+   "prio": "P0",
+   "titulo": "Chapa com furo, corpo que não some no erro e seção da estação que acompanha a asa",
+   "oque": "Teste com mouse da asa em 23/11: a parede base com contorno interno fechado sai cheia (anel da caverna impossível); feature de chapa em erro esconde o corpo inteiro; a interseção da asa com o plano da estação deixa o bordo de fuga aberto e a linha que fecha é manual, então a nervura quebra ao mudar a estação de 1500 para 2800. Corrigir: parede base fura pelos contornos internos; em erro, o corpo mostra o último estado bom e marca o erro; a seção de um sólido por um plano sai como contorno fechado associativo (ou a parede base aceita a seção direto), e mudar a estação recalcula a nervura sem erro. Aceite: testes de anel, de erro numa feature de chapa (corpo continua visível com o estado anterior) e de nervura em três estações diferentes, com status, volume e caixa.",
+   "origem": [
+    "USR-CHECK"
+   ],
+   "catalogo": [],
+   "tokens_k": 400,
+   "teste": "Auto + Visual",
+   "area": "Chapa metálica",
    "status": "a fazer",
    "pct": 0.3
   }
