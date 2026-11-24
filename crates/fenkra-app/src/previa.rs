@@ -586,6 +586,7 @@ mod tests {
         let o = SceneOpts {
             instancias: &[],
             curvatura: None,
+            deformacao: None,
             editing: None,
             sel: &sel,
             filter: &filtro,

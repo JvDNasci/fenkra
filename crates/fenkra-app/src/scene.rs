@@ -41,6 +41,8 @@ pub struct SceneOpts<'a> {
     pub sombra_perfil: bool,
     /// mapa de curvatura ou inclinação: o vértice leva a medida do kernel e o shader pinta por pixel
     pub curvatura: Option<crate::sup_inclinacao::EscalaMapa>,
+    /// B579: mapa de deformação da aba curva: as quatro cores do tema (contração, ok, atenção, falha)
+    pub deformacao: Option<[[f32; 3]; 4]>,
     /// prévia do comando aberto
     pub fantasma: Option<crate::previa::Fantasma<'a>>,
     /// cópias da montagem: esses corpos vão para os lotes, sem repetir a malha na cena (B125)
@@ -150,6 +152,7 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
     let feat_hidden: HashSet<Id> = doc.features.iter().filter(|f| doc.sketch_hidden(f) && matches!(f.kind, fenkra_core::FeatureKind::Sketch(_))).map(|f| f.id).collect();
     let (peca_tema, aresta_tema) = crate::theme::piece_colors();
     // o mapa de curvatura colore por vértice: só a malha posicionada de cada corpo sabe disso
+    let mapa_def = o.deformacao.filter(|_| o.curvatura.is_none()).and_then(|p| crate::chapa_deformacao::Mapa::novo(&r.conformacoes, p));
     let copias: HashMap<Id, &fenkra_montagem::lod::Instancia> = if o.curvatura.is_none() && o.fantasma.is_none() { o.instancias.iter().filter_map(|i| r.bodies.get(i.corpo).map(|b| (b.collector, i))).collect() } else { HashMap::new() };
     s.tangentes = o.tangent_edges;
     let edge_col = if o.dark_edges { aresta_tema.map(|a| { let f = rgb(a); [f[0], f[1], f[2], 1.0] }).unwrap_or([0.06, 0.07, 0.09, 1.0]) } else { [0.85, 0.88, 0.92, 1.0] };
@@ -198,6 +201,8 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 continue;
             }
             let nfaces = m.face_ranges.len();
+            // B579: mapa de deformação: o campo de cada aba desta malha (pelos vértices das faces dela)
+            let mut campos: HashMap<Id, Option<crate::chapa_deformacao::Campo>> = HashMap::new();
             for fi in 0..nfaces {
                 let owner = face_owner.get(fi).copied();
                 let face_hidden = !col.visible || owner.is_some_and(|w| feat_hidden.contains(&w));
@@ -219,6 +224,10 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                 let end = m.face_ranges.get(fi + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
                 let textura = app.texture.filter(|t| (*t as u32) < crate::render::TEX_LAYERS).map(|t| t as f32 + 1.).unwrap_or(0.);
                 let medida = |i: usize| o.curvatura.and_then(|e| e.atributo_da_malha(m, i));
+                let campo = match (&mapa_def, owner) {
+                    (Some(mp), Some(w)) if mp.analise(w).is_some() => campos.entry(w).or_insert_with(|| mp.campo(w, &crate::chapa_deformacao::posicoes_do_dono(m, face_owner, w))).as_ref(),
+                    _ => None,
+                };
                 // duplica os vértices da face para poder colorir por face
                 let mut remap: HashMap<u32, u32> = HashMap::new();
                 for &vi in &m.indices[start..end] {
@@ -230,6 +239,10 @@ pub fn build(doc: &Document, r: &RecomputeResult, o: &SceneOpts) -> Scene {
                             pos: p,
                             nrm: [m.normals[k], m.normals[k + 1], m.normals[k + 2]],
                             col: {
+                                let c = match (&mapa_def, campo) {
+                                    (Some(mp), Some(cp)) => mp.cor(cp, p),
+                                    _ => c,
+                                };
                                 let c = medida(vi as usize).unwrap_or(c);
                                 [c[0], c[1], c[2], 1.0]
                             },
@@ -617,7 +630,7 @@ mod testes_setas {
         let r = fenkra_solidos::recompute(&d);
         let (sel, filtro) = (Sel::None, Filter::default());
         // o sketch aparece mesmo consumido pela extrusão: é o caso em que a sombra passa pela peça
-        let o = SceneOpts { instancias: &[], forma_oculta: None, sombra_perfil: !m.e_analise(), editing: editing.then_some(sk), sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: Some(sk), hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura: None, fantasma: None };
+        let o = SceneOpts { instancias: &[], forma_oculta: None, sombra_perfil: !m.e_analise(), editing: editing.then_some(sk), sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: Some(sk), hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura: None, deformacao: None, fantasma: None };
         let c = build(&d, &r, &o);
         let tam = c.bounds.map(|(a, b)| b - a).unwrap_or(Vec3::ZERO);
         (c, tam)
@@ -755,7 +768,7 @@ mod testes_malha_de_tela {
 
     fn cena(d: &Document, r: &RecomputeResult, curvatura: Option<EscalaMapa>, fantasma: Option<crate::previa::Fantasma>) -> Scene {
         let (sel, filtro) = (Sel::None, Filter::default());
-        let o = SceneOpts { sombra_perfil: true, instancias: &[], forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: None, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura, fantasma };
+        let o = SceneOpts { sombra_perfil: true, instancias: &[], forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: None, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura, deformacao: None, fantasma };
         build(d, r, &o)
     }
 
@@ -768,7 +781,7 @@ mod testes_malha_de_tela {
         let r = polida(&d);
         let id = d.features[0].id;
         let (sel, filtro) = (Sel::None, Filter::default());
-        let cena_com = |hilite| build(&d, &r, &SceneOpts { sombra_perfil: true, instancias: &[], forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura: None, fantasma: None });
+        let cena_com = |hilite| build(&d, &r, &SceneOpts { sombra_perfil: true, instancias: &[], forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura: None, deformacao: None, fantasma: None });
         let (normal, acesa) = (cena_com(None), cena_com(Some(id)));
         assert!(!normal.mesh.is_empty());
         assert_eq!(normal.mesh.len(), acesa.mesh.len());
@@ -792,6 +805,44 @@ mod testes_malha_de_tela {
         let r = polida(&d);
         let f = crate::previa::Fantasma { id: fenkra_core::Id(u64::MAX), cor: [10, 20, 200], entrada: [200, 150, 10], erro: [200, 0, 0], retirada: [150, 0, 150], ferramenta: [0, 200, 200], neutro: [0, 200, 90], antes: &[] };
         assert_eq!(cena(&d, &r, None, Some(f)).indices.len(), r.bodies[0].mesh.indices.len());
+    }
+
+    /// B579: o mapa de deformação pinta por vértice as faces do comando que tem análise, com as cores do tema, e deixa a
+    /// cor de peça nas outras; sem a opção a cena é a de sempre. A linha de dobra é um arco convexo rente à face de baixo da caixa.
+    #[test]
+    fn mapa_de_deformacao_pinta_a_aba_por_vertice_com_as_cores_do_tema() {
+        use fenkra_solidos::chapa_hidro::{analisar, Aba, Limites};
+        let mut d = esfera("40");
+        if let FeatureKind::Primitive(p) = &mut d.features[0].kind {
+            (p.kind, p.a, p.b, p.c) = (PrimKind::Caixa, "10".into(), "20".into(), "30".into());
+        }
+        let mut r = polida(&d);
+        let id = d.features[0].id;
+        let (lo, hi) = r.bodies[0].mesh.positions.chunks_exact(3).fold(([f64::MAX; 3], [f64::MIN; 3]), |(lo, hi), p| {
+            ([0, 1, 2].map(|k| lo[k].min(p[k] as f64)), [0, 1, 2].map(|k| hi[k].max(p[k] as f64)))
+        });
+        let c = [0, 1, 2].map(|k| (lo[k] + hi[k]) / 2.);
+        // a linha de dobra roda rente à face de baixo: os vértices de baixo ficam perto dela (deformação pequena) e os de
+        // cima a 30 mm (a borda livre, a deformação inteira)
+        let centro = [c[0] + 75., c[1], lo[2]];
+        let pts: Vec<[f64; 3]> = (0..=40).map(|i| {
+            let t = -0.5 + i as f64 / 40.;
+            [centro[0] - 75. * t.cos(), centro[1] + 75. * t.sin(), lo[2]]
+        }).collect();
+        let outs: Vec<[f64; 3]> = pts.iter().map(|p| [(p[0] - centro[0]) / 75., (p[1] - centro[1]) / 75., 0.]).collect();
+        let analise = analisar(&pts, &outs, [0., 0., 1.], Aba { t: 1.2, r: 1.2, k: 0.33, ang: 90., len: 10. }, Limites::default());
+        assert!(!analise.pontos.is_empty());
+        r.conformacoes = vec![(id, analise)];
+        let (sel, filtro) = (Sel::None, Filter::default());
+        let com = |def: Option<[[f32; 3]; 4]>| build(&d, &r, &SceneOpts { sombra_perfil: true, instancias: &[], forma_oculta: None, editing: None, sel: &sel, filter: &filtro, hidden_env: false, dark_edges: true, tangent_edges: false, hilite: None, hilite_extra: &[], line_w: 1., line_dash: 0, point_style: 0, curvatura: None, deformacao: def, fantasma: None });
+        let (sem, mapa) = (com(None), com(Some(PARADAS)));
+        assert_eq!(sem.mesh.len(), mapa.mesh.len());
+        let rgb = |v: &MeshVertex| [v.col[0], v.col[1], v.col[2]];
+        assert!(sem.mesh.iter().all(|v| !PARADAS.contains(&rgb(v))), "sem a opção a peça fica na cor de peça");
+        let n = |faixa: usize| mapa.mesh.iter().filter(|v| rgb(v) == PARADAS[faixa]).count();
+        assert!(n(0) + n(1) > 0, "perto da linha de dobra a aba contrai sem risco (azul) ou está ok (verde): {:?}", [n(0), n(1), n(2), n(3)]);
+        assert!(n(3) > 0, "na borda livre, a 30 mm da dobra num arco de raio 75, a chapa enruga (vermelho): {:?}", [n(0), n(1), n(2), n(3)]);
+        assert!(mapa.mesh.iter().all(|v| v.mat[3] >= 0. && v.col[3] == 1.), "a cor sai por vértice, não pelo shader de mapa");
     }
 
     #[test]

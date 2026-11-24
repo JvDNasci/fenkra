@@ -509,6 +509,9 @@ pub struct Settings {
     pub incl_eixo: u8,
     #[serde(default)]
     pub incl_inverte: bool,
+    /// B579: pinta a aba de linha de dobra curva pela deformação da borda livre
+    #[serde(default)]
+    pub mostrar_deformacao: bool,
     #[serde(default = "minimo_da_inclinacao")]
     pub incl_min: f32,
     /// B180: zebra, isofotas e plano de corte das análises
@@ -691,6 +694,7 @@ impl Default for Settings {
             curv_raio: raio_da_curvatura(),
             incl_eixo: eixo_da_inclinacao(),
             incl_inverte: false,
+            mostrar_deformacao: false,
             incl_min: minimo_da_inclinacao(),
             analise_sup: Default::default(),
             edges_in_render: true,

@@ -929,6 +929,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             });
             crate::inverter::botao(ui, &mut cf.flip);
             ui.label(RichText::new(tr("A aba segue a aresta e as que continuam tangentes (reta e curva juntas), com o raio de dobra; planifica pelo comprimento desenvolvido.")).weak().small());
+            crate::chapa_deformacao::opcao(ui);
         }
         FeatureKind::SmSurfFlange(sf) => {
             section(ui, "Parâmetros");
@@ -984,6 +985,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
                 _ => "Exato: a aba se apoia no suporte escolhido. A linha de dobra (OML) é a interseção do suporte com o plano da web.",
             };
             ui.label(RichText::new(tr(help)).weak().small());
+            crate::chapa_deformacao::opcao(ui);
             section(ui, "Avançado");
             crate::editor::check(ui, &mut sf.keep_base, "não relimitar a web pelo suporte");
         }

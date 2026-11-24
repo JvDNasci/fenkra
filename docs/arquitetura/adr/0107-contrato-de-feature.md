@@ -743,11 +743,96 @@ curvatura não vale ali e a aba pede alívio de canto. O resultado é um `Status
 espessura final e o comprimento de aba que ainda fica abaixo do limite; nunca um erro. `ψ` e `ε_trinca` são
 hipóteses de trabalho a calibrar (nenhuma fonte pública foi consultada; ver `procedencia.md`).
 
-**Ficou de fora.** (a) O mapa de deformação "tipo elementos finitos" com cores no 3D, a legenda e a opção
+**Ficou de fora.** (a) (Feito em 24/11/2026, no seguimento abaixo.) O mapa de deformação "tipo elementos finitos" com cores no 3D, a legenda e a opção
 "Mostrar deformação" (pedido de 23/11, depois do núcleo): o cálculo por ponto da linha de dobra
 (`Analise::pontos`: κ, ε, t'/t, regime, faixa de risco) está pronto e testado; falta a ponte com o renderer (cor por
 vértice da malha da aba). (b) A simulação completa de conformação (FEA) vai para depois do lançamento. (c) O bordo
 de fuga agudo: pede alívio de canto ou aba em dois trechos (o erro diz como); o alívio automático não foi feito.
 (d) Aba em perfil fechado com limites de lado e canto: não se aplicam (a cadeia é um laço); o recuo (posição do
 material) de um laço segue a polilinha. (e) O volume que a interface mostra (`mass`) segue com o erro da
-integração em face de spline longa. (f) A aba dobrada da nervura de aerofólio (spline longa na web) pela fusão lenta e às vezes recusada, descrita acima: o caminho natural é uma fusão sem contato quase tangente (a seção encostar na face da web em vez de entrar 0,05 mm) ou converter a face lateral da web em B-spline de menos nós, e fica para a bancada de kernel. (g) Aba por superfície em perfil fechado com loft de aerofólio (asa enflechada) só testada planificada; a dobrada do mesmo caso cai na mesma fusão lenta.
+integração em face de spline longa. (f) (Feito em 24/11/2026 por costura das arestas, no seguimento abaixo.) A aba dobrada da nervura de aerofólio (spline longa na web) pela fusão lenta e às vezes recusada, descrita acima: o caminho natural é uma fusão sem contato quase tangente (a seção encostar na face da web em vez de entrar 0,05 mm) ou converter a face lateral da web em B-spline de menos nós, e fica para a bancada de kernel. (g) (Medida em 24/11/2026, no seguimento abaixo: dobrada 437 s e −4,09 %, pela booleana.) (g) Aba por superfície em perfil fechado com loft de aerofólio (asa enflechada) só testada planificada; a dobrada do mesmo caso cai na mesma fusão lenta.
+
+### B579, seguimento: nervura dobrada por costura e mapa de deformação no 3D (24/11/2026)
+
+Duas lacunas do B579 fechadas: a aba dobrada da nervura de aerofólio (a fusão de minutos) e o mapa de deformação com
+cores no 3D.
+
+**1. Nervura dobrada: costura das arestas no lugar da booleana geral.** A varredura da aba leva 7 a 8 s; o resto do tempo
+(100 a 500 s) era a booleana da aba com a chapa. Medido por etapa (`boolean_t` na colagem, com a varredura de 7,4 s):
+a construção da booleana `Build` leva 49 a 52 s e é a única parte cara; o `carry` das etiquetas, o `UnifySameDomain` (1,7 s)
+e a conferência (`is_valid` mais volume pela malha, 1,3 s) são pequenos. A causa é a de antes: a lateral da chapa é uma
+B-spline longa, e a seção da dobra encosta nela e nas faces de cima e de baixo (planas, mas a varredura as gera como
+B-spline) quase tangente e quase coincidente. A booleana geral resolve interseção de superfície com superfície; a costura não.
+
+*O que a costura faz* (`costura_t` em `sheet.inc`, `Shape::costura_tagged_src`, `apply_aceita_x` com `costura = Some(tol)`):
+a aba sai da varredura com o pé de 0,05 mm dentro da chapa, como antes; as faces dela que encostam na chapa (as três do pé:
+topo, base e fim, a menos de `tol` em 9 pontos internos) e as faces da chapa que encostam nelas (a lateral da borda) são
+descartadas; o resto vira um casco só pela costura das arestas livres que sobram (a borda de cima e a de baixo da chapa
+com o começo da dobra), `BRepBuilderAPI_Sewing` com `tol = min(0,25·t, 0,15 mm)` (menos que metade da espessura, para a
+borda de cima não casar com a de baixo). `ShapeFix_Solid` orienta o sólido. As etiquetas de face (dono, papel) saem de
+`Modified` da costura, no mesmo contrato do `boolean_t`. Só vale para perfil fechado dobrado (`laco`); o resto segue a
+booleana.
+
+*Quando a costura não vale, cai na booleana* (as quatro tentativas de antes, sem perder nada): a varredura falha, a costura
+deixa borda livre (a folga passa de `tol`), o sólido não é válido, o volume não é o da chapa mais o da aba (0,8 a 1,2 da
+aba, pela malha) ou a malha não é estável: `chapa_fechada::volume_estavel` mede o volume da malha em duas flechas (2e-4 e
+5e-5 da diagonal) e as duas têm de concordar em 2 %. Isso último pegou um defeito real: a fuselagem por loft costurada tem
+volume do kernel certo (756 650 contra 756 207) e é válida, mas a malha dela dá dezenas de vezes o volume em flechas de 0,7
+mm para baixo (24 milhões, depois −18 e −36 milhões); uma peça assim tesselaria errado na exportação. As arestas costuradas
+ficam com a tolerância da folga (0,076 mm medido na fuselagem), mais que a flecha fina.
+
+*Caminhos testados* (NACA 2412, corda 2000, t 1, aba 8 para cima, aresta, dobrada; tempo = recálculo completo, em PC
+compartilhado com outra suíte; erro = (medido − teoria) / volume da aba; volume pela malha de flecha 0,05):
+
+| caminho | tempo | erro | resultado |
+|---|---|---|---|
+| booleana geral (antes) | 100 a 500 s (medida de 23/11, não repetida) | | às vezes recusada |
+| fusão difusa 0,01 mm | 70 s (as quatro tentativas) | | recusada: a união saiu com 178 739 mm³ (a chapa tem 326 516) |
+| fusão difusa 0,03 mm | 51 s (as quatro tentativas) | | recusada (20 264 mm³) |
+| fusão difusa 0,06 mm | mais de 700 s (cancelada) | | |
+| fusão difusa 0,1 mm | 24,5 s | −2,59 % | aceita, mas perde 1 074 mm³ |
+| fusão difusa 0,2 mm | 49 s (as quatro tentativas) | | recusada (256 562 mm³) |
+| fusão difusa 0,3 mm | 62 s (as quatro tentativas) | | recusada (volume zero) |
+| cola `GlueShift` | 62 s (a booleana sozinha, 49 a 52 s) | −0,35 % | certa e lenta |
+| **costura das arestas** | **8,7 s** (varredura 7 s, costura 2,7 s) | **−0,35 %** | **certa** |
+
+A fusão difusa é traiçoeira: o valor que passa (0,1) é o que cobre a folga do pé (0,05) e vizinhos o recusam ou o perdem;
+não serve de regra. A cola acerta mas gasta os mesmos 50 s da booleana (o custo é a classificação das faces, não a
+interseção). A costura dá o mesmo volume da cola (−0,35 %) em 8,7 s. Nas ovais de 1200 × 900 (96 pontos; as oito
+combinações de aresta e superfície, cima e baixo) a costura leva 10 a 12 s e dá −0,55 a −0,69 % do volume da aba, contra
+17 a 30 s e −0,14 a −0,28 % da booleana: a costura não carrega o fiapo (da ordem de 0,05 mm) entre a borda da chapa e o
+caminho da dobra, que é a folga da tolerância das arestas. Fica dentro dos 6 % do teste.
+
+*Teste.* `nervura_naca_dobrada_aresta` perdeu o `#[ignore]` e confere status, volume (pela malha) e caixa dobrada de uma
+nervura de 2 m em menos de 30 s. `nervura_dobrada_costurada_aceita_furo_na_borda` fura a borda costurada (a booleana
+seguinte sobre o sólido costurado: 120 mm³, 0,6 s, forma válida).
+
+*Fuselagem e asa enflechada por loft dobradas.* Não são costuradas: a web é a seção do loft (interseção de superfícies
+B-spline) e o volume da malha da costura não é estável (acima). Seguem pela booleana, e a causa é a mesma da nervura:
+fuselagem com a aba para cima 82 a 116 s (erro 0,00 %); fuselagem com a aba para baixo (flip) 80 s (−1,19 %); asa enflechada
+dobrada 437 s (−4,09 %, dentro dos 8 % do teste, mas o maior erro de volume do B579). `caverna_na_fuselagem_loft_aba_para_baixo`
+e `nervura_na_asa_enflechada_dobrada_suporte_loft` ficam `#[ignore]` e registram o tempo e o erro. Caminho natural para elas: a borda da web com a tolerância da interseção reduzida (reajustar a aresta
+costurada à curva da dobra) ou a web e a aba construídas da mesma curva exata.
+
+**2. Mapa de deformação no 3D** (`crates/fenkra-app/src/chapa_deformacao.rs`). `curve_flange_lim_x` guarda a `Analise`
+de cada aba curva no `RecomputeResult::conformacoes` (comando, análise; também no cache por comando, como as prévias). O
+app pinta a malha da aba por vértice com a cor da faixa, em `MeshVertex::col`: o pipeline wgpu não muda (a cor por vértice
+já existia). A deformação cresce da dobra para a borda livre (`ε·d/d_máx`, primeira ordem: uma fibra a `d` da dobra); cada
+vértice acha o ponto mais perto da linha de dobra por uma grade espacial e a faixa vem de `chapa_hidro::classifica` com o
+material da própria análise. Quatro faixas, com as paradas de cor do tema (`sup_analise::paradas`: destaque, ok, aviso,
+erro; com a paleta segura, a escala de luminância): **contração** sem risco (ε ≤ −0,2 %), **ok**, **atenção**, **enruga ou
+trinca**. A opção "Mostrar deformação" está nos painéis da aba curva e da aba por superfície e vai para as preferências;
+a legenda é um painel livre e encaixável (aberto só com a opção ligada) com as quatro faixas, o ε da borda (pior contração
+a pior estiramento) e a espessura final `t' = t/(1 + ε)`. A peça fora da aba fica na cor de peça do tema. Na planificada a
+faixa se une à face plana da chapa (mesmo domínio) e só as bordas dela são da aba: o mapa serve à peça dobrada.
+
+*Testes.* `faixa_pela_deformacao_e_pelo_regime` (ε → faixa), `cada_faixa_leva_a_cor_do_tema`, `oval_tem_vertices_nas_tres_faixas`
+(oval 1200 × 900 com o comprimento de aba varrido até as três faixas de risco aparecerem; cada faixa tem vértices),
+`deformacao_cresce_da_dobra_para_a_borda`, `grade_acha_o_mesmo_ponto_que_a_varredura`, `resumo_junta_as_abas`;
+`recalculo_entrega_a_deformacao_ponto_a_ponto` (a nervura planificada entrega a análise, com nariz em falha e dorso ok).
+
+*Captura (sem mouse).* `docs/pesquisa/asa/capturas/mapa-deformacao.png`: nervura NACA 2412 de corda 300 mm (chapa de 1,5 mm, aba de 12 mm), dobrada, com `FENKRA_DEMO_DEFORMACAO=1`. A aba aparece azul na contração leve, verde onde está bom, amarela em atenção e vermelha no nariz e no bordo de fuga; a web fica na cor de peça do tema; a legenda mostra ε de −58,0 % a +75,6 % e a espessura final de 0,854 a 3,574 mm. O documento vem de `grava_a_nervura_dobrada_para_a_captura` (`FENKRA_GRAVAR_DOC`, `FENKRA_GRAVAR_CORDA=300`). Um comando em erro não entrega análise (`recompute` tira a dele de `conformacoes`): na captura do `nervura.fkp` da pesquisa, com a `Aba1` em erro, a legenda saía com valores de uma aba que não existe.
+
+**Ficou de fora (24/11).** Mapa na planificada (a faixa não é face própria), cor por vértice no conjunto de montagem
+(instâncias) e a escala de ε configurável na legenda; costura da web de loft (acima); o volume que a interface mostra
+(`mass`) segue com o erro de spline longa.

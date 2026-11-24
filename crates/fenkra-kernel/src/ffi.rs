@@ -212,6 +212,8 @@ pub mod bridge {
         /// resultado (-1 = face criada pela operação).
         /// `out_b` = índice da face da ferramenta `b` de onde vem cada face do resultado (-1 = nenhuma).
         fn boolean_t(a: &Shape, b: &Shape, op: u8, tags: &[i32], out: &mut Vec<i32>, out_b: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
+        /// B579: une a aba que contorna a chapa por costura das arestas, sem booleana (`boolean_t` com as mesmas etiquetas).
+        fn costura_t(a: &Shape, b: &Shape, tol: f64, tags: &[i32], out: &mut Vec<i32>, out_b: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn fillet_all_t(s: &Shape, r: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn fillet_sel_t(s: &Shape, r: f64, mids: &[f64], tol: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;
         fn chamfer_sel_t(s: &Shape, d: f64, mids: &[f64], tol: f64, tags: &[i32], out: &mut Vec<i32>) -> Result<UniquePtr<Shape>>;

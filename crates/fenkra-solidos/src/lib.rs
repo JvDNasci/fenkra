@@ -907,6 +907,9 @@ pub struct RecomputeResult {
     pub roscas: Vec<RoscaViz>,
     /// prévia leve dos comandos pesados em edição (B356)
     pub previas: Vec<previa_leve::PreviaViz>,
+    /// B579: deformação da borda livre, ponto a ponto, de cada aba de linha de dobra curva (comando, análise);
+    /// o app pinta o mapa de deformação a partir dela
+    pub conformacoes: Vec<(Id, chapa_hidro::Analise)>,
 }
 
 impl RecomputeResult {
@@ -984,6 +987,7 @@ struct Ctx<'a> {
     malhas: HashMap<Id, corpo_malha::CorpoMalha>,
     roscas: Vec<RoscaViz>,
     previas: Vec<previa_leve::PreviaViz>,
+    conformacoes: Vec<(Id, chapa_hidro::Analise)>,
     /// comando em edição: a rosca modelada dele vira só linhas, sem construir a hélice (B351)
     leve: Option<Id>,
     relatorios_forma: Vec<(Id, forma_brep::RelatorioForma)>,
@@ -1139,6 +1143,7 @@ struct FeatEntry {
     outlines: Vec<CutOutline>,
     roscas: Vec<RoscaViz>,
     previas: Vec<previa_leve::PreviaViz>,
+    conformacoes: Vec<(Id, chapa_hidro::Analise)>,
     relatorios_forma: Vec<(Id, forma_brep::RelatorioForma)>,
     formas_resolvidas: Vec<forma_vinculo::FormaResolvida>,
     steps: Vec<(Shape, BoolOp)>,
@@ -4803,6 +4808,9 @@ impl Ctx<'_> {
         let trinca = self.doc.sheet.as_ref().and_then(|x| ev(&x.trinca, &self.vars, "alongamento limite").ok()).filter(|v| *v > 0.).map(|v| v / 100.);
         let analise = chapa_hidro::analisar(&pts, &outs, n, chapa_hidro::Aba { t: sp.t, r, k: sp.k_for(r), ang, len }, chapa_hidro::Limites { trinca: trinca.unwrap_or(chapa_hidro::Limites::default().trinca), ..Default::default() });
         let hidro = analise.aviso();
+        // B579: o app pinta o mapa de deformação com os pontos dela
+        self.conformacoes.retain(|(id, _)| *id != f.id);
+        self.conformacoes.push((f.id, analise.clone()));
         // perfil fechado que não une: o motivo geométrico (canto vivo, curva fechada demais) vai junto com o erro
         let dica = |e: String| if laco { format!("{e}{}", analise.dica_falha()) } else { e };
         // de que lado está a espessura (raio de teste a partir de dentro da chapa)
@@ -5019,7 +5027,40 @@ impl Ctx<'_> {
         // seção entrando mais. Se nenhuma fechar, é erro explícito (nunca corpo vazio com status Ok).
         let mut feito = false;
         let mut ultimo = String::from("a aba não pôde ser unida à chapa");
+        // B579: perfil fechado dobrado: a booleana geral da aba com a lateral da chapa (B-spline longa, encosto
+        // quase tangente) leva minutos e às vezes é recusada; a aba sem pé (só encosta na chapa) é costurada pelas
+        // arestas livres, sem interseção de superfícies. Falhando, cai nas tentativas da booleana abaixo.
+        if laco && lim.ponta.is_none() && lim.lados.is_empty() && lim.cantos.iter().all(|c| c.is_none()) {
+            // a seção de sempre (com o pé de 0,05 mm dentro da chapa): é a que a varredura da cadeia fechada aceita; a
+            // costura descarta as faces do pé (elas encostam na chapa) e liga o resto pelas bordas
+            match Shape::face(&fr, &[secao(0.05)]).and_then(|f| f.sm_chain_sweep(&inner, n)) {
+                Ok(t) => {
+                    let tv = vol(&t);
+                    // a costura une as arestas até esta folga (a borda da chapa contra o caminho da varredura); menos que
+                    // metade da espessura, senão a borda de cima casaria com a de baixo
+                    let tol = (0.25 * sp.t).min(0.15);
+                    // a aba só encosta na chapa (o pé sai): o volume é o da chapa mais o da aba. A malha tem de dar o
+                    // mesmo volume em duas flechas: uma costura com a borda fora da tolerância tesselava errado
+                    // (volume de dezenas de vezes o da peça) nas flechas finas
+                    let aceita = |s: &Shape| {
+                        if tv <= 1e-6 || !s.is_valid() {
+                            return false;
+                        }
+                        chapa_fechada::volume_estavel(s).is_some_and(|v| v > base_vol + 0.8 * tv && v < base_vol + 1.2 * tv)
+                    };
+                    match self.apply_aceita_x(f.target, t, BoolOp::Add, f.id, None, Some(&aceita), Some(tol)) {
+                        Ok(None) => feito = true,
+                        Ok(Some(s)) => ultimo = format!("a costura da aba com a chapa saiu inválida ou incompleta (volume {:.1}, chapa {:.1}, aba {:.1})", vol(&s), base_vol, tv),
+                        Err(e) => ultimo = e,
+                    }
+                }
+                Err(e) => ultimo = e.0,
+            }
+        }
         for (e0, dec) in [(0.05, 1usize), (0.3, 1), (0.3, 4), (0.5, 8)] {
+            if feito {
+                break;
+            }
             // pontos muito próximos (amostragem densa de uma spline) fazem a varredura ondular
             let mut ch: Vec<V3> = inner.iter().step_by(dec).copied().collect();
             if dec > 1 && ch.last() != inner.last() {
@@ -5295,7 +5336,13 @@ impl Ctx<'_> {
     /// (corpo, ferramenta e passos do comando) e devolve `Ok(Some(resultado))` para a mensagem. Evita
     /// fazer a mesma booleana duas vezes (uma para conferir e outra para aplicar, B566).
     fn apply_aceita(&mut self, target: Id, tool: Shape, op: BoolOp, fid: Id, tool_roles: Option<Vec<i32>>, aceita: Option<&dyn Fn(&Shape) -> bool>) -> Result<Option<Shape>, String> {
-        let k = |e: KernelError| e.0;
+        self.apply_aceita_x(target, tool, op, fid, tool_roles, aceita, None)
+    }
+
+    /// `apply_aceita` com a união por costura (B579): `costura = Some(tol)` une a ferramenta (só soma) à chapa
+    /// pela costura das arestas livres, sem booleana geral; `tol` é a folga máxima entre as bordas.
+    #[allow(clippy::too_many_arguments)]
+    fn apply_aceita_x(&mut self, target: Id, tool: Shape, op: BoolOp, fid: Id, tool_roles: Option<Vec<i32>>, aceita: Option<&dyn Fn(&Shape) -> bool>, costura: Option<f64>) -> Result<Option<Shape>, String> {
         // a ferramenta levada entre o dobrado e o planificado perde a correspondência com os papéis
         let mismatch = self.sheet_mismatch(fid);
         let (tool, tool_roles) = match mismatch {
@@ -5323,7 +5370,27 @@ impl Ctx<'_> {
                     BoolOp::Cut => Bool::Cut,
                     BoolOp::Intersect => Bool::Common,
                 };
-                let (s, out, src) = b.boolean_tagged_src(&tool, kop, &tags_for(owners)).map_err(k)?;
+                let junta = match costura.filter(|_| op == BoolOp::Add) {
+                    Some(tol) => b.costura_tagged_src(&tool, tol, &tags_for(owners)),
+                    None => b.boolean_tagged_src(&tool, kop, &tags_for(owners)),
+                };
+                let (s, out, src) = match junta {
+                    Ok(r) => r,
+                    Err(e) => {
+                        // a operação falhou: o comando volta ao que era (a próxima tentativa parte do mesmo estado)
+                        match antes.0 {
+                            Some(t) => self.tools.insert(fid, t),
+                            None => self.tools.remove(&fid),
+                        };
+                        match antes.1 {
+                            Some(n) => self.steps.entry(fid).or_default().truncate(n),
+                            None => {
+                                self.steps.remove(&fid);
+                            }
+                        }
+                        return Err(e.0);
+                    }
+                };
                 // recorte desenhado no outro estado da chapa que não achou material depois de levado
                 // para este (a aba por perfil não tem mapa de dobras): erro com o motivo, em vez de
                 // sumir da planificada sem aviso (B86)
@@ -7922,6 +7989,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         malhas: HashMap::new(),
         roscas: vec![],
         previas: vec![],
+        conformacoes: vec![],
         leve: cache.leve,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -8103,6 +8171,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 cx.cut_outlines.extend(e.outlines.iter().cloned());
                 cx.roscas.extend(e.roscas.iter().cloned());
                 cx.previas.extend(e.previas.iter().cloned());
+                cx.conformacoes.extend(e.conformacoes.iter().cloned());
                 cx.relatorios_forma.extend(e.relatorios_forma.iter().cloned());
                 cx.formas_resolvidas.extend(e.formas_resolvidas.iter().cloned());
                 if e.steps.is_empty() {
@@ -8116,6 +8185,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                 let outlines_before = cx.cut_outlines.len();
                 let roscas_before = cx.roscas.len();
                 let previas_before = cx.previas.len();
+                let conformacoes_before = cx.conformacoes.len();
                 let relatorios_before = cx.relatorios_forma.len();
                 let resolvidas_before = cx.formas_resolvidas.len();
                 *cx.promoted.borrow_mut() = None;
@@ -8127,6 +8197,8 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                     Ok(Some(w)) => Status::Warning(w),
                     Err(e) => {
                         erro_corpo::restaura(&mut cx.bodies, antes_do_erro);
+                        // B579: aba que não saiu não tem mapa de deformação (a análise de um comando em erro não vale)
+                        cx.conformacoes.retain(|(id, _)| *id != f.id);
                         Status::Error(e)
                     }
                 };
@@ -8191,6 +8263,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
                         outlines: cx.cut_outlines[outlines_before.min(cx.cut_outlines.len())..].to_vec(),
                         roscas: cx.roscas[roscas_before.min(cx.roscas.len())..].to_vec(),
                         previas: cx.previas[previas_before.min(cx.previas.len())..].to_vec(),
+                        conformacoes: cx.conformacoes[conformacoes_before.min(cx.conformacoes.len())..].to_vec(),
                         relatorios_forma: cx.relatorios_forma[relatorios_before.min(cx.relatorios_forma.len())..].to_vec(),
                         formas_resolvidas: cx.formas_resolvidas[resolvidas_before.min(cx.formas_resolvidas.len())..].to_vec(),
                         steps: cx.steps.get(&f.id).cloned().unwrap_or_default(),
@@ -8478,6 +8551,7 @@ fn recompute_efetivo(doc: &Document, cache: &mut Cache) -> RecomputeResult {
         cancelado,
         roscas: cx.roscas,
         previas: cx.previas,
+        conformacoes: cx.conformacoes,
         relatorios_forma: cx.relatorios_forma,
         formas_resolvidas: cx.formas_resolvidas,
     }
@@ -8529,6 +8603,7 @@ pub fn publications(doc: &Document) -> Vec<(String, LinkedGeo)> {
         malhas: HashMap::new(),
         roscas: vec![],
         previas: vec![],
+        conformacoes: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -8586,6 +8661,7 @@ fn ctx_no_fim(doc: &Document) -> Option<Ctx<'_>> {
         malhas: HashMap::new(),
         roscas: vec![],
         previas: vec![],
+        conformacoes: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -9148,6 +9224,7 @@ pub fn cut_list(doc: &Document) -> Vec<CutRow> {
         malhas: HashMap::new(),
         roscas: vec![],
         previas: vec![],
+        conformacoes: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -9261,6 +9338,7 @@ pub fn member_joints(doc: &Document) -> Vec<((Id, usize), (Id, usize), [f64; 3])
         malhas: HashMap::new(),
         roscas: vec![],
         previas: vec![],
+        conformacoes: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -9306,6 +9384,7 @@ pub fn member_corners(doc: &Document) -> Vec<st_cantos::Canto> {
         malhas: HashMap::new(),
         roscas: vec![],
         previas: vec![],
+        conformacoes: vec![],
         leve: None,
         steps: HashMap::new(),
         miter_next: false,
@@ -9369,6 +9448,7 @@ pub fn skeleton_groups(doc: &Document, paths: &[CurveRef]) -> Vec<Vec<usize>> {
         malhas: HashMap::new(),
         roscas: vec![],
         previas: vec![],
+        conformacoes: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -9659,6 +9739,7 @@ pub fn export_com_preset(doc: &Document, collector: Option<Id>, path: &str, pres
         malhas: HashMap::new(),
         roscas: vec![],
         previas: vec![],
+        conformacoes: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],
@@ -9726,6 +9807,7 @@ pub fn final_shape(doc: &Document) -> Option<Shape> {
         malhas: HashMap::new(),
         roscas: vec![],
         previas: vec![],
+        conformacoes: vec![],
         leve: None,
         relatorios_forma: vec![],
         formas_resolvidas: vec![],

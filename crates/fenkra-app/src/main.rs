@@ -229,6 +229,7 @@ mod chapa_estilo_ui;
 mod chapa_laco_ui;
 mod chapa_canto_ui;
 mod chapa_aba_limites_ui;
+mod chapa_deformacao;
 mod chapa_unif_ui;
 mod chapa_b35_ui;
 mod chapa_fab_ui;

@@ -283,7 +283,8 @@ pub fn roda(k: &Caso) -> Medida {
     assert_eq!(r.bodies.len(), 1, "{}: {estado}: um corpo só", k.nome);
     let forma = final_shape(&d).expect("forma final");
     assert!(forma.is_valid(), "{}: {estado}: forma inválida", k.nome);
-    let volume = volume_da_malha(&forma, 0.05);
+    let defl: f64 = std::env::var("FENKRA_DEFL").ok().and_then(|v| v.parse().ok()).unwrap_or(0.05);
+    let volume = volume_da_malha(&forma, defl);
     let (lo, hi) = caixa_fina(&forma, 0.05);
     Medida { status, volume, lo, hi, segundos }
 }
@@ -341,16 +342,43 @@ fn nervura_naca_planificada_aresta_e_superficie() {
     }
 }
 
-/// Nervura dobrada (aba para cima, aresta): a varredura leva uns 8 s, mas a fusão com a web (spline de 139 pontos)
-/// leva de 100 a 500 s e às vezes é recusada; fica de fora da bateria comum. Roda com `--ignored`.
+/// Nervura dobrada (aba para cima, aresta). A varredura leva uns 8 s; a união com a web (spline de 139 pontos) era
+/// a booleana geral, de 100 a 500 s e às vezes recusada, e agora é a costura das arestas livres (alguns segundos).
 #[test]
-#[ignore = "lento: a fusão da aba dobrada com a web da nervura leva minutos"]
 fn nervura_naca_dobrada_aresta() {
     if !kernel_disponivel() {
         return;
     }
     let cont = naca2412_rombo(2000., 2000);
     confere(&caso("NACA 2412, corda 2000, t 1, aba 8", naca2412_rombo(2000., 60), 1., 8., Via::Aresta, false, false), &cont, 0.06);
+}
+
+/// A nervura dobrada sai da costura das arestas (sem booleana geral): o corpo resultante é um sólido válido e de
+/// um corpo só, aceita um furo que atravessa a borda da chapa e a dobra (as arestas costuradas têm a tolerância da
+/// folga entre a borda e o caminho da dobra).
+#[test]
+fn nervura_dobrada_costurada_aceita_furo_na_borda() {
+    if !kernel_disponivel() {
+        return;
+    }
+    use fenkra_kernel::{Bool, HoleShape};
+    let k = caso("NACA 2412, corda 2000, t 1, aba 8", naca2412_rombo(2000., 60), 1., 8., Via::Aresta, false, false);
+    let (d, _) = monta(&k);
+    let forma = final_shape(&d).expect("forma final");
+    assert!(forma.is_valid());
+    let v0 = volume_da_malha(&forma, 0.05);
+    // o furo de 8 mm no bordo de ataque (x = 4: corta a chapa, a dobra e a parede) até passar da aba
+    let furo = Shape::hole_tool([4., 0., -5.], [0., 0., 1.], 8., 30., HoleShape::Simple).expect("ferramenta de furo");
+    let t0 = Instant::now();
+    let furada = forma.boolean(&furo, Bool::Cut).expect("o furo na borda costurada");
+    let seg = t0.elapsed().as_secs_f64();
+    assert!(furada.is_valid(), "forma com furo inválida");
+    let v1 = volume_da_malha(&furada, 0.05);
+    let tirado = v0 - v1;
+    // o cilindro de 8 mm tira no máximo a chapa (1), o raio de dobra e a parede (até t + r + 8 = 10): menos que 500 mm³
+    assert!(tirado > 5. && tirado < 500., "o furo tirou {tirado:.1} mm³");
+    println!("furo na borda costurada: tirou {tirado:.1} mm³ em {seg:.1} s");
+    assert!(seg < 60., "o furo na forma costurada levou {seg:.1} s");
 }
 
 #[test]
@@ -388,6 +416,43 @@ fn nervura_na_asa_enflechada_suporte_loft() {
     }
 }
 
+/// Asa enflechada dobrada (suporte = loft): a web é a seção do loft (interseção de superfícies B-spline), as arestas
+/// costuradas ficam com tolerância acima da flecha e a malha delas não é estável (`volume_estavel` recusa), então a união
+/// segue pela booleana geral: medido em 437 s e −4,09 % do volume da aba. Fica de fora da bateria comum; roda com
+/// `--ignored`.
+#[test]
+#[ignore = "lento: a união da aba dobrada de um suporte loft é a booleana geral, de minutos"]
+fn nervura_na_asa_enflechada_dobrada_suporte_loft() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let (a, b) = (naca2412_rombo(2000., 60), naca2412_rombo(1500., 60));
+    let u = 1500. / 4000.;
+    let estacao = mistura(&a, &b, 600., u);
+    let cont = mistura(&naca2412_rombo(2000., 2000), &naca2412_rombo(1500., 2000), 600., u);
+    let mut k = caso("asa enflechada 2000 -> 1500, estação 1500", estacao, 1.5, 15., Via::Superficie, false, false);
+    k.z0 = 1500.;
+    k.suporte = Suporte::Loft { a, b: b.iter().map(|p| [p[0] + 600., p[1]]).collect(), z1: 4000. };
+    confere(&k, &cont, 0.08);
+}
+
+/// Fuselagem por loft com a aba para baixo (flip): a mesma união pela booleana geral da fuselagem com a aba para
+/// cima, medida em 80 s e −1,19 % do volume da aba. Fica de fora da bateria comum; roda com `--ignored`.
+#[test]
+#[ignore = "lento: a união da aba dobrada de um suporte loft é a booleana geral, de minutos"]
+fn caverna_na_fuselagem_loft_aba_para_baixo() {
+    if !kernel_disponivel() {
+        return;
+    }
+    let (a, b) = (oval(600., 450., 96), oval(400., 300., 96));
+    let estacao = mistura(&a, &b, 0., 0.5);
+    let cont = mistura(&oval(600., 450., 4000), &oval(400., 300., 4000), 0., 0.5);
+    let mut k = caso("fuselagem 1200x900 -> 800x600, estação 1500", estacao, 1.2, 12., Via::Superficie, true, false);
+    k.z0 = 1500.;
+    k.suporte = Suporte::Loft { a, b, z1: 3000. };
+    confere(&k, &cont, 0.08);
+}
+
 /// Fuselagem de dupla curvatura: loft entre ovais de 1200 × 900 e 800 × 600 em 3000 mm; a caverna fica na estação 1500.
 #[test]
 fn caverna_na_fuselagem_loft_de_ovais() {
@@ -419,6 +484,48 @@ fn aviso_de_conformacao_no_nariz_e_no_bordo_de_fuga() {
     assert!(m.contains("enruga") && m.contains("alívio") && m.contains("aba nesse trecho"), "{m}");
     let oval_grande = roda(&caso("oval", oval(600., 450., 96), 1.2, 8., Via::Aresta, false, true));
     assert_eq!(oval_grande.status, Status::Ok, "{:?}", oval_grande.status);
+}
+
+/// B579: o recálculo entrega a deformação ponto a ponto (o que o app pinta no mapa de deformação): a nervura
+/// de aerofólio planificada tem o nariz que enruga (falha) e o dorso que está bom (ok), com a borda convexa
+/// contraindo e o ventre levemente côncavo esticando; a oval grande com aba baixa não tem ponto em falha.
+#[test]
+fn recalculo_entrega_a_deformacao_ponto_a_ponto() {
+    if !kernel_disponivel() {
+        return;
+    }
+    use fenkra_solidos::chapa_hidro::{Regime, Risco};
+    let (d, aba) = monta(&caso("nariz", naca2412_rombo(1500., 60), 1.5, 15., Via::Aresta, false, true));
+    let r = recompute(&d);
+    let (_, a) = r.conformacoes.iter().find(|(id, _)| *id == aba).expect("a aba entrega a análise");
+    assert!(a.pontos.len() > 100, "pontos da linha de dobra: {}", a.pontos.len());
+    let n = |risco: Risco| a.pontos.iter().filter(|p| p.risco == risco).count();
+    assert!(n(Risco::Falha) > 0, "o nariz de raio pequeno enruga");
+    assert!(n(Risco::Ok) > 0, "o dorso do perfil está dentro do limite");
+    // o nariz e o dorso são convexos (a borda contrai e a chapa engrossa); o ventre do perfil tem um trecho
+    // levemente côncavo (estica e afina), então os dois regimes aparecem
+    assert!(a.pontos.iter().any(|p| p.regime == Regime::Contracao && p.esp > 1.), "contração engrossa a borda");
+    assert!(a.pontos.iter().filter(|p| p.regime == Regime::Estiramento).all(|p| p.esp < 1.), "estiramento afina a borda");
+    // a mesma análise que gera o aviso
+    assert!(matches!(r.status[&aba], Status::Warning(_)));
+    // aba baixa na oval grande: sem trecho em falha
+    let (d, aba) = monta(&caso("oval", oval(600., 450., 96), 1.2, 8., Via::Aresta, false, true));
+    let r = recompute(&d);
+    let (_, a) = r.conformacoes.iter().find(|(id, _)| *id == aba).expect("a aba entrega a análise");
+    assert!(a.pontos.iter().all(|p| p.risco != Risco::Falha));
+}
+
+/// Grava a nervura dobrada (aba para cima) em `FENKRA_GRAVAR_DOC=<arquivo.fkp>`, para a captura do mapa de
+/// deformação: `FENKRA_ABRIR=<arquivo.fkp> FENKRA_DEMO_DEFORMACAO=1 FENKRA_DEMO_FOTO=<png> FENKRA_DEMO_FOTO_ESPERA=60`.
+/// `FENKRA_GRAVAR_CORDA=<mm>` troca a corda (padrão 2000; com 300 a aba de 12 mm e a chapa de 1,5 mm aparecem na captura).
+#[test]
+#[ignore = "só grava o documento da captura"]
+fn grava_a_nervura_dobrada_para_a_captura() {
+    let Ok(destino) = std::env::var("FENKRA_GRAVAR_DOC") else { return };
+    let corda: f64 = std::env::var("FENKRA_GRAVAR_CORDA").ok().and_then(|v| v.parse().ok()).unwrap_or(2000.);
+    let (t, len) = if corda < 1000. { (1.5, 12.) } else { (1., 8.) };
+    let (d, _) = monta(&caso(&format!("NACA 2412, corda {corda}, t {t}, aba {len}"), naca2412_rombo(corda, 60), t, len, Via::Aresta, false, false));
+    std::fs::write(destino, d.to_json()).expect("gravar o documento");
 }
 
 /// Bordo de fuga agudo de verdade (spline fechada que se fecha num canto de 14°, como no perfil de papel): a aba

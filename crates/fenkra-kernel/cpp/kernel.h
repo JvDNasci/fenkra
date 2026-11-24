@@ -56,6 +56,8 @@ std::unique_ptr<Shape> chamfer_all(const Shape& s, double dist);
 std::unique_ptr<Shape> compound(const Shape& a, const Shape& b);
 std::unique_ptr<Shape> boolean_t(const Shape& a, const Shape& b, uint8_t op, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out,
                                  rust::Vec<int32_t>& out_b);
+std::unique_ptr<Shape> costura_t(const Shape& a, const Shape& b, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out,
+                                 rust::Vec<int32_t>& out_b);
 std::unique_ptr<Shape> fillet_all_t(const Shape& s, double r, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> fillet_sel_t(const Shape& s, double r, rust::Slice<const double> mids, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);
 std::unique_ptr<Shape> chamfer_sel_t(const Shape& s, double d, rust::Slice<const double> mids, double tol, rust::Slice<const int32_t> tags, rust::Vec<int32_t>& out);

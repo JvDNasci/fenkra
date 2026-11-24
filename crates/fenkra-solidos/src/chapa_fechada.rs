@@ -165,7 +165,12 @@ pub fn anel(fr: &Frame, a: &[[f64; 2]], sa: &dyn Fn(&[[f64; 2]]) -> Vec<Seg2>, b
 /// o que basta para as conferências de "a fusão tem volume" (margem de 50 %) e custa uma fração do tempo.
 pub fn volume(forma: &Shape) -> f64 {
     let diag = forma.bbox().map(|(a, b)| geo3d::dist(a, b)).unwrap_or(1.);
-    let Ok(m) = forma.mesh((diag * 2e-4).max(0.02)) else { return forma.mass().volume };
+    volume_com(forma, (diag * 2e-4).max(0.02))
+}
+
+/// `volume` com a flecha da malha dada.
+pub fn volume_com(forma: &Shape, flecha: f64) -> f64 {
+    let Ok(m) = forma.mesh(flecha) else { return forma.mass().volume };
     let p = |i: u32| {
         let k = i as usize * 3;
         [m.positions[k] as f64, m.positions[k + 1] as f64, m.positions[k + 2] as f64]
@@ -176,6 +181,17 @@ pub fn volume(forma: &Shape) -> f64 {
         v += a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0]) + a[2] * (b[0] * c[1] - b[1] * c[0]);
     }
     v / 6.
+}
+
+/// Volume da malha em duas flechas (a de `volume` e uma quarta parte dela), ou `None` se elas discordam em mais de 2 %. Uma forma
+/// costurada com a tolerância das arestas acima da flecha pode tesselar certo numa flecha e dar um volume de dezenas de vezes
+/// o da peça noutra (medido na fuselagem por loft); só serve o que mede igual nas duas. A flecha grossa (1e-3 da diagonal) fica de
+/// fora: ela mesma erra uns 8 % numa nervura de 2 m, costurada ou não.
+pub fn volume_estavel(forma: &Shape) -> Option<f64> {
+    let diag = forma.bbox().map(|(a, b)| geo3d::dist(a, b)).unwrap_or(1.);
+    let vs = [(diag * 2e-4).max(0.02), (diag * 5e-5).max(0.05)].map(|d| volume_com(forma, d));
+    let (lo, hi) = vs.iter().fold((f64::MAX, f64::MIN), |a, v| (a.0.min(*v), a.1.max(*v)));
+    (lo > 0. && hi - lo < 0.02 * hi).then_some(vs[0])
 }
 
 #[cfg(test)]
