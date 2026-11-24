@@ -11,6 +11,16 @@ use fenkra_core::*;
 use fenkra_solidos::{final_shape, recompute, BodyResult, RecomputeResult, Status};
 use std::f64::consts::PI;
 
+/// B579: o aviso de conformação de uma aba de linha de dobra curva (a borda livre se comprime ou estica além do
+/// limite do material) é só aviso: a peça sai certa. Para as conferências de geometria vale como Ok.
+pub fn ok_ou_conformacao(s: &Status) -> bool {
+    match s {
+        Status::Ok => true,
+        Status::Warning(m) => m.contains("conformação"),
+        _ => false,
+    }
+}
+
 pub fn kernel_disponivel() -> bool {
     fenkra_kernel::AVAILABLE
 }

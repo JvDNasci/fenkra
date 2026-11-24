@@ -3045,6 +3045,9 @@ pub struct SheetParams {
     /// tamanho padrão do alívio de canto (vazio = o comando pergunta)
     #[serde(default)]
     pub corner: String,
+    /// B579: alongamento limite da borda esticada de uma aba curva na conformação, em % (vazio = 15 %)
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub trinca: String,
     /// B304: ordem de dobra escolhida pelo usuário (glifos numerados); dobra sem entrada usa a
     /// posição no mapa. Número repetido vale: dobras feitas no mesmo golpe.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -3091,6 +3094,7 @@ impl Default for SheetParams {
             relief: String::new(),
             relief_kind: 0,
             corner: String::new(),
+            trinca: String::new(),
             ordem_dobras: vec![],
         }
     }

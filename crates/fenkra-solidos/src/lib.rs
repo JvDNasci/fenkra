@@ -108,6 +108,8 @@ pub mod chapa_animacao;
 pub mod chapa_linha;
 mod chapa_dobra_curva;
 mod chapa_aba_diag;
+pub mod chapa_fechada;
+pub mod chapa_hidro;
 mod chapa_aba_limites;
 pub mod chapa_cega;
 pub mod chapa_cone;
@@ -4747,6 +4749,23 @@ impl Ctx<'_> {
         if pts.len() < 2 {
             return Err("aresta curta demais".into());
         }
+        // B579: perfil fechado: a última amostra é o começo
+        let laco = chapa_fechada::fechada(&pts);
+        if laco {
+            let p0 = pts[0];
+            let u = pts.len() - 1;
+            pts[u] = p0;
+            // a varredura começa onde a linha é mais reta (a costura de uma spline fechada pode ter canto)
+            let k0 = chapa_fechada::inicio_mais_reto(&pts, 2. * (r + sp.t) + len);
+            if k0 > 0 {
+                pts.pop();
+                pts.rotate_left(k0);
+                pts.push(pts[0]);
+            }
+        }
+        // B579: a integração de volume do kernel erra (até 13 %) em face plana limitada por uma spline longa
+        // (a web de uma nervura): em perfil fechado as conferências de volume usam a malha
+        let vol = |x: &Shape| if laco { chapa_fechada::volume(x) } else { x.mass().volume };
         let mid = pts[pts.len() / 2];
         // normal da chapa: face perto da aresta, um pouco para dentro da peça
         let (lo, hi) = b.bbox().ok_or("chapa sem dimensões")?;
@@ -4761,7 +4780,9 @@ impl Ctx<'_> {
             let (p, t) = if fim { (e.fim()?, e.0.last().and_then(geo3d::tangente_fim)?) } else { (e.inicio()?, e.0.first().and_then(geo3d::tangente_inicio)?) };
             (geo3d::dist(p, pts[if fim { pts.len() - 1 } else { 0 }]) < 1e-4).then_some(t)
         };
-        let (t_ini, t_fim) = (ponta_exata(false), ponta_exata(true));
+        // B579: perfil fechado: a ponta é a mesma que o começo, e a tangente dela atravessa a costura (senão a
+        // linha de fora do começo e a do fim não se encontram e o anel da faixa não fecha)
+        let (t_ini, t_fim) = if laco { (None, None) } else { (ponta_exata(false), ponta_exata(true)) };
         let tan = |i: usize| {
             let dif = || geo3d::unit(geo3d::sub(pts[(i + 1).min(pts.len() - 1)], pts[i.saturating_sub(1)])).unwrap_or([1., 0., 0.]);
             match (i, t_ini, t_fim) {
@@ -4772,8 +4793,18 @@ impl Ctx<'_> {
         };
         let im = pts.len() / 2;
         let w0 = geo3d::unit(fenkra_kernel::cross(tan(im), n)).ok_or("aresta normal à chapa")?;
-        let s = if geo3d::dot(w0, geo3d::sub(mid, ctr)) >= 0. { 1. } else { -1. };
-        let outs: Vec<V3> = (0..pts.len()).map(|i| geo3d::mul(geo3d::unit(fenkra_kernel::cross(tan(i), n)).unwrap_or(w0), s)).collect();
+        // B579: perfil fechado: o lado de fora vem da sonda no material (o contorno de um furo aponta para o centro)
+        let s = laco.then(|| chapa_fechada::lado_fora(&b, mid, w0, sp.t)).flatten().unwrap_or(if geo3d::dot(w0, geo3d::sub(mid, ctr)) >= 0. { 1. } else { -1. });
+        // B579: no perfil fechado a linha de fora da costura atravessa o começo (a mesma no começo e no fim)
+        let tan_fora = |i: usize| if laco && (i == 0 || i == pts.len() - 1) { geo3d::unit(geo3d::sub(pts[1], pts[pts.len() - 2])).unwrap_or(tan(i)) } else { tan(i) };
+        let outs: Vec<V3> = (0..pts.len()).map(|i| geo3d::mul(geo3d::unit(fenkra_kernel::cross(tan_fora(i), n)).unwrap_or(w0), s)).collect();
+        // B579: conformação (prensa, hidroconformação): quanto a borda livre da aba se comprime ou estica, ponto a
+        // ponto, contra o limite do material; vira aviso (não erro) com o trecho e o que fazer
+        let trinca = self.doc.sheet.as_ref().and_then(|x| ev(&x.trinca, &self.vars, "alongamento limite").ok()).filter(|v| *v > 0.).map(|v| v / 100.);
+        let analise = chapa_hidro::analisar(&pts, &outs, n, chapa_hidro::Aba { t: sp.t, r, k: sp.k_for(r), ang, len }, chapa_hidro::Limites { trinca: trinca.unwrap_or(chapa_hidro::Limites::default().trinca), ..Default::default() });
+        let hidro = analise.aviso();
+        // perfil fechado que não une: o motivo geométrico (canto vivo, curva fechada demais) vai junto com o erro
+        let dica = |e: String| if laco { format!("{e}{}", analise.dica_falha()) } else { e };
         // de que lado está a espessura (raio de teste a partir de dentro da chapa)
         let probe = geo3d::sub(mid, geo3d::mul(outs[im], sp.t * 0.5));
         let up_hit = b.ray_hit(geo3d::add(probe, geo3d::mul(n, -sp.t * 3.)), n).map_err(k)?.map(|(q, _)| geo3d::dot(geo3d::sub(q, probe), n));
@@ -4821,8 +4852,13 @@ impl Ctx<'_> {
                 // B566: na planificada a faixa vem em spline pelas amostras (abaixo); o recorte do recuo usa a
                 // mesma borda, senão sobra uma fresta entre o recorte e a faixa
                 let corte = |v: &[[f64; 2]]| if suave && sp.flat && v.len() >= 4 { vec![fenkra_kernel::Seg2::Spline(v.to_vec())] } else { chapa::chain_segs(v) };
-                let lp = [corte(&a2), vec![fenkra_kernel::Seg2::Line(a2[a2.len() - 1], b2[0])], corte(&b2), vec![fenkra_kernel::Seg2::Line(b2[b2.len() - 1], a2[0])]].concat();
-                Shape::face(&fr, &[lp]).map_err(k)?.extrude(n, sp.t * 2. + 1., sp.t * 2. + 1.).map_err(k)?
+                // B579: cadeia fechada: a faixa é um anel (dois laços), e não uma tira que volta por um corte sem largura
+                if laco {
+                    chapa_fechada::anel(&fr, &a2, &corte, &b2, &chapa_fechada::poligono, n, sp.t * 2. + 1., sp.t * 2. + 1.)?
+                } else {
+                    let loops: Vec<fenkra_kernel::Loop2> = vec![[corte(&a2), vec![fenkra_kernel::Seg2::Line(a2[a2.len() - 1], b2[0])], corte(&b2), vec![fenkra_kernel::Seg2::Line(b2[b2.len() - 1], a2[0])]].concat()];
+                    Shape::face(&fr, &loops).map_err(k)?.extrude(n, sp.t * 2. + 1., sp.t * 2. + 1.).map_err(k)?
+                }
             };
             // o recorte também para nos limites dos lados (a aba é cortada neles), senão o recuo passa do
             // limite pela margem da varredura e deixa um entalhe sem aba
@@ -4831,13 +4867,13 @@ impl Ctx<'_> {
             // chapa é mais estreita que o recuo em algum ponto (na corda de 10 mm com o recuo de 14,5 mm a web
             // sumia e sobrava só a aba, com status Ok). A ferramenta é a faixa do recuo mais 0,5 mm para fora da
             // linha, extrudada 2·(2t + 1) de altura.
-            let antes_corte = self.body(f.target).map(|x| x.mass().volume).unwrap_or(0.);
-            let faixa = strip.mass().volume / (2. * (sp.t * 2. + 1.)) * off / (off + 0.5) * sp.t;
-            let corta = |s: &Shape| s.is_valid() && s.is_solid() && antes_corte - s.mass().volume > 0.8 * faixa;
+            let antes_corte = self.body(f.target).map(|x| vol(x)).unwrap_or(0.);
+            let faixa = vol(&strip) / (2. * (sp.t * 2. + 1.)) * off / (off + 0.5) * sp.t;
+            let corta = |s: &Shape| s.is_valid() && s.is_solid() && antes_corte - vol(s) > 0.8 * faixa;
             if let Some(s) = self.apply_aceita(f.target, strip, BoolOp::Cut, f.id, None, Some(&corta))? {
                 return Err(format!(
                     "o recuo da linha de dobra ({off:.3} mm, da posição do material) não cabe na chapa: o recorte tirou {:.4} mm³ de {faixa:.4} mm³ (a chapa é mais estreita que o recuo em algum ponto); use a dobra por fora (posição na linha) ou uma chapa maior",
-                    antes_corte - s.mass().volume
+                    antes_corte - vol(&s)
                 ));
             }
             match &recuo {
@@ -4881,9 +4917,13 @@ impl Ctx<'_> {
             // grande isso é mais de 1 mm fora da linha de dobra, a borda da faixa sai da web e a fusão
             // perde parte da faixa sem erro. Amostras de uma curva lisa viram uma spline por elas.
             let segs = |v: &[[f64; 2]]| if suave && v.len() >= 4 { vec![fenkra_kernel::Seg2::Spline(v.to_vec())] } else { chapa::chain_segs(v) };
-            let lp = [segs(&p2), vec![fenkra_kernel::Seg2::Line(p2[p2.len() - 1], q2[0])], segs(&q2), vec![fenkra_kernel::Seg2::Line(q2[q2.len() - 1], p2[0])]].concat();
-            let face = Shape::face(&fr, &[lp]).map_err(k)?;
-            let mut tool = face.extrude(geo3d::mul(d, -1.), sp.t, 0.).map_err(k)?;
+            // B579: cadeia fechada: a faixa é um anel (dois laços)
+            let mut tool = if laco {
+                chapa_fechada::anel(&fr, &p2, &segs, &q2, &chapa_fechada::poligono, geo3d::mul(d, -1.), sp.t, 0.)?
+            } else {
+                let loops: Vec<fenkra_kernel::Loop2> = vec![[segs(&p2), vec![fenkra_kernel::Seg2::Line(p2[p2.len() - 1], q2[0])], segs(&q2), vec![fenkra_kernel::Seg2::Line(q2[q2.len() - 1], p2[0])]].concat()];
+                Shape::face(&fr, &loops).map_err(k)?.extrude(geo3d::mul(d, -1.), sp.t, 0.).map_err(k)?
+            };
             if lim.cantos.iter().any(|c| c.is_some()) {
                 let n_ = inner.len() - 1;
                 tool = self.aba_cantos_planos(tool, lim, [(inner[0], outs[0]), (inner[n_], outs[n_])], dev, d, sp.t)?;
@@ -4893,33 +4933,35 @@ impl Ctx<'_> {
             // fusão e, se falham, é erro (nunca corpo errado com status Ok). Numa cadeia fechada (laço) a faixa é
             // um anel com a costura no começo da cadeia, que a conferência de forma acusa sem ser defeito: ali vale
             // só a conferência da fusão.
-            let tv = tool.mass().volume;
+            let tv = vol(&tool);
             let fechada = geo3d::dist(inner[0], inner[inner.len() - 1]) < 1e-6 * (1. + dev);
             if (!fechada && !tool.is_valid()) || tv <= 1e-12 {
-                return Err(format!("a faixa planificada da aba ({dev:.3} mm de largura) se cruza ou sai vazia: a linha de dobra curva demais para o comprimento"));
+                return Err(dica(format!("a faixa planificada da aba ({dev:.3} mm de largura) se cruza ou sai vazia: a linha de dobra curva demais para o comprimento")));
             }
-            let base_vol = self.body(f.target).map(|x| x.mass().volume).unwrap_or(0.);
+            let base_vol = self.body(f.target).map(|x| vol(x)).unwrap_or(0.);
             // a faixa entra 0,05 mm na chapa: só o resto dela é volume novo
             let novo = tv * dev / (dev + 0.05);
-            let aceita = |s: &Shape| s.is_valid() && s.mass().volume > base_vol + 0.5 * novo;
+            let aceita = |s: &Shape| s.is_valid() && vol(s) > base_vol + 0.5 * novo;
             if let Some(s) = self.apply_aceita(f.target, tool, BoolOp::Add, f.id, None, Some(&aceita))? {
-                return Err(format!("a união da faixa planificada da aba com a chapa saiu inválida ou incompleta (volume {:.4}, chapa {base_vol:.4}, faixa {tv:.4})", s.mass().volume));
+                return Err(dica(format!("a união da faixa planificada da aba com a chapa saiu inválida ou incompleta (volume {:.4}, chapa {base_vol:.4}, faixa {tv:.4})", vol(&s))));
             }
             self.marca_cadeia(f.id, &inner, &outs, ang, r, sobe, &cmp, true);
-            return Ok(None);
+            return Ok(hidro);
         }
         // B559: a cadeia exata (as arestas da chapa) é o caminho da varredura. Com recuo (B566), o caminho
         // é a curva exata deslocada no plano, como o recorte a deixou na chapa (só curva de um trecho). A
         // tangente do começo sai da curva exata, para a seção ficar normal ao caminho de verdade.
         // só cadeia lisa (G1): com canto vivo entre trechos, a varredura de seção fixa não contorna o
         // canto, e a polilinha (que arredonda os cantos suaves) continua sendo o caminho
-        let caminho = if off > 1e-6 { caminho_recuo } else { exata }.filter(|e| geo3d::curva_g1(e, 0.02)).map(|e| e.transformada(&Xform::Translate(shift)));
+        // B579: perfil fechado: a varredura pela curva exata de um laço saía inválida (medido, nervura de 1500 mm);
+        // pela polilinha da aresta (cadeia de arcos e splines pelos pontos) sai válida
+        let caminho = if off > 1e-6 { caminho_recuo } else { exata }.filter(|e| !laco && geo3d::curva_g1(e, 0.02)).map(|e| e.transformada(&Xform::Translate(shift)));
         let (tan0, out0) = match caminho.as_ref().and_then(|e| e.0.first()).and_then(geo3d::tangente_inicio) {
             Some(t0) => {
                 let o = geo3d::unit(fenkra_kernel::cross(t0, n)).map(|o| geo3d::mul(o, s)).unwrap_or(outs[0]);
                 (t0, o)
             }
-            None => (tan(0), outs[0]),
+            None => (tan(0), geo3d::unit(fenkra_kernel::cross(tan(0), n)).map(|o| geo3d::mul(o, s)).unwrap_or(outs[0])),
         };
         // seção no plano normal à aresta: arco da dobra (raio interno r, externo r+t) e parede
         // a normal da seção segue o sentido da varredura (senão o sólido sai do avesso);
@@ -4971,7 +5013,7 @@ impl Ctx<'_> {
                 geo3d::norm(geo3d::sub(q, geo3d::mul(e, geo3d::dot(q, e)))) < 1e-3
             })
         });
-        let base_vol = self.body(f.target).map(|x| x.mass().volume).unwrap_or(0.);
+        let base_vol = self.body(f.target).map(|x| vol(x)).unwrap_or(0.);
         // B529: a fusão da varredura com a base pode falhar sem erro (volume vazio ou de um lado só)
         // com cadeia curva e a seção entrando só 0,05 mm: confere o volume da fusão e repete com a
         // seção entrando mais. Se nenhuma fechar, é erro explícito (nunca corpo vazio com status Ok).
@@ -5005,25 +5047,24 @@ impl Ctx<'_> {
             } else {
                 t
             };
-            let tv = t.mass().volume;
+            let tv = vol(&t);
             // a fusão é conferida e aplicada de uma vez (antes era feita duas vezes)
-            let aceita = |s: &Shape| tv > 1e-6 && s.is_valid() && s.mass().volume > base_vol + 0.5 * tv;
+            let aceita = |s: &Shape| tv > 1e-6 && s.is_valid() && vol(s) > base_vol + 0.5 * tv;
             let res = self.apply_aceita(f.target, t, BoolOp::Add, f.id, None, Some(&aceita));
             match res {
                 Ok(None) => {
                     feito = true;
                     break;
                 }
-                Ok(Some(s)) => ultimo = format!("a união da aba com a chapa saiu inválida ou vazia (volume {:.1}, chapa {:.1}, aba {:.1})", s.mass().volume, base_vol, tv),
+                Ok(Some(s)) => ultimo = format!("a união da aba com a chapa saiu inválida ou vazia (volume {:.1}, chapa {:.1}, aba {:.1})", vol(&s), base_vol, tv),
                 Err(e) => ultimo = e,
             }
         }
         if !feito {
-            return Err(ultimo);
+            return Err(dica(ultimo));
         }
         self.marca_cadeia(f.id, &inner, &outs, ang, r, sobe, &cmp, false);
-        Ok(None)
-            
+        Ok(hidro)
     }
 
     /// Leva um ponto do estado em que foi escolhido (`from_flat`) ao estado `to_flat`.
@@ -6670,7 +6711,8 @@ impl Ctx<'_> {
                 // OML: maior trecho da interseção suporte × plano da web perto dela (subdividido)
                 let oml = |sup: &Shape| -> Result<Vec<V3>, String> {
                     let mut best: Vec<V3> = vec![];
-                    for cv in sup.section(&plane).map_err(k)? {
+                    // B579: suporte fechado: a seção chega em pedaços (costura, faces do suporte); as pontas se unem
+                    for cv in chapa_fechada::junta(sup.section(&plane).map_err(k)?, 1e-4 + step * 1e-3) {
                         // subdivide (retas vêm só com as pontas) e fica com o trecho perto da web
                         let mut dense: Vec<V3> = vec![];
                         for w in cv.windows(2) {
@@ -6720,7 +6762,27 @@ impl Ctx<'_> {
                 // relimita a web pelo suporte (fica o lado com o grosso do material)
                 // B564: na prévia simplificada a web não é relimitada (a booleana com o suporte grande e o
                 // prisma de corte custam mais que todo o resto); o contorno mostra onde o corte vai ficar
-                if !sf.keep_base && !leve {
+                // B579: perfil fechado (nervura, caverna): o suporte contorna a web inteira e não a divide. Se a
+                // borda da web já é a OML, nada a relimitar; se a OML cai dentro da web, a web fica só dentro dela.
+                let laco = chapa_fechada::fechada(&best);
+                if laco && !sf.keep_base && !leve {
+                    // a OML é a seção do kernel (polilinha com flecha): todas as amostras têm de cair na borda da web
+                    let tol = 1.5 * FLECHA_SECAO + 0.1 * step;
+                    let na_borda = (0..8).all(|i| b.edges_through(best[(best.len() - 1) * i / 8], tol).is_ok_and(|e| !e.is_empty()));
+                    if !na_borda {
+                        let x = geo3d::any_perp(n);
+                        let y = fenkra_kernel::cross(n, x);
+                        let fr = Frame { origin: on, x, normal: n };
+                        let loc: Vec<[f64; 2]> = best.iter().map(|q| [geo3d::dot(geo3d::sub(*q, on), x), geo3d::dot(geo3d::sub(*q, on), y)]).collect();
+                        let tool = Shape::face(&fr, &[vec![fenkra_kernel::Seg2::Spline(loc)]]).map_err(k)?.extrude(n, sp.t * 2. + 1., sp.t * 2. + 1.).map_err(k)?;
+                        let dentro = b.boolean(&tool, Bool::Common).map_err(k)?;
+                        if dentro.is_null() || dentro.face_count() == 0 {
+                            return Err("o perfil fechado do suporte não cobre a web: nada da chapa fica dentro dele".into());
+                        }
+                        self.bodies.insert(f.target, fresh_body(dentro, f.id));
+                    }
+                }
+                if !sf.keep_base && !leve && !laco {
                     let keep_pos = geo3d::dot(ns, geo3d::sub(ctr, mid)) > 0.;
                     // B529: o suporte só relimita a base se de fato atravessa a placa. Suporte finito
                     // (arco curto, spline que termina dentro da placa) não divide: erro ou nada muda.
@@ -6750,7 +6812,9 @@ impl Ctx<'_> {
                     u = geo3d::mul(u, -1.);
                 }
                 let mut out = geo3d::unit(fenkra_kernel::cross(tan, n)).ok_or("OML normal à web")?;
-                if geo3d::dot(out, geo3d::sub(mid, ctr)) < 0. {
+                // B579: perfil fechado: o lado de fora é o do vazio ao lado do material (contorno de furo inclusive)
+                let sinal_fora = if laco { chapa_fechada::lado_fora(&b, mid, out, sp.t) } else { None };
+                if sinal_fora.is_some_and(|sg| sg < 0.) || (sinal_fora.is_none() && geo3d::dot(out, geo3d::sub(mid, ctr)) < 0.) {
                     out = geo3d::mul(out, -1.);
                 }
                 let ang = if sf.mode == 2 {
@@ -6796,6 +6860,16 @@ impl Ctx<'_> {
                 if pts.len() < 2 {
                     return Err(if lm.lado1.is_some() || lm.lado2.is_some() { "os limites dos lados não deixam trecho da aba sobre a web".into() } else { "o suporte não encontra a borda da web".to_string() });
                 }
+                // B579: perfil fechado: a linha de dobra é a aresta da web (a polilinha da seção do suporte tem a
+                // flecha da tesselação e ruído, que a varredura fechada não perdoa); o suporte só escolheu a aresta
+                let pts = if laco && !leve {
+                    match web.edge_at(pts[pts.len() / 2]) {
+                        Ok(e) if e.len() > 8 && chapa_fechada::fechada(&e) => e,
+                        _ => pts,
+                    }
+                } else {
+                    pts
+                };
                 // B564: prévia simplificada: a web já está relimitada pelo suporte; a aba aparece como o
                 // contorno da parede (OML e borda de cima), sem varredura da dobra, limites nem cantos. O
                 // cálculo completo (e o resultado final) só roda ao concluir.
@@ -6872,7 +6946,7 @@ impl Ctx<'_> {
                 // varredura vai por ela, uma aresta só, e não pela polilinha das amostras.
                 // B566: vale também com limites de lado (a varredura passa do limite e é cortada nele) e vai até a
                 // borda da web quando as amostras chegam perto dela
-                let oml_exata = Self::oml_exata(&web, &pts, true);
+                let oml_exata = if laco { None } else { Self::oml_exata(&web, &pts, true) };
                 let feito = match oml_exata {
                     Some((pts, c)) => self.curve_flange_lim_x(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim, Some(c), true),
                     None => self.curve_flange_exata(f, pts, ang, r, len, sf.flip, Some(d), sf.side, &lim),

@@ -114,8 +114,8 @@ fn resultado_final_depois_da_previa_e_igual_ao_de_um_calculo_do_zero() {
     cache.leve = None;
     let final_ = recompute_cached(&d, &mut cache);
     let zero = recompute(&d);
-    assert_eq!(final_.status[&aba], Status::Ok, "{:?}", final_.status[&aba]);
-    assert_eq!(zero.status[&aba], Status::Ok);
+    assert!(ok_ou_conformacao(&final_.status[&aba]), "{:?}", final_.status[&aba]);
+    assert!(ok_ou_conformacao(&zero.status[&aba]));
     assert!(final_.previas.iter().all(|p| p.feature != aba), "o resultado final não traz prévia");
     let (a, b) = (volume_total(&final_), volume_total(&zero));
     assert!((a - b).abs() < 1e-6 * b, "final {a} contra do zero {b}");

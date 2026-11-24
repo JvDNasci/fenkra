@@ -35,7 +35,7 @@ fn recalcula(d: &Document, flat: bool) -> RecomputeResult {
 
 fn tudo_ok(d: &Document, r: &RecomputeResult, rotulo: &str) {
     for f in &d.features {
-        assert_eq!(r.status[&f.id], Status::Ok, "{rotulo}: {}: {:?}", f.name, r.status[&f.id]);
+        assert!(ok_ou_conformacao(&r.status[&f.id]), "{rotulo}: {}: {:?}", f.name, r.status[&f.id]);
     }
 }
 

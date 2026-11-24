@@ -63,12 +63,12 @@ fn suporte_curvo_limitado_por_dois_planos_tem_a_largura_entre_eles() {
     }
     let (livre, a0) = nervura(LimitesAba::default());
     let rl = recalcula(&livre, false);
-    assert_eq!(rl.status[&a0], Status::Ok, "{:?}", rl.status[&a0]);
+    assert!(ok_ou_conformacao(&rl.status[&a0]), "{:?}", rl.status[&a0]);
     let (y0, y1) = faixa_y(&rl);
     assert!(y1 - y0 > 45., "sem limites a aba cobre a web inteira: {y0}..{y1}");
     let (d, aba) = com_limites(|d| LimitesAba { lado1: Some(plano_y(d, 10.)), lado2: Some(plano_y(d, 40.)), ..Default::default() });
     let r = recalcula(&d, false);
-    assert_eq!(r.status[&aba], Status::Ok, "{:?}", r.status[&aba]);
+    assert!(ok_ou_conformacao(&r.status[&aba]), "{:?}", r.status[&aba]);
     let (a, b) = faixa_y(&r);
     assert!((b - a - 30.).abs() < 0.6, "largura da aba {} (esperado 30 = distância entre os planos): {a}..{b}", b - a);
     assert!(a > 9.5 && b < 40.5, "{a}..{b}");
@@ -79,7 +79,7 @@ fn suporte_curvo_limitado_por_dois_planos_tem_a_largura_entre_eles() {
     assert!(hi[2] > 18. && hi[2] < 20., "altura {}", hi[2]);
     // planificada também sai com a largura certa
     let plana = recalcula(&d, true);
-    assert_eq!(plana.status[&aba], Status::Ok, "{:?}", plana.status[&aba]);
+    assert!(ok_ou_conformacao(&plana.status[&aba]), "{:?}", plana.status[&aba]);
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn so_um_lado_limitado_para_na_curva_e_estende_o_resto() {
     }
     let (d, aba) = com_limites(|d| LimitesAba { lado2: Some(plano_y(d, 30.)), ..Default::default() });
     let r = recalcula(&d, false);
-    assert_eq!(r.status[&aba], Status::Ok, "{:?}", r.status[&aba]);
+    assert!(ok_ou_conformacao(&r.status[&aba]), "{:?}", r.status[&aba]);
     let (a, b) = faixa_y(&r);
     assert!(a < 1. && (b - 30.).abs() < 0.5, "{a}..{b}");
 }
@@ -104,7 +104,7 @@ fn borda_final_limitada_por_uma_curva() {
         LimitesAba { ponta: Some(LimiteAba::Curva(CurveRef::Ref(c))), ..Default::default() }
     });
     let r = recalcula(&d, false);
-    assert_eq!(r.status[&aba], Status::Ok, "{:?}", r.status[&aba]);
+    assert!(ok_ou_conformacao(&r.status[&aba]), "{:?}", r.status[&aba]);
     let (_, hi) = caixa_da_malha(&r);
     // sem o limite a aba sobe a 19; com a curva em z = 10 a borda final para ali
     assert!((hi[2] - 10.).abs() < 0.3, "altura {} (esperado 10)", hi[2]);
@@ -115,7 +115,7 @@ fn borda_final_limitada_por_uma_curva() {
         LimitesAba { ponta: Some(LimiteAba::Curva(CurveRef::Ref(c))), ..Default::default() }
     });
     let r = recalcula(&d, false);
-    assert_eq!(r.status[&aba], Status::Ok, "{:?}", r.status[&aba]);
+    assert!(ok_ou_conformacao(&r.status[&aba]), "{:?}", r.status[&aba]);
     let (_, hi) = caixa_da_malha(&r);
     assert!((hi[2] - 30.).abs() < 0.3, "estendida até o limite: {}", hi[2]);
 }
@@ -131,7 +131,7 @@ fn chanfro_num_lado_e_filete_no_outro_tiram_material() {
     let (d, aba2) = com_limites(|d| LimitesAba { canto1: CantoAba::Chanfro(s("2")), canto2: CantoAba::Filete(s("2")), ..base(d) });
     assert_eq!(aba, aba2);
     let r = recalcula(&d, false);
-    assert_eq!(r.status[&aba], Status::Ok, "{:?}", r.status[&aba]);
+    assert!(ok_ou_conformacao(&r.status[&aba]), "{:?}", r.status[&aba]);
     let com = volume_total(&r);
     assert!(com < sem - 1., "cantos tiram material: {com} contra {sem}");
     // cada canto sozinho tira menos que os dois juntos
@@ -144,7 +144,7 @@ fn chanfro_num_lado_e_filete_no_outro_tiram_material() {
     assert!(hi[2] > 18. && hi[2] < 20., "{}", hi[2]);
     // planificada: o canto também sai
     let plana = recalcula(&d, true);
-    assert_eq!(plana.status[&aba], Status::Ok, "{:?}", plana.status[&aba]);
+    assert!(ok_ou_conformacao(&plana.status[&aba]), "{:?}", plana.status[&aba]);
 }
 
 #[test]

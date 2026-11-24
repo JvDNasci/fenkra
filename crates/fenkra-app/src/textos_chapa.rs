@@ -18,6 +18,9 @@ pub static TEXTOS: &[(&str, &str)] = &[
     ("O raio aceita fórmula da espessura, por exemplo 1.15*espessura.", "The radius accepts a thickness formula, for example 1.15*espessura."),
     ("Alívio padrão nas abas", "Default relief on flanges"),
     ("Tamanho padrão do canto", "Default corner size"),
+    // B579: conformação da aba curva (prensa, hidroconformação)
+    ("Limite de conformação da borda", "Edge forming limit"),
+    ("Alongamento limite da borda", "Edge elongation limit"),
     ("Alívios padrão", "Default reliefs"),
     // B284: aba por laço e extensão lateral
     ("Aba por laço", "Flange by loop"),

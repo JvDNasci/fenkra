@@ -4564,6 +4564,16 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 if !sp.corner.trim().is_empty() {
                     editor::expr(ui, "Tamanho do canto", &mut sp.corner, &vars, "mm");
                 }
+                // B579: limite de alongamento da borda esticada de uma aba curva (conformação)
+                ui.horizontal(|ui| {
+                    let mut tem = !sp.trinca.trim().is_empty();
+                    if editor::check(ui, &mut tem, "Limite de conformação da borda").changed() {
+                        sp.trinca = if tem { "15".into() } else { String::new() };
+                    }
+                });
+                if !sp.trinca.trim().is_empty() {
+                    editor::expr(ui, "Alongamento limite da borda", &mut sp.trinca, &vars, "%");
+                }
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut sp.flat, false, tr("dobrada"));
                     ui.radio_value(&mut sp.flat, true, tr("planificada"));

@@ -59,7 +59,7 @@ fn confere(nome: &str, d: &Document, falhas: &mut Vec<String>, avisos_de_estado:
         let estado = if plana { "planificada" } else { "dobrada" };
         for f in &d.features {
             let so_aviso_de_estado = avisos_de_estado && plana && matches!(&r.status[&f.id], Status::Warning(w) if w.starts_with("planificada:"));
-            if r.status[&f.id] != Status::Ok && !so_aviso_de_estado {
+            if !ok_ou_conformacao(&r.status[&f.id]) && !so_aviso_de_estado {
                 falhas.push(format!("{nome} ({estado}): {}: {:?}", f.name, r.status[&f.id]));
             }
         }

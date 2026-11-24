@@ -136,8 +136,8 @@ fn confere(c: f64, caso: Caso) {
     let (vd, vp) = (volume_total(&dobrada), volume_total(&plana));
     let ((lo, hi), (lop, hip)) = (caixa_da_malha(&dobrada), caixa_da_malha(&plana));
     println!("B566 corda {c} {caso:?}: dobrada {t_dobrada:.2} s vol {vd:.1} caixa {lo:?} {hi:?}; planificada {t_plana:.2} s vol {vp:.1} caixa {lop:?} {hip:?}");
-    assert_eq!(dobrada.status[&aba], Status::Ok, "corda {c} {caso:?} dobrada");
-    assert_eq!(plana.status[&abap], Status::Ok, "corda {c} {caso:?} planificada");
+    assert!(ok_ou_conformacao(&dobrada.status[&aba]), "corda {c} {caso:?} dobrada");
+    assert!(ok_ou_conformacao(&plana.status[&abap]), "corda {c} {caso:?} planificada");
 
     // posição do material: a linha de dobra recua `rec` para dentro da web (r·tg(θ/2) por fora,
     // (r + t)·tg(θ/2) por dentro; θ = 90°)

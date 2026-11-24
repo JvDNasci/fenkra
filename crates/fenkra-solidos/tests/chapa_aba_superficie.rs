@@ -46,13 +46,13 @@ fn aba_por_superficie_curva_segue_a_oml_dobrada_e_planificada() {
     for spline in [true, false] {
         let (d, _, aba) = nervura(spline);
         let r = recalcula(&d, false);
-        assert_eq!(r.status[&aba], Status::Ok, "spline={spline}: {:?}", r.status[&aba]);
+        assert!(ok_ou_conformacao(&r.status[&aba]), "spline={spline}: {:?}", r.status[&aba]);
         let (lo, hi) = caixa_da_malha(&r);
         // a aba sobe 15 sobre a web (2) mais o raio e a espessura da dobra: topo perto de 19
         assert!(hi[2] > 18. && hi[2] < 20., "spline={spline}: altura {}", hi[2]);
         assert!(hi[0] < 90. && lo[0].abs() < 0.1, "spline={spline}: a web foi relimitada pelo suporte {lo:?} {hi:?}");
         let plana = recalcula(&d, true);
-        assert_eq!(plana.status[&aba], Status::Ok, "spline={spline} plana: {:?}", plana.status[&aba]);
+        assert!(ok_ou_conformacao(&plana.status[&aba]), "spline={spline} plana: {:?}", plana.status[&aba]);
         let (_, hip) = caixa_da_malha(&plana);
         assert!(hip[2] < 2.1, "spline={spline}: planificada fica plana {}", hip[2]);
     }
@@ -127,7 +127,7 @@ fn placa_com_spline(y0: f64, y1: f64, amp: f64) -> (Document, Id) {
 /// altura da aba = comprimento + raio + espessura e planificação plana e Ok.
 fn confere_b529(nome: &str, d: &Document, aba: Id, x_max: f64) {
     let r = recalcula(d, false);
-    assert_eq!(r.status[&aba], Status::Ok, "{nome}: {:?}", r.status[&aba]);
+    assert!(ok_ou_conformacao(&r.status[&aba]), "{nome}: {:?}", r.status[&aba]);
     assert!(r.bodies.iter().all(|b| !b.mesh.positions.is_empty() && b.mass.volume > 1000.), "{nome}: corpo vazio com status Ok");
     let (lo, hi) = caixa_da_malha(&r);
     assert!(lo[0].abs() < 0.1, "{nome}: {lo:?}");
@@ -136,7 +136,7 @@ fn confere_b529(nome: &str, d: &Document, aba: Id, x_max: f64) {
     let dobra = r.bodies.iter().flat_map(|b| b.mesh.positions.chunks_exact(3)).any(|p| p[2] > 2.6 && p[2] < 3.8 && p[0] > 60.);
     assert!(dobra, "{nome}: sem a face da dobra (raio) entre a base e a parede");
     let plana = recalcula(d, true);
-    assert_eq!(plana.status[&aba], Status::Ok, "{nome} plana: {:?}", plana.status[&aba]);
+    assert!(ok_ou_conformacao(&plana.status[&aba]), "{nome} plana: {:?}", plana.status[&aba]);
     let (_, hip) = caixa_da_malha(&plana);
     assert!(hip[2] < 2.1, "{nome}: planificada fica plana {}", hip[2]);
     assert!(volume_total(&plana) > 14000., "{nome}: volume planificado {}", volume_total(&plana));
@@ -164,7 +164,7 @@ fn b529_arco_curto_relimita_a_base_e_dobra() {
     // arco de raio 40 com o centro fora da placa: o lado do centro sai, os cantos ficam
     let (d, aba) = placa_com_arco(40., 125., 150., 210.);
     let r = recalcula(&d, false);
-    assert_eq!(r.status[&aba], Status::Ok, "{:?}", r.status[&aba]);
+    assert!(ok_ou_conformacao(&r.status[&aba]), "{:?}", r.status[&aba]);
     assert!(volume_total(&r) < 16500., "o lado cortado saiu: {}", volume_total(&r));
 }
 
