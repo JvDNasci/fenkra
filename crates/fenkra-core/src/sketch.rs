@@ -603,6 +603,9 @@ pub enum LinkSrc {
     Vertex { pos: [f64; 3] },
     /// face de um corpo (para a interseção com o plano do sketch)
     Face { point: [f64; 3] },
+    /// B580: corpo sólido inteiro (o mais perto do ponto); a interseção com o plano do sketch é o
+    /// contorno fechado da seção, não o corte de uma face só
+    Body { point: [f64; 3] },
 }
 
 /// Como a geometria externa vira geometria do sketch.

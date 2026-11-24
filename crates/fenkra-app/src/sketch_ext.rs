@@ -134,7 +134,7 @@ impl External {
 }
 
 /// Origem e geometria 3D do item clicado (converter = projetar; interseção = corte pelo plano).
-pub fn world(doc: &Document, r: &RecomputeResult, p: &Pick, intersect: bool, f: &Frame) -> Option<External> {
+pub fn world(doc: &Document, r: &RecomputeResult, p: &Pick, intersect: bool, f: &Frame, corpo: bool) -> Option<External> {
     match *p {
         Pick::Edge { body, edge, mid } => {
             let pts = crate::picking::edge_polyline(r, body, edge);
@@ -168,6 +168,14 @@ pub fn world(doc: &Document, r: &RecomputeResult, p: &Pick, intersect: bool, f: 
         }
         Pick::Face { body, face, point, .. } if intersect => {
             let m = &r.bodies.get(body)?.mesh;
+            // B580: a seção do corpo inteiro, quando fecha, vale mais que o corte de uma face só
+            // (a asa tem o bordo de fuga numa face à parte e a lateral sozinha deixa a fresta)
+            if corpo {
+                let toda = mesh_cut(f, &m.positions, &m.indices);
+                if toda.len() >= 4 && (0..3).all(|i| (toda[0][i] - toda[toda.len() - 1][i]).abs() < 1e-3) {
+                    return Some(External::line(LinkSrc::Body { point: point.map(|v| v as f64) }, toda));
+                }
+            }
             let s0 = *m.face_ranges.get(face)? as usize;
             let s1 = m.face_ranges.get(face + 1).map(|x| *x as usize).unwrap_or(m.indices.len());
             let pts = mesh_cut(f, &m.positions, &m.indices[s0..s1]);

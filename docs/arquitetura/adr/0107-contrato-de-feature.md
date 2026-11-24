@@ -622,3 +622,27 @@ a coerência antes de integrar.
   revolução, membro estrutural) têm número mas não chave; `SketchLine`, `SketchCurve` e `Pick::SkCurve`
   ainda mostram "#id"; nível "dono" escolhe só faces (falta recurso inteiro para campos de corpo); listas de
   pontos de arquivo antigo (extrapolar) seguem por ponto; realce ao passar o mouse sobre um nível.
+
+### B580, nervura de asa e caverna de fuselagem (23/11/2026)
+
+Teste com mouse da asa enflechada (`docs/pesquisa/asa/relatorio-asa.md`). Três causas, três correções, todas
+nos comandos irmãos já existentes (nada de comando novo).
+
+- **Erro não leva o corpo (fato 9 deste ADR).** `Ctx::run` de vários comandos tira o corpo do coletor antes de
+  montar o novo e só então descobre que não dá. O recálculo (`recompute_efetivo`) guarda os corpos que o
+  comando toca (`erro_corpo::guarda`, só divide a forma, não a refaz) e os devolve se `run` termina em erro
+  (`erro_corpo::restaura`). O comando fica marcado com a mensagem; o que vem depois trabalha sobre o último
+  estado bom; o app já desenha o que o resultado traz. Vale para qualquer bancada, não só chapa.
+- **Seção fechada e associativa.** O corte de *uma face* de um sólido por um plano é aberto (a asa tem o
+  bordo de fuga numa face própria). Novo vínculo de geometria externa `LinkSrc::Body { point }`: o corpo mais
+  perto do ponto (não exige o ponto sobre a superfície, a asa pode crescer), cortado inteiro pelo plano do
+  sketch (`Shape::section_loops`, a face de seção); sai o contorno mais longo, já fechado, simplificado a
+  0,05 mm (`secao_corpo.rs`). A Interseção ganhou o seletor "Corpo inteiro / Só a face" (padrão: corpo
+  inteiro), no mesmo painel do Polígono (inscrito/circunscrito). Mudar a estação ou a asa recalcula o
+  sketch e a parede base junto. Plano que deixa de cortar o corpo: erro "seção ... falhou" na parede base
+  (antes saía com o perfil velho e status Ok).
+- **Parede base com furo.** `make_face` já fura por profundidade (elipse, spline, círculo, polilinha, dobrado
+  e planificado), conferido por teste. O "sem furo" do teste de mouse vinha do contorno de fora aberto (item
+  acima): só o de dentro fechava e a chapa saía como disco. O erro agora explica.
+- **Pendente.** Furos internos da seção do corpo (a seção de uma casca oca) não vêm: só o contorno mais
+  longo, como na interseção de face. A aba por superfície no perfil fechado curvo é o B579.

@@ -85,6 +85,7 @@ fn nome_da_origem(s: &LinkSrc) -> &'static str {
         LinkSrc::Edge { .. } => "aresta",
         LinkSrc::Vertex { .. } => "vértice",
         LinkSrc::Face { .. } => "face",
+        LinkSrc::Body { .. } => "corpo",
     }
 }
 

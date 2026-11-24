@@ -223,6 +223,8 @@ pub struct SketchEdit {
     pub polygon_sides: usize,
     /// o círculo do polígono fica dentro, tangente aos lados, em vez de passar nos vértices
     pub polygon_circunscrito: bool,
+    /// B580: a interseção com uma face pega a seção do corpo inteiro (contorno fechado)
+    pub secao_corpo: bool,
     pub prev_ortho: bool,
     hits: Vec<(Rect, Ent)>,
     /// mostra a checagem de contornos
@@ -455,6 +457,7 @@ impl SketchEdit {
             construction: false,
             polygon_sides: 6,
             polygon_circunscrito: false,
+            secao_corpo: true,
             prev_ortho,
             hits: vec![],
             check: false,
@@ -1360,7 +1363,7 @@ fn project_ui(app: &mut App, ui: &mut egui::Ui) {
         }
         for (id, n, inter) in &refs {
             if ui.button(n).clicked() {
-                chosen = crate::sketch_ext::world(&app.open.doc, r, &crate::picking::Pick::Geo(*id), *inter, &f).map(|x| (x, *inter));
+                chosen = crate::sketch_ext::world(&app.open.doc, r, &crate::picking::Pick::Geo(*id), *inter, &f, false).map(|x| (x, *inter));
             }
         }
         if !others.is_empty() {
@@ -3250,7 +3253,7 @@ pub fn overlay(app: &mut App, ui: &mut egui::Ui, rect: Rect, resp: &egui::Respon
                 let filt = crate::picking::Filter { faces: intersect, edges: true, vertices: !intersect, planes: true, hidden_env: false, exclude_sketch: Some(edit.feature), fantasma: None, planos_origem: app.settings.filter.planos_origem, planos_ref: app.settings.filter.planos_ref };
                 if let Some(p) = crate::picking::pick(r, &app.open.doc, &v.cam, rect, h, &filt) {
                     crate::picking::draw(&painter, r, &v.cam, rect, &p, false);
-                    let made = crate::sketch_ext::world(&app.open.doc, r, &p, intersect, &v.f);
+                    let made = crate::sketch_ext::world(&app.open.doc, r, &p, intersect, &v.f, edit.secao_corpo);
                     // a dica diz a forma exata que vai nascer
                     let forma = made.as_ref().and_then(|x| x.forma(&v.f)).map_or(String::new(), |n| format!(" → {}", tr(n)));
                     painter.text(h + egui::vec2(14., 14.), egui::Align2::LEFT_TOP, format!("{}{forma}", p.label(&app.open.doc)), egui::FontId::proportional(crate::acessibilidade::fonte_3d(11.)), FREE);
