@@ -4,15 +4,15 @@ Consolidado do [design review](../contextos/design-review.md), dos [contextos](.
 Versão visual (kanban + comparador): [painel.html](painel.html), gerada por `scripts/benchmark/pagina.py`.
 Gerado por `scripts/benchmark/backlog.py`; o estado de cada item é atualizado aqui a cada entrega.
 
-**Estimativa total:** ≈ 134.0 M tokens (≈ 447 mil linhas de código, pela média das últimas versões).
+**Estimativa total:** ≈ 135.5 M tokens (≈ 452 mil linhas de código, pela média das últimas versões).
 
 | Onda | Versão | Itens | Tokens | % |
 |---|---|---|---|---|
-| Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 5.4% |
-| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 8.7% |
-| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 156 | ≈ 32350 k | 24.1% |
-| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 125 | ≈ 24700 k | 18.4% |
-| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 203 | ≈ 58120 k | 43.4% |
+| Onda 0 — fundação: filosofia robusta (contexto, publicações, salvar, testes) | `0.1.0-alpha.28 a .30` | 36 | ≈ 7180 k | 5.3% |
+| Onda 1 — bugs do design review | `0.1.0-alpha.31` | 58 | ≈ 11610 k | 8.6% |
+| Onda 2 — filosofia base + VPM local | `0.1.0-alpha.32` | 156 | ≈ 32350 k | 23.9% |
+| Onda 3 — módulos novos e lacunas do benchmark | `0.1.0-alpha.33+` | 125 | ≈ 24700 k | 18.2% |
+| Onda 4 — módulos de engenharia a jusante (cálculo, DFM, nesting, custeio…) | `0.2.x` | 203 | ≈ 58120 k | 42.9% |
 
 Prioridade: **P0** quebra o uso · **P1** importante · **P2** desejável · **P3** futuro.
 Teste: **Auto** = `cargo test` com documento montado em código · **Visual** = captura do app com `FENKRA_DEMO_*` · **Manual** = usuário.
