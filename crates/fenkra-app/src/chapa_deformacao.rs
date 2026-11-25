@@ -441,6 +441,50 @@ mod tests {
         }
     }
 
+    /// B579: a aba por laço no contorno curvo fechado entrega a análise e o mapa pinta os vértices dela (não só a aba
+    /// curva e a por superfície): recálculo de verdade, oval de 600 × 450 com a aba de 12 mm.
+    #[test]
+    fn aba_por_laco_entrega_o_mapa_de_deformacao() {
+        use fenkra_core::sketch::Curve;
+        use fenkra_core::*;
+        let mut d = Document::new("laco");
+        d.sheet = Some(SheetParams { thickness: "1.2".into(), radius: "1.2".into(), k: "0.33".into(), ..Default::default() });
+        let mut data = SketchData::default();
+        let mut n_id = 9_400_000u64;
+        let mut al = move || {
+            n_id += 1;
+            Id(n_id)
+        };
+        let n = 64;
+        let mut ids: Vec<Id> = (0..n).map(|i| {
+            let t = i as f64 / n as f64 * std::f64::consts::TAU;
+            data.add_point(&mut al, 600. * t.cos(), 450. * t.sin())
+        }).collect();
+        ids.push(ids[0]);
+        data.add_curve(&mut al, Curve::Spline { pts: ids }, false);
+        let sk = d.add_feature(FeatureKind::Sketch(Sketch { plane: PlaneRef::Origin(OriginPlane::XY), data }));
+        d.add_feature(FeatureKind::SmWall(SmWall { sketch: sk, reverse: false, offset: String::new(), mid: false, surface: None }));
+        let forma = fenkra_solidos::final_shape(&d).expect("chapa");
+        let mid = forma.topology().expect("topologia").edge_mids.iter().copied().find(|m| (m[2] - 1.2).abs() < 1e-3).expect("aresta de cima");
+        let aba = d.add_feature(FeatureKind::SmFlangeLoop(SmFlangeLoop {
+            edges: vec![mid], edge_keys: vec![], loop_all: true, extent: ExtensaoAba::Inteira, invert: false, length: "12".into(), angle: "90".into(),
+            radius: None, flip: false, side: 0, miter: true, relief: None, relief_kind: 0, seguir: false,
+        }));
+        let r = fenkra_solidos::recompute(&d);
+        assert!(!matches!(r.status[&aba], fenkra_solidos::Status::Error(_)), "{:?}", r.status[&aba]);
+        let paradas = crate::sup_analise::paradas(&eframe::egui::Visuals::dark());
+        let mapa = Mapa::novo(&r.conformacoes, paradas).expect("a aba por laço tem análise");
+        assert!(mapa.analise(aba).is_some_and(|a| a.pontos.len() > 20));
+        let b = &r.bodies[0];
+        let pos = posicoes_do_dono(&b.mesh, &b.face_owner, aba);
+        assert!(!pos.is_empty(), "a aba tem faces");
+        let campo = mapa.campo(aba, &pos).expect("campo da aba");
+        let cores: std::collections::HashSet<[u32; 3]> = pos.iter().map(|p| mapa.cor(&campo, *p).map(f32::to_bits)).collect();
+        assert!(!cores.is_empty());
+        // a legenda também a enxerga
+        assert!(resumo(&r.conformacoes).is_some());
+    }
+
     #[test]
     fn resumo_junta_as_abas() {
         let (pts, outs) = oval(600., 450., 200);

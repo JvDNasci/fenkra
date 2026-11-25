@@ -325,7 +325,7 @@ impl App {
         });
         if escolher_destino {
             let sugestao = st.plano.destino.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-            if let Some(p) = rfd::FileDialog::new().set_file_name(sugestao).save_file() {
+            if let Some(p) = crate::dialogo_dono::novo().set_file_name(sugestao).save_file() {
                 st.destino_txt = p.display().to_string();
             }
         }
@@ -370,7 +370,7 @@ impl App {
                 ui.label(tr("Destino"));
                 ui.add(egui::TextEdit::singleline(&mut st.destino_txt).desired_width(340.)).on_hover_text(tr("Termine em .zip para um arquivo único; senão é uma pasta nova"));
                 if ui.button(tr("Escolher…")).clicked() {
-                    if let Some(p) = rfd::FileDialog::new().add_filter("ZIP", &["zip"]).set_file_name("pacote.zip").save_file() {
+                    if let Some(p) = crate::dialogo_dono::novo().add_filter("ZIP", &["zip"]).set_file_name("pacote.zip").save_file() {
                         st.destino_txt = p.display().to_string();
                     }
                 }
@@ -583,7 +583,7 @@ impl App {
                             Veredito::Perdido => {
                                 ui.label(RichText::new(tr("não encontrado")).color(ui.visuals().error_fg_color).small());
                                 if ui.small_button(tr("Localizar…")).clicked() {
-                                    if let Some(p) = rfd::FileDialog::new().pick_file() {
+                                    if let Some(p) = crate::dialogo_dono::novo().pick_file() {
                                         aplicar = Some((d.referencia.caminho.clone(), p));
                                     }
                                 }

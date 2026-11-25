@@ -136,7 +136,7 @@ pub fn secao(st: &mut AsmState, ui: &mut egui::Ui) {
         }
         Acao::Tocar => tocar(st),
         Acao::Exportar => {
-            let pasta = std::env::var("FENKRA_DEMO_EXPORTAR_ANIMACAO").ok().map(PathBuf::from).or_else(|| rfd::FileDialog::new().set_title(tr("Pasta para a animação")).pick_folder());
+            let pasta = std::env::var("FENKRA_DEMO_EXPORTAR_ANIMACAO").ok().map(PathBuf::from).or_else(|| crate::dialogo_dono::novo().set_title(tr("Pasta para a animação")).pick_folder());
             if let Some(pasta) = pasta {
                 if let Err(e) = exportar(st, pasta) {
                     st.aviso = Some((e, true));

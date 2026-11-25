@@ -216,7 +216,7 @@ pub fn painel(app: &mut App, ctx: &egui::Context, area: Rect) {
             ui.label(RichText::new(tr("Compara a peça com um corpo alvo no mesmo sistema de coordenadas: medidas, furos e distância entre as superfícies.")).small().weak());
             ui.horizontal(|ui| {
                 if ui.button(tr("Escolher alvo (STEP)…")).on_hover_text(tr("Arquivo STEP com o corpo que a peça deve reproduzir.")).clicked() {
-                    if let Some(p) = rfd::FileDialog::new().add_filter("STEP", &["step", "stp"]).pick_file() {
+                    if let Some(p) = crate::dialogo_dono::novo().add_filter("STEP", &["step", "stp"]).pick_file() {
                         e.alvo = Some(p);
                         pedir = true;
                     }

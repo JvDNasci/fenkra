@@ -236,7 +236,7 @@ impl App {
                 refazer = true;
             }
             Acao::EscolherFatiador => {
-                if let Some(p) = rfd::FileDialog::new().pick_file() {
+                if let Some(p) = crate::dialogo_dono::novo().pick_file() {
                     self.settings.fatiador = p.to_string_lossy().into();
                 }
             }
@@ -244,7 +244,7 @@ impl App {
                 let stl = acao == Acao::GravarStl;
                 let extensao = if stl { "stl" } else { "3mf" };
                 let demo = std::env::var("FENKRA_DEMO_IMPRESSAO_ARQUIVO").ok().map(std::path::PathBuf::from);
-                let destino = demo.or_else(|| rfd::FileDialog::new().add_filter(extensao.to_uppercase(), &[extensao]).set_file_name(format!("{nome}.{extensao}")).save_file());
+                let destino = demo.or_else(|| crate::dialogo_dono::novo().add_filter(extensao.to_uppercase(), &[extensao]).set_file_name(format!("{nome}.{extensao}")).save_file());
                 if let (Some(caminho), Ok(p)) = (destino, &d.plano) {
                     let r = if stl { gravar_stl(p, &nome, &caminho) } else { gravar_3mf(p, &d.opcoes, &nome, &caminho) };
                     match r {

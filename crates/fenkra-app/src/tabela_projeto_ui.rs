@@ -136,7 +136,7 @@ pub fn tabela_projeto(ui: &mut egui::Ui, doc: &mut Document) {
     let mut msg: Option<(bool, String)> = ui.ctx().data(|d| d.get_temp(aviso(ui)));
     ui.horizontal(|ui| {
         if ui.button(tr("⬆ Exportar CSV")).on_hover_text(tr("Grava a tabela em CSV (separador ;), que qualquer planilha abre.")).clicked() {
-            if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("tabela_de_projeto.csv").save_file() {
+            if let Some(p) = crate::dialogo_dono::novo().add_filter("CSV", &["csv"]).set_file_name("tabela_de_projeto.csv").save_file() {
                 msg = Some(match std::fs::write(&p, doc.tabela_para_csv()) {
                     Ok(()) => (true, format!("{} {}", tr("Gravado em"), p.display())),
                     Err(e) => (false, format!("{}: {e}", p.display())),
@@ -144,7 +144,7 @@ pub fn tabela_projeto(ui: &mut egui::Ui, doc: &mut Document) {
             }
         }
         if ui.button(tr("⬇ Importar CSV")).on_hover_text(tr("Troca a tabela pelo CSV. Cabeçalho: Configuração; PN; nome de parâmetro; suprimir:<nome do comando>.")).clicked() {
-            if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv", "txt"]).pick_file() {
+            if let Some(p) = crate::dialogo_dono::novo().add_filter("CSV", &["csv", "txt"]).pick_file() {
                 msg = Some(match std::fs::read_to_string(&p) {
                     Ok(t) => match doc.importar_tabela_csv(&t) {
                         Ok(()) => (true, format!("{} {}", tr("Importado de"), p.display())),

@@ -207,12 +207,12 @@ pub fn editor(ctx: &egui::Context, cfg: &mut Config) {
                 cfg.restaurar(chave);
             }
             if ui.button(tr("Exportar…")).clicked() {
-                if let Some(p) = rfd::FileDialog::new().set_file_name("roda_de_comandos.json").add_filter("JSON", &["json"]).save_file() {
+                if let Some(p) = crate::dialogo_dono::novo().set_file_name("roda_de_comandos.json").add_filter("JSON", &["json"]).save_file() {
                     let _ = std::fs::write(p, cfg.exportar());
                 }
             }
             if ui.button(tr("Importar…")).clicked() {
-                if let Some(p) = rfd::FileDialog::new().add_filter("JSON", &["json"]).pick_file() {
+                if let Some(p) = crate::dialogo_dono::novo().add_filter("JSON", &["json"]).pick_file() {
                     let validos: Vec<&str> = crate::ajuda_cmd::comandos().iter().map(|i| i.icon).collect();
                     let r = std::fs::read_to_string(p).map_err(|e| e.to_string()).and_then(|t| cfg.importar(&t, &validos));
                     ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new("roda_import_msg"), r.map(|n| format!("{n}")).unwrap_or_else(|e| e)));

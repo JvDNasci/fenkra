@@ -231,7 +231,7 @@ impl App {
                     ui.label(tr("Destino"));
                     ui.add(egui::TextEdit::singleline(&mut st.destino).desired_width(380.));
                     if ui.button(tr("Escolher…")).clicked() {
-                        if let Some(c) = rfd::FileDialog::new().add_filter("ZIP", &["zip"]).set_file_name("liberacao.zip").save_file() {
+                        if let Some(c) = crate::dialogo_dono::novo().add_filter("ZIP", &["zip"]).set_file_name("liberacao.zip").save_file() {
                             st.destino = c.display().to_string();
                         }
                     }

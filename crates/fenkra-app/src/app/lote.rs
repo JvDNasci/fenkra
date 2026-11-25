@@ -379,18 +379,18 @@ impl App {
             Acao::Nada => {}
             Acao::Arquivos => {
                 let extensoes = registro.extensoes_de_leitura();
-                if let Some(l) = rfd::FileDialog::new().add_filter(tr("Todos os formatos"), &extensoes).add_filter("Fenkra", &["fkp", "fka"]).pick_files() {
+                if let Some(l) = crate::dialogo_dono::novo().add_filter(tr("Todos os formatos"), &extensoes).add_filter("Fenkra", &["fkp", "fka"]).pick_files() {
                     d.acrescentar(lote::listar_entradas(&l, &registro));
                 }
             }
             Acao::Pasta => {
-                if let Some(p) = rfd::FileDialog::new().pick_folder() {
+                if let Some(p) = crate::dialogo_dono::novo().pick_folder() {
                     d.acrescentar(lote::listar_entradas(&[p], &registro));
                 }
             }
             Acao::Projeto => d.acrescentar(self.entradas_do_projeto()),
             Acao::Saida => {
-                if let Some(p) = rfd::FileDialog::new().pick_folder() {
+                if let Some(p) = crate::dialogo_dono::novo().pick_folder() {
                     d.pasta = p;
                     d.invalidar();
                 }

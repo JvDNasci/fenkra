@@ -29,7 +29,7 @@ pub fn pagina(ui: &mut egui::Ui, s: &mut Settings) {
         ui.label(tr("Pasta"));
         ui.add(egui::TextEdit::singleline(&mut s.libredwg).desired_width(320.).hint_text(tr("vazio: procura no PATH"))).on_hover_text(tr("Pasta com dwg2dxf e dxf2dwg. Vazia, o Fenkra procura no PATH e nas pastas de instalação de costume."));
         if ui.button(tr("Escolher…")).on_hover_text(tr("Escolhe a pasta do LibreDWG.")).clicked() {
-            if let Some(p) = rfd::FileDialog::new().pick_folder() {
+            if let Some(p) = crate::dialogo_dono::novo().pick_folder() {
                 s.libredwg = p.to_string_lossy().into();
             }
         }

@@ -198,7 +198,53 @@ std::unique_ptr<Shape> sm_chain_sweep(const Shape& face, rust::Slice<const doubl
             if (pior < 1e-3) w.Add(BRepBuilderAPI_MakeEdge(p[a], p[b]).Edge());
             else interpola(a, b);
         };
-        int i = 0;  // ponto onde o próximo trecho começa
+        // B579: cadeia fechada lisa (todos os vértices viram, a costura também): o caminho é a curva fechada inteira, não
+        // "reta de um passo + curva + reta de um passo". Essas duas retas nas pontas dobram 3° na costura, para o lado
+        // do centro; uma seção que fica desse lado (a aba para dentro de um furo) se sobrepõe nesse canto e a varredura
+        // volta "command not done". Circunferência: dois arcos (um arco de ~360° também não varre); outra curva: spline
+        // periódica pelos pontos.
+        bool lisa_fechada = false;
+        if (n >= 8 && p.front().Distance(p.back()) < 1e-6) {
+            lisa_fechada = gp_Vec(p[n - 2], p[0]).Angle(gp_Vec(p[0], p[1])) > 0.0087;
+            for (int j = 1; j + 1 < n && lisa_fechada; ++j) lisa_fechada = curved[j];
+            // trechos retos longos entre pontos densos (o retângulo de cantos arredondados: lados de 80 mm e arcos de 1,5 mm):
+            // a spline periódica pelos pontos ondularia nas retas; esses seguem o caminho de retas e curvas de baixo
+            if (lisa_fechada) {
+                std::vector<double> seg;
+                for (int j = 0; j + 1 < n; ++j) seg.push_back(p[j].Distance(p[j + 1]));
+                std::vector<double> ord = seg;
+                std::nth_element(ord.begin(), ord.begin() + ord.size() / 2, ord.end());
+                const double mediana = ord[ord.size() / 2];
+                for (double d : seg) if (d > 8.0 * mediana) lisa_fechada = false;
+            }
+        }
+        if (lisa_fechada) {
+            const int m = (n - 1) / 2;
+            bool circular = false;
+            {
+                GC_MakeCircle mc(p[0], p[m], p[(3 * (n - 1)) / 4]);
+                if (mc.IsDone()) {
+                    const gp_Circ c = mc.Value()->Circ();
+                    double worst = 0;
+                    for (int j = 0; j < n; ++j) worst = std::max(worst, std::abs(c.Distance(p[j])));
+                    circular = worst < 1e-3;
+                }
+            }
+            if (circular) {
+                GC_MakeArcOfCircle a1(p[0], p[m / 2], p[m]), a2(p[m], p[(m + n - 1) / 2], p[n - 1]);
+                if (!a1.IsDone() || !a2.IsDone()) throw std::runtime_error("não foi possível ajustar a circunferência da aresta");
+                w.Add(BRepBuilderAPI_MakeEdge(a1.Value()).Edge());
+                w.Add(BRepBuilderAPI_MakeEdge(a2.Value()).Edge());
+            } else {
+                Handle(TColgp_HArray1OfPnt) arr = new TColgp_HArray1OfPnt(1, n - 1);
+                for (int j = 0; j + 1 < n; ++j) arr->SetValue(j + 1, p[j]);
+                GeomAPI_Interpolate ip(arr, Standard_True, 1e-6);
+                ip.Perform();
+                if (!ip.IsDone()) throw std::runtime_error("não foi possível ajustar a curva fechada da aresta");
+                w.Add(BRepBuilderAPI_MakeEdge(ip.Curve()).Edge());
+            }
+        }
+        int i = lisa_fechada ? n : 0;  // ponto onde o próximo trecho começa
         while (i + 1 < n) {
             int c0 = i + 1;
             while (c0 < n - 1 && !curved[c0]) ++c0;
@@ -228,7 +274,22 @@ std::unique_ptr<Shape> sm_chain_sweep(const Shape& face, rust::Slice<const doubl
                     // pontos a mais de 1 mm do arco em raio grande
                     ok = worst < 1e-3;
                 }
-                if (ok) w.Add(BRepBuilderAPI_MakeEdge(tc).Edge());
+                if (ok) {
+                    // B579: arco de mais de 180° (um furo redondo: a cadeia fechada é uma circunferência quase inteira) vai em
+                    // dois arcos; a varredura de uma seção por um único arco de ~360° volta "command not done"
+                    if (tc->LastParameter() - tc->FirstParameter() > M_PI && c1 - c0 >= 4) {
+                        const int q1 = (c0 + m) / 2, q2 = (m + c1) / 2;
+                        GC_MakeArcOfCircle a1(p[c0], p[q1], p[m]), a2(p[m], p[q2], p[c1]);
+                        if (a1.IsDone() && a2.IsDone()) {
+                            w.Add(BRepBuilderAPI_MakeEdge(a1.Value()).Edge());
+                            w.Add(BRepBuilderAPI_MakeEdge(a2.Value()).Edge());
+                        } else {
+                            w.Add(BRepBuilderAPI_MakeEdge(tc).Edge());
+                        }
+                    } else {
+                        w.Add(BRepBuilderAPI_MakeEdge(tc).Edge());
+                    }
+                }
             }
             if (!ok) interpola(c0, c1);
             i = c1;

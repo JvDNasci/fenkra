@@ -1756,7 +1756,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     fn open_file(&mut self) {
-        let Some(path) = rfd::FileDialog::new().add_filter("Peça Fenkra", &["fkp"]).pick_file() else { return };
+        let Some(path) = crate::dialogo_dono::novo().add_filter("Peça Fenkra", &["fkp"]).pick_file() else { return };
         self.open_path(&path);
     }
 
@@ -1822,7 +1822,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     fn new_project(&mut self) {
-        let Some(dir) = rfd::FileDialog::new().set_title("Pasta do novo projeto").pick_folder() else { return };
+        let Some(dir) = crate::dialogo_dono::novo().set_title("Pasta do novo projeto").pick_folder() else { return };
         let name = dir.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or("Projeto".into());
         match Project::create(&dir, &name) {
             Ok(p) => {
@@ -1837,7 +1837,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
     }
 
     fn open_project(&mut self) {
-        let Some(dir) = rfd::FileDialog::new().set_title("Pasta do projeto").pick_folder() else { return };
+        let Some(dir) = crate::dialogo_dono::novo().set_title("Pasta do projeto").pick_folder() else { return };
         self.open_project_at(&dir);
     }
 
@@ -2784,7 +2784,15 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     crate::picking::Pick::Face { point, .. } => Some(point.map(|v| v as f64)),
                     _ => None,
                 });
-                let support = seed.surface.unwrap_or_else(|| SurfRef::Plane(seed.planes.last().copied().unwrap_or(PlaneRef::Origin(OriginPlane::YZ))));
+                // B579: o suporte vem de uma superfície ou de um plano já escolhido; a face clicada sozinha é a da web, não o
+                // suporte. Sem nada, nasce "a escolher": o campo fica ativo e o próximo clique numa face (de sólido ou de
+                // superfície) o preenche (com o plano YZ de padrão o campo parecia pronto e o clique não entrava)
+                let faces_clicadas = self.picks.iter().filter(|p| matches!(p, crate::picking::Pick::Face { .. })).count();
+                let support = match seed.surface {
+                    Some(SurfRef::Ref(id)) => SurfRef::Ref(id),
+                    Some(face) if faces_clicadas >= 2 => face,
+                    _ => seed.planes.last().map(|p| SurfRef::Plane(*p)).unwrap_or_else(crate::slots::surf),
+                };
                 let d = &mut self.open.doc;
                 Sel::Feature(d.add_feature(FeatureKind::SmSurfFlange(SmSurfFlange { support, face: face.unwrap_or([0.; 3]), length: s("20"), radius: None, flip: false, keep_base: false, mode: 0, angle: "90".into(), limites: Default::default(), side: 0, inv_lado: false })))
             }
@@ -3002,7 +3010,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 return;
             }
             Cmd::MeshImport => {
-                let Some(p) = rfd::FileDialog::new().add_filter(tr("Malha"), &["stl", "obj", "ply", "3mf"]).pick_file() else { return };
+                let Some(p) = crate::dialogo_dono::novo().add_filter(tr("Malha"), &["stl", "obj", "ply", "3mf"]).pick_file() else { return };
                 match crate::malha_ui::importar_para_doc(d, &p) {
                     Ok(id) => Sel::Feature(id),
                     Err(e) => {
@@ -3600,7 +3608,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     self.settings.macro_src = fenkra_core::macros::EXAMPLE.to_string();
                 }
                 if ui.button(tr("📂 Abrir…")).clicked() {
-                    if let Some(p) = rfd::FileDialog::new().add_filter("Macro", &["fkm", "txt"]).pick_file() {
+                    if let Some(p) = crate::dialogo_dono::novo().add_filter("Macro", &["fkm", "txt"]).pick_file() {
                         match std::fs::read_to_string(&p) {
                             Ok(s) => self.settings.macro_src = s,
                             Err(e) => self.macro_log = vec![format!("⚠ {e}")],
@@ -3608,7 +3616,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                     }
                 }
                 if ui.button(tr("💾 Salvar…")).clicked() {
-                    if let Some(p) = rfd::FileDialog::new().add_filter("Macro", &["fkm"]).set_file_name("macro.fkm").save_file() {
+                    if let Some(p) = crate::dialogo_dono::novo().add_filter("Macro", &["fkm"]).set_file_name("macro.fkm").save_file() {
                         if let Err(e) = std::fs::write(&p, &self.settings.macro_src) {
                             self.macro_log = vec![format!("⚠ {e}")];
                         }
@@ -3859,7 +3867,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 }
             }
             if ui.button(tr("📂 Escolher arquivo .fkp…")).clicked() {
-                if let Some(p) = rfd::FileDialog::new().add_filter("Peça Fenkra", &["fkp"]).pick_file() {
+                if let Some(p) = crate::dialogo_dono::novo().add_filter("Peça Fenkra", &["fkp"]).pick_file() {
                     let n = p.file_stem().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();
                     choose = Some((n, p.to_string_lossy().to_string()));
                 }
@@ -4054,7 +4062,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                         self.com_confirmacao(Acao::Exemplo);
                         ui.close();
                     }
-                    if ui.button(tr("Abrir peça…")).clicked() {
+                    if ui.button(tr("Abrir peça…   Ctrl+O")).clicked() {
                         self.com_confirmacao(Acao::AbrirDialogo);
                         ui.close();
                     }
@@ -4647,7 +4655,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 ctx.data_mut(|m| m.insert_temp(k_blank, r));
             }
             2 => {
-                if let Some(path) = rfd::FileDialog::new().add_filter("DXF", &["dxf"]).set_file_name(format!("{}-planificada.dxf", self.open.doc.name)).save_file() {
+                if let Some(path) = crate::dialogo_dono::novo().add_filter("DXF", &["dxf"]).set_file_name(format!("{}-planificada.dxf", self.open.doc.name)).save_file() {
                     let r = fenkra_solidos::planificada::exportar_dxf(&self.open.doc, &path.to_string_lossy(), true);
                     match &r {
                         Ok(_) => self.toast(format!("Exportado: {}", path.display()), false),
@@ -7457,7 +7465,7 @@ Todos os cantos".into(), size: 3.5, style: fenkra_core::pmi::PmiStyle { frame: P
                 self.abrir_liberacao(0);
             }
             if ui.button(tr("📄 Estrutura CSV")).clicked() {
-                if let Some(path) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("estrutura.csv").save_file() {
+                if let Some(path) = crate::dialogo_dono::novo().add_filter("CSV", &["csv"]).set_file_name("estrutura.csv").save_file() {
                     if let Err(e) = self.project.as_ref().unwrap().export_csv(&path) {
                         self.toast(e.to_string(), true);
                     }
@@ -9090,6 +9098,7 @@ impl eframe::App for App {
                     r.elapsed_ms = a.elapsed_ms;
                 }
                 crate::ref_nome::atualizar(&r);
+                crate::chapa_laco_ui::atualiza_lacos(self.doc(), &r);
                 self.result = Some(r);
                 self.enquadrar_abertura.resultado(g == self.gen_sent);
                 if g == self.gen_sent {
@@ -9128,6 +9137,10 @@ impl eframe::App for App {
         }
         if km.pressed(ctx, K::SaveAll) {
             self.abrir_plano();
+        }
+        // B579: Ctrl+O abre o diálogo de peça (o mesmo de Arquivo › Abrir peça, que confirma antes se há alteração)
+        if km.pressed(ctx, K::Open) {
+            self.com_confirmacao(Acao::AbrirDialogo);
         }
         let save = false;
         let asm_mode = self.in_asm();

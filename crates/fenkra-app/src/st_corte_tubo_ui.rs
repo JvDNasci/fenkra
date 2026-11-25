@@ -223,7 +223,7 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
     });
     if csv {
         if let Some(c) = &e.caminho {
-            if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("caminho_de_corte.csv").save_file() {
+            if let Some(p) = crate::dialogo_dono::novo().add_filter("CSV", &["csv"]).set_file_name("caminho_de_corte.csv").save_file() {
                 match std::fs::write(&p, c.csv()) {
                     Ok(()) => app.toast(tr("Caminho de corte exportado"), false),
                     Err(err) => app.toast(format!("{}: {err}", tr("Erro")), true),
@@ -238,7 +238,7 @@ pub fn window(app: &mut App, ctx: &egui::Context) {
     }
     if dxf {
         if let Some(c) = &e.caminho {
-            if let Some(p) = rfd::FileDialog::new().add_filter("DXF", &["dxf"]).set_file_name("caminho_de_corte.dxf").save_file() {
+            if let Some(p) = crate::dialogo_dono::novo().add_filter("DXF", &["dxf"]).set_file_name("caminho_de_corte.dxf").save_file() {
                 match std::fs::write(&p, fenkra_solidos::st_dobra_saida::dxf(&c.desenvolvido())) {
                     Ok(()) => app.toast(tr("Caminho de corte exportado"), false),
                     Err(err) => app.toast(format!("{}: {err}", tr("Erro")), true),

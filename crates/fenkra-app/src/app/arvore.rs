@@ -37,7 +37,7 @@ impl App {
             Ok(x) => x,
             Err(e) => return self.toast(format!("Falha ao exportar: {e}"), true),
         };
-        let Some(caminho) = rfd::FileDialog::new().add_filter(tr("Árvore paramétrica"), &["fkx"]).set_file_name(format!("{nome}.fkx")).save_file() else { return };
+        let Some(caminho) = crate::dialogo_dono::novo().add_filter(tr("Árvore paramétrica"), &["fkx"]).set_file_name(format!("{nome}.fkx")).save_file() else { return };
         match gravar(&arquivo, &caminho) {
             Ok(()) if arquivo.fora.is_empty() => self.toast(format!("Exportado: {}", caminho.display()), false),
             Ok(()) => self.toast(tr("Árvore exportada, com itens de fora: {0}").replace("{0}", &arquivo.fora.join("; ")), true),
@@ -55,7 +55,7 @@ impl App {
         // desenvolvimento: FENKRA_DEMO_PASTA=<pasta> grava sem perguntar, para capturar a montagem
         let pasta = std::env::var("FENKRA_DEMO_PASTA").ok().map(std::path::PathBuf::from).or_else(|| {
             self.toast(tr("Este arquivo tem várias peças ou uma montagem: escolha uma pasta para elas.").to_string(), false);
-            rfd::FileDialog::new().set_title(tr("Pasta para as peças do arquivo")).pick_folder()
+            crate::dialogo_dono::novo().set_title(tr("Pasta para as peças do arquivo")).pick_folder()
         });
         let Some(pasta) = pasta else { return };
         match gravar_em_pasta(&conjunto, &pasta) {

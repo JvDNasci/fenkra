@@ -144,7 +144,7 @@ mod chapa_canto_tests;
 mod chapa_fluxo_tests;
 #[cfg(test)]
 mod chapa_b558_tests;
-pub use chapa_laco::{laco_de_malha, recuos_extensao};
+pub use chapa_laco::{descreve_laco, laco_de_malha, recuos_extensao, LacoDesc};
 pub mod planificada;
 pub mod nesting;
 pub mod chapa_dobra_sim;
@@ -4777,6 +4777,9 @@ impl Ctx<'_> {
         let ctr = geo3d::lerp(lo, hi, 0.5);
         let inward = geo3d::unit(geo3d::sub(ctr, mid)).unwrap_or([0., 0., -1.]);
         let (_, n) = b.surface_near(geo3d::add(mid, geo3d::mul(inward, sp.t * 0.25))).map_err(k)?;
+        // B579: perfil fechado: a aresta de um furo no meio da chapa: o passo para o centro da peça cai no vazio do furo e a
+        // superfície mais perto é a parede dele; a normal da face vem do plano da linha e de raios
+        let n = if laco { chapa_fechada::normal_da_face(&b, &pts, mid, sp.t).unwrap_or(n) } else { n };
         // para fora (no plano da chapa), com o mesmo sentido ao longo da cadeia
         // B566: nas pontas, com a curva exata, a tangente é a dela: a diferença das duas amostras da ponta erra
         // κ·passo/2, e a ponta da faixa planificada (normal à linha de dobra) sairia torta décimos de mm
@@ -4813,6 +4816,17 @@ impl Ctx<'_> {
         self.conformacoes.push((f.id, analise.clone()));
         // perfil fechado que não une: o motivo geométrico (canto vivo, curva fechada demais) vai junto com o erro
         let dica = |e: String| if laco { format!("{e}{}", analise.dica_falha()) } else { e };
+        // B579: aba para dentro de um furo (ou de um trecho côncavo) maior que o furo: a faixa se cruza e o kernel
+        // só diria "BRep_API: command not done". Diz a largura que cabe.
+        if laco {
+            let dev = chapa::compensacao(sp.t, r, ang, sp.k_for(r)).ba + len;
+            if let Some(cabe) = chapa_fechada::largura_que_cabe(&pts, &outs, dev) {
+                let folga = (cabe - chapa::compensacao(sp.t, r, ang, sp.k_for(r)).ba).max(0.);
+                return Err(format!(
+                    "a aba de {dev:.1} mm de largura (dobra mais comprimento reto de {len:.1} mm) não cabe neste contorno fechado: ela se cruza do outro lado do furo. Cabem {cabe:.1} mm de largura, ou seja, comprimento reto de até {folga:.1} mm; diminua o comprimento ou escolha o contorno externo"
+                ));
+            }
+        }
         // de que lado está a espessura (raio de teste a partir de dentro da chapa)
         let probe = geo3d::sub(mid, geo3d::mul(outs[im], sp.t * 0.5));
         let up_hit = b.ray_hit(geo3d::add(probe, geo3d::mul(n, -sp.t * 3.)), n).map_err(k)?.map(|(q, _)| geo3d::dot(geo3d::sub(q, probe), n));
@@ -4919,7 +4933,12 @@ impl Ctx<'_> {
             };
             // começa 0,05 mm para dentro da chapa (fusão sem faces coincidentes)
             let p2: Vec<[f64; 2]> = inner.iter().zip(&outs).map(|(p, o)| loc(geo3d::sub(*p, geo3d::mul(*o, 0.05)))).collect();
-            let mut q2: Vec<[f64; 2]> = inner.iter().zip(&outs).map(|(p, o)| loc(geo3d::add(*p, geo3d::mul(*o, dev)))).collect();
+            // B579: cadeia fechada: a borda livre leva o leque de raio `dev` nos cantos vivos (bordo de fuga, nariz cortado)
+            let mut q2: Vec<[f64; 2]> = if laco {
+                chapa_fechada::desloca_com_juntas(&inner, &outs, n, s, dev).iter().map(|p| loc(*p)).collect()
+            } else {
+                inner.iter().zip(&outs).map(|(p, o)| loc(geo3d::add(*p, geo3d::mul(*o, dev)))).collect()
+            };
             q2.reverse();
             // B566: `chain_segs` aceita um arco quando os pontos ficam a até 0,2 % do raio dele: em peça
             // grande isso é mais de 1 mm fora da linha de dobra, a borda da faixa sai da web e a fusão
@@ -4949,7 +4968,7 @@ impl Ctx<'_> {
             let base_vol = self.body(f.target).map(|x| vol(x)).unwrap_or(0.);
             // a faixa entra 0,05 mm na chapa: só o resto dela é volume novo
             let novo = tv * dev / (dev + 0.05);
-            let aceita = |s: &Shape| s.is_valid() && vol(s) > base_vol + 0.5 * novo;
+            let aceita = |s: &Shape| s.is_valid() && vol(s) > base_vol + (if laco { 0.85 } else { 0.5 }) * novo;
             if let Some(s) = self.apply_aceita(f.target, tool, BoolOp::Add, f.id, None, Some(&aceita))? {
                 return Err(dica(format!("a união da faixa planificada da aba com a chapa saiu inválida ou incompleta (volume {:.4}, chapa {base_vol:.4}, faixa {tv:.4})", vol(&s))));
             }
@@ -5090,7 +5109,10 @@ impl Ctx<'_> {
             };
             let tv = vol(&t);
             // a fusão é conferida e aplicada de uma vez (antes era feita duas vezes)
-            let aceita = |s: &Shape| tv > 1e-6 && s.is_valid() && vol(s) > base_vol + 0.5 * tv;
+            // B579: perfil fechado: a união que fica com menos de 85 % da aba é a união incompleta (valida, volume certo da
+            // chapa, parte da faixa perdida) e nunca pode sair com status Ok; a volume da malha dá a conta exata
+            let minimo = if laco { 0.85 } else { 0.5 };
+            let aceita = |s: &Shape| tv > 1e-6 && s.is_valid() && vol(s) > base_vol + minimo * tv;
             let res = self.apply_aceita(f.target, t, BoolOp::Add, f.id, None, Some(&aceita));
             match res {
                 Ok(None) => {

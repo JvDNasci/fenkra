@@ -131,7 +131,7 @@ pub fn aba_verificar(ui: &mut egui::Ui, v: &mut EstadoVerificar, par: Result<(&P
     ui.add_space(4.);
     if ui.button(tr("Exportar relatório...")).on_hover_text(tr("Salva a verificação (entradas, método, resultados e avisos) numa página HTML para anexar ao projeto.")).clicked() {
         let html = relatorio_html(p, c, e, &r, &|s| tr(s).to_string());
-        if let Some(caminho) = rfd::FileDialog::new().add_filter(tr("Página web"), &["html"]).set_file_name("verificacao_engrenagens.html").save_file() {
+        if let Some(caminho) = crate::dialogo_dono::novo().add_filter(tr("Página web"), &["html"]).set_file_name("verificacao_engrenagens.html").save_file() {
             v.msg = Some(match std::fs::write(&caminho, html) {
                 Ok(()) => format!("{} {}", tr("Relatório salvo em"), caminho.display()),
                 Err(err) => format!("{} {err}", tr("Não consegui salvar o relatório:")),

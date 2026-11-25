@@ -77,7 +77,7 @@ fn desenhar(ui: &mut egui::Ui, d: &Desenho) {
 
 fn salvar(ui: &egui::Ui, nome: &str, filtro: (&str, &str), bytes: Vec<u8>) {
     let id = egui::Id::new("st_dobra_saida_msg");
-    let Some(caminho) = rfd::FileDialog::new().add_filter(filtro.0, &[filtro.1]).set_file_name(nome).save_file() else { return };
+    let Some(caminho) = crate::dialogo_dono::novo().add_filter(filtro.0, &[filtro.1]).set_file_name(nome).save_file() else { return };
     let msg = match std::fs::write(&caminho, bytes) {
         Ok(()) => format!("{} {}", tr("Salvo em"), caminho.display()),
         Err(e) => format!("{} {e}", tr("Falha ao salvar:")),

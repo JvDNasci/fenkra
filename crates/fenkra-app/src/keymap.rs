@@ -35,6 +35,8 @@ pub enum KeyAction {
     Delete,
     Save,
     SaveAll,
+    /// B579: Arquivo › Abrir peça (Ctrl+O), com o diálogo à frente da janela
+    Open,
     ClipCopy,
     ClipCut,
     ClipPaste,
@@ -74,8 +76,8 @@ use KeyAction::*;
 use crate::i18n::tr;
 
 impl KeyAction {
-    pub const ALL: [KeyAction; 50] = [
-        Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Origem, CentroOrbita, OrbitaLivre, Undo, Redo, Delete, Save, SaveAll, ClipCopy, ClipCut,
+    pub const ALL: [KeyAction; 51] = [
+        Fit, ViewMenu, Normal, Ortho, ViewFront, ViewBack, ViewTop, ViewBottom, ViewLeft, ViewRight, ViewIso, Hide, HiddenEnv, Origem, CentroOrbita, OrbitaLivre, Undo, Redo, Delete, Save, SaveAll, Open, ClipCopy, ClipCut,
         ClipPaste, ClipDup, Sketch,
         Extrude, Cut, Revolve, Hole, Fillet, Chamfer, Plane, RodaComandos, SkSelect, SkLine, SkRect, SkCircle, SkArc, SkPoint, SkDim, SkConstruction, SkGrid, SkTrim, SkOffset, SkFillet, SkMirror, SkSpline, SkModo, CompassoCanto,
     ];
@@ -104,6 +106,7 @@ impl KeyAction {
             Delete => tr("Apagar"),
             Save => tr("Salvar"),
             SaveAll => tr("Salvar tudo (plano de salvamento)"),
+            Open => tr("Abrir peça"),
             ClipCopy => tr("Copiar (árvore)"),
             ClipCut => tr("Recortar (árvore)"),
             ClipPaste => tr("Colar (árvore)"),
@@ -138,7 +141,7 @@ impl KeyAction {
     pub fn group(self) -> &'static str {
         match self {
             Fit | ViewMenu | Normal | Ortho | ViewFront | ViewBack | ViewTop | ViewBottom | ViewLeft | ViewRight | ViewIso | Hide | HiddenEnv | Origem | CompassoCanto | CentroOrbita | OrbitaLivre => "Vista",
-            Undo | Redo | Delete | Save | SaveAll | ClipCopy | ClipCut | ClipPaste | ClipDup => "Edição",
+            Undo | Redo | Delete | Save | SaveAll | Open | ClipCopy | ClipCut | ClipPaste | ClipDup => "Edição",
             Sketch | Extrude | Cut | Revolve | Hole | Fillet | Chamfer | Plane | RodaComandos => "Modelagem",
             _ => "Sketch",
         }
@@ -251,6 +254,7 @@ impl Preset {
             (Delete, "Delete"),
             (Save, "Ctrl+S"),
             (SaveAll, "Ctrl+Shift+S"),
+            (Open, "Ctrl+O"),
             (ViewMenu, "Space"),
             (Origem, "Alt+O"),
             (ClipCopy, "Ctrl+C"),
@@ -412,5 +416,15 @@ mod tests {
             }
         }
         assert_eq!(Binding::parse("Ctrl+Shift+Z").unwrap().text(), "Ctrl+Shift+Z");
+    }
+
+    /// B579: Ctrl+O abre a peça em todas as predefinições, sem tomar o atalho de outra ação.
+    #[test]
+    fn ctrl_o_abre_a_peca_em_todas_as_predefinicoes() {
+        for p in Preset::ALL {
+            let km = Keymap { preset: p, custom: vec![] };
+            assert_eq!(km.binding(Open).map(|b| b.text()).as_deref(), Some("Ctrl+O"), "{p:?}");
+            assert!(km.conflicts(Open).is_empty(), "{p:?}: Ctrl+O em conflito com {:?}", km.conflicts(Open));
+        }
     }
 }

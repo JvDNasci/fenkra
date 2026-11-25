@@ -249,6 +249,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
     // comando de aba unificado (B31): Suporte, Modo, Parâmetros e Avançado
     crate::chapa_unif_ui::suporte(ui, doc, kind);
     suporte_aba_modos(ui, doc, idx, me, kind, seed);
+    crate::chapa_laco_ui::quem(ui, me, kind);
     crate::chapa_unif_ui::modos(ui, kind);
     match kind {
         FeatureKind::Forma(fm) => {
@@ -1131,7 +1132,7 @@ pub fn panel(ui: &mut egui::Ui, doc: &Document, idx: usize, me: Id, kind: &mut F
             section(ui, "Malha → B-rep");
             ui.label(RichText::new(&m.path).small());
             if ui.button(tr("📂 Trocar arquivo…")).clicked() {
-                if let Some(p) = rfd::FileDialog::new().add_filter("Malha", &["stl", "obj"]).pick_file() {
+                if let Some(p) = crate::dialogo_dono::novo().add_filter("Malha", &["stl", "obj"]).pick_file() {
                     m.path = p.to_string_lossy().into();
                 }
             }

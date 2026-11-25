@@ -400,7 +400,7 @@ fn relatorio_ui(ui: &mut egui::Ui, rel: &Relatorio, realce: Option<usize>) -> Sa
 impl App {
     pub(super) fn importar_arquivo(&mut self) {
         let malhas: Vec<&str> = fenkra_conversor::Formato::MALHA.iter().filter(|f| Registro::default().capacidades(**f).ler).flat_map(|f| f.extensoes().iter().copied()).collect();
-        let dialogo = rfd::FileDialog::new().add_filter(tr("Todos os formatos"), &Registro::default().extensoes_de_leitura()).add_filter("STEP, IGES, BREP, DXF, DWG", &["step", "stp", "igs", "iges", "brep", "dxf", "dwg"]).add_filter(tr("Malha"), &malhas).add_filter(tr("Árvore paramétrica"), &["fkx"]).add_filter(tr("Todos os arquivos"), &["*"]);
+        let dialogo = crate::dialogo_dono::novo().add_filter(tr("Todos os formatos"), &Registro::default().extensoes_de_leitura()).add_filter("STEP, IGES, BREP, DXF, DWG", &["step", "stp", "igs", "iges", "brep", "dxf", "dwg"]).add_filter(tr("Malha"), &malhas).add_filter(tr("Árvore paramétrica"), &["fkx"]).add_filter(tr("Todos os arquivos"), &["*"]);
         let Some(caminho) = dialogo.pick_file() else { return };
         self.abrir_painel_importar(caminho);
     }
@@ -466,7 +466,7 @@ impl App {
 
     fn gravar_relatorio(&mut self, rel: &Relatorio, extensao: &str) {
         let nome = std::path::Path::new(&rel.arquivo).file_stem().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
-        let Some(caminho) = rfd::FileDialog::new().add_filter(extensao.to_uppercase(), &[extensao]).set_file_name(format!("{nome}-relatorio.{extensao}")).save_file() else { return };
+        let Some(caminho) = crate::dialogo_dono::novo().add_filter(extensao.to_uppercase(), &[extensao]).set_file_name(format!("{nome}-relatorio.{extensao}")).save_file() else { return };
         let texto = if extensao == "html" { rel.html(&|s| tr(s)) } else { rel.json() };
         match std::fs::write(&caminho, texto) {
             Ok(()) => self.toast(tr("Relatório gravado: {0}").replace("{0}", &caminho.display().to_string()), false),

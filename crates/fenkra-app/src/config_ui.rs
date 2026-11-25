@@ -52,7 +52,7 @@ pub fn pagina(ui: &mut egui::Ui, s: &mut Settings, doc: &mut Document) {
     ui.label(RichText::new(tr("Tema, atalhos, barras, painéis e navegação num arquivo para levar a outro computador. Não leva gráficos, recentes nem o que depende da máquina.")).weak().small());
     ui.horizontal(|ui| {
         if ui.button(tr("📤 Exportar perfil…")).clicked() {
-            if let Some(p) = rfd::FileDialog::new().set_file_name("perfil-fenkra.json").add_filter("Perfil Fenkra", &["json"]).save_file() {
+            if let Some(p) = crate::dialogo_dono::novo().set_file_name("perfil-fenkra.json").add_filter("Perfil Fenkra", &["json"]).save_file() {
                 let m = match std::fs::write(&p, cc::exportar_perfil(s)) {
                     Ok(()) => format!("{} {}", tr("Perfil gravado em"), p.display()),
                     Err(e) => format!("{}: {e}", tr("Não consegui gravar o perfil")),
@@ -61,7 +61,7 @@ pub fn pagina(ui: &mut egui::Ui, s: &mut Settings, doc: &mut Document) {
             }
         }
         if ui.button(tr("📥 Importar perfil…")).clicked() {
-            if let Some(p) = rfd::FileDialog::new().add_filter("Perfil Fenkra", &["json"]).pick_file() {
+            if let Some(p) = crate::dialogo_dono::novo().add_filter("Perfil Fenkra", &["json"]).pick_file() {
                 let m = match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|t| cc::importar_perfil(&t, s)) {
                     Ok(r) => {
                         let mut m = format!("{} {}", r.aplicadas, tr("opções importadas"));

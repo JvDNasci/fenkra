@@ -533,7 +533,7 @@ pub fn command(app: &mut App, i: u8) {
             }
         }
         c::OPEN => {
-            let Some(p) = rfd::FileDialog::new().add_filter(tr("Desenho Fenkra"), &["fkd"]).add_filter(tr("Desenho 2D (DXF, DWG, SVG)"), &["dxf", "dwg", "svg"]).pick_file() else { return };
+            let Some(p) = crate::dialogo_dono::novo().add_filter(tr("Desenho Fenkra"), &["fkd"]).add_filter(tr("Desenho 2D (DXF, DWG, SVG)"), &["dxf", "dwg", "svg"]).pick_file() else { return };
             if !p.extension().is_some_and(|e| e.eq_ignore_ascii_case("fkd")) {
                 // B211: o arquivo 2D vira um desenho novo, sem caminho: gravar pergunta onde
                 match fenkra_conversor::folha::abrir_como_desenho(&p) {
@@ -647,7 +647,7 @@ fn save(app: &mut App, ask: bool) {
     let path = match (&st.path, ask) {
         (Some(p), false) => p.clone(),
         _ => {
-            let Some(p) = rfd::FileDialog::new().add_filter(tr("Desenho Fenkra"), &["fkd"]).set_file_name(format!("{}.fkd", st.d.name)).save_file() else { return };
+            let Some(p) = crate::dialogo_dono::novo().add_filter(tr("Desenho Fenkra"), &["fkd"]).set_file_name(format!("{}.fkd", st.d.name)).save_file() else { return };
             p
         }
     };
@@ -2319,7 +2319,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
                 csv = Some(data);
             }
             if let Some(data) = csv {
-                if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).save_file() {
+                if let Some(p) = crate::dialogo_dono::novo().add_filter("CSV", &["csv"]).save_file() {
                     let mut s = data.headers.join(";") + "\n";
                     for r in &data.rows {
                         s += &(r.join(";") + "\n");
@@ -2415,7 +2415,7 @@ pub fn panel(app: &mut App, ui: &mut egui::Ui) {
             st.source = cur.clone().map(|s| Source { path: st.rel(std::path::Path::new(&s.path)), ..s });
         }
         if ui.button(tr("Escolher arquivo…")).clicked() {
-            if let Some(p) = rfd::FileDialog::new().add_filter(tr("Peça ou montagem"), &["fkp", "fka"]).pick_file() {
+            if let Some(p) = crate::dialogo_dono::novo().add_filter(tr("Peça ou montagem"), &["fkp", "fka"]).pick_file() {
                 st.source = Some(Source { path: st.rel(&p), display_state: String::new(), hidden: vec![] });
             }
         }
