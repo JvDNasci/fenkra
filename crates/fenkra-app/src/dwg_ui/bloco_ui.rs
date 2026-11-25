@@ -399,7 +399,7 @@ pub(super) fn painel(ui: &mut egui::Ui, st: &mut DwgState) -> bool {
         });
     }
     if escolher_imagem {
-        if let Some(p) = rfd::FileDialog::new().add_filter(tr("Imagem"), &["png", "jpg", "jpeg"]).pick_file() {
+        if let Some(p) = crate::dialogo_dono::novo().add_filter(tr("Imagem"), &["png", "jpg", "jpeg"]).pick_file() {
             let caminho = st.rel(&p);
             if fenkra_desenho::logo::carregar(&p).is_none() {
                 st.bloco.aviso = Some((tr("A imagem não abriu (use PNG ou JPEG)").to_string(), true));
@@ -453,7 +453,7 @@ pub(super) fn painel(ui: &mut egui::Ui, st: &mut DwgState) -> bool {
             });
         }
         if ui.button(tr("Gravar como…")).on_hover_text(tr("Grava o modelo num arquivo .fkfolha")).clicked() {
-            if let Some(p) = rfd::FileDialog::new().add_filter(tr("Modelo de folha"), &[mf::EXTENSAO]).set_file_name(mf::nome_de_arquivo(&m.nome)).save_file() {
+            if let Some(p) = crate::dialogo_dono::novo().add_filter(tr("Modelo de folha"), &[mf::EXTENSAO]).set_file_name(mf::nome_de_arquivo(&m.nome)).save_file() {
                 st.bloco.aviso = Some(match m.gravar(&p) {
                     Ok(()) => (format!("{}: {}", tr("Modelo gravado"), p.display()), false),
                     Err(e) => (format!("{}: {e}", tr("Não gravou o modelo")), true),
@@ -462,7 +462,7 @@ pub(super) fn painel(ui: &mut egui::Ui, st: &mut DwgState) -> bool {
         }
         if ui.button(tr("Abrir modelo…")).on_hover_text(tr("Lê um modelo .fkfolha e o aplica a esta folha")).clicked() {
             let dir = mf::pasta_biblioteca();
-            let mut dlg = rfd::FileDialog::new().add_filter(tr("Modelo de folha"), &[mf::EXTENSAO]);
+            let mut dlg = crate::dialogo_dono::novo().add_filter(tr("Modelo de folha"), &[mf::EXTENSAO]);
             if let Some(d) = dir.filter(|d| d.exists()) {
                 dlg = dlg.set_directory(d);
             }

@@ -189,7 +189,7 @@ fn janela_novo(ctx: &egui::Context, novo: &mut Option<NovoUi>, aberta: Option<So
                             }
                         }
                         if ui.small_button(tr("outro arquivo…")).clicked() {
-                            if let Some(p) = rfd::FileDialog::new().add_filter(tr("Peça ou montagem"), &["fkp", "fka"]).pick_file() {
+                            if let Some(p) = crate::dialogo_dono::novo().add_filter(tr("Peça ou montagem"), &["fkp", "fka"]).pick_file() {
                                 n.cfg.origem = Some(Source { path: p.to_string_lossy().to_string(), display_state: String::new(), hidden: vec![] });
                             }
                         }
@@ -323,7 +323,7 @@ fn janela_exportar(ctx: &egui::Context, st: &mut DwgState) -> Option<(String, bo
     let mut msg = None;
     if exportar {
         let nome = format!("{}.{}", st.d.name, ex.ext);
-        if let Some(p) = rfd::FileDialog::new().add_filter(ex.ext.to_uppercase(), &[ex.ext]).set_file_name(nome).save_file() {
+        if let Some(p) = crate::dialogo_dono::novo().add_filter(ex.ext.to_uppercase(), &[ex.ext]).set_file_name(nome).save_file() {
             let o = ex.opcoes(&st.d);
             msg = Some(match opcoes::salvar_com(&st.d, &mut st.models, &p.to_string_lossy(), &o) {
                 Ok(f) => (format!("{} {}", tr("Exportado:"), f.join(", ")), false),

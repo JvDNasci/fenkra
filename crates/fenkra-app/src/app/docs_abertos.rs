@@ -537,7 +537,7 @@ impl App {
             Acao::NovaPeca | Acao::Exemplo | Acao::ExemploNomeado(_) | Acao::AbrirCaminho(_) => {}
             Acao::AbrirDialogo => {
                 // escolhe o arquivo antes, para reaproveitar a aba que já o tiver
-                if let Some(p) = rfd::FileDialog::new().add_filter("Peça Fenkra", &["fkp"]).pick_file() {
+                if let Some(p) = crate::dialogo_dono::novo().add_filter("Peça Fenkra", &["fkp"]).pick_file() {
                     self.abrir_em_aba(&Acao::AbrirCaminho(p));
                 }
                 return true;

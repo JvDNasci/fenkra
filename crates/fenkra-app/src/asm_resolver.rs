@@ -97,7 +97,7 @@ pub fn janela(st: &mut AsmState, ctx: &egui::Context) -> bool {
                     }
                 }
                 if ui.button(tr("Procurar…")).clicked() {
-                    if let Some(f) = rfd::FileDialog::new().add_filter("Fenkra", &["fkp", "fka"]).pick_file() {
+                    if let Some(f) = crate::dialogo_dono::novo().add_filter("Fenkra", &["fkp", "fka"]).pick_file() {
                         escolha = Some((p.comp, f));
                     }
                 }

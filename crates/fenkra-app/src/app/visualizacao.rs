@@ -225,8 +225,8 @@ impl App {
         // desenvolvimento: FENKRA_DEMO_VISUALIZACAO_ARQUIVO=<arquivo> grava sem perguntar
         let demo = std::env::var("FENKRA_DEMO_VISUALIZACAO_ARQUIVO").ok().map(PathBuf::from);
         let escolhido = demo.or_else(|| match d.saida {
-            Saida::Html => rfd::FileDialog::new().add_filter(tr("Página web"), &["html"]).set_file_name(format!("{nome}.html")).save_file(),
-            Saida::Fkv => rfd::FileDialog::new().add_filter(tr("Pacote de visualização"), &["fkv"]).set_file_name(format!("{nome}.fkv")).save_file(),
+            Saida::Html => crate::dialogo_dono::novo().add_filter(tr("Página web"), &["html"]).set_file_name(format!("{nome}.html")).save_file(),
+            Saida::Fkv => crate::dialogo_dono::novo().add_filter(tr("Pacote de visualização"), &["fkv"]).set_file_name(format!("{nome}.fkv")).save_file(),
         });
         let Some(caminho) = escolhido else { return };
         // a extensão acompanha a escolha: arquivo sem extensão ou com a errada não abre com duplo clique

@@ -677,7 +677,7 @@ fn cut_list(app: &mut App, ctx: &egui::Context) {
         exportar_gabaritos(app);
     }
     if export {
-        if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_corte.csv").save_file() {
+        if let Some(p) = crate::dialogo_dono::novo().add_filter("CSV", &["csv"]).set_file_name("lista_de_corte.csv").save_file() {
             let mut t = String::from("perfil;material;comprimento_mm;angulo1_graus;angulo2_graus;quantidade;barras_materia_prima;dobras;modo_da_dobra;corte_encaixe_mm\n");
             let num = |a: Option<f64>| a.map(fmt).unwrap_or_default();
             let ponta = |a: Option<f64>, e: bool| if e && a.is_none() { "encaixe".to_string() } else { num(a) };
@@ -716,7 +716,7 @@ fn exportar_gabaritos(app: &mut App) {
         app.toast(tr("Nenhum encaixe com corte normal à parede neste modelo"), true);
         return;
     }
-    let Some(pasta) = rfd::FileDialog::new().pick_folder() else { return };
+    let Some(pasta) = crate::dialogo_dono::novo().pick_folder() else { return };
     let mut n = 0;
     for m in normais {
         let nome: String = format!("{}-linha{}", m.designacao, m.linha + 1).chars().map(|c| if c.is_alphanumeric() || c == '-' { c } else { '_' }).collect();
@@ -730,7 +730,7 @@ fn exportar_gabaritos(app: &mut App) {
 
 /// B176: grava, numa pasta escolhida, o NC1 e o STEP de cada item da lista de corte.
 fn exportar_nc(app: &mut App) {
-    let Some(pasta) = rfd::FileDialog::new().pick_folder() else { return };
+    let Some(pasta) = crate::dialogo_dono::novo().pick_folder() else { return };
     match fenkra_solidos::st_dstv::gravar_saidas(app.doc(), &pasta) {
         Ok(v) => app.toast(format!("{}: {} {}", tr("NC1 e STEP gravados"), v.len(), tr("arquivos")), false),
         Err(e) => app.toast(format!("{}: {}", tr("Erro"), tr(&e)), true),
@@ -740,7 +740,7 @@ fn exportar_nc(app: &mut App) {
 /// B134: grava a estrutura da peça em IFC4.
 fn exportar_ifc(app: &mut App) {
     let nome = format!("{}.ifc", if app.doc().name.trim().is_empty() { "estrutura" } else { app.doc().name.trim() });
-    let Some(p) = rfd::FileDialog::new().add_filter("IFC", &["ifc"]).set_file_name(nome).save_file() else { return };
+    let Some(p) = crate::dialogo_dono::novo().add_filter("IFC", &["ifc"]).set_file_name(nome).save_file() else { return };
     match fenkra_solidos::st_ifc::ifc_da_estrutura(app.doc()).and_then(|r| std::fs::write(&p, &r.texto).map(|_| r).map_err(|e| e.to_string())) {
         Ok(r) => app.toast(format!("{}: {} {}, {} {}, {} {}", tr("IFC exportado"), r.membros, tr("membros"), r.placas, tr("placas"), r.soldas, tr("soldas")), false),
         Err(e) => app.toast(format!("{}: {}", tr("Erro"), tr(&e)), true),

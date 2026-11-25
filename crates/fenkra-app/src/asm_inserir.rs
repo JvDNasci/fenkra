@@ -543,7 +543,7 @@ pub fn painel(app: &mut App, ui: &mut egui::Ui) {
         }
         Some(Acao::Procurar) => {
             let (filtro, e) = if est.sub { ("Montagem", "fka") } else { ("Peça", "fkp") };
-            if let Some(mut files) = rfd::FileDialog::new().add_filter(filtro, &[e]).pick_files().filter(|f| !f.is_empty()) {
+            if let Some(mut files) = crate::dialogo_dono::novo().add_filter(filtro, &[e]).pick_files().filter(|f| !f.is_empty()) {
                 let f = files.remove(0);
                 est.fila = files;
                 aviso = crate::asm_inserir_projeto::pegar_ou_avisar(app.project.as_ref(), st, &mut est, &f).err();

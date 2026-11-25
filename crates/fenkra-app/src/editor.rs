@@ -905,7 +905,7 @@ fn show_painel(app: &mut App, ui: &mut egui::Ui) {
                 doc.textures.remove(i);
             }
             if doc.textures.len() < 8 && ui.button(tr("🖼 Adicionar imagem…")).clicked() {
-                if let Some(p) = rfd::FileDialog::new().add_filter("Imagem", &["png", "jpg", "jpeg"]).pick_file() {
+                if let Some(p) = crate::dialogo_dono::novo().add_filter("Imagem", &["png", "jpg", "jpeg"]).pick_file() {
                     let name = p.file_stem().map(|x| x.to_string_lossy().to_string()).unwrap_or_default();
                     doc.textures.push(TextureRef { name, path: p.to_string_lossy().to_string(), scale: 50. });
                 }

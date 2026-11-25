@@ -90,7 +90,7 @@ pub fn executar(app: &mut App, tubos: &[TuboDobrado], acao: Acao, est: &mut Esta
                 Err(e) => app.toast(tr(&e).to_string(), true),
                 Ok(txt) => {
                     let nome = format!("tubo_{}.{}", n + 1, f.extensao());
-                    if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name(&nome).save_file() {
+                    if let Some(p) = crate::dialogo_dono::novo().add_filter("CSV", &["csv"]).set_file_name(&nome).save_file() {
                         match std::fs::write(&p, txt) {
                             Ok(()) => app.toast(tr("Dados de dobra exportados"), false),
                             Err(e) => app.toast(format!("Erro: {e}"), true),
@@ -105,7 +105,7 @@ pub fn executar(app: &mut App, tubos: &[TuboDobrado], acao: Acao, est: &mut Esta
                 Err(e) => app.toast(tr(&e).to_string(), true),
                 Ok(txt) => {
                     let nome = format!("tubo_{}_tabela_de_dobras.csv", n + 1);
-                    if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name(&nome).save_file() {
+                    if let Some(p) = crate::dialogo_dono::novo().add_filter("CSV", &["csv"]).set_file_name(&nome).save_file() {
                         match std::fs::write(&p, txt) {
                             Ok(()) => app.toast(tr("Tabela de dobras exportada"), false),
                             Err(e) => app.toast(format!("Erro: {e}"), true),
@@ -116,7 +116,7 @@ pub fn executar(app: &mut App, tubos: &[TuboDobrado], acao: Acao, est: &mut Esta
         }
         Acao::Importar(n) => {
             let Some(t) = tubos.get(n) else { return };
-            let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv", "txt"]).pick_file() else { return };
+            let Some(p) = crate::dialogo_dono::novo().add_filter("CSV", &["csv", "txt"]).pick_file() else { return };
             est.conferencia = match std::fs::read_to_string(&p).map_err(|e| e.to_string()).and_then(|s| maq::importar(&s)) {
                 Err(e) => format!("⚠ {e}"),
                 Ok(lido) => match maq::rota_do_tubo(t).ok().and_then(|r| maq::diferenca(&r, &lido.rota)) {

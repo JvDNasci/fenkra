@@ -274,7 +274,7 @@ fn resolve_ui(ui: &mut egui::Ui, st: &mut DwgState, tool: u8, cur: Option<Source
             }
         }
         if ui.button(tr("Escolher arquivo…")).clicked() {
-            if let Some(p) = rfd::FileDialog::new().add_filter(tr("Peça ou montagem"), &["fkp", "fka"]).pick_file() {
+            if let Some(p) = crate::dialogo_dono::novo().add_filter(tr("Peça ou montagem"), &["fkp", "fka"]).pick_file() {
                 st.source = Some(Source { path: st.rel(&p), display_state: String::new(), hidden: vec![] });
             }
         }

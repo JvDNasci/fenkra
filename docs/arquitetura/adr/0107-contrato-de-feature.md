@@ -836,3 +836,80 @@ faixa se une à face plana da chapa (mesmo domínio) e só as bordas dela são d
 **Ficou de fora (24/11).** Mapa na planificada (a faixa não é face própria), cor por vértice no conjunto de montagem
 (instâncias) e a escala de ε configurável na legenda; costura da web de loft (acima); o volume que a interface mostra
 (`mass`) segue com o erro de spline longa.
+
+### B579, defeitos do teste com mouse da alpha.43: aba por laço, furo, suporte, Ctrl+O (24/11/2026)
+
+O teste com mouse da alpha.43 (`docs/pesquisa/asa/nervura-a43.fkp`, capturas `a43-*.png`) escolheu o caminho natural da
+nervura: a aba por laço ("laço da face inteira"), que não passa pelo que o B579 consertou (aba curva e aba por superfície).
+Causas medidas, uma a uma, em `crates/fenkra-solidos/tests/chapa_a43_laco.rs`.
+
+**D4, planificar a nervura com a aba por laço falhava (corrigido).** O laço lia a polilinha de cada aresta da *malha da
+tela* (`mesh_edge_curves`): 23 pontos numa spline de 1,8 m, uma aresta de 1,9 m em segmentos de 100 mm. A aba seguia as
+facetas, e a união de uma faixa com a chapa saía inválida ("aba 2 de 3: ... volume 600728, chapa 511698, faixa 89749"). A
+aba curva já usava `Shape::edge_at` (a discretização do B-rep, densa); o laço agora também (`densa` em
+`run_flange_loop`). Com isso a nervura do arquivo sai planificada em 2,1 s com a aba 2,08 % abaixo de Pappus (o leque do
+canto agudo do bordo de fuga não entra) e dobrada em 61 s com 2,09 % abaixo (antes 149 mil mm³ de uma aba de 183 mil, sem
+erro: veja "volume aceito pela metade"). O contorno da nervura tem três trechos sem tangência (spline do extradorso, a reta
+do nariz cortado e a spline do intradorso), e o laço faz uma aba por trecho tangente, com mitra: é o caminho certo para o
+canto vivo (a varredura de uma volta só pelo contorno com 3 cantos (70° a 160°) sai inválida e a união da faixa em anel
+devolve volume zero, medido). O caminho de volta única (`chapa_fechada`) só entra quando o perímetro é em maioria curvo,
+são vários trechos e nenhum giro passa de 35° (`GIRO_CANTO`); se ele falha, o laço cai por trechos e o erro dele vai junto.
+A polilinha do B-rep é afinada a 1,5 mm entre pontos (`afina`): num arco pequeno ela dá um ponto a cada 0,5 mm (um canto R10 do retângulo arredondado em 33 pontos) e a varredura de uma cadeia fechada de retas longas e arcos densos falhava (`laco_inteiro_do_retangulo_arredondado`, que a suíte pegou). Também entrou `chapa_fechada::desloca_com_juntas`: a borda livre da faixa planificada em anel com juntas redondas nos cantos
+convexos (leque de raio igual à largura) e de quina nos côncavos.
+
+*Volume aceito pela metade (silêncio).* A conferência da união da aba aceitava `volume > chapa + 0,5 · aba`; uma aba com
+35 % faltando passava e o comando saía `Ok`. Em perfil fechado agora é 0,85 (pelo volume da malha, que não erra em spline
+longa).
+
+**D2, aba em volta de furo (corrigido, dobrada e planificada).** "O laço segue a aresta clicada": clicar numa aresta do
+contorno externo leva a aba ao contorno todo (para fora); clicar na aresta de um furo leva a aba para dentro do furo
+(`laco_de_arestas`: o laço que contém a aresta; `lacos_da_face`). Três defeitos juntos davam `BRep_API: command not done`:
+1. *Normal da chapa errada na aresta de um furo.* O código dava um passo para o centro da peça e pegava a superfície mais
+   perto; no furo esse passo cai no vazio e a superfície mais perto é a parede do furo (normal horizontal). Agora
+   `chapa_fechada::normal_da_face` tira a direção do plano da linha (Newell) e o sentido por raios (a meia espessura, o lado do
+   material cruza a forma um número ímpar de vezes).
+2. *Varredura fechada com a seção do lado de dentro da curva.* A cadeia fechada virava "reta de um passo + curva + reta de
+   um passo"; as duas retas dobram 3° na costura, para o lado do centro, e uma seção desse lado (a aba dentro do furo) se
+   sobrepõe ali. `sm_chain_sweep` agora faz a curva fechada lisa inteira: dois arcos numa circunferência, spline periódica nas
+   outras (só quando os passos da polilinha são parecidos: com retas longas entre arcos densos, como o retângulo de cantos
+   arredondados, a spline periódica ondularia, e o caminho antigo de retas e arcos continua). Efeito colateral bom: a aba por laço da caverna oval levou 5,8 s para 2,1 s (dobrada).
+3. *O clique numa aresta de B-spline.* `mais_perto` exigia aresta com fórmula (reta ou cônica) e a aresta de spline dava "a
+   chapa não tem arestas" (só o clique no nariz reto funcionou no teste com mouse).
+Furo pequeno demais para a aba: erro claro antes do kernel (`chapa_fechada::largura_que_cabe`): "não cabe neste contorno
+fechado... comprimento reto de até X mm". Na interface o painel diz o laço que pegou (`LacoDesc`, `descreve_laco`): "Laço pego:
+contorno externo (3 arestas, 3646 mm)" ou "furo 2 de 2".
+
+**D5, "Mostrar deformação" no painel da aba por laço (corrigido).** `chapa_laco_ui::painel` ganhou a opção; o laço por
+trechos junta as análises de cada trecho numa só (antes cada trecho apagava a anterior e o mapa pintava só o último).
+Teste `aba_por_laco_entrega_o_mapa_de_deformacao` (app) e a análise do laço em cada caso do arquivo de testes.
+
+**D3, aba por superfície: o campo Superfície aceita o clique numa face de sólido (corrigido).** O suporte nascia com o plano YZ
+(campo "preenchido", portanto não ativo) e o primeiro clique ia para a face da web; o do suporte não entrava. Agora o suporte
+nasce "a escolher" (`Id::A_ESCOLHER`, `UNSET_SURF`) e o campo fica ativo depois da face da web; a face de sólido clicada vira
+`SurfRef::Face` (o recálculo já sabia cortá-la). Teste: `b579_suporte_da_aba_por_superficie_aceita_o_clique_na_face_de_solido`.
+
+**Ângulo diferente de 90° (conferido, sem defeito de geometria).** Aba por laço na caverna a 60°: dobrada −0,05 %, planificada
+−0,08 %; aba por superfície tipo Ângulo a 60° no perfil fechado: dobrada −0,07 %, planificada −0,16 %. O "não atualizou a
+prévia" do teste com mouse não é falha de geometria: o perfil fechado a 60° recalcula certo em código. Se a prévia ao digitar
+60 não reagiu, a causa não está no kernel e não foi reproduzida sem mouse (uma hipótese: a aba por arestas em prévia leve
+mostra só a caixa da zona, ver `previa_leve::so_no_fim`); fica para o próximo teste com mouse.
+
+**D1, diálogo de arquivo (corrigido).** `Arquivo › Abrir peça` e os demais diálogos de arquivo do app (35 arquivos) usavam `rfd::FileDialog::new()` sem
+dona e podiam abrir atrás da janela; todos passam por `dialogo_dono::novo()`. Ctrl+O é a ação nova `KeyAction::Open` (todas as
+predefinições; nenhuma usava Ctrl+O; o teste de conflito cobre). O item de menu mostra o atalho.
+
+**Caverna oval 1200 × 900 com anel** (externo e furo; cima e baixo; dobrada e planificada; teoria de Pappus, giro ±2π):
+
+| caso | dobrada | planificada |
+|---|---|---|
+| laço externo, para cima, 90° | −0,15 %, 2,1 s | −0,07 %, 7,9 s |
+| laço externo, para baixo, 90° | −0,07 %, 2,1 s | −0,07 %, 8,0 s |
+| laço externo, para cima, 60° | −0,05 % | −0,08 % |
+| laço do furo, para cima, 90° | −0,08 %, 2,1 s | +0,10 %, 10,8 s |
+| laço do furo, para baixo, 90° | +0,00 %, 2,1 s | +0,10 %, 10,6 s |
+| placa com furo de raio 40, aba de 12 | −0,12 % | −0,10 % |
+
+**Ficou de fora.** (a) O leque do canto agudo na planificada por trechos (bordo de fuga de 18°): falta o setor, uns 1 % do
+volume da aba da nervura; a união da faixa em anel completa com o leque devolve volume zero no kernel (`desloca_com_juntas` está
+pronto e testado, e vale nos laços suaves). (b) Furos internos da seção do corpo (B580). (c) D6, tempo da nervura (dobrada 61 s,
+planificada 2 s no PC compartilhado): não medido por etapa. (d) A interface não foi exercida com mouse neste ciclo.

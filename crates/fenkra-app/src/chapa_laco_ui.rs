@@ -5,10 +5,51 @@
 use crate::editor::{check, expr, section};
 use crate::i18n::tr;
 use eframe::egui::{self, RichText};
-use fenkra_core::{Document, ExtensaoAba, SmFlangeLoop};
+use fenkra_core::{Document, ExtensaoAba, FeatureKind, Id, SmFlangeLoop};
+use fenkra_solidos::LacoDesc;
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 type Vars = HashMap<String, f64>;
+
+thread_local! {
+    /// Qual laço cada aba por laço pegou, do último cálculo (B579): a face de topo da chapa guarda os mesmos laços
+    /// depois que a aba nasce, então o resultado final basta para dizer "contorno externo" ou "furo N".
+    static LACOS: RefCell<HashMap<Id, LacoDesc>> = RefCell::new(HashMap::new());
+}
+
+/// Renova o laço de cada aba por laço do documento com o resultado do cálculo.
+pub fn atualiza_lacos(doc: &Document, r: &fenkra_solidos::RecomputeResult) {
+    let mut m = HashMap::new();
+    for f in &doc.features {
+        let FeatureKind::SmFlangeLoop(lp) = &f.kind else { continue };
+        let Some(p) = lp.edges.first().filter(|p| **p != [0.; 3]) else { continue };
+        if let Some(d) = r.bodies.iter().find_map(|b| fenkra_solidos::descreve_laco(&b.mesh, *p)) {
+            m.insert(f.id, d);
+        }
+    }
+    LACOS.with(|c| *c.borrow_mut() = m);
+}
+
+/// O texto do laço pego (contorno externo ou furo N), para o painel. `None` sem cálculo ou fora do modo laço.
+pub fn texto_do_laco(d: &LacoDesc) -> String {
+    let onde = if d.externo {
+        tr("contorno externo").to_string()
+    } else {
+        format!("{} {} {} {}", tr("furo"), d.furo, tr("de"), d.furos)
+    };
+    format!("{}: {} ({} {}, {:.1} mm)", tr("Laço pego"), onde, d.arestas, tr(if d.arestas == 1 { "aresta" } else { "arestas" }), d.comprimento)
+}
+
+/// Linha do painel que diz qual laço a aresta escolhida pegou. Só com "usar o laço da face inteira" ligado.
+pub fn quem(ui: &mut egui::Ui, me: Id, kind: &FeatureKind) {
+    let FeatureKind::SmFlangeLoop(lp) = kind else { return };
+    if !lp.loop_all {
+        return;
+    }
+    let Some(d) = LACOS.with(|c| c.borrow().get(&me).cloned()) else { return };
+    ui.label(RichText::new(texto_do_laco(&d)).small()).on_hover_text(tr("O laço segue a aresta clicada: clicar numa aresta do contorno externo leva a aba ao contorno todo; clicar na aresta de um furo leva a aba para dentro do furo. Para trocar, clique outra aresta."));
+}
 
 /// Modos da extensão lateral, na ordem do seletor.
 const MODOS: [(&str, &str); 4] = [("Aresta inteira", "inteira"), ("Largura centrada", "centrada"), ("Largura deslocada", "deslocada"), ("Entre duas referências", "entre")];
@@ -96,6 +137,8 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, lp: &mut SmFlangeLoop, vars: &V
         }
     });
     crate::inverter::botao(ui, &mut lp.flip);
+    // B579: o laço com trecho curvo vira aba curva e tem o mapa de conformação, como a aba curva e a por superfície
+    crate::chapa_deformacao::opcao(ui);
     section(ui, "Avançado");
     check(ui, &mut lp.miter, "pontas em meia-esquadria (45°) para a aba vizinha");
     let mut rel = lp.relief.is_some();
@@ -121,6 +164,14 @@ pub fn painel(ui: &mut egui::Ui, doc: &Document, lp: &mut SmFlangeLoop, vars: &V
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn o_painel_diz_qual_laco_a_aresta_pegou() {
+        let ext = LacoDesc { externo: true, furo: 0, furos: 2, arestas: 3, comprimento: 3646.2 };
+        assert_eq!(texto_do_laco(&ext), "Laço pego: contorno externo (3 arestas, 3646.2 mm)");
+        let furo = LacoDesc { externo: false, furo: 2, furos: 2, arestas: 1, comprimento: 369.5 };
+        assert_eq!(texto_do_laco(&furo), "Laço pego: furo 2 de 2 (1 aresta, 369.5 mm)");
+    }
 
     #[test]
     fn troca_de_modo_aproveita_a_largura() {

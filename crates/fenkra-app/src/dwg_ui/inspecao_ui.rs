@@ -26,7 +26,7 @@ pub(super) fn exportar(st: &mut DwgState, xlsx: bool) -> Option<(String, bool)> 
     let ext = if xlsx { "xlsx" } else { "csv" };
     let nome = format!("{} - inspecao.{ext}", st.d.name);
     let destino = std::env::var("FENKRA_DEMO_EXPORTAR_ARQUIVO").ok().map(PathBuf::from);
-    let caminho = destino.or_else(|| rfd::FileDialog::new().add_filter(if xlsx { "XLSX" } else { "CSV" }, &[ext]).set_file_name(nome).save_file())?;
+    let caminho = destino.or_else(|| crate::dialogo_dono::novo().add_filter(if xlsx { "XLSX" } else { "CSV" }, &[ext]).set_file_name(nome).save_file())?;
     let sh = st.d.sheets[0].clone();
     let campos = layout::sheet_fields(&st.d, &sh, &mut st.models);
     let codigo = campos.get("codigo").cloned().unwrap_or_default();
@@ -43,7 +43,7 @@ pub(super) fn exportar(st: &mut DwgState, xlsx: bool) -> Option<(String, bool)> 
 /// valor). Devolve a mensagem do aviso e se é erro.
 pub(super) fn importar(st: &mut DwgState) -> Option<(String, bool)> {
     let origem = std::env::var("FENKRA_DEMO_IMPORTAR_MEDICOES").ok().map(PathBuf::from);
-    let caminho = origem.or_else(|| rfd::FileDialog::new().add_filter("CSV", &["csv", "txt"]).pick_file())?;
+    let caminho = origem.or_else(|| crate::dialogo_dono::novo().add_filter("CSV", &["csv", "txt"]).pick_file())?;
     let texto = match std::fs::read(&caminho) {
         Ok(b) => String::from_utf8_lossy(&b).trim_start_matches('\u{feff}').to_string(),
         Err(e) => return Some((e.to_string(), true)),

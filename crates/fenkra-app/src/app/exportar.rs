@@ -228,7 +228,7 @@ impl App {
         let extensao = d.formato.extensoes()[0];
         // desenvolvimento: FENKRA_DEMO_EXPORTAR_ARQUIVO=<arquivo> grava sem perguntar, para conferir a saída
         let demo = std::env::var("FENKRA_DEMO_EXPORTAR_ARQUIVO").ok().map(std::path::PathBuf::from);
-        let Some(caminho) = demo.or_else(|| rfd::FileDialog::new().add_filter(d.formato.nome(), d.formato.extensoes()).set_file_name(format!("{nome}.{extensao}")).save_file()) else { return };
+        let Some(caminho) = demo.or_else(|| crate::dialogo_dono::novo().add_filter(d.formato.nome(), d.formato.extensoes()).set_file_name(format!("{nome}.{extensao}")).save_file()) else { return };
         // PMI semântico: só na peça aberta, em STEP AP242 e com a opção ligada; o que não vai vira aviso
         let mut fora_do_step = vec![];
         let r = if d.formato.e_2d() || (!d.montagem && fenkra_solidos::corpo_malha::tem_corpo_de_malha(&self.open.doc)) {

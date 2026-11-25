@@ -429,7 +429,7 @@ fn ambiente(ui: &mut egui::Ui, c: &mut Cena, tema: ([u8; 3], [u8; 3])) {
             ui.horizontal(|ui| {
                 ui.add(egui::TextEdit::singleline(caminho).desired_width(170.)).on_hover_text(tr("Imagem panorâmica (equirretangular) em PNG ou JPG: vira o fundo e o reflexo das faces."));
                 if ui.button(tr("Escolher…")).on_hover_text(tr("Procura a imagem no computador.")).clicked() {
-                    if let Some(p) = rfd::FileDialog::new().add_filter(tr("Imagem"), &["png", "jpg", "jpeg"]).pick_file() {
+                    if let Some(p) = crate::dialogo_dono::novo().add_filter(tr("Imagem"), &["png", "jpg", "jpeg"]).pick_file() {
                         *caminho = p.display().to_string();
                     }
                 }

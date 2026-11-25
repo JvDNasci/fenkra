@@ -497,7 +497,7 @@ impl App {
                     if item.motivo == Motivo::Novo {
                         let texto = item.pasta.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| tr("Escolher pasta…").to_string());
                         if ui.button(texto).clicked() {
-                            if let Some(d) = rfd::FileDialog::new().pick_folder() {
+                            if let Some(d) = crate::dialogo_dono::novo().pick_folder() {
                                 item.pasta = Some(d);
                             }
                         }

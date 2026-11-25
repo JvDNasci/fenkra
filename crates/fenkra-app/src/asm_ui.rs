@@ -861,7 +861,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
             app.toast(tr("Montagem nova: insira peças (🧩) e posicione com restrições"), false);
         }
         Cmd::AsmOpen => {
-            let Some(p) = rfd::FileDialog::new().add_filter("Montagem Fenkra", &["fka"]).pick_file() else { return true };
+            let Some(p) = crate::dialogo_dono::novo().add_filter("Montagem Fenkra", &["fka"]).pick_file() else { return true };
             abrir_arquivo(app, p);
         }
         Cmd::AsmSave => save(app),
@@ -898,7 +898,7 @@ pub fn command(app: &mut App, c: Cmd) -> bool {
                         app.toast(tr("Selecione o componente a substituir"), true);
                         return true;
                     };
-                    let Some(f) = rfd::FileDialog::new().add_filter("Peça ou montagem", &["fkp", "fka"]).pick_file() else { return true };
+                    let Some(f) = crate::dialogo_dono::novo().add_filter("Peça ou montagem", &["fkp", "fka"]).pick_file() else { return true };
                     if st.file.as_ref().is_some_and(|a| links::depende_de(&f, a, None)) {
                         app.toast(tr("Referência circular: o subconjunto já contém esta montagem"), true);
                         return true;
@@ -3956,7 +3956,7 @@ pub fn contexto_window(app: &mut App, ctx: &egui::Context) {
             ui.label(tr("Pasta"));
             ui.text_edit_singleline(&mut nova.pasta).on_hover_text(tr("Onde o arquivo nasce ao salvar a montagem"));
             if ui.button("…").clicked() {
-                if let Some(d) = rfd::FileDialog::new().set_directory(&nova.pasta).pick_folder() {
+                if let Some(d) = crate::dialogo_dono::novo().set_directory(&nova.pasta).pick_folder() {
                     nova.pasta = d.to_string_lossy().to_string();
                 }
             }
@@ -4321,7 +4321,7 @@ pub fn bom_window(app: &mut App, ctx: &egui::Context) {
         st.modified = true;
     }
     if export {
-        if let Some(p) = rfd::FileDialog::new().add_filter("CSV", &["csv"]).set_file_name("lista_de_pecas.csv").save_file() {
+        if let Some(p) = crate::dialogo_dono::novo().add_filter("CSV", &["csv"]).set_file_name("lista_de_pecas.csv").save_file() {
             let mut t = String::from("item;componente;configuração;pn;quantidade\n");
             for r in &rows {
                 t += &format!("{};{};{};{};{}\n", r.item, r.name, r.config, r.pn, r.qty);

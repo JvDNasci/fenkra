@@ -289,7 +289,7 @@ fn aba_nesting(ui: &mut egui::Ui, e: &mut Est, doc: &Document) {
         }
         let tem = e.res.as_ref().is_some_and(|(l, _)| !l.chapas.is_empty());
         if ui.add_enabled(tem, egui::Button::new(tr("Exportar DXF por chapa…"))).on_hover_text(tr("Grava um DXF por chapa mais o relatório de aproveitamento em CSV, na pasta escolhida.")).clicked() {
-            if let (Some(pasta), Some((l, op))) = (rfd::FileDialog::new().pick_folder(), &e.res) {
+            if let (Some(pasta), Some((l, op))) = (crate::dialogo_dono::novo().pick_folder(), &e.res) {
                 match nest::exportar(&e.pecas, l, op, &pasta, "nesting") {
                     Ok(v) => e.msg = Some((format!("{} {}", v.len(), tr("arquivos gravados")), false)),
                     Err(er) => e.msg = Some((er, true)),

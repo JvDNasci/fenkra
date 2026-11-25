@@ -175,7 +175,9 @@ pub fn converter_aba(k: &FeatureKind, novo: ModoAba) -> Option<FeatureKind> {
         }
         ModoAba::Perfil => FeatureKind::SmProfileFlange(SmProfileFlange { sketch: Id(0), l1: "0".into(), l2: c.comprimento, radius: c.raio, flip: c.inverter }),
         ModoAba::Superficie => FeatureKind::SmSurfFlange(SmSurfFlange {
-            support: SurfRef::Plane(PlaneRef::Origin(OriginPlane::YZ)),
+            // B579: o suporte nasce "a escolher" (o campo fica ativo e aceita o clique numa face de sólido ou de superfície);
+            // com o plano YZ de padrão o campo parecia preenchido e o clique na face lateral não entrava
+            support: SurfRef::Ref(Id(u64::MAX - 14)),
             face: aresta,
             length: c.comprimento,
             radius: c.raio,

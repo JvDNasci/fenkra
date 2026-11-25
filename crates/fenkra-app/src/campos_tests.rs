@@ -450,3 +450,30 @@ fn b560_curva_mais_reta_vira_o_conjunto_com_a_cadeia_da_curva() {
     assert_eq!(l.edges, vec![c1, c2, r]);
     assert_eq!((l.length.as_str(), l.side, l.seguir), ("15", 1, true), "o 'seguir tangentes' da aba curva vira o do conjunto");
 }
+
+/// B579: a aba por superfície nasce com o suporte "a escolher" (não mais o plano YZ), e o campo ativo aceita o clique
+/// numa face de sólido (a face lateral da asa) como suporte. Antes o campo parecia preenchido e o clique não entrava.
+#[test]
+fn b579_suporte_da_aba_por_superficie_aceita_o_clique_na_face_de_solido() {
+    let FeatureKind::SmSurfFlange(sf) = fenkra_core::aba_unif::converter_aba(&aba_com([10., 0., 2.]), fenkra_core::aba_unif::ModoAba::Superficie).unwrap() else { panic!() };
+    assert!(matches!(sf.support, SurfRef::Ref(id) if crate::slots::is_unset(id)), "suporte nasce a escolher: {:?}", sf.support);
+    let d = Document::new("t");
+    let mut suporte = sf.support;
+    let face = SurfRef::Face { point: [10., 20., 30.], normal: [1., 0., 0.], owner: Some(Id(7)), key: None };
+    let ctx = egui::Context::default();
+    let mut quadro_sup = |seed: &Seed, suporte: &mut SurfRef| {
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1200., 900.))), ..Default::default() };
+        let sel: Vec<String> = seed.surface.iter().map(|x| format!("{x:?}")).collect();
+        let mut saida = ctx.run_ui(raw, |root| {
+            let caixa = egui::Rect::from_min_size(egui::pos2(8., 8.), egui::vec2(crate::paineis::LARGURA_COLUNA - 16., 880.));
+            let mut ui = root.new_child(egui::UiBuilder::new().max_rect(caixa));
+            crate::campos::inicio(ui.ctx(), 77, crate::campos::assinatura(&sel));
+            crate::geo_ui::surf_slot(&mut ui, "smsf_sup", "Superfície", &d, Id(77), suporte, seed);
+            crate::campos::fim(ui.ctx());
+        });
+        saida.textures_delta.clear();
+    };
+    quadro_sup(&Seed::default(), &mut suporte);
+    quadro_sup(&Seed { surface: Some(face), ..Default::default() }, &mut suporte);
+    assert_eq!(suporte, face, "o clique na face de sólido vira o suporte");
+}

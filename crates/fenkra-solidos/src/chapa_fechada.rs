@@ -159,6 +159,122 @@ pub fn anel(fr: &Frame, a: &[[f64; 2]], sa: &dyn Fn(&[[f64; 2]]) -> Vec<Seg2>, b
     fora.boolean(&furo, Bool::Cut).map_err(k)
 }
 
+/// Borda livre da faixa planificada de uma linha fechada: cada ponto de `pts` deslocado `d` para fora (`outs`),
+/// com juntas redondas nos cantos convexos e de quina (mitra) nos côncavos. Deslocar ponto a ponto pela direção
+/// do ponto deixa, num canto vivo (o bordo de fuga de uma nervura, o nariz cortado), um único ponto sobre a
+/// bissetriz: a faixa perde o setor que a conformação precisa naquele canto (o leque de raio `d`) ou, num canto
+/// muito agudo, a borda se cruza e o prisma da faixa sai inválido (a união com a chapa devolvia volume zero). O
+/// canto é o ponto onde a normal para fora gira mais de 8° de um trecho ao seguinte; ali entram pontos do arco
+/// de raio `d` de 6° em 6° (convexo) ou o ponto de encontro das duas bordas (côncavo). `n` é a normal do plano da
+/// chapa e `s` o sinal que `outs` tem em relação a tangente × `n`. A última amostra repete a primeira.
+pub fn desloca_com_juntas(pts: &[V3], outs: &[V3], n: V3, s: f64, d: f64) -> Vec<V3> {
+    let m = pts.len().saturating_sub(1);
+    if m < 3 || outs.len() != pts.len() {
+        return pts.iter().zip(outs).map(|(p, o)| geo3d::add(*p, geo3d::mul(*o, d))).collect();
+    }
+    let normal_do_trecho = |i: usize, j: usize| geo3d::unit(geo3d::sub(pts[j], pts[i])).and_then(|t| geo3d::unit(fenkra_kernel::cross(t, n)).map(|o| (t, geo3d::mul(o, s))));
+    let mut v: Vec<V3> = Vec::with_capacity(pts.len() + 32);
+    for i in 0..m {
+        let (ant, prox) = (normal_do_trecho((i + m - 1) % m, i), normal_do_trecho(i, (i + 1) % m));
+        let (Some((t_in, o_in)), Some((_, o_out))) = (ant, prox) else {
+            v.push(geo3d::add(pts[i], geo3d::mul(outs[i], d)));
+            continue;
+        };
+        let c = geo3d::dot(o_in, o_out).clamp(-1., 1.);
+        let giro = c.acos();
+        if giro < 8f64.to_radians() {
+            v.push(geo3d::add(pts[i], geo3d::mul(outs[i], d)));
+            continue;
+        }
+        let a = geo3d::add(pts[i], geo3d::mul(o_in, d));
+        let b = geo3d::add(pts[i], geo3d::mul(o_out, d));
+        if geo3d::dot(geo3d::sub(b, a), t_in) > 0. {
+            // convexo: o arco de raio d de uma normal à outra
+            let sinal = if geo3d::dot(fenkra_kernel::cross(o_in, o_out), n) >= 0. { 1. } else { -1. };
+            let passos = (giro / 6f64.to_radians()).ceil().max(1.) as usize;
+            for k in 0..=passos {
+                let ang = sinal * giro * k as f64 / passos as f64;
+                let (sn, cs) = ang.sin_cos();
+                let perp = fenkra_kernel::cross(n, o_in);
+                let o = geo3d::add(geo3d::mul(o_in, cs), geo3d::mul(perp, sn));
+                v.push(geo3d::add(pts[i], geo3d::mul(o, d)));
+            }
+        } else {
+            // côncavo: as duas bordas se cruzam no ponto de encontro (mitra)
+            let soma = geo3d::add(o_in, o_out);
+            let f = d / (1. + c).max(1e-3);
+            v.push(geo3d::add(pts[i], geo3d::mul(soma, f)));
+        }
+    }
+    v.push(v[0]);
+    v
+}
+
+/// Normal (para fora do material) da face de chapa a que a linha fechada `pts` pertence, em `mid` (o ponto do meio).
+/// O plano da linha dá a direção (método de Newell); o sinal e o lado vêm de raios: o ponto a meia espessura sob a
+/// face, do lado do material, está dentro da chapa (a reta na normal cruza a forma um número ímpar de vezes), e do
+/// lado oposto, no furo, não está. A normal que a sonda de `surface_near` dá a um passo para o centro da peça erra
+/// para a aresta de um furo no meio da chapa: o passo cai no vazio do furo e a superfície mais perto é a parede dele.
+pub fn normal_da_face(corpo: &Shape, pts: &[V3], mid: V3, t: f64) -> Option<V3> {
+    let mut nn = [0.; 3];
+    for w in pts.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        nn[0] += (a[1] - b[1]) * (a[2] + b[2]);
+        nn[1] += (a[2] - b[2]) * (a[0] + b[0]);
+        nn[2] += (a[0] - b[0]) * (a[1] + b[1]);
+    }
+    let n = geo3d::unit(nn)?;
+    let im = pts.len() / 2;
+    let tan = geo3d::unit(geo3d::sub(pts[(im + 1).min(pts.len() - 1)], pts[im.saturating_sub(1)]))?;
+    let h = geo3d::unit(fenkra_kernel::cross(tan, n))?;
+    let dentro = |p: V3| corpo.ray_hits(p, n).map(|v| v.iter().filter(|x| **x > 1e-6).count() % 2 == 1).unwrap_or(false);
+    for sn in [-1., 1.] {
+        let lados: Vec<f64> = [1., -1.]
+            .into_iter()
+            .filter(|sh| dentro(geo3d::add(geo3d::add(mid, geo3d::mul(h, sh * 0.3 * t)), geo3d::mul(n, sn * 0.5 * t))))
+            .collect();
+        if lados.len() == 1 {
+            // `sn·n` aponta para dentro da chapa a partir da face da aresta; para fora é o contrário
+            return Some(geo3d::mul(n, -sn));
+        }
+    }
+    None
+}
+
+/// Largura máxima de uma faixa que se afasta da linha fechada `pts` na direção `outs` (unitários, no plano da
+/// chapa) sem se cruzar, ou `None` se a faixa de `largura` cabe. Numa aba para dentro de um furo, ou para fora de
+/// um contorno côncavo, a borda deslocada passa a menos de `largura` de outro trecho da linha (a faixa se cruza e
+/// a varredura da dobra ou a união da faixa planificada falham no kernel sem dizer por quê). A conferência é pelas
+/// amostras: o ponto deslocado de uma amostra tem de ficar a `largura` da linha, e a de qualquer outra amostra
+/// mais perto que 97 % disso é cruzamento. Devolve, por bisseção, a maior largura que passa.
+pub fn largura_que_cabe(pts: &[V3], outs: &[V3], largura: f64) -> Option<f64> {
+    let n = pts.len().min(outs.len());
+    if n < 4 || largura <= 1e-6 {
+        return None;
+    }
+    // até 400 pontos deslocados (a faixa varia devagar ao longo da linha); todas as amostras como alvo
+    let passo = (n / 400).max(1);
+    let cruza = |w: f64| {
+        (0..n).step_by(passo).any(|i| {
+            let q = geo3d::add(pts[i], geo3d::mul(outs[i], w));
+            pts[..n].iter().any(|p| geo3d::dist(q, *p) < 0.97 * w - 1e-9)
+        })
+    };
+    if !cruza(largura) {
+        return None;
+    }
+    let (mut lo, mut hi) = (0., largura);
+    for _ in 0..14 {
+        let m = (lo + hi) / 2.;
+        if cruza(m) {
+            hi = m;
+        } else {
+            lo = m;
+        }
+    }
+    Some(lo)
+}
+
 /// Volume pela malha (teorema da divergência). A integração do kernel (`mass`) erra até 13 % numa face plana
 /// limitada por uma spline longa (a web de uma nervura, medido), e o erro some na malha: a flecha da
 /// tesselação é 2e-4 da diagonal (no mínimo 20 µm): o volume sai uns 2 % abaixo do verdadeiro nas paredes curvas,
@@ -212,6 +328,59 @@ mod testes {
         assert_eq!(r.len(), 1);
         assert!(fechada(&r[0]), "laço aberto: {} pontos", r[0].len());
         assert_eq!(r[0].len(), 41);
+    }
+
+    /// Losango fino (pontas agudas) em sentido anti-horário, cada lado em passos de 5 mm.
+    fn losango() -> Vec<V3> {
+        let cantos = [[0., 0.], [50., -8.], [100., 0.], [50., 8.], [0., 0.]];
+        let mut v: Vec<V3> = vec![];
+        for w in cantos.windows(2) {
+            let n = (geo3d::dist([w[0][0], w[0][1], 0.], [w[1][0], w[1][1], 0.]) / 5.).ceil() as usize;
+            for i in 0..n {
+                let u = i as f64 / n as f64;
+                v.push([w[0][0] + (w[1][0] - w[0][0]) * u, w[0][1] + (w[1][1] - w[0][1]) * u, 0.]);
+            }
+        }
+        v.push(v[0]);
+        v
+    }
+
+    #[test]
+    fn borda_deslocada_leva_o_leque_na_ponta_aguda() {
+        let pts = losango();
+        let outs: Vec<V3> = (0..pts.len())
+            .map(|i| {
+                let t = geo3d::unit(geo3d::sub(pts[(i + 1).min(pts.len() - 1)], pts[i.saturating_sub(1)])).unwrap_or([1., 0., 0.]);
+                geo3d::unit(crate::geo3d::cross(t, [0., 0., 1.])).unwrap_or([0., -1., 0.])
+            })
+            .collect();
+        let q = desloca_com_juntas(&pts, &outs, [0., 0., 1.], 1., 20.);
+        let (xmin, xmax) = q.iter().fold((f64::MAX, f64::MIN), |a, p| (a.0.min(p[0]), a.1.max(p[0])));
+        assert!((xmax - 120.).abs() < 0.5, "a ponta direita leva o leque de 20 mm: x máximo {xmax:.2}");
+        assert!((xmin + 20.).abs() < 0.5, "a ponta esquerda também: x mínimo {xmin:.2}");
+        assert!(fechada(&q));
+        // todos os pontos da borda a pelo menos 19,9 mm da linha (nenhum cruzamento para dentro)
+        for p in &q {
+            let d = pts.iter().map(|x| geo3d::dist(*p, *x)).fold(f64::MAX, f64::min);
+            assert!(d > 19.0, "ponto {p:?} a {d:.2} mm da linha");
+        }
+    }
+
+    #[test]
+    fn faixa_que_nao_cabe_no_furo_acha_a_largura_que_cabe() {
+        // círculo de raio 40 (furo): a faixa para dentro de 30 cabe, a de 50 não; cabe até uns 40
+        let n = 120;
+        let pts: Vec<V3> = (0..=n).map(|i| {
+            let a = std::f64::consts::TAU * (i % n) as f64 / n as f64;
+            [40. * a.cos(), 40. * a.sin(), 0.]
+        }).collect();
+        let dentro: Vec<V3> = pts.iter().map(|p| geo3d::mul(*p, -1. / 40.)).collect();
+        assert_eq!(largura_que_cabe(&pts, &dentro, 30.), None);
+        let cabe = largura_que_cabe(&pts, &dentro, 50.).expect("50 mm não cabe num furo de raio 40");
+        assert!(cabe > 30. && cabe < 41., "cabe {cabe:.1}");
+        // para fora nunca se cruza
+        let fora: Vec<V3> = pts.iter().map(|p| geo3d::mul(*p, 1. / 40.)).collect();
+        assert_eq!(largura_que_cabe(&pts, &fora, 200.), None);
     }
 
     #[test]
